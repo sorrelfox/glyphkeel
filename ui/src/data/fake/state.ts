@@ -6,6 +6,7 @@
 import {
   type ActivityEntry,
   type Actor,
+  type ProjectIcon,
   type BoardLayout,
   type Category,
   type CommentRevision,
@@ -46,6 +47,8 @@ export interface FakeProject {
   key: string;
   name: string;
   hue: Hue;
+  /** No icon: the circle. */
+  icon?: ProjectIcon | undefined;
   /** The parent's ID. */
   parent: string | null;
   /** Order among its siblings. */

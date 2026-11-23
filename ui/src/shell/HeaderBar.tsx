@@ -11,6 +11,7 @@ import { useProjects } from "../data/board";
 import { type Project } from "../data/catalog";
 import { Tooltip } from "../components/Tooltip";
 import { classes } from "../classes";
+import { ProjectMark } from "../components/ProjectMark";
 import { useT } from "../i18n/I18n";
 import { appWindow } from "../ipc/window";
 import { type TitleBar } from "../start";
@@ -129,7 +130,7 @@ function ProjectButton({ project, onSettings, onNewSubproject }: ProjectButtonPr
   return (
     <MenuTrigger>
       <Button className={classes("btn flat", styles.projectButton)} aria-label={t("header-project-menu", { name: project.name })}>
-        <span className={`dot hue-${project.hue}`} />
+        <ProjectMark hue={project.hue} icon={project.icon} />
         {path.map((name) => (
           <span key={name} className="muted">
             {name} ›

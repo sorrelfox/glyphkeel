@@ -1,0 +1,33 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+   Copyright (C) 2026 Glyphkeel contributors
+
+   The formatting toolbar: a row of small flat buttons in groups, above the
+   editor and inside its box. It wraps when the box is narrow. */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding-block: 3px;
+  padding-inline: 4px;
+  border-block-end: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.group + .group {
+  padding-inline-start: 4px;
+  margin-inline-start: 2px;
+  border-inline-start: 1px solid var(--border);
+}
+
+.compact {
+  padding-block: 1px;
+  border-block-end-color: transparent;
+}

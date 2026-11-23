@@ -6,9 +6,11 @@ import { useState } from "react";
 import { Button, useLocale } from "react-aria-components";
 
 import { classes } from "../../classes";
+import { ProjectMark } from "../../components/ProjectMark";
 import { Select } from "../../components/Select";
 import { useOp } from "../../data/hooks";
 import { useDurations } from "../../data/time";
+import { useToday } from "../../data/zone";
 import { type TimeGroupBy, type WeekStart } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { isoDay } from "../board/model";
@@ -67,7 +69,7 @@ export function TimeReportScreen() {
   const durations = useDurations();
   const settings = useOp("settings.get", {});
   const projects = useOp("project.list", {});
-  const today = isoDay(new Date());
+  const today = useToday();
   const weekStart = settings.data?.week_start ?? "monday";
   const [range, setRange] = useState<[string, string] | null>(null);
   const [from, to] = range ?? presetRange("this-week", today, weekStart);
@@ -106,7 +108,7 @@ export function TimeReportScreen() {
           onChange={(key) => {
             setProject(key === ALL_PROJECTS ? "" : key);
           }}
-          options={[{ id: ALL_PROJECTS, label: t("report-all-projects") }, ...(projects.data?.items ?? []).map((each) => ({ id: each.key, label: each.path }))]}
+          options={[{ id: ALL_PROJECTS, label: t("report-all-projects") }, ...(projects.data?.items ?? []).map((each) => ({ id: each.key, label: each.path, icon: <ProjectMark hue={each.hue} icon={each.icon} /> }))]}
         />
         <div className="seg" role="radiogroup" aria-label={t("report-group-by")}>
           {GROUPS.map((group) => (

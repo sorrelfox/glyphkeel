@@ -17,6 +17,7 @@ export type {
   ChecklistToggle,
   CompletionProviders,
   EditorMode,
+  FormatKind,
   LineBreakNote,
   MarkdownEditorHandle,
   MarkdownEditorProps,
@@ -25,3 +26,4 @@ export type {
   TaskSuggestion,
   TextEdit,
 } from "./types";
+export { FORMAT_KINDS, FORMAT_SHORTCUTS } from "./formats";

@@ -7,6 +7,7 @@ import { useState, type ReactNode } from "react";
 import { Button, Tree, TreeItem, TreeItemContent, type Key } from "react-aria-components";
 
 import { classes } from "../../classes";
+import { ProjectMark } from "../../components/ProjectMark";
 import { isMenuKey, useContextMenu, type MenuEntry } from "../../components/ContextMenu";
 import { useProjects } from "../../data/board";
 import { type ProjectSummary } from "../../data/catalog";
@@ -84,7 +85,7 @@ export function ProjectTree({ current, onNewProject, onSettings }: ProjectTreePr
         ) : (
           <span className={styles.chevron} />
         )}
-        <span className={`dot hue-${project.hue}`} />
+        <ProjectMark hue={project.hue} icon={project.icon} />
         <span className="truncate">{project.name}</span>
         <span className="count">{count}</span>
       </div>
@@ -156,7 +157,7 @@ export function ProjectTree({ current, onNewProject, onSettings }: ProjectTreePr
                 menu.open(event, entries(project));
               }}
             >
-              <span className={`dot hue-${project.hue}`} />
+              <ProjectMark hue={project.hue} icon={project.icon} />
               <span className="truncate">{project.name}</span>
             </button>
           ))}

@@ -31,7 +31,8 @@ import { useNewTask, useStatus, useTimerTask } from "../../shell/context";
 import { CardView } from "./CardView";
 import { indexCoordinates, pointerThenCenter, step } from "./dnd";
 import { CollapsedLane, Lane, type CardHandlers } from "./Lane";
-import { boardView, isFiltered, isoDay, moveColumn, NO_FILTERS, positionIn, type BoardView, type Filters } from "./model";
+import { useToday } from "../../data/zone";
+import { boardView, isFiltered, moveColumn, NO_FILTERS, positionIn, type BoardView, type Filters } from "./model";
 import { Toolbar } from "./Toolbar";
 import styles from "./Board.module.css";
 
@@ -86,7 +87,7 @@ function LoadedBoard({ project, layout, board, openTask, now }: LoadedBoardProps
   const create = useCreateTask();
   const update = useUpdateTask();
   const menu = useContextMenu(t("card-menu"));
-  const today = isoDay(now());
+  const today = useToday(now);
   const readOnly = project.state === "archived";
 
   const view: BoardView = boardView(board, layout, filters, now(), showOlder);

@@ -553,3 +553,49 @@
   background: var(--surface);
   cursor: grabbing;
 }
+
+/* ---------- labels: the picker's search and the first label's form ---------- */
+.labelPicker {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-inline-size: 220px;
+  max-inline-size: 320px;
+  padding: 4px;
+}
+
+.labelSearch {
+  display: flex;
+}
+
+.labelSearch input {
+  flex: 1;
+  min-inline-size: 0;
+}
+
+.labelSearch input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.labelDialog {
+  padding: 12px;
+  outline: none;
+}
+
+.labelForm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  inline-size: 260px;
+  max-inline-size: 80vw;
+}
+
+.labelForm p {
+  margin: 0;
+}
+
+.labelFormRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

@@ -10,6 +10,7 @@ import { useAppearance } from "../appearance/AppearanceProvider";
 import { useProject } from "../data/board";
 import { useUndo } from "../data/hooks";
 import { useTimerCommands } from "../data/time";
+import { useTimeZone } from "../data/zone";
 import { useT } from "../i18n/I18n";
 import { appWindow } from "../ipc/window";
 import { NewProjectDialog, type NewProjectRequest } from "../screens/project/NewProjectDialog";
@@ -52,6 +53,7 @@ export function viewOf(pathname: string): View {
 export function Shell({ titleBar, openGallery }: ShellProps) {
   const t = useT();
   const { locale } = useLocale();
+  const zone = useTimeZone();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const view = viewOf(pathname);
@@ -111,7 +113,7 @@ export function Shell({ titleBar, openGallery }: ShellProps) {
   const title =
     view === "project" ? (project.data?.name ?? projectKey ?? "") : t(view === "today" ? "view-today" : view === "time" ? "view-time-report" : "view-all-tasks");
   const subtitle =
-    view === "today" ? new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long" }).format(new Date()) : undefined;
+    view === "today" ? new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long", ...(zone === undefined ? {} : { timeZone: zone }) }).format(new Date()) : undefined;
 
   useEffect(() => {
     // Fluent isolates placeables with invisible marks; window titles show them.

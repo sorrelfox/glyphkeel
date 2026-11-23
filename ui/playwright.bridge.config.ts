@@ -11,8 +11,11 @@ import { defineConfig, devices } from "@playwright/test";
 // Flows against the real engine: the development bridge serves a fresh
 // workspace on loopback, and a `--mode bridge` build of the UI talks to it
 // from Chromium. Playwright starts both and stops them afterwards.
+// The bridge takes the UI's development port only. Its own port can be
+// another of 5320–5329, so that a bridge left running doesn't stop a run.
 const UI_PORT = 5310;
-const BRIDGE_PORT = 5321;
+process.env.GK_BRIDGE_PORT ??= "5321";
+const BRIDGE_PORT = Number(process.env.GK_BRIDGE_PORT);
 const BRIDGE_DIST = "node_modules/.cache/bridge-dist";
 
 // The workers inherit these, so every test sees the same token and folder.

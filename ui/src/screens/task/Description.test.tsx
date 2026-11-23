@@ -95,6 +95,24 @@ describe("the description", () => {
     expect(await stored(transport, task.key)).toBe("Before we go:\n\n- [ ] Book the train\n- [x] Pack the bags\n\nSee the *full* list.\n");
   });
 
+  it("formats the selection from the toolbar and saves the text exactly", async () => {
+    const { transport, task, section } = await renderDescription("Pack light\r\nand early\r\n");
+    fireEvent.click(within(section).getByRole("button", { name: "Edit" }));
+    const field = await within(section).findByRole("textbox", { name: "Description" });
+    const toolbar = within(section).getByRole("toolbar", { name: "Formatting" });
+    const bold = within(toolbar).getByRole("button", { name: "Bold" });
+    const view = EditorView.findFromDOM(field);
+    act(() => {
+      view?.dispatch({ selection: { anchor: 5, head: 10 } });
+    });
+    fireEvent.click(bold);
+    fireEvent.click(within(toolbar).getByRole("button", { name: "Bulleted list" }));
+    fireEvent.click(within(section).getByRole("button", { name: "Save" }));
+    await waitFor(async () => {
+      expect(await stored(transport, task.key)).toBe("- Pack **light**\r\nand early\r\n");
+    });
+  });
+
   it("keeps a clashing edit as a conflict copy, and resolves it with the copy", async () => {
     const { transport, task, section } = await renderDescription();
     fireEvent.click(within(section).getByRole("button", { name: "Edit" }));

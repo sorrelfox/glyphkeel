@@ -15,9 +15,9 @@ import { formatClock } from "../../data/duration";
 import { errorToast, useCall, useCommand, useOp } from "../../data/hooks";
 import { isLongRunning, useDurations, useElapsedSeconds, useTimer, useTimerCommands } from "../../data/time";
 import { type Reminder, type Task, type TimeEntry } from "../../generated/ops";
+import { dayIn, momentFrom, momentIn, useTimeZone, useToday } from "../../data/zone";
 import { useT } from "../../i18n/I18n";
 import { useDayFormat } from "../board/CardView";
-import { isoDay } from "../board/model";
 import styles from "./Time.module.css";
 
 // ---------- the Time tab ----------
@@ -186,6 +186,7 @@ export function TimeEntries({ task, readOnly }: { task: Task; readOnly: boolean 
   const t = useT();
   const durations = useDurations();
   const [logging, setLogging] = useState(false);
+  const today = useToday();
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const log = useCommand("time.log");
   const entries = task.time_entries ?? [];
@@ -206,7 +207,7 @@ export function TimeEntries({ task, readOnly }: { task: Task; readOnly: boolean 
       </div>
       {logging && (
         <EntryForm
-          initial={{ duration: "", date: isoDay(new Date()), note: "" }}
+          initial={{ duration: "", date: today, note: "" }}
           label={t("time-log")}
           saveLabel={t("time-log-save")}
           busy={log.isPending}
@@ -315,21 +316,17 @@ export function QuickLog({ task, readOnly }: { task: Task; readOnly: boolean }) 
 
 // ---------- the reminder ----------
 
-/** A moment as `YYYY-MM-DDTHH:MM` in local time, for a datetime field. */
-function localMoment(at: Date): string {
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${isoDay(at)}T${pad(at.getHours())}:${pad(at.getMinutes())}`;
-}
-
 /** What the reminder says in the panel: "Nov 24, 10:00 AM · 1 day before due"; the year only when it isn't this one. */
 function useReminderText(): (reminder: Reminder) => string {
   const t = useT();
   const { locale } = useLocale();
-  const thisYear = new Intl.DateTimeFormat(locale, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-  const otherYear = new Intl.DateTimeFormat(locale, { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  const zone = useTimeZone();
+  const inZone = zone === undefined ? {} : { timeZone: zone };
+  const thisYear = new Intl.DateTimeFormat(locale, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", ...inZone });
+  const otherYear = new Intl.DateTimeFormat(locale, { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", ...inZone });
   const moment = (at: string) => {
     const date = new Date(at);
-    return (date.getFullYear() === new Date().getFullYear() ? thisYear : otherYear).format(date);
+    return (dayIn(date, zone).slice(0, 4) === dayIn(new Date(), zone).slice(0, 4) ? thisYear : otherYear).format(date);
   };
   return (reminder) => {
     if (reminder.days_before_due !== undefined) {
@@ -377,7 +374,8 @@ function ReminderForm({ task, close }: { task: Task; close: () => void }) {
   const settings = useOp("settings.get", {});
   const reminder = task.reminder;
   const [mode, setMode] = useState<"at" | "due">(reminder?.days_before_due !== undefined || (reminder === undefined && task.due_date !== undefined) ? "due" : "at");
-  const [at, setAt] = useState(() => (reminder?.at !== undefined && reminder.days_before_due === undefined ? localMoment(new Date(reminder.at)) : localMoment(new Date(Date.now() + 3_600_000))));
+  const zone = useTimeZone();
+  const [at, setAt] = useState(() => momentIn(reminder?.at !== undefined && reminder.days_before_due === undefined ? new Date(reminder.at) : Date.now() + 3_600_000, zone));
   const [days, setDays] = useState(String(reminder?.days_before_due ?? 1));
   const [time, setTime] = useState(reminder?.time ?? "");
   const [note, setNote] = useState(reminder?.note ?? "");
@@ -396,7 +394,7 @@ function ReminderForm({ task, close }: { task: Task; close: () => void }) {
           call(
             "reminder.set",
             mode === "at"
-              ? { key: task.key, at: new Date(at).toISOString(), note: noteOrNull }
+              ? { key: task.key, at: new Date(momentFrom(at, zone)).toISOString(), note: noteOrNull }
               : { key: task.key, days_before_due: Number(days), time: time === "" ? null : time, note: noteOrNull },
           ),
         );

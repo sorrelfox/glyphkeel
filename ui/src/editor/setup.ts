@@ -8,10 +8,11 @@
 
 import { autocompletion, completionKeymap } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
-import { Compartment, EditorSelection, EditorState, type Extension } from "@codemirror/state";
-import { drawSelection, EditorView, keymap, type KeyBinding } from "@codemirror/view";
+import { Compartment, EditorState, type Extension } from "@codemirror/state";
+import { drawSelection, EditorView, keymap } from "@codemirror/view";
 
 import { completionProviders, completionSources, editorText } from "./complete";
+import { formatKeys } from "./format";
 import { checkEdits, convertLineBreaks, type LineBreak, type TextEdit } from "./lineEndings";
 import { livePreview } from "./livePreview";
 import { pasting } from "./paste";
@@ -52,34 +53,6 @@ export const compartments = {
   label: new Compartment(),
 };
 
-/** Wraps each selection in markers, or puts the cursor between them. */
-function wrapSelection(before: string, after: string) {
-  return (view: EditorView): boolean => {
-    if (view.state.readOnly) {
-      return false;
-    }
-    const transaction = view.state.changeByRange((range) => ({
-      changes: [
-        { from: range.from, insert: before },
-        { from: range.to, insert: after },
-      ],
-      range: range.empty
-        ? EditorSelection.cursor(range.from + before.length)
-        : EditorSelection.range(range.from + before.length, range.to + before.length),
-    }));
-    view.dispatch(transaction, { userEvent: "input.format" });
-    return true;
-  };
-}
-
-/** Markdown keys on top of CodeMirror's own: Ctrl+B bold, Ctrl+I italic, Ctrl+E code, Ctrl+K link. */
-const formattingKeys: KeyBinding[] = [
-  { key: "Mod-b", run: wrapSelection("**", "**") },
-  { key: "Mod-i", run: wrapSelection("*", "*") },
-  { key: "Mod-e", run: wrapSelection("`", "`") },
-  { key: "Mod-k", run: wrapSelection("[", "]()") },
-];
-
 export function modeExtension(mode: EditorMode): Extension {
   return mode === "preview" ? livePreview : [];
 }
@@ -116,7 +89,7 @@ export function editorExtensions(options: EditorOptions): Extension[] {
     editorText.of(environment.text),
     checklistHandler.of(environment.toggle),
     pasting,
-    keymap.of([...completionKeymap, ...formattingKeys, ...defaultKeymap, ...historyKeymap, indentWithTab]),
+    keymap.of([...completionKeymap, ...formatKeys, ...defaultKeymap, ...historyKeymap, indentWithTab]),
     editorTheme,
     compartments.mode.of(modeExtension(options.mode)),
     compartments.readOnly.of(readOnlyExtension(options.readOnly)),

@@ -14,8 +14,9 @@ import { Switch } from "../components/Switch";
 import { useCommand, useOp } from "../data/hooks";
 import { type SettingsPatch, type WeekStart } from "../generated/ops";
 import { useT } from "../i18n/I18n";
-import { useAppSettings, useUpdateAppSettings } from "../ipc/appSettings";
+import { SYSTEM_ZONE, useAppSettings, useTimeZones, useUpdateAppSettings } from "../ipc/appSettings";
 import styles from "./Preferences.module.css";
+import { TimeZonePicker } from "./TimeZonePicker";
 
 const WEEK_STARTS: readonly WeekStart[] = ["monday", "saturday", "sunday"];
 
@@ -401,6 +402,7 @@ function TimePage() {
   const data = settings.data;
   return (
     <>
+      <ZoneGroup />
       <Group title={t("preferences-calendar")}>
         <Row label={t("preferences-week-start")} about={t("preferences-week-start-about")}>
           <Segmented
@@ -455,6 +457,40 @@ function TimePage() {
       </Group>
     </>
   );
+}
+
+/** The person's time zone: theirs, not the workspace's, so it is kept with the app's settings. */
+function ZoneGroup() {
+  const t = useT();
+  const app = useAppSettings();
+  const zones = useTimeZones(true);
+  const updateApp = useUpdateAppSettings();
+  // The field takes its list once; it waits for it (an error leaves only "System").
+  if (!app.data || zones.isPending) {
+    return null;
+  }
+  const chosen = app.data.time_zone;
+  return (
+    <Group title={t("preferences-zone-group")}>
+      <Row label={t("preferences-time-zone")} about={t("preferences-time-zone-about")}>
+        <TimeZonePicker
+          label={t("preferences-time-zone")}
+          value={chosen}
+          systemZone={chosen === SYSTEM_ZONE ? app.data.zone_in_use : systemZoneName()}
+          zones={zones.data ?? []}
+          onChange={(time_zone) => {
+            updateApp({ time_zone });
+          }}
+        />
+      </Row>
+    </Group>
+  );
+}
+
+/** The computer's own zone, by name, as the page sees it. */
+function systemZoneName(): string | undefined {
+  const zone = new Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return zone === "" ? undefined : zone;
 }
 
 function RemindersPage() {

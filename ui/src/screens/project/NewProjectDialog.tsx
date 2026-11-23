@@ -5,8 +5,8 @@ import { useState } from "react";
 import { Button } from "react-aria-components";
 
 import { Dialog } from "../../components/Dialog";
-import { type Hue } from "../../data/catalog";
-import { useCall } from "../../data/hooks";
+import { suggestHue, type Hue } from "../../data/catalog";
+import { useCall, useOp } from "../../data/hooks";
 import { OpFailure } from "../../data/transport";
 import { useT } from "../../i18n/I18n";
 import { HuePicker } from "./HuePicker";
@@ -42,12 +42,16 @@ export function NewProjectDialog({ request, onClose }: NewProjectDialogProps) {
   const call = useCall();
   const [name, setName] = useState("");
   const [key, setKey] = useState<string | null>(null);
-  const [hue, setHue] = useState<Hue>("blue");
+  // The colour: one its siblings don't use yet, as the engine suggests, until another is picked.
+  const [picked, setPicked] = useState<Hue | null>(null);
+  const projects = useOp("project.list", { include_archived: true });
+  const siblings = (projects.data?.items ?? []).filter((project) => (project.parent ?? null) === request.parent);
+  const hue = picked ?? suggestHue(siblings.map((project) => project.hue));
   const [error, setError] = useState<string | null>(null);
   const shownKey = key ?? suggestKey(name);
 
   const create = () => {
-    call("project.create", { name, key: shownKey, parent: request.parent, hue }).then(
+    call("project.create", { name, key: shownKey, parent: request.parent, ...(picked === null ? {} : { hue: picked }) }).then(
       (change) => {
         onClose(change.project.key);
       },
@@ -113,7 +117,7 @@ export function NewProjectDialog({ request, onClose }: NewProjectDialogProps) {
         </label>
         <div className={styles.formRow}>
           <span className={styles.formLabel}>{t("project-colour")}</span>
-          <HuePicker label={t("project-colour")} value={hue} onChange={setHue} />
+          <HuePicker label={t("project-colour")} value={hue} onChange={setPicked} />
         </div>
         {error && (
           <p className={styles.error} role="alert">

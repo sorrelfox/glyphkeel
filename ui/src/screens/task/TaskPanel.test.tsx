@@ -54,6 +54,49 @@ function typeInto(textbox: HTMLElement, text: string) {
 /** The text in a Markdown editor. */
 const editorText = (textbox: HTMLElement) => EditorView.findFromDOM(textbox)?.state.doc.toString();
 
+describe("labels from the task panel", () => {
+  it("creates a label by the typed name, in the suggested colour, and puts it on the task", async () => {
+    const { panel, task, transport } = await renderPanel();
+    fireEvent.click(within(panel).getByRole("button", { name: "Change labels" }));
+    const search = await screen.findByRole("searchbox", { name: "Find or create a label" });
+    fireEvent.change(search, { target: { value: "garden" } });
+    const create = await screen.findByRole("menuitemcheckbox", { name: named(/^Create label “garden”$/) });
+    fireEvent.click(create);
+    const chip = await within(panel).findByText("garden", { selector: ".chip" });
+    // Personal's labels are green, orange and yellow: red is the first one free.
+    expect(chip.className).toContain("hue-red");
+    const stored = (await transport.call("task.get", { keys: [task.key] })) as { items: { labels: { name: string }[] }[] };
+    expect(stored.items[0]?.labels.map((label) => label.name)).toEqual(["garden"]);
+  });
+
+  it("filters the labels as one types and offers no copy of one that exists", async () => {
+    const { panel } = await renderPanel();
+    fireEvent.click(within(panel).getByRole("button", { name: "Change labels" }));
+    const search = await screen.findByRole("searchbox", { name: "Find or create a label" });
+    fireEvent.change(search, { target: { value: "HOME" } });
+    await waitFor(() => {
+      expect(screen.getAllByRole("menuitemcheckbox").map((item) => plain(item.textContent))).toEqual(["home"]);
+    });
+  });
+
+  it("creates the first label of a project from a small form", async () => {
+    const transport = fakeTransport();
+    await transport.call("project.create", { name: "Empty", key: "EMP" });
+    const task = ((await transport.call("task.create", { project: "EMP", title: "First" })) as TaskChange).task;
+    render(<App start={{ titleBar: "app", locale: "en-US" }} client={createClient(transport)} path={`/projects/EMP?task=${task.key}`} />);
+    const panel = await screen.findByRole("complementary", { name: named(new RegExp(`Task ${task.key}`)) });
+    const plus = await within(panel).findByRole("button", { name: "Change labels" });
+    expect((plus as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(plus);
+    const form = await screen.findByRole("dialog", { name: "New label" });
+    const name = within(form).getByRole("textbox", { name: "Name" });
+    fireEvent.change(name, { target: { value: "urgent" } });
+    fireEvent.submit(name);
+    const chip = await within(panel).findByText("urgent", { selector: ".chip" });
+    expect(chip.className).toContain("hue-red");
+  });
+});
+
 describe("the task panel's sections", () => {
   it("adds a subtask, closes it from its checkbox and counts it", async () => {
     const { panel } = await renderPanel();

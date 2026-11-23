@@ -15,6 +15,7 @@ import { GLYPHS, HUES, MODULES, STATUS_CATEGORIES, type Hue, type Project, type 
 import { useCommand } from "../../data/hooks";
 import { useT } from "../../i18n/I18n";
 import { HuePicker } from "./HuePicker";
+import { IconPicker } from "./IconPicker";
 import styles from "./Project.module.css";
 
 interface ProjectSettingsProps {
@@ -136,6 +137,16 @@ function General({ project }: { project: Project }) {
       <Row label={t("project-colour")}>
         <HuePicker label={t("project-colour")} value={project.hue} onChange={(hue) => { patch({ hue }); }} />
       </Row>
+      <Row label={t("project-icon")}>
+        <IconPicker
+          label={t("project-icon")}
+          hue={project.hue}
+          value={project.icon}
+          onChange={(icon) => {
+            patch(icon === undefined ? { clear: ["icon"] } : { icon });
+          }}
+        />
+      </Row>
       <Row label={t("project-description")}>
         <SaveField label={t("project-description")} value={project.description} onSave={(description) => { patch({ description }); }} />
       </Row>
@@ -169,11 +180,11 @@ function General({ project }: { project: Project }) {
   );
 }
 
-function HueSelect({ label, value, onChange }: { label: string; value: Hue; onChange: (hue: Hue) => void }) {
+function HueSelect({ label, value, onChange, className }: { label: string; value: Hue; onChange: (hue: Hue) => void; className?: string | undefined }) {
   const t = useT();
   return (
     <Select
-      className={classes(styles.select)}
+      className={classes(styles.select, className)}
       label={label}
       value={value}
       onChange={onChange}
@@ -381,6 +392,8 @@ function Labels({ project }: { project: Project }) {
   const create = useCommand("label.create");
   const remove = useCommand("label.delete");
   const [name, setName] = useState("");
+  // The colour of the next label: the engine's suggestion until one is picked.
+  const [hue, setHue] = useState<Hue | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
   const ref = { project: project.key };
   return (
@@ -418,8 +431,10 @@ function Labels({ project }: { project: Project }) {
         onSubmit={(event) => {
           event.preventDefault();
           if (name.trim() !== "") {
-            create.mutate({ ...ref, name });
+            // Without a picked colour the engine gives the suggested one.
+            create.mutate(hue === null ? { ...ref, name } : { ...ref, name, hue });
             setName("");
+            setHue(null);
           }
         }}
       >
@@ -427,6 +442,7 @@ function Labels({ project }: { project: Project }) {
           <Plus className="ic" />
           <input aria-label={t("label-add")} placeholder={t("label-add")} value={name} onChange={(event) => { setName(event.target.value); }} />
         </span>
+        <HueSelect className={classes(styles.addHue)} label={t("label-add-colour")} value={hue ?? project.next_label_hue} onChange={setHue} />
         <button type="submit" className="btn" disabled={name.trim() === ""}>
           {t("settings-add")}
         </button>
