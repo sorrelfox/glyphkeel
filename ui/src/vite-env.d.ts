@@ -8,3 +8,6 @@ declare const __BRIDGE__: boolean;
 
 /** True only in `vite --mode fake`: the page then works on sample data in memory, without the engine. */
 declare const __FAKE__: boolean;
+
+/** The product's version, from the workspace's Cargo.toml. */
+declare const __VERSION__: string;

@@ -23,8 +23,8 @@ use anyhow::{Context, Result, bail};
 
 const HELP: &str = "\
 Usage: cargo xtask ci [--suite S[,S…]] [--distro D[,D…]] [--engine E] [--rebuild]
-                      [--cache-dir DIR]
-       cargo xtask ci --here [--suite S[,S…]]
+                      [--cache-dir DIR] [--package-release N]
+       cargo xtask ci --here [--suite S[,S…]] [--package-release N]
        cargo xtask ci --list
 
 Runs check suites in containers, one image per distribution.
@@ -42,6 +42,9 @@ Options:
                 volumes: DIR/cargo-registry, DIR/pnpm-store and
                 DIR/target-<distro>. Packages land in
                 DIR/target-<distro>/dist/bundle/.
+  --package-release N
+                The rpm's release number, for a rebuild of the same version
+                (`package` suite only). Default: 1.
   --here        Run the suites on this machine, without containers. This is
                 what runs inside each container.
   --list        List the suites and distributions.
@@ -124,8 +127,9 @@ impl Suite {
         matches!(self, Self::Static | Self::Ui | Self::App | Self::Package)
     }
 
-    /// The commands of this suite, in order.
-    fn steps(self) -> Vec<Step> {
+    /// The commands of this suite, in order. `package_release` is the rpm's
+    /// release number, for the `package` suite.
+    fn steps(self, package_release: Option<u32>) -> Vec<Step> {
         match self {
             Self::Static => vec![
                 Step::cargo(&["fmt", "--all", "--check"]),
@@ -167,7 +171,8 @@ impl Suite {
             Self::Deny => vec![Step::cargo(&["deny", "--locked", "check"])],
             // The packages hold both programs: the command line is built
             // first and added to /usr/bin next to the app, where it looks
-            // for the app. `bundle.active` is off in tauri.conf.json, so
+            // for the app, with its shell completions and man page, which it
+            // writes itself. `bundle.active` is off in tauri.conf.json, so
             // everyday builds never bundle; this suite switches it on. The
             // UI is built by the config's `beforeBuildCommand`.
             Self::Package => vec![
@@ -179,27 +184,104 @@ impl Suite {
                     "--profile",
                     "dist",
                 ]),
-                Step::pnpm(&[
-                    "tauri",
-                    "build",
-                    "--ci",
-                    "--bundles",
-                    "deb,rpm",
-                    "--config",
-                    PACKAGE_CONFIG,
-                    "--",
-                    "--profile",
-                    "dist",
-                ]),
+                Step::CliFiles,
+                Step::Pnpm(
+                    [
+                        "tauri",
+                        "build",
+                        "--ci",
+                        "--bundles",
+                        "deb,rpm",
+                        "--config",
+                        &package_config(package_release),
+                        "--",
+                        "--profile",
+                        "dist",
+                    ]
+                    .map(str::to_owned)
+                    .to_vec(),
+                ),
             ],
         }
     }
 }
 
-/// The Tauri configuration the `package` suite adds: bundling on, and the
-/// command line `glyphkeel` in /usr/bin. The source path is relative to
-/// crates/gk-app, where tauri.conf.json is.
-const PACKAGE_CONFIG: &str = r#"{"bundle":{"active":true,"linux":{"deb":{"files":{"/usr/bin/glyphkeel":"../../target/dist/glyphkeel"}},"rpm":{"files":{"/usr/bin/glyphkeel":"../../target/dist/glyphkeel"}}}}}"#;
+/// Where the command line's generated files land, relative to the
+/// repository: the shell completions and the man page.
+const CLI_FILES_DIR: &str = "target/dist/cli-files";
+
+/// The files `glyphkeel` writes for the packages: the file name, then the
+/// arguments that print it.
+const CLI_FILES: [(&str, &[&str]); 4] = [
+    ("glyphkeel.bash", &["completions", "bash"]),
+    ("_glyphkeel", &["completions", "zsh"]),
+    ("glyphkeel.fish", &["completions", "fish"]),
+    ("glyphkeel.1", &["man"]),
+];
+
+/// The Tauri configuration the `package` suite adds: bundling on, the
+/// command line `glyphkeel` in /usr/bin with its completions and man page,
+/// and the rpm's release number. Source paths are relative to crates/gk-app,
+/// where tauri.conf.json is. zsh looks in a different folder on Debian and
+/// on Fedora.
+fn package_config(package_release: Option<u32>) -> String {
+    let files = |zsh: &str| {
+        let generated = |name: &str| format!("../../{CLI_FILES_DIR}/{name}");
+        serde_json::json!({
+            "/usr/bin/glyphkeel": "../../target/dist/glyphkeel",
+            "/usr/share/bash-completion/completions/glyphkeel": generated("glyphkeel.bash"),
+            format!("{zsh}/_glyphkeel"): generated("_glyphkeel"),
+            "/usr/share/fish/vendor_completions.d/glyphkeel.fish": generated("glyphkeel.fish"),
+            "/usr/share/man/man1/glyphkeel.1.gz": generated("glyphkeel.1.gz"),
+        })
+    };
+    let mut rpm = serde_json::json!({ "files": files("/usr/share/zsh/site-functions") });
+    if let Some(release) = package_release {
+        rpm["release"] = release.to_string().into();
+    }
+    serde_json::json!({
+        "bundle": {
+            "active": true,
+            "linux": {
+                "deb": { "files": files("/usr/share/zsh/vendor-completions") },
+                "rpm": rpm,
+            }
+        }
+    })
+    .to_string()
+}
+
+/// Runs the built command line to write its completions and man page into
+/// [`CLI_FILES_DIR`]; the man page is compressed, as the distributions ship
+/// them.
+fn write_cli_files(root: &Path) -> Result<bool> {
+    let program = root.join("target/dist/glyphkeel");
+    let dir = root.join(CLI_FILES_DIR);
+    fs::create_dir_all(&dir).with_context(|| format!("cannot create {}", dir.display()))?;
+    for (name, args) in CLI_FILES {
+        let output = Command::new(&program)
+            .args(args)
+            .output()
+            .with_context(|| format!("cannot run {}", program.display()))?;
+        if !output.status.success() || output.stdout.is_empty() {
+            eprintln!(
+                "`glyphkeel {}` failed: {}",
+                args.join(" "),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            return Ok(false);
+        }
+        let file = dir.join(name);
+        fs::write(&file, &output.stdout)
+            .with_context(|| format!("cannot write {}", file.display()))?;
+    }
+    // `-n`: no name or time stamp in the header, so the file is reproducible.
+    status(
+        Command::new("gzip")
+            .args(["-9", "-n", "-f", "glyphkeel.1"])
+            .current_dir(&dir),
+    )
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Distro {
@@ -268,20 +350,22 @@ impl Engine {
 
 #[derive(Debug, PartialEq, Eq)]
 enum Step {
-    Cargo(Vec<&'static str>),
-    Pnpm(Vec<&'static str>),
+    Cargo(Vec<String>),
+    Pnpm(Vec<String>),
     Headers,
     Deps,
     GenCheck,
+    /// The command line's completions and man page, for the packages.
+    CliFiles,
 }
 
 impl Step {
-    fn cargo(args: &[&'static str]) -> Self {
-        Self::Cargo(args.to_vec())
+    fn cargo(args: &[&str]) -> Self {
+        Self::Cargo(args.iter().map(|&arg| arg.to_owned()).collect())
     }
 
-    fn pnpm(args: &[&'static str]) -> Self {
-        Self::Pnpm(args.to_vec())
+    fn pnpm(args: &[&str]) -> Self {
+        Self::Pnpm(args.iter().map(|&arg| arg.to_owned()).collect())
     }
 
     fn run(&self, root: &Path) -> Result<bool> {
@@ -291,6 +375,7 @@ impl Step {
             Self::Headers => crate::headers::run(root),
             Self::Deps => crate::deps::run(root),
             Self::GenCheck => crate::codegen::run(root, &["--check".to_owned()]),
+            Self::CliFiles => write_cli_files(root),
         }
     }
 }
@@ -303,6 +388,7 @@ impl fmt::Display for Step {
             Self::Headers => f.write_str("cargo xtask check-headers"),
             Self::Deps => f.write_str("cargo xtask check-deps"),
             Self::GenCheck => f.write_str("cargo xtask gen --check"),
+            Self::CliFiles => write!(f, "glyphkeel completions and man into {CLI_FILES_DIR}"),
         }
     }
 }
@@ -314,6 +400,8 @@ struct Options {
     engine: Option<Engine>,
     rebuild: bool,
     cache_dir: Option<PathBuf>,
+    /// The rpm's release number; Tauri's default (1) when not given.
+    package_release: Option<u32>,
     here: bool,
     list: bool,
     help: bool,
@@ -327,6 +415,7 @@ impl Options {
             engine: None,
             rebuild: false,
             cache_dir: None,
+            package_release: None,
             here: false,
             list: false,
             help: false,
@@ -366,6 +455,15 @@ impl Options {
                 }
                 "--rebuild" => options.rebuild = true,
                 "--cache-dir" => options.cache_dir = Some(PathBuf::from(value()?)),
+                "--package-release" => {
+                    let given = value()?;
+                    match given.parse::<u32>() {
+                        Ok(release) if release >= 1 => options.package_release = Some(release),
+                        _ => {
+                            bail!("`--package-release` needs a whole number from 1, not `{given}`")
+                        }
+                    }
+                }
                 "--here" => options.here = true,
                 "--list" => options.list = true,
                 "-h" | "--help" => options.help = true,
@@ -377,6 +475,9 @@ impl Options {
         }
         if options.distros.is_empty() {
             options.distros = Distro::ALL.to_vec();
+        }
+        if options.package_release.is_some() && !options.suites.contains(&Suite::Package) {
+            bail!("`--package-release` applies to the `package` suite only");
         }
         if options.here
             && (options.engine.is_some() || options.rebuild || options.cache_dir.is_some())
@@ -407,7 +508,7 @@ pub(crate) fn run(root: &Path, args: &[String]) -> Result<bool> {
         return Ok(true);
     }
     if options.here {
-        return run_here(root, &options.suites);
+        return run_here(root, &options.suites, options.package_release);
     }
     let engine = match options.engine {
         Some(engine) => engine,
@@ -428,6 +529,7 @@ pub(crate) fn run(root: &Path, args: &[String]) -> Result<bool> {
                 engine,
                 distro,
                 &options.suites,
+                options.package_release,
                 options.cache_dir.as_deref(),
             )?;
         let seconds = started.elapsed().as_secs();
@@ -459,7 +561,7 @@ fn list() {
 }
 
 /// Runs the suites on this machine, stopping at the first failure.
-fn run_here(root: &Path, suites: &[Suite]) -> Result<bool> {
+fn run_here(root: &Path, suites: &[Suite], package_release: Option<u32>) -> Result<bool> {
     if suites.iter().any(|suite| suite.needs_node_modules()) {
         eprintln!("==> pnpm install --frozen-lockfile");
         if !Step::pnpm(&["install", "--frozen-lockfile"]).run(root)? {
@@ -467,7 +569,7 @@ fn run_here(root: &Path, suites: &[Suite]) -> Result<bool> {
         }
     }
     for &suite in suites {
-        for step in suite.steps() {
+        for step in suite.steps(package_release) {
             eprintln!("==> [{}] {step}", suite.name());
             if !step.run(root)? {
                 eprintln!("==> FAILED: [{}] {step}", suite.name());
@@ -622,6 +724,7 @@ fn run_in_container(
     engine: Engine,
     distro: Distro,
     suites: &[Suite],
+    package_release: Option<u32>,
     cache_dir: Option<&Path>,
 ) -> Result<bool> {
     let names: Vec<&str> = suites.iter().map(|suite| suite.name()).collect();
@@ -631,7 +734,7 @@ fn run_in_container(
     // files (build output, generated files) stay out; otherwise the whole
     // tree is copied without the build output.
     let files = crate::headers::git_files(root);
-    let script = copy_script(files.is_some(), &names);
+    let script = copy_script(files.is_some(), &names, package_release);
     let source = root
         .to_str()
         .context("the repository path is not valid UTF-8")?;
@@ -675,15 +778,18 @@ fn run_in_container(
 
 /// The shell script run in each container: copy the source into `/work`,
 /// then run the suites there.
-fn copy_script(from_list: bool, suites: &[&str]) -> String {
+fn copy_script(from_list: bool, suites: &[&str], package_release: Option<u32>) -> String {
     let copy = if from_list {
         "tar -C /src --null --files-from=- -cf - | tar -C /work -xf -"
     } else {
         "tar -C /src --exclude=./.git --exclude=./target --exclude=./node_modules \
          --exclude=./ui/node_modules --exclude=./ui/dist -cf - . | tar -C /work -xf -"
     };
+    let release = package_release
+        .map(|release| format!(" --package-release {release}"))
+        .unwrap_or_default();
     format!(
-        "set -e; {copy}; exec cargo xtask ci --here --suite {} </dev/null",
+        "set -e; {copy}; exec cargo xtask ci --here --suite {}{release} </dev/null",
         suites.join(",")
     )
 }
@@ -703,7 +809,8 @@ mod tests {
     use std::path::PathBuf;
 
     use super::{
-        Distro, Engine, Options, PACKAGE_CONFIG, Pins, Step, Suite, cache_volumes, copy_script,
+        CLI_FILES, CLI_FILES_DIR, Distro, Engine, Options, Pins, Step, Suite, cache_volumes,
+        copy_script, package_config,
     };
 
     fn parse(args: &[&str]) -> anyhow::Result<Options> {
@@ -746,6 +853,13 @@ mod tests {
         assert!(parse(&["--here", "--cache-dir", "/tmp/x"]).is_err());
         assert!(parse(&["--cache-dir"]).is_err());
         assert!(parse(&["--frobnicate"]).is_err());
+        assert!(
+            parse(&["--package-release", "2"]).is_err(),
+            "package suite only"
+        );
+        assert!(parse(&["--suite", "package", "--package-release", "0"]).is_err());
+        assert!(parse(&["--suite", "package", "--package-release", "x"]).is_err());
+        assert!(parse(&["--suite", "package", "--package-release"]).is_err());
     }
 
     #[test]
@@ -755,7 +869,12 @@ mod tests {
         let options = parse(&["--suite", "package", "--cache-dir", "ci-cache"]).unwrap();
         assert_eq!(options.suites, [Suite::Package]);
         assert_eq!(options.cache_dir, Some(PathBuf::from("ci-cache")));
+        assert_eq!(options.package_release, None);
         assert!(Suite::Package.needs_node_modules());
+        let options = parse(&["--suite=package", "--package-release=3"]).unwrap();
+        assert_eq!(options.package_release, Some(3));
+        let options = parse(&["--here", "--suite", "package", "--package-release", "2"]).unwrap();
+        assert_eq!(options.package_release, Some(2));
     }
 
     #[test]
@@ -801,22 +920,54 @@ mod tests {
 
     #[test]
     fn the_packages_hold_the_app_and_the_command_line() {
-        let config: serde_json::Value = serde_json::from_str(PACKAGE_CONFIG).unwrap();
+        let config: serde_json::Value = serde_json::from_str(&package_config(None)).unwrap();
         assert_eq!(config["bundle"]["active"], true);
-        for format in ["deb", "rpm"] {
+        for (format, zsh) in [
+            ("deb", "/usr/share/zsh/vendor-completions"),
+            ("rpm", "/usr/share/zsh/site-functions"),
+        ] {
+            let files = &config["bundle"]["linux"][format]["files"];
+            assert_eq!(files["/usr/bin/glyphkeel"], "../../target/dist/glyphkeel");
+            let generated = |name: &str| format!("../../{CLI_FILES_DIR}/{name}");
             assert_eq!(
-                config["bundle"]["linux"][format]["files"]["/usr/bin/glyphkeel"],
-                "../../target/dist/glyphkeel"
+                files["/usr/share/bash-completion/completions/glyphkeel"],
+                generated("glyphkeel.bash")
             );
+            assert_eq!(files[format!("{zsh}/_glyphkeel")], generated("_glyphkeel"));
+            assert_eq!(
+                files["/usr/share/fish/vendor_completions.d/glyphkeel.fish"],
+                generated("glyphkeel.fish")
+            );
+            assert_eq!(
+                files["/usr/share/man/man1/glyphkeel.1.gz"],
+                generated("glyphkeel.1.gz")
+            );
+            assert_eq!(files.as_object().unwrap().len(), 5);
         }
+        // Every packaged generated file is one the command line writes.
+        for (name, _) in CLI_FILES {
+            let packaged = if name.ends_with(".1") {
+                format!("{name}.gz")
+            } else {
+                name.to_owned()
+            };
+            assert!(package_config(None).contains(&format!("{CLI_FILES_DIR}/{packaged}")));
+        }
+        // Tauri's default release unless one is given.
+        assert!(config["bundle"]["linux"]["rpm"].get("release").is_none());
+        let config: serde_json::Value = serde_json::from_str(&package_config(Some(3))).unwrap();
+        assert_eq!(config["bundle"]["linux"]["rpm"]["release"], "3");
+
         let steps: Vec<String> = Suite::Package
-            .steps()
+            .steps(Some(3))
             .iter()
             .map(ToString::to_string)
             .collect();
         assert!(steps[0].starts_with("cargo build --package gk-cli"));
         assert!(steps[0].ends_with("--profile dist"));
-        assert!(steps[1].starts_with("pnpm tauri build"));
+        assert_eq!(Suite::Package.steps(None)[1], Step::CliFiles);
+        assert!(steps[2].starts_with("pnpm tauri build"));
+        assert!(steps[2].contains(r#""release":"3""#));
     }
 
     #[test]
@@ -849,8 +1000,12 @@ mod tests {
 
     #[test]
     fn the_suites_check_generated_files_the_bundle_and_the_bridge_flows() {
-        assert!(Suite::Static.steps().contains(&Step::GenCheck));
-        let ui: Vec<String> = Suite::Ui.steps().iter().map(ToString::to_string).collect();
+        assert!(Suite::Static.steps(None).contains(&Step::GenCheck));
+        let ui: Vec<String> = Suite::Ui
+            .steps(None)
+            .iter()
+            .map(ToString::to_string)
+            .collect();
         let build = ui.iter().position(|step| step == "pnpm build").unwrap();
         let bundle = ui
             .iter()
@@ -863,10 +1018,12 @@ mod tests {
 
     #[test]
     fn the_container_copies_the_listed_files_or_the_tree() {
-        let script = copy_script(true, &["static", "ui"]);
+        let script = copy_script(true, &["static", "ui"], None);
         assert!(script.contains("--null --files-from=-"));
         assert!(script.ends_with("exec cargo xtask ci --here --suite static,ui </dev/null"));
-        let script = copy_script(false, &["rust"]);
+        let script = copy_script(true, &["package"], Some(2));
+        assert!(script.ends_with("--suite package --package-release 2 </dev/null"));
+        let script = copy_script(false, &["rust"], None);
         assert!(script.contains("--exclude=./target"));
         assert!(!script.contains("--files-from"));
     }

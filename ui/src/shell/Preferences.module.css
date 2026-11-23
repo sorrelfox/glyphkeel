@@ -9,12 +9,16 @@
   margin: -16px -20px;
 }
 
+/* Drawn like the sidebar, but not the global `.sidebar`: that one hides in a
+   narrow window, and the list of pages must stay. */
 .pages {
   display: flex;
   flex: 0 0 224px;
   flex-direction: column;
   gap: 1px;
   padding: 8px;
+  border-right: 1px solid var(--border);
+  background: var(--sidebar);
 }
 
 .pages > * {
@@ -30,6 +34,7 @@
   padding: 16px 28px 20px;
   overflow: auto;
   outline: none;
+  container: preferences-page / inline-size;
 }
 
 .group {
@@ -55,17 +60,20 @@
   border-top: 1px solid var(--border);
 }
 
+/* The control sits on the right of the text; when both don't fit, it wraps
+   onto its own line below the text, so nothing runs out of the box. */
 .row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 8px 12px;
   min-height: var(--h-headerbar);
   padding: 8px 14px;
 }
 
 .text {
   display: flex;
-  flex: 1 1 0;
+  flex: 1 1 160px;
   flex-direction: column;
   min-width: 0;
   line-height: 18px;
@@ -78,14 +86,24 @@
 
 .control {
   display: flex;
-  flex: none;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  max-width: 60%;
+  min-width: 0;
+  max-width: 100%;
+  margin-left: auto;
+}
+
+/* A segmented control wider than the row breaks onto a second line. */
+.control > [role="radiogroup"] {
+  flex-wrap: wrap;
+  max-width: 100%;
 }
 
 .select {
   width: 200px;
+  max-width: 100%;
 }
 
 .select select {
@@ -118,6 +136,135 @@
   overflow-wrap: anywhere;
   font-family: var(--font-mono);
   font-size: var(--fs-small);
+}
+
+/* Theme tiles: a preview of each theme with its name below, all six in one
+   line, or in two lines of three when the page is too narrow for that. */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@container preferences-page (width < 580px) {
+  .tiles {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .tile > .preview,
+  .tile > .previewPair {
+    aspect-ratio: 2 / 1;
+  }
+}
+
+.tileField {
+  display: flex;
+  min-width: 0;
+}
+
+.tile {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px;
+  border-radius: var(--r-l);
+  outline: none;
+  cursor: default;
+}
+
+.tile[data-hovered] {
+  background: var(--hover);
+}
+
+.tileOn {
+  box-shadow: 0 0 0 2px var(--focus);
+}
+
+.tileFocus {
+  outline: var(--focus-w) solid var(--focus);
+  outline-offset: 2px;
+}
+
+.preview,
+.previewPair {
+  display: flex;
+  aspect-ratio: 3 / 2;
+  overflow: hidden;
+  border-radius: var(--r-m);
+  box-shadow: 0 0 0 1px var(--border-strong);
+}
+
+.previewSide {
+  flex: 0 0 28%;
+  border-right: 1px solid var(--border);
+  background: var(--sidebar);
+}
+
+.previewPair > .preview {
+  flex: 1 1 0;
+  aspect-ratio: auto;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.previewPair > .preview + .preview > .previewSide {
+  display: none;
+}
+
+.previewMain {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 8%;
+  min-width: 0;
+  padding: 10%;
+  background: var(--bg);
+}
+
+.previewCard {
+  flex: 0 0 18%;
+  border-radius: var(--r-s);
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+.previewAccent {
+  flex: 0 0 11%;
+  width: 60%;
+  border-radius: var(--r-s);
+  background: var(--accent);
+}
+
+.tileName {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 2px 2px;
+  font-weight: 500;
+}
+
+.tileText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The radio mark, drawn like `input.radio`. */
+.mark {
+  flex: none;
+  width: 14px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1.5px var(--border-strong);
+}
+
+.markOn {
+  box-shadow: inset 0 0 0 4.5px var(--accent);
 }
 
 .error {

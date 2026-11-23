@@ -25,7 +25,7 @@ export function workspaceInfo(overrides: Partial<WorkspaceInfo> = {}): Workspace
     guide: "",
     id: "w-1",
     name: "Personal",
-    program_version: "0.0.0",
+    program_version: __VERSION__,
     schema_version: 1,
     settings: settings(),
     ...overrides,

@@ -2,9 +2,9 @@
 // Copyright (C) 2026 Glyphkeel contributors
 
 import { useState, type ReactNode } from "react";
-import { Tab, TabList, TabPanel, Tabs } from "react-aria-components";
+import { RadioButton, RadioField, RadioGroup, Tab, TabList, TabPanel, Tabs } from "react-aria-components";
 
-import { ACCENTS, DENSITIES, THEMES } from "../appearance/appearance";
+import { ACCENTS, DENSITIES, THEMES, type Accent, type Theme } from "../appearance/appearance";
 import { useAppearance } from "../appearance/AppearanceProvider";
 import { classes } from "../classes";
 import { Dialog } from "../components/Dialog";
@@ -40,7 +40,7 @@ export function Preferences({ isOpen, onOpenChange, page = "appearance" }: Prefe
   return (
     <Dialog title={t("preferences-title")} isOpen={isOpen} onOpenChange={onOpenChange}>
       <Tabs orientation="vertical" className={classes(styles.layout)} defaultSelectedKey={page}>
-        <TabList className={classes("sidebar", styles.pages)} aria-label={t("preferences-pages")}>
+        <TabList className={classes(styles.pages)} aria-label={t("preferences-pages")}>
           {PREFERENCE_PAGES.map((id) => (
             <Tab key={id} id={id} className={({ isSelected }) => classes("nav", isSelected && "on")}>
               {t(`preferences-page-${id}`)}
@@ -64,17 +64,22 @@ export function Preferences({ isOpen, onOpenChange, page = "appearance" }: Prefe
   );
 }
 
-/** A titled group of rows in a box. */
-function Group({ title, children }: { title: string; children: ReactNode }) {
+/** A titled group of rows in a box, with optional content above the box. */
+function Group({ title, lead, children }: { title: string; lead?: ReactNode; children: ReactNode }) {
   return (
     <section className={styles.group} aria-label={title}>
       <h2 className={styles.groupTitle}>{title}</h2>
+      {lead}
       <div className={styles.boxed}>{children}</div>
     </section>
   );
 }
 
-/** One setting: its name, an optional line about it, and its control on the right. */
+/**
+ * One setting: its name, an optional line about it, and its control on the
+ * right. When the row is too narrow for both, the control moves below the
+ * text instead of running out of the box.
+ */
 function Row({ label, about, children }: { label: string; about?: string | undefined; children: ReactNode }) {
   return (
     <div className={styles.row}>
@@ -89,23 +94,101 @@ function Row({ label, about, children }: { label: string; about?: string | undef
 
 // ---------- Appearance ----------
 
+const THEME_CHOICES = ["system", ...THEMES] as const;
+type ThemeChoice = (typeof THEME_CHOICES)[number];
+
+/** A miniature window drawn with a theme's own tokens: sidebar strip, cards, accent bar. */
+function ThemePreview({ theme, accent }: { theme: Theme; accent: Accent }) {
+  return (
+    <span className={styles.preview} data-theme={theme} data-accent={accent}>
+      <span className={styles.previewSide} />
+      <span className={styles.previewMain}>
+        <span className={styles.previewCard} />
+        <span className={styles.previewCard} />
+        <span className={styles.previewAccent} />
+      </span>
+    </span>
+  );
+}
+
+/**
+ * The themes as tiles, each a preview with its name below; System shows the
+ * light and the dark theme it follows side by side. The tiles wrap onto more
+ * lines when the page is narrow. Arrow keys move between them.
+ */
+function ThemeTiles({
+  label,
+  value,
+  accent,
+  systemThemes,
+  onChange,
+}: {
+  label: string;
+  value: ThemeChoice;
+  accent: Accent;
+  systemThemes: readonly [Theme, Theme];
+  onChange: (theme: ThemeChoice) => void;
+}) {
+  const t = useT();
+  return (
+    <RadioGroup
+      aria-label={label}
+      orientation="horizontal"
+      className={classes(styles.tiles)}
+      value={value}
+      onChange={(next) => {
+        const theme = THEME_CHOICES.find((candidate) => candidate === next);
+        if (theme) {
+          onChange(theme);
+        }
+      }}
+    >
+      {THEME_CHOICES.map((theme) => (
+        <RadioField key={theme} value={theme} className={classes(styles.tileField)}>
+          <RadioButton className={({ isSelected, isFocusVisible }) => classes(styles.tile, isSelected && styles.tileOn, isFocusVisible && styles.tileFocus)}>
+            {({ isSelected }) => (
+              <>
+                {theme === "system" ? (
+                  <span className={styles.previewPair}>
+                    <ThemePreview theme={systemThemes[0]} accent={accent} />
+                    <ThemePreview theme={systemThemes[1]} accent={accent} />
+                  </span>
+                ) : (
+                  <ThemePreview theme={theme} accent={accent} />
+                )}
+                <span className={styles.tileName}>
+                  <span className={classes(styles.mark, isSelected && styles.markOn)} aria-hidden="true" />
+                  <span className={styles.tileText}>{t(`theme-${theme}`)}</span>
+                </span>
+              </>
+            )}
+          </RadioButton>
+        </RadioField>
+      ))}
+    </RadioGroup>
+  );
+}
+
 /** Theme, accent, density and motion: they apply at once and are kept for the next start. */
 function AppearancePage() {
   const t = useT();
-  const { appearance, update } = useAppearance();
+  const { appearance, resolved, update } = useAppearance();
   return (
     <>
-      <Group title={t("preferences-theme")}>
-        <Row label={t("preferences-theme")}>
-          <Segmented
+      <Group
+        title={t("preferences-theme")}
+        lead={
+          <ThemeTiles
             label={t("preferences-theme")}
-            segments={(["system", ...THEMES] as const).map((theme) => ({ id: theme, label: t(`theme-${theme}`) }))}
             value={appearance.theme}
+            accent={resolved.accent}
+            systemThemes={[appearance.systemLight, appearance.systemDark]}
             onChange={(theme) => {
               update({ theme });
             }}
           />
-        </Row>
+        }
+      >
         <Row label={t("preferences-accent")} about={t("preferences-accent-about")}>
           <span className={classes("field", styles.select)}>
             <select

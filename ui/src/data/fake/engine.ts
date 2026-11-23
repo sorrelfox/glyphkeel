@@ -1110,7 +1110,7 @@ export class FakeWorkspace {
       guide: "",
       id: "w-1",
       name: this.state.workspaceName,
-      program_version: "0.0.0",
+      program_version: __VERSION__,
       schema_version: 2,
       settings: { ...this.state.settings },
     }),

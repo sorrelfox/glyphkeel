@@ -76,6 +76,9 @@ describe("the workspace in the window", () => {
     expect((trash as HTMLInputElement).value).toBe("30");
     // Outside the desktop app the page can't know the folder.
     expect(screen.getByText("Shown in the desktop app")).toBeDefined();
+    // The stand-in data reports the product's own version.
+    expect(__VERSION__).toMatch(/^\d+\.\d+\.\d+/u);
+    expect(screen.getByText(__VERSION__)).toBeDefined();
     fireEvent.click(screen.getByRole("tab", { name: "Time" }));
     await waitFor(() => {
       expect(selectedDay()).toBe("Monday");

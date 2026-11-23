@@ -142,7 +142,9 @@ cargo xtask ci --here --suite ui                   # on this machine, no contain
 Podman is used when it is installed, Docker otherwise. The images, and the
 volumes that cache builds between runs, are all named `glyphkeel-ci…`.
 `cargo xtask ci --distro ubuntu-22.04 --suite package` builds the deb and rpm
-packages the way a release does.
+packages the way a release does: both programs, the menu entry, the shell
+completions (bash, zsh, fish) and the man page. A rebuild of the same version
+takes `--package-release N` for the rpm's release number.
 
 GitHub Actions run only when a pre-release tag (`v0.1.0-rc.1`) is pushed: the
 same suites in the same containers, a Windows build with the unit tests, the
