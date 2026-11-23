@@ -6,11 +6,13 @@ import { useLocale } from "react-aria-components";
 
 import { ActionsProvider } from "../actions/ActionsProvider";
 import { useAppearance } from "../appearance/AppearanceProvider";
+import { useUndo } from "../data/hooks";
 import { useT } from "../i18n/I18n";
 import { appWindow } from "../ipc/window";
 import { type TitleBar } from "../start";
 import { EmptyState } from "./EmptyState";
 import { HeaderBar } from "./HeaderBar";
+import { Preferences } from "./Preferences";
 import { ShortcutSheet } from "./ShortcutSheet";
 import { shellActions, type View } from "./shellActions";
 import { Sidebar } from "./Sidebar";
@@ -28,8 +30,9 @@ interface ShellProps {
 }
 
 /**
- * The window: sidebar, header bar, the view, status bar. No workspace is
- * wired in yet, so the views are empty states.
+ * The window: sidebar, header bar, the view, status bar. The views are empty
+ * states until tasks exist; the status bar and Preferences show the open
+ * workspace.
  */
 export function Shell({ titleBar, openGallery }: ShellProps) {
   const t = useT();
@@ -41,11 +44,16 @@ export function Shell({ titleBar, openGallery }: ShellProps) {
   const [chosenWidth, setChosenWidth] = useState<number | null>(null);
   const sidebarWidth = chosenWidth ?? SIDEBAR_WIDTH[density];
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [preferencesOpen, setPreferencesOpen] = useState(false);
+  const { undo, redo } = useUndo();
 
   const actions = shellActions({
     setView,
     toggleSidebar: () => { setSidebarOpen((open) => !open); },
     showShortcuts: () => { setShortcutsOpen(true); },
+    openPreferences: () => { setPreferencesOpen(true); },
+    undo,
+    redo,
     openGallery,
   });
 
@@ -78,6 +86,7 @@ export function Shell({ titleBar, openGallery }: ShellProps) {
         </div>
       </div>
       <ShortcutSheet isOpen={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+      <Preferences isOpen={preferencesOpen} onOpenChange={setPreferencesOpen} />
     </ActionsProvider>
   );
 }

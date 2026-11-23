@@ -11,6 +11,9 @@ export interface ShellCommands {
   setView: (view: View) => void;
   toggleSidebar: () => void;
   showShortcuts: () => void;
+  openPreferences: () => void;
+  undo: () => void;
+  redo: () => void;
   /** Opens the development gallery; absent in release builds. */
   openGallery?: (() => void) | undefined;
 }
@@ -19,7 +22,7 @@ function action(id: string, label: string, group: ActionGroup, run: () => void, 
   return { id, label, group, keys: keysOf(id), run, ...extra };
 }
 
-/** Not available until the engine is wired to the window. */
+/** Not available yet: the screens behind them come later. */
 const UNAVAILABLE = { disabled: true } as const;
 const nothing = () => undefined;
 
@@ -34,13 +37,13 @@ export function shellActions(commands: ShellCommands): Action[] {
     action("focus.previousRegion", "action-previous-region", "window", () => { focusRegion(-1); }),
     action("task.new", "action-new-task", "tasks", nothing, UNAVAILABLE),
     // Inside a text field, the field's own undo comes first.
-    action("app.undo", "action-undo", "app", nothing, { ...UNAVAILABLE, inText: false }),
-    action("app.redo", "action-redo", "app", nothing, { ...UNAVAILABLE, inText: false }),
+    action("app.undo", "action-undo", "app", commands.undo, { inText: false }),
+    action("app.redo", "action-redo", "app", commands.redo, { inText: false }),
     action("app.backup", "action-backup", "app", nothing, UNAVAILABLE),
     action("app.import", "action-import", "app", nothing, UNAVAILABLE),
     action("app.export", "action-export", "app", nothing, UNAVAILABLE),
     action("help.shortcuts", "action-shortcuts", "app", commands.showShortcuts),
-    action("app.preferences", "action-preferences", "app", nothing, UNAVAILABLE),
+    action("app.preferences", "action-preferences", "app", commands.openPreferences),
     action("app.about", "action-about", "app", nothing, UNAVAILABLE),
     action("window.close", "action-close-window", "window", () => void appWindow.close()),
     // One window for now: quitting closes it.

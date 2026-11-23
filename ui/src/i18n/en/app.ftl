@@ -50,6 +50,9 @@ status-tasks =
        *[other] { $count } tasks
     }
 status-workspace = Local workspace
+# The open workspace's name.
+status-workspace-name = { $name }
+status-workspace-unavailable = Workspace unavailable
 
 ## Actions: their names in menus, tooltips and the shortcut sheet
 
@@ -72,6 +75,36 @@ action-today = Today
 action-all-tasks = All tasks
 action-gallery = Themes and components
 action-leave-gallery = Back to the app
+
+## Preferences
+
+preferences-title = Preferences
+preferences-workspace = Workspace
+preferences-workspace-name = Name
+preferences-program-version = Program version
+preferences-schema-version = Database version
+preferences-time = Calendar and working time
+preferences-week-start = First day of the week
+preferences-hours-per-day = Working hours per day
+preferences-days-per-week = Working days per week
+preferences-reminder-time = Reminders for due dates at
+preferences-trash-days = Keep items in the trash for
+preferences-days =
+    { $count ->
+        [one] One day
+       *[other] { $count } days
+    }
+weekday-monday = Monday
+weekday-saturday = Saturday
+weekday-sunday = Sunday
+
+## Toasts
+
+toast-region = Notifications
+toast-undo = Undo
+toast-settings-changed = Settings changed
+# The app couldn't reach its workspace at all (not an error of an operation).
+error-ipc = The workspace could not be reached
 
 ## Shortcut sheet
 

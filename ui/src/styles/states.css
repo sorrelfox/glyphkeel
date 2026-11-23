@@ -161,6 +161,51 @@
   padding: 0 20px 16px;
 }
 
+/* ---------- toasts: short messages at the bottom centre ---------- */
+.toasts {
+  position: fixed;
+  bottom: 40px;
+  left: 50%;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--gap);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(560px, 90vw);
+  padding: 8px 14px;
+  border-radius: var(--r-l);
+  background: var(--popover);
+  box-shadow: var(--shadow-pop);
+  pointer-events: auto;
+}
+
+.toastText {
+  display: flex;
+  flex-direction: column;
+}
+
+.toastDetail {
+  color: var(--fg-muted);
+  font-size: var(--fs-small);
+}
+
+.toastAction {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-fg);
+  font: inherit;
+  font-weight: 500;
+}
+
 /* ---------- switch with its label ---------- */
 .switchField {
   display: inline-flex;

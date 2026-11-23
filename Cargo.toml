@@ -23,6 +23,7 @@ publish = false
 # use which is checked by `cargo xtask check-deps`.
 gk-api = { path = "crates/gk-api" }
 gk-core = { path = "crates/gk-core" }
+gk-engine = { path = "crates/gk-engine" }
 gk-store = { path = "crates/gk-store" }
 
 # Third-party crates: shared versions live here, crates use `{ workspace = true }`.
@@ -71,6 +72,12 @@ zbus = "5.19.0"
 # The WebKitGTK bindings Tauri itself uses, to switch off web-view features
 # the app never needs (Linux only).
 webkit2gtk = "=2.0.2"
+# The development bridge only (tools/devbridge, never in a release): its
+# async runtime, its loopback WebSocket server and stream helpers. The
+# WebSocket crates are built without TLS.
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "net", "sync"] }
+tokio-tungstenite = { version = "0.28.0", default-features = false, features = ["handshake"] }
+futures-util = { version = "0.3.34", default-features = false, features = ["sink", "std"] }
 # IDs: UUIDv7.
 uuid = { version = "1.29.3", features = ["v7"] }
 
