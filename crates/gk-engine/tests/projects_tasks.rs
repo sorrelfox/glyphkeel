@@ -859,7 +859,8 @@ fn the_app_copies_an_older_workspace_before_upgrading_it() {
         .map(|f| f.unwrap().file_name().to_string_lossy().into_owned())
         .collect();
     assert_eq!(copies.len(), 1);
-    assert!(copies[0].starts_with("before-schema-4-v1-"), "{copies:?}");
+    let expected = format!("before-schema-{}-v1-", gk_store::SCHEMA_VERSION);
+    assert!(copies[0].starts_with(&expected), "{copies:?}");
 }
 
 #[test]
@@ -921,5 +922,137 @@ fn upgrading_keeps_the_subtasks_in_the_order_they_were_shown() {
     assert_eq!(
         order(&e),
         [subs[0].clone(), subs[1].clone(), subs[2].clone()]
+    );
+}
+
+#[test]
+fn new_labels_get_a_colour_the_project_does_not_use_yet() {
+    let dir = tempfile::tempdir().unwrap();
+    let e = open(&dir);
+    let p = project(&e, "TM", None);
+    assert_eq!(p["next_label_hue"], "red");
+    let add = |name: &str, hue: Option<&str>| {
+        let mut input = json!({ "project": "TM", "name": name });
+        if let Some(h) = hue {
+            input["hue"] = json!(h);
+        }
+        let p = call(&e, "label.create", input)["project"].clone();
+        let label = p["labels"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|l| l["name"] == name)
+            .unwrap()
+            .clone();
+        (
+            label["hue"].as_str().unwrap().to_owned(),
+            p["next_label_hue"].clone(),
+        )
+    };
+    assert_eq!(add("a", None), ("red".to_owned(), json!("orange")));
+    assert_eq!(
+        add("b", Some("orange")),
+        ("orange".to_owned(), json!("yellow"))
+    );
+    assert_eq!(add("c", None).0, "yellow");
+    // Labels added in one project change get different colours too.
+    let p = call(
+        &e,
+        "project.update",
+        json!({ "project": "TM", "labels": [{ "name": "d" }, { "name": "e" }] }),
+    )["project"]
+        .clone();
+    let hues: Vec<&str> = p["labels"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|l| l["hue"].as_str().unwrap())
+        .collect();
+    assert_eq!(hues, ["red", "orange", "yellow", "green", "teal"]);
+    // Once every colour is taken, the least-used one comes next.
+    for name in ["f", "g", "h", "i"] {
+        add(name, None);
+    }
+    assert_eq!(add("j", None).0, "red");
+    assert_eq!(add("k", Some("red")).1, json!("orange"));
+    // A sub-project copies its parent's labels and continues from them.
+    let sub = project(&e, "TS", Some("TM"));
+    assert_eq!(sub["next_label_hue"], "orange");
+}
+
+#[test]
+fn new_projects_get_a_colour_their_siblings_do_not_use_yet() {
+    let dir = tempfile::tempdir().unwrap();
+    let e = open(&dir);
+    assert_eq!(project(&e, "AA", None)["hue"], "red");
+    call(
+        &e,
+        "project.create",
+        json!({ "name": "B", "key": "BB", "hue": "orange" }),
+    );
+    assert_eq!(project(&e, "CC", None)["hue"], "yellow");
+    // Sub-projects are compared with their own siblings.
+    assert_eq!(project(&e, "AB", Some("AA"))["hue"], "red");
+    assert_eq!(project(&e, "AC", Some("AA"))["hue"], "orange");
+    assert_eq!(project(&e, "DD", None)["hue"], "green");
+}
+
+#[test]
+fn a_project_icon_comes_from_the_fixed_set_and_undoes() {
+    let dir = tempfile::tempdir().unwrap();
+    let e = open(&dir);
+    let app = Context::user(Via::App);
+    let p = e
+        .call(
+            &app,
+            "project.create",
+            json!({ "name": "Web", "key": "WEB", "icon": "rocket" }),
+        )
+        .unwrap();
+    assert_eq!(p["project"]["icon"], "rocket");
+    let listed = call(&e, "project.list", json!({}));
+    assert_eq!(listed["items"][0]["icon"], "rocket");
+    let err = fails(
+        &e,
+        "project.update",
+        json!({ "project": "WEB", "icon": "unicorn" }),
+    );
+    assert_eq!(err.code, ErrorCode::Invalid);
+    assert!(
+        fails(
+            &e,
+            "project.create",
+            json!({ "name": "X", "key": "XX", "icon": "" })
+        )
+        .code
+            == ErrorCode::Invalid
+    );
+
+    let group = e
+        .call(
+            &app,
+            "project.update",
+            json!({ "project": "WEB", "icon": "graduation-cap" }),
+        )
+        .unwrap()["group"]
+        .clone();
+    e.call(
+        &app,
+        "project.update",
+        json!({ "project": "WEB", "clear": ["icon"] }),
+    )
+    .unwrap();
+    let icon = |e: &Engine| call(e, "project.get", json!({ "project": "WEB" }))["icon"].clone();
+    assert_eq!(icon(&e), Value::Null, "no icon: the circle");
+    e.call(&app, "history.undo", json!({})).unwrap();
+    assert_eq!(icon(&e), "graduation-cap");
+    e.call(&app, "history.undo", json!({})).unwrap();
+    assert_eq!(icon(&e), "rocket");
+    e.call(&app, "history.redo", json!({})).unwrap();
+    assert_eq!(icon(&e), "graduation-cap");
+    let feed = call(&e, "history.feed", json!({ "group": group }));
+    assert!(
+        feed.to_string().contains("graduation-cap"),
+        "the change shows in the history: {feed}"
     );
 }

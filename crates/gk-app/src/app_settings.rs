@@ -6,6 +6,13 @@
 //! `$XDG_CONFIG_HOME/glyphkeel/app.json`, and Preferences reads and changes
 //! them through `app_settings` and `update_app_settings`.
 //!
+//! The same two commands read and change the person's time zone. It is a
+//! personal setting that the command line and the agent server follow too,
+//! so it is kept in the shared personal settings file next to this one
+//! (`settings.json`, see [`gk_store::UserSettings`]), not in `app.json`. It
+//! is not a workspace operation: it isn't workspace data, has no place in
+//! the workspace's history, and an agent must not change it.
+//!
 //! The same file keeps the page's own preferences (the appearance, the
 //! sidebar's closed projects, the board's card size…): the web view runs
 //! without storage of its own, so they come back through the start script,
@@ -19,6 +26,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use gk_api::OpError;
+use gk_store::UserSettings;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use tauri::{AppHandle, State};
@@ -79,13 +87,10 @@ fn check_ui_pref(name: &str, value: &Value) -> Result<(), OpError> {
     Ok(())
 }
 
-/// Where the settings are kept, or `None` without a home folder.
+/// Where the settings are kept, or `None` without a home folder: in the
+/// program's configuration folder, next to the personal settings.
 pub(crate) fn file() -> Option<PathBuf> {
-    let config_home = std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .filter(|path| path.is_absolute())
-        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))?;
-    Some(config_home.join("glyphkeel").join("app.json"))
+    gk_store::config_dir().map(|dir| dir.join("app.json"))
 }
 
 /// The stored settings, or the defaults when there are none or they can't be read.
@@ -118,6 +123,9 @@ pub(crate) fn save(path: &Path, stored: &Stored) -> std::io::Result<()> {
 #[derive(Debug)]
 pub(crate) struct AppSettings {
     file: Option<PathBuf>,
+    /// The personal settings shared with the command line and the agent
+    /// server.
+    user_file: Option<PathBuf>,
     stored: Mutex<Stored>,
     /// Read by the reminders' notifier on its own thread.
     notifications: Arc<AtomicBool>,
@@ -129,12 +137,15 @@ impl AppSettings {
     pub(crate) fn load() -> Self {
         let file = file();
         let stored = file.as_deref().map(load).unwrap_or_default();
-        Self::new(file, stored)
+        let mut settings = Self::new(file, stored);
+        settings.user_file = gk_store::user_settings_file();
+        settings
     }
 
     fn new(file: Option<PathBuf>, stored: Stored) -> Self {
         Self {
             file,
+            user_file: None,
             notifications: Arc::new(AtomicBool::new(stored.notifications)),
             stored: Mutex::new(stored),
         }
@@ -173,6 +184,34 @@ impl AppSettings {
             );
         }
         stored.clone()
+    }
+
+    /// The personal time zone as chosen: `"system"` or an IANA name.
+    pub(crate) fn time_zone(&self) -> String {
+        let user = self
+            .user_file
+            .as_deref()
+            .map(UserSettings::load)
+            .unwrap_or_default();
+        user.zone_name()
+            .unwrap_or(gk_store::SYSTEM_TIME_ZONE)
+            .to_owned()
+    }
+
+    /// Keeps the personal time zone `zone` (`None`: the system's) in the
+    /// shared file, keeping the file's other fields.
+    fn set_time_zone(&self, zone: Option<&str>) -> Result<(), OpError> {
+        let Some(path) = &self.user_file else {
+            return Ok(());
+        };
+        let mut user = UserSettings::load(path);
+        user.time_zone = Some(zone.unwrap_or(gk_store::SYSTEM_TIME_ZONE).to_owned());
+        user.save(path).map_err(|err| {
+            OpError::storage(format!(
+                "Can't store the time zone in {}: {err}.",
+                path.display()
+            ))
+        })
     }
 
     /// Applies a change from Preferences.
@@ -239,6 +278,12 @@ impl Notifier for Switched {
 pub(crate) struct View {
     pub(crate) background: bool,
     pub(crate) notifications: bool,
+    /// The personal time zone as chosen: `"system"` or an IANA name.
+    pub(crate) time_zone: String,
+    /// The zone times are shown in now, by its IANA name: the chosen one,
+    /// or the system's; absent when the system's zone has no name.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) zone_in_use: Option<String>,
     /// The workspace folder; absent when the workspace didn't open.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) workspace_path: Option<String>,
@@ -252,12 +297,22 @@ pub(crate) struct Patch {
     pub(crate) background: Option<bool>,
     #[serde(default)]
     pub(crate) notifications: Option<bool>,
+    /// `"system"` or an IANA name such as `"Europe/Berlin"`.
+    #[serde(default)]
+    pub(crate) time_zone: Option<String>,
 }
 
-fn view(stored: &Stored, mode: &BackgroundMode, workspace: &Workspace) -> View {
+fn view(
+    settings: &AppSettings,
+    stored: &Stored,
+    mode: &BackgroundMode,
+    workspace: &Workspace,
+) -> View {
     View {
         background: mode.enabled(),
         notifications: stored.notifications,
+        time_zone: settings.time_zone(),
+        zone_in_use: workspace.time_zone(),
         workspace_path: workspace
             .layout()
             .map(|layout| layout.root().display().to_string()),
@@ -271,11 +326,12 @@ pub(crate) fn app_settings(
     mode: State<'_, BackgroundMode>,
     workspace: State<'_, Arc<Workspace>>,
 ) -> View {
-    view(&settings.stored(), &mode, &workspace)
+    view(&settings, &settings.stored(), &mode, &workspace)
 }
 
 /// Changes the app's settings from Preferences; they apply at once.
-/// Runs on the main thread, where the tray icon is made and removed.
+/// Runs on the main thread, where the tray icon is made and removed. An
+/// unknown time zone refuses the whole change.
 #[tauri::command]
 pub(crate) fn update_app_settings(
     app: AppHandle,
@@ -283,12 +339,27 @@ pub(crate) fn update_app_settings(
     mode: State<'_, BackgroundMode>,
     workspace: State<'_, Arc<Workspace>>,
     patch: Patch,
-) -> View {
+) -> Result<View, OpError> {
+    let zone = match &patch.time_zone {
+        Some(name) => Some(gk_engine::check_time_zone(name)?),
+        None => None,
+    };
     let stored = settings.apply(&patch);
     if let Some(on) = patch.background {
         background::switch(&app, on);
     }
-    view(&stored, &mode, &workspace)
+    if let Some(zone) = zone {
+        settings.set_time_zone(zone.as_deref())?;
+        workspace.set_time_zone(zone.as_deref().unwrap_or(gk_store::SYSTEM_TIME_ZONE))?;
+    }
+    Ok(view(&settings, &stored, &mode, &workspace))
+}
+
+/// Every time zone a person can choose, with its offset from UTC now, for
+/// the picker in Preferences.
+#[tauri::command]
+pub(crate) fn time_zones() -> Vec<gk_engine::ZoneChoice> {
+    gk_engine::time_zones((gk_engine::system_clock())())
 }
 
 /// Keeps one of the page's preferences for the next start; `null` removes it.
@@ -353,6 +424,31 @@ mod tests {
         assert!(!settings.notifications.load(Ordering::SeqCst));
         assert_eq!(load(&path), stored);
         assert!(serde_json::from_str::<Patch>(r#"{"theme": "dark"}"#).is_err());
+    }
+
+    #[test]
+    fn the_time_zone_is_kept_in_the_shared_personal_settings() {
+        let dir = tempfile::tempdir().unwrap();
+        let user = dir.path().join(gk_store::USER_SETTINGS_FILE);
+        std::fs::write(&user, br#"{"time_zone": "Asia/Tokyo", "other": 1}"#).unwrap();
+        let mut settings = AppSettings::new(Some(dir.path().join("app.json")), Stored::default());
+        settings.user_file = Some(user.clone());
+        assert_eq!(settings.time_zone(), "Asia/Tokyo");
+        settings.set_time_zone(Some("Europe/Berlin")).unwrap();
+        assert_eq!(settings.time_zone(), "Europe/Berlin");
+        // The command line and the agent server read the same file.
+        let shared = gk_store::UserSettings::load(&user);
+        assert_eq!(
+            gk_engine::personal_time_zone(None, &shared)
+                .unwrap()
+                .as_deref(),
+            Some("Europe/Berlin")
+        );
+        assert_eq!(shared.other["other"], 1);
+        settings.set_time_zone(None).unwrap();
+        assert_eq!(settings.time_zone(), "system");
+        let patch: Patch = serde_json::from_str(r#"{"time_zone": "UTC"}"#).unwrap();
+        assert_eq!(patch.time_zone.as_deref(), Some("UTC"));
     }
 
     #[test]

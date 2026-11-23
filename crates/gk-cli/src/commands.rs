@@ -18,6 +18,7 @@ pub(crate) const WORKSPACE: &str = "workspace";
 pub(crate) const JSON: &str = "json";
 pub(crate) const QUIET: &str = "quiet";
 pub(crate) const NO_COLOR: &str = "no-color";
+pub(crate) const TZ: &str = "tz";
 
 /// Commands of the program itself, not operations.
 pub(crate) const OPEN: &str = "open";
@@ -104,6 +105,16 @@ pub(crate) fn build(ops: &[OpCommand]) -> Command {
                 .global(true)
                 .action(ArgAction::SetTrue)
                 .help("No colours in help and messages (also with NO_COLOR set)"),
+        )
+        .arg(
+            Arg::new(TZ)
+                .long(TZ)
+                .global(true)
+                .value_name("ZONE")
+                .help(
+                    "The time zone of \"today\" and local times for this command: \"system\" or \
+                     an IANA name such as Europe/Berlin [default: the personal setting]",
+                ),
         );
 
     let mut tree = Node::default();
@@ -269,6 +280,7 @@ mod tests {
                     JSON,
                     QUIET,
                     NO_COLOR,
+                    TZ,
                 ] {
                     assert_ne!(f.long(), taken, "{} has a field `{}`", c.op.id, f.name);
                 }

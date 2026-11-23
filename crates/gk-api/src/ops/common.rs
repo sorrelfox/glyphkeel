@@ -66,7 +66,9 @@ pub const DEFAULT_LIMIT: u32 = 50;
 /// The most items a list returns at once.
 pub const MAX_LIMIT: u32 = 200;
 
-/// The design's nine colours, for projects, statuses, types and labels.
+/// The design's nine colours, for projects, statuses, types and labels, in
+/// palette order: a new label or project without a colour gets the first one
+/// its neighbours don't use yet.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Hue {
@@ -88,6 +90,54 @@ pub enum Hue {
     Pink,
     /// Grey.
     Grey,
+}
+
+/// An icon that stands for a project instead of its coloured circle, drawn
+/// in the project's colour. The names are those of the app's icon family
+/// (Lucide), so each variant's name says what it shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum ProjectIcon {
+    Folder,
+    Star,
+    Bug,
+    Rocket,
+    Book,
+    House,
+    Briefcase,
+    Code,
+    Terminal,
+    Globe,
+    Heart,
+    Flag,
+    Zap,
+    Target,
+    Lightbulb,
+    Wrench,
+    Hammer,
+    Palette,
+    Music,
+    Camera,
+    GraduationCap,
+    ShoppingCart,
+    Wallet,
+    ChartLine,
+    Calendar,
+    Users,
+    Building,
+    Plane,
+    Leaf,
+    Coffee,
+    Gamepad,
+    Puzzle,
+    Shield,
+    FlaskConical,
+    Layers,
+    Package,
+    Compass,
+    Mountain,
+    Sparkles,
+    Database,
 }
 
 /// The shape that shows a task's type.

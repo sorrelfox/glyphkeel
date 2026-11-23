@@ -14,7 +14,7 @@ expression: "ws.ok(&[\"status\", \"--json\"])"
   "id": "[id]",
   "name": "Personal",
   "program_version": [version],
-  "schema_version": 4,
+  "schema_version": 5,
   "settings": {
     "agent_max_profile": "standard",
     "days_per_week": 5,

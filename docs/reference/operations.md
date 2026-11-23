@@ -116,7 +116,7 @@ Input: `ProjectRef`. Output: `Project`. Schemas: [catalog.schema.json](catalog.s
 
 ## `project.create`
 
-Create a project, or a sub-project that copies its parent's statuses, types and labels.
+Create a project, or a sub-project that copies its parent's statuses, types and labels; without a colour it gets one its sibling projects don't use yet.
 
 Input: `ProjectCreateInput`. Output: `ProjectChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
@@ -206,7 +206,7 @@ Input: `TypeDeleteInput`. Output: `ProjectChange`. Schemas: [catalog.schema.json
 
 ## `label.create`
 
-Add a label to a project.
+Add a label to a project; without a colour it gets the first palette colour the project's labels don't use yet.
 
 Input: `LabelCreateInput`. Output: `ProjectChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 

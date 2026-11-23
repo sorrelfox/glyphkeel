@@ -60,7 +60,8 @@ pub struct EngineConfig {
     /// When the write-ahead log is checkpointed by the jobs-lock holder.
     pub checkpoints: CheckpointPolicy,
     /// The time zone of "today", reminder times and the days of time
-    /// entries, by its IANA name; `None`: the computer's.
+    /// entries, by its IANA name; `None`: the computer's. Programs pass the
+    /// person's choice in ([`crate::personal_time_zone`]).
     pub time_zone: Option<String>,
 }
 
@@ -228,6 +229,26 @@ impl Engine {
     #[must_use]
     pub fn env(&self) -> &Env {
         &self.env
+    }
+
+    /// The time zone of "today", reminder times and the days of time
+    /// entries, by its IANA name; `None` when the zone has no name (a
+    /// system zone given only by its rules).
+    #[must_use]
+    pub fn time_zone(&self) -> Option<String> {
+        self.env.zone.name()
+    }
+
+    /// Changes the time zone while the workspace is open, for a person who
+    /// chooses another one: `"system"` (or blank) for the computer's own,
+    /// or an IANA name. Operations that start afterwards use it.
+    ///
+    /// # Errors
+    /// `invalid` when the name is no known zone; the zone stays as it was.
+    pub fn set_time_zone(&self, name: &str) -> Result<(), OpError> {
+        let zone = crate::time::check_time_zone(name)?;
+        self.env.zone.set(zone.as_deref());
+        Ok(())
     }
 
     /// Whether a newer program upgraded the schema while this one ran. The

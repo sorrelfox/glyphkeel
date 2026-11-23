@@ -61,6 +61,7 @@ impl Workspace {
 fn glyphkeel(home: &Path) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_glyphkeel"));
     cmd.env("XDG_DATA_HOME", home.join("data"))
+        .env("XDG_CONFIG_HOME", home.join("config"))
         .env("HOME", home)
         .env("NO_COLOR", "1")
         .env_remove("GLYPHKEEL_WORKSPACE")
@@ -565,4 +566,71 @@ mod app {
             .unwrap();
         assert_eq!(code(&out), 1);
     }
+}
+
+/// The day a quarter of an hour logged now falls on, as `time log` reports it.
+fn logged_day(entry: &Value) -> String {
+    entry["entry"]["date"].as_str().unwrap().to_owned()
+}
+
+#[test]
+fn the_command_line_and_the_engine_agree_on_today_in_the_personal_zone() {
+    let ws = Workspace::new();
+    // UTC+14 and UTC-12 are 26 hours apart: their dates always differ.
+    let settings = ws.dir.path().join("config").join("glyphkeel");
+    std::fs::create_dir_all(&settings).unwrap();
+    std::fs::write(
+        settings.join(gk_store::USER_SETTINGS_FILE),
+        br#"{"time_zone": "Pacific/Kiritimati"}"#,
+    )
+    .unwrap();
+    ws.ok(&["project", "create", "--name", "Glyphkeel", "--key", "GK"]);
+    ws.ok(&["task", "create", "--project", "GK", "--title", "Work"]);
+
+    let engine_day = |zone: &str| {
+        let mut config = EngineConfig::new(Role::Cli);
+        config.time_zone = Some(zone.to_owned());
+        let engine = Engine::open(&WorkspaceLayout::new(ws.path()), config).unwrap();
+        let ctx = gk_engine::Context::user(gk_api::ops::common::Via::Cli);
+        let entry = engine
+            .call(
+                &ctx,
+                "time.log",
+                serde_json::json!({ "key": "GK-1", "duration": "15m" }),
+            )
+            .unwrap();
+        engine.close();
+        logged_day(&entry)
+    };
+
+    let cli = logged_day(&ws.json(&["time", "log", "GK-1", "--duration", "15m"]));
+    assert_eq!(
+        cli,
+        engine_day("Pacific/Kiritimati"),
+        "the personal setting"
+    );
+
+    let behind = logged_day(&ws.json(&[
+        "--tz",
+        "Etc/GMT+12",
+        "time",
+        "log",
+        "GK-1",
+        "--duration",
+        "15m",
+    ]));
+    assert_eq!(behind, engine_day("Etc/GMT+12"), "--tz for one command");
+    assert_ne!(behind, cli);
+
+    let out = ws.run(&[
+        "--tz",
+        "Mars/Olympus",
+        "time",
+        "log",
+        "GK-1",
+        "--duration",
+        "15m",
+    ]);
+    assert_eq!(code(&out), 1, "{}", stderr(&out));
+    assert!(stderr(&out).contains("Mars/Olympus"), "{}", stderr(&out));
 }

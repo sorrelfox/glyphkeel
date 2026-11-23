@@ -13,7 +13,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::catalog::{Exposure, Meta, OpDescriptor, OpKind, Safety};
-use crate::ops::common::{Category, Edge, Glyph, Hue};
+use crate::ops::common::{Category, Edge, Glyph, Hue, ProjectIcon};
 
 /// Whether a project can be changed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
@@ -93,9 +93,9 @@ pub struct ProjectSummary {
     pub depth: u32,
     /// Its colour.
     pub hue: Hue,
-    /// Its icon, if one was chosen.
+    /// Its icon, if one was chosen; without one it shows as a circle.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub icon: Option<String>,
+    pub icon: Option<ProjectIcon>,
     /// Active or archived.
     pub state: ProjectState,
     /// Open tasks in this project alone.
@@ -197,9 +197,9 @@ pub struct Project {
     pub description: String,
     /// Its colour.
     pub hue: Hue,
-    /// Its icon, if one was chosen.
+    /// Its icon, if one was chosen; without one it shows as a circle.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub icon: Option<String>,
+    pub icon: Option<ProjectIcon>,
     /// Active or archived.
     pub state: ProjectState,
     /// The parent's key; left out for a top-level project.
@@ -215,6 +215,9 @@ pub struct Project {
     pub types: Vec<TaskType>,
     /// The labels, in order.
     pub labels: Vec<Label>,
+    /// The colour a new label gets when none is given: the first palette
+    /// colour no label uses yet, else the least-used one.
+    pub next_label_hue: Hue,
     /// Open tasks in this project alone.
     pub open_tasks: u64,
     /// All tasks in this project alone, open or closed (not in the trash).
@@ -261,12 +264,13 @@ pub struct ProjectCreateInput {
     /// The description (Markdown).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    /// The colour; default: the parent's, or blue.
+    /// The colour; default: the first palette colour that no sibling
+    /// project uses yet (the least-used one when all are taken).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hue: Option<Hue>,
-    /// An icon name.
+    /// An icon shown instead of the circle; default: none (the circle).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub icon: Option<String>,
+    pub icon: Option<ProjectIcon>,
     /// Your own ID for this request; repeating it within 24 hours returns
     /// the first answer instead of creating a second project.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -277,7 +281,7 @@ pub struct ProjectCreateInput {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ProjectField {
-    /// The icon.
+    /// The icon: the project shows as a circle again.
     Icon,
     /// The description.
     Description,
@@ -381,7 +385,8 @@ pub struct LabelChange {
     /// Its (new) name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
-    /// Its colour.
+    /// Its colour; for a new label, default: the first palette colour no
+    /// label of the project uses yet.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hue: Option<Hue>,
     /// Delete the label and take it off every task. Can't be undone.
@@ -407,9 +412,10 @@ pub struct ProjectUpdateInput {
     /// A new colour.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hue: Option<Hue>,
-    /// A new icon name.
+    /// A new icon, shown instead of the circle. To go back to the circle,
+    /// list `icon` in `clear`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub icon: Option<String>,
+    pub icon: Option<ProjectIcon>,
     /// Modules to switch on or off.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub modules: Option<ModulesPatch>,
@@ -639,7 +645,9 @@ pub struct LabelCreateInput {
     pub project: String,
     /// The name, 1 to 50 characters, unique in the project ignoring case.
     pub name: String,
-    /// Its colour; default: grey.
+    /// Its colour; default: the first palette colour no label of the
+    /// project uses yet, else the least-used one (the project's
+    /// `next_label_hue`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hue: Option<Hue>,
 }
@@ -937,7 +945,7 @@ pub(crate) const PROJECT_GET: OpDescriptor = OpDescriptor::of::<ProjectGet>(quer
     "Project",
 ));
 pub(crate) const PROJECT_CREATE: OpDescriptor = OpDescriptor::of::<ProjectCreate>(command(
-    "Create a project, or a sub-project that copies its parent's statuses, types and labels.",
+    "Create a project, or a sub-project that copies its parent's statuses, types and labels; without a colour it gets one its sibling projects don't use yet.",
     Safety::Write,
     "project create",
     "ProjectCreateInput",
@@ -1015,7 +1023,7 @@ pub(crate) const TYPE_DELETE: OpDescriptor = OpDescriptor::of::<TypeDelete>(comm
     "TypeDeleteInput",
 ));
 pub(crate) const LABEL_CREATE: OpDescriptor = OpDescriptor::of::<LabelCreate>(command(
-    "Add a label to a project.",
+    "Add a label to a project; without a colour it gets the first palette colour the project's labels don't use yet.",
     Safety::Write,
     "label add",
     "LabelCreateInput",

@@ -27,7 +27,8 @@ use clap::ArgMatches;
 use clap::error::ErrorKind;
 use gk_api::OpError;
 use gk_api::ops::common::Via;
-use gk_engine::{Confirmation, Context, Engine, EngineConfig, Role};
+use gk_engine::{Confirmation, Context, Engine, EngineConfig, Role, personal_time_zone};
+use gk_store::UserSettings;
 
 use crate::commands::OpCommand;
 
@@ -83,6 +84,7 @@ fn run(ops: &[OpCommand], matches: &ArgMatches, out: Out) -> Result<(), OpError>
     let workspace = matches
         .get_one::<String>(commands::WORKSPACE)
         .map(String::as_str);
+    let tz = matches.get_one::<String>(commands::TZ).map(String::as_str);
     match matches.subcommand() {
         None => launch::start(&[]),
         Some((commands::OPEN, m)) => {
@@ -117,7 +119,7 @@ fn run(ops: &[OpCommand], matches: &ArgMatches, out: Out) -> Result<(), OpError>
             } else {
                 ask_on_terminal()
             };
-            let value = call(workspace, cmd, input, confirm)?;
+            let value = call(workspace, tz, cmd, input, confirm)?;
             if out.quiet {
                 return Ok(());
             }
@@ -132,15 +134,19 @@ fn run(ops: &[OpCommand], matches: &ArgMatches, out: Out) -> Result<(), OpError>
 }
 
 /// Opens the workspace for this one command, runs the operation and closes
-/// it again.
+/// it again. "Today" and local times are in the zone `tz` names, else in the
+/// person's own zone from the personal settings.
 fn call(
     workspace: Option<&str>,
+    tz: Option<&str>,
     cmd: &OpCommand,
     input: serde_json::Value,
     confirm: Confirmation,
 ) -> Result<serde_json::Value, OpError> {
     let layout = workspace::resolve(workspace)?;
-    let engine = Engine::open(&layout, EngineConfig::new(Role::Cli))?;
+    let mut config = EngineConfig::new(Role::Cli);
+    config.time_zone = personal_time_zone(tz, &UserSettings::load_default())?;
+    let engine = Engine::open(&layout, config)?;
     let ctx = Context::user(Via::Cli).with_confirmation(confirm);
     let result = engine.call(&ctx, cmd.op.id, input);
     engine.close();
@@ -182,12 +188,13 @@ struct Prescan {
 }
 
 /// Finds `mcp` behind the global options. Everything after it belongs to
-/// the MCP server, which has options of its own; a global `--workspace`
-/// given before `mcp` is passed on unless the server's own arguments name
-/// one.
+/// the MCP server, which has options of its own; a global `--workspace` or
+/// `--tz` given before `mcp` is passed on unless the server's own arguments
+/// name one.
 fn prescan(args: &[OsString]) -> Prescan {
     let mut pre = Prescan::default();
     let mut workspace: Option<OsString> = None;
+    let mut tz: Option<OsString> = None;
     let mut i = 1;
     while i < args.len() {
         let arg = args[i].to_string_lossy();
@@ -201,6 +208,13 @@ fn prescan(args: &[OsString]) -> Prescan {
             a if a.starts_with("--workspace=") => {
                 workspace = Some(OsString::from(&a["--workspace=".len()..]));
             }
+            "--tz" => {
+                i += 1;
+                tz = args.get(i).cloned();
+            }
+            a if a.starts_with("--tz=") => {
+                tz = Some(OsString::from(&a["--tz=".len()..]));
+            }
             "mcp" => {
                 let mut rest: Vec<OsString> = args[i + 1..].to_vec();
                 let names_one = rest.iter().any(|a| {
@@ -209,6 +223,13 @@ fn prescan(args: &[OsString]) -> Prescan {
                 });
                 if let (Some(w), false) = (workspace, names_one) {
                     rest.splice(0..0, [OsString::from("--workspace"), w]);
+                }
+                let names_zone = rest.iter().any(|a| {
+                    let a = a.to_string_lossy();
+                    a == "--tz" || a.starts_with("--tz=")
+                });
+                if let (Some(z), false) = (tz, names_zone) {
+                    rest.splice(0..0, [OsString::from("--tz"), z]);
                 }
                 pre.mcp = Some(rest);
                 return pre;
@@ -263,6 +284,20 @@ mod tests {
             "Home",
         ]));
         assert_eq!(pre.mcp, Some(os(&["--workspace", "Home"])));
+    }
+
+    #[test]
+    fn a_global_time_zone_reaches_mcp() {
+        let pre = prescan(&os(&["glyphkeel", "--tz", "Asia/Tokyo", "mcp"]));
+        assert_eq!(pre.mcp, Some(os(&["--tz", "Asia/Tokyo"])));
+        let pre = prescan(&os(&[
+            "glyphkeel",
+            "--tz=UTC",
+            "mcp",
+            "--tz",
+            "Europe/Berlin",
+        ]));
+        assert_eq!(pre.mcp, Some(os(&["--tz", "Europe/Berlin"])));
     }
 
     #[test]

@@ -91,6 +91,7 @@ fn main() -> ExitCode {
             app_settings::app_settings,
             app_settings::update_app_settings,
             app_settings::set_ui_pref,
+            app_settings::time_zones,
             quit_app
         ])
         // Attached images, by attachment ID, for the page's <img> elements.
@@ -188,6 +189,10 @@ fn open_workspace(app: &AppHandle) -> Workspace {
     };
     let mut config = EngineConfig::new(Role::App);
     config.program_version = env!("CARGO_PKG_VERSION").to_owned();
+    // The person's own zone, shared with the command line and the agent
+    // server; an unknown one falls back to the system's.
+    config.time_zone = gk_engine::personal_time_zone(None, &gk_store::UserSettings::load_default())
+        .unwrap_or_default();
     let workspace = Workspace::open(&layout, config, ipc::native_confirmation(app.clone()));
     if let Some(err) = workspace.failure() {
         eprintln!(

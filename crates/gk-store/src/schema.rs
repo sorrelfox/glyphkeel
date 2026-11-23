@@ -19,7 +19,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 use crate::error::{Result, StoreError};
 
 /// The schema version this program is built for.
-pub const SCHEMA_VERSION: i64 = 4;
+pub const SCHEMA_VERSION: i64 = 5;
 
 /// One migration: the SQL that takes the schema from `version - 1` to
 /// `version`.
@@ -46,6 +46,10 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 4,
         sql: include_str!("../migrations/0004_time_and_reminders.sql"),
+    },
+    Migration {
+        version: 5,
+        sql: include_str!("../migrations/0005_project_icons.sql"),
     },
 ];
 
@@ -318,5 +322,87 @@ mod tests {
             [],
         );
         assert!(both.is_err(), "a moment and days before due together");
+    }
+
+    #[test]
+    fn version_5_keeps_known_project_icons_and_drops_the_rest() {
+        let mut conn = memory();
+        conn.execute_batch("PRAGMA foreign_keys = ON").unwrap();
+        migrate(&mut conn, &MIGRATIONS[..4], |_| Ok(())).unwrap();
+        let project = |n: u8, key: &str, icon: Option<&str>| {
+            conn.execute(
+                "INSERT INTO projects (id, rank, key, name, name_fold, hue, icon, modules,
+                                       created_at, updated_at)
+                 VALUES (?1, 'i', ?2, ?2, lower(?2), 'blue', ?3, '{}', 0, 0)",
+                rusqlite::params![[n; 16].to_vec(), key, icon],
+            )
+            .unwrap();
+        };
+        project(1, "AA", Some("rocket"));
+        project(2, "BB", Some("Rocket"));
+        project(3, "CC", Some(""));
+        project(4, "DD", Some("my-own-icon"));
+        project(5, "EE", None);
+        project(6, "FF", Some("graduation-cap"));
+        conn.execute_batch(
+            "INSERT INTO statuses (id, project_id, name, name_fold, category, hue, rank)
+             VALUES (x'10000000000000000000000000000000', x'01010101010101010101010101010101',
+                     'To do', 'to do', 'todo', 'blue', 'i');
+             INSERT INTO task_types (id, project_id, name, name_fold, glyph, hue, rank, is_default)
+             VALUES (x'11000000000000000000000000000000', x'01010101010101010101010101010101',
+                     'Task', 'task', 'task', 'blue', 'i', 1);
+             INSERT INTO labels (id, project_id, name, name_fold, hue, rank)
+             VALUES (x'12000000000000000000000000000000', x'01010101010101010101010101010101',
+                     'ui', 'ui', 'teal', 'i');
+             INSERT INTO tasks (id, project_id, number, title, title_fold, status_id,
+                                status_entered_at, type_id, rank, created_at, created_by_kind,
+                                created_by_name, edited_at, updated_at)
+             VALUES (x'13000000000000000000000000000000', x'01010101010101010101010101010101',
+                     1, 'A', 'a', x'10000000000000000000000000000000', 0,
+                     x'11000000000000000000000000000000', 'i', 0, 'user', 'Me', 0, 0);",
+        )
+        .unwrap();
+        migrate(&mut conn, MIGRATIONS, |_| Ok(())).unwrap();
+        assert_eq!(user_version(&conn).unwrap(), 5);
+        let icons: Vec<(String, Option<String>)> = conn
+            .prepare("SELECT key, icon FROM projects ORDER BY key")
+            .unwrap()
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        let expected: Vec<(String, Option<String>)> = [
+            ("AA", Some("rocket")),
+            ("BB", None),
+            ("CC", None),
+            ("DD", None),
+            ("EE", None),
+            ("FF", Some("graduation-cap")),
+        ]
+        .iter()
+        .map(|(k, i)| ((*k).to_owned(), i.map(str::to_owned)))
+        .collect();
+        assert_eq!(icons, expected);
+        let rows: (i64, i64, i64) = conn
+            .query_row(
+                "SELECT (SELECT count(*) FROM tasks), (SELECT count(*) FROM labels),
+                        (SELECT count(*) FROM statuses)",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(rows, (1, 1, 1), "nothing else changes");
+    }
+
+    #[test]
+    fn version_5_knows_every_project_icon() {
+        let sql = MIGRATIONS[4].sql;
+        let list = &sql[sql.find("NOT IN (").unwrap()..];
+        let named: Vec<&str> = list.split('\'').skip(1).step_by(2).collect();
+        let known: Vec<&str> = gk_core::ProjectIcon::ALL
+            .iter()
+            .map(|i| i.as_str())
+            .collect();
+        assert_eq!(named, known);
     }
 }

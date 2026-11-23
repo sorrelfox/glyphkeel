@@ -1054,7 +1054,7 @@
       "output": {
         "$defs": {
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -1103,6 +1103,52 @@
               }
             ]
           },
+          "ProjectIcon": {
+            "description": "An icon that stands for a project instead of its coloured circle, drawn\nin the project's colour. The names are those of the app's icon family\n(Lucide), so each variant's name says what it shows.",
+            "enum": [
+              "folder",
+              "star",
+              "bug",
+              "rocket",
+              "book",
+              "house",
+              "briefcase",
+              "code",
+              "terminal",
+              "globe",
+              "heart",
+              "flag",
+              "zap",
+              "target",
+              "lightbulb",
+              "wrench",
+              "hammer",
+              "palette",
+              "music",
+              "camera",
+              "graduation-cap",
+              "shopping-cart",
+              "wallet",
+              "chart-line",
+              "calendar",
+              "users",
+              "building",
+              "plane",
+              "leaf",
+              "coffee",
+              "gamepad",
+              "puzzle",
+              "shield",
+              "flask-conical",
+              "layers",
+              "package",
+              "compass",
+              "mountain",
+              "sparkles",
+              "database"
+            ],
+            "type": "string"
+          },
           "ProjectState": {
             "description": "Whether a project can be changed.",
             "oneOf": [
@@ -1133,8 +1179,8 @@
                 "description": "Its colour."
               },
               "icon": {
-                "description": "Its icon, if one was chosen.",
-                "type": "string"
+                "$ref": "#/$defs/ProjectIcon",
+                "description": "Its icon, if one was chosen; without one it shows as a circle."
               },
               "id": {
                 "description": "The project's ID.",
@@ -1292,7 +1338,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -1405,6 +1451,52 @@
               "time"
             ],
             "type": "object"
+          },
+          "ProjectIcon": {
+            "description": "An icon that stands for a project instead of its coloured circle, drawn\nin the project's colour. The names are those of the app's icon family\n(Lucide), so each variant's name says what it shows.",
+            "enum": [
+              "folder",
+              "star",
+              "bug",
+              "rocket",
+              "book",
+              "house",
+              "briefcase",
+              "code",
+              "terminal",
+              "globe",
+              "heart",
+              "flag",
+              "zap",
+              "target",
+              "lightbulb",
+              "wrench",
+              "hammer",
+              "palette",
+              "music",
+              "camera",
+              "graduation-cap",
+              "shopping-cart",
+              "wallet",
+              "chart-line",
+              "calendar",
+              "users",
+              "building",
+              "plane",
+              "leaf",
+              "coffee",
+              "gamepad",
+              "puzzle",
+              "shield",
+              "flask-conical",
+              "layers",
+              "package",
+              "compass",
+              "mountain",
+              "sparkles",
+              "database"
+            ],
+            "type": "string"
           },
           "ProjectState": {
             "description": "Whether a project can be changed.",
@@ -1529,8 +1621,8 @@
             "description": "Its colour."
           },
           "icon": {
-            "description": "Its icon, if one was chosen.",
-            "type": "string"
+            "$ref": "#/$defs/ProjectIcon",
+            "description": "Its icon, if one was chosen; without one it shows as a circle."
           },
           "id": {
             "description": "The project's ID.",
@@ -1554,6 +1646,10 @@
           "name": {
             "description": "Its name.",
             "type": "string"
+          },
+          "next_label_hue": {
+            "$ref": "#/$defs/Hue",
+            "description": "The colour a new label gets when none is given: the first palette\ncolour no label uses yet, else the least-used one."
           },
           "old_keys": {
             "description": "Keys it had before; they still find it.",
@@ -1618,6 +1714,7 @@
           "statuses",
           "types",
           "labels",
+          "next_label_hue",
           "open_tasks",
           "total_tasks",
           "created_at",
@@ -1637,7 +1734,7 @@
       "input": {
         "$defs": {
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -1685,6 +1782,52 @@
                 "type": "string"
               }
             ]
+          },
+          "ProjectIcon": {
+            "description": "An icon that stands for a project instead of its coloured circle, drawn\nin the project's colour. The names are those of the app's icon family\n(Lucide), so each variant's name says what it shows.",
+            "enum": [
+              "folder",
+              "star",
+              "bug",
+              "rocket",
+              "book",
+              "house",
+              "briefcase",
+              "code",
+              "terminal",
+              "globe",
+              "heart",
+              "flag",
+              "zap",
+              "target",
+              "lightbulb",
+              "wrench",
+              "hammer",
+              "palette",
+              "music",
+              "camera",
+              "graduation-cap",
+              "shopping-cart",
+              "wallet",
+              "chart-line",
+              "calendar",
+              "users",
+              "building",
+              "plane",
+              "leaf",
+              "coffee",
+              "gamepad",
+              "puzzle",
+              "shield",
+              "flask-conical",
+              "layers",
+              "package",
+              "compass",
+              "mountain",
+              "sparkles",
+              "database"
+            ],
+            "type": "string"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1714,14 +1857,18 @@
                 "type": "null"
               }
             ],
-            "description": "The colour; default: the parent's, or blue."
+            "description": "The colour; default: the first palette colour that no sibling\nproject uses yet (the least-used one when all are taken)."
           },
           "icon": {
-            "description": "An icon name.",
-            "type": [
-              "string",
-              "null"
-            ]
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ProjectIcon"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "An icon shown instead of the circle; default: none (the circle)."
           },
           "key": {
             "description": "The key: 2 to 10 capital letters and digits, starting with a letter\n(`TM`). Task keys start with it.",
@@ -1802,7 +1949,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -1940,8 +2087,8 @@
                 "description": "Its colour."
               },
               "icon": {
-                "description": "Its icon, if one was chosen.",
-                "type": "string"
+                "$ref": "#/$defs/ProjectIcon",
+                "description": "Its icon, if one was chosen; without one it shows as a circle."
               },
               "id": {
                 "description": "The project's ID.",
@@ -1965,6 +2112,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "next_label_hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "The colour a new label gets when none is given: the first palette\ncolour no label uses yet, else the least-used one."
               },
               "old_keys": {
                 "description": "Keys it had before; they still find it.",
@@ -2029,12 +2180,59 @@
               "statuses",
               "types",
               "labels",
+              "next_label_hue",
               "open_tasks",
               "total_tasks",
               "created_at",
               "updated_at"
             ],
             "type": "object"
+          },
+          "ProjectIcon": {
+            "description": "An icon that stands for a project instead of its coloured circle, drawn\nin the project's colour. The names are those of the app's icon family\n(Lucide), so each variant's name says what it shows.",
+            "enum": [
+              "folder",
+              "star",
+              "bug",
+              "rocket",
+              "book",
+              "house",
+              "briefcase",
+              "code",
+              "terminal",
+              "globe",
+              "heart",
+              "flag",
+              "zap",
+              "target",
+              "lightbulb",
+              "wrench",
+              "hammer",
+              "palette",
+              "music",
+              "camera",
+              "graduation-cap",
+              "shopping-cart",
+              "wallet",
+              "chart-line",
+              "calendar",
+              "users",
+              "building",
+              "plane",
+              "leaf",
+              "coffee",
+              "gamepad",
+              "puzzle",
+              "shield",
+              "flask-conical",
+              "layers",
+              "package",
+              "compass",
+              "mountain",
+              "sparkles",
+              "database"
+            ],
+            "type": "string"
           },
           "ProjectState": {
             "description": "Whether a project can be changed.",
@@ -2156,7 +2354,7 @@
       },
       "output_name": "ProjectChange",
       "safety": "write",
-      "summary": "Create a project, or a sub-project that copies its parent's statuses, types and labels."
+      "summary": "Create a project, or a sub-project that copies its parent's statuses, types and labels; without a colour it gets one its sibling projects don't use yet."
     },
     {
       "cli": "project edit <project>",
@@ -2230,7 +2428,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -2292,7 +2490,7 @@
                     "type": "null"
                   }
                 ],
-                "description": "Its colour."
+                "description": "Its colour; for a new label, default: the first palette colour no\nlabel of the project uses yet."
               },
               "label": {
                 "description": "The label to change or remove; left out to add one.",
@@ -2363,7 +2561,7 @@
             "oneOf": [
               {
                 "const": "icon",
-                "description": "The icon.",
+                "description": "The icon: the project shows as a circle again.",
                 "type": "string"
               },
               {
@@ -2377,6 +2575,52 @@
                 "type": "string"
               }
             ]
+          },
+          "ProjectIcon": {
+            "description": "An icon that stands for a project instead of its coloured circle, drawn\nin the project's colour. The names are those of the app's icon family\n(Lucide), so each variant's name says what it shows.",
+            "enum": [
+              "folder",
+              "star",
+              "bug",
+              "rocket",
+              "book",
+              "house",
+              "briefcase",
+              "code",
+              "terminal",
+              "globe",
+              "heart",
+              "flag",
+              "zap",
+              "target",
+              "lightbulb",
+              "wrench",
+              "hammer",
+              "palette",
+              "music",
+              "camera",
+              "graduation-cap",
+              "shopping-cart",
+              "wallet",
+              "chart-line",
+              "calendar",
+              "users",
+              "building",
+              "plane",
+              "leaf",
+              "coffee",
+              "gamepad",
+              "puzzle",
+              "shield",
+              "flask-conical",
+              "layers",
+              "package",
+              "compass",
+              "mountain",
+              "sparkles",
+              "database"
+            ],
+            "type": "string"
           },
           "StatusChange": {
             "additionalProperties": false,
@@ -2632,11 +2876,15 @@
             "description": "A new colour."
           },
           "icon": {
-            "description": "A new icon name.",
-            "type": [
-              "string",
-              "null"
-            ]
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ProjectIcon"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A new icon, shown instead of the circle. To go back to the circle,\nlist `icon` in `clear`."
           },
           "key": {
             "description": "A new key; the old one keeps finding the project and its tasks.",
@@ -2758,7 +3006,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -2896,8 +3144,8 @@
                 "description": "Its colour."
               },
               "icon": {
-                "description": "Its icon, if one was chosen.",
-                "type": "string"
+                "$ref": "#/$defs/ProjectIcon",
+                "description": "Its icon, if one was chosen; without one it shows as a circle."
               },
               "id": {
                 "description": "The project's ID.",
@@ -2921,6 +3169,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "next_label_hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "The colour a new label gets when none is given: the first palette\ncolour no label uses yet, else the least-used one."
               },
               "old_keys": {
                 "description": "Keys it had before; they still find it.",
@@ -2985,12 +3237,59 @@
               "statuses",
               "types",
               "labels",
+              "next_label_hue",
               "open_tasks",
               "total_tasks",
               "created_at",
               "updated_at"
             ],
             "type": "object"
+          },
+          "ProjectIcon": {
+            "description": "An icon that stands for a project instead of its coloured circle, drawn\nin the project's colour. The names are those of the app's icon family\n(Lucide), so each variant's name says what it shows.",
+            "enum": [
+              "folder",
+              "star",
+              "bug",
+              "rocket",
+              "book",
+              "house",
+              "briefcase",
+              "code",
+              "terminal",
+              "globe",
+              "heart",
+              "flag",
+              "zap",
+              "target",
+              "lightbulb",
+              "wrench",
+              "hammer",
+              "palette",
+              "music",
+              "camera",
+              "graduation-cap",
+              "shopping-cart",
+              "wallet",
+              "chart-line",
+              "calendar",
+              "users",
+              "building",
+              "plane",
+              "leaf",
+              "coffee",
+              "gamepad",
+              "puzzle",
+              "shield",
+              "flask-conical",
+              "layers",
+              "package",
+              "compass",
+              "mountain",
+              "sparkles",
+              "database"
+            ],
+            "type": "string"
           },
           "ProjectState": {
             "description": "Whether a project can be changed.",
@@ -3244,7 +3543,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -3382,8 +3681,8 @@
                 "description": "Its colour."
               },
               "icon": {
-                "description": "Its icon, if one was chosen.",
-                "type": "string"
+                "$ref": "#/$defs/ProjectIcon",
+                "description": "Its icon, if one was chosen; without one it shows as a circle."
               },
               "id": {
                 "description": "The project's ID.",
@@ -3407,6 +3706,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "next_label_hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "The colour a new label gets when none is given: the first palette\ncolour no label uses yet, else the least-used one."
               },
               "old_keys": {
                 "description": "Keys it had before; they still find it.",
@@ -3471,12 +3774,59 @@
               "statuses",
               "types",
               "labels",
+              "next_label_hue",
               "open_tasks",
               "total_tasks",
               "created_at",
               "updated_at"
             ],
             "type": "object"
+          },
+          "ProjectIcon": {
+            "description": "An icon that stands for a project instead of its coloured circle, drawn\nin the project's colour. The names are those of the app's icon family\n(Lucide), so each variant's name says what it shows.",
+            "enum": [
+              "folder",
+              "star",
+              "bug",
+              "rocket",
+              "book",
+              "house",
+              "briefcase",
+              "code",
+              "terminal",
+              "globe",
+              "heart",
+              "flag",
+              "zap",
+              "target",
+              "lightbulb",
+              "wrench",
+              "hammer",
+              "palette",
+              "music",
+              "camera",
+              "graduation-cap",
+              "shopping-cart",
+              "wallet",
+              "chart-line",
+              "calendar",
+              "users",
+              "building",
+              "plane",
+              "leaf",
+              "coffee",
+              "gamepad",
+              "puzzle",
+              "shield",
+              "flask-conical",
+              "layers",
+              "package",
+              "compass",
+              "mountain",
+              "sparkles",
+              "database"
+            ],
+            "type": "string"
           },
           "ProjectState": {
             "description": "Whether a project can be changed.",
@@ -3681,7 +4031,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -3819,8 +4169,8 @@
                 "description": "Its colour."
               },
               "icon": {
-                "description": "Its icon, if one was chosen.",
-                "type": "string"
+                "$ref": "#/$defs/ProjectIcon",
+                "description": "Its icon, if one was chosen; without one it shows as a circle."
               },
               "id": {
                 "description": "The project's ID.",
@@ -3844,6 +4194,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "next_label_hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "The colour a new label gets when none is given: the first palette\ncolour no label uses yet, else the least-used one."
               },
               "old_keys": {
                 "description": "Keys it had before; they still find it.",
@@ -3908,12 +4262,59 @@
               "statuses",
               "types",
               "labels",
+              "next_label_hue",
               "open_tasks",
               "total_tasks",
               "created_at",
               "updated_at"
             ],
             "type": "object"
+          },
+          "ProjectIcon": {
+            "description": "An icon that stands for a project instead of its coloured circle, drawn\nin the project's colour. The names are those of the app's icon family\n(Lucide), so each variant's name says what it shows.",
+            "enum": [
+              "folder",
+              "star",
+              "bug",
+              "rocket",
+              "book",
+              "house",
+              "briefcase",
+              "code",
+              "terminal",
+              "globe",
+              "heart",
+              "flag",
+              "zap",
+              "target",
+              "lightbulb",
+              "wrench",
+              "hammer",
+              "palette",
+              "music",
+              "camera",
+              "graduation-cap",
+              "shopping-cart",
+              "wallet",
+              "chart-line",
+              "calendar",
+              "users",
+              "building",
+              "plane",
+              "leaf",
+              "coffee",
+              "gamepad",
+              "puzzle",
+              "shield",
+              "flask-conical",
+              "layers",
+              "package",
+              "compass",
+              "mountain",
+              "sparkles",
+              "database"
+            ],
+            "type": "string"
           },
           "ProjectState": {
             "description": "Whether a project can be changed.",
@@ -4113,7 +4514,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -4251,8 +4652,8 @@
                 "description": "Its colour."
               },
               "icon": {
-                "description": "Its icon, if one was chosen.",
-                "type": "string"
+                "$ref": "#/$defs/ProjectIcon",
+                "description": "Its icon, if one was chosen; without one it shows as a circle."
               },
               "id": {
                 "description": "The project's ID.",
@@ -4276,6 +4677,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "next_label_hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "The colour a new label gets when none is given: the first palette\ncolour no label uses yet, else the least-used one."
               },
               "old_keys": {
                 "description": "Keys it had before; they still find it.",
@@ -4340,12 +4745,59 @@
               "statuses",
               "types",
               "labels",
+              "next_label_hue",
               "open_tasks",
               "total_tasks",
               "created_at",
               "updated_at"
             ],
             "type": "object"
+          },
+          "ProjectIcon": {
+            "description": "An icon that stands for a project instead of its coloured circle, drawn\nin the project's colour. The names are those of the app's icon family\n(Lucide), so each variant's name says what it shows.",
+            "enum": [
+              "folder",
+              "star",
+              "bug",
+              "rocket",
+              "book",
+              "house",
+              "briefcase",
+              "code",
+              "terminal",
+              "globe",
+              "heart",
+              "flag",
+              "zap",
+              "target",
+              "lightbulb",
+              "wrench",
+              "hammer",
+              "palette",
+              "music",
+              "camera",
+              "graduation-cap",
+              "shopping-cart",
+              "wallet",
+              "chart-line",
+              "calendar",
+              "users",
+              "building",
+              "plane",
+              "leaf",
+              "coffee",
+              "gamepad",
+              "puzzle",
+              "shield",
+              "flask-conical",
+              "layers",
+              "package",
+              "compass",
+              "mountain",
+              "sparkles",
+              "database"
+            ],
+            "type": "string"
           },
           "ProjectState": {
             "description": "Whether a project can be changed.",
@@ -4545,7 +4997,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -4683,8 +5135,8 @@
                 "description": "Its colour."
               },
               "icon": {
-                "description": "Its icon, if one was chosen.",
-                "type": "string"
+                "$ref": "#/$defs/ProjectIcon",
+                "description": "Its icon, if one was chosen; without one it shows as a circle."
               },
               "id": {
                 "description": "The project's ID.",
@@ -4708,6 +5160,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "next_label_hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "The colour a new label gets when none is given: the first palette\ncolour no label uses yet, else the least-used one."
               },
               "old_keys": {
                 "description": "Keys it had before; they still find it.",
@@ -4772,12 +5228,59 @@
               "statuses",
               "types",
               "labels",
+              "next_label_hue",
               "open_tasks",
               "total_tasks",
               "created_at",
               "updated_at"
             ],
             "type": "object"
+          },
+          "ProjectIcon": {
+            "description": "An icon that stands for a project instead of its coloured circle, drawn\nin the project's colour. The names are those of the app's icon family\n(Lucide), so each variant's name says what it shows.",
+            "enum": [
+              "folder",
+              "star",
+              "bug",
+              "rocket",
+              "book",
+              "house",
+              "briefcase",
+              "code",
+              "terminal",
+              "globe",
+              "heart",
+              "flag",
+              "zap",
+              "target",
+              "lightbulb",
+              "wrench",
+              "hammer",
+              "palette",
+              "music",
+              "camera",
+              "graduation-cap",
+              "shopping-cart",
+              "wallet",
+              "chart-line",
+              "calendar",
+              "users",
+              "building",
+              "plane",
+              "leaf",
+              "coffee",
+              "gamepad",
+              "puzzle",
+              "shield",
+              "flask-conical",
+              "layers",
+              "package",
+              "compass",
+              "mountain",
+              "sparkles",
+              "database"
+            ],
+            "type": "string"
           },
           "ProjectState": {
             "description": "Whether a project can be changed.",
@@ -5113,7 +5616,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -5295,7 +5798,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -5433,8 +5936,8 @@
                 "description": "Its colour."
               },
               "icon": {
-                "description": "Its icon, if one was chosen.",
-                "type": "string"
+                "$ref": "#/$defs/ProjectIcon",
+                "description": "Its icon, if one was chosen; without one it shows as a circle."
               },
               "id": {
                 "description": "The project's ID.",
@@ -5458,6 +5961,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "next_label_hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "The colour a new label gets when none is given: the first palette\ncolour no label uses yet, else the least-used one."
               },
               "old_keys": {
                 "description": "Keys it had before; they still find it.",
@@ -5522,12 +6029,59 @@
               "statuses",
               "types",
               "labels",
+              "next_label_hue",
               "open_tasks",
               "total_tasks",
               "created_at",
               "updated_at"
             ],
             "type": "object"
+          },
+          "ProjectIcon": {
+            "description": "An icon that stands for a project instead of its coloured circle, drawn\nin the project's colour. The names are those of the app's icon family\n(Lucide), so each variant's name says what it shows.",
+            "enum": [
+              "folder",
+              "star",
+              "bug",
+              "rocket",
+              "book",
+              "house",
+              "briefcase",
+              "code",
+              "terminal",
+              "globe",
+              "heart",
+              "flag",
+              "zap",
+              "target",
+              "lightbulb",
+              "wrench",
+              "hammer",
+              "palette",
+              "music",
+              "camera",
+              "graduation-cap",
+              "shopping-cart",
+              "wallet",
+              "chart-line",
+              "calendar",
+              "users",
+              "building",
+              "plane",
+              "leaf",
+              "coffee",
+              "gamepad",
+              "puzzle",
+              "shield",
+              "flask-conical",
+              "layers",
+              "package",
+              "compass",
+              "mountain",
+              "sparkles",
+              "database"
+            ],
+            "type": "string"
           },
           "ProjectState": {
             "description": "Whether a project can be changed.",
@@ -5683,7 +6237,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -5864,7 +6418,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -6002,8 +6556,8 @@
                 "description": "Its colour."
               },
               "icon": {
-                "description": "Its icon, if one was chosen.",
-                "type": "string"
+                "$ref": "#/$defs/ProjectIcon",
+                "description": "Its icon, if one was chosen; without one it shows as a circle."
               },
               "id": {
                 "description": "The project's ID.",
@@ -6027,6 +6581,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "next_label_hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "The colour a new label gets when none is given: the first palette\ncolour no label uses yet, else the least-used one."
               },
               "old_keys": {
                 "description": "Keys it had before; they still find it.",
@@ -6091,12 +6649,59 @@
               "statuses",
               "types",
               "labels",
+              "next_label_hue",
               "open_tasks",
               "total_tasks",
               "created_at",
               "updated_at"
             ],
             "type": "object"
+          },
+          "ProjectIcon": {
+            "description": "An icon that stands for a project instead of its coloured circle, drawn\nin the project's colour. The names are those of the app's icon family\n(Lucide), so each variant's name says what it shows.",
+            "enum": [
+              "folder",
+              "star",
+              "bug",
+              "rocket",
+              "book",
+              "house",
+              "briefcase",
+              "code",
+              "terminal",
+              "globe",
+              "heart",
+              "flag",
+              "zap",
+              "target",
+              "lightbulb",
+              "wrench",
+              "hammer",
+              "palette",
+              "music",
+              "camera",
+              "graduation-cap",
+              "shopping-cart",
+              "wallet",
+              "chart-line",
+              "calendar",
+              "users",
+              "building",
+              "plane",
+              "leaf",
+              "coffee",
+              "gamepad",
+              "puzzle",
+              "shield",
+              "flask-conical",
+              "layers",
+              "package",
+              "compass",
+              "mountain",
+              "sparkles",
+              "database"
+            ],
+            "type": "string"
           },
           "ProjectState": {
             "description": "Whether a project can be changed.",
@@ -6343,7 +6948,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -6481,8 +7086,8 @@
                 "description": "Its colour."
               },
               "icon": {
-                "description": "Its icon, if one was chosen.",
-                "type": "string"
+                "$ref": "#/$defs/ProjectIcon",
+                "description": "Its icon, if one was chosen; without one it shows as a circle."
               },
               "id": {
                 "description": "The project's ID.",
@@ -6506,6 +7111,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "next_label_hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "The colour a new label gets when none is given: the first palette\ncolour no label uses yet, else the least-used one."
               },
               "old_keys": {
                 "description": "Keys it had before; they still find it.",
@@ -6570,12 +7179,59 @@
               "statuses",
               "types",
               "labels",
+              "next_label_hue",
               "open_tasks",
               "total_tasks",
               "created_at",
               "updated_at"
             ],
             "type": "object"
+          },
+          "ProjectIcon": {
+            "description": "An icon that stands for a project instead of its coloured circle, drawn\nin the project's colour. The names are those of the app's icon family\n(Lucide), so each variant's name says what it shows.",
+            "enum": [
+              "folder",
+              "star",
+              "bug",
+              "rocket",
+              "book",
+              "house",
+              "briefcase",
+              "code",
+              "terminal",
+              "globe",
+              "heart",
+              "flag",
+              "zap",
+              "target",
+              "lightbulb",
+              "wrench",
+              "hammer",
+              "palette",
+              "music",
+              "camera",
+              "graduation-cap",
+              "shopping-cart",
+              "wallet",
+              "chart-line",
+              "calendar",
+              "users",
+              "building",
+              "plane",
+              "leaf",
+              "coffee",
+              "gamepad",
+              "puzzle",
+              "shield",
+              "flask-conical",
+              "layers",
+              "package",
+              "compass",
+              "mountain",
+              "sparkles",
+              "database"
+            ],
+            "type": "string"
           },
           "ProjectState": {
             "description": "Whether a project can be changed.",
@@ -6787,7 +7443,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -6925,8 +7581,8 @@
                 "description": "Its colour."
               },
               "icon": {
-                "description": "Its icon, if one was chosen.",
-                "type": "string"
+                "$ref": "#/$defs/ProjectIcon",
+                "description": "Its icon, if one was chosen; without one it shows as a circle."
               },
               "id": {
                 "description": "The project's ID.",
@@ -6950,6 +7606,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "next_label_hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "The colour a new label gets when none is given: the first palette\ncolour no label uses yet, else the least-used one."
               },
               "old_keys": {
                 "description": "Keys it had before; they still find it.",
@@ -7014,12 +7674,59 @@
               "statuses",
               "types",
               "labels",
+              "next_label_hue",
               "open_tasks",
               "total_tasks",
               "created_at",
               "updated_at"
             ],
             "type": "object"
+          },
+          "ProjectIcon": {
+            "description": "An icon that stands for a project instead of its coloured circle, drawn\nin the project's colour. The names are those of the app's icon family\n(Lucide), so each variant's name says what it shows.",
+            "enum": [
+              "folder",
+              "star",
+              "bug",
+              "rocket",
+              "book",
+              "house",
+              "briefcase",
+              "code",
+              "terminal",
+              "globe",
+              "heart",
+              "flag",
+              "zap",
+              "target",
+              "lightbulb",
+              "wrench",
+              "hammer",
+              "palette",
+              "music",
+              "camera",
+              "graduation-cap",
+              "shopping-cart",
+              "wallet",
+              "chart-line",
+              "calendar",
+              "users",
+              "building",
+              "plane",
+              "leaf",
+              "coffee",
+              "gamepad",
+              "puzzle",
+              "shield",
+              "flask-conical",
+              "layers",
+              "package",
+              "compass",
+              "mountain",
+              "sparkles",
+              "database"
+            ],
+            "type": "string"
           },
           "ProjectState": {
             "description": "Whether a project can be changed.",
@@ -7175,7 +7882,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -7328,7 +8035,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -7466,8 +8173,8 @@
                 "description": "Its colour."
               },
               "icon": {
-                "description": "Its icon, if one was chosen.",
-                "type": "string"
+                "$ref": "#/$defs/ProjectIcon",
+                "description": "Its icon, if one was chosen; without one it shows as a circle."
               },
               "id": {
                 "description": "The project's ID.",
@@ -7491,6 +8198,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "next_label_hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "The colour a new label gets when none is given: the first palette\ncolour no label uses yet, else the least-used one."
               },
               "old_keys": {
                 "description": "Keys it had before; they still find it.",
@@ -7555,12 +8266,59 @@
               "statuses",
               "types",
               "labels",
+              "next_label_hue",
               "open_tasks",
               "total_tasks",
               "created_at",
               "updated_at"
             ],
             "type": "object"
+          },
+          "ProjectIcon": {
+            "description": "An icon that stands for a project instead of its coloured circle, drawn\nin the project's colour. The names are those of the app's icon family\n(Lucide), so each variant's name says what it shows.",
+            "enum": [
+              "folder",
+              "star",
+              "bug",
+              "rocket",
+              "book",
+              "house",
+              "briefcase",
+              "code",
+              "terminal",
+              "globe",
+              "heart",
+              "flag",
+              "zap",
+              "target",
+              "lightbulb",
+              "wrench",
+              "hammer",
+              "palette",
+              "music",
+              "camera",
+              "graduation-cap",
+              "shopping-cart",
+              "wallet",
+              "chart-line",
+              "calendar",
+              "users",
+              "building",
+              "plane",
+              "leaf",
+              "coffee",
+              "gamepad",
+              "puzzle",
+              "shield",
+              "flask-conical",
+              "layers",
+              "package",
+              "compass",
+              "mountain",
+              "sparkles",
+              "database"
+            ],
+            "type": "string"
           },
           "ProjectState": {
             "description": "Whether a project can be changed.",
@@ -7731,7 +8489,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -7916,7 +8674,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -8054,8 +8812,8 @@
                 "description": "Its colour."
               },
               "icon": {
-                "description": "Its icon, if one was chosen.",
-                "type": "string"
+                "$ref": "#/$defs/ProjectIcon",
+                "description": "Its icon, if one was chosen; without one it shows as a circle."
               },
               "id": {
                 "description": "The project's ID.",
@@ -8079,6 +8837,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "next_label_hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "The colour a new label gets when none is given: the first palette\ncolour no label uses yet, else the least-used one."
               },
               "old_keys": {
                 "description": "Keys it had before; they still find it.",
@@ -8143,12 +8905,59 @@
               "statuses",
               "types",
               "labels",
+              "next_label_hue",
               "open_tasks",
               "total_tasks",
               "created_at",
               "updated_at"
             ],
             "type": "object"
+          },
+          "ProjectIcon": {
+            "description": "An icon that stands for a project instead of its coloured circle, drawn\nin the project's colour. The names are those of the app's icon family\n(Lucide), so each variant's name says what it shows.",
+            "enum": [
+              "folder",
+              "star",
+              "bug",
+              "rocket",
+              "book",
+              "house",
+              "briefcase",
+              "code",
+              "terminal",
+              "globe",
+              "heart",
+              "flag",
+              "zap",
+              "target",
+              "lightbulb",
+              "wrench",
+              "hammer",
+              "palette",
+              "music",
+              "camera",
+              "graduation-cap",
+              "shopping-cart",
+              "wallet",
+              "chart-line",
+              "calendar",
+              "users",
+              "building",
+              "plane",
+              "leaf",
+              "coffee",
+              "gamepad",
+              "puzzle",
+              "shield",
+              "flask-conical",
+              "layers",
+              "package",
+              "compass",
+              "mountain",
+              "sparkles",
+              "database"
+            ],
+            "type": "string"
           },
           "ProjectState": {
             "description": "Whether a project can be changed.",
@@ -8360,7 +9169,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -8498,8 +9307,8 @@
                 "description": "Its colour."
               },
               "icon": {
-                "description": "Its icon, if one was chosen.",
-                "type": "string"
+                "$ref": "#/$defs/ProjectIcon",
+                "description": "Its icon, if one was chosen; without one it shows as a circle."
               },
               "id": {
                 "description": "The project's ID.",
@@ -8523,6 +9332,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "next_label_hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "The colour a new label gets when none is given: the first palette\ncolour no label uses yet, else the least-used one."
               },
               "old_keys": {
                 "description": "Keys it had before; they still find it.",
@@ -8587,12 +9400,59 @@
               "statuses",
               "types",
               "labels",
+              "next_label_hue",
               "open_tasks",
               "total_tasks",
               "created_at",
               "updated_at"
             ],
             "type": "object"
+          },
+          "ProjectIcon": {
+            "description": "An icon that stands for a project instead of its coloured circle, drawn\nin the project's colour. The names are those of the app's icon family\n(Lucide), so each variant's name says what it shows.",
+            "enum": [
+              "folder",
+              "star",
+              "bug",
+              "rocket",
+              "book",
+              "house",
+              "briefcase",
+              "code",
+              "terminal",
+              "globe",
+              "heart",
+              "flag",
+              "zap",
+              "target",
+              "lightbulb",
+              "wrench",
+              "hammer",
+              "palette",
+              "music",
+              "camera",
+              "graduation-cap",
+              "shopping-cart",
+              "wallet",
+              "chart-line",
+              "calendar",
+              "users",
+              "building",
+              "plane",
+              "leaf",
+              "coffee",
+              "gamepad",
+              "puzzle",
+              "shield",
+              "flask-conical",
+              "layers",
+              "package",
+              "compass",
+              "mountain",
+              "sparkles",
+              "database"
+            ],
+            "type": "string"
           },
           "ProjectState": {
             "description": "Whether a project can be changed.",
@@ -8723,7 +9583,7 @@
       "input": {
         "$defs": {
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -8786,7 +9646,7 @@
                 "type": "null"
               }
             ],
-            "description": "Its colour; default: grey."
+            "description": "Its colour; default: the first palette colour no label of the\nproject uses yet, else the least-used one (the project's\n`next_label_hue`)."
           },
           "name": {
             "description": "The name, 1 to 50 characters, unique in the project ignoring case.",
@@ -8860,7 +9720,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -8998,8 +9858,8 @@
                 "description": "Its colour."
               },
               "icon": {
-                "description": "Its icon, if one was chosen.",
-                "type": "string"
+                "$ref": "#/$defs/ProjectIcon",
+                "description": "Its icon, if one was chosen; without one it shows as a circle."
               },
               "id": {
                 "description": "The project's ID.",
@@ -9023,6 +9883,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "next_label_hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "The colour a new label gets when none is given: the first palette\ncolour no label uses yet, else the least-used one."
               },
               "old_keys": {
                 "description": "Keys it had before; they still find it.",
@@ -9087,12 +9951,59 @@
               "statuses",
               "types",
               "labels",
+              "next_label_hue",
               "open_tasks",
               "total_tasks",
               "created_at",
               "updated_at"
             ],
             "type": "object"
+          },
+          "ProjectIcon": {
+            "description": "An icon that stands for a project instead of its coloured circle, drawn\nin the project's colour. The names are those of the app's icon family\n(Lucide), so each variant's name says what it shows.",
+            "enum": [
+              "folder",
+              "star",
+              "bug",
+              "rocket",
+              "book",
+              "house",
+              "briefcase",
+              "code",
+              "terminal",
+              "globe",
+              "heart",
+              "flag",
+              "zap",
+              "target",
+              "lightbulb",
+              "wrench",
+              "hammer",
+              "palette",
+              "music",
+              "camera",
+              "graduation-cap",
+              "shopping-cart",
+              "wallet",
+              "chart-line",
+              "calendar",
+              "users",
+              "building",
+              "plane",
+              "leaf",
+              "coffee",
+              "gamepad",
+              "puzzle",
+              "shield",
+              "flask-conical",
+              "layers",
+              "package",
+              "compass",
+              "mountain",
+              "sparkles",
+              "database"
+            ],
+            "type": "string"
           },
           "ProjectState": {
             "description": "Whether a project can be changed.",
@@ -9214,7 +10125,7 @@
       },
       "output_name": "ProjectChange",
       "safety": "write",
-      "summary": "Add a label to a project."
+      "summary": "Add a label to a project; without a colour it gets the first palette colour the project's labels don't use yet."
     },
     {
       "cli": "label edit",
@@ -9223,7 +10134,7 @@
       "input": {
         "$defs": {
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -9367,7 +10278,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -9505,8 +10416,8 @@
                 "description": "Its colour."
               },
               "icon": {
-                "description": "Its icon, if one was chosen.",
-                "type": "string"
+                "$ref": "#/$defs/ProjectIcon",
+                "description": "Its icon, if one was chosen; without one it shows as a circle."
               },
               "id": {
                 "description": "The project's ID.",
@@ -9530,6 +10441,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "next_label_hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "The colour a new label gets when none is given: the first palette\ncolour no label uses yet, else the least-used one."
               },
               "old_keys": {
                 "description": "Keys it had before; they still find it.",
@@ -9594,12 +10509,59 @@
               "statuses",
               "types",
               "labels",
+              "next_label_hue",
               "open_tasks",
               "total_tasks",
               "created_at",
               "updated_at"
             ],
             "type": "object"
+          },
+          "ProjectIcon": {
+            "description": "An icon that stands for a project instead of its coloured circle, drawn\nin the project's colour. The names are those of the app's icon family\n(Lucide), so each variant's name says what it shows.",
+            "enum": [
+              "folder",
+              "star",
+              "bug",
+              "rocket",
+              "book",
+              "house",
+              "briefcase",
+              "code",
+              "terminal",
+              "globe",
+              "heart",
+              "flag",
+              "zap",
+              "target",
+              "lightbulb",
+              "wrench",
+              "hammer",
+              "palette",
+              "music",
+              "camera",
+              "graduation-cap",
+              "shopping-cart",
+              "wallet",
+              "chart-line",
+              "calendar",
+              "users",
+              "building",
+              "plane",
+              "leaf",
+              "coffee",
+              "gamepad",
+              "puzzle",
+              "shield",
+              "flask-conical",
+              "layers",
+              "package",
+              "compass",
+              "mountain",
+              "sparkles",
+              "database"
+            ],
+            "type": "string"
           },
           "ProjectState": {
             "description": "Whether a project can be changed.",
@@ -9804,7 +10766,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -9942,8 +10904,8 @@
                 "description": "Its colour."
               },
               "icon": {
-                "description": "Its icon, if one was chosen.",
-                "type": "string"
+                "$ref": "#/$defs/ProjectIcon",
+                "description": "Its icon, if one was chosen; without one it shows as a circle."
               },
               "id": {
                 "description": "The project's ID.",
@@ -9967,6 +10929,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "next_label_hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "The colour a new label gets when none is given: the first palette\ncolour no label uses yet, else the least-used one."
               },
               "old_keys": {
                 "description": "Keys it had before; they still find it.",
@@ -10031,12 +10997,59 @@
               "statuses",
               "types",
               "labels",
+              "next_label_hue",
               "open_tasks",
               "total_tasks",
               "created_at",
               "updated_at"
             ],
             "type": "object"
+          },
+          "ProjectIcon": {
+            "description": "An icon that stands for a project instead of its coloured circle, drawn\nin the project's colour. The names are those of the app's icon family\n(Lucide), so each variant's name says what it shows.",
+            "enum": [
+              "folder",
+              "star",
+              "bug",
+              "rocket",
+              "book",
+              "house",
+              "briefcase",
+              "code",
+              "terminal",
+              "globe",
+              "heart",
+              "flag",
+              "zap",
+              "target",
+              "lightbulb",
+              "wrench",
+              "hammer",
+              "palette",
+              "music",
+              "camera",
+              "graduation-cap",
+              "shopping-cart",
+              "wallet",
+              "chart-line",
+              "calendar",
+              "users",
+              "building",
+              "plane",
+              "leaf",
+              "coffee",
+              "gamepad",
+              "puzzle",
+              "shield",
+              "flask-conical",
+              "layers",
+              "package",
+              "compass",
+              "mountain",
+              "sparkles",
+              "database"
+            ],
+            "type": "string"
           },
           "ProjectState": {
             "description": "Whether a project can be changed.",
@@ -10602,7 +11615,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -11927,7 +12940,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -13407,7 +14420,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -14680,7 +15693,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -15939,7 +16952,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -17189,7 +18202,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -18658,7 +19671,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -19888,7 +20901,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -21111,7 +22124,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -22377,7 +23390,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -23643,7 +24656,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",
@@ -29184,7 +30197,7 @@
             ]
           },
           "Hue": {
-            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
             "oneOf": [
               {
                 "const": "red",

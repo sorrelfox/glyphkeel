@@ -3,10 +3,12 @@
 
 //! Time stamps: milliseconds since 1970 in storage, RFC 3339 in outputs.
 
-use std::sync::Arc;
+use std::sync::{Arc, PoisonError, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use gk_api::OpError;
 use gk_core::Day;
+use gk_store::{SYSTEM_TIME_ZONE, UserSettings};
 
 /// Where the engine gets the current time from: milliseconds since 1970 UTC.
 /// Tests pass a fixed clock.
@@ -39,27 +41,39 @@ pub fn rfc3339(ms: i64) -> String {
 }
 
 /// The time zone of "today", of local times of day and of the days time
-/// entries fall on: the computer's own, or one named for tests.
+/// entries fall on: the person's chosen zone, or the computer's own. The app
+/// can change it while it runs ([`crate::Engine::set_time_zone`]); every
+/// copy follows.
 #[derive(Debug, Clone)]
-pub(crate) struct Zone(jiff::tz::TimeZone);
+pub(crate) struct Zone(Arc<RwLock<jiff::tz::TimeZone>>);
 
 impl Zone {
     /// The zone named `name` (IANA, `Europe/Berlin`), or the system's when
     /// `None` or unknown.
     pub(crate) fn new(name: Option<&str>) -> Self {
-        let named = name.and_then(|n| match jiff::tz::TimeZone::get(n) {
-            Ok(tz) => Some(tz),
-            Err(e) => {
-                tracing::warn!(zone = n, error = %e, "unknown time zone; using the system's");
-                None
-            }
-        });
-        Self(named.unwrap_or_else(jiff::tz::TimeZone::system))
+        Self(Arc::new(RwLock::new(resolve(name))))
+    }
+
+    /// Switches every copy of this zone to `name` (`None`: the system's).
+    pub(crate) fn set(&self, name: Option<&str>) {
+        *self.0.write().unwrap_or_else(PoisonError::into_inner) = resolve(name);
+    }
+
+    /// The zone's IANA name, when it has one.
+    pub(crate) fn name(&self) -> Option<String> {
+        self.tz().iana_name().map(str::to_owned)
+    }
+
+    fn tz(&self) -> jiff::tz::TimeZone {
+        self.0
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
     }
 
     fn local(&self, ms: i64) -> Option<jiff::civil::DateTime> {
         let ts = jiff::Timestamp::from_millisecond(ms).ok()?;
-        Some(self.0.to_datetime(ts))
+        Some(self.tz().to_datetime(ts))
     }
 
     /// The local day of moment `ms`.
@@ -95,7 +109,7 @@ impl Zone {
         );
         local
             .ok()
-            .and_then(|dt| self.0.to_timestamp(dt).ok())
+            .and_then(|dt| self.tz().to_timestamp(dt).ok())
             .map_or_else(
                 || (day.days_since_epoch() * 1440 + i64::from(minute)) * 60_000,
                 jiff::Timestamp::as_millisecond,
@@ -113,11 +127,102 @@ impl Zone {
             .replacen(' ', "T", 1)
             .parse::<jiff::civil::DateTime>()
             .ok()?;
-        self.0
+        self.tz()
             .to_timestamp(local)
             .ok()
             .map(jiff::Timestamp::as_millisecond)
     }
+}
+
+/// The zone named `name`, or the system's when `None` or unknown.
+fn resolve(name: Option<&str>) -> jiff::tz::TimeZone {
+    let named = name.and_then(|n| match jiff::tz::TimeZone::get(n) {
+        Ok(tz) => Some(tz),
+        Err(e) => {
+            tracing::warn!(zone = n, error = %e, "unknown time zone; using the system's");
+            None
+        }
+    });
+    named.unwrap_or_else(jiff::tz::TimeZone::system)
+}
+
+/// Checks a personal time zone: `"system"` (or blank) gives `None`, the
+/// computer's own zone; an IANA name known to the zone database (the
+/// system's, or the copy built into the program) gives that name.
+///
+/// # Errors
+/// `invalid` when the name is no known zone.
+pub fn check_time_zone(name: &str) -> Result<Option<String>, OpError> {
+    let name = name.trim();
+    if name.is_empty() || name.eq_ignore_ascii_case(SYSTEM_TIME_ZONE) {
+        return Ok(None);
+    }
+    match jiff::tz::TimeZone::get(name) {
+        Ok(tz) => Ok(Some(tz.iana_name().unwrap_or(name).to_owned())),
+        Err(_) => Err(
+            OpError::invalid(format!("\"{name}\" is not a known time zone."))
+                .with_hint("Use \"system\" or an IANA name such as \"Europe/Berlin\"."),
+        ),
+    }
+}
+
+/// The time zone a program runs in: `given` when the person named one for
+/// this run (the command line's `--tz`), else the one in the personal
+/// settings `settings`, else the computer's (`None`). A zone named for the
+/// run must be valid; an unknown one in the settings file is reported in
+/// the log and the computer's zone is used.
+///
+/// # Errors
+/// `invalid` when `given` is no known zone.
+pub fn personal_time_zone(
+    given: Option<&str>,
+    settings: &UserSettings,
+) -> Result<Option<String>, OpError> {
+    if let Some(given) = given {
+        return check_time_zone(given);
+    }
+    let Some(stored) = settings.zone_name() else {
+        return Ok(None);
+    };
+    match check_time_zone(stored) {
+        Ok(zone) => Ok(zone),
+        Err(e) => {
+            tracing::warn!(zone = stored, error = %e.message, "ignoring the personal time zone");
+            Ok(None)
+        }
+    }
+}
+
+/// One time zone a person can choose, with its offset from UTC now.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct ZoneChoice {
+    /// The IANA name (`Europe/Berlin`).
+    pub name: String,
+    /// The offset from UTC at the moment asked for, in seconds.
+    pub offset_seconds: i32,
+}
+
+/// Every zone of the zone database with its offset at `now` (milliseconds
+/// since 1970), sorted by name, for a picker. Names that are only aliases
+/// kept for old data (`US/Pacific`) are left in; the picker searches.
+#[must_use]
+pub fn time_zones(now: i64) -> Vec<ZoneChoice> {
+    let at = jiff::Timestamp::from_millisecond(now).unwrap_or(jiff::Timestamp::UNIX_EPOCH);
+    let db = jiff::tz::db();
+    let mut zones: Vec<ZoneChoice> = db
+        .available()
+        .filter_map(|name| {
+            let name = name.as_str().to_owned();
+            let tz = db.get(&name).ok()?;
+            Some(ZoneChoice {
+                offset_seconds: tz.to_offset(at).seconds(),
+                name,
+            })
+        })
+        .collect();
+    zones.sort_by(|a, b| a.name.cmp(&b.name));
+    zones.dedup_by(|a, b| a.name == b.name);
+    zones
 }
 
 /// `HH:MM` as minutes after midnight.

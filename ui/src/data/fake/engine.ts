@@ -434,6 +434,7 @@ export class FakeWorkspace {
       })),
       types: project.types.map((type) => ({ ...type, tasks: tasks.filter((task) => task.typeId === type.id).length })),
       labels: project.labels.map((label) => ({ ...label, tasks: tasks.filter((task) => task.labelIds.includes(label.id)).length })),
+      next_label_hue: "grey",
       children: this.children(project).map((child) => child.key),
       created_at: "2026-01-01T00:00:00Z",
       updated_at: "2026-01-01T00:00:00Z",

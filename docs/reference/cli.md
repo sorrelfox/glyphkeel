@@ -25,12 +25,12 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel file cat <attachment>` | `file.read` | An attached file's content: text for text files, Base64 for images, otherwise only its details. |
 | `glyphkeel file delete <attachment>` | `file.delete` | Move an attached file to the trash. |
 | `glyphkeel file show <attachment>` | `file.get` | An attached file's name, type, size and owner. |
-| `glyphkeel label add` | `label.create` | Add a label to a project. |
+| `glyphkeel label add` | `label.create` | Add a label to a project; without a colour it gets the first palette colour the project's labels don't use yet. |
 | `glyphkeel label delete` | `label.delete` | Delete a label and take it off every task. Can't be undone. |
 | `glyphkeel label edit` | `label.update` | Rename or recolour a label. |
 | `glyphkeel project archive <project>` | `project.archive` | Archive a project and its sub-projects: they become read-only and leave the sidebar. |
 | `glyphkeel project brief <project>` | `project.brief` | The project's instructions for agents: the wiki page marked as the brief, else the project's description. |
-| `glyphkeel project create` | `project.create` | Create a project, or a sub-project that copies its parent's statuses, types and labels. |
+| `glyphkeel project create` | `project.create` | Create a project, or a sub-project that copies its parent's statuses, types and labels; without a colour it gets one its sibling projects don't use yet. |
 | `glyphkeel project delete <project>` | `project.delete` | Delete a project and its sub-projects with every task, comment and file in them. Can't be undone. |
 | `glyphkeel project edit <project>` | `project.update` | Change a project: name, description, colour, icon, modules, key, place in the tree, archived; add, change, reorder or remove statuses, types and labels, all in one change. |
 | `glyphkeel project list` | `project.list` | The project tree in sidebar order, with keys, names and open-task counts; archived projects on request. |

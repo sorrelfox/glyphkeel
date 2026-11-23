@@ -45,6 +45,12 @@ pub struct Options {
     #[arg(long, value_name = "NAME")]
     pub agent_name: Option<String>,
 
+    /// The time zone of "today" and local times: "system" or an IANA name
+    /// such as Europe/Berlin. Default: the personal setting shared with the
+    /// app and the command line.
+    #[arg(long, value_name = "ZONE")]
+    pub tz: Option<String>,
+
     /// How much to log on standard error: off, error, warn, info, debug or
     /// trace.
     #[arg(long, value_name = "LEVEL", default_value = "warn", value_parser = parse_level)]
@@ -70,6 +76,7 @@ impl Options {
             profile: Profile::Standard,
             toolsets: None,
             agent_name: None,
+            tz: None,
             log_level: tracing::level_filters::LevelFilter::WARN,
         }
     }

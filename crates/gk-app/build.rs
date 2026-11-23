@@ -21,6 +21,7 @@ fn main() {
         "app_settings",
         "update_app_settings",
         "set_ui_pref",
+        "time_zones",
         "quit_app",
     ]);
     if let Err(err) = tauri_build::try_build(tauri_build::Attributes::new().app_manifest(manifest))
