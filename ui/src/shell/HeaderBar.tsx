@@ -118,7 +118,7 @@ function ProjectButton({ project, onSettings, onNewSubproject }: ProjectButtonPr
   const projects = useProjects();
   const path: string[] = [];
   let parent = project.parent;
-  while (parent !== null) {
+  while (parent !== undefined) {
     const found = projects.data?.items.find((candidate) => candidate.key === parent);
     if (!found) {
       break;

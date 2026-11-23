@@ -10,7 +10,7 @@ import { MenuEntries } from "../../components/ContextMenu";
 import { PriorityGlyph, TypeGlyph } from "../../components/Glyphs";
 import { useToasts } from "../../components/Toasts";
 import { useProject, useTask, useUpdateTask } from "../../data/board";
-import { PRIORITIES, type Project, type Task, type TaskPatch, type TaskRef } from "../../data/catalog";
+import { PRIORITIES, type Project, type Task, type TaskField, type TaskUpdateInput } from "../../data/catalog";
 import { errorToast, useCall, useOp } from "../../data/hooks";
 import { useT } from "../../i18n/I18n";
 import { useDayFormat } from "../board/CardView";
@@ -31,7 +31,8 @@ interface TaskPanelProps {
 export function TaskPanel({ taskKey, onClose, onOpenTask }: TaskPanelProps) {
   const t = useT();
   const task = useTask(taskKey);
-  const project = useProject(task.data?.project);
+  const loaded = task.data?.items[0];
+  const project = useProject(loaded?.project);
   return (
     <aside
       className={styles.panel}
@@ -54,7 +55,7 @@ export function TaskPanel({ taskKey, onClose, onOpenTask }: TaskPanelProps) {
           </Button>
         </div>
       )}
-      {task.data && project.data && <Loaded task={task.data} project={project.data} onClose={onClose} onOpenTask={onOpenTask} />}
+      {loaded && project.data && <Loaded task={loaded} project={project.data} onClose={onClose} onOpenTask={onOpenTask} />}
     </aside>
   );
 }
@@ -66,25 +67,31 @@ function Loaded({ task, project, onClose, onOpenTask }: { task: Task; project: P
   const call = useCall();
   const settings = useOp("settings.get", {});
   const readOnly = project.state === "archived";
-  const patch = (change: TaskPatch) => {
-    update.mutate({ key: task.key, patch: change });
+  const patch = (change: Omit<TaskUpdateInput, "key">) => {
+    update.mutate({ key: task.key, ...change });
+  };
+  /** Sets a field, or clears it when the value is null. */
+  const setOrClear = <F extends TaskField & keyof TaskUpdateInput>(field: F, value: TaskUpdateInput[F] | null) => {
+    patch(value === null ? { clear: [field] } : { [field]: value });
   };
   const setStatus = (status: string) => {
     call("task.move", { key: task.key, status }).catch((error: unknown) => {
       toasts.show(errorToast(t, error));
     });
   };
-  const estimate = task.estimate_min;
-  const left = estimate === null ? null : estimate - task.spent_min;
+  const estimate = task.estimate_minutes ?? null;
+  const spent = task.spent_minutes;
+  const left = estimate === null ? null : estimate - spent;
+  const statusHue = project.statuses.find((status) => status.id === task.status.id)?.hue ?? "grey";
 
   return (
     <>
       <div className={styles.bar}>
         <TypeGlyph glyph={task.type.glyph} label={task.type.name} />
-        {task.parent && (
+        {task.parent !== undefined && (
           <>
-            <Button className="val key" onPress={() => { if (task.parent) onOpenTask(task.parent.key); }}>
-              {task.parent.key} {task.parent.title}
+            <Button className="val key" onPress={() => { if (task.parent !== undefined) onOpenTask(task.parent); }}>
+              {task.parent}
             </Button>
             <ChevronRight className="ic s faint" />
           </>
@@ -114,7 +121,7 @@ function Loaded({ task, project, onClose, onOpenTask }: { task: Task; project: P
         <div className={styles.actions}>
           <MenuTrigger>
             <Button className="btn" isDisabled={readOnly} aria-label={t("panel-status", { name: task.status.name })}>
-              <span className={`dot hue-${task.status.hue}`} />
+              <span className={`dot hue-${statusHue}`} />
               <span>{task.status.name}</span>
               <ChevronDown className="ic s muted" />
             </Button>
@@ -132,7 +139,6 @@ function Loaded({ task, project, onClose, onOpenTask }: { task: Task; project: P
               </Menu>
             </Popover>
           </MenuTrigger>
-          {task.blocked && <span className="chip hue-red">{t("card-blocked")}</span>}
         </div>
 
         <div className={styles.props}>
@@ -179,10 +185,10 @@ function Loaded({ task, project, onClose, onOpenTask }: { task: Task; project: P
             </MenuTrigger>
           </Prop>
           <Prop label={t("prop-start")}>
-            <DateValue label={t("prop-start")} value={task.start_date} readOnly={readOnly} onChange={(start_date) => { patch({ start_date }); }} />
+            <DateValue label={t("prop-start")} value={task.start_date ?? null} readOnly={readOnly} onChange={(day) => { setOrClear("start_date", day); }} />
           </Prop>
           <Prop label={t("prop-due")}>
-            <DateValue label={t("prop-due")} value={task.due_date} readOnly={readOnly} closed={task.closed_at !== null} relative onChange={(due_date) => { patch({ due_date }); }} />
+            <DateValue label={t("prop-due")} value={task.due_date ?? null} readOnly={readOnly} closed={task.closed_at !== undefined} relative onChange={(day) => { setOrClear("due_date", day); }} />
           </Prop>
           <Prop label={t("prop-estimate")}>
             <DurationValue
@@ -191,12 +197,12 @@ function Loaded({ task, project, onClose, onOpenTask }: { task: Task; project: P
               readOnly={readOnly}
               hoursPerDay={settings.data?.hours_per_day}
               daysPerWeek={settings.data?.days_per_week}
-              onChange={(estimate_min) => { patch({ estimate_min }); }}
+              onChange={(minutes) => { setOrClear("estimate", minutes === null ? null : `${String(minutes)}m`); }}
             />
           </Prop>
           <Prop label={t("prop-spent")}>
             <span className={classes("num", styles.static)}>
-              {task.spent_min === 0 && left === null ? <span className="faint">{t("prop-none")}</span> : formatMinutes(task.spent_min)}
+              {spent === 0 && left === null ? <span className="faint">{t("prop-none")}</span> : formatMinutes(spent)}
               {left !== null && (
                 <span className={left < 0 ? styles.over : "faint"}>
                   {left < 0 ? t("prop-over-by", { time: formatMinutes(-left) }) : t("prop-left", { time: formatMinutes(left) })}
@@ -205,7 +211,7 @@ function Loaded({ task, project, onClose, onOpenTask }: { task: Task; project: P
             </span>
           </Prop>
           <Prop label={t("prop-labels")} wide>
-            <Labels task={task} project={project} readOnly={readOnly} onChange={(set) => { patch({ labels: { set } }); }} />
+            <Labels task={task} project={project} readOnly={readOnly} onChange={(labels) => { setOrClear("labels", labels.length === 0 ? null : labels); }} />
           </Prop>
           <Prop label={t("prop-progress")}>
             {task.checklist.total > 0 ? (
@@ -225,30 +231,6 @@ function Loaded({ task, project, onClose, onOpenTask }: { task: Task; project: P
 
         <Description task={task} readOnly={readOnly} onSave={(description) => { patch({ description }); }} />
 
-        {task.subtasks.length > 0 && (
-          <section className={styles.section} aria-label={t("panel-subtasks")}>
-            <div className={styles.sectionHead}>
-              <span className="caption grow">{t("panel-subtasks")}</span>
-              <span className={classes("num muted", styles.small)}>
-                {task.subtasks.filter((sub) => sub.status.category === "done" || sub.status.category === "cancelled").length}/{task.subtasks.length}
-              </span>
-            </div>
-            {task.subtasks.map((sub) => (
-              <RefRow key={sub.key} task={sub} onOpen={onOpenTask} />
-            ))}
-          </section>
-        )}
-
-        {task.relations.length > 0 && (
-          <section className={styles.section} aria-label={t("panel-links")}>
-            <div className={styles.sectionHead}>
-              <span className="caption grow">{t("panel-links")}</span>
-            </div>
-            {task.relations.map((relation) => (
-              <RefRow key={`${relation.kind}-${relation.task.key}`} task={relation.task} kind={t(`relation-${relation.kind}`)} onOpen={onOpenTask} />
-            ))}
-          </section>
-        )}
       </div>
     </>
   );
@@ -260,20 +242,6 @@ function Prop({ label, children, wide = false }: { label: string; children: Reac
       <dt>{label}</dt>
       <dd>{children}</dd>
     </dl>
-  );
-}
-
-function RefRow({ task, kind, onOpen }: { task: TaskRef; kind?: string; onOpen: (key: string) => void }) {
-  return (
-    <button type="button" className={classes("item", styles.refRow)} onClick={() => { onOpen(task.key); }}>
-      {kind && <span className={classes("muted", styles.relationKind)}>{kind}</span>}
-      <span className="key">{task.key}</span>
-      <span className="truncate grow">{task.title}</span>
-      <span className={`pill hue-${task.status.hue}`}>
-        <span className="dot" />
-        {task.status.name}
-      </span>
-    </button>
   );
 }
 

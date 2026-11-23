@@ -121,8 +121,8 @@ function General({ project }: { project: Project }) {
   const update = useCommand("project.update", { undoable: t("toast-project-changed") });
   const archive = useCommand("project.archive", { undoable: t("toast-project-archived") });
   const unarchive = useCommand("project.unarchive");
-  const patch = (change: Parameters<typeof update.mutate>[0]["patch"]) => {
-    update.mutate({ project: project.key, patch: change });
+  const patch = (change: Omit<Parameters<typeof update.mutate>[0], "project">) => {
+    update.mutate({ project: project.key, ...change });
   };
   return (
     <div className={styles.form}>
@@ -216,7 +216,7 @@ function Statuses({ project }: { project: Project }) {
       {project.statuses.map((status, index) => (
         <div key={status.id} className={styles.statusRow} data-testid={`status-${status.name}`}>
           <span className={`dot hue-${status.hue}`} />
-          <SaveField label={t("status-name")} value={status.name} onSave={(value) => { update.mutate({ ...ref, status: status.id, patch: { name: value } }); }} />
+          <SaveField label={t("status-name")} value={status.name} onSave={(value) => { update.mutate({ ...ref, status: status.id, name: value }); }} />
           <span className={classes("field", styles.select)}>
             <select
               aria-label={t("status-category")}
@@ -224,7 +224,7 @@ function Statuses({ project }: { project: Project }) {
               onChange={(event) => {
                 const category = STATUS_CATEGORIES.find((candidate) => candidate === event.target.value);
                 if (category) {
-                  update.mutate({ ...ref, status: status.id, patch: { category } });
+                  update.mutate({ ...ref, status: status.id, category });
                 }
               }}
             >
@@ -235,14 +235,13 @@ function Statuses({ project }: { project: Project }) {
               ))}
             </select>
           </span>
-          <HueSelect label={t("status-colour")} value={status.hue} onChange={(hue) => { update.mutate({ ...ref, status: status.id, patch: { hue } }); }} />
+          <HueSelect label={t("status-colour")} value={status.hue} onChange={(hue) => { update.mutate({ ...ref, status: status.id, hue }); }} />
           <SaveField
             className={classes(styles.narrow)}
             label={t("status-wip")}
-            value={status.wip_limit === null ? "" : String(status.wip_limit)}
+            value={status.wip_limit === undefined ? "" : String(status.wip_limit)}
             onSave={(value) => {
-              const limit = value.trim() === "" ? null : Number(value);
-              update.mutate({ ...ref, status: status.id, patch: { wip_limit: limit } });
+              update.mutate(value.trim() === "" ? { ...ref, status: status.id, clear: ["wip_limit"] } : { ...ref, status: status.id, wip_limit: Number(value) });
             }}
           />
           <span className={styles.rowButtons}>
@@ -253,7 +252,7 @@ function Statuses({ project }: { project: Project }) {
               onPress={() => {
                 const previous = project.statuses[index - 1];
                 if (previous) {
-                  reorder.mutate({ ...ref, status: status.id, position: { before: previous.id } });
+                  reorder.mutate({ ...ref, status: status.id, before: previous.id });
                 }
               }}
             >
@@ -266,7 +265,7 @@ function Statuses({ project }: { project: Project }) {
               onPress={() => {
                 const next = project.statuses[index + 1];
                 if (next) {
-                  reorder.mutate({ ...ref, status: status.id, position: { after: next.id } });
+                  reorder.mutate({ ...ref, status: status.id, after: next.id });
                 }
               }}
             >
@@ -356,7 +355,7 @@ function Types({ project }: { project: Project }) {
       {project.types.map((type) => (
         <div key={type.id} className={styles.simpleRow}>
           <TypeGlyph glyph={type.glyph} />
-          <SaveField className={classes(styles.growField)} label={t("type-name")} value={type.name} onSave={(value) => { update.mutate({ ...ref, type: type.id, patch: { name: value } }); }} />
+          <SaveField className={classes(styles.growField)} label={t("type-name")} value={type.name} onSave={(value) => { update.mutate({ ...ref, type: type.id, name: value }); }} />
           <span className={classes("field", styles.select)}>
             <select
               aria-label={t("type-glyph")}
@@ -364,7 +363,7 @@ function Types({ project }: { project: Project }) {
               onChange={(event) => {
                 const glyph = GLYPHS.find((candidate) => candidate === event.target.value);
                 if (glyph) {
-                  update.mutate({ ...ref, type: type.id, patch: { glyph } });
+                  update.mutate({ ...ref, type: type.id, glyph });
                 }
               }}
             >
@@ -379,12 +378,10 @@ function Types({ project }: { project: Project }) {
           <Button
             className="btn flat icon sm"
             aria-label={t("type-delete", { name: type.name })}
-            isDisabled={project.types.length < 2}
+            isDisabled={type.is_default}
             onPress={() => {
-              const target = project.types.find((candidate) => candidate.id !== type.id);
-              if (target) {
-                remove.mutate({ ...ref, type: type.id, move_tasks_to: target.id });
-              }
+              // Its tasks get the default type.
+              remove.mutate({ ...ref, type: type.id });
             }}
           >
             <Trash2 className="ic s" />
@@ -417,7 +414,7 @@ function Labels({ project }: { project: Project }) {
   const t = useT();
   const update = useCommand("label.update");
   const create = useCommand("label.create");
-  const remove = useCommand("label.delete", { undoable: t("toast-label-deleted") });
+  const remove = useCommand("label.delete");
   const [name, setName] = useState("");
   const [confirming, setConfirming] = useState<string | null>(null);
   const ref = { project: project.key };
@@ -427,8 +424,8 @@ function Labels({ project }: { project: Project }) {
       {project.labels.map((label) => (
         <div key={label.id} className={styles.simpleRow}>
           <span className={`chip hue-${label.hue}`}>{label.name}</span>
-          <SaveField className={classes(styles.growField)} label={t("label-name")} value={label.name} onSave={(value) => { update.mutate({ ...ref, label: label.id, patch: { name: value } }); }} />
-          <HueSelect label={t("label-colour")} value={label.hue} onChange={(hue) => { update.mutate({ ...ref, label: label.id, patch: { hue } }); }} />
+          <SaveField className={classes(styles.growField)} label={t("label-name")} value={label.name} onSave={(value) => { update.mutate({ ...ref, label: label.id, name: value }); }} />
+          <HueSelect label={t("label-colour")} value={label.hue} onChange={(hue) => { update.mutate({ ...ref, label: label.id, hue }); }} />
           {confirming === label.id ? (
             <>
               <Button className="btn" onPress={() => { setConfirming(null); }}>

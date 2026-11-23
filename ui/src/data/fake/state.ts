@@ -3,8 +3,29 @@
 
 // The in-memory engine's own records, shaped like the workspace's tables.
 
-import { type Settings } from "../../generated/ops";
-import { type BoardLayout, type Hue, type Label, type Module, type Priority, type Status, type TaskType } from "../catalog";
+import { type BoardLayout, type Category, type Glyph, type Hue, type Modules, type Priority, type Settings } from "../../generated/ops";
+
+export interface FakeStatus {
+  id: string;
+  name: string;
+  category: Category;
+  hue: Hue;
+  wip_limit: number | null;
+}
+
+export interface FakeType {
+  id: string;
+  name: string;
+  glyph: Glyph;
+  hue: Hue;
+  is_default: boolean;
+}
+
+export interface FakeLabel {
+  id: string;
+  name: string;
+  hue: Hue;
+}
 
 export interface FakeProject {
   id: string;
@@ -17,11 +38,11 @@ export interface FakeProject {
   rank: number;
   description: string;
   state: "active" | "archived";
-  modules: Record<Module, boolean>;
+  modules: Modules;
   /** In the project's order. */
-  statuses: Status[];
-  types: TaskType[];
-  labels: Label[];
+  statuses: FakeStatus[];
+  types: FakeType[];
+  labels: FakeLabel[];
   nextNumber: number;
 }
 
@@ -42,16 +63,20 @@ export interface FakeTask {
   dueDate: string | null;
   estimateMin: number | null;
   spentMin: number;
+  /** Sample data for the files and comments to come. */
   files: number;
   comments: number;
   createdAt: string;
   editedAt: string;
+  statusEnteredAt: string;
   updatedAt: string;
+  /** Who changed it last; the engine doesn't report it on cards yet. */
   updatedBy: { kind: "user" | "agent"; name: string };
   closedAt: string | null;
   version: number;
 }
 
+/** Sample links between tasks, for when tasks show them. */
 export interface FakeRelation {
   from: string;
   to: string;

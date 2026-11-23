@@ -7,8 +7,9 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { useToasts } from "../components/Toasts";
+import { type LayoutChange, type LayoutUpdateInput, type ProjectList, type TaskCreateInput, type TaskUpdateInput } from "../generated/ops";
 import { useT } from "../i18n/I18n";
-import { type Board, type BoardLayout, type Position, type TaskPatch } from "./catalog";
+import { type Board, type BoardLayout, type Card, type Place } from "./catalog";
 import { errorToast, useCall, useOp } from "./hooks";
 import { opKey } from "./queries";
 import { type OpFailure } from "./transport";
@@ -17,65 +18,145 @@ export function useProjects() {
   return useOp("project.list", { include_archived: true });
 }
 
-export function useCounts() {
-  return useOp("workspace.counts", {});
+/** Open tasks: in all active projects, and by project key. */
+export interface Counts {
+  all: number;
+  /** Open tasks of each project alone. */
+  own: Record<string, number>;
+  /** Open tasks of each project with its sub-projects. */
+  withSubprojects: Record<string, number>;
+}
+
+export function countsOf(list: ProjectList): Counts {
+  const counts: Counts = { all: 0, own: {}, withSubprojects: {} };
+  for (const project of list.items) {
+    counts.own[project.key] = project.open_tasks;
+    counts.withSubprojects[project.key] = project.open_tasks_with_subprojects;
+    if (project.state === "active") {
+      counts.all += project.open_tasks;
+    }
+  }
+  return counts;
+}
+
+/** The sidebar's counts, read from the project tree. */
+export function useCounts(): Counts | undefined {
+  const projects = useProjects();
+  return projects.data ? countsOf(projects.data) : undefined;
 }
 
 export function useProject(key: string | undefined) {
   return useOp("project.get", { project: key ?? "" }, { enabled: key !== undefined });
 }
 
+/**
+ * The board's input. Older closed cards always come along: the board hides
+ * them itself, column by column, behind "Show older".
+ */
 export function boardInput(project: string, includeSubprojects: boolean) {
-  return { project, include_subprojects: includeSubprojects };
+  return { project, include_subprojects: includeSubprojects, show_older: true };
 }
 
 export function useBoard(project: string, includeSubprojects: boolean, enabled = true) {
   return useOp("board.get", boardInput(project, includeSubprojects), { enabled });
 }
 
-export function layoutInput(project: string) {
-  return { project, view: "board" as const };
-}
-
 export function useLayout(project: string) {
-  return useOp("layout.get", layoutInput(project));
+  return useOp("layout.get", { project });
 }
 
+/** One task. */
 export function useTask(key: string | undefined) {
-  return useOp("task.get", { key: key ?? "" }, { enabled: key !== undefined });
+  return useOp("task.get", { keys: [key ?? ""] }, { enabled: key !== undefined });
+}
+
+/** A change to the layout as the screens make it: the fields that change, whole. */
+export type LayoutEdit = Partial<BoardLayout>;
+
+const added = (before: readonly string[], after: readonly string[]) => after.filter((id) => !before.includes(id));
+
+/** The engine's input for a layout change. */
+export function layoutUpdate(project: string, before: BoardLayout, change: LayoutEdit | "reset"): LayoutUpdateInput {
+  if (change === "reset") {
+    return {
+      project,
+      reset: true,
+      // Reset brings back the project's columns; the card fields and the rest stay.
+      card_fields: before.card_fields,
+      hide_done_after_days: before.hide_done_after_days,
+      include_subprojects: before.include_subprojects,
+    };
+  }
+  const input: LayoutUpdateInput = { project };
+  if (change.order !== undefined) {
+    input.order = change.order;
+  }
+  if (change.hidden !== undefined) {
+    input.hide = added(before.hidden, change.hidden);
+    input.show = added(change.hidden, before.hidden);
+  }
+  if (change.collapsed !== undefined) {
+    input.collapse = added(before.collapsed, change.collapsed);
+    input.expand = added(change.collapsed, before.collapsed);
+  }
+  if (change.sort_mode !== undefined) {
+    input.sort_mode = change.sort_mode;
+  }
+  if (change.column_sort !== undefined) {
+    // A column that goes back to the board's mode loses its own.
+    const mode = change.sort_mode ?? before.sort_mode;
+    input.column_sort = { ...Object.fromEntries(Object.keys(before.column_sort).map((id) => [id, mode])), ...change.column_sort };
+  }
+  if (change.hide_done_after_days !== undefined) {
+    input.hide_done_after_days = change.hide_done_after_days;
+  }
+  if (change.card_fields !== undefined) {
+    input.card_fields = change.card_fields;
+  }
+  if (change.include_subprojects !== undefined) {
+    input.include_subprojects = change.include_subprojects;
+  }
+  return input;
 }
 
 /**
  * Changes the personal layout. The board follows at once; if the change
  * fails, it goes back and a toast says why.
  */
-export function useUpdateLayout(project: string): (change: Partial<BoardLayout> | "reset") => void {
+export function useUpdateLayout(project: string): (change: LayoutEdit | "reset") => void {
   const call = useCall();
   const queryClient = useQueryClient();
   const toasts = useToasts();
   const t = useT();
-  const key = opKey("layout.get", layoutInput(project));
+  const key = opKey("layout.get", { project });
   const mutation = useMutation({
-    mutationFn: (change: Partial<BoardLayout> | "reset") =>
-      call("layout.update", change === "reset" ? { ...layoutInput(project), reset: true } : { ...layoutInput(project), patch: change }),
-    onMutate: async (change) => {
-      await queryClient.cancelQueries({ queryKey: key });
-      const before = queryClient.getQueryData<BoardLayout>(key);
-      if (before && change !== "reset") {
-        queryClient.setQueryData<BoardLayout>(key, { ...before, ...change });
-      }
-      return { before };
-    },
-    onError: (error, _change, context) => {
-      if (context?.before) {
-        queryClient.setQueryData(key, context.before);
-      }
+    mutationFn: ({ input }: { input: LayoutUpdateInput; before: LayoutChange }) => call("layout.update", input),
+    onError: (error, { before }) => {
+      queryClient.setQueryData(key, before);
       toasts.show(errorToast(t, error));
     },
   });
   return (change) => {
-    mutation.mutate(change);
+    const before = queryClient.getQueryData<LayoutChange>(key);
+    if (!before) {
+      return;
+    }
+    if (change !== "reset") {
+      queryClient.setQueryData<LayoutChange>(key, { ...before, layout: { ...before.layout, ...change } });
+    }
+    void queryClient.cancelQueries({ queryKey: key });
+    mutation.mutate({ input: layoutUpdate(project, before.layout, change), before });
   };
+}
+
+/** Every card on the board, by key. */
+export function cardsOf(board: Board): Map<string, Card> {
+  return new Map(board.columns.flatMap((column) => column.cards.map((card) => [card.key, card] as const)));
+}
+
+/** The column of every card on the board, by card key. */
+export function columnsOf(board: Board): Record<string, string> {
+  return Object.fromEntries(board.columns.flatMap((column) => column.cards.map((card) => [card.key, column.id] as const)));
 }
 
 export interface Move {
@@ -84,30 +165,33 @@ export interface Move {
   status: string;
   /** The column the card lands in. */
   column: string;
-  position: Position;
+  place: Place;
 }
 
 /** The board with one card moved, as it will look once the engine agrees. */
 export function moveOnBoard(board: Board, move: Move): Board {
-  const card = board.cards.find((candidate) => candidate.key === move.key);
+  const card = cardsOf(board).get(move.key);
   if (!card) {
     return board;
   }
-  const moved = { ...card, status: move.status };
-  const rest = board.cards.filter((candidate) => candidate.key !== move.key);
-  const columnOf = { ...board.column_of, [move.key]: move.column };
-  let at: number;
-  if (typeof move.position === "object") {
-    const anchor = "before" in move.position ? move.position.before : move.position.after;
-    at = rest.findIndex((candidate) => candidate.key === anchor) + ("before" in move.position ? 0 : 1);
-  } else {
-    const inColumn = rest.map((candidate, index) => [candidate, index] as const).filter(([candidate]) => columnOf[candidate.key] === move.column);
-    const first = inColumn[0];
-    const last = inColumn[inColumn.length - 1];
-    at = move.position === "top" ? (first?.[1] ?? rest.length) : last ? last[1] + 1 : rest.length;
-  }
-  rest.splice(at, 0, moved);
-  return { ...board, cards: rest, column_of: columnOf };
+  const columns = board.columns.map((column) => {
+    const had = column.cards.some((candidate) => candidate.key === move.key);
+    const cards = column.cards.filter((candidate) => candidate.key !== move.key);
+    if (column.id !== move.column) {
+      return had ? { ...column, cards, count: column.count - 1 } : column;
+    }
+    let at = cards.length;
+    if ("before" in move.place || "after" in move.place) {
+      const anchor = "before" in move.place ? move.place.before : move.place.after;
+      const found = cards.findIndex((candidate) => candidate.key === anchor);
+      at = found < 0 ? cards.length : found + ("before" in move.place ? 0 : 1);
+    } else if (move.place.at === "top") {
+      at = 0;
+    }
+    cards.splice(at, 0, card);
+    return { ...column, cards, count: column.count + (had ? 0 : 1) };
+  });
+  return { ...board, columns };
 }
 
 /**
@@ -115,15 +199,14 @@ export function moveOnBoard(board: Board, move: Move): Board {
  * drop, so the card never jumps back), the engine records it, and a failure
  * puts the card back with a toast.
  */
-export function useMoveTask(board: { project: string; include_subprojects: boolean }): { mutate: (move: Move) => void } {
+export function useMoveTask(board: { project: string; layout: { include_subprojects: boolean } }): { mutate: (move: Move) => void } {
   const call = useCall();
   const queryClient = useQueryClient();
   const toasts = useToasts();
   const t = useT();
-  const key = opKey("board.get", boardInput(board.project, board.include_subprojects));
+  const key = opKey("board.get", boardInput(board.project, board.layout.include_subprojects));
   const mutation = useMutation({
-    mutationFn: ({ move }: { move: Move; before: Board | undefined }) =>
-      call("task.move", { key: move.key, status: move.status, position: move.position }),
+    mutationFn: ({ move }: { move: Move; before: Board | undefined }) => call("task.move", { key: move.key, status: move.status, ...move.place }),
     onError: (error: OpFailure, { before }) => {
       if (before) {
         queryClient.setQueryData(key, before);
@@ -148,7 +231,7 @@ export function useCreateTask() {
   const toasts = useToasts();
   const t = useT();
   return useMutation({
-    mutationFn: (input: { project: string; title: string; status?: string }) => call("task.create", input),
+    mutationFn: (input: TaskCreateInput) => call("task.create", input),
     onError: (error) => {
       toasts.show(errorToast(t, error));
     },
@@ -160,7 +243,7 @@ export function useUpdateTask() {
   const toasts = useToasts();
   const t = useT();
   return useMutation({
-    mutationFn: (input: { key: string; patch: TaskPatch }) => call("task.update", input),
+    mutationFn: (input: TaskUpdateInput) => call("task.update", input),
     onError: (error) => {
       toasts.show(errorToast(t, error));
     },

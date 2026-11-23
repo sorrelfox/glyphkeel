@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { CalendarDays, Clock, MessageSquare, Paperclip, SquareCheck, Workflow } from "lucide-react";
+import { CalendarClock, CalendarDays, Clock, Hourglass, SquareCheck, Workflow } from "lucide-react";
 import { forwardRef, type CSSProperties, type HTMLAttributes } from "react";
 import { useLocale } from "react-aria-components";
 
@@ -14,7 +14,7 @@ import styles from "./Board.module.css";
 
 interface CardViewProps extends HTMLAttributes<HTMLElement> {
   card: Card;
-  fields: readonly CardField[];
+  fields: readonly string[];
   compact: boolean;
   today: string;
   selected?: boolean;
@@ -33,9 +33,9 @@ export function useDayFormat(): (day: string) => string {
 }
 
 /**
- * A task on the board. Rows, each left out when empty: type, key, Blocked
- * and priority; the title; labels; due date, checklist, subtasks, files,
- * comments and time spent, as the personal card fields choose.
+ * A task on the board. Rows, each left out when empty: type, key and
+ * priority; the title; labels; start and due dates, checklist, subtasks,
+ * estimate and days in the column, as the personal card fields choose.
  */
 export const CardView = forwardRef<HTMLElement, CardViewProps>(function CardView(
   { card, fields, compact, today, selected = false, ghost = false, lifted = false, className, ...rest },
@@ -44,43 +44,44 @@ export const CardView = forwardRef<HTMLElement, CardViewProps>(function CardView
   const t = useT();
   const day = useDayFormat();
   const show = (field: CardField) => !compact && fields.includes(field);
-  const closed = card.closed_at !== null;
+  const closed = card.closed_at !== undefined;
   const due = dueState(card.due_date, closed, today);
+  const days = Math.max(0, Math.floor((Date.parse(`${today}T23:59:59`) - Date.parse(card.status_entered_at)) / 86_400_000));
   const meta = [
-    show("due") && card.due_date !== null && (
+    show("start") && card.start_date !== undefined && (
+      <span key="start" className="meta" aria-label={t("card-start", { day: day(card.start_date) })}>
+        <CalendarClock className="ic" />
+        {day(card.start_date)}
+      </span>
+    ),
+    show("due") && card.due_date !== undefined && (
       <span key="due" className={classes("meta", due === "overdue" && "overdue", (due === "soon" || due === "today") && "soon")}>
         <CalendarDays className="ic" />
         {due === "today" ? t("due-today") : day(card.due_date)}
       </span>
     ),
-    show("checklist") && card.checklist && (
+    show("checklist") && card.checklist.total > 0 && (
       <span key="checklist" className="meta" aria-label={t("card-checklist", { done: card.checklist.done, total: card.checklist.total })}>
         <SquareCheck className="ic" />
         {card.checklist.done}/{card.checklist.total}
       </span>
     ),
-    show("subtasks") && card.subtasks && (
+    show("subtasks") && card.subtasks.total > 0 && (
       <span key="subtasks" className="meta" aria-label={t("card-subtasks", { done: card.subtasks.done, total: card.subtasks.total })}>
         <Workflow className="ic" />
         {card.subtasks.done}/{card.subtasks.total}
       </span>
     ),
-    show("files") && card.files > 0 && (
-      <span key="files" className="meta" aria-label={t("card-files", { count: card.files })}>
-        <Paperclip className="ic" />
-        {card.files}
-      </span>
-    ),
-    show("comments") && card.comments > 0 && (
-      <span key="comments" className="meta" aria-label={t("card-comments", { count: card.comments })}>
-        <MessageSquare className="ic" />
-        {card.comments}
-      </span>
-    ),
-    show("spent") && card.spent_min > 0 && (
-      <span key="spent" className="meta" aria-label={t("card-spent", { time: formatMinutes(card.spent_min) })}>
+    show("estimate") && card.estimate_minutes !== undefined && (
+      <span key="estimate" className="meta" aria-label={t("card-estimate", { time: formatMinutes(card.estimate_minutes) })}>
         <Clock className="ic" />
-        {formatMinutes(card.spent_min)}
+        {formatMinutes(card.estimate_minutes)}
+      </span>
+    ),
+    show("days_in_column") && !closed && days > 0 && (
+      <span key="days" className="meta" aria-label={t("card-days-in-column", { count: days })}>
+        <Hourglass className="ic" />
+        {days}
       </span>
     ),
   ].filter(Boolean);
@@ -95,10 +96,9 @@ export const CardView = forwardRef<HTMLElement, CardViewProps>(function CardView
       {...rest}
     >
       <div className={styles.cardTop}>
-        <TypeGlyph glyph={card.type} label={card.type_name} />
+        <TypeGlyph glyph={card.type.glyph} label={card.type.name} />
         <span className="key">{card.key}</span>
         <div className="grow" />
-        {card.blocked && <span className="chip hue-red">{t("card-blocked")}</span>}
         <PriorityGlyph priority={card.priority} label={t(`priority-${card.priority}`)} />
       </div>
       <div className={classes("card-title", styles.cardTitle, compact && styles.compactTitle)}>{card.title}</div>

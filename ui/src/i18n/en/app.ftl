@@ -200,7 +200,6 @@ module-wiki = Wiki
 module-time = Time tracking
 toast-project-changed = Project changed
 toast-project-archived = Project archived
-toast-label-deleted = Label deleted
 dialog-cancel = Cancel
 settings-add = Add
 
@@ -296,9 +295,9 @@ card-field-labels = Labels
 card-field-due = Due date
 card-field-checklist = Checklist
 card-field-subtasks = Subtasks
-card-field-files = Files
-card-field-comments = Comments
-card-field-spent = Time spent
+card-field-start = Start date
+card-field-estimate = Estimate
+card-field-days_in_column = Days in column
 card-size-regular = Regular
 card-size-compact = Compact
 sort-manual = Manual order
@@ -315,8 +314,6 @@ filter-due-overdue = Overdue
 filter-due-today = Due today
 filter-due-week = Due in the next 7 days
 filter-due-none = No due date
-filter-agents = Changed by agents
-filter-agents-short = Agents
 filter-recent = Recently updated
 filter-recent-short = Recent
 filter-active = { $name }: { $count } chosen
@@ -346,20 +343,15 @@ lane-collapsed =
     }
 
 card-label = { $key }: { $title }
-card-blocked = Blocked
 card-checklist = { $done } of { $total } checklist items done
 card-subtasks = { $done } of { $total } subtasks done
-card-files =
+card-start = Starts { $day }
+card-estimate = { $time } estimated
+card-days-in-column =
     { $count ->
-        [one] 1 file
-       *[other] { $count } files
+        [one] 1 day in this column
+       *[other] { $count } days in this column
     }
-card-comments =
-    { $count ->
-        [one] 1 comment
-       *[other] { $count } comments
-    }
-card-spent = { $time } spent
 card-menu = Task
 card-open = Open
 card-move-to = Move to
@@ -395,8 +387,6 @@ panel-copied = Copied { $key }
 panel-title = Title
 panel-status = Status: { $name }. Change status
 panel-status-menu = Status
-panel-subtasks = Subtasks
-panel-links = Links
 panel-description = Description
 panel-no-description = No description.
 panel-edit = Edit
@@ -417,13 +407,6 @@ prop-left = { $time } left
 prop-over-by = over by { $time }
 prop-date-value = { $name }: { $value }
 prop-duration-placeholder = e.g. 1h 30m
-relation-blocks = Blocks
-relation-blocked_by = Blocked by
-relation-relates = Relates to
-relation-duplicates = Duplicates
-relation-duplicated_by = Duplicated by
-relation-clones = Clones
-relation-cloned_by = Cloned by
 
 ## Preferences: appearance
 

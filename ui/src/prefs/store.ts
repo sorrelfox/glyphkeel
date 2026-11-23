@@ -5,7 +5,7 @@ import { ACCENTS, DEFAULT_APPEARANCE, DENSITIES, THEMES, type Appearance } from 
 
 /**
  * Personal settings of this window that aren't workspace data: the
- * appearance and the sidebar's open projects. They live in the web view's
+ * appearance, the sidebar's open projects and the board's card size. They live in the web view's
  * storage, behind this one module, until the app keeps them in its own
  * settings file. Storage that is missing or full is not an error: the
  * defaults apply.
@@ -67,4 +67,16 @@ export function loadCollapsedProjects(): string[] {
 
 export function saveCollapsedProjects(keys: readonly string[]): void {
   writePref("sidebar.collapsed", keys);
+}
+
+/** How big the board's cards are. */
+export type CardSize = "regular" | "compact";
+
+/** The card size of a project's board (by project ID); the engine's layout doesn't hold it. */
+export function loadCardSize(project: string): CardSize {
+  return oneOf(readPref(`board.cardSize.${project}`), ["regular", "compact"], "regular");
+}
+
+export function saveCardSize(project: string, size: CardSize): void {
+  writePref(`board.cardSize.${project}`, size);
 }

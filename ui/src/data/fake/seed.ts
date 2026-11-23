@@ -4,7 +4,7 @@
 // Sample data for the in-memory engine: the same projects and tasks on every
 // start for a given day, so screenshots and browser flows can rely on them.
 
-import { type Glyph, type Hue, type Priority, type StatusCategory } from "../catalog";
+import { type Category as StatusCategory, type Glyph, type Hue, type Priority } from "../../generated/ops";
 import { type FakeProject, type FakeState, type FakeTask } from "./state";
 
 /** A small deterministic random generator (mulberry32). */
@@ -220,6 +220,7 @@ export function seed(today: Date, seedNumber = 7): FakeState {
         comments: rand() < 0.3 ? 1 + Math.floor(rand() * 5) : 0,
         createdAt: new Date(now - createdDaysAgo * 86_400_000).toISOString(),
         editedAt: new Date(now - updatedDaysAgo * 86_400_000).toISOString(),
+        statusEnteredAt: new Date(now - updatedDaysAgo * 86_400_000).toISOString(),
         updatedAt: new Date(now - updatedDaysAgo * 86_400_000 - Math.floor(rand() * 3_600_000)).toISOString(),
         updatedBy: byAgent ? { kind: "agent", name: SAMPLE_AGENT } : { kind: "user", name: "You" },
         closedAt: closedDaysAgo === null ? null : new Date(now - closedDaysAgo * 86_400_000).toISOString(),

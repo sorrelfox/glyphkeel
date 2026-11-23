@@ -4,35 +4,23 @@
 import { useMutation, useQuery, type UseMutationResult, type UseQueryResult } from "@tanstack/react-query";
 
 import { useToasts, type Toast } from "../components/Toasts";
-import { type CallError } from "../generated/ops";
+import { type Call, type CallError, type OpMap } from "../generated/ops";
 import { useT, type Translate } from "../i18n/I18n";
-import { type AppOpId, type AppOpMap } from "./catalog";
 import { useClient } from "./DataProvider";
 import { opKey, type CommandOp, type QueryOp } from "./queries";
-import { OpFailure, type Client } from "./transport";
-
-/** Calls any operation the UI knows, typed by `AppOpMap`. */
-export type AppCall = <K extends AppOpId>(op: K, input: AppOpMap[K]["input"]) => Promise<AppOpMap[K]["output"]>;
-
-/**
- * The client's `call` for every operation the UI uses, including those the
- * generated client doesn't list yet. The transport passes any name through.
- */
-export function appCall(client: Client): AppCall {
-  return client.call as unknown as AppCall;
-}
+import { OpFailure } from "./transport";
 
 /** The typed call of the page's client. */
-export function useCall(): AppCall {
-  return appCall(useClient());
+export function useCall(): Call {
+  return useClient().call;
 }
 
 /** An operation's answer, cached under its key and refreshed by change events. */
 export function useOp<K extends QueryOp>(
   op: K,
-  input: AppOpMap[K]["input"],
+  input: OpMap[K]["input"],
   options: { enabled?: boolean } = {},
-): UseQueryResult<AppOpMap[K]["output"], OpFailure> {
+): UseQueryResult<OpMap[K]["output"], OpFailure> {
   const call = useCall();
   return useQuery({ queryKey: opKey(op, input), queryFn: () => call(op, input), enabled: options.enabled ?? true });
 }
@@ -62,13 +50,13 @@ interface CommandOptions {
 export function useCommand<K extends CommandOp>(
   op: K,
   options: CommandOptions = {},
-): UseMutationResult<AppOpMap[K]["output"], OpFailure, AppOpMap[K]["input"]> {
+): UseMutationResult<OpMap[K]["output"], OpFailure, OpMap[K]["input"]> {
   const call = useCall();
   const toasts = useToasts();
   const t = useT();
   const { undo } = useUndo();
   return useMutation({
-    mutationFn: (input: AppOpMap[K]["input"]) => call(op, input),
+    mutationFn: (input: OpMap[K]["input"]) => call(op, input),
     onError: (error) => {
       toasts.show(errorToast(t, error));
     },

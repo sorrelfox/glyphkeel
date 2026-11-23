@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { ArrowDownWideNarrow, Bot, CalendarDays, ChevronDown, EyeOff, Filter, Flag, History, Network, SlidersHorizontal, Tag } from "lucide-react";
+import { ArrowDownWideNarrow, CalendarDays, ChevronDown, EyeOff, Filter, Flag, History, Network, SlidersHorizontal, Tag } from "lucide-react";
 import { type ReactNode } from "react";
 import { Button, Menu, MenuItem, MenuTrigger, Popover, type Selection } from "react-aria-components";
 
 import { classes } from "../../classes";
 import { MenuEntries, type MenuEntry } from "../../components/ContextMenu";
-import { CARD_FIELDS, PRIORITIES, SORT_MODES, type Board, type BoardLayout, type Project } from "../../data/catalog";
+import { cardsOf, type LayoutEdit } from "../../data/board";
+import { CARD_FIELDS, PRIORITIES, SORT_MODES, type Board, type BoardLayout, type CardSize, type Project } from "../../data/catalog";
 import { useT } from "../../i18n/I18n";
 import { DUE_FILTERS, type BoardView, type Filters } from "./model";
 import styles from "./Board.module.css";
@@ -19,7 +20,10 @@ interface ToolbarProps {
   view: BoardView;
   filters: Filters;
   onFilters: (filters: Filters) => void;
-  onLayout: (change: Partial<BoardLayout> | "reset") => void;
+  onLayout: (change: LayoutEdit | "reset") => void;
+  /** Card size is kept in this window, not in the layout. */
+  cardSize: CardSize;
+  onCardSize: (size: CardSize) => void;
 }
 
 /** Choices for "hide closed cards after": days, 0 = never. */
@@ -92,10 +96,11 @@ function MenuButton({ label, children, entries, on = false, icon }: { label: str
  * Include sub-projects, the hidden-columns chip, the sort mode and the board
  * options. Filters are for this window; the layout is kept per project.
  */
-export function Toolbar({ project, board, layout, view, filters, onFilters, onLayout }: ToolbarProps) {
+export function Toolbar({ project, board, layout, view, filters, onFilters, onLayout, cardSize, onCardSize }: ToolbarProps) {
   const t = useT();
-  const labelNames = [...new Set(board.cards.flatMap((card) => card.labels.map((label) => label.name)))].sort();
-  const allLabels = new Map(board.cards.flatMap((card) => card.labels.map((label) => [label.name, label] as const)));
+  const cards = [...cardsOf(board).values()];
+  const labelNames = [...new Set(cards.flatMap((card) => card.labels.map((label) => label.name)))].sort();
+  const allLabels = new Map(cards.flatMap((card) => card.labels.map((label) => [label.name, label] as const)));
   const hiddenTasks = view.hidden.reduce((sum, hidden) => sum + hidden.count, 0);
   const sorted = layout.sort_mode !== "manual";
 
@@ -146,18 +151,6 @@ export function Toolbar({ project, board, layout, view, filters, onFilters, onLa
           onFilters({ ...filters, due });
         }}
       />
-      <button
-        type="button"
-        className={classes("btn", filters.changedByAgents ? "on" : "flat")}
-        aria-pressed={filters.changedByAgents}
-        aria-label={t("filter-agents")}
-        onClick={() => {
-          onFilters({ ...filters, changedByAgents: !filters.changedByAgents });
-        }}
-      >
-        <Bot className="ic" />
-        <span className="hide-narrow">{t("filter-agents-short")}</span>
-      </button>
       <button
         type="button"
         className={classes("btn", filters.recentlyUpdated ? "on" : "flat")}
@@ -248,9 +241,9 @@ export function Toolbar({ project, board, layout, view, filters, onFilters, onLa
             items: (["regular", "compact"] as const).map((size) => ({
               id: `size-${size}`,
               label: t(`card-size-${size}`),
-              checked: layout.card_size === size,
+              checked: cardSize === size,
               run: () => {
-                onLayout({ card_size: size });
+                onCardSize(size);
               },
             })),
           },

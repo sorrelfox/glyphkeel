@@ -48,12 +48,11 @@ export function Sidebar({ view, project, width, onNewProject, onProjectSettings 
         <button type="button" className={classes("nav", view === "today" && "on")} aria-current={view === "today" ? "page" : undefined} onClick={today.run}>
           <Sun className="ic" />
           <span>{t("view-today")}</span>
-          {counts.data && <span className="count">{counts.data.today}</span>}
         </button>
         <button type="button" className={classes("nav", view === "all-tasks" && "on")} aria-current={view === "all-tasks" ? "page" : undefined} onClick={allTasks.run}>
           <List className="ic" />
           <span>{t("view-all-tasks")}</span>
-          {counts.data && <span className="count">{counts.data.all}</span>}
+          {counts && <span className="count">{counts.all}</span>}
         </button>
       </div>
 
@@ -71,7 +70,7 @@ export function Sidebar({ view, project, width, onNewProject, onProjectSettings 
         </button>
       </div>
       <div className={styles.projectTree}>
-        <ProjectTree current={project} counts={counts.data?.projects} onNewProject={onNewProject} onSettings={onProjectSettings} />
+        <ProjectTree current={project} onNewProject={onNewProject} onSettings={onProjectSettings} />
       </div>
 
       <div className={styles.navGroup}>

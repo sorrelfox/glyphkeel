@@ -5,7 +5,7 @@
 // layout and the quick filters. Pure functions, so the rules are tested
 // without a page.
 
-import { PRIORITIES, type Board, type BoardColumn, type BoardLayout, type Card, type Priority, type SortMode } from "../../data/catalog";
+import { PRIORITIES, type Board, type BoardLayout, type Card, type Column, type Place, type Priority, type SortMode } from "../../data/catalog";
 
 export const DUE_FILTERS = ["overdue", "today", "week", "none"] as const;
 export type DueFilter = (typeof DUE_FILTERS)[number];
@@ -16,11 +16,10 @@ export interface Filters {
   labels: string[];
   priorities: Priority[];
   due: DueFilter[];
-  changedByAgents: boolean;
   recentlyUpdated: boolean;
 }
 
-export const NO_FILTERS: Readonly<Filters> = { text: "", labels: [], priorities: [], due: [], changedByAgents: false, recentlyUpdated: false };
+export const NO_FILTERS: Readonly<Filters> = { text: "", labels: [], priorities: [], due: [], recentlyUpdated: false };
 
 /** "Recently updated" means within this many days. */
 export const RECENT_DAYS = 7;
@@ -31,7 +30,6 @@ export function isFiltered(filters: Filters): boolean {
     filters.labels.length > 0 ||
     filters.priorities.length > 0 ||
     filters.due.length > 0 ||
-    filters.changedByAgents ||
     filters.recentlyUpdated
   );
 }
@@ -48,8 +46,8 @@ function addDays(day: string, days: number): string {
 }
 
 /** How a due date reads: overdue, today, soon (within three days), or plain. Closed tasks are never overdue. */
-export function dueState(due: string | null, closed: boolean, today: string): "overdue" | "today" | "soon" | null {
-  if (due === null || closed) {
+export function dueState(due: string | null | undefined, closed: boolean, today: string): "overdue" | "today" | "soon" | null {
+  if (due === null || due === undefined || closed) {
     return null;
   }
   if (due < today) {
@@ -75,8 +73,8 @@ export function matches(card: Card, filters: Filters, now: Date): boolean {
   if (filters.due.length > 0) {
     const today = isoDay(now);
     const weekEnd = addDays(today, 7);
-    const closed = card.closed_at !== null;
-    const due = card.due_date;
+    const closed = card.closed_at !== undefined;
+    const due = card.due_date ?? null;
     const hit = filters.due.some((kind) => {
       switch (kind) {
         case "overdue":
@@ -93,10 +91,7 @@ export function matches(card: Card, filters: Filters, now: Date): boolean {
       return false;
     }
   }
-  if (filters.changedByAgents && card.updated.actor.kind !== "agent") {
-    return false;
-  }
-  if (filters.recentlyUpdated && now.getTime() - Date.parse(card.updated.at) > RECENT_DAYS * 86_400_000) {
+  if (filters.recentlyUpdated && now.getTime() - Date.parse(card.updated_at) > RECENT_DAYS * 86_400_000) {
     return false;
   }
   return true;
@@ -119,16 +114,16 @@ export function sortCards(cards: readonly Card[], mode: SortMode): Card[] {
         if (a.due_date === b.due_date) {
           return manual(a, b);
         }
-        if (a.due_date === null) {
+        if (a.due_date === undefined) {
           return 1;
         }
-        if (b.due_date === null) {
+        if (b.due_date === undefined) {
           return -1;
         }
         return a.due_date < b.due_date ? -1 : 1;
       });
     case "updated":
-      return sorted.sort((a, b) => Date.parse(b.updated.at) - Date.parse(a.updated.at) || manual(a, b));
+      return sorted.sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at) || manual(a, b));
   }
 }
 
@@ -137,7 +132,7 @@ export function sortCards(cards: readonly Card[], mode: SortMode): Card[] {
  * a status added since, goes in at its project position, after the column
  * that comes before it in the project's order.
  */
-export function orderColumns(columns: readonly BoardColumn[], order: readonly string[]): BoardColumn[] {
+export function orderColumns(columns: readonly Column[], order: readonly string[]): Column[] {
   const byId = new Map(columns.map((column) => [column.id, column]));
   const result = order.filter((id) => byId.has(id));
   columns.forEach((column, index) => {
@@ -148,11 +143,11 @@ export function orderColumns(columns: readonly BoardColumn[], order: readonly st
     const at = previous ? result.indexOf(previous.id) + 1 : 0;
     result.splice(at, 0, column.id);
   });
-  return result.map((id) => byId.get(id)).filter((column): column is BoardColumn => column !== undefined);
+  return result.map((id) => byId.get(id)).filter((column): column is Column => column !== undefined);
 }
 
 export interface Lane {
-  column: BoardColumn;
+  column: Column;
   collapsed: boolean;
   sort: SortMode;
   /** The cards shown, in order. */
@@ -165,7 +160,7 @@ export interface Lane {
 
 export interface BoardView {
   lanes: Lane[];
-  hidden: { column: BoardColumn; count: number }[];
+  hidden: { column: Column; count: number }[];
   /** Cards on the board, and how many the filters let through. */
   total: number;
   shown: number;
@@ -174,49 +169,41 @@ export interface BoardView {
 
 /** Everything the board draws. */
 export function boardView(board: Board, layout: BoardLayout, filters: Filters, now: Date, showOlder: ReadonlySet<string>): BoardView {
-  const byColumn = new Map<string, Card[]>();
-  for (const card of board.cards) {
-    const column = board.column_of[card.key];
-    if (column !== undefined) {
-      byColumn.set(column, [...(byColumn.get(column) ?? []), card]);
-    }
-  }
   const cutoff = now.getTime() - layout.hide_done_after_days * 86_400_000;
   const lanes: Lane[] = [];
   const hidden: BoardView["hidden"] = [];
   let shown = 0;
   for (const column of orderColumns(board.columns, layout.order)) {
-    const all = byColumn.get(column.id) ?? [];
     if (layout.hidden.includes(column.id)) {
-      hidden.push({ column, count: all.length });
+      hidden.push({ column, count: column.count });
       continue;
     }
+    const all = column.cards;
     const matching = all.filter((card) => matches(card, filters, now));
-    const closedColumn = column.category === "done" || column.category === "cancelled";
+    const closedColumn = isClosedCategory(column.category);
     const hideOld = closedColumn && layout.hide_done_after_days > 0 && !showOlder.has(column.id);
-    const recent = hideOld ? matching.filter((card) => card.closed_at === null || Date.parse(card.closed_at) >= cutoff) : matching;
+    const recent = hideOld ? matching.filter((card) => card.closed_at === undefined || Date.parse(card.closed_at) >= cutoff) : matching;
     const sort = layout.column_sort[column.id] ?? layout.sort_mode;
     lanes.push({
       column,
       collapsed: layout.collapsed.includes(column.id),
       sort,
       cards: sortCards(recent, sort),
-      total: all.length,
+      total: column.count,
       older: matching.length - recent.length,
     });
     shown += recent.length;
   }
-  return {
-    lanes,
-    hidden,
-    total: board.cards.length,
-    shown,
-    open: board.cards.filter((card) => card.closed_at === null).length,
-  };
+  const total = board.columns.reduce((sum, column) => sum + column.count, 0);
+  // A task is closed exactly when its status is.
+  const open = board.columns.reduce((sum, column) => sum + (isClosedCategory(column.category) ? 0 : column.count), 0);
+  return { lanes, hidden, total, shown, open };
 }
 
+const isClosedCategory = (category: Column["category"]) => category === "done" || category === "cancelled";
+
 /** The new order after moving one column a step left or right; the order lists every column. */
-export function moveColumn(columns: readonly BoardColumn[], order: readonly string[], id: string, step: -1 | 1): string[] {
+export function moveColumn(columns: readonly Column[], order: readonly string[], id: string, step: -1 | 1): string[] {
   const ids = orderColumns(columns, order).map((column) => column.id);
   const at = ids.indexOf(id);
   const to = at + step;
@@ -233,14 +220,14 @@ export function moveColumn(columns: readonly BoardColumn[], order: readonly stri
 }
 
 /** Where a card goes, given the visible order it should land in. */
-export function positionIn(ids: readonly string[], key: string): { before: string } | { after: string } | "bottom" {
+export function positionIn(ids: readonly string[], key: string): Place {
   const at = ids.indexOf(key);
   const next = ids[at + 1];
   if (next !== undefined) {
     return { before: next };
   }
   const previous = ids[at - 1];
-  return previous !== undefined ? { after: previous } : "bottom";
+  return previous !== undefined ? { after: previous } : { at: "bottom" };
 }
 
 /** Minutes as people read them: "1h 30m", "45m", "2h". */

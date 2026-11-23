@@ -6,27 +6,28 @@
 // see them: keys, default statuses, closing, WIP, sub-project columns,
 // layouts, typed errors, change events and Undo.
 
-import { type EntityChange, type OpError, type Settings, type SettingsPatch } from "../../generated/ops";
 import {
-  DEFAULT_LAYOUT,
-  type AppOpId,
-  type AppOpMap,
   type Board,
-  type BoardColumn,
   type BoardLayout,
   type Card,
-  type Counts,
+  type Column,
+  type Edge,
+  type EntityChange,
   type Hue,
-  type Position,
+  type LabelRef,
+  type OpError,
+  type OpId,
+  type OpMap,
   type Project,
   type ProjectChange,
   type ProjectSummary,
-  type Relation,
+  type Settings,
+  type SettingsPatch,
   type Task,
   type TaskChange,
-  type TaskRef,
-} from "../catalog";
-import { dayOffset, newProject, nextId } from "./seed";
+  type TypeRef,
+} from "../../generated/ops";
+import { newProject, nextId } from "./seed";
 import { type FakeProject, type FakeState, type FakeTask } from "./state";
 
 /** An operation failed: the engine's error, as the transports deliver it. */
@@ -55,7 +56,50 @@ interface Result<O> {
   changes: EntityChange[];
 }
 
-type Handler<K extends AppOpId> = (input: AppOpMap[K]["input"]) => AppOpMap[K]["output"] | Result<AppOpMap[K]["output"]>;
+type Handler<K extends OpId> = (input: OpMap[K]["input"]) => OpMap[K]["output"] | Result<OpMap[K]["output"]>;
+
+/** A place among siblings, as inputs give it. */
+interface Place {
+  before?: string | null | undefined;
+  after?: string | null | undefined;
+  at?: Edge | null | undefined;
+}
+
+/** The engine's layout before anyone changes it. */
+const DEFAULT_LAYOUT: Readonly<BoardLayout> = {
+  order: [],
+  hidden: [],
+  collapsed: [],
+  sort_mode: "manual",
+  column_sort: {},
+  hide_done_after_days: 14,
+  card_fields: ["type", "priority", "due", "labels", "checklist"],
+  include_subprojects: false,
+};
+
+/** `{ [key]: value }` when there is a value; nothing otherwise. */
+function some<K extends string, V>(key: K, value: V | null | undefined): { [P in K]?: V } {
+  return value === null || value === undefined ? {} : ({ [key]: value } as { [P in K]?: V });
+}
+
+/** A duration as the engine reads it: `1w 2d 4h 30m`, `90m`, `1.5h`; a day has 8 hours, a week 5 days. */
+function minutesOf(text: string): number | null {
+  const unit: Record<string, number> = { m: 1, h: 60, d: 480, w: 2400 };
+  let total = 0;
+  let rest = text.trim().toLowerCase();
+  if (rest === "") {
+    return null;
+  }
+  while (rest !== "") {
+    const found = /^(\d+(?:[.,]\d+)?)\s*([wdhm])\s*/.exec(rest);
+    if (!found) {
+      return null;
+    }
+    total += Number((found[1] ?? "0").replace(",", ".")) * (unit[found[2] ?? "m"] ?? 1);
+    rest = rest.slice(found[0].length);
+  }
+  return Math.round(total);
+}
 
 export interface FakeAnswer {
   output: unknown;
@@ -183,16 +227,6 @@ export class FakeWorkspace {
     return parent ? 1 + this.depth(parent) : 1;
   }
 
-  private isBlocked(task: FakeTask): boolean {
-    return this.state.relations.some((relation) => {
-      if (relation.kind !== "blocks" || relation.to !== task.id) {
-        return false;
-      }
-      const blocker = this.state.tasks.find((candidate) => candidate.id === relation.from);
-      return blocker !== undefined && blocker.closedAt === null;
-    });
-  }
-
   private checklist(task: FakeTask): { done: number; total: number } {
     const items = task.description.match(/^\s*[-*+] \[[ xX]\]/gm) ?? [];
     const done = items.filter((item) => /\[[xX]\]/.test(item)).length;
@@ -201,6 +235,15 @@ export class FakeWorkspace {
 
   // ---------- output shapes ----------
 
+  private open(project: FakeProject): number {
+    return this.state.tasks.filter((task) => task.projectId === project.id && task.closedAt === null).length;
+  }
+
+  private path(project: FakeProject): string {
+    const parent = this.state.projects.find((candidate) => candidate.id === project.parent);
+    return parent ? `${this.path(parent)} / ${project.name}` : project.name;
+  }
+
   private summary(project: FakeProject): ProjectSummary {
     const parent = this.state.projects.find((candidate) => candidate.id === project.parent);
     return {
@@ -208,84 +251,89 @@ export class FakeWorkspace {
       key: project.key,
       name: project.name,
       hue: project.hue,
-      parent: parent?.key ?? null,
+      ...some("parent", parent?.key),
+      depth: this.depth(project) - 1,
+      path: this.path(project),
       state: project.state,
-      open: this.state.tasks.filter((task) => task.projectId === project.id && task.closedAt === null).length,
+      open_tasks: this.open(project),
+      open_tasks_with_subprojects: [project, ...this.descendants(project)].reduce((sum, item) => sum + this.open(item), 0),
     };
   }
 
   private fullProject(project: FakeProject): Project {
+    const tasks = this.state.tasks.filter((task) => task.projectId === project.id);
+    const summary = this.summary(project);
     return {
-      ...this.summary(project),
+      id: project.id,
+      key: project.key,
+      name: project.name,
+      hue: project.hue,
+      ...some("parent", summary.parent),
+      path: summary.path,
+      state: project.state,
+      open_tasks: summary.open_tasks,
+      total_tasks: tasks.length,
       description: project.description,
       modules: { ...project.modules },
-      statuses: structuredClone(project.statuses),
-      types: structuredClone(project.types),
-      labels: structuredClone(project.labels),
+      statuses: project.statuses.map((status) => ({
+        id: status.id,
+        name: status.name,
+        category: status.category,
+        hue: status.hue,
+        ...some("wip_limit", status.wip_limit),
+        tasks: tasks.filter((task) => task.statusId === status.id).length,
+      })),
+      types: project.types.map((type) => ({ ...type, tasks: tasks.filter((task) => task.typeId === type.id).length })),
+      labels: project.labels.map((label) => ({ ...label, tasks: tasks.filter((task) => task.labelIds.includes(label.id)).length })),
       children: this.children(project).map((child) => child.key),
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
     };
   }
 
-  private ref(task: FakeTask): TaskRef {
-    const status = this.statusIn(this.projectOf(task), task.statusId);
-    return { key: this.keyOf(task), title: task.title, status: { name: status.name, category: status.category, hue: status.hue } };
-  }
-
-  private card(task: FakeTask): Card {
-    const project = this.projectOf(task);
-    const type = project.types.find((candidate) => candidate.id === task.typeId);
-    const subtasks = this.state.tasks.filter((candidate) => candidate.parentId === task.id);
-    const checklist = this.checklist(task);
-    return {
-      id: task.id,
-      key: this.keyOf(task),
-      project: project.key,
-      title: task.title,
-      status: task.statusId,
-      type: type?.glyph ?? "task",
-      type_name: type?.name ?? "",
-      priority: task.priority,
-      labels: project.labels.filter((label) => task.labelIds.includes(label.id)),
-      due_date: task.dueDate,
-      checklist: checklist.total > 0 ? checklist : null,
-      subtasks: subtasks.length > 0 ? { done: subtasks.filter((sub) => sub.closedAt !== null).length, total: subtasks.length } : null,
-      files: task.files,
-      comments: task.comments,
-      spent_min: task.spentMin,
-      blocked: this.isBlocked(task),
-      closed_at: task.closedAt,
-      updated: { at: task.updatedAt, actor: { ...task.updatedBy } },
-    };
-  }
-
-  private fullTask(task: FakeTask): Task {
+  private typeRef(task: FakeTask): TypeRef {
     const project = this.projectOf(task);
     const type = project.types.find((candidate) => candidate.id === task.typeId) ?? project.types[0];
     if (!type) {
       throw new Error(`project ${project.key} has no task types`);
     }
-    const relations: Relation[] = [];
-    for (const relation of this.state.relations) {
-      const forward = relation.from === task.id;
-      if (!forward && relation.to !== task.id) {
-        continue;
-      }
-      const other = this.state.tasks.find((candidate) => candidate.id === (forward ? relation.to : relation.from));
-      if (!other) {
-        continue;
-      }
-      const kind =
-        relation.kind === "relates"
-          ? "relates"
-          : forward
-            ? relation.kind
-            : relation.kind === "blocks"
-              ? "blocked_by"
-              : relation.kind === "duplicates"
-                ? "duplicated_by"
-                : "cloned_by";
-      relations.push({ kind, task: this.ref(other) });
-    }
+    return { id: type.id, name: type.name, glyph: type.glyph };
+  }
+
+  private labelRefs(task: FakeTask): LabelRef[] {
+    return this.projectOf(task)
+      .labels.filter((label) => task.labelIds.includes(label.id))
+      .map((label) => ({ id: label.id, name: label.name, hue: label.hue }));
+  }
+
+  private card(task: FakeTask): Card {
+    const subtasks = this.state.tasks.filter((candidate) => candidate.parentId === task.id);
+    const parent = this.state.tasks.find((candidate) => candidate.id === task.parentId);
+    return {
+      id: task.id,
+      key: this.keyOf(task),
+      project: this.projectOf(task).key,
+      title: task.title,
+      type: this.typeRef(task),
+      priority: task.priority,
+      labels: this.labelRefs(task),
+      ...some("parent", parent && this.keyOf(parent)),
+      ...some("start_date", task.startDate),
+      ...some("due_date", task.dueDate),
+      ...some("estimate_minutes", task.estimateMin),
+      checklist: this.checklist(task),
+      subtasks: { done: subtasks.filter((sub) => sub.closedAt !== null).length, total: subtasks.length },
+      rank: String(task.rank),
+      status_entered_at: task.statusEnteredAt,
+      updated_at: task.updatedAt,
+      ...some("closed_at", task.closedAt),
+      version: task.version,
+    };
+  }
+
+  private fullTask(task: FakeTask): Task {
+    const project = this.projectOf(task);
+    const status = this.statusIn(project, task.statusId);
     const parent = this.state.tasks.find((candidate) => candidate.id === task.parentId);
     return {
       id: task.id,
@@ -293,69 +341,88 @@ export class FakeWorkspace {
       project: project.key,
       title: task.title,
       description: task.description,
-      status: structuredClone(this.statusIn(project, task.statusId)),
-      type: structuredClone(type),
+      status: { id: status.id, name: status.name, category: status.category },
+      type: this.typeRef(task),
       priority: task.priority,
-      labels: project.labels.filter((label) => task.labelIds.includes(label.id)),
-      parent: parent ? this.ref(parent) : null,
-      subtasks: this.state.tasks.filter((candidate) => candidate.parentId === task.id).map((sub) => this.ref(sub)),
-      relations,
-      start_date: task.startDate,
-      due_date: task.dueDate,
-      estimate_min: task.estimateMin,
-      spent_min: task.spentMin,
+      labels: this.labelRefs(task),
+      ...some("parent", parent && this.keyOf(parent)),
+      ...some("start_date", task.startDate),
+      ...some("due_date", task.dueDate),
+      ...some("estimate_minutes", task.estimateMin),
+      spent_minutes: task.spentMin,
       checklist: this.checklist(task),
-      blocked: this.isBlocked(task),
+      rank: String(task.rank),
       created_at: task.createdAt,
+      created_by: { kind: "user", name: "You" },
       edited_at: task.editedAt,
-      updated: { at: task.updatedAt, actor: { ...task.updatedBy } },
-      closed_at: task.closedAt,
+      status_entered_at: task.statusEnteredAt,
+      updated_at: task.updatedAt,
+      ...some("closed_at", task.closedAt),
       version: task.version,
     };
   }
 
-  private board(ref: string, includeSubprojects: boolean): Board {
+  private board(ref: string, includeInput: boolean | null | undefined, showOlder: boolean): Board {
     const root = this.project(ref);
-    const onBoard = [root, ...(includeSubprojects ? this.descendants(root).filter((project) => project.state === "active") : [])];
-    const columns: BoardColumn[] = root.statuses.map((status) => ({
+    const layout = this.layout(root);
+    const include = includeInput ?? layout.include_subprojects;
+    const onBoard = [root, ...(include ? this.descendants(root).filter((project) => project.state === "active") : [])];
+    const base = (status: FakeProject["statuses"][number], project: FakeProject): Column => ({
       id: status.id,
       name: status.name,
       category: status.category,
       hue: status.hue,
-      wip_limit: status.wip_limit,
-      statuses: { [root.key]: status.id },
-    }));
+      ...some("wip_limit", status.wip_limit),
+      statuses: { [project.key]: status.id },
+      cards: [],
+      count: 0,
+      older: 0,
+      over_limit: false,
+      hidden: false,
+      collapsed: false,
+      sort_mode: "manual",
+    });
+    const columns: Column[] = root.statuses.map((status) => base(status, root));
+    const extra: Column[] = [];
     for (const project of onBoard.slice(1)) {
       for (const status of project.statuses) {
-        const column = columns.find((candidate) => fold(candidate.name) === fold(status.name));
+        const column = [...columns, ...extra].find((candidate) => fold(candidate.name) === fold(status.name));
         if (column) {
           column.statuses[project.key] = status.id;
         } else {
-          columns.push({
-            id: `name:${fold(status.name)}`,
-            name: status.name,
-            category: status.category,
-            hue: status.hue,
-            wip_limit: status.wip_limit,
-            statuses: { [project.key]: status.id },
-          });
+          extra.push(base(status, project));
         }
       }
     }
-    const projectIds = new Set(onBoard.map((project) => project.id));
-    const tasks = this.state.tasks.filter((task) => projectIds.has(task.projectId)).sort((a, b) => a.rank - b.rank);
-    const columnOf: Record<string, string> = {};
-    const cards: Card[] = [];
-    for (const column of columns) {
-      for (const task of tasks) {
-        if (column.statuses[this.projectOf(task).key] === task.statusId) {
-          const card = this.card(task);
-          columnOf[card.key] = column.id;
-          cards.push(card);
-        }
+    const ordered = [...arrange(columns, layout.order), ...arrange(extra, layout.order)];
+    const tasks = [...this.state.tasks].sort((a, b) => a.rank - b.rank);
+    const cutoff = this.today().getTime() - layout.hide_done_after_days * 86_400_000;
+    let hiddenColumns = 0;
+    let hiddenTasks = 0;
+    for (const column of ordered) {
+      const statusIds = new Set(Object.values(column.statuses));
+      const all = tasks.filter((task) => statusIds.has(task.statusId));
+      const shown = layout.hide_done_after_days > 0 && !showOlder ? all.filter((task) => task.closedAt === null || Date.parse(task.closedAt) >= cutoff) : all;
+      column.count = all.length;
+      column.older = all.length - shown.length;
+      column.over_limit = column.wip_limit !== undefined && all.length > column.wip_limit;
+      column.hidden = layout.hidden.includes(column.id);
+      column.collapsed = layout.collapsed.includes(column.id);
+      column.sort_mode = layout.column_sort[column.id] ?? layout.sort_mode;
+      if (column.hidden) {
+        hiddenColumns += 1;
+        hiddenTasks += all.length;
+      } else {
+        column.cards = shown.map((task) => this.card(task));
       }
     }
-    return { project: root.key, include_subprojects: includeSubprojects, columns, cards, column_of: columnOf };
+    return {
+      project: root.key,
+      columns: ordered,
+      layout: { ...layout, include_subprojects: include },
+      hidden_columns: hiddenColumns,
+      hidden_tasks: hiddenTasks,
+    };
   }
 
   // ---------- changes ----------
@@ -370,22 +437,26 @@ export class FakeWorkspace {
     task.version += 1;
   }
 
-  /** The rank for a task placed at `position` among the tasks of `statusId`. */
-  private rankAt(statusId: string, position: Position | undefined, moving: FakeTask | null): number {
+  /** The rank for a task placed at `place` among the tasks of `statusId`. */
+  private rankAt(statusId: string, place: Place, moving: FakeTask | null): number {
     const column = this.state.tasks.filter((task) => task.statusId === statusId && task !== moving).sort((a, b) => a.rank - b.rank);
     const first = column[0];
     const last = column[column.length - 1];
-    if (position === "top") {
-      return first ? first.rank - 1 : 1;
+    const given = [place.before, place.after, place.at].filter((value) => value !== null && value !== undefined).length;
+    if (given > 1) {
+      fail("invalid", "Give one place: before, after or at.", { details: { path: "before" } });
     }
-    if (position === undefined || position === "bottom") {
+    const anchorKey = place.before ?? place.after;
+    if (anchorKey === null || anchorKey === undefined) {
+      if (place.at === "top") {
+        return first ? first.rank - 1 : 1;
+      }
       return last ? last.rank + 1 : 1;
     }
-    const anchorKey = "before" in position ? position.before : position.after;
     const anchor = this.task(anchorKey);
     const all = this.state.tasks.filter((task) => task.statusId === anchor.statusId && task !== moving).sort((a, b) => a.rank - b.rank);
     const at = all.indexOf(anchor);
-    if ("before" in position) {
+    if (place.before !== null && place.before !== undefined) {
       const previous = all[at - 1];
       return previous ? (previous.rank + anchor.rank) / 2 : anchor.rank - 1;
     }
@@ -395,19 +466,22 @@ export class FakeWorkspace {
 
   private taskChange(task: FakeTask, fields: string[]): Result<TaskChange> {
     return {
-      output: { task: this.fullTask(task), group: "" },
+      output: { task: this.fullTask(task) },
       changes: [{ entity: "task", id: task.id, fields, project: this.projectOf(task).key }],
     };
   }
 
   private projectChange(project: FakeProject, entity: string, fields: string[]): Result<ProjectChange> {
-    return { output: { project: this.fullProject(project), group: "" }, changes: [{ entity, id: project.id, fields, project: project.key }] };
+    return { output: { project: this.fullProject(project) }, changes: [{ entity, id: project.id, fields, project: project.key }] };
   }
 
   private enterStatus(task: FakeTask, statusId: string): void {
     const project = this.projectOf(task);
     const status = this.statusIn(project, statusId);
     const wasClosed = task.closedAt !== null;
+    if (task.statusId !== status.id) {
+      task.statusEnteredAt = this.today().toISOString();
+    }
     task.statusId = status.id;
     if (isClosed(status.category) && !wasClosed) {
       task.closedAt = this.today().toISOString();
@@ -416,8 +490,8 @@ export class FakeWorkspace {
     }
   }
 
-  private validHue(hue: Hue | undefined): void {
-    if (hue !== undefined && !["red", "orange", "yellow", "green", "teal", "blue", "purple", "pink", "grey"].includes(hue)) {
+  private validHue(hue: Hue | null | undefined): void {
+    if (hue !== undefined && hue !== null && !["red", "orange", "yellow", "green", "teal", "blue", "purple", "pink", "grey"].includes(hue)) {
       fail("invalid", `"${hue}" is not a colour.`, { details: { path: "hue" } });
     }
   }
@@ -437,23 +511,78 @@ export class FakeWorkspace {
     return structuredClone(this.state.layouts[project.id] ?? DEFAULT_LAYOUT);
   }
 
+  private typeIn(project: FakeProject, ref: string, path = "type") {
+    const type = project.types.find((candidate) => candidate.id === ref || fold(candidate.name) === fold(ref));
+    if (!type) {
+      fail("not_found", `Project ${project.key} has no task type "${ref}".`, { details: { path } });
+    }
+    return type;
+  }
+
+  private labelIn(project: FakeProject, ref: string, path = "label") {
+    const label = project.labels.find((candidate) => candidate.id === ref || fold(candidate.name) === fold(ref));
+    if (!label) {
+      fail("not_found", `Project ${project.key} has no label "${ref}".`, { details: { path } });
+    }
+    return label;
+  }
+
+  /** Moves an item of a project's list (statuses, types) to its place. */
+  private place<T extends { id: string; name: string }>(list: T[], item: T, place: Place, what: string): T[] {
+    const rest = list.filter((candidate) => candidate !== item);
+    const find = (ref: string) => {
+      const found = rest.find((candidate) => candidate.id === ref || fold(candidate.name) === fold(ref));
+      if (!found) {
+        fail("not_found", `There is no ${what} "${ref}".`);
+      }
+      return found;
+    };
+    let at = rest.length;
+    if (place.before !== null && place.before !== undefined) {
+      at = rest.indexOf(find(place.before));
+    } else if (place.after !== null && place.after !== undefined) {
+      at = rest.indexOf(find(place.after)) + 1;
+    } else if (place.at === "top") {
+      at = 0;
+    }
+    rest.splice(at, 0, item);
+    return rest;
+  }
+
+  private checkWip(limit: number | null | undefined): void {
+    if (limit !== null && limit !== undefined && (!Number.isInteger(limit) || limit < 1)) {
+      fail("invalid", "A WIP limit is a whole number of at least 1.", { details: { path: "wip_limit" } });
+    }
+  }
+
+  private checkTitle(title: string): string {
+    const trimmed = title.replace(/\s+/g, " ").trim();
+    if (trimmed === "") {
+      fail("invalid", "A task needs a title.", { details: { path: "title" } });
+    }
+    if (trimmed.length > MAX_TITLE) {
+      fail("limit", `A title has at most ${String(MAX_TITLE)} characters.`, { details: { path: "title", max: MAX_TITLE } });
+    }
+    return trimmed;
+  }
+
   // ---------- the operations ----------
 
-  private readonly handlers: { [K in AppOpId]?: Handler<K> } = {
+  private readonly handlers: { [K in OpId]?: Handler<K> } = {
     "workspace.get": () => ({
       caller: { actor: { kind: "user", name: "You" }, via: "app" },
       guide: "",
       id: "w-1",
       name: this.state.workspaceName,
       program_version: "0.0.0",
-      schema_version: 1,
+      schema_version: 2,
       settings: { ...this.state.settings },
     }),
     "settings.get": () => ({ ...this.state.settings }),
     "settings.update": (patch: SettingsPatch) => {
       const changed: string[] = [];
       for (const [name, value] of Object.entries(patch)) {
-        if (value !== null && (this.state.settings as Record<string, unknown>)[name] !== value) {
+        if (name !== "clear" && value !== null && (this.state.settings as Record<string, unknown>)[name] !== value) {
           (this.state.settings as Record<string, unknown>)[name] = value;
           changed.push(name);
         }
@@ -463,20 +592,11 @@ export class FakeWorkspace {
     },
     "history.feed": () => ({ items: [], total: 0 }),
     "agent.sessions": () => ({ items: [], total: 0 }),
-    "workspace.counts": (): Counts => {
-      const today = dayOffset(this.today(), 0);
-      const open = this.state.tasks.filter((task) => task.closedAt === null && this.projectOf(task).state === "active");
-      const projects: Record<string, number> = {};
-      for (const project of this.state.projects) {
-        projects[project.key] = open.filter((task) => task.projectId === project.id).length;
-      }
-      return { today: open.filter((task) => task.dueDate !== null && task.dueDate <= today).length, all: open.length, projects };
-    },
     "project.list": ({ include_archived }) => {
       const ordered: FakeProject[] = [];
       const visit = (parent: string | null) => {
         for (const project of this.state.projects.filter((candidate) => candidate.parent === parent).sort((a, b) => a.rank - b.rank)) {
-          if (include_archived !== false || project.state === "active") {
+          if (include_archived === true || project.state === "active") {
             ordered.push(project);
           }
           visit(project.id);
@@ -486,7 +606,7 @@ export class FakeWorkspace {
       return { items: ordered.map((project) => this.summary(project)), total: ordered.length };
     },
     "project.get": ({ project }) => this.fullProject(this.project(project)),
-    "project.create": ({ name, key, parent, hue }) => {
+    "project.create": ({ name, key, parent, hue, description }) => {
       const trimmed = name.trim();
       if (trimmed === "") {
         fail("invalid", "A project needs a name.", { details: { path: "name" } });
@@ -509,48 +629,69 @@ export class FakeWorkspace {
       const project = newProject({
         key,
         name: trimmed,
-        hue: hue ?? "blue",
+        hue: hue ?? parentProject?.hue ?? "blue",
         parent: parentProject?.id ?? null,
         rank: Math.max(0, ...siblings.map((sibling) => sibling.rank)) + 1,
       });
+      project.description = description ?? "";
       if (parentProject) {
         // A sub-project starts with copies of its parent's statuses, types and labels.
         project.statuses = parentProject.statuses.map((status) => ({ ...status, id: nextId("s") }));
         project.types = parentProject.types.map((type) => ({ ...type, id: nextId("ty") }));
         project.labels = parentProject.labels.map((label) => ({ ...label, id: nextId("l") }));
+        project.modules = { ...parentProject.modules };
       }
       this.state.projects.push(project);
       return this.projectChange(project, "project", ["*"]);
     },
-    "project.update": ({ project: ref, patch }) => {
+    // The sample workspace changes the project's own fields here; statuses,
+    // types and labels change through their own operations.
+    "project.update": ({ project: ref, name, description, hue, modules, archived, clear }) => {
+      if (archived === false) {
+        return this.handlers["project.unarchive"]?.({ project: ref }) ?? fail("not_found", "No unarchive.");
+      }
       const project = this.writable(ref);
       const fields: string[] = [];
-      if (patch.name !== undefined) {
-        const name = patch.name.trim();
-        if (name === "") {
+      if (name !== null && name !== undefined) {
+        const trimmed = name.trim();
+        if (trimmed === "") {
           fail("invalid", "A project needs a name.", { details: { path: "name" } });
         }
-        project.name = name;
+        project.name = trimmed;
         fields.push("name");
       }
-      if (patch.description !== undefined) {
-        project.description = patch.description;
+      if (description !== null && description !== undefined) {
+        project.description = description;
         fields.push("description");
       }
-      if (patch.hue !== undefined) {
-        this.validHue(patch.hue);
-        project.hue = patch.hue;
+      if (clear?.includes("description")) {
+        project.description = "";
+        fields.push("description");
+      }
+      if (hue !== null && hue !== undefined) {
+        this.validHue(hue);
+        project.hue = hue;
         fields.push("hue");
       }
-      if (patch.modules !== undefined) {
-        project.modules = { ...project.modules, ...patch.modules };
+      if (modules !== null && modules !== undefined) {
+        for (const [module, on] of Object.entries(modules)) {
+          if (typeof on === "boolean") {
+            project.modules[module as keyof typeof project.modules] = on;
+          }
+        }
         fields.push("modules");
+      }
+      if (archived === true) {
+        for (const item of [project, ...this.descendants(project)]) {
+          item.state = "archived";
+        }
+        fields.push("state");
       }
       return this.projectChange(project, "project", fields);
     },
-    "project.move": ({ project: ref, parent }) => {
+    "project.move": ({ project: ref, parent, top_level }) => {
       const project = this.writable(ref);
-      const target = parent ? this.project(parent) : null;
+      const target = parent && top_level !== true ? this.project(parent) : null;
       if (target && (target === project || this.descendants(project).includes(target))) {
         fail("invalid", "A project can't move under itself or its own sub-projects.");
       }
@@ -570,102 +711,131 @@ export class FakeWorkspace {
     },
     "project.unarchive": ({ project: ref }) => {
       const project = this.project(ref);
+      const parent = this.state.projects.find((candidate) => candidate.id === project.parent);
+      if (parent?.state === "archived") {
+        fail("forbidden", `Its parent ${parent.key} is archived.`, { hint: "Unarchive the parent instead." });
+      }
       for (const item of [project, ...this.descendants(project)]) {
         item.state = "active";
       }
       return this.projectChange(project, "project", ["state"]);
     },
-    "status.create": ({ project: ref, name, category, hue, wip_limit }) => {
+    "status.create": ({ project: ref, name, category, hue, wip_limit, before, after, at }) => {
       const project = this.writable(ref);
       this.validHue(hue);
-      project.statuses.push({
+      this.checkWip(wip_limit);
+      const status = {
         id: nextId("s"),
         name: this.uniqueName(project.statuses, name, "status"),
-        category,
+        category: category ?? "todo",
         hue: hue ?? "grey",
         wip_limit: wip_limit ?? null,
-      });
+      };
+      project.statuses = this.place([...project.statuses, status], status, { before, after, at }, "status");
       return this.projectChange(project, "status", ["*"]);
     },
-    "status.update": ({ project: ref, status: statusRef, patch }) => {
+    "status.update": ({ project: ref, status: statusRef, name, category, hue, wip_limit, clear }) => {
       const project = this.writable(ref);
       const status = this.statusIn(project, statusRef);
-      if (patch.name !== undefined) {
-        status.name = this.uniqueName(project.statuses, patch.name, "status", status.id);
+      const fields: string[] = [];
+      if (name !== null && name !== undefined) {
+        status.name = this.uniqueName(project.statuses, name, "status", status.id);
+        fields.push("name");
       }
-      if (patch.category !== undefined) {
-        status.category = patch.category;
-      }
-      if (patch.hue !== undefined) {
-        this.validHue(patch.hue);
-        status.hue = patch.hue;
-      }
-      if (patch.wip_limit !== undefined) {
-        if (patch.wip_limit !== null && (!Number.isInteger(patch.wip_limit) || patch.wip_limit < 1)) {
-          fail("invalid", "A WIP limit is a whole number of at least 1.", { details: { path: "wip_limit" } });
+      if (category !== null && category !== undefined) {
+        status.category = category;
+        fields.push("category");
+        for (const task of this.state.tasks.filter((candidate) => candidate.statusId === status.id)) {
+          this.enterStatus(task, status.id);
         }
-        status.wip_limit = patch.wip_limit;
       }
-      return this.projectChange(project, "status", Object.keys(patch));
+      if (hue !== null && hue !== undefined) {
+        this.validHue(hue);
+        status.hue = hue;
+        fields.push("hue");
+      }
+      if (wip_limit !== null && wip_limit !== undefined) {
+        this.checkWip(wip_limit);
+        status.wip_limit = wip_limit;
+        fields.push("wip_limit");
+      }
+      if (clear?.includes("wip_limit")) {
+        status.wip_limit = null;
+        fields.push("wip_limit");
+      }
+      return this.projectChange(project, "status", fields);
     },
-    "status.reorder": ({ project: ref, status: statusRef, position }) => {
+    "status.reorder": ({ project: ref, status: statusRef, before, after, at }) => {
       const project = this.writable(ref);
       const status = this.statusIn(project, statusRef);
-      const rest = project.statuses.filter((candidate) => candidate !== status);
-      let at = rest.length;
-      if (position === "top") {
-        at = 0;
-      } else if (typeof position === "object") {
-        const anchor = this.statusIn(project, "before" in position ? position.before : position.after);
-        at = rest.indexOf(anchor) + ("before" in position ? 0 : 1);
-      }
-      rest.splice(at, 0, status);
-      project.statuses = rest;
+      project.statuses = this.place(project.statuses, status, { before, after, at }, "status");
       return this.projectChange(project, "status", ["rank"]);
     },
     "status.delete": ({ project: ref, status: statusRef, move_tasks_to }) => {
       const project = this.writable(ref);
       const status = this.statusIn(project, statusRef);
-      const target = this.statusIn(project, move_tasks_to);
-      if (target === status) {
-        fail("invalid", "Choose another status for its tasks.", { details: { path: "move_tasks_to" } });
+      if (project.statuses.length === 1) {
+        fail("invalid", "A project keeps at least one status.");
       }
-      for (const task of this.state.tasks.filter((candidate) => candidate.statusId === status.id)) {
-        this.enterStatus(task, target.id);
-        this.touch(task, false);
+      const tasks = this.state.tasks.filter((candidate) => candidate.statusId === status.id);
+      if (tasks.length > 0) {
+        const target = move_tasks_to ? this.statusIn(project, move_tasks_to) : null;
+        if (!target || target === status) {
+          fail("invalid", "Choose another status for its tasks.", { details: { path: "move_tasks_to" } });
+        }
+        for (const task of tasks) {
+          this.enterStatus(task, target.id);
+          this.touch(task, false);
+        }
       }
       project.statuses = project.statuses.filter((candidate) => candidate !== status);
       return this.projectChange(project, "status", ["*"]);
     },
-    "type.create": ({ project: ref, name, glyph, hue }) => {
+    "type.create": ({ project: ref, name, glyph, hue, make_default }) => {
       const project = this.writable(ref);
       this.validHue(hue);
-      project.types.push({ id: nextId("ty"), name: this.uniqueName(project.types, name, "task type"), glyph, hue: hue ?? "blue", is_default: false });
-      return this.projectChange(project, "type", ["*"]);
+      const type = { id: nextId("ty"), name: this.uniqueName(project.types, name, "task type"), glyph: glyph ?? "task", hue: hue ?? "grey", is_default: false };
+      project.types.push(type);
+      if (make_default === true) {
+        project.types.forEach((candidate) => (candidate.is_default = candidate === type));
+      }
+      return this.projectChange(project, "task_type", ["*"]);
     },
-    "type.update": ({ project: ref, type: typeRef, patch }) => {
+    "type.update": ({ project: ref, type: typeRef, name, glyph, hue, make_default, before, after, at }) => {
       const project = this.writable(ref);
-      const type = project.types.find((candidate) => candidate.id === typeRef || fold(candidate.name) === fold(typeRef));
-      if (!type) {
-        fail("not_found", `Project ${project.key} has no task type "${typeRef}".`);
+      const type = this.typeIn(project, typeRef);
+      const fields: string[] = [];
+      if (name !== null && name !== undefined) {
+        type.name = this.uniqueName(project.types, name, "task type", type.id);
+        fields.push("name");
       }
-      if (patch.name !== undefined) {
-        type.name = this.uniqueName(project.types, patch.name, "task type", type.id);
+      if (glyph !== null && glyph !== undefined) {
+        type.glyph = glyph;
+        fields.push("glyph");
       }
-      if (patch.glyph !== undefined) {
-        type.glyph = patch.glyph;
+      if (hue !== null && hue !== undefined) {
+        this.validHue(hue);
+        type.hue = hue;
+        fields.push("hue");
       }
-      if (patch.hue !== undefined) {
-        this.validHue(patch.hue);
-        type.hue = patch.hue;
+      if (make_default === true) {
+        project.types.forEach((candidate) => (candidate.is_default = candidate === type));
+        fields.push("is_default");
       }
-      return this.projectChange(project, "type", Object.keys(patch));
+      if ([before, after, at].some((value) => value !== null && value !== undefined)) {
+        project.types = this.place(project.types, type, { before, after, at }, "task type");
+        fields.push("rank");
+      }
+      return this.projectChange(project, "task_type", fields);
     },
     "type.delete": ({ project: ref, type: typeRef, move_tasks_to }) => {
       const project = this.writable(ref);
-      const type = project.types.find((candidate) => candidate.id === typeRef);
-      const target = project.types.find((candidate) => candidate.id === move_tasks_to);
-      if (!type || !target || type === target) {
+      const type = this.typeIn(project, typeRef);
+      if (type.is_default) {
+        fail("invalid", "The default task type can't be deleted.", { hint: "Make another type the default first." });
+      }
+      const target = move_tasks_to ? this.typeIn(project, move_tasks_to, "move_tasks_to") : project.types.find((candidate) => candidate.is_default);
+      if (!target || target === type) {
         fail("invalid", "Choose another task type for its tasks.", { details: { path: "move_tasks_to" } });
       }
       for (const task of this.state.tasks.filter((candidate) => candidate.typeId === type.id)) {
@@ -673,10 +843,7 @@ export class FakeWorkspace {
         this.touch(task, false);
       }
       project.types = project.types.filter((candidate) => candidate !== type);
-      if (type.is_default) {
-        target.is_default = true;
-      }
-      return this.projectChange(project, "type", ["*"]);
+      return this.projectChange(project, "task_type", ["*"]);
     },
     "label.create": ({ project: ref, name, hue }) => {
       const project = this.writable(ref);
@@ -684,27 +851,24 @@ export class FakeWorkspace {
       project.labels.push({ id: nextId("l"), name: this.uniqueName(project.labels, name, "label"), hue: hue ?? "grey" });
       return this.projectChange(project, "label", ["*"]);
     },
-    "label.update": ({ project: ref, label: labelRef, patch }) => {
+    "label.update": ({ project: ref, label: labelRef, name, hue }) => {
       const project = this.writable(ref);
-      const label = project.labels.find((candidate) => candidate.id === labelRef || fold(candidate.name) === fold(labelRef));
-      if (!label) {
-        fail("not_found", `Project ${project.key} has no label "${labelRef}".`);
+      const label = this.labelIn(project, labelRef);
+      const fields: string[] = [];
+      if (name !== null && name !== undefined) {
+        label.name = this.uniqueName(project.labels, name, "label", label.id);
+        fields.push("name");
       }
-      if (patch.name !== undefined) {
-        label.name = this.uniqueName(project.labels, patch.name, "label", label.id);
+      if (hue !== null && hue !== undefined) {
+        this.validHue(hue);
+        label.hue = hue;
+        fields.push("hue");
       }
-      if (patch.hue !== undefined) {
-        this.validHue(patch.hue);
-        label.hue = patch.hue;
-      }
-      return this.projectChange(project, "label", Object.keys(patch));
+      return this.projectChange(project, "label", fields);
     },
     "label.delete": ({ project: ref, label: labelRef }) => {
       const project = this.writable(ref);
-      const label = project.labels.find((candidate) => candidate.id === labelRef);
-      if (!label) {
-        fail("not_found", `Project ${project.key} has no label "${labelRef}".`);
-      }
+      const label = this.labelIn(project, labelRef);
       for (const task of this.state.tasks.filter((candidate) => candidate.labelIds.includes(label.id))) {
         task.labelIds = task.labelIds.filter((id) => id !== label.id);
         this.touch(task);
@@ -712,30 +876,69 @@ export class FakeWorkspace {
       project.labels = project.labels.filter((candidate) => candidate !== label);
       return this.projectChange(project, "label", ["*"]);
     },
-    "board.get": ({ project, include_subprojects }) => this.board(project, include_subprojects ?? false),
-    "layout.get": ({ project }) => this.layout(this.project(project)),
-    "layout.update": ({ project: ref, patch, reset }) => {
+    "board.get": ({ project, include_subprojects, show_older }) => this.board(project, include_subprojects, show_older === true),
+    "layout.get": ({ project: ref }) => {
       const project = this.project(ref);
-      const current = this.layout(project);
-      const next: BoardLayout = reset
-        ? { ...current, order: [], hidden: [], collapsed: [], sort_mode: "manual", column_sort: {} }
-        : { ...current, ...patch };
-      if (!Number.isInteger(next.hide_done_after_days) || next.hide_done_after_days < 0) {
-        fail("invalid", "Days must be a whole number, 0 or more.", { details: { path: "hide_done_after_days" } });
+      return { project: project.key, layout: this.layout(project) };
+    },
+    "layout.update": (input) => {
+      const project = this.project(input.project);
+      const next: BoardLayout = input.reset === true ? structuredClone(DEFAULT_LAYOUT) : this.layout(project);
+      const column = (ref: string) => {
+        const status = project.statuses.find((candidate) => candidate.id === ref || fold(candidate.name) === fold(ref));
+        return status?.id ?? ref;
+      };
+      const add = (list: string[], refs: readonly string[] | undefined) => {
+        for (const id of (refs ?? []).map(column)) {
+          if (!list.includes(id)) {
+            list.push(id);
+          }
+        }
+      };
+      add(next.hidden, input.hide);
+      next.hidden = next.hidden.filter((id) => !(input.show ?? []).map(column).includes(id));
+      add(next.collapsed, input.collapse);
+      next.collapsed = next.collapsed.filter((id) => !(input.expand ?? []).map(column).includes(id));
+      if (input.order) {
+        next.order = input.order.map(column);
+      }
+      if (input.sort_mode) {
+        next.sort_mode = input.sort_mode;
+      }
+      const sorts = new Map(Object.entries(next.column_sort));
+      for (const [ref, mode] of Object.entries(input.column_sort ?? {})) {
+        if (mode === next.sort_mode) {
+          sorts.delete(column(ref));
+        } else {
+          sorts.set(column(ref), mode);
+        }
+      }
+      next.column_sort = Object.fromEntries(sorts);
+      if (input.hide_done_after_days !== null && input.hide_done_after_days !== undefined) {
+        if (!Number.isInteger(input.hide_done_after_days) || input.hide_done_after_days < 0 || input.hide_done_after_days > 3650) {
+          fail("invalid", "Use 0 to 3650 days.", { details: { path: "hide_done_after_days" } });
+        }
+        next.hide_done_after_days = input.hide_done_after_days;
+      }
+      if (input.card_fields) {
+        next.card_fields = [...new Set(input.card_fields)];
+      }
+      if (input.include_subprojects !== null && input.include_subprojects !== undefined) {
+        next.include_subprojects = input.include_subprojects;
       }
       this.state.layouts[project.id] = next;
-      return { output: structuredClone(next), changes: [{ entity: "layout", id: project.id, fields: Object.keys(patch ?? {}), project: project.key }] };
+      return {
+        output: { project: project.key, layout: structuredClone(next) },
+        changes: [{ entity: "layout", id: project.id, fields: ["settings"], project: project.key }],
+      };
     },
-    "task.get": ({ key }) => this.fullTask(this.task(key)),
-    "task.create": ({ project: ref, title, status, position }) => {
+    "task.get": ({ keys }) => {
+      const items = keys.map((key) => this.fullTask(this.task(key)));
+      return { items, total: items.length };
+    },
+    "task.create": ({ project: ref, title, status, description, priority, before, after, at }) => {
       const project = this.writable(ref);
-      const trimmed = title.trim();
-      if (trimmed === "") {
-        fail("invalid", "A task needs a title.", { details: { path: "title" } });
-      }
-      if (trimmed.length > MAX_TITLE) {
-        fail("limit", `A title has at most ${String(MAX_TITLE)} characters.`, { details: { path: "title", max: MAX_TITLE } });
-      }
+      const trimmed = this.checkTitle(title);
       const target = status
         ? this.statusIn(project, status)
         : (project.statuses.find((candidate) => candidate.category === "todo") ?? project.statuses[0]);
@@ -749,13 +952,13 @@ export class FakeWorkspace {
         projectId: project.id,
         number: project.nextNumber,
         title: trimmed,
-        description: "",
+        description: description ?? "",
         statusId: target.id,
         typeId: type.id,
-        priority: "none",
+        priority: priority ?? "none",
         labelIds: [],
         parentId: null,
-        rank: this.rankAt(target.id, position, null),
+        rank: this.rankAt(target.id, { before, after, at }, null),
         startDate: null,
         dueDate: null,
         estimateMin: null,
@@ -764,6 +967,7 @@ export class FakeWorkspace {
         comments: 0,
         createdAt: now,
         editedAt: now,
+        statusEnteredAt: now,
         updatedAt: now,
         updatedBy: { kind: "user", name: "You" },
         closedAt: isClosed(target.category) ? now : null,
@@ -773,96 +977,94 @@ export class FakeWorkspace {
       this.state.tasks.push(task);
       return this.taskChange(task, ["*"]);
     },
-    "task.update": ({ key, expected_version, patch }) => {
-      const task = this.task(key);
+    "task.update": (input) => {
+      const task = this.task(input.key);
       const project = this.writable(this.projectOf(task).key);
-      if (expected_version !== undefined && expected_version !== task.version) {
+      if (input.expected_version !== null && input.expected_version !== undefined && input.expected_version !== task.version) {
         fail("conflict", `${this.keyOf(task)} changed since you read it.`, {
           hint: "Read it again and repeat the change.",
           details: { current_version: task.version },
         });
       }
+      const clear = input.clear ?? [];
       const fields: string[] = [];
-      if (patch.title !== undefined) {
-        const title = patch.title.trim();
-        if (title === "") {
-          fail("invalid", "A task needs a title.", { details: { path: "title" } });
-        }
-        if (title.length > MAX_TITLE) {
-          fail("limit", `A title has at most ${String(MAX_TITLE)} characters.`, { details: { path: "title", max: MAX_TITLE } });
-        }
-        task.title = title;
+      if (input.title !== null && input.title !== undefined) {
+        task.title = this.checkTitle(input.title);
         fields.push("title");
       }
-      if (patch.description !== undefined) {
-        task.description = patch.description;
+      if (input.description !== null && input.description !== undefined) {
+        task.description = input.description;
         fields.push("description");
       }
-      if (patch.type !== undefined) {
-        const ref = patch.type;
-        const type = project.types.find((candidate) => candidate.id === ref || fold(candidate.name) === fold(ref));
-        if (!type) {
-          fail("invalid", `Project ${project.key} has no task type "${ref}".`, { details: { path: "type" } });
-        }
-        task.typeId = type.id;
+      if (clear.includes("description")) {
+        task.description = "";
+        fields.push("description");
+      }
+      if (input.type !== null && input.type !== undefined) {
+        task.typeId = this.typeIn(project, input.type).id;
         fields.push("type");
       }
-      if (patch.priority !== undefined) {
-        task.priority = patch.priority;
+      if (input.priority !== null && input.priority !== undefined) {
+        task.priority = input.priority;
         fields.push("priority");
       }
-      if (patch.labels !== undefined) {
-        const resolve = (refs: readonly string[]) =>
-          refs.map((ref) => {
-            const label = project.labels.find((candidate) => candidate.id === ref || fold(candidate.name) === fold(ref));
-            if (!label) {
-              fail("invalid", `Project ${project.key} has no label "${ref}".`, { details: { path: "labels" } });
-            }
-            return label.id;
-          });
-        let labels = patch.labels.set ? resolve(patch.labels.set) : [...task.labelIds];
-        labels = [...labels, ...resolve(patch.labels.add ?? []).filter((id) => !labels.includes(id))];
-        const removed = resolve(patch.labels.remove ?? []);
+      const resolve = (refs: readonly string[], path: string) => refs.map((ref) => this.labelIn(project, ref, path).id);
+      if (input.labels || input.add_labels || input.remove_labels || clear.includes("labels")) {
+        let labels = clear.includes("labels") ? [] : input.labels ? resolve(input.labels, "labels") : [...task.labelIds];
+        labels = [...labels, ...resolve(input.add_labels ?? [], "add_labels").filter((id) => !labels.includes(id))];
+        const removed = resolve(input.remove_labels ?? [], "remove_labels");
         task.labelIds = labels.filter((id) => !removed.includes(id));
         fields.push("labels");
       }
-      const start = patch.start_date !== undefined ? patch.start_date : task.startDate;
-      const due = patch.due_date !== undefined ? patch.due_date : task.dueDate;
+      const start = clear.includes("start_date") ? null : (input.start_date ?? task.startDate);
+      const due = clear.includes("due_date") ? null : (input.due_date ?? task.dueDate);
       if (start !== null && due !== null && start > due) {
-        fail("invalid", "The start date is after the due date.", { details: { path: patch.start_date !== undefined ? "start_date" : "due_date" } });
+        fail("invalid", "The start date is after the due date.", { details: { path: input.start_date ? "start_date" : "due_date" } });
       }
-      if (patch.start_date !== undefined) {
-        task.startDate = patch.start_date;
+      if (start !== task.startDate) {
+        task.startDate = start;
         fields.push("start_date");
       }
-      if (patch.due_date !== undefined) {
-        task.dueDate = patch.due_date;
+      if (due !== task.dueDate) {
+        task.dueDate = due;
         fields.push("due_date");
       }
-      if (patch.estimate_min !== undefined) {
-        if (patch.estimate_min !== null && (!Number.isInteger(patch.estimate_min) || patch.estimate_min < 0)) {
+      if (input.estimate !== null && input.estimate !== undefined) {
+        const minutes = minutesOf(input.estimate);
+        if (minutes === null) {
           fail("invalid", "An estimate is a duration such as 1h 30m.", { details: { path: "estimate" } });
         }
-        task.estimateMin = patch.estimate_min;
+        task.estimateMin = minutes;
+        fields.push("estimate");
+      }
+      if (clear.includes("estimate")) {
+        task.estimateMin = null;
         fields.push("estimate");
       }
       if (fields.length === 0) {
-        return { output: { task: this.fullTask(task), group: "" }, changes: [] };
+        return { output: { task: this.fullTask(task) }, changes: [] };
       }
       this.touch(task);
       return this.taskChange(task, fields);
     },
-    "task.move": ({ key, status, position }) => {
+    "task.move": ({ key, status, project: toProject, expected_version, before, after, at }) => {
       const task = this.task(key);
       const project = this.writable(this.projectOf(task).key);
+      if (toProject !== null && toProject !== undefined && this.project(toProject) !== project) {
+        fail("invalid", "The sample workspace doesn't move tasks between projects.");
+      }
+      if (expected_version !== null && expected_version !== undefined && expected_version !== task.version) {
+        fail("conflict", `${this.keyOf(task)} changed since you read it.`, { details: { current_version: task.version } });
+      }
       const fields: string[] = [];
-      const target = status === undefined ? this.statusIn(project, task.statusId) : this.statusIn(project, status);
+      const target = status === null || status === undefined ? this.statusIn(project, task.statusId) : this.statusIn(project, status);
       if (target.id !== task.statusId) {
         this.enterStatus(task, target.id);
         fields.push("status");
       }
-      if (position !== undefined || fields.length > 0) {
-        task.rank = this.rankAt(target.id, position, task);
+      const placed = [before, after, at].some((value) => value !== null && value !== undefined);
+      if (placed || fields.length > 0) {
+        task.rank = this.rankAt(target.id, { before, after, at }, task);
         fields.push("rank");
       }
       this.touch(task, fields.includes("status"));
@@ -877,8 +1079,21 @@ function isResult(value: unknown): value is Result<unknown> {
 
 /** Fills in the history group of a change's output. */
 function withGroup(output: unknown, group: string): unknown {
-  if (typeof output === "object" && output !== null && "group" in output) {
+  if (typeof output === "object" && output !== null) {
     return { ...output, group };
   }
   return output;
+}
+
+/** Columns in the layout's order; a column it doesn't list goes after the one before it in project order. */
+function arrange(columns: readonly Column[], order: readonly string[]): Column[] {
+  const result = order.map((id) => columns.find((column) => column.id === id)).filter((column): column is Column => column !== undefined);
+  columns.forEach((column, index) => {
+    if (result.includes(column)) {
+      return;
+    }
+    const previous = columns[index - 1];
+    result.splice(previous ? result.indexOf(previous) + 1 : 0, 0, column);
+  });
+  return result;
 }

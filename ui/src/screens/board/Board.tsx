@@ -23,8 +23,9 @@ import { keysOf, type Action } from "../../actions/actions";
 import { ActionsProvider } from "../../actions/ActionsProvider";
 import { isMenuKey, useContextMenu, type MenuEntry } from "../../components/ContextMenu";
 import { useToasts } from "../../components/Toasts";
-import { useBoard, useCreateTask, useLayout, useMoveTask, useProject, useUpdateLayout, useUpdateTask, type Move } from "../../data/board";
-import { PRIORITIES, SORT_MODES, type Board as BoardData, type BoardLayout, type Card, type Position, type Project } from "../../data/catalog";
+import { cardsOf, columnsOf, useBoard, useCreateTask, useLayout, useMoveTask, useProject, useUpdateLayout, useUpdateTask, type Move } from "../../data/board";
+import { PRIORITIES, SORT_MODES, type Board as BoardData, type BoardLayout, type Card, type CardSize, type Place, type Project } from "../../data/catalog";
+import { loadCardSize, saveCardSize } from "../../prefs/store";
 import { useT } from "../../i18n/I18n";
 import { useNewTask, useStatus } from "../../shell/context";
 import { CardView } from "./CardView";
@@ -46,12 +47,12 @@ interface BoardProps {
 export function Board({ projectKey, openTask, now = () => new Date() }: BoardProps) {
   const project = useProject(projectKey);
   const layout = useLayout(projectKey);
-  const include = layout.data?.include_subprojects ?? false;
+  const include = layout.data?.layout.include_subprojects ?? false;
   const board = useBoard(projectKey, include, layout.isSuccess);
   if (!project.data || !layout.data || !board.data) {
     return <div className={styles.board} aria-busy="true" />;
   }
-  return <LoadedBoard project={project.data} layout={layout.data} board={board.data} openTask={openTask} now={now} />;
+  return <LoadedBoard project={project.data} layout={layout.data.layout} board={board.data} openTask={openTask} now={now} />;
 }
 
 interface LoadedBoardProps {
@@ -76,7 +77,8 @@ function LoadedBoard({ project, layout, board, openTask, now }: LoadedBoardProps
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [showOlder, setShowOlder] = useState<ReadonlySet<string>>(new Set());
   const [selected, setSelected] = useState<string | null>(openTask ?? null);
-  const [adding, setAdding] = useState<string | null>(board.cards.length === 0 ? (board.columns[0]?.id ?? null) : null);
+  const [adding, setAdding] = useState<string | null>(board.columns.every((column) => column.count === 0) ? (board.columns[0]?.id ?? null) : null);
+  const [cardSize, setCardSize] = useState<CardSize>(() => loadCardSize(project.id));
   const [drag, setDrag] = useState<Drag | null>(null);
   const [note, setNote] = useState<string | undefined>(undefined);
   const updateLayout = useUpdateLayout(project.key);
@@ -88,7 +90,8 @@ function LoadedBoard({ project, layout, board, openTask, now }: LoadedBoardProps
   const readOnly = project.state === "archived";
 
   const view: BoardView = boardView(board, layout, filters, now(), showOlder);
-  const cards = new Map(board.cards.map((card) => [card.key, card]));
+  const cards = cardsOf(board);
+  const columnOf = columnsOf(board);
   const columnName = new Map(board.columns.map((column) => [column.id, column.name]));
   const lanesNow: Record<string, string[]> = Object.fromEntries(view.lanes.map((lane) => [lane.column.id, lane.cards.map((card) => card.key)]));
   const laneKeys = drag ? drag.lanes : lanesNow;
@@ -114,7 +117,7 @@ function LoadedBoard({ project, layout, board, openTask, now }: LoadedBoardProps
   };
 
   /** Sends a move to the engine and says what happened. */
-  const commit = (key: string, laneId: string, position: Position, ids: readonly string[]) => {
+  const commit = (key: string, laneId: string, place: Place, ids: readonly string[]) => {
     const card = cards.get(key);
     const lane = view.lanes.find((candidate) => candidate.column.id === laneId);
     const status = card && lane?.column.statuses[card.project];
@@ -122,8 +125,8 @@ function LoadedBoard({ project, layout, board, openTask, now }: LoadedBoardProps
       toasts.show({ tone: "error", text: t("move-refused", { key, column: lane?.column.name ?? "" }) });
       return;
     }
-    const sameColumn = board.column_of[key] === laneId;
-    const change: Move = { key, status, column: laneId, position };
+    const sameColumn = columnOf[key] === laneId;
+    const change: Move = { key, status, column: laneId, place };
     move.mutate(change);
     announce(
       sameColumn
@@ -185,12 +188,12 @@ function LoadedBoard({ project, layout, board, openTask, now }: LoadedBoardProps
         ids = arrayMove(ids, from, to);
       }
     }
-    const moved = board.column_of[key] !== laneId;
+    const moved = columnOf[key] !== laneId;
     const before = lanesNow[laneId] ?? [];
     if (!moved && ids.join() === before.join()) {
       return;
     }
-    commit(key, laneId, manual ? positionIn(ids, key) : "bottom", ids);
+    commit(key, laneId, manual ? positionIn(ids, key) : { at: "bottom" }, ids);
   };
 
   const announcements: Announcements = {
@@ -230,14 +233,14 @@ function LoadedBoard({ project, layout, board, openTask, now }: LoadedBoardProps
     if (!lane) {
       return;
     }
-    const sameLane = board.column_of[key] === next.lane;
+    const sameLane = columnOf[key] === next.lane;
     if (sameLane && lane.sort !== "manual") {
       announce(t("move-sorted", { column: lane.column.name }));
       return;
     }
     const ids = (lanesNow[next.lane] ?? []).filter((id) => id !== key);
     ids.splice(next.index, 0, key);
-    commit(key, next.lane, lane.sort === "manual" ? positionIn(ids, key) : "bottom", ids);
+    commit(key, next.lane, lane.sort === "manual" ? positionIn(ids, key) : { at: "bottom" }, ids);
     focusCard(key);
   };
 
@@ -254,8 +257,8 @@ function LoadedBoard({ project, layout, board, openTask, now }: LoadedBoardProps
         submenu: view.lanes.map((lane) => ({
           id: `move-${lane.column.id}`,
           label: lane.column.name,
-          disabled: readOnly || board.column_of[key] === lane.column.id || lane.column.statuses[card.project] === undefined,
-          run: () => { commit(key, lane.column.id, "bottom", [...(lanesNow[lane.column.id] ?? []), key]); },
+          disabled: readOnly || columnOf[key] === lane.column.id || lane.column.statuses[card.project] === undefined,
+          run: () => { commit(key, lane.column.id, { at: "bottom" }, [...(lanesNow[lane.column.id] ?? []), key]); },
         })),
       },
       {
@@ -266,7 +269,7 @@ function LoadedBoard({ project, layout, board, openTask, now }: LoadedBoardProps
           label: t(`priority-${priority}`),
           checked: card.priority === priority,
           disabled: readOnly,
-          run: () => { update.mutate({ key, patch: { priority } }); },
+          run: () => { update.mutate({ key, priority }); },
         })),
       },
       "separator",
@@ -309,7 +312,7 @@ function LoadedBoard({ project, layout, board, openTask, now }: LoadedBoardProps
   const handlers: CardHandlers = {
     selected,
     fields: layout.card_fields,
-    compact: layout.card_size === "compact",
+    compact: cardSize === "compact",
     today,
     onSelect: setSelected,
     onOpen: openPanel,
@@ -358,7 +361,7 @@ function LoadedBoard({ project, layout, board, openTask, now }: LoadedBoardProps
   };
 
   const newTaskColumn = () => {
-    const selectedColumn = selected ? board.column_of[selected] : undefined;
+    const selectedColumn = selected ? columnOf[selected] : undefined;
     const open = view.lanes.filter((lane) => !lane.collapsed);
     return open.find((lane) => lane.column.id === selectedColumn)?.column.id ?? open.find((lane) => lane.column.category === "todo")?.column.id ?? open[0]?.column.id ?? null;
   };
@@ -407,11 +410,11 @@ function LoadedBoard({ project, layout, board, openTask, now }: LoadedBoardProps
         action("card.moveUp", "action-card-up", () => { if (selected) moveByKey(selected, KeyboardCode.Up); }),
         action("card.moveDown", "action-card-down", () => { if (selected) moveByKey(selected, KeyboardCode.Down); }),
         action("column.moveLeft", "action-column-left", () => {
-          const column = selected ? board.column_of[selected] : undefined;
+          const column = selected ? columnOf[selected] : undefined;
           if (column) updateLayout({ order: moveColumn(board.columns, orderOf(), column, -1) });
         }),
         action("column.moveRight", "action-column-right", () => {
-          const column = selected ? board.column_of[selected] : undefined;
+          const column = selected ? columnOf[selected] : undefined;
           if (column) updateLayout({ order: moveColumn(board.columns, orderOf(), column, 1) });
         }),
       ];
@@ -419,7 +422,20 @@ function LoadedBoard({ project, layout, board, openTask, now }: LoadedBoardProps
   return (
     <ActionsProvider actions={boardActions}>
       <div className={styles.board}>
-        <Toolbar project={project} board={board} layout={layout} view={view} filters={filters} onFilters={setFilters} onLayout={updateLayout} />
+        <Toolbar
+          project={project}
+          board={board}
+          layout={layout}
+          view={view}
+          filters={filters}
+          onFilters={setFilters}
+          onLayout={updateLayout}
+          cardSize={cardSize}
+          onCardSize={(size) => {
+            setCardSize(size);
+            saveCardSize(project.id, size);
+          }}
+        />
         {isFiltered(filters) && (
           <div className="banner" role="status">
             <span>{t("board-filtered", { shown: view.shown, total: view.total })}</span>
@@ -486,7 +502,7 @@ function LoadedBoard({ project, layout, board, openTask, now }: LoadedBoardProps
             )}
           </div>
           <DragOverlay dropAnimation={{ duration: 160 }}>
-            {activeCard ? <CardView card={activeCard} fields={layout.card_fields} compact={layout.card_size === "compact"} today={today} lifted /> : null}
+            {activeCard ? <CardView card={activeCard} fields={layout.card_fields} compact={cardSize === "compact"} today={today} lifted /> : null}
           </DragOverlay>
         </DndContext>
         {menu.menu}

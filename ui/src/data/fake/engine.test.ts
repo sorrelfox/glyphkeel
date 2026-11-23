@@ -3,8 +3,9 @@
 
 import { describe, expect, it } from "vitest";
 
-import { type Board, type Counts, type Project, type ProjectList, type Task, type TaskChange } from "../catalog";
-import { moveOnBoard } from "../board";
+import { type ProjectList, type TaskList } from "../../generated/ops";
+import { cardsOf, countsOf, moveOnBoard } from "../board";
+import { type Board, type Project, type TaskChange } from "../catalog";
 import { FakeError, FakeWorkspace } from "./engine";
 import { seed } from "./seed";
 import { fakeTransport } from "./transport";
@@ -15,7 +16,7 @@ function workspace() {
   return new FakeWorkspace(seed(TODAY), () => TODAY);
 }
 
-// Answers come back untyped; the tests read them as the catalog types them.
+// Answers come back untyped; the tests read them as the generated client types them.
 // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- a typed view of an untyped answer
 function call<T>(ws: FakeWorkspace, op: string, input: unknown = {}): T {
   return ws.call(op, input).output as T;
@@ -33,20 +34,26 @@ function failure(run: () => unknown) {
   throw new Error("expected the call to fail");
 }
 
+const cards = (board: Board) => [...cardsOf(board).values()];
+const keysIn = (board: Board, column: string | undefined) => board.columns.find((c) => c.id === column)?.cards.map((c) => c.key) ?? [];
+
 describe("the sample workspace", () => {
   it("has data set S: three top-level projects, one with two sub-projects, an archived one and 200 tasks", () => {
     const ws = workspace();
-    const list = call<ProjectList>(ws, "project.list");
-    expect(list.items.map((p) => [p.key, p.parent, p.state])).toEqual([
-      ["TM", null, "active"],
-      ["CLI", "TM", "active"],
-      ["DOC", "TM", "active"],
-      ["PER", null, "active"],
-      ["LAB", null, "active"],
-      ["BLOG", null, "archived"],
+    const list = call<ProjectList>(ws, "project.list", { include_archived: true });
+    expect(list.items.map((p) => [p.key, p.parent ?? null, p.state, p.depth])).toEqual([
+      ["TM", null, "active", 0],
+      ["CLI", "TM", "active", 1],
+      ["DOC", "TM", "active", 1],
+      ["PER", null, "active", 0],
+      ["LAB", null, "active", 0],
+      ["BLOG", null, "archived", 0],
     ]);
-    const counts = call<Counts>(ws, "workspace.counts");
-    const boards = ["TM", "CLI", "DOC", "PER", "LAB"].map((key) => call<Board>(ws, "board.get", { project: key }).cards.length);
+    expect(call<ProjectList>(ws, "project.list").items.map((p) => p.key)).not.toContain("BLOG");
+    const counts = countsOf(list);
+    const tm = list.items[0];
+    expect(tm?.open_tasks_with_subprojects).toBe((counts.own.TM ?? 0) + (counts.own.CLI ?? 0) + (counts.own.DOC ?? 0));
+    const boards = ["TM", "CLI", "DOC", "PER", "LAB"].map((key) => cards(call<Board>(ws, "board.get", { project: key, show_older: true })).length);
     expect(boards.reduce((a, b) => a + b, 0)).toBe(200);
     expect(counts.all).toBeGreaterThan(0);
   });
@@ -58,9 +65,9 @@ describe("the sample workspace", () => {
   it("puts Task Manager's In progress over its WIP limit", () => {
     const board = call<Board>(workspace(), "board.get", { project: "TM" });
     const column = board.columns.find((c) => c.name === "In progress");
-    const count = board.cards.filter((card) => board.column_of[card.key] === column?.id).length;
     expect(column?.wip_limit).toBe(3);
-    expect(count).toBeGreaterThan(3);
+    expect(column?.count).toBeGreaterThan(3);
+    expect(column?.over_limit).toBe(true);
   });
 });
 
@@ -84,35 +91,37 @@ describe("tasks", () => {
     const done = project.statuses.find((s) => s.category === "done");
     const todo = project.statuses.find((s) => s.name === "To do");
     const key = call<TaskChange>(ws, "task.create", { project: "PER", title: "Close me" }).task.key;
-    expect(call<TaskChange>(ws, "task.move", { key, status: done?.id }).task.closed_at).not.toBeNull();
-    expect(call<TaskChange>(ws, "task.move", { key, status: todo?.id }).task.closed_at).toBeNull();
+    expect(call<TaskChange>(ws, "task.move", { key, status: done?.id }).task.closed_at).toBeDefined();
+    expect(call<TaskChange>(ws, "task.move", { key, status: todo?.id }).task.closed_at).toBeUndefined();
   });
 
   it("orders a moved task before or after its neighbour", () => {
     const ws = workspace();
     const board = call<Board>(ws, "board.get", { project: "PER" });
-    const column = board.columns[1];
-    const inColumn = board.cards.filter((c) => board.column_of[c.key] === column?.id).map((c) => c.key);
-    const [first, second, third] = inColumn;
-    call(ws, "task.move", { key: third, position: { before: first } });
+    const column = board.columns[1]?.id;
+    const [first, second, third] = keysIn(board, column);
+    call(ws, "task.move", { key: third, before: first });
     const after = call<Board>(ws, "board.get", { project: "PER" });
-    expect(after.cards.filter((c) => after.column_of[c.key] === column?.id).map((c) => c.key).slice(0, 3)).toEqual([third, first, second]);
+    expect(keysIn(after, column).slice(0, 3)).toEqual([third, first, second]);
+    expect(failure(() => ws.call("task.move", { key: third, before: first, at: "top" })).code).toBe("invalid");
   });
 
   it("rejects a start after the due date and a stale version", () => {
     const ws = workspace();
     const key = call<TaskChange>(ws, "task.create", { project: "PER", title: "Dates" }).task.key;
-    expect(failure(() => ws.call("task.update", { key, patch: { start_date: "2026-12-02", due_date: "2026-12-01" } })).code).toBe("invalid");
-    expect(failure(() => ws.call("task.update", { key, expected_version: 99, patch: { title: "x" } })).code).toBe("conflict");
-    const task = call<TaskChange>(ws, "task.update", { key, patch: { labels: { add: ["home"] }, estimate_min: 90 } }).task;
+    expect(failure(() => ws.call("task.update", { key, start_date: "2026-12-02", due_date: "2026-12-01" })).code).toBe("invalid");
+    expect(failure(() => ws.call("task.update", { key, expected_version: 99, title: "x" })).code).toBe("conflict");
+    const task = call<TaskChange>(ws, "task.update", { key, add_labels: ["home"], estimate: "1h 30m", due_date: "2026-12-01" }).task;
     expect(task.labels.map((l) => l.name)).toEqual(["home"]);
-    expect(task.estimate_min).toBe(90);
+    expect(task.estimate_minutes).toBe(90);
+    const cleared = call<TaskChange>(ws, "task.update", { key, clear: ["estimate", "due_date", "labels"] }).task;
+    expect([cleared.estimate_minutes, cleared.due_date, cleared.labels]).toEqual([undefined, undefined, []]);
   });
 
   it("counts checklist items from the description", () => {
     const ws = workspace();
     const key = call<TaskChange>(ws, "task.create", { project: "PER", title: "List" }).task.key;
-    const task = call<TaskChange>(ws, "task.update", { key, patch: { description: "- [x] one\n- [ ] two\n* [X] three" } }).task;
+    const task = call<TaskChange>(ws, "task.update", { key, description: "- [x] one\n- [ ] two\n* [X] three" }).task;
     expect(task.checklist).toEqual({ done: 2, total: 3 });
   });
 });
@@ -142,12 +151,13 @@ describe("projects", () => {
     const project = call<Project>(ws, "project.get", { project: "LAB" });
     const [backlog, todo] = project.statuses;
     const before = call<Board>(ws, "board.get", { project: "LAB" });
-    const moving = before.cards.filter((c) => c.status === backlog?.id).length;
-    const staying = before.cards.filter((c) => c.status === todo?.id).length;
+    const moving = keysIn(before, backlog?.id).length;
+    const staying = keysIn(before, todo?.id).length;
+    expect(failure(() => ws.call("status.delete", { project: "LAB", status: backlog?.id })).code).toBe("invalid");
     call(ws, "status.delete", { project: "LAB", status: backlog?.id, move_tasks_to: todo?.id });
     const after = call<Board>(ws, "board.get", { project: "LAB" });
     expect(after.columns.map((c) => c.name)).not.toContain("Backlog");
-    expect(after.cards.filter((c) => c.status === todo?.id).length).toBe(moving + staying);
+    expect(keysIn(after, todo?.id).length).toBe(moving + staying);
   });
 });
 
@@ -159,8 +169,8 @@ describe("the board with sub-projects", () => {
     const waiting = board.columns.at(-1);
     expect(Object.keys(waiting?.statuses ?? {})).toEqual(["CLI"]);
     expect(Object.keys(board.columns[0]?.statuses ?? {})).toEqual(["TM", "CLI", "DOC"]);
-    expect(board.cards.some((c) => c.project === "DOC")).toBe(true);
-    expect(failure(() => ws.call("task.move", { key: board.cards.find((c) => c.project === "TM")?.key, status: "Waiting" })).code).toBe("invalid");
+    expect(cards(board).some((c) => c.project === "DOC")).toBe(true);
+    expect(failure(() => ws.call("task.move", { key: cards(board).find((c) => c.project === "TM")?.key, status: "Waiting" })).code).toBe("invalid");
   });
 });
 
@@ -169,9 +179,9 @@ describe("Undo", () => {
     const ws = workspace();
     const key = call<TaskChange>(ws, "task.create", { project: "PER", title: "Undo me" }).task.key;
     call(ws, "history.undo");
-    expect(failure(() => ws.call("task.get", { key })).code).toBe("not_found");
+    expect(failure(() => ws.call("task.get", { keys: [key] })).code).toBe("not_found");
     call(ws, "history.redo");
-    expect(call<Task>(ws, "task.get", { key }).title).toBe("Undo me");
+    expect(call<TaskList>(ws, "task.get", { keys: [key] }).items[0]?.title).toBe("Undo me");
   });
 });
 
@@ -180,7 +190,7 @@ describe("the transport", () => {
     const transport = fakeTransport({ today: () => TODAY });
     const events: unknown[] = [];
     await transport.subscribe((event) => events.push(event));
-    await expect(transport.call("task.get", { key: "NOPE-1" })).rejects.toMatchObject({ code: "not_found" });
+    await expect(transport.call("task.get", { keys: ["NOPE-1"] })).rejects.toMatchObject({ code: "not_found" });
     await transport.call("task.create", { project: "PER", title: "Hello" });
     await new Promise((resolve) => setTimeout(resolve, 5));
     expect(events).toMatchObject([{ changes: [{ entity: "task", project: "PER" }] }]);
@@ -192,15 +202,14 @@ describe("moveOnBoard", () => {
     const ws = workspace();
     const board = call<Board>(ws, "board.get", { project: "PER" });
     const [todo, doing] = [board.columns[1], board.columns[2]];
-    const card = board.cards.find((c) => board.column_of[c.key] === todo?.id);
-    const anchor = board.cards.find((c) => board.column_of[c.key] === doing?.id);
-    if (!card || !anchor || !doing) {
+    const card = todo?.cards[0];
+    const anchor = doing?.cards[0];
+    if (!todo || !doing || !card || !anchor) {
       throw new Error("sample data changed");
     }
-    const moved = moveOnBoard(board, { key: card.key, status: doing.id, column: doing.id, position: { before: anchor.key } });
-    const keys = moved.cards.filter((c) => moved.column_of[c.key] === doing.id).map((c) => c.key);
-    expect(keys[0]).toBe(card.key);
-    expect(keys[1]).toBe(anchor.key);
-    expect(moved.cards.find((c) => c.key === card.key)?.status).toBe(doing.id);
+    const moved = moveOnBoard(board, { key: card.key, status: doing.id, column: doing.id, place: { before: anchor.key } });
+    expect(keysIn(moved, doing.id).slice(0, 2)).toEqual([card.key, anchor.key]);
+    expect(keysIn(moved, todo.id)).not.toContain(card.key);
+    expect(moved.columns[2]?.count).toBe(doing.count + 1);
   });
 });

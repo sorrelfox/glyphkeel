@@ -11,7 +11,7 @@ import { Button, Menu, MenuTrigger, Popover } from "react-aria-components";
 
 import { classes } from "../../classes";
 import { MenuEntries, type MenuEntry } from "../../components/ContextMenu";
-import { type Card, type CardField } from "../../data/catalog";
+import { type Card } from "../../data/catalog";
 import { useT } from "../../i18n/I18n";
 import { CardView } from "./CardView";
 import { keepMounted, type LaneData } from "./dnd";
@@ -23,7 +23,7 @@ export const VIRTUAL_OVER = 150;
 
 export interface CardHandlers {
   selected: string | null;
-  fields: readonly CardField[];
+  fields: readonly string[];
   compact: boolean;
   today: string;
   onSelect: (key: string) => void;
@@ -112,13 +112,13 @@ export function Lane({ lane, keys, cards, handlers, active, closed, hot, adding,
   const t = useT();
   const { column } = lane;
   const limit = column.wip_limit;
-  const over = limit !== null && lane.total > limit;
+  const over = limit !== undefined && lane.total > limit;
   // A virtual lane hands over how to bring an index into view, for keyboard moves.
   const [scrollTo, setScrollTo] = useState<{ run: (index: number) => void } | null>(null);
   const data: LaneData = { kind: "lane", cards: keys, closed, scrollTo: scrollTo?.run };
   const { setNodeRef } = useDroppable({ id: column.id, data, disabled: closed });
   const body = keys.length > VIRTUAL_OVER;
-  const label = limit === null ? t("lane-label", { name: column.name, count: lane.total }) : t("lane-label-wip", { name: column.name, count: lane.total, limit });
+  const label = limit === undefined ? t("lane-label", { name: column.name, count: lane.total }) : t("lane-label-wip", { name: column.name, count: lane.total, limit });
 
   return (
     <section className={classes("lane", styles.lane, hot && !closed && styles.hot, closed && active !== null && styles.closedLane)} aria-label={label} data-lane={column.id}>
@@ -126,7 +126,7 @@ export function Lane({ lane, keys, cards, handlers, active, closed, hot, adding,
         <span className={`dot hue-${column.hue}`} />
         <h2 className={styles.laneName}>{column.name}</h2>
         <span className={classes("count", over && "over")} data-testid="lane-count">
-          {limit === null ? lane.total : t("lane-wip", { count: lane.total, limit })}
+          {limit === undefined ? lane.total : t("lane-wip", { count: lane.total, limit })}
         </span>
         <div className="grow" />
         <Button className="btn flat icon sm" aria-label={t("lane-add", { name: column.name })} onPress={onAdd}>

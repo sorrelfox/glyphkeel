@@ -19,8 +19,6 @@ import styles from "./Project.module.css";
 interface ProjectTreeProps {
   /** The open project. */
   current: string | undefined;
-  /** Open tasks by project key. */
-  counts: Record<string, number> | undefined;
   onNewProject: (request: NewProjectRequest) => void;
   onSettings: (key: string) => void;
 }
@@ -35,18 +33,13 @@ export function childrenByParent(projects: readonly ProjectSummary[]): Map<strin
   return map;
 }
 
-/** Open tasks of a project and everything under it. */
-export function subtreeCount(key: string, children: Map<string, ProjectSummary[]>, counts: Record<string, number>): number {
-  return (counts[key] ?? 0) + (children.get(key) ?? []).reduce((sum, child) => sum + subtreeCount(child.key, children, counts), 0);
-}
-
 /**
  * The project tree: an indented tree of active projects. A parent opens and
  * closes with its chevron (or the arrow keys); the closed ones are
  * remembered. Its count is its own open tasks; closed, the count covers
  * everything under it. Archived projects are listed apart, below.
  */
-export function ProjectTree({ current, counts, onNewProject, onSettings }: ProjectTreeProps) {
+export function ProjectTree({ current, onNewProject, onSettings }: ProjectTreeProps) {
   const t = useT();
   const navigate = useNavigate();
   const projects = useProjects();
@@ -76,7 +69,7 @@ export function ProjectTree({ current, counts, onNewProject, onSettings }: Proje
         ];
 
   const row = (project: ProjectSummary, hasChildren: boolean, isExpanded: boolean): ReactNode => {
-    const count = counts ? (hasChildren && !isExpanded ? subtreeCount(project.key, children, counts) : (counts[project.key] ?? 0)) : null;
+    const count = hasChildren && !isExpanded ? project.open_tasks_with_subprojects : project.open_tasks;
     return (
       <div
         className={classes("nav", styles.treeRow, project.key === current && "on")}
@@ -93,7 +86,7 @@ export function ProjectTree({ current, counts, onNewProject, onSettings }: Proje
         )}
         <span className={`dot hue-${project.hue}`} />
         <span className="truncate">{project.name}</span>
-        {count !== null && <span className="count">{count}</span>}
+        <span className="count">{count}</span>
       </div>
     );
   };

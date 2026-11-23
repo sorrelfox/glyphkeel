@@ -154,12 +154,3 @@
 .descriptionField:focus {
   box-shadow: inset 0 0 0 2px var(--focus);
 }
-
-.refRow {
-  width: auto;
-  margin: 0 -8px;
-}
-
-.relationKind {
-  flex: 0 0 84px;
-}
