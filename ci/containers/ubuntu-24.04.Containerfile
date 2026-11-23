@@ -29,4 +29,11 @@ RUN apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update \
 COPY install-toolchains.sh /usr/local/bin/install-toolchains.sh
 RUN install-toolchains.sh
 
+# Chromium for the UI's Playwright flows, in its own layer so that a new
+# Playwright version doesn't rebuild the toolchains.
+ARG PLAYWRIGHT_VERSION
+ENV PLAYWRIGHT_BROWSERS_PATH=/usr/local/ms-playwright
+COPY install-browsers.sh /usr/local/bin/install-browsers.sh
+RUN install-browsers.sh
+
 WORKDIR /work

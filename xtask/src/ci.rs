@@ -6,15 +6,17 @@
 //! libraries (WebKitGTK, GTK, SQLite).
 //!
 //! On the host it builds one image per distribution from
-//! `ci/containers/<distro>.Containerfile`, copies the source into a fresh
-//! container and runs `cargo xtask ci --here` inside it. Build caches (the
+//! `ci/containers/<distro>.Containerfile`, copies the source (the files git
+//! tracks, plus untracked ones it doesn't ignore) into a fresh container and
+//! runs `cargo xtask ci --here` inside it. Build caches (the
 //! cargo registry, each distribution's `target/` and the pnpm store) live in
 //! named volumes, so runs after the first are incremental.
 
 use std::fmt;
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::time::Instant;
 
 use anyhow::{Context, Result, bail};
@@ -53,12 +55,13 @@ const PREFIX: &str = "glyphkeel-ci";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Suite {
-    /// Formatting, licence headers, dependency rules, clippy, ESLint,
-    /// stylelint and the TypeScript check.
+    /// Formatting, licence headers, dependency rules, generated files,
+    /// clippy, ESLint, stylelint and the TypeScript check.
     Static,
     /// Every Rust test.
     Rust,
-    /// The UI's component tests and its production build.
+    /// The UI's component tests, its production build (checked for network
+    /// and bridge code) and the flows against the real engine in Chromium.
     Ui,
     /// The desktop app built with the UI embedded, as it ships.
     App,
@@ -94,10 +97,14 @@ impl Suite {
     fn about(self) -> &'static str {
         match self {
             Self::Static => {
-                "fmt, licence headers, dependency rules, clippy, ESLint, stylelint, tsc"
+                "fmt, licence headers, dependency rules, generated files, clippy, ESLint, \
+                 stylelint, tsc"
             }
             Self::Rust => "cargo test for the whole workspace",
-            Self::Ui => "the UI's component tests and production build",
+            Self::Ui => {
+                "the UI's component tests, release build and bundle check, bridge flows \
+                 (Chromium)"
+            }
             Self::App => "the desktop app with the UI embedded",
             Self::Deny => "cargo-deny: licences, advisories, bans, sources",
             Self::Package => "deb and rpm packages (Tauri bundler, `dist` profile)",
@@ -122,6 +129,7 @@ impl Suite {
                 Step::cargo(&["fmt", "--all", "--check"]),
                 Step::Headers,
                 Step::Deps,
+                Step::GenCheck,
                 Step::cargo(&[
                     "clippy",
                     "--workspace",
@@ -138,6 +146,10 @@ impl Suite {
             Self::Ui => vec![
                 Step::pnpm(&["--filter", "ui", "exec", "vitest", "run"]),
                 Step::pnpm(&["build"]),
+                // The release bundle has no network code and no bridge.
+                Step::pnpm(&["--filter", "ui", "check:bundle"]),
+                // The UI against the engine, through the development bridge.
+                Step::pnpm(&["--filter", "ui", "test:bridge"]),
             ],
             Self::App => vec![
                 Step::pnpm(&["build"]),
@@ -241,6 +253,7 @@ enum Step {
     Pnpm(Vec<&'static str>),
     Headers,
     Deps,
+    GenCheck,
 }
 
 impl Step {
@@ -258,6 +271,7 @@ impl Step {
             Self::Pnpm(args) => status(Command::new("pnpm").args(args).current_dir(root)),
             Self::Headers => crate::headers::run(root),
             Self::Deps => crate::deps::run(root),
+            Self::GenCheck => crate::codegen::run(root, &["--check".to_owned()]),
         }
     }
 }
@@ -269,6 +283,7 @@ impl fmt::Display for Step {
             Self::Pnpm(args) => write!(f, "pnpm {}", args.join(" ")),
             Self::Headers => f.write_str("cargo xtask check-headers"),
             Self::Deps => f.write_str("cargo xtask check-deps"),
+            Self::GenCheck => f.write_str("cargo xtask gen --check"),
         }
     }
 }
@@ -452,6 +467,8 @@ struct Pins {
     rust: String,
     node: String,
     pnpm: String,
+    /// The UI's Playwright, whose Chromium the images install.
+    playwright: String,
 }
 
 impl Pins {
@@ -460,10 +477,17 @@ impl Pins {
         let node = read(root, ".node-version")?;
         let package: serde_json::Value = serde_json::from_str(&read(root, "package.json")?)
             .context("cannot parse package.json")?;
-        Self::from_files(&toolchain, &node, &package)
+        let ui: serde_json::Value = serde_json::from_str(&read(root, "ui/package.json")?)
+            .context("cannot parse ui/package.json")?;
+        Self::from_files(&toolchain, &node, &package, &ui)
     }
 
-    fn from_files(toolchain: &str, node: &str, package: &serde_json::Value) -> Result<Self> {
+    fn from_files(
+        toolchain: &str,
+        node: &str,
+        package: &serde_json::Value,
+        ui: &serde_json::Value,
+    ) -> Result<Self> {
         let rust = toolchain
             .lines()
             .find_map(|line| line.trim().strip_prefix("channel"))
@@ -475,10 +499,16 @@ impl Pins {
             .and_then(|value| value.strip_prefix("pnpm@"))
             .map(|value| value.split('+').next().unwrap_or(value).to_owned())
             .context("package.json names no pnpm version in `packageManager`")?;
+        let playwright = ui["devDependencies"]["@playwright/test"]
+            .as_str()
+            .filter(|version| version.chars().all(|c| c.is_ascii_digit() || c == '.'))
+            .map(str::to_owned)
+            .context("ui/package.json pins no exact version of @playwright/test")?;
         Ok(Self {
             rust,
             node: node.trim().to_owned(),
             pnpm,
+            playwright,
         })
     }
 }
@@ -507,7 +537,9 @@ fn build_image(
         .arg("--build-arg")
         .arg(format!("NODE_VERSION={}", pins.node))
         .arg("--build-arg")
-        .arg(format!("PNPM_VERSION={}", pins.pnpm));
+        .arg(format!("PNPM_VERSION={}", pins.pnpm))
+        .arg("--build-arg")
+        .arg(format!("PLAYWRIGHT_VERSION={}", pins.playwright));
     if rebuild {
         cmd.arg("--no-cache");
     }
@@ -555,18 +587,17 @@ fn run_in_container(
 ) -> Result<bool> {
     let names: Vec<&str> = suites.iter().map(|suite| suite.name()).collect();
     // The source is mounted read-only and copied into the container, so the
-    // host's tree is never written to. Build output stays out of the copy.
-    let script = format!(
-        "set -e; tar -C /src --exclude=./.git --exclude=./target --exclude=./node_modules \
-         --exclude=./ui/node_modules --exclude=./ui/dist -cf - . | tar -C /work -xf -; \
-         exec cargo xtask ci --here --suite {}",
-        names.join(",")
-    );
+    // host's tree is never written to. In a git checkout the copy is the
+    // list of files git knows about, given on standard input, so ignored
+    // files (build output, generated files) stay out; otherwise the whole
+    // tree is copied without the build output.
+    let files = crate::headers::git_files(root);
+    let script = copy_script(files.is_some(), &names);
     let source = root
         .to_str()
         .context("the repository path is not valid UTF-8")?;
     let mut cmd = Command::new(engine.program());
-    cmd.args(["run", "--rm", "--init"])
+    cmd.args(["run", "--rm", "--init", "--interactive"])
         // The source is only read; relabelling it for SELinux is not needed.
         .args(["--security-opt", "label=disable"])
         .arg("--volume")
@@ -582,7 +613,40 @@ fn run_in_container(
         }
     }
     cmd.arg(distro.image()).args(["sh", "-c", &script]);
-    status(&mut cmd)
+    let shown = format!("{cmd:?}");
+    let mut child = cmd
+        .stdin(Stdio::piped())
+        .spawn()
+        .with_context(|| format!("cannot run {shown}"))?;
+    {
+        let mut stdin = child.stdin.take().context("no standard input")?;
+        for file in files.iter().flatten() {
+            let name = file
+                .to_str()
+                .with_context(|| format!("{} is not valid UTF-8", file.display()))?;
+            stdin.write_all(name.as_bytes())?;
+            stdin.write_all(b"\0")?;
+        }
+    }
+    Ok(child
+        .wait()
+        .with_context(|| format!("cannot wait for {shown}"))?
+        .success())
+}
+
+/// The shell script run in each container: copy the source into `/work`,
+/// then run the suites there.
+fn copy_script(from_list: bool, suites: &[&str]) -> String {
+    let copy = if from_list {
+        "tar -C /src --null --files-from=- -cf - | tar -C /work -xf -"
+    } else {
+        "tar -C /src --exclude=./.git --exclude=./target --exclude=./node_modules \
+         --exclude=./ui/node_modules --exclude=./ui/dist -cf - . | tar -C /work -xf -"
+    };
+    format!(
+        "set -e; {copy}; exec cargo xtask ci --here --suite {} </dev/null",
+        suites.join(",")
+    )
 }
 
 fn status(cmd: &mut Command) -> Result<bool> {
@@ -599,7 +663,7 @@ mod tests {
 
     use std::path::PathBuf;
 
-    use super::{Distro, Engine, Options, Pins, Suite, cache_volumes};
+    use super::{Distro, Engine, Options, Pins, Step, Suite, cache_volumes, copy_script};
 
     fn parse(args: &[&str]) -> anyhow::Result<Options> {
         Options::parse(&args.iter().map(ToString::to_string).collect::<Vec<_>>())
@@ -692,16 +756,45 @@ mod tests {
     fn pins_come_from_the_repository_files() {
         let toolchain = "[toolchain]\nchannel = \"1.100.0\"\ncomponents = [\"clippy\"]\n";
         let package = json!({ "packageManager": "pnpm@12.21.0+sha512.abc" });
-        let pins = Pins::from_files(toolchain, "24.18.0\n", &package).unwrap();
+        let ui = json!({ "devDependencies": { "@playwright/test": "1.65.1" } });
+        let pins = Pins::from_files(toolchain, "24.18.0\n", &package, &ui).unwrap();
         assert_eq!(
             pins,
             Pins {
                 rust: "1.100.0".into(),
                 node: "24.18.0".into(),
-                pnpm: "12.21.0".into()
+                pnpm: "12.21.0".into(),
+                playwright: "1.65.1".into(),
             }
         );
-        assert!(Pins::from_files("[toolchain]\n", "24", &package).is_err());
-        assert!(Pins::from_files(toolchain, "24", &json!({})).is_err());
+        assert!(Pins::from_files("[toolchain]\n", "24", &package, &ui).is_err());
+        assert!(Pins::from_files(toolchain, "24", &json!({}), &ui).is_err());
+        assert!(Pins::from_files(toolchain, "24", &package, &json!({})).is_err());
+        let range = json!({ "devDependencies": { "@playwright/test": "^1.65.1" } });
+        assert!(Pins::from_files(toolchain, "24", &package, &range).is_err());
+    }
+
+    #[test]
+    fn the_suites_check_generated_files_the_bundle_and_the_bridge_flows() {
+        assert!(Suite::Static.steps().contains(&Step::GenCheck));
+        let ui: Vec<String> = Suite::Ui.steps().iter().map(ToString::to_string).collect();
+        let build = ui.iter().position(|step| step == "pnpm build").unwrap();
+        let bundle = ui
+            .iter()
+            .position(|step| step == "pnpm --filter ui check:bundle")
+            .unwrap();
+        assert!(build < bundle, "the bundle is checked after it is built");
+        assert!(ui.contains(&"pnpm --filter ui test:bridge".to_owned()));
+        assert_eq!(Step::GenCheck.to_string(), "cargo xtask gen --check");
+    }
+
+    #[test]
+    fn the_container_copies_the_listed_files_or_the_tree() {
+        let script = copy_script(true, &["static", "ui"]);
+        assert!(script.contains("--null --files-from=-"));
+        assert!(script.ends_with("exec cargo xtask ci --here --suite static,ui </dev/null"));
+        let script = copy_script(false, &["rust"]);
+        assert!(script.contains("--exclude=./target"));
+        assert!(!script.contains("--files-from"));
     }
 }
