@@ -230,3 +230,12 @@ describe("the appearance", () => {
     expect(document.querySelector("select")).toBeNull();
   });
 });
+
+describe("quick add", () => {
+  it("says the desktop-wide shortcut belongs to the desktop app, outside it", async () => {
+    setUp({ page: "quick-add" });
+    const shortcut = await screen.findByRole("switch", { name: "Shortcut for quick add" });
+    await screen.findByText("The shortcut belongs to the desktop app.");
+    expect((shortcut as HTMLInputElement).disabled).toBe(true);
+  });
+});

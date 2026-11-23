@@ -43,6 +43,8 @@ export function HeaderBar({ titleBar, title, subtitle, project, onProjectSetting
     useAction("app.undo"),
     useAction("app.redo"),
     SEPARATOR,
+    useAction("app.quickAdd"),
+    SEPARATOR,
     useAction("app.backup"),
     useAction("app.import"),
     useAction("app.export"),

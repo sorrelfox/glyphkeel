@@ -1,0 +1,17 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "quick-add-window",
+  "description": "The quick-add window's page may read the projects and create a task through `op`, receive change events through `subscribe`, signal its first screen, hear each time the window is shown, hide its own window, keep the page's own preferences (the project it last added to) and set its title. Nothing else of Tauri's API is reachable from it.",
+  "windows": [
+    "quick-add"
+  ],
+  "permissions": [
+    "allow-op",
+    "allow-subscribe",
+    "allow-window-ready",
+    "allow-watch-quick-add",
+    "allow-hide-quick-add",
+    "allow-set-ui-pref",
+    "core:window:allow-set-title"
+  ]
+}

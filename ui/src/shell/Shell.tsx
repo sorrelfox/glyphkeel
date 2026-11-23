@@ -12,7 +12,9 @@ import { useUndo } from "../data/hooks";
 import { useTimerCommands } from "../data/time";
 import { useTimeZone } from "../data/zone";
 import { useT } from "../i18n/I18n";
+import { hasQuickAddWindow, showQuickAdd } from "../ipc/quickAdd";
 import { appWindow } from "../ipc/window";
+import { CommandPalette } from "../screens/palette/CommandPalette";
 import { NewProjectDialog, type NewProjectRequest } from "../screens/project/NewProjectDialog";
 import { ProjectSettings } from "../screens/project/ProjectSettings";
 import { type TitleBar } from "../start";
@@ -65,6 +67,7 @@ export function Shell({ titleBar, openGallery }: ShellProps) {
   const [chosenWidth, setChosenWidth] = useState<number | null>(null);
   const sidebarWidth = chosenWidth ?? SIDEBAR_WIDTH[density];
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [newProject, setNewProject] = useState<NewProjectRequest | null>(null);
   const [settingsOf, setSettingsOf] = useState<string | null>(null);
@@ -86,6 +89,14 @@ export function Shell({ titleBar, openGallery }: ShellProps) {
   );
 
   const actions = shellActions({
+    openPalette: () => {
+      setPaletteOpen(true);
+    },
+    quickAdd: hasQuickAddWindow()
+      ? () => {
+          void showQuickAdd();
+        }
+      : null,
     setView: (next) => {
       void navigate({ to: next === "all-tasks" ? "/all" : next === "time" ? "/time" : "/" });
     },
@@ -153,6 +164,7 @@ export function Shell({ titleBar, openGallery }: ShellProps) {
             <StatusBar info={status} />
           </div>
         </div>
+        <CommandPalette isOpen={paletteOpen} onOpenChange={setPaletteOpen} />
         <ShortcutSheet isOpen={shortcutsOpen} onOpenChange={setShortcutsOpen} />
         <Preferences isOpen={preferencesOpen} onOpenChange={setPreferencesOpen} />
         {newProject && (

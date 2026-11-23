@@ -18,6 +18,7 @@ import { BoardScreen } from "./screens/board/BoardScreen";
 import { OpenTaskScreen, TaskWindowScreen } from "./screens/task/TaskWindow";
 import { AllTasksListScreen, ProjectListScreen } from "./screens/list/ListScreen";
 import { TimeReportScreen } from "./screens/time/TimeReport";
+import { QuickAdd } from "./screens/quick-add/QuickAdd";
 import { TodayScreen } from "./screens/today/Placeholders";
 import { Shell } from "./shell/Shell";
 import { StartupFailure } from "./shell/StartupFailure";
@@ -32,6 +33,9 @@ export const GALLERY_PATH = "/dev/themes";
 
 /** The path of the Markdown editor's development page, for the browser tests. */
 export const EDITOR_PLAYGROUND_PATH = "/dev/editor";
+
+/** The quick-add window's page; a plain browser opens it by this path. */
+export const QUICK_ADD_PATH = "/quick-add";
 
 export interface RouterContext {
   start: StartData;
@@ -87,6 +91,9 @@ export const projectListRoute = createRoute({
   component: ProjectListScreen,
 });
 
+/** The quick-add window: one field, without the board and the sidebar. */
+const quickAddRoute = createRoute({ getParentRoute: () => rootRoute, path: QUICK_ADD_PATH, component: QuickAdd });
+
 /** A task window: one task, without the board and the sidebar. */
 const taskWindowRoute = createRoute({ getParentRoute: () => rootRoute, path: "/task/$key", component: TaskWindowScreen });
 
@@ -96,19 +103,24 @@ const openTaskRoute = createRoute({ getParentRoute: () => shellRoute, path: "/op
 const routeTree = rootRoute.addChildren([
   galleryRoute,
   editorPlaygroundRoute,
+  quickAddRoute,
   taskWindowRoute,
   shellRoute.addChildren([todayRoute, allTasksRoute, timeReportRoute, boardRoute, projectListRoute, openTaskRoute]),
 ]);
 
 /**
- * The first screen: a development page from its path (browser tests); a task
- * window's task; the task of the link the app was started with; else Today.
+ * The first screen: a development page or the quick-add page from its path
+ * (browser tests); the quick-add window's field; a task window's task; the
+ * task of the link the app was started with; else Today.
  */
-export function initialPath(pathname: string, start: Pick<StartData, "task" | "open"> = {}): string {
-  for (const path of [GALLERY_PATH, EDITOR_PLAYGROUND_PATH]) {
+export function initialPath(pathname: string, start: Pick<StartData, "task" | "open" | "quickAdd"> = {}): string {
+  for (const path of [GALLERY_PATH, EDITOR_PLAYGROUND_PATH, QUICK_ADD_PATH]) {
     if (pathname.startsWith(path)) {
       return path;
     }
+  }
+  if (start.quickAdd === true) {
+    return QUICK_ADD_PATH;
   }
   if (start.task !== undefined) {
     return `/task/${start.task}`;

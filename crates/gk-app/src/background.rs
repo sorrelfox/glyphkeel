@@ -101,18 +101,21 @@ pub(crate) struct MainTitleBar(pub(crate) TitleBar);
 
 const TRAY_ID: &str = "main";
 const OPEN_ID: &str = "open";
+const QUICK_ADD_ID: &str = "quick-add";
 const QUIT_ID: &str = "quit";
 // English until the Rust side reads the message files the page uses.
 const OPEN_LABEL: &str = "Open Glyphkeel";
+const QUICK_ADD_LABEL: &str = "Quick Add…";
 const QUIT_LABEL: &str = "Quit";
 const TOOLTIP: &str = "Glyphkeel";
 
-/// Puts the app's icon in the tray, with Open and Quit.
+/// Puts the app's icon in the tray, with Open, Quick add and Quit.
 fn build_tray(app: &AppHandle) -> tauri::Result<TrayIcon> {
     let open = MenuItem::with_id(app, OPEN_ID, OPEN_LABEL, true, None::<&str>)?;
+    let quick_add = MenuItem::with_id(app, QUICK_ADD_ID, QUICK_ADD_LABEL, true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, QUIT_ID, QUIT_LABEL, true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&open, &separator, &quit])?;
+    let menu = Menu::with_items(app, &[&open, &quick_add, &separator, &quit])?;
     let mut builder = TrayIconBuilder::with_id(TRAY_ID)
         .menu(&menu)
         .tooltip(TOOLTIP)
@@ -120,6 +123,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<TrayIcon> {
         .show_menu_on_left_click(true)
         .on_menu_event(|app, event| match event.id().as_ref() {
             OPEN_ID => show_main(app, None, None),
+            QUICK_ADD_ID => crate::quick_add::show(app, None),
             QUIT_ID => app.exit(0),
             _ => {}
         });

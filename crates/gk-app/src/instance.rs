@@ -42,7 +42,14 @@ pub(crate) struct Activation {
     /// The token that lets the window come forward (xdg-activation on
     /// Wayland, the startup id on X11), when the launcher gave one.
     pub(crate) token: Option<String>,
+    /// Show the quick-add window instead of the main one (`--quick-add`).
+    pub(crate) quick_add: bool,
 }
+
+/// The argument that asks for the quick-add window, and its action name on
+/// the bus.
+pub(crate) const QUICK_ADD: &str = "--quick-add";
+const QUICK_ADD_ACTION: &str = "quick-add";
 
 /// The outcome of trying to become the running app.
 pub(crate) enum Claim {
@@ -88,7 +95,16 @@ fn forward(activation: &Activation) -> zbus::Result<()> {
         platform_data.insert("activation-token", Value::from(token.as_str()));
         platform_data.insert("desktop-startup-id", Value::from(token.as_str()));
     }
-    if activation.links.is_empty() {
+    if activation.quick_add {
+        let parameter: Vec<Value<'_>> = Vec::new();
+        connection.call_method(
+            Some(BUS_NAME),
+            OBJECT_PATH,
+            Some(INTERFACE),
+            "ActivateAction",
+            &(QUICK_ADD_ACTION, parameter, platform_data),
+        )?;
+    } else if activation.links.is_empty() {
         connection.call_method(
             Some(BUS_NAME),
             OBJECT_PATH,
@@ -117,6 +133,7 @@ pub(crate) fn this_start() -> Activation {
     Activation {
         links: links_in(&args),
         token,
+        quick_add: args.iter().any(|arg| arg == QUICK_ADD),
     }
 }
 
@@ -133,7 +150,12 @@ struct Application {
 }
 
 impl Application {
-    fn send(&self, links: Vec<String>, platform_data: &HashMap<String, OwnedValue>) {
+    fn send(
+        &self,
+        links: Vec<String>,
+        quick_add: bool,
+        platform_data: &HashMap<String, OwnedValue>,
+    ) {
         let token = ["activation-token", "desktop-startup-id"]
             .iter()
             .find_map(|key| {
@@ -147,6 +169,7 @@ impl Application {
         let _ = self.sender.send(Activation {
             links: links_in(&links),
             token,
+            quick_add,
         });
     }
 }
@@ -154,11 +177,11 @@ impl Application {
 #[interface(name = "org.freedesktop.Application")]
 impl Application {
     fn activate(&self, platform_data: HashMap<String, OwnedValue>) {
-        self.send(Vec::new(), &platform_data);
+        self.send(Vec::new(), false, &platform_data);
     }
 
     fn open(&self, uris: Vec<String>, platform_data: HashMap<String, OwnedValue>) {
-        self.send(uris, &platform_data);
+        self.send(uris, false, &platform_data);
     }
 
     fn activate_action(
@@ -167,9 +190,9 @@ impl Application {
         parameter: Vec<OwnedValue>,
         platform_data: HashMap<String, OwnedValue>,
     ) {
-        // The app has no actions to start from outside yet; bring it forward.
-        let _ = (action_name, parameter);
-        self.send(Vec::new(), &platform_data);
+        // Quick add is the one action; any other brings the app forward.
+        let _ = parameter;
+        self.send(Vec::new(), action_name == QUICK_ADD_ACTION, &platform_data);
     }
 }
 

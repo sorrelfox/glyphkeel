@@ -8,6 +8,9 @@ import { focusRegion } from "./regions";
 export type View = "today" | "all-tasks" | "time" | "project";
 
 export interface ShellCommands {
+  openPalette: () => void;
+  /** Shows the quick-add window; null where there is none (a plain browser). */
+  quickAdd: (() => void) | null;
   setView: (view: "today" | "all-tasks" | "time") => void;
   toggleSidebar: () => void;
   showShortcuts: () => void;
@@ -33,7 +36,7 @@ const nothing = () => undefined;
 /** The window's actions, with their default keys. */
 export function shellActions(commands: ShellCommands): Action[] {
   const actions = [
-    action("palette.open", "action-palette", "navigation", nothing, UNAVAILABLE),
+    action("palette.open", "action-palette", "navigation", commands.openPalette),
     action("nav.today", "action-today", "navigation", () => { commands.setView("today"); }),
     action("nav.allTasks", "action-all-tasks", "navigation", () => { commands.setView("all-tasks"); }),
     action("nav.timeReport", "action-time-report", "navigation", () => { commands.setView("time"); }),
@@ -42,6 +45,7 @@ export function shellActions(commands: ShellCommands): Action[] {
     action("focus.previousRegion", "action-previous-region", "window", () => { focusRegion(-1); }),
     action("task.new", "action-new-task", "tasks", commands.newTask ?? nothing, commands.newTask ? {} : UNAVAILABLE),
     action("timer.toggle", "action-timer-toggle", "tasks", commands.toggleTimer ?? nothing, commands.toggleTimer ? {} : UNAVAILABLE),
+    action("app.quickAdd", "action-quick-add", "tasks", commands.quickAdd ?? nothing, commands.quickAdd ? {} : UNAVAILABLE),
     // Inside a text field, the field's own undo comes first.
     action("app.undo", "action-undo", "app", commands.undo, { inText: false }),
     action("app.redo", "action-redo", "app", commands.redo, { inText: false }),

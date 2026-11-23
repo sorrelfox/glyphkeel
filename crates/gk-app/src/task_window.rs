@@ -77,6 +77,7 @@ fn open(app: &AppHandle, key: &str) -> tauri::Result<WebviewWindow> {
         prefs: app
             .try_state::<crate::app_settings::AppSettings>()
             .map(|settings| settings.ui()),
+        quick_add: false,
     };
     let window = page::window(app, label(key), &start)
         .title(key)

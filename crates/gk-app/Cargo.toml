@@ -31,12 +31,17 @@ serde_json = { workspace = true }
 spellbook = { workspace = true }
 # The tray icon of background mode (libappindicator at run time on Linux).
 tauri = { workspace = true, features = ["tray-icon"] }
+# The quick-add shortcut on X11 (and KWin's XWayland).
+tauri-plugin-global-shortcut = { workspace = true }
 
 # The web view's settings are tightened through WebKitGTK directly.
 [target.'cfg(target_os = "linux")'.dependencies]
 webkit2gtk = { workspace = true, features = ["v2_40"] }
 gtk = { workspace = true }
 zbus = { workspace = true }
+# The quick-add shortcut through the GlobalShortcuts portal.
+ashpd = { workspace = true }
+futures-util = { workspace = true }
 
 [dev-dependencies]
 schemars = { workspace = true }
