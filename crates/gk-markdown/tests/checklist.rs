@@ -236,3 +236,20 @@ fn generated_documents_round_trip() {
         }
     }
 }
+
+#[test]
+fn items_know_their_lines() {
+    let text = "Intro\n\n- [ ] one\n  continued\n  - [x] nested\n- [ ] two\r\n\n> - [ ] quoted\n\n- [ ] last";
+    let items = checklist(text);
+    let spans: Vec<&str> = items.iter().map(|i| &text[i.lines.clone()]).collect();
+    assert_eq!(
+        spans,
+        [
+            "- [ ] one\n  continued\n  - [x] nested\n",
+            "  - [x] nested\n",
+            "- [ ] two\r\n",
+            "> - [ ] quoted\n",
+            "- [ ] last",
+        ]
+    );
+}

@@ -19,6 +19,8 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel comment delete <comment>` | `comment.delete` | Move a comment to the trash. |
 | `glyphkeel comment edit <comment>` | `comment.update` | Change a comment's text; the earlier text is kept and can be viewed. |
 | `glyphkeel comment list <key>` | `comment.list` | A task's comments, oldest first, optionally with their earlier texts. |
+| `glyphkeel description history` | `description.history` | List the revisions of a task's or project's description, newest first, conflict copies included. |
+| `glyphkeel description show <revision>` | `description.revision` | One description revision with its text, and the differences from another revision on request. |
 | `glyphkeel file attach` | `file.attach` | Attach a local file, or Base64 data with a name, to a task or a comment. |
 | `glyphkeel file cat <attachment>` | `file.read` | An attached file's content: text for text files, Base64 for images, otherwise only its details. |
 | `glyphkeel file delete <attachment>` | `file.delete` | Move an attached file to the trash. |
@@ -44,13 +46,15 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel status delete` | `status.delete` | Delete a status; its tasks move to the status named. Can't be undone. |
 | `glyphkeel status edit` | `status.update` | Rename or recolour a status, change its category or its WIP limit. |
 | `glyphkeel status move` | `status.reorder` | Move a status in the project's board order. |
+| `glyphkeel task check <key>` | `checklist.update` | Tick, clear, add or remove checklist items in a task's description or a comment, by number plus expected text. |
 | `glyphkeel task claim <key>` | `task.claim` | Claim a task for your agent session for a while, so other agents leave it alone; moves it into progress. |
 | `glyphkeel task create` | `task.create` | Create a task from a title alone or with its fields; it gets the project's next key. |
 | `glyphkeel task duplicate <key>` | `task.duplicate` | Copy a task with its subtasks (in order), labels, checklist and files; the copy is linked as a clone. |
-| `glyphkeel task edit <key>` | `task.update` | Change a task's title, description, type, priority, labels, parent, dates, estimate or progress. |
+| `glyphkeel task edit <key>` | `task.update` | Change a task's title, description (whole, with a base revision, or by targeted edits), type, priority, labels, parent, dates, estimate or progress. |
 | `glyphkeel task link <key>` | `relation.add` | Link two tasks (blocks, relates, duplicates, clones, or make one a subtask of the other). |
 | `glyphkeel task move <key>` | `task.move` | Move a task to another status or place in its column, or to another project (new key; the old one forwards). |
 | `glyphkeel task release <key>` | `task.release` | Give up a claim on a task, optionally moving it and adding a comment. |
+| `glyphkeel task resolve <key>` | `task.resolve_conflict` | Resolve a conflict copy of a task's description: keep the description, use the copy, or save a combined text. |
 | `glyphkeel task show <keys>` | `task.get` | One to 20 tasks by key, with their fields, description, labels and version; subtasks, links, comments and files on request. |
 | `glyphkeel task unlink <key>` | `relation.remove` | Remove a link between two tasks, or a subtask from its parent. |
 | `glyphkeel type add` | `type.create` | Add a task type to a project. |

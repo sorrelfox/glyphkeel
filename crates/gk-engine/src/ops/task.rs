@@ -23,6 +23,7 @@ use gk_store::rusqlite::{OptionalExtension, Transaction, params};
 use serde_json::Value;
 
 use super::desc;
+use super::description::{self, CONFLICTS_SQL, Owner};
 use super::fields::{self, TASK, id_value, priority_name, text};
 use super::lookup::{self, List, ProjectRow, Target, TaskRow, b, id_at, opt_id_at};
 use super::project::{enum_text, parse_enum};
@@ -134,51 +135,6 @@ pub(crate) fn set_labels(
     Ok(true)
 }
 
-/// Ticked and all task-list items of a Markdown text (`- [ ]`, `* [x]`,
-/// `1. [ ]`), outside fenced code blocks.
-pub(crate) fn checklist(markdown: &str) -> (u32, u32) {
-    let (mut done, mut total) = (0, 0);
-    let mut fence: Option<&str> = None;
-    for line in markdown.lines() {
-        let trimmed = line.trim_start();
-        for marker in ["```", "~~~"] {
-            if trimmed.starts_with(marker) {
-                fence = match fence {
-                    None => Some(marker),
-                    Some(m) if m == marker => None,
-                    other => other,
-                };
-            }
-        }
-        if fence.is_some() {
-            continue;
-        }
-        let rest = if let Some(r) = trimmed
-            .strip_prefix("- ")
-            .or_else(|| trimmed.strip_prefix("* "))
-            .or_else(|| trimmed.strip_prefix("+ "))
-        {
-            r
-        } else {
-            let digits = trimmed.bytes().take_while(u8::is_ascii_digit).count();
-            match trimmed[digits..]
-                .strip_prefix(". ")
-                .or_else(|| trimmed[digits..].strip_prefix(") "))
-            {
-                Some(r) if digits > 0 => r,
-                _ => continue,
-            }
-        };
-        if rest.starts_with("[ ]") {
-            total += 1;
-        } else if rest.starts_with("[x]") || rest.starts_with("[X]") {
-            total += 1;
-            done += 1;
-        }
-    }
-    (done, total)
-}
-
 /// Keeps the task's search entry and checklist counts in step with its
 /// title and description.
 pub(crate) fn refresh_text(w: &WriteCtx<'_>, task: Id) -> Result<(), Failure> {
@@ -187,17 +143,23 @@ pub(crate) fn refresh_text(w: &WriteCtx<'_>, task: Id) -> Result<(), Failure> {
         [b(task)],
         |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
     )?;
-    let (done, total) = checklist(&description);
+    let analysis = gk_markdown::analyze(&description);
+    let total = analysis.checklist.len();
+    let done = analysis.checklist.iter().filter(|i| i.checked).count();
     w.tx().execute(
         "UPDATE tasks SET checklist_done = ?2, checklist_total = ?3 WHERE id = ?1",
-        params![b(task), done, total],
+        params![
+            b(task),
+            i64::try_from(done).unwrap_or(i64::MAX),
+            i64::try_from(total).unwrap_or(i64::MAX)
+        ],
     )?;
     w.tx().execute(
         "INSERT INTO search_docs (kind, entity_id, task_id, project_id, title, body, updated_at)
          VALUES ('task', ?1, ?1, ?2, ?3, ?4, ?5)
          ON CONFLICT (kind, entity_id) DO UPDATE SET project_id = excluded.project_id,
            title = excluded.title, body = excluded.body, updated_at = excluded.updated_at",
-        params![b(task), project, title, description, w.now()],
+        params![b(task), project, title, analysis.plain_text, w.now()],
     )?;
     Ok(())
 }
@@ -262,7 +224,7 @@ pub(crate) fn load(
                 t.checklist_total, t.rank, t.created_by_kind, t.created_by_name, t.created_at,
                 t.edited_at, t.updated_at, t.status_entered_at, t.closed_at, t.version,
                 {SUBTASKS_SQL}, {CLOSED_SUBTASKS_SQL}, {BLOCKED_SQL}, {COMMENTS_SQL}, {FILES_SQL},
-                t.claim_session, t.claim_name, t.claim_until
+                t.claim_session, t.claim_name, t.claim_until, t.description_rev, {CONFLICTS_SQL}
            FROM tasks t JOIN projects p ON p.id = t.project_id
            JOIN statuses s ON s.id = t.status_id JOIN task_types y ON y.id = t.type_id
           WHERE t.id = ?1"
@@ -288,6 +250,8 @@ pub(crate) fn load(
                 labels: Vec::new(),
                 parent: None,
                 description: r.get(3)?,
+                description_revision: opt_id_at(r, 36)?.map(|id| id.to_string()),
+                conflict_copies: count(r.get(37)?),
                 start_date: r.get(12)?,
                 due_date: r.get(13)?,
                 estimate: estimate.map(|m| gk_core::format_duration(m, units)),
@@ -300,6 +264,8 @@ pub(crate) fn load(
                     done: u32::try_from(r.get::<_, i64>(17)?).unwrap_or(0),
                     total: u32::try_from(r.get::<_, i64>(18)?).unwrap_or(0),
                 },
+                progress_percent: 0,
+                totals: None,
                 subtask_count: Checklist {
                     done: count(r.get(29)?),
                     total: count(r.get(28)?),
@@ -312,6 +278,8 @@ pub(crate) fn load(
                 links: None,
                 comments: None,
                 files: None,
+                checklist_items: None,
+                revisions: None,
                 rank: r.get(19)?,
                 old_keys: Vec::new(),
                 created_by: Actor {
@@ -345,6 +313,10 @@ pub(crate) fn load(
         task.parent = Some(lookup::task_key(tx, project, number)?);
     }
     task.labels = task_labels(tx, id)?;
+    task.progress_percent = super::rollup::progress(tx, id)?;
+    if task.subtask_count.total > 0 {
+        task.totals = super::rollup::totals(tx, id)?;
+    }
     let mut stmt = tx.prepare_cached(
         "SELECT project_key || '-' || number FROM task_key_aliases WHERE task_id = ?1
           ORDER BY project_key, number",
@@ -386,6 +358,12 @@ pub(crate) fn add_parts(
             TaskPart::Links => task.links = Some(super::relation::links(tx, id)?),
             TaskPart::Comments => task.comments = Some(super::comment::list(tx, id, false)?),
             TaskPart::Files => task.files = Some(super::file::of_task(tx, id)?),
+            TaskPart::Checklist => {
+                task.checklist_items = Some(description::checklist_items(&task.description));
+            }
+            TaskPart::Revisions => {
+                task.revisions = Some(description::revisions(tx, Owner::Task(id))?);
+            }
         }
     }
     Ok(())
@@ -441,6 +419,7 @@ pub(crate) fn changed_with(
         task,
         group: w.group_if_changed(),
         warnings,
+        description_save: None,
     })
 }
 
@@ -823,6 +802,7 @@ pub(crate) fn insert(w: &mut WriteCtx<'_>, t: NewTask) -> Result<Id, Failure> {
         ],
     )?;
     write_labels(w, id, &t.labels)?;
+    description::initial(w, Owner::Task(id), &t.description)?;
     w.tx()
         .execute("UPDATE tasks SET version = 1 WHERE id = ?1", [b(id)])?;
     refresh_text(w, id)?;
@@ -859,7 +839,7 @@ fn update(w: &mut WriteCtx<'_>, input: TaskUpdateInput) -> Result<TaskChange, Fa
     let clears = |f: TaskField| input.clear.contains(&f);
     for (given, field, name) in [
         (
-            input.description.is_some(),
+            input.description.is_some() || !input.description_edits.is_empty(),
             TaskField::Description,
             "description",
         ),
@@ -884,8 +864,24 @@ fn update(w: &mut WriteCtx<'_>, input: TaskUpdateInput) -> Result<TaskChange, Fa
             );
         }
     }
+    if input.description.is_some() && !input.description_edits.is_empty() {
+        return Err(OpError::invalid_at(
+            "description_edits",
+            "Give either a new description or edits to it, not both.",
+        )
+        .into());
+    }
+    if input.base_revision.is_some() && input.description.is_none() {
+        return Err(OpError::invalid_at(
+            "base_revision",
+            "base_revision goes with a new description.",
+        )
+        .into());
+    }
     let (id, pid) = (task.id, Some(project.id));
     let mut text_changed = false;
+    let mut warnings = Vec::new();
+    let mut description_save = None;
     if let Some(title) = &input.title {
         let title = gk_core::check_title(title).map_err(|e| invalid("title", e))?;
         text_changed |= fields::set(w, TASK, id, pid, "title", text(title))?;
@@ -893,10 +889,50 @@ fn update(w: &mut WriteCtx<'_>, input: TaskUpdateInput) -> Result<TaskChange, Fa
     if let Some(description) = &input.description {
         gk_core::check_markdown("description", description)
             .map_err(|e| invalid("description", e))?;
-        text_changed |= fields::set(w, TASK, id, pid, "description", text(description.as_str()))?;
+        let saved = description::save(
+            w,
+            Owner::Task(id),
+            pid,
+            description,
+            input.base_revision.as_deref(),
+            "normal",
+        )?;
+        if let Some(copy) = &saved.conflict_copy {
+            warnings.push(format!(
+                "Someone changed the same lines of the description since your base revision. \
+                 The description stays as they left it; your text was kept as conflict copy {copy}."
+            ));
+        }
+        description_save = Some(saved);
+    }
+    if !input.description_edits.is_empty() {
+        description_save = Some(description::save_edits(
+            w,
+            Owner::Task(id),
+            pid,
+            &input.description_edits,
+        )?);
     }
     if clears(TaskField::Description) {
-        text_changed |= fields::set(w, TASK, id, pid, "description", text(""))?;
+        description_save = Some(description::save(
+            w,
+            Owner::Task(id),
+            pid,
+            "",
+            None,
+            "normal",
+        )?);
+    }
+    if let Some(r) = &input.resolve_conflict {
+        description_save = Some(description::resolve(
+            w,
+            id,
+            pid,
+            &r.copy,
+            r.action,
+            r.text.as_deref(),
+            None,
+        )?);
     }
     if let Some(t) = &input.task_type {
         let t = lookup::named(w.tx(), List::Types, &project, "type", t)?;
@@ -978,7 +1014,9 @@ fn update(w: &mut WriteCtx<'_>, input: TaskUpdateInput) -> Result<TaskChange, Fa
     if text_changed {
         refresh_text(w, id)?;
     }
-    changed(w, id, Vec::new())
+    let mut change = changed(w, id, warnings)?;
+    change.description_save = description_save;
+    Ok(change)
 }
 
 pub(crate) fn move_task(w: &mut WriteCtx<'_>, input: TaskMoveInput) -> Result<TaskChange, Failure> {
@@ -1186,14 +1224,6 @@ fn move_to_project(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn checklists_count_task_list_items_outside_code() {
-        let text = "- [ ] one\n- [x] two\n* [X] three\n1. [ ] four\n\
-                    ```\n- [ ] not this\n```\n- not an item\n  + [ ] nested";
-        assert_eq!(checklist(text), (2, 5));
-        assert_eq!(checklist(""), (0, 0));
-    }
 
     #[test]
     fn labels_are_recorded_sorted_or_not_at_all() {

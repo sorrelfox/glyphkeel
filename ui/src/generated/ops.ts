@@ -246,6 +246,8 @@ export type Card = {
   parent?: string;
   /** Its priority. */
   priority: Priority;
+  /** Its progress in percent, as tasks show it. */
+  progress_percent: number;
   /** Its project's key (differs from the board's for sub-project tasks). */
   project: string;
   /** Its place in the column. */
@@ -289,6 +291,78 @@ export type Checklist = {
   done: number;
   /** All items. */
   total: number;
+};
+
+/** A new item. */
+export type ChecklistAdd = {
+  /** Put it after this item (number, as read before this change); default: after the last top-level item, or in a new list at the end. */
+  after?: number | null;
+  /** Whether it starts ticked. */
+  checked?: boolean;
+  /** Its text, one line. */
+  text: string;
+};
+
+/** A checklist after a change. */
+export type ChecklistChange = {
+  /** Ticked and all items. */
+  checklist: Checklist;
+  /** The comment's ID, for a comment's checklist. */
+  comment?: string;
+  /** The history group, for revert and Undo; left out when nothing changed. */
+  group?: string;
+  /** The items now. */
+  items: ChecklistItem[];
+  /** The task's key. */
+  key: string;
+  /** The description's revision now, for a task. */
+  revision?: string;
+  /** The task's (or comment's) version now. */
+  version: number;
+};
+
+/** One checklist item. */
+export type ChecklistItem = {
+  /** Whether it is ticked. */
+  checked: boolean;
+  /** How many items it is nested in. */
+  depth: number;
+  /** Its number, from 1, in reading order; the reader's checkboxes carry the same number. */
+  number: number;
+  /** Its text, without formatting. */
+  text: string;
+};
+
+/** An item to remove, with its nested items. */
+export type ChecklistRemove = {
+  /** The item's number. */
+  number: number;
+  /** The item's text as you read it. */
+  text: string;
+};
+
+/** Tick or clear one item. */
+export type ChecklistToggle = {
+  /** Tick (`true`) or clear (`false`); left out, the item flips. */
+  checked?: boolean | null;
+  /** The item's number. */
+  number: number;
+  /** The item's text as you read it. */
+  text: string;
+};
+
+/** Changes to the checklist in a task's description or a comment. Numbers are as read before the change. When an item's number now points at other text, the item with that text is used if there is exactly one; otherwise nothing changes. */
+export type ChecklistUpdateInput = {
+  /** Items to add. */
+  add?: ChecklistAdd[];
+  /** Or the comment that holds it: its ID. */
+  comment?: string | null;
+  /** The task whose description holds the checklist: its key or ID. */
+  key?: string | null;
+  /** Items to remove. */
+  remove?: ChecklistRemove[];
+  /** Items to tick or clear. */
+  toggle?: ChecklistToggle[];
 };
 
 /** An agent's claim on a task. */
@@ -421,6 +495,45 @@ export type CommentUpdateInput = {
   comment: string;
   /** Refuse the change unless the comment still has this version. */
   expected_version?: number | null;
+};
+
+/** What to do with a conflict copy. */
+export type ConflictAction = "keep_current" | "use_copy" | "use_text";
+
+/** How to resolve a conflict copy, inside `task.update`. */
+export type ConflictResolution = {
+  /** What to do with it. */
+  action: ConflictAction;
+  /** The conflict copy's revision ID. */
+  copy: string;
+  /** The text to save, for `use_text`. */
+  text?: string | null;
+};
+
+/** Whose description history to list: a task's or a project's. */
+export type DescriptionHistoryInput = {
+  /** The project: its key or ID. */
+  project?: string | null;
+  /** The task: its key or ID. */
+  task?: string | null;
+};
+
+/** One revision to read. */
+export type DescriptionRevisionInput = {
+  /** Another revision of the same description: adds the differences from it to this one. */
+  diff_from?: string | null;
+  /** The revision's ID. */
+  revision: string;
+};
+
+/** The result of saving a description. */
+export type DescriptionSave = {
+  /** The conflict copy that holds the edit, after a conflict. */
+  conflict_copy?: string;
+  /** What became of the edit. */
+  outcome: SaveOutcome;
+  /** The description's revision now; pass it as `base_revision` next time. Left out while the description has none. */
+  revision?: string;
 };
 
 /** The two ends of an ordered list. */
@@ -898,6 +1011,48 @@ export type RelationInput = {
 /** The kinds of link, as read from the first task. */
 export type RelationKind = "blocks" | "blocked_by" | "relates" | "duplicates" | "duplicated_by" | "clones" | "cloned_by" | "subtask_of" | "parent_of";
 
+/** Texts to render for the reader. */
+export type RenderInput = {
+  /** One to 200 texts. */
+  documents: RenderSource[];
+};
+
+/** The rendered texts, in the order asked. */
+export type RenderOutput = {
+  /** The texts. */
+  items: Rendered[];
+};
+
+/** One text to render. Give exactly one of `source`, `task`, `comment`, `project` and `revision`. */
+export type RenderSource = {
+  /** A comment's body: its ID. */
+  comment?: string | null;
+  /** The id that keeps this text's footnote anchors apart from others on the page; default: the item's ID (`preview` for `source`). */
+  document_id?: string | null;
+  /** A project's description: its key or ID. */
+  project?: string | null;
+  /** A description revision: its ID. */
+  revision?: string | null;
+  /** Markdown to render as it is, such as an editor's preview. */
+  source?: string | null;
+  /** A task's description: its key or ID. */
+  task?: string | null;
+};
+
+/** One rendered text. */
+export type Rendered = {
+  /** Its checklist; the HTML's checkboxes carry the same numbers. */
+  checklist: ChecklistItem[];
+  /** The id its footnote anchors are made from. */
+  document_id: string;
+  /** Sanitized HTML, safe to insert as it is. */
+  html: string;
+  /** The description's revision that was rendered, for a task or project. */
+  revision?: string;
+  /** The item's version (task or comment) that was rendered. */
+  version?: number;
+};
+
 /** What to revert: history groups, or everything an agent session changed. */
 export type RevertInput = {
   /** Only report what would be reverted. */
@@ -917,6 +1072,54 @@ export type RevertResult = {
   /** Groups left alone, with the reason. */
   skipped: SkippedGroup[];
 };
+
+/** One revision with its text. */
+export type RevisionDetail = {
+  /** The text (Markdown). */
+  body: string;
+  /** The differences from `diff_from` as a unified diff; empty when the texts are the same. */
+  diff?: string;
+  /** The task's or project's key. */
+  owner: string;
+  /** The revision. */
+  revision: RevisionInfo;
+};
+
+/** One revision of a description, without its text. */
+export type RevisionInfo = {
+  /** Who saved it. */
+  author: Actor;
+  /** The revision it was edited from. */
+  base?: string;
+  /** Its size in bytes. */
+  bytes: number;
+  /** When (RFC 3339, UTC). */
+  created_at: string;
+  /** Whether it is the description now. */
+  current: boolean;
+  /** The revision's ID. */
+  id: string;
+  /** How it came about. */
+  kind: RevisionKind;
+  /** A note saved with it. */
+  message?: string;
+  /** For a conflict copy: when it was resolved; left out while it is open. */
+  resolved_at?: string;
+};
+
+/** How a revision came about. */
+export type RevisionKind = "normal" | "merged" | "conflict" | "restored" | "resolved";
+
+/** A description's revisions, newest first, conflict copies included. */
+export type RevisionList = {
+  /** The revisions. */
+  items: RevisionInfo[];
+  /** How many. */
+  total: number;
+};
+
+/** What became of a description that was saved. */
+export type SaveOutcome = "saved" | "merged" | "conflict" | "unchanged";
 
 /** A setting that can be set back to its default. */
 export type SettingKey = "trash_days" | "reminder_time" | "hours_per_day" | "days_per_week" | "week_start" | "file_max_mb";
@@ -1104,6 +1307,8 @@ export type Task = {
   blocked: boolean;
   /** The description's checklist. */
   checklist: Checklist;
+  /** The description's checklist items, numbered, when asked for with `include`. */
+  checklist_items?: ChecklistItem[];
   /** The agent that claimed it, while the claim lasts. */
   claim?: Claim;
   /** When it was closed; left out while it is open. */
@@ -1112,12 +1317,16 @@ export type Task = {
   comment_count: number;
   /** Its comments, oldest first, when asked for with `include`. */
   comments?: Comment[];
+  /** Edits of the description that clashed with another and wait to be resolved (conflict copies). */
+  conflict_copies: number;
   /** When it was created (RFC 3339, UTC). */
   created_at: string;
   /** Who created it. */
   created_by: Actor;
   /** Its description (Markdown). */
   description: string;
+  /** The description's revision; pass it as `base_revision` when you save a new description. Left out while it has none. */
+  description_revision?: string;
   /** The due date. */
   due_date?: string;
   /** When its own fields last changed. */
@@ -1146,10 +1355,14 @@ export type Task = {
   priority: Priority;
   /** Progress set by hand, 0 to 100. */
   progress?: number;
+  /** Its progress in percent: the progress set by hand, else 100 when closed, else the share of ticked checklist items, else its subtasks' progress weighted by their estimates, else 0. */
+  progress_percent: number;
   /** Its project's key. */
   project: string;
   /** Its place in its status column. */
   rank: string;
+  /** The description's revisions, newest first, conflict copies included, when asked for with `include`. */
+  revisions?: RevisionInfo[];
   /** Logged time in minutes. */
   spent_minutes: number;
   /** The start date. */
@@ -1164,6 +1377,8 @@ export type Task = {
   subtasks?: TaskRef[];
   /** Its title. */
   title: string;
+  /** Totals over the task and all its subtasks; only for a task with subtasks. */
+  totals?: Totals;
   /** Its type. */
   type: TypeRef;
   /** When anything about it last changed. */
@@ -1174,6 +1389,8 @@ export type Task = {
 
 /** A task changed, with the history group of the change. */
 export type TaskChange = {
+  /** What became of a new description: saved, merged with another edit, or kept as a conflict copy. */
+  description_save?: DescriptionSave;
   /** The history group, for revert and Undo; left out when nothing changed. */
   group?: string;
   /** The task after the change. */
@@ -1249,7 +1466,7 @@ export type TaskField = "description" | "parent" | "start_date" | "due_date" | "
 
 /** Which tasks to read. */
 export type TaskGetInput = {
-  /** What to add to each task: `subtasks`, `links`, `comments`, `files`. */
+  /** What to add to each task: `subtasks`, `links`, `comments`, `files`, `checklist`, `revisions`. */
   include?: TaskPart[];
   /** One to 20 task keys or IDs. */
   keys: string[];
@@ -1284,7 +1501,7 @@ export type TaskMoveInput = {
 };
 
 /** What `task.get` adds to each task. */
-export type TaskPart = "subtasks" | "links" | "comments" | "files";
+export type TaskPart = "subtasks" | "links" | "comments" | "files" | "checklist" | "revisions";
 
 /** Another task, as links and subtask lists show it. */
 export type TaskRef = {
@@ -1312,6 +1529,20 @@ export type TaskReleaseInput = {
   status?: string | null;
 };
 
+/** Resolving a task's conflict copy. */
+export type TaskResolveInput = {
+  /** What to do with it. */
+  action: ConflictAction;
+  /** Refuse unless the description is still at this revision. */
+  base_revision?: string | null;
+  /** The conflict copy's revision ID. */
+  copy: string;
+  /** The task: its key or ID. */
+  key: string;
+  /** The text to save, for `use_text`. */
+  text?: string | null;
+};
+
 /** A task type. */
 export type TaskType = {
   /** Its shape. */
@@ -1332,10 +1563,14 @@ export type TaskType = {
 export type TaskUpdateInput = {
   /** Labels to add. */
   add_labels?: string[];
+  /** The description revision your new description was edited from. If somebody saved in between, the two edits are merged; when they changed the same lines, yours is kept as a conflict copy and the description stays as it is. */
+  base_revision?: string | null;
   /** Fields to clear. */
   clear?: TaskField[];
   /** A new description (Markdown), replacing the old one. */
   description?: string | null;
+  /** Targeted changes to the description instead of a new one: each `old_text` must occur exactly once. */
+  description_edits?: TextEdit[];
   /** A new due date, `YYYY-MM-DD`. */
   due_date?: string | null;
   /** A new estimate, as a duration. */
@@ -1356,12 +1591,32 @@ export type TaskUpdateInput = {
   progress?: number | null;
   /** Labels to take off. */
   remove_labels?: string[];
+  /** Resolve a conflict copy of the description. */
+  resolve_conflict?: ConflictResolution | null;
   /** A new start date, `YYYY-MM-DD`. */
   start_date?: string | null;
   /** A new title. */
   title?: string | null;
   /** A new type. */
   type?: string | null;
+};
+
+/** A targeted change to a text: `old_text` must occur exactly once. */
+export type TextEdit = {
+  /** What replaces it. */
+  new_text: string;
+  /** The text to replace; it must occur exactly once. */
+  old_text: string;
+};
+
+/** Estimate and time over a task and all its subtasks. */
+export type Totals = {
+  /** The estimates added up, in minutes. */
+  estimate_minutes: number;
+  /** Estimate minus spent time, in minutes; below 0 when over. */
+  remaining_minutes: number;
+  /** The logged time added up, in minutes. */
+  spent_minutes: number;
 };
 
 /** Adds, changes or removes a task type inside [`ProjectUpdateInput`]. */
@@ -1522,11 +1777,16 @@ export interface OpMap {
   "task.create": { input: TaskCreateInput; output: TaskChange; safety: "write"; kind: "command" };
   "task.update": { input: TaskUpdateInput; output: TaskChange; safety: "write"; kind: "command" };
   "task.move": { input: TaskMoveInput; output: TaskChange; safety: "write"; kind: "command" };
+  "task.resolve_conflict": { input: TaskResolveInput; output: TaskChange; safety: "write"; kind: "command" };
+  "checklist.update": { input: ChecklistUpdateInput; output: ChecklistChange; safety: "write"; kind: "command" };
   "task.duplicate": { input: TaskDuplicateInput; output: TaskChange; safety: "write"; kind: "command" };
   "task.claim": { input: TaskClaimInput; output: TaskChange; safety: "write"; kind: "command" };
   "task.release": { input: TaskReleaseInput; output: TaskChange; safety: "write"; kind: "command" };
   "relation.add": { input: RelationInput; output: TaskChange; safety: "write"; kind: "command" };
   "relation.remove": { input: RelationInput; output: TaskChange; safety: "write"; kind: "command" };
+  "description.history": { input: DescriptionHistoryInput; output: RevisionList; safety: "read"; kind: "query" };
+  "description.revision": { input: DescriptionRevisionInput; output: RevisionDetail; safety: "read"; kind: "query" };
+  "markdown.render": { input: RenderInput; output: RenderOutput; safety: "read"; kind: "query" };
   "comment.list": { input: CommentListInput; output: CommentList; safety: "read"; kind: "query" };
   "comment.add": { input: CommentAddInput; output: CommentChange; safety: "write"; kind: "command" };
   "comment.update": { input: CommentUpdateInput; output: CommentChange; safety: "write"; kind: "command" };
@@ -1578,11 +1838,16 @@ export const OP_SAFETY = {
   "task.create": "write",
   "task.update": "write",
   "task.move": "write",
+  "task.resolve_conflict": "write",
+  "checklist.update": "write",
   "task.duplicate": "write",
   "task.claim": "write",
   "task.release": "write",
   "relation.add": "write",
   "relation.remove": "write",
+  "description.history": "read",
+  "description.revision": "read",
+  "markdown.render": "read",
   "comment.list": "read",
   "comment.add": "write",
   "comment.update": "write",
@@ -1618,6 +1883,10 @@ export function makeOps(call: Call) {
       /** A project's board as the person sees it: columns in the personal order with hidden ones flagged, WIP state and compact cards. (read) */
       get: (input: OpMap["board.get"]["input"]) => call("board.get", input),
     },
+    checklist: {
+      /** Tick, clear, add or remove checklist items in a task's description or a comment, by number plus expected text. (write) */
+      update: (input: OpMap["checklist.update"]["input"] = {}) => call("checklist.update", input),
+    },
     comment: {
       /** A task's comments, oldest first, optionally with their earlier texts. (read) */
       list: (input: OpMap["comment.list"]["input"]) => call("comment.list", input),
@@ -1627,6 +1896,12 @@ export function makeOps(call: Call) {
       update: (input: OpMap["comment.update"]["input"]) => call("comment.update", input),
       /** Move a comment to the trash. (trash) */
       delete: (input: OpMap["comment.delete"]["input"]) => call("comment.delete", input),
+    },
+    description: {
+      /** List the revisions of a task's or project's description, newest first, conflict copies included. (read) */
+      history: (input: OpMap["description.history"]["input"] = {}) => call("description.history", input),
+      /** One description revision with its text, and the differences from another revision on request. (read) */
+      revision: (input: OpMap["description.revision"]["input"]) => call("description.revision", input),
     },
     file: {
       /** An attached file's name, type, size and owner. (read) */
@@ -1661,6 +1936,10 @@ export function makeOps(call: Call) {
       get: (input: OpMap["layout.get"]["input"]) => call("layout.get", input),
       /** Hide, show, collapse or reorder board columns, set sort modes, card fields and older closed cards, or reset to the project's layout. (write) */
       update: (input: OpMap["layout.update"]["input"]) => call("layout.update", input),
+    },
+    markdown: {
+      /** Render descriptions, comments or editor text to the reader's sanitized HTML, with numbered checkboxes and linked task keys. (read) */
+      render: (input: OpMap["markdown.render"]["input"]) => call("markdown.render", input),
     },
     project: {
       /** The project tree in sidebar order, with keys, names and open-task counts; archived projects on request. (read) */
@@ -1711,10 +1990,12 @@ export function makeOps(call: Call) {
       get: (input: OpMap["task.get"]["input"]) => call("task.get", input),
       /** Create a task from a title alone or with its fields; it gets the project's next key. (write) */
       create: (input: OpMap["task.create"]["input"]) => call("task.create", input),
-      /** Change a task's title, description, type, priority, labels, parent, dates, estimate or progress. (write) */
+      /** Change a task's title, description (whole, with a base revision, or by targeted edits), type, priority, labels, parent, dates, estimate or progress. (write) */
       update: (input: OpMap["task.update"]["input"]) => call("task.update", input),
       /** Move a task to another status or place in its column, or to another project (new key; the old one forwards). (write) */
       move: (input: OpMap["task.move"]["input"]) => call("task.move", input),
+      /** Resolve a conflict copy of a task's description: keep the description, use the copy, or save a combined text. (write) */
+      resolveConflict: (input: OpMap["task.resolve_conflict"]["input"]) => call("task.resolve_conflict", input),
       /** Copy a task with its subtasks (in order), labels, checklist and files; the copy is linked as a clone. (write) */
       duplicate: (input: OpMap["task.duplicate"]["input"]) => call("task.duplicate", input),
       /** Claim a task for your agent session for a while, so other agents leave it alone; moves it into progress. (write) */

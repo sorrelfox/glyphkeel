@@ -42,11 +42,16 @@ The safety class decides who may run an operation:
 | `task.create` | write | app, command line, MCP | `create_task` | `glyphkeel task create` |
 | `task.update` | write | app, command line, MCP | `update_task` | `glyphkeel task edit <key>` |
 | `task.move` | write | app, command line, MCP | `move_task` | `glyphkeel task move <key>` |
+| `task.resolve_conflict` | write | app, command line, MCP | `update_task` | `glyphkeel task resolve <key>` |
+| `checklist.update` | write | app, command line, MCP | `update_checklist` | `glyphkeel task check <key>` |
 | `task.duplicate` | write | app, command line, MCP | `duplicate_task` | `glyphkeel task duplicate <key>` |
 | `task.claim` | write | app, command line, MCP | `claim_task` | `glyphkeel task claim <key>` |
 | `task.release` | write | app, command line, MCP | `release_task` | `glyphkeel task release <key>` |
 | `relation.add` | write | app, command line, MCP | `link_tasks` | `glyphkeel task link <key>` |
 | `relation.remove` | write | app, command line, MCP | `unlink_tasks` | `glyphkeel task unlink <key>` |
+| `description.history` | read | app, command line, MCP | `get_task` | `glyphkeel description history` |
+| `description.revision` | read | app, command line, MCP | `get_description_revision` | `glyphkeel description show <revision>` |
+| `markdown.render` | read | app | — | — |
 | `comment.list` | read | app, command line, MCP | `get_task` | `glyphkeel comment list <key>` |
 | `comment.add` | write | app, command line, MCP | `add_comment` | `glyphkeel comment add <key>` |
 | `comment.update` | write | app, command line, MCP | `update_comment` | `glyphkeel comment edit <comment>` |
@@ -217,7 +222,7 @@ Input: `TaskCreateInput`. Output: `TaskChange`. Schemas: [catalog.schema.json](c
 
 ## `task.update`
 
-Change a task's title, description, type, priority, labels, parent, dates, estimate or progress.
+Change a task's title, description (whole, with a base revision, or by targeted edits), type, priority, labels, parent, dates, estimate or progress.
 
 Input: `TaskUpdateInput`. Output: `TaskChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
@@ -226,6 +231,18 @@ Input: `TaskUpdateInput`. Output: `TaskChange`. Schemas: [catalog.schema.json](c
 Move a task to another status or place in its column, or to another project (new key; the old one forwards).
 
 Input: `TaskMoveInput`. Output: `TaskChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `task.resolve_conflict`
+
+Resolve a conflict copy of a task's description: keep the description, use the copy, or save a combined text.
+
+Input: `TaskResolveInput`. Output: `TaskChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `checklist.update`
+
+Tick, clear, add or remove checklist items in a task's description or a comment, by number plus expected text.
+
+Input: `ChecklistUpdateInput`. Output: `ChecklistChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `task.duplicate`
 
@@ -256,6 +273,26 @@ Input: `RelationInput`. Output: `TaskChange`. Schemas: [catalog.schema.json](cat
 Remove a link between two tasks, or a subtask from its parent.
 
 Input: `RelationInput`. Output: `TaskChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `description.history`
+
+List the revisions of a task's or project's description, newest first, conflict copies included.
+
+Input: `DescriptionHistoryInput`. Output: `RevisionList`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `description.revision`
+
+One description revision with its text, and the differences from another revision on request.
+
+Input: `DescriptionRevisionInput`. Output: `RevisionDetail`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `markdown.render`
+
+Render descriptions, comments or editor text to the reader's sanitized HTML, with numbered checkboxes and linked task keys.
+
+Input: `RenderInput`. Output: `RenderOutput`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+Not available to agents: It produces HTML for the app's reader; agents and the command line read the Markdown itself.
 
 ## `comment.list`
 

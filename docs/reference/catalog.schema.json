@@ -9999,6 +9999,16 @@
                 "const": "files",
                 "description": "The attached files.",
                 "type": "string"
+              },
+              {
+                "const": "checklist",
+                "description": "The description's checklist items, numbered.",
+                "type": "string"
+              },
+              {
+                "const": "revisions",
+                "description": "The description's revisions and conflict copies.",
+                "type": "string"
               }
             ]
           }
@@ -10008,7 +10018,7 @@
         "description": "Which tasks to read.",
         "properties": {
           "include": {
-            "description": "What to add to each task: `subtasks`, `links`, `comments`, `files`.",
+            "description": "What to add to each task: `subtasks`, `links`, `comments`, `files`,\n`checklist`, `revisions`.",
             "items": {
               "$ref": "#/$defs/TaskPart"
             },
@@ -10184,6 +10194,39 @@
             "required": [
               "done",
               "total"
+            ],
+            "type": "object"
+          },
+          "ChecklistItem": {
+            "additionalProperties": false,
+            "description": "One checklist item.",
+            "properties": {
+              "checked": {
+                "description": "Whether it is ticked.",
+                "type": "boolean"
+              },
+              "depth": {
+                "description": "How many items it is nested in.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "number": {
+                "description": "Its number, from 1, in reading order; the reader's checkboxes carry\nthe same number.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "text": {
+                "description": "Its text, without formatting.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "number",
+              "checked",
+              "text",
+              "depth"
             ],
             "type": "object"
           },
@@ -10527,6 +10570,89 @@
               }
             ]
           },
+          "RevisionInfo": {
+            "additionalProperties": false,
+            "description": "One revision of a description, without its text.",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who saved it."
+              },
+              "base": {
+                "description": "The revision it was edited from.",
+                "type": "string"
+              },
+              "bytes": {
+                "description": "Its size in bytes.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "created_at": {
+                "description": "When (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "current": {
+                "description": "Whether it is the description now.",
+                "type": "boolean"
+              },
+              "id": {
+                "description": "The revision's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/RevisionKind",
+                "description": "How it came about."
+              },
+              "message": {
+                "description": "A note saved with it.",
+                "type": "string"
+              },
+              "resolved_at": {
+                "description": "For a conflict copy: when it was resolved; left out while it is\nopen.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "author",
+              "created_at",
+              "current",
+              "bytes"
+            ],
+            "type": "object"
+          },
+          "RevisionKind": {
+            "description": "How a revision came about.",
+            "oneOf": [
+              {
+                "const": "normal",
+                "description": "A save.",
+                "type": "string"
+              },
+              {
+                "const": "merged",
+                "description": "Two edits of the same revision, merged.",
+                "type": "string"
+              },
+              {
+                "const": "conflict",
+                "description": "An edit that clashed with another; kept aside, not the description.",
+                "type": "string"
+              },
+              {
+                "const": "restored",
+                "description": "An earlier revision brought back (by Undo or a revert).",
+                "type": "string"
+              },
+              {
+                "const": "resolved",
+                "description": "The result of resolving a conflict copy.",
+                "type": "string"
+              }
+            ]
+          },
           "StatusRef": {
             "additionalProperties": false,
             "description": "A task's status, as tasks carry it.",
@@ -10563,6 +10689,13 @@
                 "$ref": "#/$defs/Checklist",
                 "description": "The description's checklist."
               },
+              "checklist_items": {
+                "description": "The description's checklist items, numbered, when asked for with\n`include`.",
+                "items": {
+                  "$ref": "#/$defs/ChecklistItem"
+                },
+                "type": "array"
+              },
               "claim": {
                 "$ref": "#/$defs/Claim",
                 "description": "The agent that claimed it, while the claim lasts."
@@ -10584,6 +10717,12 @@
                 },
                 "type": "array"
               },
+              "conflict_copies": {
+                "description": "Edits of the description that clashed with another and wait to be\nresolved (conflict copies).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
               "created_at": {
                 "description": "When it was created (RFC 3339, UTC).",
                 "type": "string"
@@ -10594,6 +10733,10 @@
               },
               "description": {
                 "description": "Its description (Markdown).",
+                "type": "string"
+              },
+              "description_revision": {
+                "description": "The description's revision; pass it as `base_revision` when you save\na new description. Left out while it has none.",
                 "type": "string"
               },
               "due_date": {
@@ -10670,6 +10813,13 @@
                 "minimum": 0,
                 "type": "integer"
               },
+              "progress_percent": {
+                "description": "Its progress in percent: the progress set by hand, else 100 when\nclosed, else the share of ticked checklist items, else its subtasks'\nprogress weighted by their estimates, else 0.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
               "project": {
                 "description": "Its project's key.",
                 "type": "string"
@@ -10677,6 +10827,13 @@
               "rank": {
                 "description": "Its place in its status column.",
                 "type": "string"
+              },
+              "revisions": {
+                "description": "The description's revisions, newest first, conflict copies\nincluded, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/RevisionInfo"
+                },
+                "type": "array"
               },
               "spent_minutes": {
                 "description": "Logged time in minutes.",
@@ -10710,6 +10867,10 @@
                 "description": "Its title.",
                 "type": "string"
               },
+              "totals": {
+                "$ref": "#/$defs/Totals",
+                "description": "Totals over the task and all its subtasks; only for a task with\nsubtasks."
+              },
               "type": {
                 "$ref": "#/$defs/TypeRef",
                 "description": "Its type."
@@ -10733,8 +10894,10 @@
               "priority",
               "labels",
               "description",
+              "conflict_copies",
               "spent_minutes",
               "checklist",
+              "progress_percent",
               "subtask_count",
               "blocked",
               "comment_count",
@@ -10781,6 +10944,33 @@
               "status",
               "closed",
               "id"
+            ],
+            "type": "object"
+          },
+          "Totals": {
+            "additionalProperties": false,
+            "description": "Estimate and time over a task and all its subtasks.",
+            "properties": {
+              "estimate_minutes": {
+                "description": "The estimates added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "remaining_minutes": {
+                "description": "Estimate minus spent time, in minutes; below 0 when over.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "spent_minutes": {
+                "description": "The logged time added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "estimate_minutes",
+              "spent_minutes",
+              "remaining_minutes"
             ],
             "type": "object"
           },
@@ -11188,6 +11378,39 @@
             ],
             "type": "object"
           },
+          "ChecklistItem": {
+            "additionalProperties": false,
+            "description": "One checklist item.",
+            "properties": {
+              "checked": {
+                "description": "Whether it is ticked.",
+                "type": "boolean"
+              },
+              "depth": {
+                "description": "How many items it is nested in.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "number": {
+                "description": "Its number, from 1, in reading order; the reader's checkboxes carry\nthe same number.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "text": {
+                "description": "Its text, without formatting.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "number",
+              "checked",
+              "text",
+              "depth"
+            ],
+            "type": "object"
+          },
           "Claim": {
             "additionalProperties": false,
             "description": "An agent's claim on a task.",
@@ -11307,6 +11530,28 @@
               "body",
               "replaced_by",
               "replaced_at"
+            ],
+            "type": "object"
+          },
+          "DescriptionSave": {
+            "additionalProperties": false,
+            "description": "The result of saving a description.",
+            "properties": {
+              "conflict_copy": {
+                "description": "The conflict copy that holds the edit, after a conflict.",
+                "type": "string"
+              },
+              "outcome": {
+                "$ref": "#/$defs/SaveOutcome",
+                "description": "What became of the edit."
+              },
+              "revision": {
+                "description": "The description's revision now; pass it as `base_revision` next\ntime. Left out while the description has none.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "outcome"
             ],
             "type": "object"
           },
@@ -11528,6 +11773,114 @@
               }
             ]
           },
+          "RevisionInfo": {
+            "additionalProperties": false,
+            "description": "One revision of a description, without its text.",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who saved it."
+              },
+              "base": {
+                "description": "The revision it was edited from.",
+                "type": "string"
+              },
+              "bytes": {
+                "description": "Its size in bytes.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "created_at": {
+                "description": "When (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "current": {
+                "description": "Whether it is the description now.",
+                "type": "boolean"
+              },
+              "id": {
+                "description": "The revision's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/RevisionKind",
+                "description": "How it came about."
+              },
+              "message": {
+                "description": "A note saved with it.",
+                "type": "string"
+              },
+              "resolved_at": {
+                "description": "For a conflict copy: when it was resolved; left out while it is\nopen.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "author",
+              "created_at",
+              "current",
+              "bytes"
+            ],
+            "type": "object"
+          },
+          "RevisionKind": {
+            "description": "How a revision came about.",
+            "oneOf": [
+              {
+                "const": "normal",
+                "description": "A save.",
+                "type": "string"
+              },
+              {
+                "const": "merged",
+                "description": "Two edits of the same revision, merged.",
+                "type": "string"
+              },
+              {
+                "const": "conflict",
+                "description": "An edit that clashed with another; kept aside, not the description.",
+                "type": "string"
+              },
+              {
+                "const": "restored",
+                "description": "An earlier revision brought back (by Undo or a revert).",
+                "type": "string"
+              },
+              {
+                "const": "resolved",
+                "description": "The result of resolving a conflict copy.",
+                "type": "string"
+              }
+            ]
+          },
+          "SaveOutcome": {
+            "description": "What became of a description that was saved.",
+            "oneOf": [
+              {
+                "const": "saved",
+                "description": "Saved as the new description.",
+                "type": "string"
+              },
+              {
+                "const": "merged",
+                "description": "Somebody saved in between; both edits were merged.",
+                "type": "string"
+              },
+              {
+                "const": "conflict",
+                "description": "Somebody changed the same lines in between: the description stays\nas they left it, and this edit was kept as a conflict copy.",
+                "type": "string"
+              },
+              {
+                "const": "unchanged",
+                "description": "The text was already that.",
+                "type": "string"
+              }
+            ]
+          },
           "StatusRef": {
             "additionalProperties": false,
             "description": "A task's status, as tasks carry it.",
@@ -11564,6 +11917,13 @@
                 "$ref": "#/$defs/Checklist",
                 "description": "The description's checklist."
               },
+              "checklist_items": {
+                "description": "The description's checklist items, numbered, when asked for with\n`include`.",
+                "items": {
+                  "$ref": "#/$defs/ChecklistItem"
+                },
+                "type": "array"
+              },
               "claim": {
                 "$ref": "#/$defs/Claim",
                 "description": "The agent that claimed it, while the claim lasts."
@@ -11585,6 +11945,12 @@
                 },
                 "type": "array"
               },
+              "conflict_copies": {
+                "description": "Edits of the description that clashed with another and wait to be\nresolved (conflict copies).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
               "created_at": {
                 "description": "When it was created (RFC 3339, UTC).",
                 "type": "string"
@@ -11595,6 +11961,10 @@
               },
               "description": {
                 "description": "Its description (Markdown).",
+                "type": "string"
+              },
+              "description_revision": {
+                "description": "The description's revision; pass it as `base_revision` when you save\na new description. Left out while it has none.",
                 "type": "string"
               },
               "due_date": {
@@ -11671,6 +12041,13 @@
                 "minimum": 0,
                 "type": "integer"
               },
+              "progress_percent": {
+                "description": "Its progress in percent: the progress set by hand, else 100 when\nclosed, else the share of ticked checklist items, else its subtasks'\nprogress weighted by their estimates, else 0.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
               "project": {
                 "description": "Its project's key.",
                 "type": "string"
@@ -11678,6 +12055,13 @@
               "rank": {
                 "description": "Its place in its status column.",
                 "type": "string"
+              },
+              "revisions": {
+                "description": "The description's revisions, newest first, conflict copies\nincluded, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/RevisionInfo"
+                },
+                "type": "array"
               },
               "spent_minutes": {
                 "description": "Logged time in minutes.",
@@ -11711,6 +12095,10 @@
                 "description": "Its title.",
                 "type": "string"
               },
+              "totals": {
+                "$ref": "#/$defs/Totals",
+                "description": "Totals over the task and all its subtasks; only for a task with\nsubtasks."
+              },
               "type": {
                 "$ref": "#/$defs/TypeRef",
                 "description": "Its type."
@@ -11734,8 +12122,10 @@
               "priority",
               "labels",
               "description",
+              "conflict_copies",
               "spent_minutes",
               "checklist",
+              "progress_percent",
               "subtask_count",
               "blocked",
               "comment_count",
@@ -11782,6 +12172,33 @@
               "status",
               "closed",
               "id"
+            ],
+            "type": "object"
+          },
+          "Totals": {
+            "additionalProperties": false,
+            "description": "Estimate and time over a task and all its subtasks.",
+            "properties": {
+              "estimate_minutes": {
+                "description": "The estimates added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "remaining_minutes": {
+                "description": "Estimate minus spent time, in minutes; below 0 when over.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "spent_minutes": {
+                "description": "The logged time added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "estimate_minutes",
+              "spent_minutes",
+              "remaining_minutes"
             ],
             "type": "object"
           },
@@ -11834,6 +12251,10 @@
         "additionalProperties": false,
         "description": "A task changed, with the history group of the change.",
         "properties": {
+          "description_save": {
+            "$ref": "#/$defs/DescriptionSave",
+            "description": "What became of a new description: saved, merged with another edit,\nor kept as a conflict copy."
+          },
           "group": {
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
             "type": "string"
@@ -11866,6 +12287,52 @@
       "id": "task.update",
       "input": {
         "$defs": {
+          "ConflictAction": {
+            "description": "What to do with a conflict copy.",
+            "oneOf": [
+              {
+                "const": "keep_current",
+                "description": "Keep the description as it is and close the copy.",
+                "type": "string"
+              },
+              {
+                "const": "use_copy",
+                "description": "Make the copy the description.",
+                "type": "string"
+              },
+              {
+                "const": "use_text",
+                "description": "Save `text` (for example both combined by hand) as the description.",
+                "type": "string"
+              }
+            ]
+          },
+          "ConflictResolution": {
+            "additionalProperties": false,
+            "description": "How to resolve a conflict copy, inside `task.update`.",
+            "properties": {
+              "action": {
+                "$ref": "#/$defs/ConflictAction",
+                "description": "What to do with it."
+              },
+              "copy": {
+                "description": "The conflict copy's revision ID.",
+                "type": "string"
+              },
+              "text": {
+                "description": "The text to save, for `use_text`.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "copy",
+              "action"
+            ],
+            "type": "object"
+          },
           "Priority": {
             "description": "A task's priority.",
             "oneOf": [
@@ -11935,6 +12402,25 @@
                 "type": "string"
               }
             ]
+          },
+          "TextEdit": {
+            "additionalProperties": false,
+            "description": "A targeted change to a text: `old_text` must occur exactly once.",
+            "properties": {
+              "new_text": {
+                "description": "What replaces it.",
+                "type": "string"
+              },
+              "old_text": {
+                "description": "The text to replace; it must occur exactly once.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "old_text",
+              "new_text"
+            ],
+            "type": "object"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -11947,6 +12433,13 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "base_revision": {
+            "description": "The description revision your new description was edited from. If\nsomebody saved in between, the two edits are merged; when they\nchanged the same lines, yours is kept as a conflict copy and the\ndescription stays as it is.",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "clear": {
             "description": "Fields to clear.",
@@ -11961,6 +12454,13 @@
               "string",
               "null"
             ]
+          },
+          "description_edits": {
+            "description": "Targeted changes to the description instead of a new one: each\n`old_text` must occur exactly once.",
+            "items": {
+              "$ref": "#/$defs/TextEdit"
+            },
+            "type": "array"
           },
           "due_date": {
             "description": "A new due date, `YYYY-MM-DD`.",
@@ -12037,6 +12537,17 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "resolve_conflict": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ConflictResolution"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Resolve a conflict copy of the description."
           },
           "start_date": {
             "description": "A new start date, `YYYY-MM-DD`.",
@@ -12225,6 +12736,39 @@
             ],
             "type": "object"
           },
+          "ChecklistItem": {
+            "additionalProperties": false,
+            "description": "One checklist item.",
+            "properties": {
+              "checked": {
+                "description": "Whether it is ticked.",
+                "type": "boolean"
+              },
+              "depth": {
+                "description": "How many items it is nested in.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "number": {
+                "description": "Its number, from 1, in reading order; the reader's checkboxes carry\nthe same number.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "text": {
+                "description": "Its text, without formatting.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "number",
+              "checked",
+              "text",
+              "depth"
+            ],
+            "type": "object"
+          },
           "Claim": {
             "additionalProperties": false,
             "description": "An agent's claim on a task.",
@@ -12344,6 +12888,28 @@
               "body",
               "replaced_by",
               "replaced_at"
+            ],
+            "type": "object"
+          },
+          "DescriptionSave": {
+            "additionalProperties": false,
+            "description": "The result of saving a description.",
+            "properties": {
+              "conflict_copy": {
+                "description": "The conflict copy that holds the edit, after a conflict.",
+                "type": "string"
+              },
+              "outcome": {
+                "$ref": "#/$defs/SaveOutcome",
+                "description": "What became of the edit."
+              },
+              "revision": {
+                "description": "The description's revision now; pass it as `base_revision` next\ntime. Left out while the description has none.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "outcome"
             ],
             "type": "object"
           },
@@ -12565,6 +13131,114 @@
               }
             ]
           },
+          "RevisionInfo": {
+            "additionalProperties": false,
+            "description": "One revision of a description, without its text.",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who saved it."
+              },
+              "base": {
+                "description": "The revision it was edited from.",
+                "type": "string"
+              },
+              "bytes": {
+                "description": "Its size in bytes.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "created_at": {
+                "description": "When (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "current": {
+                "description": "Whether it is the description now.",
+                "type": "boolean"
+              },
+              "id": {
+                "description": "The revision's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/RevisionKind",
+                "description": "How it came about."
+              },
+              "message": {
+                "description": "A note saved with it.",
+                "type": "string"
+              },
+              "resolved_at": {
+                "description": "For a conflict copy: when it was resolved; left out while it is\nopen.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "author",
+              "created_at",
+              "current",
+              "bytes"
+            ],
+            "type": "object"
+          },
+          "RevisionKind": {
+            "description": "How a revision came about.",
+            "oneOf": [
+              {
+                "const": "normal",
+                "description": "A save.",
+                "type": "string"
+              },
+              {
+                "const": "merged",
+                "description": "Two edits of the same revision, merged.",
+                "type": "string"
+              },
+              {
+                "const": "conflict",
+                "description": "An edit that clashed with another; kept aside, not the description.",
+                "type": "string"
+              },
+              {
+                "const": "restored",
+                "description": "An earlier revision brought back (by Undo or a revert).",
+                "type": "string"
+              },
+              {
+                "const": "resolved",
+                "description": "The result of resolving a conflict copy.",
+                "type": "string"
+              }
+            ]
+          },
+          "SaveOutcome": {
+            "description": "What became of a description that was saved.",
+            "oneOf": [
+              {
+                "const": "saved",
+                "description": "Saved as the new description.",
+                "type": "string"
+              },
+              {
+                "const": "merged",
+                "description": "Somebody saved in between; both edits were merged.",
+                "type": "string"
+              },
+              {
+                "const": "conflict",
+                "description": "Somebody changed the same lines in between: the description stays\nas they left it, and this edit was kept as a conflict copy.",
+                "type": "string"
+              },
+              {
+                "const": "unchanged",
+                "description": "The text was already that.",
+                "type": "string"
+              }
+            ]
+          },
           "StatusRef": {
             "additionalProperties": false,
             "description": "A task's status, as tasks carry it.",
@@ -12601,6 +13275,13 @@
                 "$ref": "#/$defs/Checklist",
                 "description": "The description's checklist."
               },
+              "checklist_items": {
+                "description": "The description's checklist items, numbered, when asked for with\n`include`.",
+                "items": {
+                  "$ref": "#/$defs/ChecklistItem"
+                },
+                "type": "array"
+              },
               "claim": {
                 "$ref": "#/$defs/Claim",
                 "description": "The agent that claimed it, while the claim lasts."
@@ -12622,6 +13303,12 @@
                 },
                 "type": "array"
               },
+              "conflict_copies": {
+                "description": "Edits of the description that clashed with another and wait to be\nresolved (conflict copies).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
               "created_at": {
                 "description": "When it was created (RFC 3339, UTC).",
                 "type": "string"
@@ -12632,6 +13319,10 @@
               },
               "description": {
                 "description": "Its description (Markdown).",
+                "type": "string"
+              },
+              "description_revision": {
+                "description": "The description's revision; pass it as `base_revision` when you save\na new description. Left out while it has none.",
                 "type": "string"
               },
               "due_date": {
@@ -12708,6 +13399,13 @@
                 "minimum": 0,
                 "type": "integer"
               },
+              "progress_percent": {
+                "description": "Its progress in percent: the progress set by hand, else 100 when\nclosed, else the share of ticked checklist items, else its subtasks'\nprogress weighted by their estimates, else 0.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
               "project": {
                 "description": "Its project's key.",
                 "type": "string"
@@ -12715,6 +13413,13 @@
               "rank": {
                 "description": "Its place in its status column.",
                 "type": "string"
+              },
+              "revisions": {
+                "description": "The description's revisions, newest first, conflict copies\nincluded, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/RevisionInfo"
+                },
+                "type": "array"
               },
               "spent_minutes": {
                 "description": "Logged time in minutes.",
@@ -12748,6 +13453,10 @@
                 "description": "Its title.",
                 "type": "string"
               },
+              "totals": {
+                "$ref": "#/$defs/Totals",
+                "description": "Totals over the task and all its subtasks; only for a task with\nsubtasks."
+              },
               "type": {
                 "$ref": "#/$defs/TypeRef",
                 "description": "Its type."
@@ -12771,8 +13480,10 @@
               "priority",
               "labels",
               "description",
+              "conflict_copies",
               "spent_minutes",
               "checklist",
+              "progress_percent",
               "subtask_count",
               "blocked",
               "comment_count",
@@ -12819,6 +13530,33 @@
               "status",
               "closed",
               "id"
+            ],
+            "type": "object"
+          },
+          "Totals": {
+            "additionalProperties": false,
+            "description": "Estimate and time over a task and all its subtasks.",
+            "properties": {
+              "estimate_minutes": {
+                "description": "The estimates added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "remaining_minutes": {
+                "description": "Estimate minus spent time, in minutes; below 0 when over.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "spent_minutes": {
+                "description": "The logged time added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "estimate_minutes",
+              "spent_minutes",
+              "remaining_minutes"
             ],
             "type": "object"
           },
@@ -12871,6 +13609,10 @@
         "additionalProperties": false,
         "description": "A task changed, with the history group of the change.",
         "properties": {
+          "description_save": {
+            "$ref": "#/$defs/DescriptionSave",
+            "description": "What became of a new description: saved, merged with another edit,\nor kept as a conflict copy."
+          },
           "group": {
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
             "type": "string"
@@ -12895,7 +13637,7 @@
       },
       "output_name": "TaskChange",
       "safety": "write",
-      "summary": "Change a task's title, description, type, priority, labels, parent, dates, estimate or progress."
+      "summary": "Change a task's title, description (whole, with a base revision, or by targeted edits), type, priority, labels, parent, dates, estimate or progress."
     },
     {
       "cli": "task move <key>",
@@ -13145,6 +13887,39 @@
             ],
             "type": "object"
           },
+          "ChecklistItem": {
+            "additionalProperties": false,
+            "description": "One checklist item.",
+            "properties": {
+              "checked": {
+                "description": "Whether it is ticked.",
+                "type": "boolean"
+              },
+              "depth": {
+                "description": "How many items it is nested in.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "number": {
+                "description": "Its number, from 1, in reading order; the reader's checkboxes carry\nthe same number.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "text": {
+                "description": "Its text, without formatting.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "number",
+              "checked",
+              "text",
+              "depth"
+            ],
+            "type": "object"
+          },
           "Claim": {
             "additionalProperties": false,
             "description": "An agent's claim on a task.",
@@ -13264,6 +14039,28 @@
               "body",
               "replaced_by",
               "replaced_at"
+            ],
+            "type": "object"
+          },
+          "DescriptionSave": {
+            "additionalProperties": false,
+            "description": "The result of saving a description.",
+            "properties": {
+              "conflict_copy": {
+                "description": "The conflict copy that holds the edit, after a conflict.",
+                "type": "string"
+              },
+              "outcome": {
+                "$ref": "#/$defs/SaveOutcome",
+                "description": "What became of the edit."
+              },
+              "revision": {
+                "description": "The description's revision now; pass it as `base_revision` next\ntime. Left out while the description has none.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "outcome"
             ],
             "type": "object"
           },
@@ -13485,6 +14282,114 @@
               }
             ]
           },
+          "RevisionInfo": {
+            "additionalProperties": false,
+            "description": "One revision of a description, without its text.",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who saved it."
+              },
+              "base": {
+                "description": "The revision it was edited from.",
+                "type": "string"
+              },
+              "bytes": {
+                "description": "Its size in bytes.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "created_at": {
+                "description": "When (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "current": {
+                "description": "Whether it is the description now.",
+                "type": "boolean"
+              },
+              "id": {
+                "description": "The revision's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/RevisionKind",
+                "description": "How it came about."
+              },
+              "message": {
+                "description": "A note saved with it.",
+                "type": "string"
+              },
+              "resolved_at": {
+                "description": "For a conflict copy: when it was resolved; left out while it is\nopen.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "author",
+              "created_at",
+              "current",
+              "bytes"
+            ],
+            "type": "object"
+          },
+          "RevisionKind": {
+            "description": "How a revision came about.",
+            "oneOf": [
+              {
+                "const": "normal",
+                "description": "A save.",
+                "type": "string"
+              },
+              {
+                "const": "merged",
+                "description": "Two edits of the same revision, merged.",
+                "type": "string"
+              },
+              {
+                "const": "conflict",
+                "description": "An edit that clashed with another; kept aside, not the description.",
+                "type": "string"
+              },
+              {
+                "const": "restored",
+                "description": "An earlier revision brought back (by Undo or a revert).",
+                "type": "string"
+              },
+              {
+                "const": "resolved",
+                "description": "The result of resolving a conflict copy.",
+                "type": "string"
+              }
+            ]
+          },
+          "SaveOutcome": {
+            "description": "What became of a description that was saved.",
+            "oneOf": [
+              {
+                "const": "saved",
+                "description": "Saved as the new description.",
+                "type": "string"
+              },
+              {
+                "const": "merged",
+                "description": "Somebody saved in between; both edits were merged.",
+                "type": "string"
+              },
+              {
+                "const": "conflict",
+                "description": "Somebody changed the same lines in between: the description stays\nas they left it, and this edit was kept as a conflict copy.",
+                "type": "string"
+              },
+              {
+                "const": "unchanged",
+                "description": "The text was already that.",
+                "type": "string"
+              }
+            ]
+          },
           "StatusRef": {
             "additionalProperties": false,
             "description": "A task's status, as tasks carry it.",
@@ -13521,6 +14426,13 @@
                 "$ref": "#/$defs/Checklist",
                 "description": "The description's checklist."
               },
+              "checklist_items": {
+                "description": "The description's checklist items, numbered, when asked for with\n`include`.",
+                "items": {
+                  "$ref": "#/$defs/ChecklistItem"
+                },
+                "type": "array"
+              },
               "claim": {
                 "$ref": "#/$defs/Claim",
                 "description": "The agent that claimed it, while the claim lasts."
@@ -13542,6 +14454,12 @@
                 },
                 "type": "array"
               },
+              "conflict_copies": {
+                "description": "Edits of the description that clashed with another and wait to be\nresolved (conflict copies).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
               "created_at": {
                 "description": "When it was created (RFC 3339, UTC).",
                 "type": "string"
@@ -13552,6 +14470,10 @@
               },
               "description": {
                 "description": "Its description (Markdown).",
+                "type": "string"
+              },
+              "description_revision": {
+                "description": "The description's revision; pass it as `base_revision` when you save\na new description. Left out while it has none.",
                 "type": "string"
               },
               "due_date": {
@@ -13628,6 +14550,13 @@
                 "minimum": 0,
                 "type": "integer"
               },
+              "progress_percent": {
+                "description": "Its progress in percent: the progress set by hand, else 100 when\nclosed, else the share of ticked checklist items, else its subtasks'\nprogress weighted by their estimates, else 0.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
               "project": {
                 "description": "Its project's key.",
                 "type": "string"
@@ -13635,6 +14564,13 @@
               "rank": {
                 "description": "Its place in its status column.",
                 "type": "string"
+              },
+              "revisions": {
+                "description": "The description's revisions, newest first, conflict copies\nincluded, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/RevisionInfo"
+                },
+                "type": "array"
               },
               "spent_minutes": {
                 "description": "Logged time in minutes.",
@@ -13668,6 +14604,10 @@
                 "description": "Its title.",
                 "type": "string"
               },
+              "totals": {
+                "$ref": "#/$defs/Totals",
+                "description": "Totals over the task and all its subtasks; only for a task with\nsubtasks."
+              },
               "type": {
                 "$ref": "#/$defs/TypeRef",
                 "description": "Its type."
@@ -13691,8 +14631,10 @@
               "priority",
               "labels",
               "description",
+              "conflict_copies",
               "spent_minutes",
               "checklist",
+              "progress_percent",
               "subtask_count",
               "blocked",
               "comment_count",
@@ -13739,6 +14681,33 @@
               "status",
               "closed",
               "id"
+            ],
+            "type": "object"
+          },
+          "Totals": {
+            "additionalProperties": false,
+            "description": "Estimate and time over a task and all its subtasks.",
+            "properties": {
+              "estimate_minutes": {
+                "description": "The estimates added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "remaining_minutes": {
+                "description": "Estimate minus spent time, in minutes; below 0 when over.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "spent_minutes": {
+                "description": "The logged time added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "estimate_minutes",
+              "spent_minutes",
+              "remaining_minutes"
             ],
             "type": "object"
           },
@@ -13791,6 +14760,10 @@
         "additionalProperties": false,
         "description": "A task changed, with the history group of the change.",
         "properties": {
+          "description_save": {
+            "$ref": "#/$defs/DescriptionSave",
+            "description": "What became of a new description: saved, merged with another edit,\nor kept as a conflict copy."
+          },
           "group": {
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
             "type": "string"
@@ -13816,6 +14789,1373 @@
       "output_name": "TaskChange",
       "safety": "write",
       "summary": "Move a task to another status or place in its column, or to another project (new key; the old one forwards)."
+    },
+    {
+      "cli": "task resolve <key>",
+      "exposure": "data",
+      "id": "task.resolve_conflict",
+      "input": {
+        "$defs": {
+          "ConflictAction": {
+            "description": "What to do with a conflict copy.",
+            "oneOf": [
+              {
+                "const": "keep_current",
+                "description": "Keep the description as it is and close the copy.",
+                "type": "string"
+              },
+              {
+                "const": "use_copy",
+                "description": "Make the copy the description.",
+                "type": "string"
+              },
+              {
+                "const": "use_text",
+                "description": "Save `text` (for example both combined by hand) as the description.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Resolving a task's conflict copy.",
+        "properties": {
+          "action": {
+            "$ref": "#/$defs/ConflictAction",
+            "description": "What to do with it."
+          },
+          "base_revision": {
+            "description": "Refuse unless the description is still at this revision.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "copy": {
+            "description": "The conflict copy's revision ID.",
+            "type": "string"
+          },
+          "key": {
+            "description": "The task: its key or ID.",
+            "type": "string"
+          },
+          "text": {
+            "description": "The text to save, for `use_text`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "key",
+          "copy",
+          "action"
+        ],
+        "title": "TaskResolveInput",
+        "type": "object"
+      },
+      "input_name": "TaskResolveInput",
+      "kind": "command",
+      "mcp_tool": "update_task",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person or agent."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person or an agent.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              }
+            ]
+          },
+          "Attachment": {
+            "additionalProperties": false,
+            "description": "One attached file.",
+            "properties": {
+              "added_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who attached it."
+              },
+              "comment": {
+                "description": "The comment's ID, for a file attached to a comment.",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was attached (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "height": {
+                "description": "An image's height in pixels.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "The attachment's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/FileKind",
+                "description": "What it holds."
+              },
+              "mime": {
+                "description": "The media type, read from the content.",
+                "type": "string"
+              },
+              "name": {
+                "description": "The file name.",
+                "type": "string"
+              },
+              "sha256": {
+                "description": "The content's SHA-256.",
+                "type": "string"
+              },
+              "size": {
+                "description": "The size in bytes.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "width": {
+                "description": "An image's width in pixels.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "mime",
+              "kind",
+              "size",
+              "sha256",
+              "task",
+              "added_by",
+              "created_at"
+            ],
+            "type": "object"
+          },
+          "Category": {
+            "description": "What a status means for the work in it.",
+            "oneOf": [
+              {
+                "const": "todo",
+                "description": "Not started.",
+                "type": "string"
+              },
+              {
+                "const": "in_progress",
+                "description": "Being worked on.",
+                "type": "string"
+              },
+              {
+                "const": "done",
+                "description": "Finished; closes the task.",
+                "type": "string"
+              },
+              {
+                "const": "cancelled",
+                "description": "Dropped; closes the task.",
+                "type": "string"
+              }
+            ]
+          },
+          "Checklist": {
+            "additionalProperties": false,
+            "description": "Ticked and all checklist items.",
+            "properties": {
+              "done": {
+                "description": "Ticked items.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "total": {
+                "description": "All items.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "done",
+              "total"
+            ],
+            "type": "object"
+          },
+          "ChecklistItem": {
+            "additionalProperties": false,
+            "description": "One checklist item.",
+            "properties": {
+              "checked": {
+                "description": "Whether it is ticked.",
+                "type": "boolean"
+              },
+              "depth": {
+                "description": "How many items it is nested in.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "number": {
+                "description": "Its number, from 1, in reading order; the reader's checkboxes carry\nthe same number.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "text": {
+                "description": "Its text, without formatting.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "number",
+              "checked",
+              "text",
+              "depth"
+            ],
+            "type": "object"
+          },
+          "Claim": {
+            "additionalProperties": false,
+            "description": "An agent's claim on a task.",
+            "properties": {
+              "agent": {
+                "description": "The agent's name.",
+                "type": "string"
+              },
+              "session": {
+                "description": "The agent session holding it.",
+                "type": "string"
+              },
+              "until": {
+                "description": "When the claim ends unless renewed (RFC 3339, UTC).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "agent",
+              "session",
+              "until"
+            ],
+            "type": "object"
+          },
+          "Comment": {
+            "additionalProperties": false,
+            "description": "One comment.",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who wrote it."
+              },
+              "body": {
+                "description": "The text (Markdown).",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was written (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "edited_at": {
+                "description": "When it was last edited; left out when never.",
+                "type": "string"
+              },
+              "files": {
+                "description": "Files attached to it.",
+                "items": {
+                  "$ref": "#/$defs/Attachment"
+                },
+                "type": "array"
+              },
+              "id": {
+                "description": "The comment's ID.",
+                "type": "string"
+              },
+              "reply_to": {
+                "description": "The comment it answers.",
+                "type": "string"
+              },
+              "revision_count": {
+                "description": "How many earlier texts it has.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "revisions": {
+                "description": "Its earlier texts, newest first, when asked for.",
+                "items": {
+                  "$ref": "#/$defs/CommentRevision"
+                },
+                "type": "array"
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "version": {
+                "description": "Goes up by one with every edit; pass it as `expected_version`.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "via": {
+                "$ref": "#/$defs/Via",
+                "description": "The program it came through."
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "body",
+              "author",
+              "via",
+              "created_at",
+              "revision_count",
+              "version"
+            ],
+            "type": "object"
+          },
+          "CommentRevision": {
+            "additionalProperties": false,
+            "description": "An earlier text of a comment.",
+            "properties": {
+              "body": {
+                "description": "The text as it was.",
+                "type": "string"
+              },
+              "replaced_at": {
+                "description": "When it was replaced (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "replaced_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who replaced it with a newer text."
+              }
+            },
+            "required": [
+              "body",
+              "replaced_by",
+              "replaced_at"
+            ],
+            "type": "object"
+          },
+          "DescriptionSave": {
+            "additionalProperties": false,
+            "description": "The result of saving a description.",
+            "properties": {
+              "conflict_copy": {
+                "description": "The conflict copy that holds the edit, after a conflict.",
+                "type": "string"
+              },
+              "outcome": {
+                "$ref": "#/$defs/SaveOutcome",
+                "description": "What became of the edit."
+              },
+              "revision": {
+                "description": "The description's revision now; pass it as `base_revision` next\ntime. Left out while the description has none.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "outcome"
+            ],
+            "type": "object"
+          },
+          "FileKind": {
+            "description": "What a file holds, which decides how it is shown.",
+            "oneOf": [
+              {
+                "const": "image",
+                "description": "A picture shown inline.",
+                "type": "string"
+              },
+              {
+                "const": "text",
+                "description": "Text in UTF-8.",
+                "type": "string"
+              },
+              {
+                "const": "executable",
+                "description": "A program or script: only ever saved, never opened or shown.",
+                "type": "string"
+              },
+              {
+                "const": "other",
+                "description": "Anything else.",
+                "type": "string"
+              }
+            ]
+          },
+          "Glyph": {
+            "description": "The shape that shows a task's type.",
+            "oneOf": [
+              {
+                "const": "task",
+                "description": "A plain task.",
+                "type": "string"
+              },
+              {
+                "const": "bug",
+                "description": "A bug.",
+                "type": "string"
+              },
+              {
+                "const": "feature",
+                "description": "A feature.",
+                "type": "string"
+              },
+              {
+                "const": "milestone",
+                "description": "A milestone.",
+                "type": "string"
+              }
+            ]
+          },
+          "Hue": {
+            "description": "The design's nine colours, for projects, statuses, types and labels.",
+            "oneOf": [
+              {
+                "const": "red",
+                "description": "Red.",
+                "type": "string"
+              },
+              {
+                "const": "orange",
+                "description": "Orange.",
+                "type": "string"
+              },
+              {
+                "const": "yellow",
+                "description": "Yellow.",
+                "type": "string"
+              },
+              {
+                "const": "green",
+                "description": "Green.",
+                "type": "string"
+              },
+              {
+                "const": "teal",
+                "description": "Teal.",
+                "type": "string"
+              },
+              {
+                "const": "blue",
+                "description": "Blue.",
+                "type": "string"
+              },
+              {
+                "const": "purple",
+                "description": "Purple.",
+                "type": "string"
+              },
+              {
+                "const": "pink",
+                "description": "Pink.",
+                "type": "string"
+              },
+              {
+                "const": "grey",
+                "description": "Grey.",
+                "type": "string"
+              }
+            ]
+          },
+          "LabelRef": {
+            "additionalProperties": false,
+            "description": "A label on a task.",
+            "properties": {
+              "hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "Its colour."
+              },
+              "id": {
+                "description": "The label's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "hue"
+            ],
+            "type": "object"
+          },
+          "Link": {
+            "additionalProperties": false,
+            "description": "A link from one task to another.",
+            "properties": {
+              "id": {
+                "description": "The link's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/LinkKind",
+                "description": "How the link reads from this task."
+              },
+              "task": {
+                "$ref": "#/$defs/TaskRef",
+                "description": "The task at the other end."
+              }
+            },
+            "required": [
+              "kind",
+              "task",
+              "id"
+            ],
+            "type": "object"
+          },
+          "LinkKind": {
+            "description": "How a link reads from one task.",
+            "oneOf": [
+              {
+                "const": "blocks",
+                "description": "This task must be finished before the other.",
+                "type": "string"
+              },
+              {
+                "const": "blocked_by",
+                "description": "The other task must be finished before this one.",
+                "type": "string"
+              },
+              {
+                "const": "relates",
+                "description": "The two are related.",
+                "type": "string"
+              },
+              {
+                "const": "duplicates",
+                "description": "This task duplicates the other.",
+                "type": "string"
+              },
+              {
+                "const": "duplicated_by",
+                "description": "The other task duplicates this one.",
+                "type": "string"
+              },
+              {
+                "const": "clones",
+                "description": "This task is a copy of the other.",
+                "type": "string"
+              },
+              {
+                "const": "cloned_by",
+                "description": "The other task is a copy of this one.",
+                "type": "string"
+              }
+            ]
+          },
+          "Priority": {
+            "description": "A task's priority.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No priority (the default).",
+                "type": "string"
+              },
+              {
+                "const": "low",
+                "description": "Low.",
+                "type": "string"
+              },
+              {
+                "const": "normal",
+                "description": "Normal.",
+                "type": "string"
+              },
+              {
+                "const": "high",
+                "description": "High.",
+                "type": "string"
+              },
+              {
+                "const": "urgent",
+                "description": "Urgent.",
+                "type": "string"
+              }
+            ]
+          },
+          "RevisionInfo": {
+            "additionalProperties": false,
+            "description": "One revision of a description, without its text.",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who saved it."
+              },
+              "base": {
+                "description": "The revision it was edited from.",
+                "type": "string"
+              },
+              "bytes": {
+                "description": "Its size in bytes.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "created_at": {
+                "description": "When (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "current": {
+                "description": "Whether it is the description now.",
+                "type": "boolean"
+              },
+              "id": {
+                "description": "The revision's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/RevisionKind",
+                "description": "How it came about."
+              },
+              "message": {
+                "description": "A note saved with it.",
+                "type": "string"
+              },
+              "resolved_at": {
+                "description": "For a conflict copy: when it was resolved; left out while it is\nopen.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "author",
+              "created_at",
+              "current",
+              "bytes"
+            ],
+            "type": "object"
+          },
+          "RevisionKind": {
+            "description": "How a revision came about.",
+            "oneOf": [
+              {
+                "const": "normal",
+                "description": "A save.",
+                "type": "string"
+              },
+              {
+                "const": "merged",
+                "description": "Two edits of the same revision, merged.",
+                "type": "string"
+              },
+              {
+                "const": "conflict",
+                "description": "An edit that clashed with another; kept aside, not the description.",
+                "type": "string"
+              },
+              {
+                "const": "restored",
+                "description": "An earlier revision brought back (by Undo or a revert).",
+                "type": "string"
+              },
+              {
+                "const": "resolved",
+                "description": "The result of resolving a conflict copy.",
+                "type": "string"
+              }
+            ]
+          },
+          "SaveOutcome": {
+            "description": "What became of a description that was saved.",
+            "oneOf": [
+              {
+                "const": "saved",
+                "description": "Saved as the new description.",
+                "type": "string"
+              },
+              {
+                "const": "merged",
+                "description": "Somebody saved in between; both edits were merged.",
+                "type": "string"
+              },
+              {
+                "const": "conflict",
+                "description": "Somebody changed the same lines in between: the description stays\nas they left it, and this edit was kept as a conflict copy.",
+                "type": "string"
+              },
+              {
+                "const": "unchanged",
+                "description": "The text was already that.",
+                "type": "string"
+              }
+            ]
+          },
+          "StatusRef": {
+            "additionalProperties": false,
+            "description": "A task's status, as tasks carry it.",
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/Category",
+                "description": "Its category."
+              },
+              "id": {
+                "description": "The status's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "category"
+            ],
+            "type": "object"
+          },
+          "Task": {
+            "additionalProperties": false,
+            "description": "One task.",
+            "properties": {
+              "blocked": {
+                "description": "Whether a task that blocks it is still open.",
+                "type": "boolean"
+              },
+              "checklist": {
+                "$ref": "#/$defs/Checklist",
+                "description": "The description's checklist."
+              },
+              "checklist_items": {
+                "description": "The description's checklist items, numbered, when asked for with\n`include`.",
+                "items": {
+                  "$ref": "#/$defs/ChecklistItem"
+                },
+                "type": "array"
+              },
+              "claim": {
+                "$ref": "#/$defs/Claim",
+                "description": "The agent that claimed it, while the claim lasts."
+              },
+              "closed_at": {
+                "description": "When it was closed; left out while it is open.",
+                "type": "string"
+              },
+              "comment_count": {
+                "description": "How many comments it has.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "comments": {
+                "description": "Its comments, oldest first, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/Comment"
+                },
+                "type": "array"
+              },
+              "conflict_copies": {
+                "description": "Edits of the description that clashed with another and wait to be\nresolved (conflict copies).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "created_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who created it."
+              },
+              "description": {
+                "description": "Its description (Markdown).",
+                "type": "string"
+              },
+              "description_revision": {
+                "description": "The description's revision; pass it as `base_revision` when you save\na new description. Left out while it has none.",
+                "type": "string"
+              },
+              "due_date": {
+                "description": "The due date.",
+                "type": "string"
+              },
+              "edited_at": {
+                "description": "When its own fields last changed.",
+                "type": "string"
+              },
+              "estimate": {
+                "description": "The estimate, as a duration (`1d 4h`).",
+                "type": "string"
+              },
+              "estimate_minutes": {
+                "description": "The estimate in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "file_count": {
+                "description": "How many files are attached to it and to its comments.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "files": {
+                "description": "The files attached to it, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/Attachment"
+                },
+                "type": "array"
+              },
+              "id": {
+                "description": "The task's ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "The task's key (`TM-41`).",
+                "type": "string"
+              },
+              "labels": {
+                "description": "Its labels, in the project's order.",
+                "items": {
+                  "$ref": "#/$defs/LabelRef"
+                },
+                "type": "array"
+              },
+              "links": {
+                "description": "Its links to other tasks, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/Link"
+                },
+                "type": "array"
+              },
+              "old_keys": {
+                "description": "Keys it had before; they still find it.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "parent": {
+                "description": "The parent task's key, for a subtask.",
+                "type": "string"
+              },
+              "priority": {
+                "$ref": "#/$defs/Priority",
+                "description": "Its priority."
+              },
+              "progress": {
+                "description": "Progress set by hand, 0 to 100.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "progress_percent": {
+                "description": "Its progress in percent: the progress set by hand, else 100 when\nclosed, else the share of ticked checklist items, else its subtasks'\nprogress weighted by their estimates, else 0.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "project": {
+                "description": "Its project's key.",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place in its status column.",
+                "type": "string"
+              },
+              "revisions": {
+                "description": "The description's revisions, newest first, conflict copies\nincluded, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/RevisionInfo"
+                },
+                "type": "array"
+              },
+              "spent_minutes": {
+                "description": "Logged time in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "start_date": {
+                "description": "The start date.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/StatusRef",
+                "description": "Its status."
+              },
+              "status_entered_at": {
+                "description": "When it entered its status.",
+                "type": "string"
+              },
+              "subtask_count": {
+                "$ref": "#/$defs/Checklist",
+                "description": "Its subtasks: closed and all."
+              },
+              "subtasks": {
+                "description": "Its subtasks in order, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/TaskRef"
+                },
+                "type": "array"
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              },
+              "totals": {
+                "$ref": "#/$defs/Totals",
+                "description": "Totals over the task and all its subtasks; only for a task with\nsubtasks."
+              },
+              "type": {
+                "$ref": "#/$defs/TypeRef",
+                "description": "Its type."
+              },
+              "updated_at": {
+                "description": "When anything about it last changed.",
+                "type": "string"
+              },
+              "version": {
+                "description": "Goes up by one with every change; pass it as `expected_version` to\nmake sure nobody changed the task since you read it.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "project",
+              "status",
+              "type",
+              "priority",
+              "labels",
+              "description",
+              "conflict_copies",
+              "spent_minutes",
+              "checklist",
+              "progress_percent",
+              "subtask_count",
+              "blocked",
+              "comment_count",
+              "file_count",
+              "rank",
+              "created_by",
+              "created_at",
+              "edited_at",
+              "updated_at",
+              "status_entered_at",
+              "version",
+              "id"
+            ],
+            "type": "object"
+          },
+          "TaskRef": {
+            "additionalProperties": false,
+            "description": "Another task, as links and subtask lists show it.",
+            "properties": {
+              "closed": {
+                "description": "Whether it is closed (done or cancelled).",
+                "type": "boolean"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "Its key.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/StatusRef",
+                "description": "Its status."
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "status",
+              "closed",
+              "id"
+            ],
+            "type": "object"
+          },
+          "Totals": {
+            "additionalProperties": false,
+            "description": "Estimate and time over a task and all its subtasks.",
+            "properties": {
+              "estimate_minutes": {
+                "description": "The estimates added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "remaining_minutes": {
+                "description": "Estimate minus spent time, in minutes; below 0 when over.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "spent_minutes": {
+                "description": "The logged time added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "estimate_minutes",
+              "spent_minutes",
+              "remaining_minutes"
+            ],
+            "type": "object"
+          },
+          "TypeRef": {
+            "additionalProperties": false,
+            "description": "A task's type, as tasks carry it.",
+            "properties": {
+              "glyph": {
+                "$ref": "#/$defs/Glyph",
+                "description": "Its shape."
+              },
+              "id": {
+                "description": "The type's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "glyph"
+            ],
+            "type": "object"
+          },
+          "Via": {
+            "description": "The program a change came through.",
+            "oneOf": [
+              {
+                "const": "app",
+                "description": "The desktop app.",
+                "type": "string"
+              },
+              {
+                "const": "cli",
+                "description": "The `glyphkeel` command.",
+                "type": "string"
+              },
+              {
+                "const": "mcp",
+                "description": "An agent through `glyphkeel mcp`.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A task changed, with the history group of the change.",
+        "properties": {
+          "description_save": {
+            "$ref": "#/$defs/DescriptionSave",
+            "description": "What became of a new description: saved, merged with another edit,\nor kept as a conflict copy."
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "task": {
+            "$ref": "#/$defs/Task",
+            "description": "The task after the change."
+          },
+          "warnings": {
+            "description": "Problems that did not stop the change, such as closing a task whose\nsubtasks are still open.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "task"
+        ],
+        "title": "TaskChange",
+        "type": "object"
+      },
+      "output_name": "TaskChange",
+      "safety": "write",
+      "summary": "Resolve a conflict copy of a task's description: keep the description, use the copy, or save a combined text."
+    },
+    {
+      "cli": "task check <key>",
+      "exposure": "data",
+      "id": "checklist.update",
+      "input": {
+        "$defs": {
+          "ChecklistAdd": {
+            "additionalProperties": false,
+            "description": "A new item.",
+            "properties": {
+              "after": {
+                "description": "Put it after this item (number, as read before this change); default:\nafter the last top-level item, or in a new list at the end.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "checked": {
+                "default": false,
+                "description": "Whether it starts ticked.",
+                "type": "boolean"
+              },
+              "text": {
+                "description": "Its text, one line.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "text"
+            ],
+            "type": "object"
+          },
+          "ChecklistRemove": {
+            "additionalProperties": false,
+            "description": "An item to remove, with its nested items.",
+            "properties": {
+              "number": {
+                "description": "The item's number.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "text": {
+                "description": "The item's text as you read it.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "number",
+              "text"
+            ],
+            "type": "object"
+          },
+          "ChecklistToggle": {
+            "additionalProperties": false,
+            "description": "Tick or clear one item.",
+            "properties": {
+              "checked": {
+                "description": "Tick (`true`) or clear (`false`); left out, the item flips.",
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
+              "number": {
+                "description": "The item's number.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "text": {
+                "description": "The item's text as you read it.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "number",
+              "text"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Changes to the checklist in a task's description or a comment. Numbers\nare as read before the change. When an item's number now points at other\ntext, the item with that text is used if there is exactly one; otherwise\nnothing changes.",
+        "properties": {
+          "add": {
+            "description": "Items to add.",
+            "items": {
+              "$ref": "#/$defs/ChecklistAdd"
+            },
+            "type": "array"
+          },
+          "comment": {
+            "description": "Or the comment that holds it: its ID.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "key": {
+            "description": "The task whose description holds the checklist: its key or ID.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "remove": {
+            "description": "Items to remove.",
+            "items": {
+              "$ref": "#/$defs/ChecklistRemove"
+            },
+            "type": "array"
+          },
+          "toggle": {
+            "description": "Items to tick or clear.",
+            "items": {
+              "$ref": "#/$defs/ChecklistToggle"
+            },
+            "type": "array"
+          }
+        },
+        "title": "ChecklistUpdateInput",
+        "type": "object"
+      },
+      "input_name": "ChecklistUpdateInput",
+      "kind": "command",
+      "mcp_tool": "update_checklist",
+      "output": {
+        "$defs": {
+          "Checklist": {
+            "additionalProperties": false,
+            "description": "Ticked and all checklist items.",
+            "properties": {
+              "done": {
+                "description": "Ticked items.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "total": {
+                "description": "All items.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "done",
+              "total"
+            ],
+            "type": "object"
+          },
+          "ChecklistItem": {
+            "additionalProperties": false,
+            "description": "One checklist item.",
+            "properties": {
+              "checked": {
+                "description": "Whether it is ticked.",
+                "type": "boolean"
+              },
+              "depth": {
+                "description": "How many items it is nested in.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "number": {
+                "description": "Its number, from 1, in reading order; the reader's checkboxes carry\nthe same number.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "text": {
+                "description": "Its text, without formatting.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "number",
+              "checked",
+              "text",
+              "depth"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A checklist after a change.",
+        "properties": {
+          "checklist": {
+            "$ref": "#/$defs/Checklist",
+            "description": "Ticked and all items."
+          },
+          "comment": {
+            "description": "The comment's ID, for a comment's checklist.",
+            "type": "string"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "items": {
+            "description": "The items now.",
+            "items": {
+              "$ref": "#/$defs/ChecklistItem"
+            },
+            "type": "array"
+          },
+          "key": {
+            "description": "The task's key.",
+            "type": "string"
+          },
+          "revision": {
+            "description": "The description's revision now, for a task.",
+            "type": "string"
+          },
+          "version": {
+            "description": "The task's (or comment's) version now.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key",
+          "items",
+          "checklist",
+          "version"
+        ],
+        "title": "ChecklistChange",
+        "type": "object"
+      },
+      "output_name": "ChecklistChange",
+      "safety": "write",
+      "summary": "Tick, clear, add or remove checklist items in a task's description or a comment, by number plus expected text."
     },
     {
       "cli": "task duplicate <key>",
@@ -14022,6 +16362,39 @@
             ],
             "type": "object"
           },
+          "ChecklistItem": {
+            "additionalProperties": false,
+            "description": "One checklist item.",
+            "properties": {
+              "checked": {
+                "description": "Whether it is ticked.",
+                "type": "boolean"
+              },
+              "depth": {
+                "description": "How many items it is nested in.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "number": {
+                "description": "Its number, from 1, in reading order; the reader's checkboxes carry\nthe same number.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "text": {
+                "description": "Its text, without formatting.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "number",
+              "checked",
+              "text",
+              "depth"
+            ],
+            "type": "object"
+          },
           "Claim": {
             "additionalProperties": false,
             "description": "An agent's claim on a task.",
@@ -14141,6 +16514,28 @@
               "body",
               "replaced_by",
               "replaced_at"
+            ],
+            "type": "object"
+          },
+          "DescriptionSave": {
+            "additionalProperties": false,
+            "description": "The result of saving a description.",
+            "properties": {
+              "conflict_copy": {
+                "description": "The conflict copy that holds the edit, after a conflict.",
+                "type": "string"
+              },
+              "outcome": {
+                "$ref": "#/$defs/SaveOutcome",
+                "description": "What became of the edit."
+              },
+              "revision": {
+                "description": "The description's revision now; pass it as `base_revision` next\ntime. Left out while the description has none.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "outcome"
             ],
             "type": "object"
           },
@@ -14362,6 +16757,114 @@
               }
             ]
           },
+          "RevisionInfo": {
+            "additionalProperties": false,
+            "description": "One revision of a description, without its text.",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who saved it."
+              },
+              "base": {
+                "description": "The revision it was edited from.",
+                "type": "string"
+              },
+              "bytes": {
+                "description": "Its size in bytes.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "created_at": {
+                "description": "When (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "current": {
+                "description": "Whether it is the description now.",
+                "type": "boolean"
+              },
+              "id": {
+                "description": "The revision's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/RevisionKind",
+                "description": "How it came about."
+              },
+              "message": {
+                "description": "A note saved with it.",
+                "type": "string"
+              },
+              "resolved_at": {
+                "description": "For a conflict copy: when it was resolved; left out while it is\nopen.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "author",
+              "created_at",
+              "current",
+              "bytes"
+            ],
+            "type": "object"
+          },
+          "RevisionKind": {
+            "description": "How a revision came about.",
+            "oneOf": [
+              {
+                "const": "normal",
+                "description": "A save.",
+                "type": "string"
+              },
+              {
+                "const": "merged",
+                "description": "Two edits of the same revision, merged.",
+                "type": "string"
+              },
+              {
+                "const": "conflict",
+                "description": "An edit that clashed with another; kept aside, not the description.",
+                "type": "string"
+              },
+              {
+                "const": "restored",
+                "description": "An earlier revision brought back (by Undo or a revert).",
+                "type": "string"
+              },
+              {
+                "const": "resolved",
+                "description": "The result of resolving a conflict copy.",
+                "type": "string"
+              }
+            ]
+          },
+          "SaveOutcome": {
+            "description": "What became of a description that was saved.",
+            "oneOf": [
+              {
+                "const": "saved",
+                "description": "Saved as the new description.",
+                "type": "string"
+              },
+              {
+                "const": "merged",
+                "description": "Somebody saved in between; both edits were merged.",
+                "type": "string"
+              },
+              {
+                "const": "conflict",
+                "description": "Somebody changed the same lines in between: the description stays\nas they left it, and this edit was kept as a conflict copy.",
+                "type": "string"
+              },
+              {
+                "const": "unchanged",
+                "description": "The text was already that.",
+                "type": "string"
+              }
+            ]
+          },
           "StatusRef": {
             "additionalProperties": false,
             "description": "A task's status, as tasks carry it.",
@@ -14398,6 +16901,13 @@
                 "$ref": "#/$defs/Checklist",
                 "description": "The description's checklist."
               },
+              "checklist_items": {
+                "description": "The description's checklist items, numbered, when asked for with\n`include`.",
+                "items": {
+                  "$ref": "#/$defs/ChecklistItem"
+                },
+                "type": "array"
+              },
               "claim": {
                 "$ref": "#/$defs/Claim",
                 "description": "The agent that claimed it, while the claim lasts."
@@ -14419,6 +16929,12 @@
                 },
                 "type": "array"
               },
+              "conflict_copies": {
+                "description": "Edits of the description that clashed with another and wait to be\nresolved (conflict copies).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
               "created_at": {
                 "description": "When it was created (RFC 3339, UTC).",
                 "type": "string"
@@ -14429,6 +16945,10 @@
               },
               "description": {
                 "description": "Its description (Markdown).",
+                "type": "string"
+              },
+              "description_revision": {
+                "description": "The description's revision; pass it as `base_revision` when you save\na new description. Left out while it has none.",
                 "type": "string"
               },
               "due_date": {
@@ -14505,6 +17025,13 @@
                 "minimum": 0,
                 "type": "integer"
               },
+              "progress_percent": {
+                "description": "Its progress in percent: the progress set by hand, else 100 when\nclosed, else the share of ticked checklist items, else its subtasks'\nprogress weighted by their estimates, else 0.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
               "project": {
                 "description": "Its project's key.",
                 "type": "string"
@@ -14512,6 +17039,13 @@
               "rank": {
                 "description": "Its place in its status column.",
                 "type": "string"
+              },
+              "revisions": {
+                "description": "The description's revisions, newest first, conflict copies\nincluded, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/RevisionInfo"
+                },
+                "type": "array"
               },
               "spent_minutes": {
                 "description": "Logged time in minutes.",
@@ -14545,6 +17079,10 @@
                 "description": "Its title.",
                 "type": "string"
               },
+              "totals": {
+                "$ref": "#/$defs/Totals",
+                "description": "Totals over the task and all its subtasks; only for a task with\nsubtasks."
+              },
               "type": {
                 "$ref": "#/$defs/TypeRef",
                 "description": "Its type."
@@ -14568,8 +17106,10 @@
               "priority",
               "labels",
               "description",
+              "conflict_copies",
               "spent_minutes",
               "checklist",
+              "progress_percent",
               "subtask_count",
               "blocked",
               "comment_count",
@@ -14616,6 +17156,33 @@
               "status",
               "closed",
               "id"
+            ],
+            "type": "object"
+          },
+          "Totals": {
+            "additionalProperties": false,
+            "description": "Estimate and time over a task and all its subtasks.",
+            "properties": {
+              "estimate_minutes": {
+                "description": "The estimates added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "remaining_minutes": {
+                "description": "Estimate minus spent time, in minutes; below 0 when over.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "spent_minutes": {
+                "description": "The logged time added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "estimate_minutes",
+              "spent_minutes",
+              "remaining_minutes"
             ],
             "type": "object"
           },
@@ -14668,6 +17235,10 @@
         "additionalProperties": false,
         "description": "A task changed, with the history group of the change.",
         "properties": {
+          "description_save": {
+            "$ref": "#/$defs/DescriptionSave",
+            "description": "What became of a new description: saved, merged with another edit,\nor kept as a conflict copy."
+          },
           "group": {
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
             "type": "string"
@@ -14899,6 +17470,39 @@
             ],
             "type": "object"
           },
+          "ChecklistItem": {
+            "additionalProperties": false,
+            "description": "One checklist item.",
+            "properties": {
+              "checked": {
+                "description": "Whether it is ticked.",
+                "type": "boolean"
+              },
+              "depth": {
+                "description": "How many items it is nested in.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "number": {
+                "description": "Its number, from 1, in reading order; the reader's checkboxes carry\nthe same number.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "text": {
+                "description": "Its text, without formatting.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "number",
+              "checked",
+              "text",
+              "depth"
+            ],
+            "type": "object"
+          },
           "Claim": {
             "additionalProperties": false,
             "description": "An agent's claim on a task.",
@@ -15018,6 +17622,28 @@
               "body",
               "replaced_by",
               "replaced_at"
+            ],
+            "type": "object"
+          },
+          "DescriptionSave": {
+            "additionalProperties": false,
+            "description": "The result of saving a description.",
+            "properties": {
+              "conflict_copy": {
+                "description": "The conflict copy that holds the edit, after a conflict.",
+                "type": "string"
+              },
+              "outcome": {
+                "$ref": "#/$defs/SaveOutcome",
+                "description": "What became of the edit."
+              },
+              "revision": {
+                "description": "The description's revision now; pass it as `base_revision` next\ntime. Left out while the description has none.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "outcome"
             ],
             "type": "object"
           },
@@ -15239,6 +17865,114 @@
               }
             ]
           },
+          "RevisionInfo": {
+            "additionalProperties": false,
+            "description": "One revision of a description, without its text.",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who saved it."
+              },
+              "base": {
+                "description": "The revision it was edited from.",
+                "type": "string"
+              },
+              "bytes": {
+                "description": "Its size in bytes.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "created_at": {
+                "description": "When (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "current": {
+                "description": "Whether it is the description now.",
+                "type": "boolean"
+              },
+              "id": {
+                "description": "The revision's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/RevisionKind",
+                "description": "How it came about."
+              },
+              "message": {
+                "description": "A note saved with it.",
+                "type": "string"
+              },
+              "resolved_at": {
+                "description": "For a conflict copy: when it was resolved; left out while it is\nopen.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "author",
+              "created_at",
+              "current",
+              "bytes"
+            ],
+            "type": "object"
+          },
+          "RevisionKind": {
+            "description": "How a revision came about.",
+            "oneOf": [
+              {
+                "const": "normal",
+                "description": "A save.",
+                "type": "string"
+              },
+              {
+                "const": "merged",
+                "description": "Two edits of the same revision, merged.",
+                "type": "string"
+              },
+              {
+                "const": "conflict",
+                "description": "An edit that clashed with another; kept aside, not the description.",
+                "type": "string"
+              },
+              {
+                "const": "restored",
+                "description": "An earlier revision brought back (by Undo or a revert).",
+                "type": "string"
+              },
+              {
+                "const": "resolved",
+                "description": "The result of resolving a conflict copy.",
+                "type": "string"
+              }
+            ]
+          },
+          "SaveOutcome": {
+            "description": "What became of a description that was saved.",
+            "oneOf": [
+              {
+                "const": "saved",
+                "description": "Saved as the new description.",
+                "type": "string"
+              },
+              {
+                "const": "merged",
+                "description": "Somebody saved in between; both edits were merged.",
+                "type": "string"
+              },
+              {
+                "const": "conflict",
+                "description": "Somebody changed the same lines in between: the description stays\nas they left it, and this edit was kept as a conflict copy.",
+                "type": "string"
+              },
+              {
+                "const": "unchanged",
+                "description": "The text was already that.",
+                "type": "string"
+              }
+            ]
+          },
           "StatusRef": {
             "additionalProperties": false,
             "description": "A task's status, as tasks carry it.",
@@ -15275,6 +18009,13 @@
                 "$ref": "#/$defs/Checklist",
                 "description": "The description's checklist."
               },
+              "checklist_items": {
+                "description": "The description's checklist items, numbered, when asked for with\n`include`.",
+                "items": {
+                  "$ref": "#/$defs/ChecklistItem"
+                },
+                "type": "array"
+              },
               "claim": {
                 "$ref": "#/$defs/Claim",
                 "description": "The agent that claimed it, while the claim lasts."
@@ -15296,6 +18037,12 @@
                 },
                 "type": "array"
               },
+              "conflict_copies": {
+                "description": "Edits of the description that clashed with another and wait to be\nresolved (conflict copies).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
               "created_at": {
                 "description": "When it was created (RFC 3339, UTC).",
                 "type": "string"
@@ -15306,6 +18053,10 @@
               },
               "description": {
                 "description": "Its description (Markdown).",
+                "type": "string"
+              },
+              "description_revision": {
+                "description": "The description's revision; pass it as `base_revision` when you save\na new description. Left out while it has none.",
                 "type": "string"
               },
               "due_date": {
@@ -15382,6 +18133,13 @@
                 "minimum": 0,
                 "type": "integer"
               },
+              "progress_percent": {
+                "description": "Its progress in percent: the progress set by hand, else 100 when\nclosed, else the share of ticked checklist items, else its subtasks'\nprogress weighted by their estimates, else 0.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
               "project": {
                 "description": "Its project's key.",
                 "type": "string"
@@ -15389,6 +18147,13 @@
               "rank": {
                 "description": "Its place in its status column.",
                 "type": "string"
+              },
+              "revisions": {
+                "description": "The description's revisions, newest first, conflict copies\nincluded, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/RevisionInfo"
+                },
+                "type": "array"
               },
               "spent_minutes": {
                 "description": "Logged time in minutes.",
@@ -15422,6 +18187,10 @@
                 "description": "Its title.",
                 "type": "string"
               },
+              "totals": {
+                "$ref": "#/$defs/Totals",
+                "description": "Totals over the task and all its subtasks; only for a task with\nsubtasks."
+              },
               "type": {
                 "$ref": "#/$defs/TypeRef",
                 "description": "Its type."
@@ -15445,8 +18214,10 @@
               "priority",
               "labels",
               "description",
+              "conflict_copies",
               "spent_minutes",
               "checklist",
+              "progress_percent",
               "subtask_count",
               "blocked",
               "comment_count",
@@ -15493,6 +18264,33 @@
               "status",
               "closed",
               "id"
+            ],
+            "type": "object"
+          },
+          "Totals": {
+            "additionalProperties": false,
+            "description": "Estimate and time over a task and all its subtasks.",
+            "properties": {
+              "estimate_minutes": {
+                "description": "The estimates added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "remaining_minutes": {
+                "description": "Estimate minus spent time, in minutes; below 0 when over.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "spent_minutes": {
+                "description": "The logged time added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "estimate_minutes",
+              "spent_minutes",
+              "remaining_minutes"
             ],
             "type": "object"
           },
@@ -15545,6 +18343,10 @@
         "additionalProperties": false,
         "description": "A task changed, with the history group of the change.",
         "properties": {
+          "description_save": {
+            "$ref": "#/$defs/DescriptionSave",
+            "description": "What became of a new description: saved, merged with another edit,\nor kept as a conflict copy."
+          },
           "group": {
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
             "type": "string"
@@ -15769,6 +18571,39 @@
             ],
             "type": "object"
           },
+          "ChecklistItem": {
+            "additionalProperties": false,
+            "description": "One checklist item.",
+            "properties": {
+              "checked": {
+                "description": "Whether it is ticked.",
+                "type": "boolean"
+              },
+              "depth": {
+                "description": "How many items it is nested in.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "number": {
+                "description": "Its number, from 1, in reading order; the reader's checkboxes carry\nthe same number.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "text": {
+                "description": "Its text, without formatting.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "number",
+              "checked",
+              "text",
+              "depth"
+            ],
+            "type": "object"
+          },
           "Claim": {
             "additionalProperties": false,
             "description": "An agent's claim on a task.",
@@ -15888,6 +18723,28 @@
               "body",
               "replaced_by",
               "replaced_at"
+            ],
+            "type": "object"
+          },
+          "DescriptionSave": {
+            "additionalProperties": false,
+            "description": "The result of saving a description.",
+            "properties": {
+              "conflict_copy": {
+                "description": "The conflict copy that holds the edit, after a conflict.",
+                "type": "string"
+              },
+              "outcome": {
+                "$ref": "#/$defs/SaveOutcome",
+                "description": "What became of the edit."
+              },
+              "revision": {
+                "description": "The description's revision now; pass it as `base_revision` next\ntime. Left out while the description has none.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "outcome"
             ],
             "type": "object"
           },
@@ -16109,6 +18966,114 @@
               }
             ]
           },
+          "RevisionInfo": {
+            "additionalProperties": false,
+            "description": "One revision of a description, without its text.",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who saved it."
+              },
+              "base": {
+                "description": "The revision it was edited from.",
+                "type": "string"
+              },
+              "bytes": {
+                "description": "Its size in bytes.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "created_at": {
+                "description": "When (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "current": {
+                "description": "Whether it is the description now.",
+                "type": "boolean"
+              },
+              "id": {
+                "description": "The revision's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/RevisionKind",
+                "description": "How it came about."
+              },
+              "message": {
+                "description": "A note saved with it.",
+                "type": "string"
+              },
+              "resolved_at": {
+                "description": "For a conflict copy: when it was resolved; left out while it is\nopen.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "author",
+              "created_at",
+              "current",
+              "bytes"
+            ],
+            "type": "object"
+          },
+          "RevisionKind": {
+            "description": "How a revision came about.",
+            "oneOf": [
+              {
+                "const": "normal",
+                "description": "A save.",
+                "type": "string"
+              },
+              {
+                "const": "merged",
+                "description": "Two edits of the same revision, merged.",
+                "type": "string"
+              },
+              {
+                "const": "conflict",
+                "description": "An edit that clashed with another; kept aside, not the description.",
+                "type": "string"
+              },
+              {
+                "const": "restored",
+                "description": "An earlier revision brought back (by Undo or a revert).",
+                "type": "string"
+              },
+              {
+                "const": "resolved",
+                "description": "The result of resolving a conflict copy.",
+                "type": "string"
+              }
+            ]
+          },
+          "SaveOutcome": {
+            "description": "What became of a description that was saved.",
+            "oneOf": [
+              {
+                "const": "saved",
+                "description": "Saved as the new description.",
+                "type": "string"
+              },
+              {
+                "const": "merged",
+                "description": "Somebody saved in between; both edits were merged.",
+                "type": "string"
+              },
+              {
+                "const": "conflict",
+                "description": "Somebody changed the same lines in between: the description stays\nas they left it, and this edit was kept as a conflict copy.",
+                "type": "string"
+              },
+              {
+                "const": "unchanged",
+                "description": "The text was already that.",
+                "type": "string"
+              }
+            ]
+          },
           "StatusRef": {
             "additionalProperties": false,
             "description": "A task's status, as tasks carry it.",
@@ -16145,6 +19110,13 @@
                 "$ref": "#/$defs/Checklist",
                 "description": "The description's checklist."
               },
+              "checklist_items": {
+                "description": "The description's checklist items, numbered, when asked for with\n`include`.",
+                "items": {
+                  "$ref": "#/$defs/ChecklistItem"
+                },
+                "type": "array"
+              },
               "claim": {
                 "$ref": "#/$defs/Claim",
                 "description": "The agent that claimed it, while the claim lasts."
@@ -16166,6 +19138,12 @@
                 },
                 "type": "array"
               },
+              "conflict_copies": {
+                "description": "Edits of the description that clashed with another and wait to be\nresolved (conflict copies).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
               "created_at": {
                 "description": "When it was created (RFC 3339, UTC).",
                 "type": "string"
@@ -16176,6 +19154,10 @@
               },
               "description": {
                 "description": "Its description (Markdown).",
+                "type": "string"
+              },
+              "description_revision": {
+                "description": "The description's revision; pass it as `base_revision` when you save\na new description. Left out while it has none.",
                 "type": "string"
               },
               "due_date": {
@@ -16252,6 +19234,13 @@
                 "minimum": 0,
                 "type": "integer"
               },
+              "progress_percent": {
+                "description": "Its progress in percent: the progress set by hand, else 100 when\nclosed, else the share of ticked checklist items, else its subtasks'\nprogress weighted by their estimates, else 0.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
               "project": {
                 "description": "Its project's key.",
                 "type": "string"
@@ -16259,6 +19248,13 @@
               "rank": {
                 "description": "Its place in its status column.",
                 "type": "string"
+              },
+              "revisions": {
+                "description": "The description's revisions, newest first, conflict copies\nincluded, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/RevisionInfo"
+                },
+                "type": "array"
               },
               "spent_minutes": {
                 "description": "Logged time in minutes.",
@@ -16292,6 +19288,10 @@
                 "description": "Its title.",
                 "type": "string"
               },
+              "totals": {
+                "$ref": "#/$defs/Totals",
+                "description": "Totals over the task and all its subtasks; only for a task with\nsubtasks."
+              },
               "type": {
                 "$ref": "#/$defs/TypeRef",
                 "description": "Its type."
@@ -16315,8 +19315,10 @@
               "priority",
               "labels",
               "description",
+              "conflict_copies",
               "spent_minutes",
               "checklist",
+              "progress_percent",
               "subtask_count",
               "blocked",
               "comment_count",
@@ -16363,6 +19365,33 @@
               "status",
               "closed",
               "id"
+            ],
+            "type": "object"
+          },
+          "Totals": {
+            "additionalProperties": false,
+            "description": "Estimate and time over a task and all its subtasks.",
+            "properties": {
+              "estimate_minutes": {
+                "description": "The estimates added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "remaining_minutes": {
+                "description": "Estimate minus spent time, in minutes; below 0 when over.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "spent_minutes": {
+                "description": "The logged time added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "estimate_minutes",
+              "spent_minutes",
+              "remaining_minutes"
             ],
             "type": "object"
           },
@@ -16415,6 +19444,10 @@
         "additionalProperties": false,
         "description": "A task changed, with the history group of the change.",
         "properties": {
+          "description_save": {
+            "$ref": "#/$defs/DescriptionSave",
+            "description": "What became of a new description: saved, merged with another edit,\nor kept as a conflict copy."
+          },
           "group": {
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
             "type": "string"
@@ -16682,6 +19715,39 @@
             ],
             "type": "object"
           },
+          "ChecklistItem": {
+            "additionalProperties": false,
+            "description": "One checklist item.",
+            "properties": {
+              "checked": {
+                "description": "Whether it is ticked.",
+                "type": "boolean"
+              },
+              "depth": {
+                "description": "How many items it is nested in.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "number": {
+                "description": "Its number, from 1, in reading order; the reader's checkboxes carry\nthe same number.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "text": {
+                "description": "Its text, without formatting.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "number",
+              "checked",
+              "text",
+              "depth"
+            ],
+            "type": "object"
+          },
           "Claim": {
             "additionalProperties": false,
             "description": "An agent's claim on a task.",
@@ -16801,6 +19867,28 @@
               "body",
               "replaced_by",
               "replaced_at"
+            ],
+            "type": "object"
+          },
+          "DescriptionSave": {
+            "additionalProperties": false,
+            "description": "The result of saving a description.",
+            "properties": {
+              "conflict_copy": {
+                "description": "The conflict copy that holds the edit, after a conflict.",
+                "type": "string"
+              },
+              "outcome": {
+                "$ref": "#/$defs/SaveOutcome",
+                "description": "What became of the edit."
+              },
+              "revision": {
+                "description": "The description's revision now; pass it as `base_revision` next\ntime. Left out while the description has none.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "outcome"
             ],
             "type": "object"
           },
@@ -17022,6 +20110,114 @@
               }
             ]
           },
+          "RevisionInfo": {
+            "additionalProperties": false,
+            "description": "One revision of a description, without its text.",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who saved it."
+              },
+              "base": {
+                "description": "The revision it was edited from.",
+                "type": "string"
+              },
+              "bytes": {
+                "description": "Its size in bytes.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "created_at": {
+                "description": "When (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "current": {
+                "description": "Whether it is the description now.",
+                "type": "boolean"
+              },
+              "id": {
+                "description": "The revision's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/RevisionKind",
+                "description": "How it came about."
+              },
+              "message": {
+                "description": "A note saved with it.",
+                "type": "string"
+              },
+              "resolved_at": {
+                "description": "For a conflict copy: when it was resolved; left out while it is\nopen.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "author",
+              "created_at",
+              "current",
+              "bytes"
+            ],
+            "type": "object"
+          },
+          "RevisionKind": {
+            "description": "How a revision came about.",
+            "oneOf": [
+              {
+                "const": "normal",
+                "description": "A save.",
+                "type": "string"
+              },
+              {
+                "const": "merged",
+                "description": "Two edits of the same revision, merged.",
+                "type": "string"
+              },
+              {
+                "const": "conflict",
+                "description": "An edit that clashed with another; kept aside, not the description.",
+                "type": "string"
+              },
+              {
+                "const": "restored",
+                "description": "An earlier revision brought back (by Undo or a revert).",
+                "type": "string"
+              },
+              {
+                "const": "resolved",
+                "description": "The result of resolving a conflict copy.",
+                "type": "string"
+              }
+            ]
+          },
+          "SaveOutcome": {
+            "description": "What became of a description that was saved.",
+            "oneOf": [
+              {
+                "const": "saved",
+                "description": "Saved as the new description.",
+                "type": "string"
+              },
+              {
+                "const": "merged",
+                "description": "Somebody saved in between; both edits were merged.",
+                "type": "string"
+              },
+              {
+                "const": "conflict",
+                "description": "Somebody changed the same lines in between: the description stays\nas they left it, and this edit was kept as a conflict copy.",
+                "type": "string"
+              },
+              {
+                "const": "unchanged",
+                "description": "The text was already that.",
+                "type": "string"
+              }
+            ]
+          },
           "StatusRef": {
             "additionalProperties": false,
             "description": "A task's status, as tasks carry it.",
@@ -17058,6 +20254,13 @@
                 "$ref": "#/$defs/Checklist",
                 "description": "The description's checklist."
               },
+              "checklist_items": {
+                "description": "The description's checklist items, numbered, when asked for with\n`include`.",
+                "items": {
+                  "$ref": "#/$defs/ChecklistItem"
+                },
+                "type": "array"
+              },
               "claim": {
                 "$ref": "#/$defs/Claim",
                 "description": "The agent that claimed it, while the claim lasts."
@@ -17079,6 +20282,12 @@
                 },
                 "type": "array"
               },
+              "conflict_copies": {
+                "description": "Edits of the description that clashed with another and wait to be\nresolved (conflict copies).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
               "created_at": {
                 "description": "When it was created (RFC 3339, UTC).",
                 "type": "string"
@@ -17089,6 +20298,10 @@
               },
               "description": {
                 "description": "Its description (Markdown).",
+                "type": "string"
+              },
+              "description_revision": {
+                "description": "The description's revision; pass it as `base_revision` when you save\na new description. Left out while it has none.",
                 "type": "string"
               },
               "due_date": {
@@ -17165,6 +20378,13 @@
                 "minimum": 0,
                 "type": "integer"
               },
+              "progress_percent": {
+                "description": "Its progress in percent: the progress set by hand, else 100 when\nclosed, else the share of ticked checklist items, else its subtasks'\nprogress weighted by their estimates, else 0.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
               "project": {
                 "description": "Its project's key.",
                 "type": "string"
@@ -17172,6 +20392,13 @@
               "rank": {
                 "description": "Its place in its status column.",
                 "type": "string"
+              },
+              "revisions": {
+                "description": "The description's revisions, newest first, conflict copies\nincluded, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/RevisionInfo"
+                },
+                "type": "array"
               },
               "spent_minutes": {
                 "description": "Logged time in minutes.",
@@ -17205,6 +20432,10 @@
                 "description": "Its title.",
                 "type": "string"
               },
+              "totals": {
+                "$ref": "#/$defs/Totals",
+                "description": "Totals over the task and all its subtasks; only for a task with\nsubtasks."
+              },
               "type": {
                 "$ref": "#/$defs/TypeRef",
                 "description": "Its type."
@@ -17228,8 +20459,10 @@
               "priority",
               "labels",
               "description",
+              "conflict_copies",
               "spent_minutes",
               "checklist",
+              "progress_percent",
               "subtask_count",
               "blocked",
               "comment_count",
@@ -17276,6 +20509,33 @@
               "status",
               "closed",
               "id"
+            ],
+            "type": "object"
+          },
+          "Totals": {
+            "additionalProperties": false,
+            "description": "Estimate and time over a task and all its subtasks.",
+            "properties": {
+              "estimate_minutes": {
+                "description": "The estimates added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "remaining_minutes": {
+                "description": "Estimate minus spent time, in minutes; below 0 when over.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "spent_minutes": {
+                "description": "The logged time added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "estimate_minutes",
+              "spent_minutes",
+              "remaining_minutes"
             ],
             "type": "object"
           },
@@ -17328,6 +20588,10 @@
         "additionalProperties": false,
         "description": "A task changed, with the history group of the change.",
         "properties": {
+          "description_save": {
+            "$ref": "#/$defs/DescriptionSave",
+            "description": "What became of a new description: saved, merged with another edit,\nor kept as a conflict copy."
+          },
           "group": {
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
             "type": "string"
@@ -17595,6 +20859,39 @@
             ],
             "type": "object"
           },
+          "ChecklistItem": {
+            "additionalProperties": false,
+            "description": "One checklist item.",
+            "properties": {
+              "checked": {
+                "description": "Whether it is ticked.",
+                "type": "boolean"
+              },
+              "depth": {
+                "description": "How many items it is nested in.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "number": {
+                "description": "Its number, from 1, in reading order; the reader's checkboxes carry\nthe same number.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "text": {
+                "description": "Its text, without formatting.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "number",
+              "checked",
+              "text",
+              "depth"
+            ],
+            "type": "object"
+          },
           "Claim": {
             "additionalProperties": false,
             "description": "An agent's claim on a task.",
@@ -17714,6 +21011,28 @@
               "body",
               "replaced_by",
               "replaced_at"
+            ],
+            "type": "object"
+          },
+          "DescriptionSave": {
+            "additionalProperties": false,
+            "description": "The result of saving a description.",
+            "properties": {
+              "conflict_copy": {
+                "description": "The conflict copy that holds the edit, after a conflict.",
+                "type": "string"
+              },
+              "outcome": {
+                "$ref": "#/$defs/SaveOutcome",
+                "description": "What became of the edit."
+              },
+              "revision": {
+                "description": "The description's revision now; pass it as `base_revision` next\ntime. Left out while the description has none.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "outcome"
             ],
             "type": "object"
           },
@@ -17935,6 +21254,114 @@
               }
             ]
           },
+          "RevisionInfo": {
+            "additionalProperties": false,
+            "description": "One revision of a description, without its text.",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who saved it."
+              },
+              "base": {
+                "description": "The revision it was edited from.",
+                "type": "string"
+              },
+              "bytes": {
+                "description": "Its size in bytes.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "created_at": {
+                "description": "When (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "current": {
+                "description": "Whether it is the description now.",
+                "type": "boolean"
+              },
+              "id": {
+                "description": "The revision's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/RevisionKind",
+                "description": "How it came about."
+              },
+              "message": {
+                "description": "A note saved with it.",
+                "type": "string"
+              },
+              "resolved_at": {
+                "description": "For a conflict copy: when it was resolved; left out while it is\nopen.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "author",
+              "created_at",
+              "current",
+              "bytes"
+            ],
+            "type": "object"
+          },
+          "RevisionKind": {
+            "description": "How a revision came about.",
+            "oneOf": [
+              {
+                "const": "normal",
+                "description": "A save.",
+                "type": "string"
+              },
+              {
+                "const": "merged",
+                "description": "Two edits of the same revision, merged.",
+                "type": "string"
+              },
+              {
+                "const": "conflict",
+                "description": "An edit that clashed with another; kept aside, not the description.",
+                "type": "string"
+              },
+              {
+                "const": "restored",
+                "description": "An earlier revision brought back (by Undo or a revert).",
+                "type": "string"
+              },
+              {
+                "const": "resolved",
+                "description": "The result of resolving a conflict copy.",
+                "type": "string"
+              }
+            ]
+          },
+          "SaveOutcome": {
+            "description": "What became of a description that was saved.",
+            "oneOf": [
+              {
+                "const": "saved",
+                "description": "Saved as the new description.",
+                "type": "string"
+              },
+              {
+                "const": "merged",
+                "description": "Somebody saved in between; both edits were merged.",
+                "type": "string"
+              },
+              {
+                "const": "conflict",
+                "description": "Somebody changed the same lines in between: the description stays\nas they left it, and this edit was kept as a conflict copy.",
+                "type": "string"
+              },
+              {
+                "const": "unchanged",
+                "description": "The text was already that.",
+                "type": "string"
+              }
+            ]
+          },
           "StatusRef": {
             "additionalProperties": false,
             "description": "A task's status, as tasks carry it.",
@@ -17971,6 +21398,13 @@
                 "$ref": "#/$defs/Checklist",
                 "description": "The description's checklist."
               },
+              "checklist_items": {
+                "description": "The description's checklist items, numbered, when asked for with\n`include`.",
+                "items": {
+                  "$ref": "#/$defs/ChecklistItem"
+                },
+                "type": "array"
+              },
               "claim": {
                 "$ref": "#/$defs/Claim",
                 "description": "The agent that claimed it, while the claim lasts."
@@ -17992,6 +21426,12 @@
                 },
                 "type": "array"
               },
+              "conflict_copies": {
+                "description": "Edits of the description that clashed with another and wait to be\nresolved (conflict copies).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
               "created_at": {
                 "description": "When it was created (RFC 3339, UTC).",
                 "type": "string"
@@ -18002,6 +21442,10 @@
               },
               "description": {
                 "description": "Its description (Markdown).",
+                "type": "string"
+              },
+              "description_revision": {
+                "description": "The description's revision; pass it as `base_revision` when you save\na new description. Left out while it has none.",
                 "type": "string"
               },
               "due_date": {
@@ -18078,6 +21522,13 @@
                 "minimum": 0,
                 "type": "integer"
               },
+              "progress_percent": {
+                "description": "Its progress in percent: the progress set by hand, else 100 when\nclosed, else the share of ticked checklist items, else its subtasks'\nprogress weighted by their estimates, else 0.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
               "project": {
                 "description": "Its project's key.",
                 "type": "string"
@@ -18085,6 +21536,13 @@
               "rank": {
                 "description": "Its place in its status column.",
                 "type": "string"
+              },
+              "revisions": {
+                "description": "The description's revisions, newest first, conflict copies\nincluded, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/RevisionInfo"
+                },
+                "type": "array"
               },
               "spent_minutes": {
                 "description": "Logged time in minutes.",
@@ -18118,6 +21576,10 @@
                 "description": "Its title.",
                 "type": "string"
               },
+              "totals": {
+                "$ref": "#/$defs/Totals",
+                "description": "Totals over the task and all its subtasks; only for a task with\nsubtasks."
+              },
               "type": {
                 "$ref": "#/$defs/TypeRef",
                 "description": "Its type."
@@ -18141,8 +21603,10 @@
               "priority",
               "labels",
               "description",
+              "conflict_copies",
               "spent_minutes",
               "checklist",
+              "progress_percent",
               "subtask_count",
               "blocked",
               "comment_count",
@@ -18189,6 +21653,33 @@
               "status",
               "closed",
               "id"
+            ],
+            "type": "object"
+          },
+          "Totals": {
+            "additionalProperties": false,
+            "description": "Estimate and time over a task and all its subtasks.",
+            "properties": {
+              "estimate_minutes": {
+                "description": "The estimates added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "remaining_minutes": {
+                "description": "Estimate minus spent time, in minutes; below 0 when over.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "spent_minutes": {
+                "description": "The logged time added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "estimate_minutes",
+              "spent_minutes",
+              "remaining_minutes"
             ],
             "type": "object"
           },
@@ -18241,6 +21732,10 @@
         "additionalProperties": false,
         "description": "A task changed, with the history group of the change.",
         "properties": {
+          "description_save": {
+            "$ref": "#/$defs/DescriptionSave",
+            "description": "What became of a new description: saved, merged with another edit,\nor kept as a conflict copy."
+          },
           "group": {
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
             "type": "string"
@@ -18266,6 +21761,538 @@
       "output_name": "TaskChange",
       "safety": "write",
       "summary": "Remove a link between two tasks, or a subtask from its parent."
+    },
+    {
+      "cli": "description history",
+      "exposure": "data",
+      "id": "description.history",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Whose description history to list: a task's or a project's.",
+        "properties": {
+          "project": {
+            "description": "The project: its key or ID.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "task": {
+            "description": "The task: its key or ID.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "DescriptionHistoryInput",
+        "type": "object"
+      },
+      "input_name": "DescriptionHistoryInput",
+      "kind": "query",
+      "mcp_tool": "get_task",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person or agent."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person or an agent.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              }
+            ]
+          },
+          "RevisionInfo": {
+            "additionalProperties": false,
+            "description": "One revision of a description, without its text.",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who saved it."
+              },
+              "base": {
+                "description": "The revision it was edited from.",
+                "type": "string"
+              },
+              "bytes": {
+                "description": "Its size in bytes.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "created_at": {
+                "description": "When (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "current": {
+                "description": "Whether it is the description now.",
+                "type": "boolean"
+              },
+              "id": {
+                "description": "The revision's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/RevisionKind",
+                "description": "How it came about."
+              },
+              "message": {
+                "description": "A note saved with it.",
+                "type": "string"
+              },
+              "resolved_at": {
+                "description": "For a conflict copy: when it was resolved; left out while it is\nopen.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "author",
+              "created_at",
+              "current",
+              "bytes"
+            ],
+            "type": "object"
+          },
+          "RevisionKind": {
+            "description": "How a revision came about.",
+            "oneOf": [
+              {
+                "const": "normal",
+                "description": "A save.",
+                "type": "string"
+              },
+              {
+                "const": "merged",
+                "description": "Two edits of the same revision, merged.",
+                "type": "string"
+              },
+              {
+                "const": "conflict",
+                "description": "An edit that clashed with another; kept aside, not the description.",
+                "type": "string"
+              },
+              {
+                "const": "restored",
+                "description": "An earlier revision brought back (by Undo or a revert).",
+                "type": "string"
+              },
+              {
+                "const": "resolved",
+                "description": "The result of resolving a conflict copy.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A description's revisions, newest first, conflict copies included.",
+        "properties": {
+          "items": {
+            "description": "The revisions.",
+            "items": {
+              "$ref": "#/$defs/RevisionInfo"
+            },
+            "type": "array"
+          },
+          "total": {
+            "description": "How many.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "RevisionList",
+        "type": "object"
+      },
+      "output_name": "RevisionList",
+      "safety": "read",
+      "summary": "List the revisions of a task's or project's description, newest first, conflict copies included."
+    },
+    {
+      "cli": "description show <revision>",
+      "exposure": "data",
+      "id": "description.revision",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "One revision to read.",
+        "properties": {
+          "diff_from": {
+            "description": "Another revision of the same description: adds the differences\nfrom it to this one.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "revision": {
+            "description": "The revision's ID.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "title": "DescriptionRevisionInput",
+        "type": "object"
+      },
+      "input_name": "DescriptionRevisionInput",
+      "kind": "query",
+      "mcp_tool": "get_description_revision",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person or agent."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person or an agent.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              }
+            ]
+          },
+          "RevisionInfo": {
+            "additionalProperties": false,
+            "description": "One revision of a description, without its text.",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who saved it."
+              },
+              "base": {
+                "description": "The revision it was edited from.",
+                "type": "string"
+              },
+              "bytes": {
+                "description": "Its size in bytes.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "created_at": {
+                "description": "When (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "current": {
+                "description": "Whether it is the description now.",
+                "type": "boolean"
+              },
+              "id": {
+                "description": "The revision's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/RevisionKind",
+                "description": "How it came about."
+              },
+              "message": {
+                "description": "A note saved with it.",
+                "type": "string"
+              },
+              "resolved_at": {
+                "description": "For a conflict copy: when it was resolved; left out while it is\nopen.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "author",
+              "created_at",
+              "current",
+              "bytes"
+            ],
+            "type": "object"
+          },
+          "RevisionKind": {
+            "description": "How a revision came about.",
+            "oneOf": [
+              {
+                "const": "normal",
+                "description": "A save.",
+                "type": "string"
+              },
+              {
+                "const": "merged",
+                "description": "Two edits of the same revision, merged.",
+                "type": "string"
+              },
+              {
+                "const": "conflict",
+                "description": "An edit that clashed with another; kept aside, not the description.",
+                "type": "string"
+              },
+              {
+                "const": "restored",
+                "description": "An earlier revision brought back (by Undo or a revert).",
+                "type": "string"
+              },
+              {
+                "const": "resolved",
+                "description": "The result of resolving a conflict copy.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "One revision with its text.",
+        "properties": {
+          "body": {
+            "description": "The text (Markdown).",
+            "type": "string"
+          },
+          "diff": {
+            "description": "The differences from `diff_from` as a unified diff; empty when the\ntexts are the same.",
+            "type": "string"
+          },
+          "owner": {
+            "description": "The task's or project's key.",
+            "type": "string"
+          },
+          "revision": {
+            "$ref": "#/$defs/RevisionInfo",
+            "description": "The revision."
+          }
+        },
+        "required": [
+          "revision",
+          "owner",
+          "body"
+        ],
+        "title": "RevisionDetail",
+        "type": "object"
+      },
+      "output_name": "RevisionDetail",
+      "safety": "read",
+      "summary": "One description revision with its text, and the differences from another revision on request."
+    },
+    {
+      "app_reason": "It produces HTML for the app's reader; agents and the command line read the Markdown itself.",
+      "exposure": "app",
+      "id": "markdown.render",
+      "input": {
+        "$defs": {
+          "RenderSource": {
+            "additionalProperties": false,
+            "description": "One text to render. Give exactly one of `source`, `task`, `comment`,\n`project` and `revision`.",
+            "properties": {
+              "comment": {
+                "description": "A comment's body: its ID.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "document_id": {
+                "description": "The id that keeps this text's footnote anchors apart from others on\nthe page; default: the item's ID (`preview` for `source`).",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "project": {
+                "description": "A project's description: its key or ID.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "revision": {
+                "description": "A description revision: its ID.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "source": {
+                "description": "Markdown to render as it is, such as an editor's preview.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "task": {
+                "description": "A task's description: its key or ID.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Texts to render for the reader.",
+        "properties": {
+          "documents": {
+            "description": "One to 200 texts.",
+            "items": {
+              "$ref": "#/$defs/RenderSource"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "documents"
+        ],
+        "title": "RenderInput",
+        "type": "object"
+      },
+      "input_name": "RenderInput",
+      "kind": "query",
+      "output": {
+        "$defs": {
+          "ChecklistItem": {
+            "additionalProperties": false,
+            "description": "One checklist item.",
+            "properties": {
+              "checked": {
+                "description": "Whether it is ticked.",
+                "type": "boolean"
+              },
+              "depth": {
+                "description": "How many items it is nested in.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "number": {
+                "description": "Its number, from 1, in reading order; the reader's checkboxes carry\nthe same number.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "text": {
+                "description": "Its text, without formatting.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "number",
+              "checked",
+              "text",
+              "depth"
+            ],
+            "type": "object"
+          },
+          "Rendered": {
+            "additionalProperties": false,
+            "description": "One rendered text.",
+            "properties": {
+              "checklist": {
+                "description": "Its checklist; the HTML's checkboxes carry the same numbers.",
+                "items": {
+                  "$ref": "#/$defs/ChecklistItem"
+                },
+                "type": "array"
+              },
+              "document_id": {
+                "description": "The id its footnote anchors are made from.",
+                "type": "string"
+              },
+              "html": {
+                "description": "Sanitized HTML, safe to insert as it is.",
+                "type": "string"
+              },
+              "revision": {
+                "description": "The description's revision that was rendered, for a task or\nproject.",
+                "type": "string"
+              },
+              "version": {
+                "description": "The item's version (task or comment) that was rendered.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "html",
+              "document_id",
+              "checklist"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The rendered texts, in the order asked.",
+        "properties": {
+          "items": {
+            "description": "The texts.",
+            "items": {
+              "$ref": "#/$defs/Rendered"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "RenderOutput",
+        "type": "object"
+      },
+      "output_name": "RenderOutput",
+      "safety": "read",
+      "summary": "Render descriptions, comments or editor text to the reader's sanitized HTML, with numbered checkboxes and linked task keys."
     },
     {
       "cli": "comment list <key>",
@@ -19687,6 +23714,13 @@
                 "$ref": "#/$defs/Priority",
                 "description": "Its priority."
               },
+              "progress_percent": {
+                "description": "Its progress in percent, as tasks show it.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
               "project": {
                 "description": "Its project's key (differs from the board's for sub-project tasks).",
                 "type": "string"
@@ -19738,6 +23772,7 @@
               "priority",
               "labels",
               "checklist",
+              "progress_percent",
               "subtasks",
               "blocked",
               "comment_count",

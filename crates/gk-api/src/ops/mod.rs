@@ -25,6 +25,7 @@ pub mod agent;
 pub mod board;
 pub mod comment;
 pub mod common;
+pub mod description;
 pub mod file;
 pub mod history;
 pub mod project;

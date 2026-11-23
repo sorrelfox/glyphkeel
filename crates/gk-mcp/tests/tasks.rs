@@ -84,3 +84,68 @@ async fn an_agent_creates_and_moves_a_task() {
     assert!(ops.contains(&"task.move"), "{ops:?}");
     assert_eq!(ops.iter().filter(|o| **o == "task.create").count(), 1);
 }
+
+#[tokio::test]
+async fn an_agent_edits_a_description_and_ticks_its_checklist() {
+    let (_dir, options) = workspace();
+    let (_, mode, version, _) = lifecycles().remove(0);
+    let c = connect(&options, mode, version, "Checklist Agent").await;
+    output(
+        &c.call("create_project", json!({ "name": "Agents", "key": "AG" }))
+            .await,
+    );
+    output(
+        &c.call(
+            "create_task",
+            json!({ "project": "AG", "title": "Ship", "description": "Plan\n\n- [ ] build\n- [ ] test\n" }),
+        )
+        .await,
+    );
+    let task = output(
+        &c.call(
+            "get_task",
+            json!({ "keys": ["AG-1"], "include": ["checklist", "revisions"] }),
+        )
+        .await,
+    );
+    let item = &task["items"][0]["checklist_items"][1];
+    assert_eq!(
+        (item["number"].clone(), item["text"].clone()),
+        (json!(2), json!("test"))
+    );
+    let base = task["items"][0]["description_revision"].clone();
+
+    let ticked = output(
+        &c.call(
+            "update_checklist",
+            json!({ "key": "AG-1", "toggle": [{ "number": 2, "text": "test", "checked": true }] }),
+        )
+        .await,
+    );
+    assert_eq!(ticked["checklist"], json!({ "done": 1, "total": 2 }));
+
+    // A whole description from the old base merges with the tick.
+    let saved = output(
+        &c.call(
+            "update_task",
+            json!({ "key": "AG-1", "description": "Plan, revised\n\n- [ ] build\n- [ ] test\n",
+                    "base_revision": base }),
+        )
+        .await,
+    );
+    assert_eq!(saved["description_save"]["outcome"], "merged");
+    assert_eq!(
+        saved["task"]["description"],
+        "Plan, revised\n\n- [ ] build\n- [x] test\n"
+    );
+    let revision = saved["description_save"]["revision"].clone();
+    let detail = output(
+        &c.call(
+            "get_description_revision",
+            json!({ "revision": revision, "diff_from": base }),
+        )
+        .await,
+    );
+    assert!(detail["diff"].as_str().unwrap().contains("+Plan, revised"));
+    c.close().await;
+}

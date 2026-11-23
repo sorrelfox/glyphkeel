@@ -11,6 +11,7 @@ pub(crate) mod agent;
 pub(crate) mod board;
 pub(crate) mod claim;
 pub(crate) mod comment;
+pub(crate) mod description;
 pub(crate) mod duplicate;
 pub(crate) mod fields;
 pub(crate) mod file;
@@ -19,6 +20,7 @@ pub(crate) mod lookup;
 pub(crate) mod project;
 pub(crate) mod project_delete;
 pub(crate) mod relation;
+pub(crate) mod rollup;
 pub(crate) mod settings;
 pub(crate) mod task;
 pub(crate) mod workspace;
@@ -40,6 +42,7 @@ pub(crate) fn register(r: &mut Registry) {
     claim::register(r);
     relation::register(r);
     comment::register(r);
+    description::register(r);
     board::register(r);
     file::register(r);
 }

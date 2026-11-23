@@ -24,6 +24,7 @@ publish = false
 gk-api = { path = "crates/gk-api" }
 gk-core = { path = "crates/gk-core" }
 gk-engine = { path = "crates/gk-engine" }
+gk-markdown = { path = "crates/gk-markdown" }
 gk-mcp = { path = "crates/gk-mcp" }
 gk-store = { path = "crates/gk-store" }
 
@@ -79,6 +80,9 @@ regex = "1.13.2"
 # Spelling in the Markdown editor: a Rust port of Hunspell that reads the
 # system's Hunspell dictionaries (MPL-2.0).
 spellbook = "=0.4.2"
+# Line diffs for the three-way merge of descriptions and the differences
+# between two revisions (already in the lock through insta).
+similar = { version = "2.7.0", default-features = false, features = ["text"] }
 # Error types.
 thiserror = "2.0.21"
 # Structured logs (slow write transactions, checkpoints).

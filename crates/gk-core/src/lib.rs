@@ -16,6 +16,8 @@ pub mod id;
 pub mod key;
 pub mod kinds;
 pub mod link;
+pub mod merge;
+pub mod progress;
 pub mod rank;
 pub mod status;
 pub mod text;
@@ -31,6 +33,8 @@ pub use id::{Id, IdError};
 pub use key::{KeyError, ProjectKey, TaskKey};
 pub use kinds::{Glyph, Hue, KindError, Priority};
 pub use link::{LinkKind, Relation};
+pub use merge::{Edit, EditError, Merge, apply_edits, merge3, unified_diff};
+pub use progress::{SubtaskProgress, progress, subtask_progress};
 pub use rank::{Rank, RankError};
 pub use status::{DEFAULT_STATUSES, DEFAULT_TASK_TYPES, StatusCategory, closed_at_after_move};
 pub use text::{

@@ -14,6 +14,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::catalog::{Exposure, Meta, OpDescriptor, OpKind, Safety};
 use crate::ops::common::{Actor, Category, Edge, Glyph, Hue, Priority};
+use crate::ops::description::{
+    ChecklistItem, ConflictResolution, DescriptionSave, RevisionInfo, TextEdit,
+};
 
 /// A task's status, as tasks carry it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -85,6 +88,13 @@ pub struct Task {
     pub parent: Option<String>,
     /// Its description (Markdown).
     pub description: String,
+    /// The description's revision; pass it as `base_revision` when you save
+    /// a new description. Left out while it has none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description_revision: Option<String>,
+    /// Edits of the description that clashed with another and wait to be
+    /// resolved (conflict copies).
+    pub conflict_copies: u32,
     /// The start date.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub start_date: Option<String>,
@@ -104,6 +114,14 @@ pub struct Task {
     pub spent_minutes: i64,
     /// The description's checklist.
     pub checklist: Checklist,
+    /// Its progress in percent: the progress set by hand, else 100 when
+    /// closed, else the share of ticked checklist items, else its subtasks'
+    /// progress weighted by their estimates, else 0.
+    pub progress_percent: u8,
+    /// Totals over the task and all its subtasks; only for a task with
+    /// subtasks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub totals: Option<Totals>,
     /// Its subtasks: closed and all.
     pub subtask_count: Checklist,
     /// Whether a task that blocks it is still open.
@@ -127,6 +145,14 @@ pub struct Task {
     /// The files attached to it, when asked for with `include`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub files: Option<Vec<crate::ops::file::Attachment>>,
+    /// The description's checklist items, numbered, when asked for with
+    /// `include`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checklist_items: Option<Vec<ChecklistItem>>,
+    /// The description's revisions, newest first, conflict copies
+    /// included, when asked for with `include`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub revisions: Option<Vec<RevisionInfo>>,
     /// Its place in its status column.
     pub rank: String,
     /// Keys it had before; they still find it.
@@ -150,6 +176,18 @@ pub struct Task {
     pub version: i64,
     /// The task's ID.
     pub id: String,
+}
+
+/// Estimate and time over a task and all its subtasks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Totals {
+    /// The estimates added up, in minutes.
+    pub estimate_minutes: i64,
+    /// The logged time added up, in minutes.
+    pub spent_minutes: i64,
+    /// Estimate minus spent time, in minutes; below 0 when over.
+    pub remaining_minutes: i64,
 }
 
 /// An agent's claim on a task.
@@ -224,6 +262,10 @@ pub enum TaskPart {
     Comments,
     /// The attached files.
     Files,
+    /// The description's checklist items, numbered.
+    Checklist,
+    /// The description's revisions and conflict copies.
+    Revisions,
 }
 
 /// A task changed, with the history group of the change.
@@ -240,6 +282,10 @@ pub struct TaskChange {
     /// subtasks are still open.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
+    /// What became of a new description: saved, merged with another edit,
+    /// or kept as a conflict copy.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description_save: Option<DescriptionSave>,
 }
 
 /// Which tasks to read.
@@ -248,7 +294,8 @@ pub struct TaskChange {
 pub struct TaskGetInput {
     /// One to 20 task keys or IDs.
     pub keys: Vec<String>,
-    /// What to add to each task: `subtasks`, `links`, `comments`, `files`.
+    /// What to add to each task: `subtasks`, `links`, `comments`, `files`,
+    /// `checklist`, `revisions`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub include: Vec<TaskPart>,
 }
@@ -349,6 +396,19 @@ pub struct TaskUpdateInput {
     /// A new description (Markdown), replacing the old one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// The description revision your new description was edited from. If
+    /// somebody saved in between, the two edits are merged; when they
+    /// changed the same lines, yours is kept as a conflict copy and the
+    /// description stays as it is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_revision: Option<String>,
+    /// Targeted changes to the description instead of a new one: each
+    /// `old_text` must occur exactly once.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub description_edits: Vec<TextEdit>,
+    /// Resolve a conflict copy of the description.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolve_conflict: Option<ConflictResolution>,
     /// A new type.
     #[serde(default, rename = "type", skip_serializing_if = "Option::is_none")]
     pub task_type: Option<String>,
@@ -642,7 +702,7 @@ pub(crate) const TASK_CREATE: OpDescriptor = OpDescriptor::of::<TaskCreate>(Meta
 });
 
 pub(crate) const TASK_UPDATE: OpDescriptor = OpDescriptor::of::<TaskUpdate>(Meta {
-    summary: "Change a task's title, description, type, priority, labels, parent, dates, estimate or progress.",
+    summary: "Change a task's title, description (whole, with a base revision, or by targeted edits), type, priority, labels, parent, dates, estimate or progress.",
     kind: OpKind::Command,
     safety: Safety::Write,
     exposure: Exposure::Data,

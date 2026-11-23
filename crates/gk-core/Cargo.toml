@@ -17,6 +17,7 @@ workspace = true
 [dependencies]
 icu_casemap = { workspace = true }
 icu_normalizer = { workspace = true }
+similar = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true }
 

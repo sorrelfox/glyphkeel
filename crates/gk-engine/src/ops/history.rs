@@ -27,6 +27,7 @@ use gk_store::rusqlite::types::Value as SqlValue;
 use gk_store::rusqlite::{OptionalExtension, Row, Transaction, params, params_from_iter};
 use serde_json::{Map, Value};
 
+use super::description::{self, Owner};
 use super::{agent, board, claim, comment, desc, fields, file, project, relation, settings, task};
 use crate::failure::Failure;
 use crate::registry::{QueryCtx, Registry};
@@ -285,6 +286,10 @@ fn current(
         (comment::ENTITY, "body") => comment::raw_body(tx, id)?,
         (file::ENTITY, "created" | "trashed") => file::raw_life(tx, id, field)?,
         (fields::TASK, "claim") => claim::raw(tx, id)?,
+        (fields::PROJECT | fields::TASK, "description") => match Owner::of_entity(entity, id) {
+            Some(owner) => description::raw(tx, owner)?,
+            None => return Ok(None),
+        },
         (fields::PROJECT | fields::TASK, "created") => {
             let table = if entity == fields::TASK {
                 "tasks"
@@ -352,6 +357,10 @@ fn apply(
         }
         (file::ENTITY, "created" | "trashed") => file::set_live(w, id, project, field, value),
         (fields::TASK, "claim") => claim::apply(w, id, project, value),
+        (fields::PROJECT | fields::TASK, "description") => match Owner::of_entity(entity, id) {
+            Some(owner) => description::restore(w, owner, project, value.as_ref()),
+            None => Ok(()),
+        },
         (fields::PROJECT | fields::TASK, "created") => {
             let is_task = entity == fields::TASK;
             let (table, child) = if is_task {
@@ -459,7 +468,7 @@ fn apply(
         }
         _ => {
             fields::set(w, entity, id, project, field, value)?;
-            if entity == fields::TASK && matches!(field, "title" | "description") {
+            if entity == fields::TASK && field == "title" {
                 task::refresh_text(w, id)?;
             }
             Ok(())

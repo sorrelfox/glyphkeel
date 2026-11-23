@@ -220,7 +220,14 @@ fn reindex(w: &WriteCtx<'_>, id: Id) -> Result<(), Failure> {
                  VALUES ('comment', ?1, ?2, ?3, ?4, ?5, ?6)
                  ON CONFLICT (kind, entity_id) DO UPDATE SET title = excluded.title,
                    body = excluded.body, updated_at = excluded.updated_at",
-                params![b(id), task, project, title, body, w.now()],
+                params![
+                    b(id),
+                    task,
+                    project,
+                    title,
+                    gk_markdown::plain_text(&body),
+                    w.now()
+                ],
             )?;
         }
         _ => {

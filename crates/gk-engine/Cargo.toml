@@ -14,6 +14,7 @@ publish.workspace = true
 [dependencies]
 gk-api = { workspace = true }
 gk-core = { workspace = true }
+gk-markdown = { workspace = true }
 gk-store = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

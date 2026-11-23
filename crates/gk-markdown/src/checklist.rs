@@ -24,6 +24,10 @@ pub struct ChecklistItem {
     pub symbol_offset: usize,
     /// How many checklist items this one is nested in.
     pub depth: usize,
+    /// The bytes of the item's lines in the source: from the start of its
+    /// first line to the end of its last line, line ending included. Its
+    /// nested items are inside.
+    pub lines: std::ops::Range<usize>,
 }
 
 /// Why a checkbox could not be changed.
@@ -169,6 +173,7 @@ pub(crate) fn items<'a>(root: &'a AstNode<'a>, source: &str) -> Vec<ChecklistIte
             continue;
         };
         let position = task.symbol_sourcepos.start;
+        let span = node.data().sourcepos;
         let depth = node
             .ancestors()
             .skip(1)
@@ -180,9 +185,24 @@ pub(crate) fn items<'a>(root: &'a AstNode<'a>, source: &str) -> Vec<ChecklistIte
             text: item_text(node),
             symbol_offset: lines.offset(position.line, position.column),
             depth,
+            lines: without_blank_end(
+                source,
+                lines.line_start(span.start.line)..lines.line_start(span.end.line + 1),
+            ),
         });
     }
     out
+}
+
+/// `range` without the blank lines at its end, which the parser counts to
+/// the last item of a list.
+fn without_blank_end(source: &str, range: std::ops::Range<usize>) -> std::ops::Range<usize> {
+    let mut end = range.end;
+    let mut lines: Vec<&str> = source[range.clone()].split_inclusive('\n').collect();
+    while lines.len() > 1 && lines.last().is_some_and(|l| l.trim().is_empty()) {
+        end -= lines.pop().map_or(0, str::len);
+    }
+    range.start..end
 }
 
 /// The text of an item's first paragraph.
@@ -201,6 +221,7 @@ fn item_text<'a>(item: &'a AstNode<'a>) -> String {
 /// bytes) to byte offsets in the source.
 struct LineIndex {
     starts: Vec<usize>,
+    len: usize,
 }
 
 impl LineIndex {
@@ -222,7 +243,19 @@ impl LineIndex {
             }
             i += 1;
         }
-        Self { starts }
+        Self {
+            starts,
+            len: source.len(),
+        }
+    }
+
+    /// Where line `line` (from 1) starts; the end of the source for a line
+    /// after the last.
+    fn line_start(&self, line: usize) -> usize {
+        self.starts
+            .get(line.saturating_sub(1))
+            .copied()
+            .unwrap_or(self.len)
     }
 
     fn offset(&self, line: usize, column: usize) -> usize {

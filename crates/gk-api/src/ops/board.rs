@@ -103,6 +103,8 @@ pub struct Card {
     pub estimate_minutes: Option<i64>,
     /// The description's checklist.
     pub checklist: Checklist,
+    /// Its progress in percent, as tasks show it.
+    pub progress_percent: u8,
     /// Its subtasks: closed and all.
     pub subtasks: Checklist,
     /// Whether a task that blocks it is still open.

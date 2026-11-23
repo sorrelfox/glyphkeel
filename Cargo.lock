@@ -1687,6 +1687,7 @@ dependencies = [
  "icu_casemap",
  "icu_normalizer",
  "proptest",
+ "similar",
  "thiserror 2.0.21",
  "uuid",
 ]
@@ -1713,6 +1714,7 @@ version = "0.0.0"
 dependencies = [
  "gk-api",
  "gk-core",
+ "gk-markdown",
  "gk-store",
  "schemars 1.2.3",
  "serde",

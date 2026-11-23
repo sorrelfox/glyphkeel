@@ -321,6 +321,7 @@ fn cards_of(
                         done: u32::try_from(r.get::<_, i64>(12)?).unwrap_or(0),
                         total: u32::try_from(r.get::<_, i64>(13)?).unwrap_or(0),
                     },
+                    progress_percent: 0,
                     subtasks: Checklist {
                         done: u32::try_from(r.get::<_, i64>(20)?).unwrap_or(0),
                         total: u32::try_from(r.get::<_, i64>(19)?).unwrap_or(0),
@@ -348,6 +349,7 @@ fn cards_of(
             .parse()
             .map_err(|_| Failure::Op(OpError::storage("A task ID is broken.")))?;
         card.labels = task_labels(tx, id)?;
+        card.progress_percent = super::rollup::progress(tx, id)?;
         if let Some(parent) = card.parent.take()
             && let Ok(parent) = parent.parse::<Id>()
             && let Some(row) = lookup::task_by_id(tx, parent)?

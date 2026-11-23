@@ -679,6 +679,7 @@ fn create(w: &mut WriteCtx<'_>, input: ProjectCreateInput) -> Result<ProjectChan
         ],
     )?;
     copy_configuration(w, id, parent_id)?;
+    super::description::initial(w, super::description::Owner::Project(id), &description)?;
     w.record_field(
         PROJECT,
         id,
@@ -931,17 +932,24 @@ fn update(w: &mut WriteCtx<'_>, input: ProjectUpdateInput) -> Result<ProjectChan
     if let Some(description) = &input.description {
         gk_core::check_markdown("description", description)
             .map_err(|e| invalid("description", e))?;
-        fields::set(
+        super::description::save(
             w,
-            PROJECT,
-            p.id,
+            super::description::Owner::Project(p.id),
             pid,
-            "description",
-            text(description.as_str()),
+            description,
+            None,
+            "normal",
         )?;
     }
     if clears(ProjectField::Description) {
-        fields::set(w, PROJECT, p.id, pid, "description", text(""))?;
+        super::description::save(
+            w,
+            super::description::Owner::Project(p.id),
+            pid,
+            "",
+            None,
+            "normal",
+        )?;
     }
     if let Some(hue) = input.hue {
         fields::set(w, PROJECT, p.id, pid, "hue", text(enum_text(hue)))?;

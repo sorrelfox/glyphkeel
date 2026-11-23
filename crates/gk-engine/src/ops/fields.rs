@@ -5,6 +5,8 @@
 //! each maps to its column, how its value reads in history, and how it is
 //! written. Handlers change fields through [`set`], which records the
 //! change; revert writes the recorded value back through the same path.
+//! Descriptions are not listed: they change through their revisions
+//! (`description.rs`).
 
 use gk_core::{Id, fold};
 use gk_store::StoreError;
@@ -89,7 +91,6 @@ const fn folded(entity: &'static str, field: &'static str, table: &'static str) 
 
 const SPECS: &[Spec] = &[
     folded(PROJECT, "name", "projects"),
-    spec(PROJECT, "description", "projects", "description", Enc::Text),
     spec(PROJECT, "hue", "projects", "hue", Enc::Text),
     spec(PROJECT, "icon", "projects", "icon", Enc::Text),
     spec(PROJECT, "modules", "projects", "modules", Enc::Json),
@@ -111,7 +112,6 @@ const SPECS: &[Spec] = &[
     spec(LABEL, "hue", "labels", "hue", Enc::Text),
     spec(LABEL, "rank", "labels", "rank", Enc::Text),
     folded(TASK, "title", "tasks"),
-    spec(TASK, "description", "tasks", "description", Enc::Text),
     spec(TASK, "status", "tasks", "status_id", Enc::Id),
     spec(TASK, "type", "tasks", "type_id", Enc::Id),
     spec(TASK, "priority", "tasks", "priority", Enc::Priority),
