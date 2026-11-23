@@ -194,6 +194,18 @@ export interface FakeReminder {
   acknowledged: boolean;
 }
 
+/** A wiki page; its text is kept whole, without revisions. */
+export interface FakeWikiPage {
+  id: string;
+  projectId: string;
+  title: string;
+  slug: string;
+  parentId: string | null;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface FakeState {
   projects: FakeProject[];
   tasks: FakeTask[];
@@ -213,6 +225,8 @@ export interface FakeState {
   settings: Settings;
   /** Saved views of the list and other screens; none until one is saved. */
   views?: SavedView[];
+  /** Wiki pages; none until one is made. */
+  wiki?: FakeWikiPage[];
   workspaceName: string;
   seq: number;
 }

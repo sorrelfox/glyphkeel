@@ -10,6 +10,7 @@ import { Button } from "react-aria-components";
 import { useContextMenu, type MenuEntry } from "../components/ContextMenu";
 import { classes } from "../classes";
 import { useT } from "../i18n/I18n";
+import { startLink } from "./complete";
 import { applyFormat } from "./format";
 import { convertLineBreaks, openText, type LineBreak } from "./lineEndings";
 import styles from "./MarkdownEditor.module.css";
@@ -179,6 +180,12 @@ export default function MarkdownEditor(props: MarkdownEditorProps) {
         if (editor) {
           applyFormat(editor, kind);
           editor.focus();
+        }
+      },
+      startLink: (kind) => {
+        const editor = view.current;
+        if (editor && !editor.state.readOnly) {
+          startLink(editor, kind);
         }
       },
       positionAt: (x, y) => view.current?.posAtCoords({ x, y }) ?? null,

@@ -1,0 +1,151 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+   Copyright (C) 2026 Glyphkeel contributors
+
+   The search page: the field and its filters, then ranked results with the
+   matches marked, in a column clamped to a readable width. */
+
+.layout {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.scroll {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: auto;
+  padding: 20px 24px 32px;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+.field {
+  height: var(--h-toolbar);
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.project {
+  min-width: 180px;
+}
+
+.summary {
+  margin: 0;
+  padding: 0 4px;
+  font-size: var(--fs-small);
+}
+
+.results {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-radius: var(--r-l);
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+.results > li + li {
+  border-top: 1px solid var(--border);
+}
+
+.hit {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  gap: 2px 10px;
+  align-items: center;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: default;
+}
+
+.hit:hover {
+  background: var(--hover);
+}
+
+.hit[data-open] {
+  background: var(--selected, var(--hover));
+}
+
+.hit > .ic {
+  color: var(--fg-muted);
+}
+
+.hitTitle {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.where {
+  justify-self: end;
+}
+
+.snippet {
+  grid-column: 2 / 4;
+  overflow: hidden;
+  color: var(--fg-muted);
+  font-size: var(--fs-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hit mark,
+.wikiPage mark {
+  border-radius: var(--r-s);
+  background: color-mix(in srgb, var(--accent) 38%, transparent);
+  color: inherit;
+}
+
+.text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.more {
+  align-self: center;
+}
+
+.nothing {
+  margin: 0;
+  padding: 8px 4px;
+}
+
+/* ---------- a wiki page, read only ---------- */
+
+.wikiPage {
+  width: min(760px, 80vw);
+}
+
+.wikiPath {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0 0 12px;
+  font-size: var(--fs-small);
+}
+
+.wikiNote {
+  margin: 16px 0 0;
+  color: var(--fg-faint);
+  font-size: var(--fs-small);
+}

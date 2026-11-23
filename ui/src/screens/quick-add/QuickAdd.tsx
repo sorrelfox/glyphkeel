@@ -4,17 +4,15 @@
 import { useMutation } from "@tanstack/react-query";
 import { CalendarDays, Flag, Plus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useLocale } from "react-aria-components";
 
 import { useAppearance } from "../../appearance/AppearanceProvider";
 import { classes } from "../../classes";
 import { ProjectMark } from "../../components/ProjectMark";
 import { Select } from "../../components/Select";
 import { useProjects } from "../../data/board";
-import { useCall, useOp } from "../../data/hooks";
+import { errorToast, useCall } from "../../data/hooks";
 import { OpFailure } from "../../data/transport";
-import { useToday } from "../../data/zone";
-import { type TaskCreateInput } from "../../generated/ops";
+import { type TaskChange, type TaskCreateInput } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { hideQuickAdd, onQuickAddShown } from "../../ipc/quickAdd";
 import { appWindow } from "../../ipc/window";
@@ -25,9 +23,9 @@ import styles from "./QuickAdd.module.css";
 /** The project new tasks went to last, kept for the next time. */
 const LAST_PROJECT = "quickAdd.project";
 
-/** A day as the field shows it: "Fri 27 Nov". */
-function formatDay(day: string, locale: string): string {
-  return new Intl.DateTimeFormat(locale, { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }).format(Date.parse(`${day}T00:00:00Z`));
+/** Whether the engine refused a task because it could not read its date. */
+function unreadDate(error: unknown): boolean {
+  return error instanceof OpFailure && error.error.code !== "ipc" && error.error.details?.message_id === "date-invalid";
 }
 
 /**
@@ -38,10 +36,7 @@ function formatDay(day: string, locale: string): string {
  */
 export function QuickAdd() {
   const t = useT();
-  const { locale } = useLocale();
   const call = useCall();
-  const today = useToday();
-  const settings = useOp("settings.get", {});
   const projects = useProjects();
   const { appearance, update } = useAppearance();
   const input = useRef<HTMLInputElement>(null);
@@ -55,7 +50,7 @@ export function QuickAdd() {
 
   const active = (projects.data?.items ?? []).filter((project) => project.state === "active");
   const choices = active.map((project) => ({ key: project.key, name: project.name }));
-  const parsed = parseQuickAdd(text, { projects: choices, today, weekStart: settings.data?.week_start ?? "monday", keepDate });
+  const parsed = parseQuickAdd(text, { projects: choices, keepDate });
   const fallback = active.find((project) => project.key === picked) ?? active[0];
   const project = parsed.project ?? fallback?.key;
 
@@ -95,15 +90,30 @@ export function QuickAdd() {
     input.current?.focus();
   }, []);
 
+  // The engine reads the date. Should it not read the words at the end, a
+  // shorter date is tried; with none left, its answer about the first.
   const create = useMutation({
-    mutationFn: (task: TaskCreateInput) => call("task.create", task),
+    mutationFn: async (tries: TaskCreateInput[]): Promise<TaskChange> => {
+      let first: unknown = null;
+      for (const task of tries) {
+        try {
+          return await call("task.create", task);
+        } catch (error) {
+          first ??= error;
+          if (!unreadDate(error)) {
+            throw error;
+          }
+        }
+      }
+      throw first;
+    },
     onSuccess: async (change) => {
       setNote({ tone: "info", text: t("quick-add-added", { key: change.task.key }) });
       reset();
       await hideQuickAdd();
     },
     onError: (error) => {
-      setNote({ tone: "error", text: error instanceof OpFailure ? error.error.message : t("error-ipc") });
+      setNote({ tone: "error", text: errorToast(t, error).text });
     },
   });
 
@@ -123,12 +133,9 @@ export function QuickAdd() {
     if (parsed.project === undefined) {
       writePref(LAST_PROJECT, project);
     }
-    create.mutate({
-      project,
-      title: parsed.title,
-      ...(parsed.due === undefined ? {} : { due_date: parsed.due }),
-      ...(parsed.priority === undefined ? {} : { priority: parsed.priority }),
-    });
+    const base = { project, ...(parsed.priority === undefined ? {} : { priority: parsed.priority }) };
+    const dates = parsed.dueText === undefined ? [] : [{ title: parsed.title, dueText: parsed.dueText }, ...(parsed.shorterDates ?? [])];
+    create.mutate(dates.length === 0 ? [{ ...base, title: parsed.title }] : dates.map((date) => ({ ...base, title: date.title, due_date: date.dueText })));
   };
 
   const close = () => {
@@ -187,10 +194,10 @@ export function QuickAdd() {
             }}
           />
         )}
-        {parsed.due !== undefined && parsed.dueText !== undefined && (
+        {parsed.dueText !== undefined && (
           <span className={classes("chip outline", styles.chip)} data-testid="quick-add-due">
             <CalendarDays className="ic s" aria-hidden="true" />
-            {t("quick-add-due", { date: formatDay(parsed.due, locale) })}
+            {t("quick-add-due", { words: parsed.dueText })}
             <button
               type="button"
               className={styles.drop}

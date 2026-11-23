@@ -5,6 +5,36 @@ Conventional Commits, and versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.0.6] - 2026-11-23
+
+Today, search across the whole workspace, a command palette and quick add from
+anywhere on the desktop.
+
+### Features
+
+- **Today:** a start page with what is overdue, due today and in progress,
+  reminders, tasks agents are working on, what changed in the last day and the
+  running timer. The sidebar shows how many tasks are due today and open.
+- **Global search:** one search across tasks, comments, wiki pages, files and
+  projects, ranked, with the matching words highlighted and filters by kind
+  and project. Typing in the sidebar's search field suggests tasks, projects
+  and actions at once; Enter opens all results.
+- **Command palette:** press Ctrl+K to run any action, jump to a task by its
+  key or words, or go to a project, all from the keyboard.
+- **Quick add:** a small window to capture a task with its project, priority
+  and due date in one line (`Renew domain fri #Personal !high`). Open it from
+  the tray, the menu, `glyphkeel --quick-add`, or a global keyboard shortcut
+  you can turn on in Preferences. The window starts only when first used.
+- **Links in the editor:** type `#` to link a task by its title or key, and
+  `[[` to link a wiki page or one of its headings, or use the new toolbar
+  buttons. Wiki links open the page.
+- **Wiki pages from the command line and for agents:** list, search, read,
+  create and update wiki pages with `glyphkeel wiki` and through the agent
+  server.
+- **Dates in words:** start and due dates accept "tomorrow", "next fri",
+  "in 3d" or "dec 1" in the task panel, in quick add, on the command line and
+  for agents, all read the same way.
+
 ## [0.0.5] - 2026-11-23
 
 A task list with a query language, and a set of smaller improvements.

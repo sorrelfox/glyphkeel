@@ -548,6 +548,33 @@ mod app {
     }
 
     #[test]
+    fn quick_add_starts_the_app_with_its_quick_add_window() {
+        let dir = tempfile::tempdir().unwrap();
+        let bin = dir.path().join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        let program = bin.join("glyphkeel");
+        copy_program(&program);
+        let record = dir.path().join("args");
+        stand_in(&bin, &record);
+
+        let out = Command::new(&program)
+            .arg("--quick-add")
+            .env("PATH", "/usr/bin:/bin")
+            .output()
+            .unwrap();
+        assert_eq!(code(&out), 0, "{}", stderr(&out));
+        assert_eq!(arguments_of_stand_in(&record), ["--quick-add"]);
+
+        // It is not an option of the other commands.
+        let out = Command::new(&program)
+            .args(["--quick-add", "task", "list"])
+            .output()
+            .unwrap();
+        assert_eq!(code(&out), 1);
+        assert!(stderr(&out).contains("--quick-add"), "{}", stderr(&out));
+    }
+
+    #[test]
     fn without_the_app_open_exits_2() {
         let dir = tempfile::tempdir().unwrap();
         let program = dir.path().join("glyphkeel");

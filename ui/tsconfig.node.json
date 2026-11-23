@@ -17,5 +17,5 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
-  "include": ["vite.config.ts", "playwright.config.ts", "playwright.bridge.config.ts", "playwright.fake.config.ts", "playwright.editor.config.ts", "playwright.list.config.ts", "playwright.palette.config.ts", "scripts/frozen-prototype.ts", "scripts/frozen-prototype.test.ts", "tests"]
+  "include": ["vite.config.ts", "playwright.config.ts", "playwright.bridge.config.ts", "playwright.fake.config.ts", "playwright.editor.config.ts", "playwright.list.config.ts", "playwright.palette.config.ts", "playwright.today.config.ts", "scripts/frozen-prototype.ts", "scripts/frozen-prototype.test.ts", "tests"]
 }

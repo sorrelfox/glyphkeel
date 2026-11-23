@@ -6,8 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { App } from "../../App";
 import { settings, workspaceInfo } from "../../data/fixtures";
-import { parseNaturalDate } from "../../data/naturalDate";
-import { fakeEngine } from "../../data/testing";
+import { fakeEngine, rejectWith } from "../../data/testing";
 import { type ProjectSummary, type TaskChange, type TaskCreateInput } from "../../generated/ops";
 
 afterEach(() => {
@@ -19,21 +18,20 @@ function project(key: string, name: string): ProjectSummary {
   return { depth: 0, hue: "green", id: `p-${key}`, key, name, open_tasks: 0, open_tasks_with_subprojects: 0, path: name, state: "active" };
 }
 
-/** Today on this computer, as the page reads it. */
-function today(): string {
-  const now = new Date();
-  return `${String(now.getFullYear())}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-}
-
 async function renderQuickAdd() {
   const created: TaskCreateInput[] = [];
   const engine = fakeEngine({
     "workspace.get": () => workspaceInfo(),
     "settings.get": () => settings(),
     "project.list": () => ({ items: [project("TM", "Task Manager"), project("PER", "Personal")], total: 2 }),
+    // Like the engine, it reads only some dates.
     "task.create": (input) => {
+      if (input.due_date !== undefined && input.due_date !== null && !["fri", "friday"].includes(input.due_date)) {
+        const text = input.due_date;
+        return rejectWith({ code: "invalid", message: `"${text}" is not a date.`, details: { path: "due_date", message_id: "date-invalid", args: { text } } });
+      }
       created.push(input);
-      return { task: { key: `${input.project}-1`, title: input.title } } as TaskChange;
+      return Promise.resolve({ task: { key: `${input.project}-1`, title: input.title } } as TaskChange);
     },
   });
   render(<App start={{ titleBar: "system", locale: "en-GB", quickAdd: true }} client={engine.client} />);
@@ -81,7 +79,7 @@ describe("the quick-add window", () => {
     await waitFor(() => {
       expect(created).toHaveLength(1);
     });
-    expect(created[0]).toEqual({ project: "PER", title: "Renew domain", due_date: parseNaturalDate("fri", today()), priority: "high" });
+    expect(created[0]).toEqual({ project: "PER", title: "Renew domain", due_date: "fri", priority: "high" });
     expect((await screen.findByRole("status")).textContent).toMatch(/PER-1.*added/);
     expect((field as HTMLInputElement).value).toBe("");
   });
@@ -96,6 +94,24 @@ describe("the quick-add window", () => {
       expect(created).toHaveLength(1);
     });
     expect(created[0]).toEqual({ project: "TM", title: "Plan the trip next week" });
+  });
+
+  it("leaves the date to the engine: a shorter one when it can't read the words, else its message", async () => {
+    const { field, created } = await renderQuickAdd();
+    type(field, "Plan the week end of the month");
+    expect(screen.getByTestId("quick-add-due").textContent).toContain("end of the month");
+    enter(field);
+    // Refused here, and no shorter date is left, so nothing is added.
+    expect((await screen.findByRole("alert")).textContent).toMatch(/end of the month\W* is not a date/);
+    expect(created).toHaveLength(0);
+    expect((field as HTMLInputElement).value).toBe("Plan the week end of the month");
+
+    type(field, "Call the shop next friday");
+    enter(field);
+    await waitFor(() => {
+      expect(created).toHaveLength(1);
+    });
+    expect(created[0]).toMatchObject({ title: "Call the shop next", due_date: "friday" });
   });
 
   it("asks for a title instead of creating an empty task, and empties the field on Escape", async () => {

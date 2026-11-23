@@ -27,11 +27,52 @@
 
 .search {
   flex: 1;
+  min-width: 0;
   border: 0;
   font: inherit;
   color: inherit;
   text-align: left;
+  cursor: text;
+}
+
+/* The field and the suggestions that open under it while typing. */
+.searchBox {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+.suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 50;
+  width: max(100%, 320px);
+  max-height: 60vh;
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.suggestion {
   cursor: default;
+}
+
+.suggestion mark {
+  color: inherit;
+  font-weight: 600;
+  background: none;
+}
+
+.suggestionKey {
+  flex: 0 0 64px;
+}
+
+/* The browser's own clear button would crowd the shortcut hint. */
+.search input::-webkit-search-cancel-button {
+  display: none;
 }
 
 .navGroup {

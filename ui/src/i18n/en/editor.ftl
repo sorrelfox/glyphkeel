@@ -46,3 +46,11 @@ editor-format-numbered-list = Numbered list
 editor-format-checklist = Checklist
 editor-format-quote = Quote
 editor-format-code-block = Code block
+
+## Links to tasks and wiki pages
+
+editor-links = Links
+editor-link-task = Link task
+editor-link-task-hint = Link task: type # and a word of its title or its key
+editor-link-page = Link wiki page
+editor-link-page-hint = Link wiki page: type [[ and its title, or Page#Heading

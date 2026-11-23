@@ -15,6 +15,9 @@ use gk_api::OpError;
 const APP: &str = "glyphkeel-app";
 /// The scheme of the app's links.
 const SCHEME: &str = "glyphkeel://";
+/// The app's argument for its quick-add window. A running app is handed
+/// it and shows the window; otherwise the app starts with only that window.
+pub(crate) const QUICK_ADD: &str = "--quick-add";
 
 /// The links to hand to the app: `glyphkeel://` links as given, task keys
 /// as `glyphkeel://open/<KEY>`.

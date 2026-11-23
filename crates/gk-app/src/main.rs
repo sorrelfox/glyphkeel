@@ -140,10 +140,8 @@ fn main() -> ExitCode {
                 .position(|link| start::task_in_link(link).is_some())
                 .and_then(|at| start::task_in_link(&first_links.remove(at)));
             app.state::<open_links::OpenLinks>().push(&first_links);
-            // The quick-add window waits hidden, ready for the shortcut.
-            if let Err(err) = quick_add::create(app.handle()) {
-                eprintln!("glyphkeel-app: cannot make the quick-add window: {err}");
-            }
+            // The quick-add window is made when it is first asked for, so
+            // that its web process isn't running before then.
             // Started for quick add, the app shows only that window.
             if first_quick_add && first_task.is_none() {
                 quick_add::show(app.handle(), None);

@@ -8,7 +8,6 @@ reader-diagram = Diagram
 reader-diagram-error = The diagram can't be drawn: { $error }
 reader-external-image = External image: { $name }. Open in browser
 reader-wiki-link = Wiki page { $page }
-reader-wiki-later = The wiki page “{ $page }” will open once the wiki is part of the app.
 reader-checkbox = Checklist item
 
 ## Descriptions: editing, conflict copies and history

@@ -6,7 +6,9 @@
 //! command is a subcommand, its input fields are options, and its output is
 //! printed for people or, with `--json`, exactly as the catalog describes it.
 //!
-//! Without a command, or with `glyphkeel open`, it starts the desktop app;
+//! Without a command, or with `glyphkeel open`, it starts the desktop app
+//! (`glyphkeel --quick-add`: with only its quick-add window, or hands that
+//! to the running app);
 //! `glyphkeel mcp` serves MCP over standard input and output.
 //!
 //! Exit codes: 0 success, 1 usage error or invalid input, 2 not found,
@@ -85,7 +87,15 @@ fn run(ops: &[OpCommand], matches: &ArgMatches, out: Out) -> Result<(), OpError>
         .get_one::<String>(commands::WORKSPACE)
         .map(String::as_str);
     let tz = matches.get_one::<String>(commands::TZ).map(String::as_str);
+    let quick_add = matches.get_flag(commands::QUICK_ADD);
+    if quick_add && matches.subcommand().is_some() {
+        return Err(OpError::invalid(
+            "--quick-add opens the app's quick-add window and takes no command.",
+        )
+        .with_hint("Run `glyphkeel --quick-add` on its own."));
+    }
     match matches.subcommand() {
+        None if quick_add => launch::start(&[launch::QUICK_ADD.to_owned()]),
         None => launch::start(&[]),
         Some((commands::OPEN, m)) => {
             let given: Vec<String> = m

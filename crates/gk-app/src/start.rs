@@ -143,7 +143,7 @@ pub(crate) fn window_ready(
     if window.label() == crate::main_window::LABEL {
         show(&window, &shown);
     } else if window.label() == crate::quick_add::LABEL {
-        // It waits hidden until the shortcut shows it.
+        // Shown now if it was asked for while its page loaded.
         crate::quick_add::on_ready(&window);
     } else {
         // Task windows come forward each time they are opened.

@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Command } from "cmdk";
 import { Search } from "lucide-react";
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Dialog, Modal, ModalOverlay } from "react-aria-components";
 
 import { type Action } from "../../actions/actions";
@@ -20,8 +20,9 @@ import { OpFailure } from "../../data/transport";
 import { useT } from "../../i18n/I18n";
 import { openTaskWindow } from "../../ipc/taskWindow";
 import { readPref, writePref } from "../../prefs/store";
-import { findMatch, matchActions, matchProjects, nextScope, recentFrom, remember, SCOPES, typedKey, type Recent, type Scope } from "./model";
+import { matchActions, matchProjects, nextScope, recentFrom, remember, SCOPES, typedKey, type Recent, type Scope } from "./model";
 import styles from "./Palette.module.css";
+import { Highlight, useSettled } from "./shared";
 
 /** Where the palette keeps what was opened from it. */
 const RECENT_PREF = "palette.recent";
@@ -40,35 +41,6 @@ interface FoundTask {
 interface CommandPaletteProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-}
-
-/** `text` with the part that matches `query` marked. */
-function Highlight({ text, query }: { text: string; query: string }) {
-  const found = findMatch(text, query);
-  if (!found) {
-    return <>{text}</>;
-  }
-  return (
-    <>
-      {text.slice(0, found.start)}
-      <mark>{text.slice(found.start, found.end)}</mark>
-      {text.slice(found.end)}
-    </>
-  );
-}
-
-/** The value of a typing pause: `value`, once it hasn't changed for `delay`. */
-function useSettled<T>(value: T, delay: number): T {
-  const [settled, setSettled] = useState(value);
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setSettled(value);
-    }, delay);
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [value, delay]);
-  return settled;
 }
 
 /**

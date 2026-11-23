@@ -3,12 +3,14 @@
 
 //! The quick-add window: one line to capture a task from anywhere.
 //!
-//! It is made hidden when the app starts, so the shortcut shows it at once,
-//! with its page loaded. The shortcut, the tray's Quick add, the page's
-//! Quick add action and a start with `--quick-add` show it; Enter (after
-//! creating the task) and Escape hide it again, and the desktop gives the
-//! focus back to the window that had it. It is hidden, never closed, while
-//! the app runs.
+//! It is made the first time it is asked for, and shown once its page has
+//! drawn: a window waiting hidden from the start would keep one more web
+//! process running for someone who never uses it. The shortcut, the tray's
+//! Quick add, the page's Quick add action and a start with `--quick-add`
+//! show it; Enter (after creating the task) and Escape hide it again, and
+//! the desktop gives the focus back to the window that had it. From then on
+//! it is hidden, never closed, while the app runs, so later shows are
+//! instant.
 //!
 //! Each time it is shown it is mapped anew: on Wayland a window that is
 //! shown again may take the focus, where raising an open one may not.
@@ -57,8 +59,9 @@ impl std::fmt::Debug for QuickAdd {
     }
 }
 
-/// Makes the window, hidden. Call on the main thread.
-pub(crate) fn create(app: &AppHandle) -> tauri::Result<WebviewWindow> {
+/// Makes the window, hidden; [`show`] shows it once its page has drawn.
+/// Call on the main thread.
+fn create(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     let start = StartData {
         title_bar: TitleBar::System,
         locale: start::locale_from_env(),
@@ -85,8 +88,7 @@ pub(crate) fn create(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     Ok(window)
 }
 
-/// Shows the window and gives it the focus, making it again if it is
-/// gone. `token` is an activation token from the desktop. Call on the main
+/// Shows the window and gives it the focus, making it on first use. `token` is an activation token from the desktop. Call on the main
 /// thread.
 pub(crate) fn show(app: &AppHandle, token: Option<String>) {
     let state = app.state::<QuickAdd>();

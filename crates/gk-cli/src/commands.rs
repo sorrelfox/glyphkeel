@@ -19,6 +19,8 @@ pub(crate) const JSON: &str = "json";
 pub(crate) const QUIET: &str = "quiet";
 pub(crate) const NO_COLOR: &str = "no-color";
 pub(crate) const TZ: &str = "tz";
+/// Without a command: start the app with its quick-add window.
+pub(crate) const QUICK_ADD: &str = "quick-add";
 
 /// Commands of the program itself, not operations.
 pub(crate) const OPEN: &str = "open";
@@ -68,14 +70,24 @@ pub(crate) fn build(ops: &[OpCommand]) -> Command {
         .about("Glyphkeel, a local task manager, from the command line.")
         .long_about(
             "Glyphkeel, a local task manager, from the command line.\n\n\
-             Without a command, starts the desktop app. Every other command runs one \
-             operation on the workspace, also while the app is open.",
+             Without a command, starts the desktop app (with `--quick-add`, only its \
+             quick-add window). Every other command runs one operation on the workspace, \
+             also while the app is open.",
         )
         .after_help(
             "Exit codes: 0 success, 1 usage error or invalid input, 2 not found, \
              3 change rejected, 4 workspace or storage problem.",
         )
         .subcommand_required(false)
+        .arg(
+            Arg::new(QUICK_ADD)
+                .long(QUICK_ADD)
+                .action(ArgAction::SetTrue)
+                .help(
+                    "Open the desktop app's quick-add window to capture a task, starting the app \
+                     if it isn't running (a command for a desktop shortcut)",
+                ),
+        )
         .arg(
             Arg::new(WORKSPACE)
                 .long(WORKSPACE)

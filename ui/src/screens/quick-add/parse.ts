@@ -13,9 +13,12 @@
 //
 // Everything else is the title. The field shows what it recognised, and the
 // person can tell it to keep a trailing date in the title instead.
+//
+// The page only sees that the last words have the shape of a date; which
+// day they mean is the engine's answer, when the task is created, so that
+// quick add, the task panel, the CLI and agents read dates the same way.
 
-import { parseNaturalDate } from "../../data/naturalDate";
-import { type Priority, type WeekStart } from "../../generated/ops";
+import { type Priority } from "../../generated/ops";
 
 export interface ProjectChoice {
   key: string;
@@ -28,10 +31,13 @@ export interface QuickAddInput {
   project?: string;
   /** A `#` token that names no project, as typed. */
   unknownProject?: string;
-  /** The due date, `YYYY-MM-DD`. */
-  due?: string;
-  /** The words the due date was read from. */
+  /** The words at the end that look like a due date, for the engine to read. */
   dueText?: string;
+  /**
+   * The title and date for a shorter date, longest first, should the
+   * engine not read `dueText` (`week end of month` → `end of month`).
+   */
+  shorterDates?: { title: string; dueText: string }[];
   priority?: Priority;
 }
 
@@ -48,6 +54,34 @@ const PRIORITY_WORDS: Readonly<Record<string, Priority>> = {
 
 /** The longest date phrase the engine reads, in words (`end of the month`). */
 const LONGEST_DATE = 4;
+
+/** A name or its start from three letters on, as the engine reads them: `fri`, `frid`, `friday`. */
+const shortened = (names: readonly string[]) => `(?:${names.map((name) => name.slice(0, 3) + Array.from(name.slice(3)).reduceRight((rest, letter) => `(?:${letter}${rest})?`, "")).join("|")})`;
+
+const WEEKDAY = shortened(["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]);
+const MONTH = `${shortened(["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"])}\\.?`;
+const UNIT = "(?:days?|d|weeks?|w|months?|m|years?|y)";
+const PERIOD = "(?:week|month|year)";
+
+/** The shapes of the engine's friendly dates; which day they mean is the engine's to say. */
+const DATE_SHAPES = [
+  "today|tomorrow|yesterday",
+  WEEKDAY,
+  "\\d{4}-\\d{1,2}-\\d{1,2}",
+  `[+-]\\d+${UNIT}`,
+  `(?:this|last|next)-${PERIOD}`,
+  `(?:this|next) (?:${WEEKDAY}|${PERIOD})`,
+  `in \\d+${UNIT}`,
+  `in (?:\\d+|a|an|one) ${UNIT}`,
+  `end of (?:the )?${PERIOD}`,
+  `${MONTH} \\d{1,2}(?:st|nd|rd|th)?,?(?: \\d{4})?`,
+  `\\d{1,2}(?:st|nd|rd|th)? ${MONTH},?(?: \\d{4})?`,
+].map((shape) => new RegExp(`^(?:${shape})$`, "i"));
+
+/** Whether `phrase` has the shape of a friendly date. */
+export function looksLikeDate(phrase: string): boolean {
+  return DATE_SHAPES.some((shape) => shape.test(phrase));
+}
 
 const compact = (text: string) => text.replace(/\s+/g, "").toLocaleLowerCase();
 
@@ -71,15 +105,12 @@ export function projectFor(token: string, projects: readonly ProjectChoice[]): P
 
 interface Options {
   projects: readonly ProjectChoice[];
-  /** Today's date in the person's time zone. */
-  today: string;
-  weekStart?: WeekStart;
   /** Keep a trailing date in the title. */
   keepDate?: boolean;
 }
 
 /** Reads the field. */
-export function parseQuickAdd(text: string, { projects, today, weekStart = "monday", keepDate = false }: Options): QuickAddInput {
+export function parseQuickAdd(text: string, { projects, keepDate = false }: Options): QuickAddInput {
   const words: string[] = [];
   const result: QuickAddInput = { title: "" };
   for (const word of text.split(/\s+/).filter((each) => each !== "")) {
@@ -103,15 +134,21 @@ export function parseQuickAdd(text: string, { projects, today, weekStart = "mond
   }
   if (!keepDate) {
     // The longest date at the end, leaving at least one word of title.
+    const dates: { title: string; dueText: string }[] = [];
     for (let count = Math.min(LONGEST_DATE, words.length - 1); count >= 1; count -= 1) {
       const phrase = words.slice(words.length - count).join(" ");
-      const due = parseNaturalDate(phrase, today, weekStart);
-      if (due !== null) {
-        result.due = due;
-        result.dueText = phrase;
-        words.splice(words.length - count, count);
-        break;
+      if (looksLikeDate(phrase)) {
+        dates.push({ title: words.slice(0, words.length - count).join(" "), dueText: phrase });
       }
+    }
+    const [longest, ...shorter] = dates;
+    if (longest) {
+      result.title = longest.title;
+      result.dueText = longest.dueText;
+      if (shorter.length > 0) {
+        result.shorterDates = shorter;
+      }
+      return result;
     }
   }
   result.title = words.join(" ");

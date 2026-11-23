@@ -6,11 +6,13 @@ import { Suspense, useEffect, useRef, type Ref } from "react";
 import { classes } from "../../classes";
 import { useToasts } from "../../components/Toasts";
 import { useCall } from "../../data/hooks";
-import { useBlockRenderer, useTaskCompletion } from "../../data/markdown";
+import { useLinkCompletion } from "../../data/linking";
+import { useBlockRenderer } from "../../data/markdown";
 import { type Attachment } from "../../generated/ops";
 import { attachBrowserFiles } from "../../ipc/files";
 import { MarkdownEditor, type EditorMode, type MarkdownEditorHandle } from "../../editor";
 import { FormatToolbar } from "../../editor/FormatToolbar";
+import { LinkButtons } from "../../editor/LinkButtons";
 import { useT } from "../../i18n/I18n";
 import styles from "./TaskPanel.module.css";
 
@@ -65,7 +67,8 @@ export function editorDropAt(x: number, y: number, task: string): ((markdown: st
 
 /**
  * The Markdown editor as the task panel uses it: tables and callouts drawn
- * by the engine's renderer, task keys completed from the engine, Ctrl+Enter
+ * by the engine's renderer, links to tasks ("#") and wiki pages ("[[")
+ * completed from the engine, also from the toolbar, Ctrl+Enter
  * to save or send and Escape to give up, and the formatting toolbar above
  * the text. The editor loads on first use.
  */
@@ -84,7 +87,8 @@ export function MarkdownField({ label, value, onChange, onSubmit, onCancel, mode
     return attached.files.map((change) => attachmentMarkdown(change.file)).join(" ");
   };
   const renderBlock = useBlockRenderer();
-  const completion = useTaskCompletion();
+  // Wiki links point at pages of the task's own project.
+  const completion = useLinkCompletion(attachTo === undefined ? undefined : attachTo.slice(0, attachTo.lastIndexOf("-")) || undefined);
   const box = useRef<HTMLDivElement>(null);
   const editor = useRef<MarkdownEditorHandle | null>(null);
   const takesFiles = attachTo !== undefined && !readOnly;
@@ -137,7 +141,14 @@ export function MarkdownField({ label, value, onChange, onSubmit, onCancel, mode
           onFormat={(kind) => {
             editor.current?.format(kind);
           }}
-        />
+        >
+          <LinkButtons
+            isDisabled={readOnly}
+            onLink={(kind) => {
+              editor.current?.startLink(kind);
+            }}
+          />
+        </FormatToolbar>
       )}
       <Suspense fallback={<p className={classes("faint", styles.small)}>{t("editor-loading")}</p>}>
         <MarkdownEditor

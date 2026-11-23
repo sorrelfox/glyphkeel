@@ -18,24 +18,26 @@ export const ENTITY_QUERIES: Readonly<Record<string, readonly OpId[]>> = {
   // Open-task counts show in the project tree. Rendered texts link task keys
   // only while the task exists, and descriptions keep their revisions.
   // A task's reminder is one of its fields; the time report shows titles.
-  task: ["task.get", "board.get", "project.list", "markdown.render", "description.history", "description.revision", "time.report", "timer.get", "task.search"],
+  task: ["task.get", "board.get", "project.list", "markdown.render", "description.history", "description.revision", "time.report", "timer.get", "task.search", "today.get", "search.query"],
   // Statuses, types and labels show on every card and in the task panel.
-  project: ["project.list", "project.get", "board.get", "task.get", "layout.get", "markdown.render", "time.report", "task.search", "query.parse", "view.list"],
-  status: ["project.get", "board.get", "task.get", "project.list", "task.search", "query.parse"],
+  project: ["project.list", "project.get", "board.get", "task.get", "layout.get", "markdown.render", "time.report", "task.search", "query.parse", "view.list", "today.get", "search.query", "wiki.search", "wiki.get"],
+  status: ["project.get", "board.get", "task.get", "project.list", "task.search", "query.parse", "today.get", "search.query"],
   task_type: ["project.get", "board.get", "task.get", "task.search", "query.parse"],
   label: ["project.get", "board.get", "task.get", "task.search", "query.parse"],
   // The board leaves out the cards of hidden columns.
   layout: ["layout.get", "board.get"],
   // Cards count comments and files, and show the Blocked badge.
-  comment: ["comment.list", "task.get", "board.get", "markdown.render", "task.search"],
-  attachment: ["comment.list", "task.get", "board.get", "file.get", "file.read", "task.search"],
+  comment: ["comment.list", "task.get", "board.get", "markdown.render", "task.search", "today.get", "search.query"],
+  attachment: ["comment.list", "task.get", "board.get", "file.get", "file.read", "task.search", "search.query"],
   relation: ["task.get", "board.get", "task.search"],
   // Cards and the task show the time spent; the report adds it up.
   time_entry: ["task.get", "board.get", "time.report", "task.search"],
   // The one timer: its chip, the task's timer button, and `workspace.get`, which carries it.
-  timer: ["timer.get", "workspace.get"],
+  timer: ["timer.get", "workspace.get", "today.get"],
   // Saved views of the list.
   view: ["view.list"],
+  // Wiki pages: their search, links to them and their text.
+  wiki_page: ["wiki.search", "wiki.get", "wiki.list", "wiki.history", "search.query", "markdown.render"],
 };
 
 /** Every committed change shows in the activity log. */

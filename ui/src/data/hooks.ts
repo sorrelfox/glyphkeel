@@ -31,6 +31,13 @@ export function errorToast(t: Translate, error: unknown): Toast {
   if (failure.code === "ipc") {
     return { tone: "error", text: t("error-ipc"), detail: failure.message };
   }
+  // The engine's newer errors name their message, so that it shows in the person's language.
+  const id = failure.details?.message_id;
+  const args = failure.details?.args;
+  if (typeof id === "string" && t.has?.(id) === true) {
+    const vars = typeof args === "object" && args !== null ? Object.fromEntries(Object.entries(args).map(([key, value]) => [key, String(value)])) : {};
+    return { tone: "error", text: t(id, vars), detail: failure.hint };
+  }
   return { tone: "error", text: failure.message, detail: failure.hint };
 }
 

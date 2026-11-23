@@ -5,7 +5,7 @@ import { keysOf, type Action, type ActionGroup } from "../actions/actions";
 import { appWindow } from "../ipc/window";
 import { focusRegion } from "./regions";
 
-export type View = "today" | "all-tasks" | "time" | "project";
+export type View = "today" | "all-tasks" | "time" | "search" | "project";
 
 export interface ShellCommands {
   openPalette: () => void;
