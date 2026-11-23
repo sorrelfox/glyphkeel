@@ -11,9 +11,11 @@
 pub mod actor;
 pub mod day;
 pub mod duration;
+pub mod file;
 pub mod id;
 pub mod key;
 pub mod kinds;
+pub mod link;
 pub mod rank;
 pub mod status;
 pub mod text;
@@ -21,9 +23,14 @@ pub mod text;
 pub use actor::{ActorKind, Via};
 pub use day::{Day, DayError, Weekday, check_date_range};
 pub use duration::{DurationError, DurationUnits, format_duration, format_minutes, parse_minutes};
+pub use file::{
+    DEFAULT_FILE_MAX_MB, FILE_NAME_MAX_BYTES, FileError, FileKind, base64_decode, base64_encode,
+    clean_file_name, hex, image_size, kind_of, sniff,
+};
 pub use id::{Id, IdError};
 pub use key::{KeyError, ProjectKey, TaskKey};
 pub use kinds::{Glyph, Hue, KindError, Priority};
+pub use link::{LinkKind, Relation};
 pub use rank::{Rank, RankError};
 pub use status::{DEFAULT_STATUSES, DEFAULT_TASK_TYPES, StatusCategory, closed_at_after_move};
 pub use text::{

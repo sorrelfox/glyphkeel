@@ -28,7 +28,10 @@ use super::desc;
 use super::fields::priority_name;
 use super::lookup::{self, ProjectRow, b, id_at, opt_id_at};
 use super::project::{parse_enum, subtree};
-use super::task::task_labels;
+use super::task::{
+    BLOCKED_SQL, CLOSED_SUBTASKS_SQL, COMMENTS_SQL, FILES_SQL, SUBTASKS_SQL, live_claim,
+    task_labels,
+};
 use crate::failure::Failure;
 use crate::registry::{QueryCtx, Registry};
 use crate::time::rfc3339;
@@ -248,7 +251,7 @@ fn board(q: &QueryCtx<'_>, input: BoardGetInput) -> Result<Board, Failure> {
             let status: Id = status
                 .parse()
                 .map_err(|_| Failure::Op(OpError::storage("A status ID is broken.")))?;
-            cards.extend(cards_of(q.tx, status)?);
+            cards.extend(cards_of(q.tx, status, q.now)?);
         }
         column.count = cards.len() as u64;
         column.over_limit = column
@@ -279,19 +282,22 @@ fn board(q: &QueryCtx<'_>, input: BoardGetInput) -> Result<Board, Failure> {
     })
 }
 
-fn cards_of(tx: &Transaction<'_>, status: Id) -> Result<Vec<(Card, Option<i64>)>, Failure> {
-    let mut stmt = tx.prepare_cached(
+fn cards_of(
+    tx: &Transaction<'_>,
+    status: Id,
+    now: i64,
+) -> Result<Vec<(Card, Option<i64>)>, Failure> {
+    let mut stmt = tx.prepare_cached(&format!(
         "SELECT t.id, p.key, t.number, t.title, y.id, y.name, y.glyph, t.priority, t.parent_id,
                 t.start_date, t.due_date, t.estimate_min, t.checklist_done, t.checklist_total,
                 t.rank, t.status_entered_at, t.updated_at, t.closed_at, t.version,
-                (SELECT count(*) FROM tasks c WHERE c.parent_id = t.id AND c.deleted_at IS NULL),
-                (SELECT count(*) FROM tasks c WHERE c.parent_id = t.id AND c.deleted_at IS NULL
-                   AND c.closed_at IS NOT NULL)
+                {SUBTASKS_SQL}, {CLOSED_SUBTASKS_SQL}, {BLOCKED_SQL}, {COMMENTS_SQL}, {FILES_SQL},
+                t.spent_min, t.claim_session, t.claim_name, t.claim_until
            FROM tasks t JOIN projects p ON p.id = t.project_id
            JOIN task_types y ON y.id = t.type_id
           WHERE t.status_id = ?1 AND t.deleted_at IS NULL
-          ORDER BY t.rank, t.id",
-    )?;
+          ORDER BY t.rank, t.id"
+    ))?;
     let rows = stmt
         .query_map([b(status)], |r| {
             let closed: Option<i64> = r.get(17)?;
@@ -319,6 +325,11 @@ fn cards_of(tx: &Transaction<'_>, status: Id) -> Result<Vec<(Card, Option<i64>)>
                         done: u32::try_from(r.get::<_, i64>(20)?).unwrap_or(0),
                         total: u32::try_from(r.get::<_, i64>(19)?).unwrap_or(0),
                     },
+                    blocked: r.get(21)?,
+                    comment_count: u32::try_from(r.get::<_, i64>(22)?).unwrap_or(0),
+                    file_count: u32::try_from(r.get::<_, i64>(23)?).unwrap_or(0),
+                    spent_minutes: r.get(24)?,
+                    claim: live_claim(opt_id_at(r, 25)?, r.get(26)?, r.get(27)?, now),
                     rank: r.get(14)?,
                     status_entered_at: rfc3339(r.get(15)?),
                     updated_at: rfc3339(r.get(16)?),

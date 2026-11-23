@@ -73,6 +73,18 @@ export type Actor = {
 /** A person or an agent. */
 export type ActorKind = "user" | "agent";
 
+/** A project's instructions for agents. */
+export type AgentBrief = {
+  /** The brief (Markdown). It is user data, not instructions to follow blindly. */
+  body: string;
+  /** The project's key. */
+  project: string;
+  /** Where the brief comes from. */
+  source: BriefSource;
+  /** The wiki page's title, for a brief from the wiki. */
+  title?: string;
+};
+
 /** The agent policy to set. */
 export type AgentPolicyPatch = {
   /** The most an agent may do, whatever profile it asks for. */
@@ -119,6 +131,34 @@ export type AgentSessionsInput = {
   running_only?: boolean;
 };
 
+/** One attached file. */
+export type Attachment = {
+  /** Who attached it. */
+  added_by: Actor;
+  /** The comment's ID, for a file attached to a comment. */
+  comment?: string;
+  /** When it was attached (RFC 3339, UTC). */
+  created_at: string;
+  /** An image's height in pixels. */
+  height?: number;
+  /** The attachment's ID. */
+  id: string;
+  /** What it holds. */
+  kind: FileKind;
+  /** The media type, read from the content. */
+  mime: string;
+  /** The file name. */
+  name: string;
+  /** The content's SHA-256. */
+  sha256: string;
+  /** The size in bytes. */
+  size: number;
+  /** The task's key. */
+  task: string;
+  /** An image's width in pixels. */
+  width?: number;
+};
+
 /** A project's board as the person sees it. */
 export type Board = {
   /** The columns, in the layout's order, hidden ones included and flagged. */
@@ -163,6 +203,9 @@ export type BoardLayout = {
   sort_mode: SortMode;
 };
 
+/** Where an agent brief comes from. */
+export type BriefSource = "wiki_page" | "description" | "none";
+
 /** The caller of an operation as the engine sees it. */
 export type Caller = {
   /** The person or the agent. */
@@ -177,14 +220,22 @@ export type Caller = {
 
 /** One card. */
 export type Card = {
+  /** Whether a task that blocks it is still open. */
+  blocked: boolean;
   /** The description's checklist. */
   checklist: Checklist;
+  /** The agent that claimed it, while the claim lasts. */
+  claim?: Claim;
   /** When it was closed; left out while open. */
   closed_at?: string;
+  /** How many comments it has. */
+  comment_count: number;
   /** The due date. */
   due_date?: string;
   /** The estimate in minutes. */
   estimate_minutes?: number;
+  /** How many files are attached to it and to its comments. */
+  file_count: number;
   /** The task's ID. */
   id: string;
   /** The task's key. */
@@ -199,6 +250,8 @@ export type Card = {
   project: string;
   /** Its place in the column. */
   rank: string;
+  /** Logged time in minutes. */
+  spent_minutes: number;
   /** The start date. */
   start_date?: string;
   /** When it entered its status. */
@@ -238,6 +291,16 @@ export type Checklist = {
   total: number;
 };
 
+/** An agent's claim on a task. */
+export type Claim = {
+  /** The agent's name. */
+  agent: string;
+  /** The agent session holding it. */
+  session: string;
+  /** When the claim ends unless renewed (RFC 3339, UTC). */
+  until: string;
+};
+
 /** One column: a status, or with sub-projects, every status of that name. */
 export type Column = {
   /** The cards, in order. */
@@ -268,6 +331,98 @@ export type Column = {
   wip_limit?: number;
 };
 
+/** One comment. */
+export type Comment = {
+  /** Who wrote it. */
+  author: Actor;
+  /** The text (Markdown). */
+  body: string;
+  /** When it was written (RFC 3339, UTC). */
+  created_at: string;
+  /** When it was last edited; left out when never. */
+  edited_at?: string;
+  /** Files attached to it. */
+  files?: Attachment[];
+  /** The comment's ID. */
+  id: string;
+  /** The comment it answers. */
+  reply_to?: string;
+  /** How many earlier texts it has. */
+  revision_count: number;
+  /** Its earlier texts, newest first, when asked for. */
+  revisions?: CommentRevision[];
+  /** The task's key. */
+  task: string;
+  /** Goes up by one with every edit; pass it as `expected_version`. */
+  version: number;
+  /** The program it came through. */
+  via: Via;
+};
+
+/** A new comment. */
+export type CommentAddInput = {
+  /** The text (Markdown), at most 256 KB. */
+  body: string;
+  /** Your own ID for this request; repeating it within 24 hours returns the first answer instead of adding a second comment. */
+  client_request_id?: string | null;
+  /** The task: its key or ID. */
+  key: string;
+  /** The ID of the comment this answers (same task). */
+  reply_to?: string | null;
+};
+
+/** A comment changed, with the history group of the change. */
+export type CommentChange = {
+  /** The comment after the change. */
+  comment: Comment;
+  /** Whether it is in the trash now. */
+  deleted: boolean;
+  /** The history group, for revert and Undo; left out when nothing changed. */
+  group?: string;
+};
+
+/** A task's comments, oldest first. */
+export type CommentList = {
+  /** The comments. */
+  items: Comment[];
+  /** How many. */
+  total: number;
+};
+
+/** Which comments to list. */
+export type CommentListInput = {
+  /** The task: its key or ID. */
+  key: string;
+  /** Add each comment's earlier texts. */
+  revisions?: boolean;
+};
+
+/** Names one comment. */
+export type CommentRef = {
+  /** The comment's ID. */
+  comment: string;
+};
+
+/** An earlier text of a comment. */
+export type CommentRevision = {
+  /** The text as it was. */
+  body: string;
+  /** When it was replaced (RFC 3339, UTC). */
+  replaced_at: string;
+  /** Who replaced it with a newer text. */
+  replaced_by: Actor;
+};
+
+/** A comment's new text. */
+export type CommentUpdateInput = {
+  /** The new text (Markdown); the earlier one is kept. */
+  body: string;
+  /** The comment's ID. */
+  comment: string;
+  /** Refuse the change unless the comment still has this version. */
+  expected_version?: number | null;
+};
+
 /** The two ends of an ordered list. */
 export type Edge = "top" | "bottom";
 
@@ -292,6 +447,55 @@ export type FieldChange = {
   after?: unknown;
   /** The value before. */
   before?: unknown;
+};
+
+/** A file to attach: from a local path, or as Base64 data with a name. */
+export type FileAttachInput = {
+  /** Your own ID for this request; repeating it within 24 hours returns the first answer instead of attaching the file again. */
+  client_request_id?: string | null;
+  /** The comment to attach it to: its ID. */
+  comment?: string | null;
+  /** The content as Base64, instead of `path`. */
+  data_base64?: string | null;
+  /** The file name; default: the path's last part. */
+  name?: string | null;
+  /** The path of a local file to read. */
+  path?: string | null;
+  /** The task to attach it to: its key or ID. */
+  task?: string | null;
+};
+
+/** A file attached or deleted, with the history group of the change. */
+export type FileChange = {
+  /** Whether it is in the trash now. */
+  deleted: boolean;
+  /** The file. */
+  file: Attachment;
+  /** The history group, for revert and Undo; left out when nothing changed. */
+  group?: string;
+};
+
+/** An attached file's content. */
+export type FileContent = {
+  /** The content as Base64, for an image (at most 5 MB). */
+  data_base64?: string;
+  /** The file. */
+  file: Attachment;
+  /** Why no content is given, for other files and large images. */
+  note?: string;
+  /** The text, for a text file (at most 256 KB). */
+  text?: string;
+  /** Whether the text was cut at the limit. */
+  truncated: boolean;
+};
+
+/** What a file holds, which decides how it is shown. */
+export type FileKind = "image" | "text" | "executable" | "other";
+
+/** Names one attached file. */
+export type FileRef = {
+  /** The attachment's ID. */
+  attachment: string;
 };
 
 /** The shape that shows a task's type. */
@@ -407,6 +611,19 @@ export type LayoutUpdateInput = {
   /** The sort mode of every column without its own. */
   sort_mode?: SortMode | null;
 };
+
+/** A link from one task to another. */
+export type Link = {
+  /** The link's ID. */
+  id: string;
+  /** How the link reads from this task. */
+  kind: LinkKind;
+  /** The task at the other end. */
+  task: TaskRef;
+};
+
+/** How a link reads from one task. */
+export type LinkKind = "blocks" | "blocked_by" | "relates" | "duplicates" | "duplicated_by" | "clones" | "cloned_by";
 
 /** Which parts of a project are switched on. */
 export type Modules = {
@@ -532,6 +749,30 @@ export type ProjectCreateInput = {
   parent?: string | null;
 };
 
+/** A project to delete for good, with its sub-projects. */
+export type ProjectDeleteInput = {
+  /** The number of tasks you expect it and its sub-projects to hold, trashed ones included; the deletion stops if the number differs. */
+  expected_task_count?: number | null;
+  /** The project: its key (current or old) or ID. */
+  project: string;
+};
+
+/** What a project deletion removed. */
+export type ProjectDeleted = {
+  /** Comments removed. */
+  comments: number;
+  /** Attached files removed. */
+  files: number;
+  /** The history group that records the deletion. */
+  group: string;
+  /** The deleted project's key. */
+  project: string;
+  /** The keys of the deleted projects: it and its sub-projects. */
+  projects: string[];
+  /** Tasks removed, trashed ones included. */
+  tasks: number;
+};
+
 /** A project field that can be cleared. */
 export type ProjectField = "icon" | "description" | "parent";
 
@@ -644,6 +885,19 @@ export type ProjectUpdateInput = {
   types?: TypeChange[];
 };
 
+/** A link to add or remove. */
+export type RelationInput = {
+  /** The task: its key or ID. */
+  key: string;
+  /** How the link reads from this task. `subtask_of` and `parent_of` change the parent instead of adding a link. */
+  kind: RelationKind;
+  /** The other task: its key or ID. */
+  other: string;
+};
+
+/** The kinds of link, as read from the first task. */
+export type RelationKind = "blocks" | "blocked_by" | "relates" | "duplicates" | "duplicated_by" | "clones" | "cloned_by" | "subtask_of" | "parent_of";
+
 /** What to revert: history groups, or everything an agent session changed. */
 export type RevertInput = {
   /** Only report what would be reverted. */
@@ -665,7 +919,7 @@ export type RevertResult = {
 };
 
 /** A setting that can be set back to its default. */
-export type SettingKey = "trash_days" | "reminder_time" | "hours_per_day" | "days_per_week" | "week_start";
+export type SettingKey = "trash_days" | "reminder_time" | "hours_per_day" | "days_per_week" | "week_start" | "file_max_mb";
 
 /** The workspace's settings, with defaults filled in. */
 export type Settings = {
@@ -673,6 +927,8 @@ export type Settings = {
   agent_max_profile: Profile;
   /** Working days in a week, for durations written in weeks (`1w`). */
   days_per_week: number;
+  /** The largest file that can be attached, in megabytes. */
+  file_max_mb: number;
   /** Working hours in a day, for durations written in days (`2d`). */
   hours_per_day: number;
   /** When reminders for a due date fire, as `HH:MM`. */
@@ -702,6 +958,8 @@ export type SettingsPatch = {
   clear?: SettingKey[];
   /** Working days in a week, 1 to 7. */
   days_per_week?: number | null;
+  /** The largest file that can be attached, in megabytes, 1 to 1024. */
+  file_max_mb?: number | null;
   /** Working hours in a day, 1 to 24. */
   hours_per_day?: number | null;
   /** Reminder time, `HH:MM` (24-hour). */
@@ -842,10 +1100,18 @@ export type StatusUpdateInput = {
 
 /** One task. */
 export type Task = {
+  /** Whether a task that blocks it is still open. */
+  blocked: boolean;
   /** The description's checklist. */
   checklist: Checklist;
+  /** The agent that claimed it, while the claim lasts. */
+  claim?: Claim;
   /** When it was closed; left out while it is open. */
   closed_at?: string;
+  /** How many comments it has. */
+  comment_count: number;
+  /** Its comments, oldest first, when asked for with `include`. */
+  comments?: Comment[];
   /** When it was created (RFC 3339, UTC). */
   created_at: string;
   /** Who created it. */
@@ -860,12 +1126,18 @@ export type Task = {
   estimate?: string;
   /** The estimate in minutes. */
   estimate_minutes?: number;
+  /** How many files are attached to it and to its comments. */
+  file_count: number;
+  /** The files attached to it, when asked for with `include`. */
+  files?: Attachment[];
   /** The task's ID. */
   id: string;
   /** The task's key (`TM-41`). */
   key: string;
   /** Its labels, in the project's order. */
   labels: LabelRef[];
+  /** Its links to other tasks, when asked for with `include`. */
+  links?: Link[];
   /** Keys it had before; they still find it. */
   old_keys?: string[];
   /** The parent task's key, for a subtask. */
@@ -886,6 +1158,10 @@ export type Task = {
   status: StatusRef;
   /** When it entered its status. */
   status_entered_at: string;
+  /** Its subtasks: closed and all. */
+  subtask_count: Checklist;
+  /** Its subtasks in order, when asked for with `include`. */
+  subtasks?: TaskRef[];
   /** Its title. */
   title: string;
   /** Its type. */
@@ -904,6 +1180,20 @@ export type TaskChange = {
   task: Task;
   /** Problems that did not stop the change, such as closing a task whose subtasks are still open. */
   warnings?: string[];
+};
+
+/** A claim on a task, for an agent working on it. */
+export type TaskClaimInput = {
+  /** Leave the status as it is. */
+  keep_status?: boolean;
+  /** The task: its key or ID. */
+  key: string;
+  /** How long the claim lasts unless renewed, 1 to 480 minutes; default 60. Every change you make to the task renews it. */
+  lease_minutes?: number | null;
+  /** Take the claim over from another agent (full profile only). */
+  override_claim?: boolean;
+  /** The status to move it to; default: the first in-progress status, unless it is in progress already. */
+  status?: string | null;
 };
 
 /** A new task. Only the project and the title are needed. */
@@ -940,11 +1230,27 @@ export type TaskCreateInput = {
   type?: string | null;
 };
 
+/** A copy of a task. */
+export type TaskDuplicateInput = {
+  /** Your own ID for this request; repeating it within 24 hours returns the first answer instead of making a second copy. */
+  client_request_id?: string | null;
+  /** The task to copy: its key or ID. */
+  key: string;
+  /** The copy's status; default: the project's first to-do status. */
+  status?: string | null;
+  /** The copy's title; default: the same title. */
+  title?: string | null;
+  /** Leave the subtasks out; by default they are copied too, in order. */
+  without_subtasks?: boolean;
+};
+
 /** A task field that can be cleared. */
 export type TaskField = "description" | "parent" | "start_date" | "due_date" | "estimate" | "progress" | "labels";
 
 /** Which tasks to read. */
 export type TaskGetInput = {
+  /** What to add to each task: `subtasks`, `links`, `comments`, `files`. */
+  include?: TaskPart[];
   /** One to 20 task keys or IDs. */
   keys: string[];
 };
@@ -969,9 +1275,40 @@ export type TaskMoveInput = {
   expected_version?: number | null;
   /** The task: its key or ID. */
   key: string;
+  /** Move the task although another agent claimed it (full profile only). */
+  override_claim?: boolean;
   /** Move it to another project: it gets the next key there, and the old key keeps finding it. Its subtasks move with it. */
   project?: string | null;
   /** The new status, by name or ID. */
+  status?: string | null;
+};
+
+/** What `task.get` adds to each task. */
+export type TaskPart = "subtasks" | "links" | "comments" | "files";
+
+/** Another task, as links and subtask lists show it. */
+export type TaskRef = {
+  /** Whether it is closed (done or cancelled). */
+  closed: boolean;
+  /** Its ID. */
+  id: string;
+  /** Its key. */
+  key: string;
+  /** Its status. */
+  status: StatusRef;
+  /** Its title. */
+  title: string;
+};
+
+/** Giving up a claim. */
+export type TaskReleaseInput = {
+  /** A comment to add (Markdown), for example what was done. */
+  comment?: string | null;
+  /** The task: its key or ID. */
+  key: string;
+  /** Release another agent's claim (full profile only; the person can always). */
+  override_claim?: boolean;
+  /** A status to move it to, for example Review. */
   status?: string | null;
 };
 
@@ -1009,6 +1346,8 @@ export type TaskUpdateInput = {
   key: string;
   /** Replace the labels with these. */
   labels?: string[] | null;
+  /** Change the task although another agent claimed it (full profile only). */
+  override_claim?: boolean;
   /** A new parent task (same project, at most 5 levels, no loops). */
   parent?: string | null;
   /** A new priority. */
@@ -1167,6 +1506,8 @@ export interface OpMap {
   "project.change_key": { input: ProjectRekeyInput; output: ProjectChange; safety: "write"; kind: "command" };
   "project.archive": { input: ProjectRef; output: ProjectChange; safety: "write"; kind: "command" };
   "project.unarchive": { input: ProjectRef; output: ProjectChange; safety: "write"; kind: "command" };
+  "project.delete": { input: ProjectDeleteInput; output: ProjectDeleted; safety: "permanent"; kind: "command" };
+  "project.brief": { input: ProjectRef; output: AgentBrief; safety: "read"; kind: "query" };
   "status.create": { input: StatusCreateInput; output: ProjectChange; safety: "write"; kind: "command" };
   "status.update": { input: StatusUpdateInput; output: ProjectChange; safety: "write"; kind: "command" };
   "status.reorder": { input: StatusReorderInput; output: ProjectChange; safety: "write"; kind: "command" };
@@ -1181,9 +1522,22 @@ export interface OpMap {
   "task.create": { input: TaskCreateInput; output: TaskChange; safety: "write"; kind: "command" };
   "task.update": { input: TaskUpdateInput; output: TaskChange; safety: "write"; kind: "command" };
   "task.move": { input: TaskMoveInput; output: TaskChange; safety: "write"; kind: "command" };
+  "task.duplicate": { input: TaskDuplicateInput; output: TaskChange; safety: "write"; kind: "command" };
+  "task.claim": { input: TaskClaimInput; output: TaskChange; safety: "write"; kind: "command" };
+  "task.release": { input: TaskReleaseInput; output: TaskChange; safety: "write"; kind: "command" };
+  "relation.add": { input: RelationInput; output: TaskChange; safety: "write"; kind: "command" };
+  "relation.remove": { input: RelationInput; output: TaskChange; safety: "write"; kind: "command" };
+  "comment.list": { input: CommentListInput; output: CommentList; safety: "read"; kind: "query" };
+  "comment.add": { input: CommentAddInput; output: CommentChange; safety: "write"; kind: "command" };
+  "comment.update": { input: CommentUpdateInput; output: CommentChange; safety: "write"; kind: "command" };
+  "comment.delete": { input: CommentRef; output: CommentChange; safety: "trash"; kind: "command" };
   "board.get": { input: BoardGetInput; output: Board; safety: "read"; kind: "query" };
   "layout.get": { input: LayoutGetInput; output: LayoutChange; safety: "read"; kind: "query" };
   "layout.update": { input: LayoutUpdateInput; output: LayoutChange; safety: "write"; kind: "command" };
+  "file.get": { input: FileRef; output: Attachment; safety: "read"; kind: "query" };
+  "file.read": { input: FileRef; output: FileContent; safety: "read"; kind: "query" };
+  "file.attach": { input: FileAttachInput; output: FileChange; safety: "write"; kind: "command" };
+  "file.delete": { input: FileRef; output: FileChange; safety: "trash"; kind: "command" };
   "agent.sessions": { input: AgentSessionsInput; output: AgentSessionList; safety: "read"; kind: "query" };
   "agent.policy.update": { input: AgentPolicyPatch; output: SettingsChange; safety: "app"; kind: "command" };
   "history.feed": { input: ActivityQuery; output: ActivityPage; safety: "read"; kind: "query" };
@@ -1208,6 +1562,8 @@ export const OP_SAFETY = {
   "project.change_key": "write",
   "project.archive": "write",
   "project.unarchive": "write",
+  "project.delete": "permanent",
+  "project.brief": "read",
   "status.create": "write",
   "status.update": "write",
   "status.reorder": "write",
@@ -1222,9 +1578,22 @@ export const OP_SAFETY = {
   "task.create": "write",
   "task.update": "write",
   "task.move": "write",
+  "task.duplicate": "write",
+  "task.claim": "write",
+  "task.release": "write",
+  "relation.add": "write",
+  "relation.remove": "write",
+  "comment.list": "read",
+  "comment.add": "write",
+  "comment.update": "write",
+  "comment.delete": "trash",
   "board.get": "read",
   "layout.get": "read",
   "layout.update": "write",
+  "file.get": "read",
+  "file.read": "read",
+  "file.attach": "write",
+  "file.delete": "trash",
   "agent.sessions": "read",
   "agent.policy.update": "app",
   "history.feed": "read",
@@ -1248,6 +1617,26 @@ export function makeOps(call: Call) {
     board: {
       /** A project's board as the person sees it: columns in the personal order with hidden ones flagged, WIP state and compact cards. (read) */
       get: (input: OpMap["board.get"]["input"]) => call("board.get", input),
+    },
+    comment: {
+      /** A task's comments, oldest first, optionally with their earlier texts. (read) */
+      list: (input: OpMap["comment.list"]["input"]) => call("comment.list", input),
+      /** Add a Markdown comment to a task, optionally answering another. (write) */
+      add: (input: OpMap["comment.add"]["input"]) => call("comment.add", input),
+      /** Change a comment's text; the earlier text is kept and can be viewed. (write) */
+      update: (input: OpMap["comment.update"]["input"]) => call("comment.update", input),
+      /** Move a comment to the trash. (trash) */
+      delete: (input: OpMap["comment.delete"]["input"]) => call("comment.delete", input),
+    },
+    file: {
+      /** An attached file's name, type, size and owner. (read) */
+      get: (input: OpMap["file.get"]["input"]) => call("file.get", input),
+      /** An attached file's content: text for text files, Base64 for images, otherwise only its details. (read) */
+      read: (input: OpMap["file.read"]["input"]) => call("file.read", input),
+      /** Attach a local file, or Base64 data with a name, to a task or a comment. (write) */
+      attach: (input: OpMap["file.attach"]["input"] = {}) => call("file.attach", input),
+      /** Move an attached file to the trash. (trash) */
+      delete: (input: OpMap["file.delete"]["input"]) => call("file.delete", input),
     },
     history: {
       /** The activity log, newest first: who changed what, when and through which program; optionally the agent sessions. (read) */
@@ -1290,6 +1679,16 @@ export function makeOps(call: Call) {
       archive: (input: OpMap["project.archive"]["input"]) => call("project.archive", input),
       /** Unarchive a project and its sub-projects. (write) */
       unarchive: (input: OpMap["project.unarchive"]["input"]) => call("project.unarchive", input),
+      /** Delete a project and its sub-projects with every task, comment and file in them. Can't be undone. (permanent) */
+      delete: (input: OpMap["project.delete"]["input"]) => call("project.delete", input),
+      /** The project's instructions for agents: the wiki page marked as the brief, else the project's description. (read) */
+      brief: (input: OpMap["project.brief"]["input"]) => call("project.brief", input),
+    },
+    relation: {
+      /** Link two tasks (blocks, relates, duplicates, clones, or make one a subtask of the other). (write) */
+      add: (input: OpMap["relation.add"]["input"]) => call("relation.add", input),
+      /** Remove a link between two tasks, or a subtask from its parent. (write) */
+      remove: (input: OpMap["relation.remove"]["input"]) => call("relation.remove", input),
     },
     settings: {
       /** Read the workspace settings. (read) */
@@ -1308,7 +1707,7 @@ export function makeOps(call: Call) {
       delete: (input: OpMap["status.delete"]["input"]) => call("status.delete", input),
     },
     task: {
-      /** One to 20 tasks by key, with their fields, description, labels and version. (read) */
+      /** One to 20 tasks by key, with their fields, description, labels and version; subtasks, links, comments and files on request. (read) */
       get: (input: OpMap["task.get"]["input"]) => call("task.get", input),
       /** Create a task from a title alone or with its fields; it gets the project's next key. (write) */
       create: (input: OpMap["task.create"]["input"]) => call("task.create", input),
@@ -1316,6 +1715,12 @@ export function makeOps(call: Call) {
       update: (input: OpMap["task.update"]["input"]) => call("task.update", input),
       /** Move a task to another status or place in its column, or to another project (new key; the old one forwards). (write) */
       move: (input: OpMap["task.move"]["input"]) => call("task.move", input),
+      /** Copy a task with its subtasks (in order), labels, checklist and files; the copy is linked as a clone. (write) */
+      duplicate: (input: OpMap["task.duplicate"]["input"]) => call("task.duplicate", input),
+      /** Claim a task for your agent session for a while, so other agents leave it alone; moves it into progress. (write) */
+      claim: (input: OpMap["task.claim"]["input"]) => call("task.claim", input),
+      /** Give up a claim on a task, optionally moving it and adding a comment. (write) */
+      release: (input: OpMap["task.release"]["input"]) => call("task.release", input),
     },
     type: {
       /** Add a task type to a project. (write) */

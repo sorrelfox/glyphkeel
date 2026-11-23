@@ -23,6 +23,8 @@ pub struct Settings {
     pub days_per_week: u32,
     /// The first day of the week in calendars and in `this-week`.
     pub week_start: WeekStart,
+    /// The largest file that can be attached, in megabytes.
+    pub file_max_mb: u32,
     /// The most an agent may do, whatever profile it asks for.
     pub agent_max_profile: Profile,
 }
@@ -35,6 +37,7 @@ impl Default for Settings {
             hours_per_day: 8,
             days_per_week: 5,
             week_start: WeekStart::Monday,
+            file_max_mb: 100,
             agent_max_profile: Profile::Standard,
         }
     }
@@ -77,6 +80,9 @@ pub struct SettingsPatch {
     /// First day of the week.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub week_start: Option<WeekStart>,
+    /// The largest file that can be attached, in megabytes, 1 to 1024.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_max_mb: Option<u32>,
     /// Settings to set back to their default.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub clear: Vec<SettingKey>,
@@ -96,6 +102,8 @@ pub enum SettingKey {
     DaysPerWeek,
     /// First day of the week (default Monday).
     WeekStart,
+    /// The largest file that can be attached (default 100 MB).
+    FileMaxMb,
 }
 
 impl SettingKey {
@@ -108,6 +116,7 @@ impl SettingKey {
             Self::HoursPerDay => "hours_per_day",
             Self::DaysPerWeek => "days_per_week",
             Self::WeekStart => "week_start",
+            Self::FileMaxMb => "file_max_mb",
         }
     }
 }

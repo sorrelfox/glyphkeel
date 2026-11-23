@@ -191,6 +191,7 @@ impl Engine {
             name,
             program_version: config.program_version,
             schema_version: SCHEMA_VERSION,
+            layout: layout.clone(),
         };
         Ok(Self {
             store,
@@ -420,6 +421,21 @@ impl Engine {
         self.execute_once(ctx, op, f, input, None)
     }
 
+    /// Runs `f` as the command `desc` with `input`, answering a repeated
+    /// `client_request_id` as a catalog command would. For operations that
+    /// prepare work outside the transaction first.
+    pub(crate) fn execute_command(
+        &self,
+        ctx: &Context,
+        desc: &'static OpDescriptor,
+        f: CommandFn,
+        input: Value,
+    ) -> Result<Value, OpError> {
+        let request = request_key(desc, ctx, &input);
+        self.execute_once(ctx, desc.id, f, input, request)
+            .map(|(output, _)| output)
+    }
+
     /// As [`Engine::execute`]; with a request key, a repeat of the same
     /// request within a day, from any process, gets the first answer back
     /// without running again.
@@ -439,6 +455,7 @@ impl Engine {
             at,
             ctx: ctx.clone(),
             workspace_id: self.env.workspace_id,
+            layout: self.env.layout.clone(),
         };
         let reads = ctx
             .session

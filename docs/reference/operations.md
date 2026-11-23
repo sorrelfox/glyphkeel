@@ -26,6 +26,8 @@ The safety class decides who may run an operation:
 | `project.change_key` | write | app, command line, MCP | `update_project` | `glyphkeel project rekey <project>` |
 | `project.archive` | write | app, command line, MCP | `update_project` | `glyphkeel project archive <project>` |
 | `project.unarchive` | write | app, command line, MCP | `update_project` | `glyphkeel project unarchive <project>` |
+| `project.delete` | permanent | app, command line, MCP | `delete_project` | `glyphkeel project delete <project>` |
+| `project.brief` | read | app, command line, MCP | `get_agent_brief` | `glyphkeel project brief <project>` |
 | `status.create` | write | app, command line, MCP | `update_project` | `glyphkeel status add` |
 | `status.update` | write | app, command line, MCP | `update_project` | `glyphkeel status edit` |
 | `status.reorder` | write | app, command line, MCP | `update_project` | `glyphkeel status move` |
@@ -40,9 +42,22 @@ The safety class decides who may run an operation:
 | `task.create` | write | app, command line, MCP | `create_task` | `glyphkeel task create` |
 | `task.update` | write | app, command line, MCP | `update_task` | `glyphkeel task edit <key>` |
 | `task.move` | write | app, command line, MCP | `move_task` | `glyphkeel task move <key>` |
+| `task.duplicate` | write | app, command line, MCP | `duplicate_task` | `glyphkeel task duplicate <key>` |
+| `task.claim` | write | app, command line, MCP | `claim_task` | `glyphkeel task claim <key>` |
+| `task.release` | write | app, command line, MCP | `release_task` | `glyphkeel task release <key>` |
+| `relation.add` | write | app, command line, MCP | `link_tasks` | `glyphkeel task link <key>` |
+| `relation.remove` | write | app, command line, MCP | `unlink_tasks` | `glyphkeel task unlink <key>` |
+| `comment.list` | read | app, command line, MCP | `get_task` | `glyphkeel comment list <key>` |
+| `comment.add` | write | app, command line, MCP | `add_comment` | `glyphkeel comment add <key>` |
+| `comment.update` | write | app, command line, MCP | `update_comment` | `glyphkeel comment edit <comment>` |
+| `comment.delete` | trash | app, command line, MCP | `delete_comment` | `glyphkeel comment delete <comment>` |
 | `board.get` | read | app, command line, MCP | `get_board` | `glyphkeel board <project>` |
 | `layout.get` | read | app, command line, MCP | `get_board` | `glyphkeel board layout show <project>` |
 | `layout.update` | write | app, command line, MCP | `set_board_layout` | `glyphkeel board layout set <project>` |
+| `file.get` | read | app, command line, MCP | `read_attachment` | `glyphkeel file show <attachment>` |
+| `file.read` | read | app, command line, MCP | `read_attachment` | `glyphkeel file cat <attachment>` |
+| `file.attach` | write | app, command line, MCP | `attach_file` | `glyphkeel file attach` |
+| `file.delete` | trash | app, command line, MCP | `delete_attachment` | `glyphkeel file delete <attachment>` |
 | `agent.sessions` | read | app, command line, MCP | `get_activity` | `glyphkeel agents sessions` |
 | `agent.policy.update` | app | app, command line | — | `glyphkeel agents policy` |
 | `history.feed` | read | app, command line, MCP | `get_activity` | `glyphkeel activity` |
@@ -116,6 +131,18 @@ Unarchive a project and its sub-projects.
 
 Input: `ProjectRef`. Output: `ProjectChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
+## `project.delete`
+
+Delete a project and its sub-projects with every task, comment and file in them. Can't be undone.
+
+Input: `ProjectDeleteInput`. Output: `ProjectDeleted`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `project.brief`
+
+The project's instructions for agents: the wiki page marked as the brief, else the project's description.
+
+Input: `ProjectRef`. Output: `AgentBrief`. Schemas: [catalog.schema.json](catalog.schema.json).
+
 ## `status.create`
 
 Add a status (a board column) to a project.
@@ -178,7 +205,7 @@ Input: `LabelDeleteInput`. Output: `ProjectChange`. Schemas: [catalog.schema.jso
 
 ## `task.get`
 
-One to 20 tasks by key, with their fields, description, labels and version.
+One to 20 tasks by key, with their fields, description, labels and version; subtasks, links, comments and files on request.
 
 Input: `TaskGetInput`. Output: `TaskList`. Schemas: [catalog.schema.json](catalog.schema.json).
 
@@ -200,6 +227,60 @@ Move a task to another status or place in its column, or to another project (new
 
 Input: `TaskMoveInput`. Output: `TaskChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
+## `task.duplicate`
+
+Copy a task with its subtasks (in order), labels, checklist and files; the copy is linked as a clone.
+
+Input: `TaskDuplicateInput`. Output: `TaskChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `task.claim`
+
+Claim a task for your agent session for a while, so other agents leave it alone; moves it into progress.
+
+Input: `TaskClaimInput`. Output: `TaskChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `task.release`
+
+Give up a claim on a task, optionally moving it and adding a comment.
+
+Input: `TaskReleaseInput`. Output: `TaskChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `relation.add`
+
+Link two tasks (blocks, relates, duplicates, clones, or make one a subtask of the other).
+
+Input: `RelationInput`. Output: `TaskChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `relation.remove`
+
+Remove a link between two tasks, or a subtask from its parent.
+
+Input: `RelationInput`. Output: `TaskChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `comment.list`
+
+A task's comments, oldest first, optionally with their earlier texts.
+
+Input: `CommentListInput`. Output: `CommentList`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `comment.add`
+
+Add a Markdown comment to a task, optionally answering another.
+
+Input: `CommentAddInput`. Output: `CommentChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `comment.update`
+
+Change a comment's text; the earlier text is kept and can be viewed.
+
+Input: `CommentUpdateInput`. Output: `CommentChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `comment.delete`
+
+Move a comment to the trash.
+
+Input: `CommentRef`. Output: `CommentChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
 ## `board.get`
 
 A project's board as the person sees it: columns in the personal order with hidden ones flagged, WIP state and compact cards.
@@ -217,6 +298,30 @@ Input: `LayoutGetInput`. Output: `LayoutChange`. Schemas: [catalog.schema.json](
 Hide, show, collapse or reorder board columns, set sort modes, card fields and older closed cards, or reset to the project's layout.
 
 Input: `LayoutUpdateInput`. Output: `LayoutChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `file.get`
+
+An attached file's name, type, size and owner.
+
+Input: `FileRef`. Output: `Attachment`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `file.read`
+
+An attached file's content: text for text files, Base64 for images, otherwise only its details.
+
+Input: `FileRef`. Output: `FileContent`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `file.attach`
+
+Attach a local file, or Base64 data with a name, to a task or a comment.
+
+Input: `FileAttachInput`. Output: `FileChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `file.delete`
+
+Move an attached file to the trash.
+
+Input: `FileRef`. Output: `FileChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `agent.sessions`
 
