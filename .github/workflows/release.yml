@@ -1,0 +1,103 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Glyphkeel contributors
+#
+# Promotes a passed pre-release to a final release. It builds nothing.
+#
+# Pushing a release tag such as v0.1.0 starts it. The tag must point at the
+# same commit as a published pre-release of that version (v0.1.0-rc.N).
+# prerelease.yml publishes a pre-release only after every check has passed,
+# so its existence is the proof. This workflow downloads that pre-release's
+# files, checks their checksums and attestations, and publishes the same
+# files, byte for byte, as the release. If the code changed after the last
+# pre-release, make a new pre-release first.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  promote:
+    name: Publish the release from its pre-release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      attestations: read
+    env:
+      TAG: ${{ github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Find the pre-release on this commit
+        id: find
+        run: |
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::$TAG is not a release tag (expected vX.Y.Z)"
+            exit 1
+          fi
+          found=""
+          while read -r candidate; do
+            if [[ "$(git rev-parse "$candidate^{commit}")" == "$GITHUB_SHA" ]]; then
+              found="$candidate"
+            fi
+          done < <(gh release list --limit 200 --exclude-drafts --json tagName,isPrerelease \
+                     --jq '.[] | select(.isPrerelease and (.tagName | startswith(env.TAG + "-"))) | .tagName' \
+                   | grep -E -- '-(alpha|beta|rc)\.[0-9]+$' | sort -V)
+          if [[ -z "$found" ]]; then
+            echo "::error::No published pre-release of $TAG points at $GITHUB_SHA. Push a pre-release tag for this commit and wait for it to pass."
+            exit 1
+          fi
+          echo "Promoting $found"
+          echo "prerelease=$found" >> "$GITHUB_OUTPUT"
+
+      - name: Download and check its files
+        env:
+          PRERELEASE: ${{ steps.find.outputs.prerelease }}
+        run: |
+          mkdir "$RUNNER_TEMP/assets"
+          gh release download "$PRERELEASE" --dir "$RUNNER_TEMP/assets"
+          cd "$RUNNER_TEMP/assets"
+          sha256sum --check --strict SHA256SUMS
+          # Every file listed, plus SHA256SUMS itself, must be in the release.
+          listed=$(awk '{ print $2 }' SHA256SUMS | sort)
+          present=$(find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%f\n' | sort)
+          if [[ "$listed" != "$present" ]]; then
+            echo "::error::The pre-release's files don't match its SHA256SUMS"
+            exit 1
+          fi
+          while read -r file; do
+            gh attestation verify "$file" \
+              --repo "$GH_REPO" \
+              --signer-workflow "$GH_REPO/.github/workflows/prerelease.yml"
+          done <<< "$listed"
+
+      - name: Publish the release
+        env:
+          PRERELEASE: ${{ steps.find.outputs.prerelease }}
+        run: |
+          gh release view "$PRERELEASE" --json body --jq .body > "$RUNNER_TEMP/notes.md"
+          printf '\n\nThese are the files of %s, unchanged.\n' "$PRERELEASE" >> "$RUNNER_TEMP/notes.md"
+          gh release create "$TAG" \
+            --verify-tag \
+            --latest \
+            --title "Glyphkeel $TAG" \
+            --notes-file "$RUNNER_TEMP/notes.md" \
+            "$RUNNER_TEMP"/assets/*
