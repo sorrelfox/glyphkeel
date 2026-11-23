@@ -9,7 +9,7 @@ members = ["crates/*", "tools/*", "xtask"]
 default-members = ["crates/*"]
 
 [workspace.package]
-version = "0.0.0"
+version = "0.0.4"
 edition = "2024"
 # Keep equal to the channel in rust-toolchain.toml and `msrv` in clippy.toml.
 rust-version = "1.100"
@@ -57,8 +57,10 @@ image = { version = "0.25.10", default-features = false, features = ["png", "jpe
 # Property tests (development only).
 proptest = "1.12.0"
 # Time zones: the local day of a moment and the moment of a local time, for
-# "today", reminders and the time report. Reads the system's zone database.
-jiff = "1.0.2"
+# "today", reminders and the time report. Reads the system's zone database;
+# `tzdb-bundle-always` embeds a copy that is used only when the system has
+# none (a minimal install without tzdata), instead of silently using UTC.
+jiff = { version = "1.0.2", features = ["tzdb-bundle-always"] }
 # The workspace database: SQLite bundled (with FTS5), custom collation and
 # busy handler.
 rusqlite = { version = "0.43.0", features = ["bundled", "collation"] }

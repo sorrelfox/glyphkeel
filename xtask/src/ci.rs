@@ -107,7 +107,9 @@ impl Suite {
             }
             Self::App => "the desktop app with the UI embedded",
             Self::Deny => "cargo-deny: licences, advisories, bans, sources",
-            Self::Package => "deb and rpm packages (Tauri bundler, `dist` profile)",
+            Self::Package => {
+                "deb and rpm packages with the app and the command line (`dist` profile)"
+            }
         }
     }
 
@@ -163,24 +165,41 @@ impl Suite {
                 ]),
             ],
             Self::Deny => vec![Step::cargo(&["deny", "--locked", "check"])],
-            // `bundle.active` is off in tauri.conf.json, so everyday builds
-            // never bundle; this suite switches it on. The UI is built by
-            // the config's `beforeBuildCommand`.
-            Self::Package => vec![Step::pnpm(&[
-                "tauri",
-                "build",
-                "--ci",
-                "--bundles",
-                "deb,rpm",
-                "--config",
-                r#"{"bundle":{"active":true}}"#,
-                "--",
-                "--profile",
-                "dist",
-            ])],
+            // The packages hold both programs: the command line is built
+            // first and added to /usr/bin next to the app, where it looks
+            // for the app. `bundle.active` is off in tauri.conf.json, so
+            // everyday builds never bundle; this suite switches it on. The
+            // UI is built by the config's `beforeBuildCommand`.
+            Self::Package => vec![
+                Step::cargo(&[
+                    "build",
+                    "--package",
+                    "gk-cli",
+                    "--locked",
+                    "--profile",
+                    "dist",
+                ]),
+                Step::pnpm(&[
+                    "tauri",
+                    "build",
+                    "--ci",
+                    "--bundles",
+                    "deb,rpm",
+                    "--config",
+                    PACKAGE_CONFIG,
+                    "--",
+                    "--profile",
+                    "dist",
+                ]),
+            ],
         }
     }
 }
+
+/// The Tauri configuration the `package` suite adds: bundling on, and the
+/// command line `glyphkeel` in /usr/bin. The source path is relative to
+/// crates/gk-app, where tauri.conf.json is.
+const PACKAGE_CONFIG: &str = r#"{"bundle":{"active":true,"linux":{"deb":{"files":{"/usr/bin/glyphkeel":"../../target/dist/glyphkeel"}},"rpm":{"files":{"/usr/bin/glyphkeel":"../../target/dist/glyphkeel"}}}}}"#;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Distro {
@@ -469,6 +488,9 @@ struct Pins {
     pnpm: String,
     /// The UI's Playwright, whose Chromium the images install.
     playwright: String,
+    /// cargo-deny, the version the pre-release workflow installs, so that
+    /// the local `deny` suite and GitHub's agree.
+    cargo_deny: String,
 }
 
 impl Pins {
@@ -479,7 +501,8 @@ impl Pins {
             .context("cannot parse package.json")?;
         let ui: serde_json::Value = serde_json::from_str(&read(root, "ui/package.json")?)
             .context("cannot parse ui/package.json")?;
-        Self::from_files(&toolchain, &node, &package, &ui)
+        let workflow = read(root, PRERELEASE_WORKFLOW)?;
+        Self::from_files(&toolchain, &node, &package, &ui, &workflow)
     }
 
     fn from_files(
@@ -487,6 +510,7 @@ impl Pins {
         node: &str,
         package: &serde_json::Value,
         ui: &serde_json::Value,
+        workflow: &str,
     ) -> Result<Self> {
         let rust = toolchain
             .lines()
@@ -504,14 +528,27 @@ impl Pins {
             .filter(|version| version.chars().all(|c| c.is_ascii_digit() || c == '.'))
             .map(str::to_owned)
             .context("ui/package.json pins no exact version of @playwright/test")?;
+        let cargo_deny = workflow
+            .lines()
+            .find_map(|line| line.trim().strip_prefix("tool: cargo-deny@"))
+            .map(str::trim)
+            .filter(|version| {
+                !version.is_empty() && version.chars().all(|c| c.is_ascii_digit() || c == '.')
+            })
+            .map(str::to_owned)
+            .with_context(|| format!("{PRERELEASE_WORKFLOW} pins no exact cargo-deny version"))?;
         Ok(Self {
             rust,
             node: node.trim().to_owned(),
             pnpm,
             playwright,
+            cargo_deny,
         })
     }
 }
+
+/// The workflow whose `tool: cargo-deny@<version>` pins cargo-deny.
+const PRERELEASE_WORKFLOW: &str = ".github/workflows/prerelease.yml";
 
 fn read(root: &Path, file: &str) -> Result<String> {
     fs::read_to_string(root.join(file)).with_context(|| format!("cannot read {file}"))
@@ -539,7 +576,9 @@ fn build_image(
         .arg("--build-arg")
         .arg(format!("PNPM_VERSION={}", pins.pnpm))
         .arg("--build-arg")
-        .arg(format!("PLAYWRIGHT_VERSION={}", pins.playwright));
+        .arg(format!("PLAYWRIGHT_VERSION={}", pins.playwright))
+        .arg("--build-arg")
+        .arg(format!("CARGO_DENY_VERSION={}", pins.cargo_deny));
     if rebuild {
         cmd.arg("--no-cache");
     }
@@ -663,7 +702,9 @@ mod tests {
 
     use std::path::PathBuf;
 
-    use super::{Distro, Engine, Options, Pins, Step, Suite, cache_volumes, copy_script};
+    use super::{
+        Distro, Engine, Options, PACKAGE_CONFIG, Pins, Step, Suite, cache_volumes, copy_script,
+    };
 
     fn parse(args: &[&str]) -> anyhow::Result<Options> {
         Options::parse(&args.iter().map(ToString::to_string).collect::<Vec<_>>())
@@ -753,11 +794,39 @@ mod tests {
     }
 
     #[test]
+    fn the_repository_pins_every_tool() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        Pins::read(&root).unwrap();
+    }
+
+    #[test]
+    fn the_packages_hold_the_app_and_the_command_line() {
+        let config: serde_json::Value = serde_json::from_str(PACKAGE_CONFIG).unwrap();
+        assert_eq!(config["bundle"]["active"], true);
+        for format in ["deb", "rpm"] {
+            assert_eq!(
+                config["bundle"]["linux"][format]["files"]["/usr/bin/glyphkeel"],
+                "../../target/dist/glyphkeel"
+            );
+        }
+        let steps: Vec<String> = Suite::Package
+            .steps()
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        assert!(steps[0].starts_with("cargo build --package gk-cli"));
+        assert!(steps[0].ends_with("--profile dist"));
+        assert!(steps[1].starts_with("pnpm tauri build"));
+    }
+
+    #[test]
     fn pins_come_from_the_repository_files() {
         let toolchain = "[toolchain]\nchannel = \"1.100.0\"\ncomponents = [\"clippy\"]\n";
         let package = json!({ "packageManager": "pnpm@12.21.0+sha512.abc" });
         let ui = json!({ "devDependencies": { "@playwright/test": "1.65.1" } });
-        let pins = Pins::from_files(toolchain, "24.18.0\n", &package, &ui).unwrap();
+        let wf =
+            "      - uses: some/action@abc\n        with:\n          tool: cargo-deny@0.21.0\n";
+        let pins = Pins::from_files(toolchain, "24.18.0\n", &package, &ui, wf).unwrap();
         assert_eq!(
             pins,
             Pins {
@@ -765,13 +834,17 @@ mod tests {
                 node: "24.18.0".into(),
                 pnpm: "12.21.0".into(),
                 playwright: "1.65.1".into(),
+                cargo_deny: "0.21.0".into(),
             }
         );
-        assert!(Pins::from_files("[toolchain]\n", "24", &package, &ui).is_err());
-        assert!(Pins::from_files(toolchain, "24", &json!({}), &ui).is_err());
-        assert!(Pins::from_files(toolchain, "24", &package, &json!({})).is_err());
+        assert!(Pins::from_files("[toolchain]\n", "24", &package, &ui, wf).is_err());
+        assert!(Pins::from_files(toolchain, "24", &json!({}), &ui, wf).is_err());
+        assert!(Pins::from_files(toolchain, "24", &package, &json!({}), wf).is_err());
         let range = json!({ "devDependencies": { "@playwright/test": "^1.65.1" } });
-        assert!(Pins::from_files(toolchain, "24", &package, &range).is_err());
+        assert!(Pins::from_files(toolchain, "24", &package, &range, wf).is_err());
+        let latest = "          tool: cargo-deny@latest\n";
+        assert!(Pins::from_files(toolchain, "24", &package, &ui, latest).is_err());
+        assert!(Pins::from_files(toolchain, "24", &package, &ui, "").is_err());
     }
 
     #[test]

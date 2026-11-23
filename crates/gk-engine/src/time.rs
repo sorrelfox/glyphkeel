@@ -163,6 +163,14 @@ mod tests {
     }
 
     #[test]
+    fn a_copy_of_the_zone_database_is_built_in_for_systems_without_one() {
+        // Used only when the system has no zone database; without it, named
+        // zones would silently become the system's (UTC on such systems).
+        let built_in = jiff::tz::TimeZoneDatabase::bundled();
+        assert!(built_in.get("Europe/Berlin").is_ok());
+    }
+
+    #[test]
     fn local_days_and_moments_follow_the_zone() {
         let berlin = Zone::new(Some("Europe/Berlin"));
         // 2026-11-23T23:30Z is already the 24th in Berlin (UTC+1).

@@ -8,6 +8,7 @@ FROM registry.fedoraproject.org/fedora:45
 ARG RUST_TOOLCHAIN
 ARG NODE_VERSION
 ARG PNPM_VERSION
+ARG CARGO_DENY_VERSION
 
 ENV CARGO_HOME=/usr/local/cargo \
     RUSTUP_HOME=/usr/local/rustup \
@@ -20,8 +21,9 @@ ENV PATH=/usr/local/cargo/bin:$PATH
 # Build tools and the desktop app's system libraries (WebKitGTK 4.1, GTK 3,
 # libsoup 3), plus Xvfb for headless UI runs and the libraries Playwright's
 # Chromium needs (Playwright installs them itself only on Debian and Ubuntu).
+# tzdata explicitly: the time zone tests need the system's zone database.
 RUN dnf install -y --setopt=install_weak_deps=False \
-      gcc gcc-c++ make curl file git pkgconf-pkg-config xz tar \
+      gcc gcc-c++ make curl file git pkgconf-pkg-config tzdata xz tar \
       webkit2gtk4.1-devel gtk3-devel libsoup3-devel librsvg2-devel \
       xorg-x11-server-Xvfb xorg-x11-xauth \
       nss nspr atk at-spi2-atk at-spi2-core cups-libs libdrm libxkbcommon \
