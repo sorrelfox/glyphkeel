@@ -7,7 +7,7 @@ use schemars::{JsonSchema, Schema};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-use crate::ops::{agent, board, history, project, settings, task, workspace};
+use crate::ops::{agent, board, comment, file, history, project, settings, task, workspace};
 use crate::schema;
 
 /// One operation of the catalog, as a type: its name and its input and
@@ -161,6 +161,8 @@ pub static CATALOG: &[OpDescriptor] = &[
     project::PROJECT_CHANGE_KEY,
     project::PROJECT_ARCHIVE,
     project::PROJECT_UNARCHIVE,
+    project::PROJECT_DELETE,
+    project::PROJECT_BRIEF,
     project::STATUS_CREATE,
     project::STATUS_UPDATE,
     project::STATUS_REORDER,
@@ -175,9 +177,22 @@ pub static CATALOG: &[OpDescriptor] = &[
     task::TASK_CREATE,
     task::TASK_UPDATE,
     task::TASK_MOVE,
+    task::TASK_DUPLICATE,
+    task::TASK_CLAIM,
+    task::TASK_RELEASE,
+    task::RELATION_ADD,
+    task::RELATION_REMOVE,
+    comment::COMMENT_LIST,
+    comment::COMMENT_ADD,
+    comment::COMMENT_UPDATE,
+    comment::COMMENT_DELETE,
     board::BOARD_GET,
     board::LAYOUT_GET,
     board::LAYOUT_UPDATE,
+    file::FILE_GET,
+    file::FILE_READ,
+    file::FILE_ATTACH,
+    file::FILE_DELETE,
     agent::AGENT_SESSIONS,
     agent::AGENT_POLICY_UPDATE,
     history::HISTORY_FEED,

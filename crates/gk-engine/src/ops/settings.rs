@@ -41,6 +41,7 @@ fn update(w: &mut WriteCtx<'_>, patch: SettingsPatch) -> Result<SettingsChange, 
             SettingKey::HoursPerDay => patch.hours_per_day.is_some(),
             SettingKey::DaysPerWeek => patch.days_per_week.is_some(),
             SettingKey::WeekStart => patch.week_start.is_some(),
+            SettingKey::FileMaxMb => patch.file_max_mb.is_some(),
         };
         if given {
             return Err(
@@ -74,6 +75,10 @@ fn update(w: &mut WriteCtx<'_>, patch: SettingsPatch) -> Result<SettingsChange, 
     if let Some(days) = patch.days_per_week {
         in_range("days_per_week", days, 1, 7)?;
         wanted.push(("days_per_week", days.into()));
+    }
+    if let Some(mb) = patch.file_max_mb {
+        in_range("file_max_mb", mb, 1, 1024)?;
+        wanted.push(("file_max_mb", mb.into()));
     }
     if let Some(start) = patch.week_start {
         wanted.push(("week_start", to_value(start)?));

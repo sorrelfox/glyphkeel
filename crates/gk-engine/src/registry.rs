@@ -28,6 +28,8 @@ pub struct Env {
     pub program_version: String,
     /// The schema version the program was built for.
     pub schema_version: i64,
+    /// The workspace's folder, for its stored files.
+    pub layout: gk_store::WorkspaceLayout,
 }
 
 /// A query's view of the workspace: one read transaction, one snapshot.

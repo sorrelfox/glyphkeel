@@ -14,8 +14,9 @@
 use gk_api::OpError;
 use gk_api::ops::common::{Actor, ActorKind, Category, Glyph, Hue, Priority};
 use gk_api::ops::task::{
-    Checklist, LabelRef, StatusRef, Task, TaskChange, TaskCreate, TaskCreateInput, TaskField,
-    TaskGet, TaskGetInput, TaskList, TaskMove, TaskMoveInput, TaskUpdate, TaskUpdateInput, TypeRef,
+    Checklist, Claim, LabelRef, StatusRef, Task, TaskChange, TaskCreate, TaskCreateInput,
+    TaskField, TaskGet, TaskGetInput, TaskList, TaskMove, TaskMoveInput, TaskPart, TaskRef,
+    TaskUpdate, TaskUpdateInput, TypeRef,
 };
 use gk_core::{Day, DurationUnits, Id, Rank, StatusCategory, fold};
 use gk_store::rusqlite::{OptionalExtension, Transaction, params};
@@ -48,7 +49,9 @@ pub(super) fn register(r: &mut Registry) {
         let mut items = Vec::with_capacity(input.keys.len());
         for (i, key) in input.keys.iter().enumerate() {
             let t = lookup::task(q.tx, &format!("keys[{i}]"), key)?;
-            items.push(load(q.tx, t.id, units)?);
+            let mut task = load(q.tx, t.id, units, q.now)?;
+            add_parts(q.tx, &mut task, t.id, &input.include)?;
+            items.push(task);
         }
         Ok(TaskList {
             total: items.len() as u64,
@@ -66,7 +69,7 @@ pub(crate) fn units(tx: &Transaction<'_>) -> Result<DurationUnits, Failure> {
     Ok(DurationUnits::new(s.hours_per_day, s.days_per_week).unwrap_or_default())
 }
 
-fn invalid(field: &str, e: impl std::fmt::Display) -> Failure {
+pub(crate) fn invalid(field: &str, e: impl std::fmt::Display) -> Failure {
     let text = e.to_string();
     let mut chars = text.chars();
     let message = chars.next().map_or_else(String::new, |c| {
@@ -202,73 +205,134 @@ pub(crate) fn refresh_text(w: &WriteCtx<'_>, task: Id) -> Result<(), Failure> {
 // ---------------------------------------------------------------------
 // Reading
 
-/// One task as outputs carry it.
-pub(crate) fn load(tx: &Transaction<'_>, id: Id, units: DurationUnits) -> Result<Task, Failure> {
-    let row = tx.query_row(
+/// Whether the task `t` is blocked: a task that blocks it is still open.
+pub(crate) const BLOCKED_SQL: &str = "EXISTS (SELECT 1 FROM task_relations r
+      JOIN tasks o ON o.id = r.from_task
+     WHERE r.to_task = t.id AND r.kind = 'blocks' AND o.deleted_at IS NULL
+       AND o.closed_at IS NULL)";
+/// The live comments of the task `t`.
+pub(crate) const COMMENTS_SQL: &str =
+    "(SELECT count(*) FROM comments c WHERE c.task_id = t.id AND c.deleted_at IS NULL)";
+/// The live files of the task `t` and of its live comments.
+pub(crate) const FILES_SQL: &str = "(SELECT count(*) FROM attachments a
+     WHERE a.deleted_at IS NULL
+       AND ((a.owner_kind = 'task' AND a.owner_id = t.id)
+         OR (a.owner_kind = 'comment' AND a.owner_id IN
+               (SELECT c.id FROM comments c WHERE c.task_id = t.id AND c.deleted_at IS NULL))))";
+/// The live subtasks of the task `t`.
+pub(crate) const SUBTASKS_SQL: &str =
+    "(SELECT count(*) FROM tasks c WHERE c.parent_id = t.id AND c.deleted_at IS NULL)";
+/// The closed live subtasks of the task `t`.
+pub(crate) const CLOSED_SUBTASKS_SQL: &str = "(SELECT count(*) FROM tasks c
+     WHERE c.parent_id = t.id AND c.deleted_at IS NULL AND c.closed_at IS NOT NULL)";
+
+fn count(n: i64) -> u32 {
+    u32::try_from(n).unwrap_or(0)
+}
+
+/// The claim stored in `session`/`name`/`until`, if it still lasts at
+/// `now`.
+pub(crate) fn live_claim(
+    session: Option<Id>,
+    name: Option<String>,
+    until: Option<i64>,
+    now: i64,
+) -> Option<Claim> {
+    match (session, until) {
+        (Some(session), Some(until)) if until > now => Some(Claim {
+            agent: name.unwrap_or_default(),
+            session: session.to_string(),
+            until: rfc3339(until),
+        }),
+        _ => None,
+    }
+}
+
+/// One task as outputs carry it, with the claim as it stands at `now`.
+pub(crate) fn load(
+    tx: &Transaction<'_>,
+    id: Id,
+    units: DurationUnits,
+    now: i64,
+) -> Result<Task, Failure> {
+    let sql = format!(
         "SELECT t.number, p.key, t.title, t.description, s.id, s.name, s.category,
                 y.id, y.name, y.glyph, t.priority, t.parent_id, t.start_date, t.due_date,
                 t.estimate_min, t.progress_override, t.spent_min, t.checklist_done,
                 t.checklist_total, t.rank, t.created_by_kind, t.created_by_name, t.created_at,
-                t.edited_at, t.updated_at, t.status_entered_at, t.closed_at, t.version
+                t.edited_at, t.updated_at, t.status_entered_at, t.closed_at, t.version,
+                {SUBTASKS_SQL}, {CLOSED_SUBTASKS_SQL}, {BLOCKED_SQL}, {COMMENTS_SQL}, {FILES_SQL},
+                t.claim_session, t.claim_name, t.claim_until
            FROM tasks t JOIN projects p ON p.id = t.project_id
            JOIN statuses s ON s.id = t.status_id JOIN task_types y ON y.id = t.type_id
-          WHERE t.id = ?1",
-        [b(id)],
-        |r| {
-            let estimate: Option<i64> = r.get(14)?;
-            Ok((
-                Task {
-                    key: format!("{}-{}", r.get::<_, String>(1)?, r.get::<_, i64>(0)?),
-                    title: r.get(2)?,
-                    project: r.get(1)?,
-                    status: StatusRef {
-                        id: id_at(r, 4)?.to_string(),
-                        name: r.get(5)?,
-                        category: parse_enum(&r.get::<_, String>(6)?).unwrap_or(Category::Todo),
-                    },
-                    task_type: TypeRef {
-                        id: id_at(r, 7)?.to_string(),
-                        name: r.get(8)?,
-                        glyph: parse_enum(&r.get::<_, String>(9)?).unwrap_or(Glyph::Task),
-                    },
-                    priority: parse_enum(priority_name(r.get(10)?)).unwrap_or(Priority::None),
-                    labels: Vec::new(),
-                    parent: None,
-                    description: r.get(3)?,
-                    start_date: r.get(12)?,
-                    due_date: r.get(13)?,
-                    estimate: estimate.map(|m| gk_core::format_duration(m, units)),
-                    estimate_minutes: estimate,
-                    progress: r
-                        .get::<_, Option<i64>>(15)?
-                        .and_then(|p| u8::try_from(p).ok()),
-                    spent_minutes: r.get(16)?,
-                    checklist: Checklist {
-                        done: u32::try_from(r.get::<_, i64>(17)?).unwrap_or(0),
-                        total: u32::try_from(r.get::<_, i64>(18)?).unwrap_or(0),
-                    },
-                    rank: r.get(19)?,
-                    old_keys: Vec::new(),
-                    created_by: Actor {
-                        kind: if r.get::<_, String>(20)? == "agent" {
-                            ActorKind::Agent
-                        } else {
-                            ActorKind::User
-                        },
-                        name: r.get(21)?,
-                    },
-                    created_at: rfc3339(r.get(22)?),
-                    edited_at: rfc3339(r.get(23)?),
-                    updated_at: rfc3339(r.get(24)?),
-                    status_entered_at: rfc3339(r.get(25)?),
-                    closed_at: r.get::<_, Option<i64>>(26)?.map(rfc3339),
-                    version: r.get(27)?,
-                    id: id.to_string(),
+          WHERE t.id = ?1"
+    );
+    let row = tx.query_row(&sql, [b(id)], |r| {
+        let estimate: Option<i64> = r.get(14)?;
+        Ok((
+            Task {
+                key: format!("{}-{}", r.get::<_, String>(1)?, r.get::<_, i64>(0)?),
+                title: r.get(2)?,
+                project: r.get(1)?,
+                status: StatusRef {
+                    id: id_at(r, 4)?.to_string(),
+                    name: r.get(5)?,
+                    category: parse_enum(&r.get::<_, String>(6)?).unwrap_or(Category::Todo),
                 },
-                opt_id_at(r, 11)?,
-            ))
-        },
-    )?;
+                task_type: TypeRef {
+                    id: id_at(r, 7)?.to_string(),
+                    name: r.get(8)?,
+                    glyph: parse_enum(&r.get::<_, String>(9)?).unwrap_or(Glyph::Task),
+                },
+                priority: parse_enum(priority_name(r.get(10)?)).unwrap_or(Priority::None),
+                labels: Vec::new(),
+                parent: None,
+                description: r.get(3)?,
+                start_date: r.get(12)?,
+                due_date: r.get(13)?,
+                estimate: estimate.map(|m| gk_core::format_duration(m, units)),
+                estimate_minutes: estimate,
+                progress: r
+                    .get::<_, Option<i64>>(15)?
+                    .and_then(|p| u8::try_from(p).ok()),
+                spent_minutes: r.get(16)?,
+                checklist: Checklist {
+                    done: u32::try_from(r.get::<_, i64>(17)?).unwrap_or(0),
+                    total: u32::try_from(r.get::<_, i64>(18)?).unwrap_or(0),
+                },
+                subtask_count: Checklist {
+                    done: count(r.get(29)?),
+                    total: count(r.get(28)?),
+                },
+                blocked: r.get(30)?,
+                comment_count: count(r.get(31)?),
+                file_count: count(r.get(32)?),
+                claim: live_claim(opt_id_at(r, 33)?, r.get(34)?, r.get(35)?, now),
+                subtasks: None,
+                links: None,
+                comments: None,
+                files: None,
+                rank: r.get(19)?,
+                old_keys: Vec::new(),
+                created_by: Actor {
+                    kind: if r.get::<_, String>(20)? == "agent" {
+                        ActorKind::Agent
+                    } else {
+                        ActorKind::User
+                    },
+                    name: r.get(21)?,
+                },
+                created_at: rfc3339(r.get(22)?),
+                edited_at: rfc3339(r.get(23)?),
+                updated_at: rfc3339(r.get(24)?),
+                status_entered_at: rfc3339(r.get(25)?),
+                closed_at: r.get::<_, Option<i64>>(26)?.map(rfc3339),
+                version: r.get(27)?,
+                id: id.to_string(),
+            },
+            opt_id_at(r, 11)?,
+        ))
+    })?;
     let (mut task, parent) = row;
     if let Some(parent) = parent {
         let (project, number): (Vec<u8>, i64) = tx.query_row(
@@ -309,18 +373,89 @@ pub(crate) fn task_labels(tx: &Transaction<'_>, id: Id) -> Result<Vec<LabelRef>,
     Ok(labels)
 }
 
-fn changed(w: &WriteCtx<'_>, id: Id, warnings: Vec<String>) -> Result<TaskChange, Failure> {
+/// Adds the parts `include` asks for to `task`.
+pub(crate) fn add_parts(
+    tx: &Transaction<'_>,
+    task: &mut Task,
+    id: Id,
+    include: &[TaskPart],
+) -> Result<(), Failure> {
+    for part in include {
+        match part {
+            TaskPart::Subtasks => task.subtasks = Some(subtasks(tx, id)?),
+            TaskPart::Links => task.links = Some(super::relation::links(tx, id)?),
+            TaskPart::Comments => task.comments = Some(super::comment::list(tx, id, false)?),
+            TaskPart::Files => task.files = Some(super::file::of_task(tx, id)?),
+        }
+    }
+    Ok(())
+}
+
+/// Another task as links and subtask lists show it.
+pub(crate) fn task_ref(tx: &Transaction<'_>, id: Id) -> Result<TaskRef, Failure> {
+    Ok(tx.query_row(
+        "SELECT p.key || '-' || t.number, t.title, s.id, s.name, s.category, t.closed_at
+           FROM tasks t JOIN projects p ON p.id = t.project_id
+           JOIN statuses s ON s.id = t.status_id
+          WHERE t.id = ?1",
+        [b(id)],
+        |r| {
+            Ok(TaskRef {
+                key: r.get(0)?,
+                title: r.get(1)?,
+                status: StatusRef {
+                    id: id_at(r, 2)?.to_string(),
+                    name: r.get(3)?,
+                    category: parse_enum(&r.get::<_, String>(4)?).unwrap_or(Category::Todo),
+                },
+                closed: r.get::<_, Option<i64>>(5)?.is_some(),
+                id: id.to_string(),
+            })
+        },
+    )?)
+}
+
+/// The live subtasks of `id`, in board order.
+fn subtasks(tx: &Transaction<'_>, id: Id) -> Result<Vec<TaskRef>, Failure> {
+    let mut stmt = tx.prepare_cached(
+        "SELECT t.id FROM tasks t JOIN statuses s ON s.id = t.status_id
+          WHERE t.parent_id = ?1 AND t.deleted_at IS NULL
+          ORDER BY s.rank, t.rank, t.id",
+    )?;
+    let ids = stmt
+        .query_map([b(id)], |r| id_at(r, 0))?
+        .collect::<Result<Vec<_>, _>>()?;
+    ids.into_iter().map(|c| task_ref(tx, c)).collect()
+}
+
+/// The task after a change, with `include` added.
+pub(crate) fn changed_with(
+    w: &WriteCtx<'_>,
+    id: Id,
+    warnings: Vec<String>,
+    include: &[TaskPart],
+) -> Result<TaskChange, Failure> {
+    let mut task = load(w.tx(), id, units(w.tx())?, w.now())?;
+    add_parts(w.tx(), &mut task, id, include)?;
     Ok(TaskChange {
-        task: load(w.tx(), id, units(w.tx())?)?,
+        task,
         group: w.group_if_changed(),
         warnings,
     })
 }
 
+pub(crate) fn changed(
+    w: &WriteCtx<'_>,
+    id: Id,
+    warnings: Vec<String>,
+) -> Result<TaskChange, Failure> {
+    changed_with(w, id, warnings, &[])
+}
+
 // ---------------------------------------------------------------------
 // Values
 
-fn day(field: &str, text: &str) -> Result<Day, Failure> {
+pub(crate) fn day(field: &str, text: &str) -> Result<Day, Failure> {
     text.trim().parse::<Day>().map_err(|e| invalid(field, e))
 }
 
@@ -332,7 +467,7 @@ fn priority_value(p: Priority) -> Option<Value> {
     Some(Value::String(enum_text(p)))
 }
 
-fn category_of(tx: &Transaction<'_>, status: Id) -> Result<StatusCategory, Failure> {
+pub(crate) fn category_of(tx: &Transaction<'_>, status: Id) -> Result<StatusCategory, Failure> {
     let text: String = tx.query_row(
         "SELECT category FROM statuses WHERE id = ?1",
         [b(status)],
@@ -342,7 +477,7 @@ fn category_of(tx: &Transaction<'_>, status: Id) -> Result<StatusCategory, Failu
 }
 
 /// The project's first to-do status, else its first status.
-fn first_status(tx: &Transaction<'_>, project: &ProjectRow) -> Result<Id, Failure> {
+pub(crate) fn first_status(tx: &Transaction<'_>, project: &ProjectRow) -> Result<Id, Failure> {
     let statuses = lookup::all(tx, List::Statuses, project.id)?;
     statuses
         .iter()
@@ -357,7 +492,7 @@ fn first_status(tx: &Transaction<'_>, project: &ProjectRow) -> Result<Id, Failur
         })
 }
 
-fn default_type(tx: &Transaction<'_>, project: &ProjectRow) -> Result<Id, Failure> {
+pub(crate) fn default_type(tx: &Transaction<'_>, project: &ProjectRow) -> Result<Id, Failure> {
     let found: Option<Id> = tx
         .query_row(
             "SELECT id FROM task_types WHERE project_id = ?1
@@ -374,7 +509,7 @@ fn default_type(tx: &Transaction<'_>, project: &ProjectRow) -> Result<Id, Failur
     })
 }
 
-fn resolve_labels(
+pub(crate) fn resolve_labels(
     tx: &Transaction<'_>,
     project: &ProjectRow,
     field: &str,
@@ -414,7 +549,7 @@ fn level_of(tx: &Transaction<'_>, id: Id) -> Result<usize, Failure> {
 }
 
 /// The task `id` and all its live subtasks, parents first.
-fn descendants(tx: &Transaction<'_>, id: Id) -> Result<Vec<Id>, Failure> {
+pub(crate) fn descendants(tx: &Transaction<'_>, id: Id) -> Result<Vec<Id>, Failure> {
     let mut out = vec![id];
     let mut i = 0;
     while i < out.len() {
@@ -448,7 +583,7 @@ fn height(tx: &Transaction<'_>, id: Id) -> Result<usize, Failure> {
 }
 
 /// Checks that `task` (with its subtasks) may go under `parent`.
-fn check_parent(
+pub(crate) fn check_parent(
     tx: &Transaction<'_>,
     task: Option<Id>,
     project: Id,
@@ -518,7 +653,7 @@ fn column_target(
 
 /// New ranks for placing `task` in the column of `status`; ranks of other
 /// tasks that had to be spread out are recorded here.
-fn rank_in_column(
+pub(crate) fn rank_in_column(
     w: &mut WriteCtx<'_>,
     project: Id,
     status: Id,
@@ -603,60 +738,104 @@ fn create(w: &mut WriteCtx<'_>, input: TaskCreateInput) -> Result<TaskChange, Fa
         input.at,
     )?
     .unwrap_or(Target::Bottom);
+    let id = insert(
+        w,
+        NewTask {
+            project: project.id,
+            project_key: project.key.clone(),
+            title,
+            description,
+            status,
+            task_type,
+            priority: priority_index(input.priority.unwrap_or_default()),
+            parent,
+            start_date: start.map(|d| d.to_string()),
+            due_date: due.map(|d| d.to_string()),
+            estimate,
+            progress: None,
+            labels,
+            target,
+        },
+    )?;
+    changed(w, id, Vec::new())
+}
 
+/// The fields of a task about to be written.
+#[derive(Debug, Clone)]
+pub(crate) struct NewTask {
+    pub(crate) project: Id,
+    pub(crate) project_key: String,
+    pub(crate) title: String,
+    pub(crate) description: String,
+    pub(crate) status: Id,
+    pub(crate) task_type: Id,
+    pub(crate) priority: i64,
+    pub(crate) parent: Option<Id>,
+    pub(crate) start_date: Option<String>,
+    pub(crate) due_date: Option<String>,
+    pub(crate) estimate: Option<i64>,
+    pub(crate) progress: Option<i64>,
+    pub(crate) labels: Vec<Id>,
+    pub(crate) target: Target,
+}
+
+/// Writes a new task with the project's next number, its labels and its
+/// search entry, and records its creation. The fields are checked already.
+pub(crate) fn insert(w: &mut WriteCtx<'_>, t: NewTask) -> Result<Id, Failure> {
     let id = Id::generate_at(u64::try_from(w.now()).unwrap_or(0));
-    let rank = rank_in_column(w, project.id, status, id, target)?;
+    let rank = rank_in_column(w, t.project, t.status, id, t.target)?;
     let number: i64 = w.tx().query_row(
         "UPDATE projects SET next_number = next_number + 1, updated_at = ?2 WHERE id = ?1
          RETURNING next_number - 1",
-        params![b(project.id), w.now()],
+        params![b(t.project), w.now()],
         |r| r.get(0),
     )?;
-    let category = category_of(w.tx(), status)?;
+    let category = category_of(w.tx(), t.status)?;
     let closed_at = category.is_closed().then(|| w.now());
     let caller = w.caller().clone();
     w.tx().execute(
         "INSERT INTO tasks (id, project_id, number, title, title_fold, description, status_id,
                             status_entered_at, type_id, priority, parent_id, rank, start_date,
                             due_date, estimate_min, created_at, created_by_kind, created_by_name,
-                            edited_at, updated_at, closed_at)
+                            edited_at, updated_at, closed_at, progress_override)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?8, ?16, ?17,
-                 ?8, ?8, ?18)",
+                 ?8, ?8, ?18, ?19)",
         params![
             b(id),
-            b(project.id),
+            b(t.project),
             number,
-            title,
-            fold(&title),
-            description,
-            b(status),
+            t.title,
+            fold(&t.title),
+            t.description,
+            b(t.status),
             w.now(),
-            b(task_type),
-            priority_index(input.priority.unwrap_or_default()),
-            parent.map(b),
+            b(t.task_type),
+            t.priority,
+            t.parent.map(b),
             rank.as_str(),
-            start.map(|d| d.to_string()),
-            due.map(|d| d.to_string()),
-            estimate,
+            t.start_date,
+            t.due_date,
+            t.estimate,
             caller.actor.kind.as_str(),
             caller.actor.name,
-            closed_at
+            closed_at,
+            t.progress
         ],
     )?;
-    write_labels(w, id, &labels)?;
+    write_labels(w, id, &t.labels)?;
     w.tx()
         .execute("UPDATE tasks SET version = 1 WHERE id = ?1", [b(id)])?;
     refresh_text(w, id)?;
-    let key = format!("{}-{number}", project.key);
-    let pid = Some(project.id);
+    let key = format!("{}-{number}", t.project_key);
+    let pid = Some(t.project);
     w.record_field(TASK, id, pid, "created", None, Some(Value::Bool(true)));
     w.record_field(TASK, id, pid, "key", None, text(key));
-    w.record_field(TASK, id, pid, "title", None, text(title));
-    w.record_field(TASK, id, pid, "status", None, id_value(status));
-    changed(w, id, Vec::new())
+    w.record_field(TASK, id, pid, "title", None, text(t.title));
+    w.record_field(TASK, id, pid, "status", None, id_value(t.status));
+    Ok(id)
 }
 
-fn priority_index(p: Priority) -> i64 {
+pub(crate) fn priority_index(p: Priority) -> i64 {
     match p {
         Priority::None => 0,
         Priority::Low => 1,
@@ -676,6 +855,7 @@ fn update(w: &mut WriteCtx<'_>, input: TaskUpdateInput) -> Result<TaskChange, Fa
     })?;
     lookup::ensure_active(&project)?;
     lookup::check_version(&task, input.expected_version, &input.key)?;
+    super::claim::guard(w, task.id, &input.key, input.override_claim)?;
     let clears = |f: TaskField| input.clear.contains(&f);
     for (given, field, name) in [
         (
@@ -801,7 +981,7 @@ fn update(w: &mut WriteCtx<'_>, input: TaskUpdateInput) -> Result<TaskChange, Fa
     changed(w, id, Vec::new())
 }
 
-fn move_task(w: &mut WriteCtx<'_>, input: TaskMoveInput) -> Result<TaskChange, Failure> {
+pub(crate) fn move_task(w: &mut WriteCtx<'_>, input: TaskMoveInput) -> Result<TaskChange, Failure> {
     let task = lookup::task(w.tx(), "key", &input.key)?;
     let from = lookup::project_by_id(w.tx(), task.project)?.ok_or_else(|| {
         Failure::Op(OpError::not_found(
@@ -811,6 +991,7 @@ fn move_task(w: &mut WriteCtx<'_>, input: TaskMoveInput) -> Result<TaskChange, F
     })?;
     lookup::ensure_active(&from)?;
     lookup::check_version(&task, input.expected_version, &input.key)?;
+    super::claim::guard(w, task.id, &input.key, input.override_claim)?;
     let mut warnings = Vec::new();
     let to = match &input.project {
         Some(p) => {
@@ -867,6 +1048,14 @@ fn move_task(w: &mut WriteCtx<'_>, input: TaskMoveInput) -> Result<TaskChange, F
             let open = open_subtasks(w.tx(), task.id)?;
             if open > 0 {
                 warnings.push(format!("{} still has {open} open subtasks.", input.key));
+            }
+            let blockers = super::relation::open_blockers(w.tx(), task.id)?;
+            if !blockers.is_empty() {
+                warnings.push(format!(
+                    "{} is still blocked by {}.",
+                    input.key,
+                    blockers.join(", ")
+                ));
             }
         }
     }

@@ -104,6 +104,29 @@ pub struct Task {
     pub spent_minutes: i64,
     /// The description's checklist.
     pub checklist: Checklist,
+    /// Its subtasks: closed and all.
+    pub subtask_count: Checklist,
+    /// Whether a task that blocks it is still open.
+    pub blocked: bool,
+    /// How many comments it has.
+    pub comment_count: u32,
+    /// How many files are attached to it and to its comments.
+    pub file_count: u32,
+    /// The agent that claimed it, while the claim lasts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claim: Option<Claim>,
+    /// Its subtasks in order, when asked for with `include`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subtasks: Option<Vec<TaskRef>>,
+    /// Its links to other tasks, when asked for with `include`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub links: Option<Vec<Link>>,
+    /// Its comments, oldest first, when asked for with `include`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comments: Option<Vec<crate::ops::comment::Comment>>,
+    /// The files attached to it, when asked for with `include`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub files: Option<Vec<crate::ops::file::Attachment>>,
     /// Its place in its status column.
     pub rank: String,
     /// Keys it had before; they still find it.
@@ -129,6 +152,80 @@ pub struct Task {
     pub id: String,
 }
 
+/// An agent's claim on a task.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Claim {
+    /// The agent's name.
+    pub agent: String,
+    /// The agent session holding it.
+    pub session: String,
+    /// When the claim ends unless renewed (RFC 3339, UTC).
+    pub until: String,
+}
+
+/// Another task, as links and subtask lists show it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TaskRef {
+    /// Its key.
+    pub key: String,
+    /// Its title.
+    pub title: String,
+    /// Its status.
+    pub status: StatusRef,
+    /// Whether it is closed (done or cancelled).
+    pub closed: bool,
+    /// Its ID.
+    pub id: String,
+}
+
+/// How a link reads from one task.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum LinkKind {
+    /// This task must be finished before the other.
+    Blocks,
+    /// The other task must be finished before this one.
+    BlockedBy,
+    /// The two are related.
+    Relates,
+    /// This task duplicates the other.
+    Duplicates,
+    /// The other task duplicates this one.
+    DuplicatedBy,
+    /// This task is a copy of the other.
+    Clones,
+    /// The other task is a copy of this one.
+    ClonedBy,
+}
+
+/// A link from one task to another.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Link {
+    /// How the link reads from this task.
+    pub kind: LinkKind,
+    /// The task at the other end.
+    pub task: TaskRef,
+    /// The link's ID.
+    pub id: String,
+}
+
+/// What `task.get` adds to each task.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskPart {
+    /// The subtasks in order.
+    Subtasks,
+    /// The links to other tasks.
+    Links,
+    /// The comments.
+    Comments,
+    /// The attached files.
+    Files,
+}
+
 /// A task changed, with the history group of the change.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -151,6 +248,9 @@ pub struct TaskChange {
 pub struct TaskGetInput {
     /// One to 20 task keys or IDs.
     pub keys: Vec<String>,
+    /// What to add to each task: `subtasks`, `links`, `comments`, `files`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub include: Vec<TaskPart>,
 }
 
 /// The tasks asked for, in the order asked.
@@ -282,6 +382,10 @@ pub struct TaskUpdateInput {
     /// Fields to clear.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub clear: Vec<TaskField>,
+    /// Change the task although another agent claimed it (full profile
+    /// only).
+    #[serde(default)]
+    pub override_claim: bool,
 }
 
 /// Where to move a task: another status, another place in its column, or
@@ -311,6 +415,107 @@ pub struct TaskMoveInput {
     /// key keeps finding it. Its subtasks move with it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub project: Option<String>,
+    /// Move the task although another agent claimed it (full profile only).
+    #[serde(default)]
+    pub override_claim: bool,
+}
+
+/// A copy of a task.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TaskDuplicateInput {
+    /// The task to copy: its key or ID.
+    pub key: String,
+    /// The copy's title; default: the same title.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// The copy's status; default: the project's first to-do status.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    /// Leave the subtasks out; by default they are copied too, in order.
+    #[serde(default)]
+    pub without_subtasks: bool,
+    /// Your own ID for this request; repeating it within 24 hours returns
+    /// the first answer instead of making a second copy.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_request_id: Option<String>,
+}
+
+/// A link to add or remove.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RelationInput {
+    /// The task: its key or ID.
+    pub key: String,
+    /// How the link reads from this task. `subtask_of` and `parent_of`
+    /// change the parent instead of adding a link.
+    pub kind: RelationKind,
+    /// The other task: its key or ID.
+    pub other: String,
+}
+
+/// The kinds of link, as read from the first task.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RelationKind {
+    /// This task must be finished before the other.
+    Blocks,
+    /// The other task must be finished before this one.
+    BlockedBy,
+    /// The two are related.
+    Relates,
+    /// This task duplicates the other.
+    Duplicates,
+    /// The other task duplicates this one.
+    DuplicatedBy,
+    /// This task is a copy of the other.
+    Clones,
+    /// The other task is a copy of this one.
+    ClonedBy,
+    /// This task is a subtask of the other.
+    SubtaskOf,
+    /// The other task is a subtask of this one.
+    ParentOf,
+}
+
+/// A claim on a task, for an agent working on it.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TaskClaimInput {
+    /// The task: its key or ID.
+    pub key: String,
+    /// How long the claim lasts unless renewed, 1 to 480 minutes; default
+    /// 60. Every change you make to the task renews it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lease_minutes: Option<u32>,
+    /// The status to move it to; default: the first in-progress status,
+    /// unless it is in progress already.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    /// Leave the status as it is.
+    #[serde(default)]
+    pub keep_status: bool,
+    /// Take the claim over from another agent (full profile only).
+    #[serde(default)]
+    pub override_claim: bool,
+}
+
+/// Giving up a claim.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TaskReleaseInput {
+    /// The task: its key or ID.
+    pub key: String,
+    /// A status to move it to, for example Review.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    /// A comment to add (Markdown), for example what was done.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comment: Option<String>,
+    /// Release another agent's claim (full profile only; the person can
+    /// always).
+    #[serde(default)]
+    pub override_claim: bool,
 }
 
 op!(
@@ -342,8 +547,82 @@ op!(
     TaskChange
 );
 
+op!(
+    /// A copy of a task, with its subtasks, labels, checklist and files.
+    TaskDuplicate,
+    "task.duplicate",
+    TaskDuplicateInput,
+    TaskChange
+);
+op!(
+    /// Claims a task for an agent session.
+    TaskClaim,
+    "task.claim",
+    TaskClaimInput,
+    TaskChange
+);
+op!(
+    /// Gives up a claim.
+    TaskRelease,
+    "task.release",
+    TaskReleaseInput,
+    TaskChange
+);
+op!(
+    /// Links two tasks.
+    RelationAdd,
+    "relation.add",
+    RelationInput,
+    TaskChange
+);
+op!(
+    /// Removes a link between two tasks.
+    RelationRemove,
+    "relation.remove",
+    RelationInput,
+    TaskChange
+);
+
+const fn command(summary: &'static str, cli: &'static str, input: &'static str) -> Meta {
+    Meta {
+        summary,
+        kind: OpKind::Command,
+        safety: Safety::Write,
+        exposure: Exposure::Data,
+        cli: Some(cli),
+        input_name: input,
+        output_name: "TaskChange",
+    }
+}
+
+pub(crate) const TASK_DUPLICATE: OpDescriptor = OpDescriptor::of::<TaskDuplicate>(command(
+    "Copy a task with its subtasks (in order), labels, checklist and files; the copy is linked as a clone.",
+    "task duplicate <key>",
+    "TaskDuplicateInput",
+));
+pub(crate) const TASK_CLAIM: OpDescriptor = OpDescriptor::of::<TaskClaim>(command(
+    "Claim a task for your agent session for a while, so other agents leave it alone; moves it into progress.",
+    "task claim <key>",
+    "TaskClaimInput",
+));
+pub(crate) const TASK_RELEASE: OpDescriptor = OpDescriptor::of::<TaskRelease>(command(
+    "Give up a claim on a task, optionally moving it and adding a comment.",
+    "task release <key>",
+    "TaskReleaseInput",
+));
+pub(crate) const RELATION_ADD: OpDescriptor = OpDescriptor::of::<RelationAdd>(command(
+    "Link two tasks (blocks, relates, duplicates, clones, or make one a subtask of the other).",
+    "task link <key>",
+    "RelationInput",
+));
+pub(crate) const RELATION_REMOVE: OpDescriptor = OpDescriptor::of::<RelationRemove>(command(
+    "Remove a link between two tasks, or a subtask from its parent.",
+    "task unlink <key>",
+    "RelationInput",
+));
+
 pub(crate) const TASK_GET: OpDescriptor = OpDescriptor::of::<TaskGet>(Meta {
-    summary: "One to 20 tasks by key, with their fields, description, labels and version.",
+    summary: "One to 20 tasks by key, with their fields, description, labels and version; subtasks, links, comments and files on request.",
     kind: OpKind::Query,
     safety: Safety::Read,
     exposure: Exposure::Data,

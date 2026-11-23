@@ -15,11 +15,21 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel board <project>` | `board.get` | A project's board as the person sees it: columns in the personal order with hidden ones flagged, WIP state and compact cards. |
 | `glyphkeel board layout set <project>` | `layout.update` | Hide, show, collapse or reorder board columns, set sort modes, card fields and older closed cards, or reset to the project's layout. |
 | `glyphkeel board layout show <project>` | `layout.get` | The person's layout of a project's board: column order, hidden and collapsed columns, sort modes, card fields. |
+| `glyphkeel comment add <key>` | `comment.add` | Add a Markdown comment to a task, optionally answering another. |
+| `glyphkeel comment delete <comment>` | `comment.delete` | Move a comment to the trash. |
+| `glyphkeel comment edit <comment>` | `comment.update` | Change a comment's text; the earlier text is kept and can be viewed. |
+| `glyphkeel comment list <key>` | `comment.list` | A task's comments, oldest first, optionally with their earlier texts. |
+| `glyphkeel file attach` | `file.attach` | Attach a local file, or Base64 data with a name, to a task or a comment. |
+| `glyphkeel file cat <attachment>` | `file.read` | An attached file's content: text for text files, Base64 for images, otherwise only its details. |
+| `glyphkeel file delete <attachment>` | `file.delete` | Move an attached file to the trash. |
+| `glyphkeel file show <attachment>` | `file.get` | An attached file's name, type, size and owner. |
 | `glyphkeel label add` | `label.create` | Add a label to a project. |
 | `glyphkeel label delete` | `label.delete` | Delete a label and take it off every task. Can't be undone. |
 | `glyphkeel label edit` | `label.update` | Rename or recolour a label. |
 | `glyphkeel project archive <project>` | `project.archive` | Archive a project and its sub-projects: they become read-only and leave the sidebar. |
+| `glyphkeel project brief <project>` | `project.brief` | The project's instructions for agents: the wiki page marked as the brief, else the project's description. |
 | `glyphkeel project create` | `project.create` | Create a project, or a sub-project that copies its parent's statuses, types and labels. |
+| `glyphkeel project delete <project>` | `project.delete` | Delete a project and its sub-projects with every task, comment and file in them. Can't be undone. |
 | `glyphkeel project edit <project>` | `project.update` | Change a project: name, description, colour, icon, modules, key, place in the tree, archived; add, change, reorder or remove statuses, types and labels, all in one change. |
 | `glyphkeel project list` | `project.list` | The project tree in sidebar order, with keys, names and open-task counts; archived projects on request. |
 | `glyphkeel project move <project>` | `project.move` | Move a project under another one (at most 3 levels), to the top level, or among its siblings. |
@@ -34,10 +44,15 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel status delete` | `status.delete` | Delete a status; its tasks move to the status named. Can't be undone. |
 | `glyphkeel status edit` | `status.update` | Rename or recolour a status, change its category or its WIP limit. |
 | `glyphkeel status move` | `status.reorder` | Move a status in the project's board order. |
+| `glyphkeel task claim <key>` | `task.claim` | Claim a task for your agent session for a while, so other agents leave it alone; moves it into progress. |
 | `glyphkeel task create` | `task.create` | Create a task from a title alone or with its fields; it gets the project's next key. |
+| `glyphkeel task duplicate <key>` | `task.duplicate` | Copy a task with its subtasks (in order), labels, checklist and files; the copy is linked as a clone. |
 | `glyphkeel task edit <key>` | `task.update` | Change a task's title, description, type, priority, labels, parent, dates, estimate or progress. |
+| `glyphkeel task link <key>` | `relation.add` | Link two tasks (blocks, relates, duplicates, clones, or make one a subtask of the other). |
 | `glyphkeel task move <key>` | `task.move` | Move a task to another status or place in its column, or to another project (new key; the old one forwards). |
-| `glyphkeel task show <keys>` | `task.get` | One to 20 tasks by key, with their fields, description, labels and version. |
+| `glyphkeel task release <key>` | `task.release` | Give up a claim on a task, optionally moving it and adding a comment. |
+| `glyphkeel task show <keys>` | `task.get` | One to 20 tasks by key, with their fields, description, labels and version; subtasks, links, comments and files on request. |
+| `glyphkeel task unlink <key>` | `relation.remove` | Remove a link between two tasks, or a subtask from its parent. |
 | `glyphkeel type add` | `type.create` | Add a task type to a project. |
 | `glyphkeel type delete` | `type.delete` | Delete a task type; its tasks get another type. Can't be undone. |
 | `glyphkeel type edit` | `type.update` | Rename, reshape, recolour or reorder a task type, or make it the default. |

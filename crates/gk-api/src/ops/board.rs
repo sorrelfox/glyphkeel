@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::catalog::{Exposure, Meta, OpDescriptor, OpKind, Safety};
 use crate::ops::common::{Category, Hue, Priority};
-use crate::ops::task::{Checklist, LabelRef, TypeRef};
+use crate::ops::task::{Checklist, Claim, LabelRef, TypeRef};
 
 /// How a column's cards are ordered.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
@@ -105,6 +105,17 @@ pub struct Card {
     pub checklist: Checklist,
     /// Its subtasks: closed and all.
     pub subtasks: Checklist,
+    /// Whether a task that blocks it is still open.
+    pub blocked: bool,
+    /// How many comments it has.
+    pub comment_count: u32,
+    /// How many files are attached to it and to its comments.
+    pub file_count: u32,
+    /// Logged time in minutes.
+    pub spent_minutes: i64,
+    /// The agent that claimed it, while the claim lasts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claim: Option<Claim>,
     /// Its place in the column.
     pub rank: String,
     /// When it entered its status.

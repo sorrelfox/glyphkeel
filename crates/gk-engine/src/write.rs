@@ -23,6 +23,7 @@ pub(crate) struct CommandMeta {
     pub(crate) at: i64,
     pub(crate) ctx: Context,
     pub(crate) workspace_id: Id,
+    pub(crate) layout: gk_store::WorkspaceLayout,
 }
 
 /// A command's view of the workspace: the open write transaction and a
@@ -88,6 +89,12 @@ impl<'a> WriteCtx<'a> {
     #[must_use]
     pub fn workspace_id(&self) -> Id {
         self.meta.workspace_id
+    }
+
+    /// The workspace's folder, for its stored files.
+    #[must_use]
+    pub fn layout(&self) -> &gk_store::WorkspaceLayout {
+        &self.meta.layout
     }
 
     /// The operation running.

@@ -27,7 +27,7 @@ use gk_store::rusqlite::types::Value as SqlValue;
 use gk_store::rusqlite::{OptionalExtension, Row, Transaction, params, params_from_iter};
 use serde_json::{Map, Value};
 
-use super::{agent, board, desc, fields, project, settings, task};
+use super::{agent, board, claim, comment, desc, fields, file, project, relation, settings, task};
 use crate::failure::Failure;
 use crate::registry::{QueryCtx, Registry};
 use crate::time::rfc3339;
@@ -280,6 +280,11 @@ fn current(
         (settings::ENTITY, _) => settings::raw(tx, field)?,
         (board::ENTITY, "settings") => board::raw(tx, id)?,
         (_, "deleted") => return Ok(None),
+        (relation::ENTITY, "link") => relation::raw(tx, id)?,
+        (comment::ENTITY, "created" | "trashed") => comment::raw_life(tx, id, field)?,
+        (comment::ENTITY, "body") => comment::raw_body(tx, id)?,
+        (file::ENTITY, "created" | "trashed") => file::raw_life(tx, id, field)?,
+        (fields::TASK, "claim") => claim::raw(tx, id)?,
         (fields::PROJECT | fields::TASK, "created") => {
             let table = if entity == fields::TASK {
                 "tasks"
@@ -339,6 +344,14 @@ fn apply(
             w.record_field(entity, id, project, field, before, value);
             Ok(())
         }
+        (relation::ENTITY, "link") => relation::apply(w, id, project, value),
+        (comment::ENTITY, "created" | "trashed") => comment::set_live(w, id, project, field, value),
+        (comment::ENTITY, "body") => {
+            let body = value.as_ref().and_then(Value::as_str).unwrap_or_default();
+            comment::set_body(w, id, project, body).map(drop)
+        }
+        (file::ENTITY, "created" | "trashed") => file::set_live(w, id, project, field, value),
+        (fields::TASK, "claim") => claim::apply(w, id, project, value),
         (fields::PROJECT | fields::TASK, "created") => {
             let is_task = entity == fields::TASK;
             let (table, child) = if is_task {
@@ -508,6 +521,12 @@ fn blocker(tx: &Transaction<'_>, rows: &[GroupRow]) -> Result<Option<String>, St
         return Ok(Some("it was already reverted".into()));
     }
     for row in rows {
+        if row.fields.is_empty() {
+            return Ok(Some(format!(
+                "the {} it changed was deleted for good",
+                row.entity
+            )));
+        }
         for field in revertible_fields(row) {
             let after = row.fields.get(field).and_then(|c| c.get("after")).cloned();
             let Some(now) = current(tx, &row.entity, row.id, field)? else {
