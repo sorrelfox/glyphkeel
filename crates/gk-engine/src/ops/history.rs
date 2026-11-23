@@ -30,7 +30,7 @@ use serde_json::{Map, Value};
 use super::description::{self, Owner};
 use super::{
     agent, board, claim, comment, desc, fields, file, lookup, project, relation, reminder,
-    settings, task, time,
+    settings, task, time, view,
 };
 use crate::failure::Failure;
 use crate::registry::{QueryCtx, Registry};
@@ -317,6 +317,7 @@ fn current(
     Ok(Some(match (entity, field) {
         (settings::ENTITY, _) => settings::raw(tx, field)?,
         (board::ENTITY, "settings") => board::raw(tx, id)?,
+        (view::ENTITY, view::RECORD) => view::raw(tx, id)?,
         (_, "deleted") => return Ok(None),
         (relation::ENTITY, "link") => relation::raw(tx, id)?,
         (comment::ENTITY, "created" | "trashed") => comment::raw_life(tx, id, field)?,
@@ -387,6 +388,12 @@ fn apply(
         (board::ENTITY, "settings") => {
             let before = board::raw(w.tx(), id)?;
             board::write_raw(w, id, value.as_ref())?;
+            w.record_field(entity, id, project, field, before, value);
+            Ok(())
+        }
+        (view::ENTITY, view::RECORD) => {
+            let before = view::raw(w.tx(), id)?;
+            view::write_raw(w, id, value.as_ref())?;
             w.record_field(entity, id, project, field, before, value);
             Ok(())
         }

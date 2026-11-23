@@ -38,10 +38,12 @@ The safety class decides who may run an operation:
 | `label.create` | write | app, command line, MCP | `update_project` | `glyphkeel label add` |
 | `label.update` | write | app, command line, MCP | `update_project` | `glyphkeel label edit` |
 | `label.delete` | permanent | app, command line, MCP | `update_project` | `glyphkeel label delete` |
+| `task.search` | read | app, command line, MCP | `search_tasks` | `glyphkeel task list` |
 | `task.get` | read | app, command line, MCP | `get_task` | `glyphkeel task show <keys>` |
 | `task.create` | write | app, command line, MCP | `create_task` | `glyphkeel task create` |
 | `task.update` | write | app, command line, MCP | `update_task` | `glyphkeel task edit <key>` |
 | `task.move` | write | app, command line, MCP | `move_task` | `glyphkeel task move <key>` |
+| `task.bulk_update` | write | app, command line, MCP | `bulk_update_tasks` | `glyphkeel task bulk` |
 | `task.reorder_subtask` | write | app, command line, MCP | `reorder_subtask` | `glyphkeel task reorder-subtask <key>` |
 | `task.resolve_conflict` | write | app, command line, MCP | `update_task` | `glyphkeel task resolve <key>` |
 | `checklist.update` | write | app, command line, MCP | `update_checklist` | `glyphkeel task check <key>` |
@@ -72,6 +74,11 @@ The safety class decides who may run an operation:
 | `board.get` | read | app, command line, MCP | `get_board` | `glyphkeel board <project>` |
 | `layout.get` | read | app, command line, MCP | `get_board` | `glyphkeel board layout show <project>` |
 | `layout.update` | write | app, command line, MCP | `set_board_layout` | `glyphkeel board layout set <project>` |
+| `view.list` | read | app, command line, MCP | `list_views` | `glyphkeel view list` |
+| `view.create` | write | app, command line, MCP | `create_view` | `glyphkeel view create` |
+| `view.update` | write | app, command line, MCP | `update_view` | `glyphkeel view edit <view>` |
+| `view.delete` | write | app, command line, MCP | `delete_view` | `glyphkeel view delete <view>` |
+| `query.parse` | read | app | — | — |
 | `file.get` | read | app, command line, MCP | `read_attachment` | `glyphkeel file show <attachment>` |
 | `file.read` | read | app, command line, MCP | `read_attachment` | `glyphkeel file cat <attachment>` |
 | `file.thumbnail` | read | app | — | — |
@@ -222,6 +229,12 @@ Delete a label and take it off every task. Can't be undone.
 
 Input: `LabelDeleteInput`. Output: `ProjectChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
+## `task.search`
+
+List the tasks matching a query (is:open due<+7d label:bug sort:due), a page at a time, with totals of estimates and logged time.
+
+Input: `TaskSearchInput`. Output: `TaskSearchResult`. Schemas: [catalog.schema.json](catalog.schema.json).
+
 ## `task.get`
 
 One to 20 tasks by key, with their fields, description, labels and version; subtasks, links, comments and files on request.
@@ -245,6 +258,12 @@ Input: `TaskUpdateInput`. Output: `TaskChange`. Schemas: [catalog.schema.json](c
 Move a task to another status or place in its column, or to another project (new key; the old one forwards).
 
 Input: `TaskMoveInput`. Output: `TaskChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `task.bulk_update`
+
+Make the same change to many tasks chosen by key or query (status, type, priority, labels, parent, dates set or shifted, estimate, project), previewed first, as one change for Undo and revert.
+
+Input: `BulkUpdateInput`. Output: `BulkResult`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `task.reorder_subtask`
 
@@ -427,6 +446,38 @@ Input: `LayoutGetInput`. Output: `LayoutChange`. Schemas: [catalog.schema.json](
 Hide, show, collapse or reorder board columns, set sort modes, card fields and older closed cards, or reset to the project's layout.
 
 Input: `LayoutUpdateInput`. Output: `LayoutChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `view.list`
+
+The saved views of a project or of the whole workspace: name, query, columns, order, grouping, totals and which is the default.
+
+Input: `ViewListInput`. Output: `ViewList`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `view.create`
+
+Save a query as a named view of a project or of the whole workspace, with its columns, order, grouping and totals.
+
+Input: `ViewCreateInput`. Output: `ViewChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `view.update`
+
+Rename a saved view, change its query, columns, order, grouping or totals, or make it the default.
+
+Input: `ViewUpdateInput`. Output: `ViewChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `view.delete`
+
+Delete a saved view; it can be brought back with revert.
+
+Input: `ViewDeleteInput`. Output: `ViewChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `query.parse`
+
+Read a task query for the query field: highlighted pieces, the chips of the condition builder, the normal form and the first mistake with its place.
+
+Input: `QueryParseInput`. Output: `ParsedQuery`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+Not available to agents: It serves the app's query field as the person types; agents and scripts run queries with task.search, which reports the same mistakes.
 
 ## `file.get`
 

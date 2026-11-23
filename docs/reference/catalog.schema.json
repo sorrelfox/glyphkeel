@@ -11174,6 +11174,591 @@
       "summary": "Delete a label and take it off every task. Can't be undone."
     },
     {
+      "cli": "task list",
+      "exposure": "data",
+      "id": "task.search",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Which tasks to list.",
+        "properties": {
+          "cursor": {
+            "description": "The `next_cursor` of the page before.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "include_subprojects": {
+            "default": false,
+            "description": "With `project`: its sub-projects' tasks too.",
+            "type": "boolean"
+          },
+          "limit": {
+            "description": "Tasks per page, 1 to 200; default 50.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "project": {
+            "description": "Only this project (key or ID).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "query": {
+            "default": "",
+            "description": "The query, for example `is:open due<+7d sort:due`; empty lists every\nopen and closed task of active projects.",
+            "type": "string"
+          },
+          "sort": {
+            "description": "The order when the query has no `sort:`, written like its keys\n(`due,-priority`). Default: by relevance for text searches, else by\nstatus, then place on the board.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "TaskSearchInput",
+        "type": "object"
+      },
+      "input_name": "TaskSearchInput",
+      "kind": "query",
+      "mcp_tool": "search_tasks",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person or agent."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person or an agent.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              }
+            ]
+          },
+          "Category": {
+            "description": "What a status means for the work in it.",
+            "oneOf": [
+              {
+                "const": "todo",
+                "description": "Not started.",
+                "type": "string"
+              },
+              {
+                "const": "in_progress",
+                "description": "Being worked on.",
+                "type": "string"
+              },
+              {
+                "const": "done",
+                "description": "Finished; closes the task.",
+                "type": "string"
+              },
+              {
+                "const": "cancelled",
+                "description": "Dropped; closes the task.",
+                "type": "string"
+              }
+            ]
+          },
+          "Checklist": {
+            "additionalProperties": false,
+            "description": "Ticked and all checklist items.",
+            "properties": {
+              "done": {
+                "description": "Ticked items.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "total": {
+                "description": "All items.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "done",
+              "total"
+            ],
+            "type": "object"
+          },
+          "Claim": {
+            "additionalProperties": false,
+            "description": "An agent's claim on a task.",
+            "properties": {
+              "agent": {
+                "description": "The agent's name.",
+                "type": "string"
+              },
+              "session": {
+                "description": "The agent session holding it.",
+                "type": "string"
+              },
+              "until": {
+                "description": "When the claim ends unless renewed (RFC 3339, UTC).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "agent",
+              "session",
+              "until"
+            ],
+            "type": "object"
+          },
+          "Glyph": {
+            "description": "The shape that shows a task's type.",
+            "oneOf": [
+              {
+                "const": "task",
+                "description": "A plain task.",
+                "type": "string"
+              },
+              {
+                "const": "bug",
+                "description": "A bug.",
+                "type": "string"
+              },
+              {
+                "const": "feature",
+                "description": "A feature.",
+                "type": "string"
+              },
+              {
+                "const": "milestone",
+                "description": "A milestone.",
+                "type": "string"
+              }
+            ]
+          },
+          "Hue": {
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
+            "oneOf": [
+              {
+                "const": "red",
+                "description": "Red.",
+                "type": "string"
+              },
+              {
+                "const": "orange",
+                "description": "Orange.",
+                "type": "string"
+              },
+              {
+                "const": "yellow",
+                "description": "Yellow.",
+                "type": "string"
+              },
+              {
+                "const": "green",
+                "description": "Green.",
+                "type": "string"
+              },
+              {
+                "const": "teal",
+                "description": "Teal.",
+                "type": "string"
+              },
+              {
+                "const": "blue",
+                "description": "Blue.",
+                "type": "string"
+              },
+              {
+                "const": "purple",
+                "description": "Purple.",
+                "type": "string"
+              },
+              {
+                "const": "pink",
+                "description": "Pink.",
+                "type": "string"
+              },
+              {
+                "const": "grey",
+                "description": "Grey.",
+                "type": "string"
+              }
+            ]
+          },
+          "LabelRef": {
+            "additionalProperties": false,
+            "description": "A label on a task.",
+            "properties": {
+              "hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "Its colour."
+              },
+              "id": {
+                "description": "The label's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "hue"
+            ],
+            "type": "object"
+          },
+          "ListTotals": {
+            "additionalProperties": false,
+            "description": "Totals over every matching task, not only the page.",
+            "properties": {
+              "count": {
+                "description": "Matching tasks.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "estimate_minutes": {
+                "description": "Their estimates added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "open": {
+                "description": "Of them, open.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "remaining_minutes": {
+                "description": "Estimate minus logged time over the tasks with an estimate, in\nminutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "spent_minutes": {
+                "description": "Their logged time added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "count",
+              "open",
+              "estimate_minutes",
+              "spent_minutes",
+              "remaining_minutes"
+            ],
+            "type": "object"
+          },
+          "ListedTask": {
+            "additionalProperties": false,
+            "description": "A task as lists show it.",
+            "properties": {
+              "blocked": {
+                "description": "Whether a task that blocks it is still open.",
+                "type": "boolean"
+              },
+              "checklist": {
+                "$ref": "#/$defs/Checklist",
+                "description": "The description's checklist."
+              },
+              "claim": {
+                "$ref": "#/$defs/Claim",
+                "description": "The agent that claimed it, while the claim lasts."
+              },
+              "closed_at": {
+                "description": "When it was closed; left out while open.",
+                "type": "string"
+              },
+              "comment_count": {
+                "description": "How many comments it has.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "created_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who created it."
+              },
+              "due_date": {
+                "description": "The due date.",
+                "type": "string"
+              },
+              "estimate_minutes": {
+                "description": "The estimate in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "file_count": {
+                "description": "How many files are attached to it and to its comments.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "The task's ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "labels": {
+                "description": "Its labels.",
+                "items": {
+                  "$ref": "#/$defs/LabelRef"
+                },
+                "type": "array"
+              },
+              "parent": {
+                "description": "The parent task's key, for a subtask.",
+                "type": "string"
+              },
+              "priority": {
+                "$ref": "#/$defs/Priority",
+                "description": "Its priority."
+              },
+              "progress_percent": {
+                "description": "Its progress in percent.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "project": {
+                "description": "Its project's key.",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place in its status column.",
+                "type": "string"
+              },
+              "remaining_minutes": {
+                "description": "Estimate minus logged time, in minutes; only with an estimate.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "spent_minutes": {
+                "description": "Logged time in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "start_date": {
+                "description": "The start date.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/StatusRef",
+                "description": "Its status."
+              },
+              "subtask_count": {
+                "$ref": "#/$defs/Checklist",
+                "description": "Its subtasks: closed and all."
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              },
+              "type": {
+                "$ref": "#/$defs/TypeRef",
+                "description": "Its type."
+              },
+              "updated_at": {
+                "description": "When anything about it last changed.",
+                "type": "string"
+              },
+              "version": {
+                "description": "Its version, for `expected_version`.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "project",
+              "status",
+              "type",
+              "priority",
+              "labels",
+              "spent_minutes",
+              "progress_percent",
+              "checklist",
+              "subtask_count",
+              "blocked",
+              "comment_count",
+              "file_count",
+              "rank",
+              "created_by",
+              "created_at",
+              "updated_at",
+              "version",
+              "id"
+            ],
+            "type": "object"
+          },
+          "Priority": {
+            "description": "A task's priority.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No priority (the default).",
+                "type": "string"
+              },
+              {
+                "const": "low",
+                "description": "Low.",
+                "type": "string"
+              },
+              {
+                "const": "normal",
+                "description": "Normal.",
+                "type": "string"
+              },
+              {
+                "const": "high",
+                "description": "High.",
+                "type": "string"
+              },
+              {
+                "const": "urgent",
+                "description": "Urgent.",
+                "type": "string"
+              }
+            ]
+          },
+          "StatusRef": {
+            "additionalProperties": false,
+            "description": "A task's status, as tasks carry it.",
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/Category",
+                "description": "Its category."
+              },
+              "id": {
+                "description": "The status's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "category"
+            ],
+            "type": "object"
+          },
+          "TypeRef": {
+            "additionalProperties": false,
+            "description": "A task's type, as tasks carry it.",
+            "properties": {
+              "glyph": {
+                "$ref": "#/$defs/Glyph",
+                "description": "Its shape."
+              },
+              "id": {
+                "description": "The type's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "glyph"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "One page of matching tasks.",
+        "properties": {
+          "items": {
+            "description": "The tasks of this page, in order.",
+            "items": {
+              "$ref": "#/$defs/ListedTask"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "description": "Pass as `cursor` for the next page; left out on the last page.",
+            "type": "string"
+          },
+          "query": {
+            "description": "The query in its normal form.",
+            "type": "string"
+          },
+          "sort": {
+            "description": "The order used, as sort keys (`-` for descending).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "total": {
+            "description": "How many tasks match.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "totals": {
+            "$ref": "#/$defs/ListTotals",
+            "description": "Totals over every matching task."
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "query",
+          "sort",
+          "totals"
+        ],
+        "title": "TaskSearchResult",
+        "type": "object"
+      },
+      "output_name": "TaskSearchResult",
+      "safety": "read",
+      "summary": "List the tasks matching a query (is:open due<+7d label:bug sort:due), a page at a time, with totals of estimates and logged time."
+    },
+    {
       "cli": "task show <keys>",
       "exposure": "data",
       "id": "task.get",
@@ -16489,6 +17074,347 @@
       "output_name": "TaskChange",
       "safety": "write",
       "summary": "Move a task to another status or place in its column, or to another project (new key; the old one forwards)."
+    },
+    {
+      "cli": "task bulk",
+      "exposure": "data",
+      "id": "task.bulk_update",
+      "input": {
+        "$defs": {
+          "BulkChanges": {
+            "additionalProperties": false,
+            "description": "The change to make to every task. Fields left out stay as they are.",
+            "properties": {
+              "add_labels": {
+                "description": "Labels to add.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "clear": {
+                "description": "Fields to clear.",
+                "items": {
+                  "$ref": "#/$defs/TaskField"
+                },
+                "type": "array"
+              },
+              "due_date": {
+                "description": "The due date, written as for `start_date`.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "estimate": {
+                "description": "The estimate, as a duration (`1d 4h`, `90m`).",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "labels": {
+                "description": "Replace the labels with these.",
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              },
+              "parent": {
+                "description": "Make them subtasks of this task.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "priority": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/Priority"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The priority."
+              },
+              "project": {
+                "description": "Move them to this project (new keys; old keys forward).",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "remove_labels": {
+                "description": "Labels to take off.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "shift_due": {
+                "description": "Move due dates the same way.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "shift_start": {
+                "description": "Move start dates by calendar days, weeks, months or years (`+2d`,\n`-1w`); tasks without one keep none.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "start_date": {
+                "description": "The start date: `YYYY-MM-DD`, or `today`, `fri`, `next mon`, `+3d`.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "status": {
+                "description": "Move to the status of this name (in each task's project).",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "type": {
+                "description": "The type of this name.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "Priority": {
+            "description": "A task's priority.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No priority (the default).",
+                "type": "string"
+              },
+              {
+                "const": "low",
+                "description": "Low.",
+                "type": "string"
+              },
+              {
+                "const": "normal",
+                "description": "Normal.",
+                "type": "string"
+              },
+              {
+                "const": "high",
+                "description": "High.",
+                "type": "string"
+              },
+              {
+                "const": "urgent",
+                "description": "Urgent.",
+                "type": "string"
+              }
+            ]
+          },
+          "TaskField": {
+            "description": "A task field that can be cleared.",
+            "oneOf": [
+              {
+                "const": "description",
+                "description": "The description.",
+                "type": "string"
+              },
+              {
+                "const": "parent",
+                "description": "The parent: the task stops being a subtask.",
+                "type": "string"
+              },
+              {
+                "const": "start_date",
+                "description": "The start date.",
+                "type": "string"
+              },
+              {
+                "const": "due_date",
+                "description": "The due date.",
+                "type": "string"
+              },
+              {
+                "const": "estimate",
+                "description": "The estimate.",
+                "type": "string"
+              },
+              {
+                "const": "progress",
+                "description": "The progress set by hand.",
+                "type": "string"
+              },
+              {
+                "const": "labels",
+                "description": "Every label.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A bulk change.",
+        "properties": {
+          "changes": {
+            "$ref": "#/$defs/BulkChanges",
+            "description": "The change."
+          },
+          "dry_run": {
+            "description": "Only show what would change; default true. Turn it off to make the\nchange.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "expected_count": {
+            "description": "How many tasks the change is for, from the preview; needed to make\nthe change, which stops when the tasks now number otherwise.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "keys": {
+            "description": "The tasks, by key or ID. Give these or `query`.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "query": {
+            "description": "A query choosing the tasks (`project:TM label:old is:open`).",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "changes"
+        ],
+        "title": "BulkUpdateInput",
+        "type": "object"
+      },
+      "input_name": "BulkUpdateInput",
+      "kind": "command",
+      "mcp_tool": "bulk_update_tasks",
+      "output": {
+        "$defs": {
+          "BulkFieldChange": {
+            "additionalProperties": false,
+            "description": "A field of one task before and after.",
+            "properties": {
+              "after": {
+                "description": "Its value after; left out when empty.",
+                "type": "string"
+              },
+              "before": {
+                "description": "Its value before; left out when empty.",
+                "type": "string"
+              },
+              "field": {
+                "description": "The field.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "field"
+            ],
+            "type": "object"
+          },
+          "BulkItem": {
+            "additionalProperties": false,
+            "description": "One task of a bulk change.",
+            "properties": {
+              "changes": {
+                "description": "What changes, or changed; empty when it already was as asked.",
+                "items": {
+                  "$ref": "#/$defs/BulkFieldChange"
+                },
+                "type": "array"
+              },
+              "key": {
+                "description": "Its key (after the change).",
+                "type": "string"
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "changes"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "What a bulk change does or did.",
+        "properties": {
+          "changed": {
+            "description": "How many of them change.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "count": {
+            "description": "How many tasks the change is for; pass it as `expected_count`.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "dry_run": {
+            "description": "Only a preview: nothing changed.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out for a preview or\nwhen nothing changed.",
+            "type": "string"
+          },
+          "items": {
+            "description": "Every task, with what changes.",
+            "items": {
+              "$ref": "#/$defs/BulkItem"
+            },
+            "type": "array"
+          },
+          "warnings": {
+            "description": "Problems that did not stop the change.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "dry_run",
+          "count",
+          "changed",
+          "items"
+        ],
+        "title": "BulkResult",
+        "type": "object"
+      },
+      "output_name": "BulkResult",
+      "safety": "write",
+      "summary": "Make the same change to many tasks chosen by key or query (status, type, priority, labels, parent, dates set or shifted, estimate, project), previewed first, as one change for Undo and revert."
     },
     {
       "cli": "task reorder-subtask <key>",
@@ -30802,6 +31728,1197 @@
       "output_name": "LayoutChange",
       "safety": "write",
       "summary": "Hide, show, collapse or reorder board columns, set sort modes, card fields and older closed cards, or reset to the project's layout."
+    },
+    {
+      "cli": "view list",
+      "exposure": "data",
+      "id": "view.list",
+      "input": {
+        "$defs": {
+          "ViewKind": {
+            "description": "Which screen a view is for.",
+            "oneOf": [
+              {
+                "const": "list",
+                "description": "The task list (the default).",
+                "type": "string"
+              },
+              {
+                "const": "board",
+                "description": "The board.",
+                "type": "string"
+              },
+              {
+                "const": "gantt",
+                "description": "The schedule.",
+                "type": "string"
+              },
+              {
+                "const": "calendar",
+                "description": "The calendar.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Which views to list.",
+        "properties": {
+          "all": {
+            "default": false,
+            "description": "Every view, of every project and the workspace.",
+            "type": "boolean"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ViewKind"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only views for this screen."
+          },
+          "project": {
+            "description": "The views of this project (key or ID); left out: the views of the\nwhole workspace.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "ViewListInput",
+        "type": "object"
+      },
+      "input_name": "ViewListInput",
+      "kind": "query",
+      "mcp_tool": "list_views",
+      "output": {
+        "$defs": {
+          "SavedView": {
+            "additionalProperties": false,
+            "description": "A saved view.",
+            "properties": {
+              "columns": {
+                "description": "The columns shown, in order.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "description": {
+                "description": "What it is for.",
+                "type": "string"
+              },
+              "group_by": {
+                "description": "The field rows are grouped by.",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "is_default": {
+                "description": "Shown first when its screen opens.",
+                "type": "boolean"
+              },
+              "kind": {
+                "$ref": "#/$defs/ViewKind",
+                "description": "The screen it is for."
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The project's key; left out for a view of the whole workspace.",
+                "type": "string"
+              },
+              "query": {
+                "description": "The query text.",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place among the views.",
+                "type": "string"
+              },
+              "sort": {
+                "description": "The order when the query has no `sort:` (`due,-priority`).",
+                "type": "string"
+              },
+              "totals": {
+                "description": "The columns totalled (`estimate`, `spent`, `remaining`).",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "description": "When it last changed.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "kind",
+              "query",
+              "is_default",
+              "rank",
+              "created_at",
+              "updated_at",
+              "id"
+            ],
+            "type": "object"
+          },
+          "ViewKind": {
+            "description": "Which screen a view is for.",
+            "oneOf": [
+              {
+                "const": "list",
+                "description": "The task list (the default).",
+                "type": "string"
+              },
+              {
+                "const": "board",
+                "description": "The board.",
+                "type": "string"
+              },
+              {
+                "const": "gantt",
+                "description": "The schedule.",
+                "type": "string"
+              },
+              {
+                "const": "calendar",
+                "description": "The calendar.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Saved views, in order.",
+        "properties": {
+          "items": {
+            "description": "The views.",
+            "items": {
+              "$ref": "#/$defs/SavedView"
+            },
+            "type": "array"
+          },
+          "total": {
+            "description": "How many.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "ViewList",
+        "type": "object"
+      },
+      "output_name": "ViewList",
+      "safety": "read",
+      "summary": "The saved views of a project or of the whole workspace: name, query, columns, order, grouping, totals and which is the default."
+    },
+    {
+      "cli": "view create",
+      "exposure": "data",
+      "id": "view.create",
+      "input": {
+        "$defs": {
+          "ViewKind": {
+            "description": "Which screen a view is for.",
+            "oneOf": [
+              {
+                "const": "list",
+                "description": "The task list (the default).",
+                "type": "string"
+              },
+              {
+                "const": "board",
+                "description": "The board.",
+                "type": "string"
+              },
+              {
+                "const": "gantt",
+                "description": "The schedule.",
+                "type": "string"
+              },
+              {
+                "const": "calendar",
+                "description": "The calendar.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A new saved view.",
+        "properties": {
+          "columns": {
+            "description": "The columns shown, in order.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "description": {
+            "description": "What it is for.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "group_by": {
+            "description": "The field rows are grouped by.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_default": {
+            "default": false,
+            "description": "Make it the screen's default view.",
+            "type": "boolean"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ViewKind"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The screen; default: the list."
+          },
+          "name": {
+            "description": "Its name, unique among the views of its project and screen.",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project (key or ID); left out: the whole workspace.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "query": {
+            "description": "The query text; it must be valid.",
+            "type": "string"
+          },
+          "sort": {
+            "description": "The order when the query has no `sort:`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "totals": {
+            "description": "The columns totalled.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "query"
+        ],
+        "title": "ViewCreateInput",
+        "type": "object"
+      },
+      "input_name": "ViewCreateInput",
+      "kind": "command",
+      "mcp_tool": "create_view",
+      "output": {
+        "$defs": {
+          "SavedView": {
+            "additionalProperties": false,
+            "description": "A saved view.",
+            "properties": {
+              "columns": {
+                "description": "The columns shown, in order.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "description": {
+                "description": "What it is for.",
+                "type": "string"
+              },
+              "group_by": {
+                "description": "The field rows are grouped by.",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "is_default": {
+                "description": "Shown first when its screen opens.",
+                "type": "boolean"
+              },
+              "kind": {
+                "$ref": "#/$defs/ViewKind",
+                "description": "The screen it is for."
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The project's key; left out for a view of the whole workspace.",
+                "type": "string"
+              },
+              "query": {
+                "description": "The query text.",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place among the views.",
+                "type": "string"
+              },
+              "sort": {
+                "description": "The order when the query has no `sort:` (`due,-priority`).",
+                "type": "string"
+              },
+              "totals": {
+                "description": "The columns totalled (`estimate`, `spent`, `remaining`).",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "description": "When it last changed.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "kind",
+              "query",
+              "is_default",
+              "rank",
+              "created_at",
+              "updated_at",
+              "id"
+            ],
+            "type": "object"
+          },
+          "ViewKind": {
+            "description": "Which screen a view is for.",
+            "oneOf": [
+              {
+                "const": "list",
+                "description": "The task list (the default).",
+                "type": "string"
+              },
+              {
+                "const": "board",
+                "description": "The board.",
+                "type": "string"
+              },
+              {
+                "const": "gantt",
+                "description": "The schedule.",
+                "type": "string"
+              },
+              {
+                "const": "calendar",
+                "description": "The calendar.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A view after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether it was deleted.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "view": {
+            "$ref": "#/$defs/SavedView",
+            "description": "The view after the change (before it, for a deletion)."
+          }
+        },
+        "required": [
+          "view"
+        ],
+        "title": "ViewChange",
+        "type": "object"
+      },
+      "output_name": "ViewChange",
+      "safety": "write",
+      "summary": "Save a query as a named view of a project or of the whole workspace, with its columns, order, grouping and totals."
+    },
+    {
+      "cli": "view edit <view>",
+      "exposure": "data",
+      "id": "view.update",
+      "input": {
+        "$defs": {
+          "ViewField": {
+            "description": "A view field that can be cleared.",
+            "oneOf": [
+              {
+                "const": "description",
+                "description": "The description.",
+                "type": "string"
+              },
+              {
+                "const": "columns",
+                "description": "The columns.",
+                "type": "string"
+              },
+              {
+                "const": "sort",
+                "description": "The order.",
+                "type": "string"
+              },
+              {
+                "const": "group_by",
+                "description": "The grouping.",
+                "type": "string"
+              },
+              {
+                "const": "totals",
+                "description": "The totals.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Changes to a saved view; fields left out keep their value.",
+        "properties": {
+          "clear": {
+            "description": "Fields to clear.",
+            "items": {
+              "$ref": "#/$defs/ViewField"
+            },
+            "type": "array"
+          },
+          "columns": {
+            "description": "New columns.",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "description": {
+            "description": "A new description.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "group_by": {
+            "description": "A new grouping.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_default": {
+            "description": "Make it, or stop it being, the screen's default view.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "name": {
+            "description": "A new name.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "project": {
+            "description": "With a name: the view's project (key or ID).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "query": {
+            "description": "A new query.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sort": {
+            "description": "A new order.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "totals": {
+            "description": "New totals.",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "view": {
+            "description": "The view: its ID, or its name.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "view"
+        ],
+        "title": "ViewUpdateInput",
+        "type": "object"
+      },
+      "input_name": "ViewUpdateInput",
+      "kind": "command",
+      "mcp_tool": "update_view",
+      "output": {
+        "$defs": {
+          "SavedView": {
+            "additionalProperties": false,
+            "description": "A saved view.",
+            "properties": {
+              "columns": {
+                "description": "The columns shown, in order.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "description": {
+                "description": "What it is for.",
+                "type": "string"
+              },
+              "group_by": {
+                "description": "The field rows are grouped by.",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "is_default": {
+                "description": "Shown first when its screen opens.",
+                "type": "boolean"
+              },
+              "kind": {
+                "$ref": "#/$defs/ViewKind",
+                "description": "The screen it is for."
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The project's key; left out for a view of the whole workspace.",
+                "type": "string"
+              },
+              "query": {
+                "description": "The query text.",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place among the views.",
+                "type": "string"
+              },
+              "sort": {
+                "description": "The order when the query has no `sort:` (`due,-priority`).",
+                "type": "string"
+              },
+              "totals": {
+                "description": "The columns totalled (`estimate`, `spent`, `remaining`).",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "description": "When it last changed.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "kind",
+              "query",
+              "is_default",
+              "rank",
+              "created_at",
+              "updated_at",
+              "id"
+            ],
+            "type": "object"
+          },
+          "ViewKind": {
+            "description": "Which screen a view is for.",
+            "oneOf": [
+              {
+                "const": "list",
+                "description": "The task list (the default).",
+                "type": "string"
+              },
+              {
+                "const": "board",
+                "description": "The board.",
+                "type": "string"
+              },
+              {
+                "const": "gantt",
+                "description": "The schedule.",
+                "type": "string"
+              },
+              {
+                "const": "calendar",
+                "description": "The calendar.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A view after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether it was deleted.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "view": {
+            "$ref": "#/$defs/SavedView",
+            "description": "The view after the change (before it, for a deletion)."
+          }
+        },
+        "required": [
+          "view"
+        ],
+        "title": "ViewChange",
+        "type": "object"
+      },
+      "output_name": "ViewChange",
+      "safety": "write",
+      "summary": "Rename a saved view, change its query, columns, order, grouping or totals, or make it the default."
+    },
+    {
+      "cli": "view delete <view>",
+      "exposure": "data",
+      "id": "view.delete",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Which view to delete.",
+        "properties": {
+          "project": {
+            "description": "With a name: the view's project (key or ID).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "view": {
+            "description": "The view: its ID, or its name.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "view"
+        ],
+        "title": "ViewDeleteInput",
+        "type": "object"
+      },
+      "input_name": "ViewDeleteInput",
+      "kind": "command",
+      "mcp_tool": "delete_view",
+      "output": {
+        "$defs": {
+          "SavedView": {
+            "additionalProperties": false,
+            "description": "A saved view.",
+            "properties": {
+              "columns": {
+                "description": "The columns shown, in order.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "description": {
+                "description": "What it is for.",
+                "type": "string"
+              },
+              "group_by": {
+                "description": "The field rows are grouped by.",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "is_default": {
+                "description": "Shown first when its screen opens.",
+                "type": "boolean"
+              },
+              "kind": {
+                "$ref": "#/$defs/ViewKind",
+                "description": "The screen it is for."
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The project's key; left out for a view of the whole workspace.",
+                "type": "string"
+              },
+              "query": {
+                "description": "The query text.",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place among the views.",
+                "type": "string"
+              },
+              "sort": {
+                "description": "The order when the query has no `sort:` (`due,-priority`).",
+                "type": "string"
+              },
+              "totals": {
+                "description": "The columns totalled (`estimate`, `spent`, `remaining`).",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "description": "When it last changed.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "kind",
+              "query",
+              "is_default",
+              "rank",
+              "created_at",
+              "updated_at",
+              "id"
+            ],
+            "type": "object"
+          },
+          "ViewKind": {
+            "description": "Which screen a view is for.",
+            "oneOf": [
+              {
+                "const": "list",
+                "description": "The task list (the default).",
+                "type": "string"
+              },
+              {
+                "const": "board",
+                "description": "The board.",
+                "type": "string"
+              },
+              {
+                "const": "gantt",
+                "description": "The schedule.",
+                "type": "string"
+              },
+              {
+                "const": "calendar",
+                "description": "The calendar.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A view after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether it was deleted.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "view": {
+            "$ref": "#/$defs/SavedView",
+            "description": "The view after the change (before it, for a deletion)."
+          }
+        },
+        "required": [
+          "view"
+        ],
+        "title": "ViewChange",
+        "type": "object"
+      },
+      "output_name": "ViewChange",
+      "safety": "write",
+      "summary": "Delete a saved view; it can be brought back with revert."
+    },
+    {
+      "app_reason": "It serves the app's query field as the person types; agents and scripts run queries with task.search, which reports the same mistakes.",
+      "exposure": "app",
+      "id": "query.parse",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A query to read for the query field.",
+        "properties": {
+          "fields": {
+            "default": false,
+            "description": "Also return the field registry, for completion.",
+            "type": "boolean"
+          },
+          "query": {
+            "description": "The query text.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "QueryParseInput",
+        "type": "object"
+      },
+      "input_name": "QueryParseInput",
+      "kind": "query",
+      "output": {
+        "$defs": {
+          "QueryChip": {
+            "additionalProperties": false,
+            "description": "One chip of the condition builder.",
+            "properties": {
+              "field": {
+                "description": "The field; left out for the free-text chip.",
+                "type": "string"
+              },
+              "negated": {
+                "description": "\"is not\" or \"doesn't contain\".",
+                "type": "boolean"
+              },
+              "op": {
+                "description": "The operator (`:`, `=`, `<`, `<=`, `>`, `>=`); left out for text.",
+                "type": "string"
+              },
+              "ranges": {
+                "description": "The text the chip stands for; editing the chip replaces only these.",
+                "items": {
+                  "$ref": "#/$defs/TextRange"
+                },
+                "type": "array"
+              },
+              "values": {
+                "description": "The values, or the words and phrases of the text chip.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "values",
+              "negated",
+              "ranges"
+            ],
+            "type": "object"
+          },
+          "QueryField": {
+            "additionalProperties": false,
+            "description": "One field of the query language.",
+            "properties": {
+              "aliases": {
+                "description": "Other names for it.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "choices": {
+                "description": "Its fixed values, when it has some.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "operators": {
+                "description": "The operators it takes.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "ranges": {
+                "description": "Whether `a..b` ranges work.",
+                "type": "boolean"
+              },
+              "sortable": {
+                "description": "Whether it can be a sort key.",
+                "type": "boolean"
+              },
+              "values": {
+                "description": "The values it takes, in words.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "operators",
+              "ranges",
+              "sortable",
+              "values"
+            ],
+            "type": "object"
+          },
+          "QueryProblem": {
+            "additionalProperties": false,
+            "description": "A mistake in a query.",
+            "properties": {
+              "args": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "The message's arguments.",
+                "type": "object"
+              },
+              "message": {
+                "description": "The message in English.",
+                "type": "string"
+              },
+              "message_id": {
+                "description": "The message's ID in the message files, for translation.",
+                "type": "string"
+              },
+              "range": {
+                "$ref": "#/$defs/TextRange",
+                "description": "Where the mistake is."
+              }
+            },
+            "required": [
+              "message",
+              "message_id",
+              "range"
+            ],
+            "type": "object"
+          },
+          "QueryToken": {
+            "additionalProperties": false,
+            "description": "A highlighted piece of the query text.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/QueryTokenKind",
+                "description": "What it is."
+              },
+              "range": {
+                "$ref": "#/$defs/TextRange",
+                "description": "Where it is."
+              }
+            },
+            "required": [
+              "kind",
+              "range"
+            ],
+            "type": "object"
+          },
+          "QueryTokenKind": {
+            "description": "What a piece of the query text is.",
+            "oneOf": [
+              {
+                "const": "field",
+                "description": "A field name.",
+                "type": "string"
+              },
+              {
+                "const": "operator",
+                "description": "An operator.",
+                "type": "string"
+              },
+              {
+                "const": "value",
+                "description": "A value.",
+                "type": "string"
+              },
+              {
+                "const": "comma",
+                "description": "A comma between values.",
+                "type": "string"
+              },
+              {
+                "const": "keyword",
+                "description": "`AND`, `OR` or `NOT`.",
+                "type": "string"
+              },
+              {
+                "const": "negation",
+                "description": "A leading `-`.",
+                "type": "string"
+              },
+              {
+                "const": "paren",
+                "description": "A parenthesis.",
+                "type": "string"
+              },
+              {
+                "const": "text",
+                "description": "Free text.",
+                "type": "string"
+              },
+              {
+                "const": "key",
+                "description": "A task key.",
+                "type": "string"
+              },
+              {
+                "const": "sort",
+                "description": "`sort:` and its keys.",
+                "type": "string"
+              },
+              {
+                "const": "error",
+                "description": "Text that could not be read.",
+                "type": "string"
+              }
+            ]
+          },
+          "TextRange": {
+            "additionalProperties": false,
+            "description": "A range of the query text, in UTF-16 code units (as the page's editor\ncounts).",
+            "properties": {
+              "from": {
+                "description": "The first unit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "to": {
+                "description": "One past the last unit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "from",
+              "to"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A query as the query field shows it.",
+        "properties": {
+          "advanced": {
+            "description": "The query has `OR` or parentheses: it is edited as text.",
+            "type": "boolean"
+          },
+          "chips": {
+            "description": "The chips, when the query is a plain AND of conditions.",
+            "items": {
+              "$ref": "#/$defs/QueryChip"
+            },
+            "type": "array"
+          },
+          "error": {
+            "$ref": "#/$defs/QueryProblem",
+            "description": "The first mistake, if any."
+          },
+          "fields": {
+            "description": "The field registry, when asked for.",
+            "items": {
+              "$ref": "#/$defs/QueryField"
+            },
+            "type": "array"
+          },
+          "normalized": {
+            "description": "The query in its normal form; left out when it doesn't read.",
+            "type": "string"
+          },
+          "sort": {
+            "description": "The sort keys of its `sort:`, `-` for descending.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "tokens": {
+            "description": "The highlighted pieces, in order.",
+            "items": {
+              "$ref": "#/$defs/QueryToken"
+            },
+            "type": "array"
+          },
+          "valid": {
+            "description": "Whether the query can run: it reads, fits the fields and names\nonly what exists.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "valid",
+          "tokens",
+          "advanced"
+        ],
+        "title": "ParsedQuery",
+        "type": "object"
+      },
+      "output_name": "ParsedQuery",
+      "safety": "read",
+      "summary": "Read a task query for the query field: highlighted pieces, the chips of the condition builder, the normal form and the first mistake with its place."
     },
     {
       "cli": "file show <attachment>",

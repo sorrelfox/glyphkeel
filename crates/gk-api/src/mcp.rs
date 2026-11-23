@@ -316,6 +316,23 @@ Example: delete_project {\"project\": \"OLD\", \"expected_task_count\": 12}",
         idempotent: false,
     },
     McpTool {
+        name: "search_tasks",
+        toolset: Toolset::Tasks,
+        title: "Search tasks",
+        description: "Lists the tasks matching a query, a page at a time, with totals of estimates and \
+logged time. The query language: `is:open`, `status:\"In progress\"`, `label:bug,crash` (any of), \
+`-label:wontfix` (not; includes tasks without labels), `priority>=high`, `due<+7d`, \
+`updated>-3d`, `created:this-month`, `estimate:1h..4h`, `has:due`, `parent:TM-12`, \
+`project:TM/*` (with sub-projects), `(a OR b)`, words and \"phrases\" for full text, a bare key \
+`TM-41`, and `sort:due,-priority`. Dates: 2026-12-31, today, +7d, -1m, this-week, next-month. \
+A mistake comes back as `invalid` with the place and a suggestion. Use the `query` it echoes when \
+you need the normal form; page with `cursor`. \
+Example: search_tasks {\"query\": \"is:open label:bug due<+7d sort:due\", \"limit\": 20}",
+        main: "task.search",
+        covers: &["task.search"],
+        idempotent: true,
+    },
+    McpTool {
         name: "get_task",
         toolset: Toolset::Tasks,
         title: "Get tasks",
@@ -378,6 +395,24 @@ Example: move_task {\"key\": \"TM-41\", \"status\": \"In progress\", \"at\": \"t
         main: "task.move",
         covers: &["task.move"],
         idempotent: true,
+    },
+    McpTool {
+        name: "bulk_update_tasks",
+        toolset: Toolset::Tasks,
+        title: "Change many tasks",
+        description: "Makes the same change to many tasks, chosen by `keys` or by a `query`: \
+`status`, `type`, `priority`, `labels` (replace), `add_labels`, `remove_labels`, `parent`, \
+`start_date` and `due_date` (also `fri`, `+3d`), `shift_start` and `shift_due` (`+2d`, `-1w`), \
+`estimate`, `project`, and `clear`. It is a preview unless `dry_run: false`: first call it to see \
+every task and what would change, then call it again with `dry_run: false` and the preview's \
+`count` as `expected_count`; if the tasks now number otherwise it stops. At most 100 tasks in the \
+standard profile, 500 in full. The whole change is one history group, so one revert_changes \
+undoes it. Only make bulk changes the person asked for. \
+Example: bulk_update_tasks {\"query\": \"project:TM label:old is:open\", \"changes\": \
+{\"add_labels\": [\"triage\"]}}",
+        main: "task.bulk_update",
+        covers: &["task.bulk_update", "task.update", "task.move"],
+        idempotent: false,
     },
     McpTool {
         name: "reorder_subtask",
@@ -682,6 +717,56 @@ Example: set_board_layout {\"project\": \"TM\", \"hide\": [\"Backlog\"]}",
         idempotent: true,
     },
     McpTool {
+        name: "list_views",
+        toolset: Toolset::Views,
+        title: "List saved views",
+        description: "Lists the saved views of a `project`, or of the whole workspace without one \
+(`all: true` lists every view): name, screen (`kind`), query, columns, order, grouping, totals and \
+which is the default. Run a view's query with search_tasks. \
+Example: list_views {\"project\": \"TM\"}",
+        main: "view.list",
+        covers: &["view.list"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "create_view",
+        toolset: Toolset::Views,
+        title: "Save a view",
+        description: "Saves a query as a named view of a `project` or of the whole workspace, with \
+optional `columns`, `sort`, `group_by`, `totals` and `is_default`. The query must be valid; \
+relative dates in it are evaluated whenever the view is opened. Only save views the person asked \
+for. \
+Example: create_view {\"name\": \"Due this week\", \"project\": \"TM\", \"query\": \
+\"is:open due:this-week\", \"sort\": \"due\"}",
+        main: "view.create",
+        covers: &["view.create"],
+        idempotent: false,
+    },
+    McpTool {
+        name: "update_view",
+        toolset: Toolset::Views,
+        title: "Change a saved view",
+        description: "Renames a saved view or changes its query, columns, order, grouping, totals \
+or whether it is the default. Name it by ID, or by name with its `project`; `clear` empties \
+fields. \
+Example: update_view {\"view\": \"Due this week\", \"project\": \"TM\", \"query\": \
+\"is:open due:this-week -label:blocked\"}",
+        main: "view.update",
+        covers: &["view.update"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "delete_view",
+        toolset: Toolset::Views,
+        title: "Delete a saved view",
+        description: "Deletes a saved view, named by ID or by name with its `project`. The tasks \
+are not touched; revert_changes brings the view back. \
+Example: delete_view {\"view\": \"Due this week\", \"project\": \"TM\"}",
+        main: "view.delete",
+        covers: &["view.delete"],
+        idempotent: true,
+    },
+    McpTool {
         name: "attach_file",
         toolset: Toolset::Files,
         title: "Attach a file",
@@ -857,11 +942,13 @@ mod tests {
                 "list_projects",
                 "get_project",
                 "get_agent_brief",
+                "search_tasks",
                 "get_task",
                 "get_description_revision",
                 "get_time_report",
                 "get_reminders",
                 "get_board",
+                "list_views",
                 "read_attachment"
             ]
         );

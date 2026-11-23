@@ -13,3 +13,10 @@ publish.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+gk-core = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
+proptest = { workspace = true }

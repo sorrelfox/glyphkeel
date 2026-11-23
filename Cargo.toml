@@ -26,6 +26,7 @@ gk-core = { path = "crates/gk-core" }
 gk-engine = { path = "crates/gk-engine" }
 gk-markdown = { path = "crates/gk-markdown" }
 gk-mcp = { path = "crates/gk-mcp" }
+gk-query = { path = "crates/gk-query" }
 gk-store = { path = "crates/gk-store" }
 
 # Third-party crates: shared versions live here, crates use `{ workspace = true }`.

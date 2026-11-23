@@ -1738,6 +1738,7 @@ dependencies = [
  "gk-api",
  "gk-core",
  "gk-markdown",
+ "gk-query",
  "gk-store",
  "image",
  "jiff 1.0.2",
@@ -1781,6 +1782,11 @@ dependencies = [
 [[package]]
 name = "gk-query"
 version = "0.0.4"
+dependencies = [
+ "gk-core",
+ "insta",
+ "proptest",
+]
 
 [[package]]
 name = "gk-seed"

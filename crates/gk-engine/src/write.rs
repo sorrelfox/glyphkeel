@@ -38,7 +38,7 @@ pub struct WriteCtx<'a> {
     changes: Vec<PendingChange>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct PendingChange {
     entity: String,
     id: Id,
@@ -171,6 +171,24 @@ impl<'a> WriteCtx<'a> {
         if change.fields.is_empty() {
             self.changes.remove(index);
         }
+    }
+
+    /// Runs `f`, then takes back everything it wrote: the transaction
+    /// returns to a savepoint and the changes `f` recorded are forgotten.
+    /// For previews that run the real code.
+    pub(crate) fn preview<T>(
+        &mut self,
+        f: impl FnOnce(&mut Self) -> Result<T, Failure>,
+    ) -> Result<T, Failure> {
+        let recorded = self.changes.clone();
+        self.tx.execute_batch("SAVEPOINT preview")?;
+        let result = f(self);
+        let undone = self
+            .tx
+            .execute_batch("ROLLBACK TO preview; RELEASE preview");
+        self.changes = recorded;
+        undone?;
+        result
     }
 
     /// Writes one history row per changed item, all in this command's
