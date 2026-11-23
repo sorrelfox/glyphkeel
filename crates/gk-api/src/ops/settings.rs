@@ -77,6 +77,39 @@ pub struct SettingsPatch {
     /// First day of the week.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub week_start: Option<WeekStart>,
+    /// Settings to set back to their default.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub clear: Vec<SettingKey>,
+}
+
+/// A setting that can be set back to its default.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SettingKey {
+    /// Days in the trash before purging (default 30).
+    TrashDays,
+    /// Reminder time (default 09:00).
+    ReminderTime,
+    /// Working hours in a day (default 8).
+    HoursPerDay,
+    /// Working days in a week (default 5).
+    DaysPerWeek,
+    /// First day of the week (default Monday).
+    WeekStart,
+}
+
+impl SettingKey {
+    /// The setting's name.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::TrashDays => "trash_days",
+            Self::ReminderTime => "reminder_time",
+            Self::HoursPerDay => "hours_per_day",
+            Self::DaysPerWeek => "days_per_week",
+            Self::WeekStart => "week_start",
+        }
+    }
 }
 
 /// The settings after a change.

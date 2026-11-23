@@ -1,0 +1,6 @@
+---
+source: crates/gk-cli/tests/commands.rs
+expression: stderr(&out)
+---
+glyphkeel: Project GK has no status "Nowhere".
+choices: Backlog, To do, In progress, Review, Done

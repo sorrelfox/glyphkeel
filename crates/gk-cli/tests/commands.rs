@@ -63,6 +63,7 @@ fn glyphkeel(home: &Path) -> Command {
     cmd.env("XDG_DATA_HOME", home.join("data"))
         .env("HOME", home)
         .env("NO_COLOR", "1")
+        .env_remove("GLYPHKEEL_WORKSPACE")
         .env_remove("RUST_LOG");
     cmd
 }
@@ -129,6 +130,43 @@ fn settings_change_shows_in_the_activity_log_and_reverts() {
     assert_eq!(ws.json(&["settings", "get"])["hours_per_day"], 8);
 
     snapshot!(ws.ok(&["revert", &group]));
+}
+
+#[test]
+fn a_task_is_created_and_moved_on_the_board() {
+    let ws = Workspace::new();
+    ws.ok(&["project", "create", "--name", "Glyphkeel", "--key", "GK"]);
+    snapshot!(ws.ok(&[
+        "task",
+        "create",
+        "--project",
+        "GK",
+        "--title",
+        "Write the release notes",
+        "--priority",
+        "high",
+        "--estimate",
+        "1d 2h",
+    ]));
+    ws.ok(&["task", "create", "--project", "gk", "--title", "Second"]);
+    snapshot!(ws.ok(&[
+        "task",
+        "move",
+        "gk-1",
+        "--status",
+        "in progress",
+        "--at",
+        "top"
+    ]));
+    let board = ws.json(&["board", "GK"]);
+    assert_eq!(board["columns"][0]["cards"][0]["key"], "GK-2");
+    assert_eq!(board["columns"][2]["cards"][0]["key"], "GK-1");
+    let shown = ws.json(&["task", "show", "GK-1", "GK-2"]);
+    assert_eq!(shown["total"], 2);
+    assert_eq!(shown["items"][0]["status"]["name"], "In progress");
+    let out = ws.run(&["task", "move", "GK-1", "--status", "Nowhere"]);
+    assert_eq!(code(&out), 2);
+    snapshot!(stderr(&out));
 }
 
 #[test]

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-//! Text rules: case-insensitive matching keys and size limits.
+//! Text rules: case-insensitive matching keys, cleaning single-line text and
+//! size limits.
 
 use icu_casemap::CaseMapper;
 use icu_normalizer::ComposingNormalizerBorrowed;
@@ -50,23 +51,53 @@ pub fn fold(text: &str) -> String {
     nfkc.normalize(&folded).into_owned()
 }
 
-/// Checks a task title: not blank, at most [`TITLE_MAX_CHARS`] characters.
-/// Returns the title with surrounding white space removed.
-pub fn check_title(title: &str) -> Result<&str, TextError> {
-    let trimmed = title.trim();
-    if trimmed.is_empty() {
-        return Err(TextError::Empty("title"));
+/// Cleans text that must stay on one line (titles and names): tabs and line
+/// breaks become spaces (`\r\n` one space), every other control character
+/// is removed, and surrounding white space is trimmed.
+#[must_use]
+pub fn clean_line(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '\r' => {
+                if chars.peek() == Some(&'\n') {
+                    chars.next();
+                }
+                out.push(' ');
+            }
+            '\t' | '\n' | '\u{0b}' | '\u{0c}' | '\u{85}' | '\u{2028}' | '\u{2029}' => out.push(' '),
+            c if c.is_control() => {}
+            c => out.push(c),
+        }
     }
-    let len = trimmed.chars().count();
-    if len > TITLE_MAX_CHARS {
+    out.trim().to_owned()
+}
+
+/// Checks a task title: cleaned as [`clean_line`], then not blank and at
+/// most [`TITLE_MAX_CHARS`] characters. Returns the cleaned title.
+pub fn check_title(title: &str) -> Result<String, TextError> {
+    check_line("title", title, TITLE_MAX_CHARS)
+}
+
+/// Checks a one-line name (a project, status, label or type name): cleaned
+/// as [`clean_line`], then not blank and at most `max` characters. Returns
+/// the cleaned name.
+pub fn check_line(what: &'static str, text: &str, max: usize) -> Result<String, TextError> {
+    let cleaned = clean_line(text);
+    if cleaned.is_empty() {
+        return Err(TextError::Empty(what));
+    }
+    let len = cleaned.chars().count();
+    if len > max {
         return Err(TextError::TooLong {
-            what: "title",
+            what,
             len,
-            max: TITLE_MAX_CHARS,
+            max,
             unit: "characters",
         });
     }
-    Ok(trimmed)
+    Ok(cleaned)
 }
 
 /// Checks a Markdown field (description, wiki page) against
@@ -113,13 +144,25 @@ mod tests {
 
     #[test]
     fn titles() {
-        assert_eq!(check_title("  Fix it  "), Ok("Fix it"));
+        assert_eq!(check_title("  Fix it  "), Ok("Fix it".to_owned()));
         assert_eq!(check_title(" \t\n"), Err(TextError::Empty("title")));
         let max = "ж".repeat(TITLE_MAX_CHARS);
         assert!(check_title(&max).is_ok());
         let over = format!("{max}x");
         let err = check_title(&over).unwrap_err();
         assert!(err.to_string().contains("501 characters"), "{err}");
+    }
+
+    #[test]
+    fn titles_lose_control_characters() {
+        assert_eq!(clean_line("Fix\tthe\nbug"), "Fix the bug");
+        assert_eq!(clean_line("one\r\ntwo\rthree"), "one two three");
+        assert_eq!(clean_line("bell\u{7}less\u{1b}[0m"), "bellless[0m");
+        assert_eq!(clean_line("zero\u{0}width"), "zerowidth");
+        assert_eq!(clean_line("\n  padded \t"), "padded");
+        assert_eq!(clean_line("Задача\u{2028}1"), "Задача 1");
+        assert_eq!(check_title("\u{7}\u{8}"), Err(TextError::Empty("title")));
+        assert_eq!(check_title("a\u{7f}b"), Ok("ab".to_owned()));
     }
 
     #[test]

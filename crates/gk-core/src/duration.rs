@@ -3,10 +3,14 @@
 
 //! Durations: estimates and logged time, stored as whole minutes.
 //!
-//! People type them as `90m`, `1.5h`, `1:30`, `2d`, `1w` or combinations
-//! such as `1h 30m` and `2d4h`. A day and a week are working days and weeks:
+//! People type them as `90m`, `1.5h`, `1,5h`, `1:30`, `2d`, `1w` or
+//! combinations such as `1h 30m` and `1w 2d 4h`. Both a decimal point and a
+//! decimal comma are accepted. A day and a week are working days and weeks:
 //! 8 hours and 5 days unless the workspace settings say otherwise
-//! ([`DurationUnits`]). Durations are shown in hours and minutes: `1h 30m`.
+//! ([`DurationUnits`]). Durations are shown in weeks, days, hours and minutes
+//! with the same units ([`format_duration`]), or in hours and minutes only
+//! ([`format_minutes`]). The setting changes only how minutes are read and
+//! shown, never what is stored.
 
 /// Most minutes a duration may hold (about 4,000 years of round-the-clock
 /// work; enough to never matter, small enough to never overflow).
@@ -169,7 +173,7 @@ pub fn parse_minutes(input: &str, units: DurationUnits) -> Result<i64, DurationE
         // A number: digits, optionally a point and more digits.
         let int_len = rest.bytes().take_while(u8::is_ascii_digit).count();
         let (int_part, after) = rest.split_at(int_len);
-        let (frac_part, after) = match after.strip_prefix('.') {
+        let (frac_part, after) = match after.strip_prefix('.').or_else(|| after.strip_prefix(',')) {
             Some(tail) => {
                 let len = tail.bytes().take_while(u8::is_ascii_digit).count();
                 tail.split_at(len)
@@ -218,6 +222,35 @@ pub fn parse_minutes(input: &str, units: DurationUnits) -> Result<i64, DurationE
         rest = after.trim_start();
     }
     i64::try_from(total).map_err(|_| too_long())
+}
+
+/// Shows minutes in weeks, days, hours and minutes of working time:
+/// `1w 2d 4h 30m`, `3d`, `45m`, `0m`, with the day and week lengths of
+/// `units`. Units that are zero are left out. Negative values get a leading
+/// minus sign (`-1d 2h`), for "over by". The result parses back to the same
+/// minutes with the same units.
+#[must_use]
+pub fn format_duration(minutes: i64, units: DurationUnits) -> String {
+    let sign = if minutes < 0 { "-" } else { "" };
+    let mut rest = u128::from(minutes.unsigned_abs());
+    let mut parts = Vec::with_capacity(4);
+    for (unit, suffix) in [
+        (Unit::Week, "w"),
+        (Unit::Day, "d"),
+        (Unit::Hour, "h"),
+        (Unit::Minute, "m"),
+    ] {
+        let size = units.minutes_per(unit);
+        let count = rest / size;
+        rest %= size;
+        if count > 0 {
+            parts.push(format!("{count}{suffix}"));
+        }
+    }
+    if parts.is_empty() {
+        return "0m".to_owned();
+    }
+    format!("{sign}{}", parts.join(" "))
 }
 
 /// Shows minutes as hours and minutes: `1h 30m`, `2h`, `45m`, `0m`.
@@ -283,12 +316,37 @@ mod tests {
         assert!(matches!(p("90"), Err(DurationError::MissingUnit(_))));
         assert!(matches!(p("1h 2h"), Err(DurationError::RepeatedUnit(_))));
         for bad in [
-            "h", "1x", "1:5", "1:60", "-1h", "1,5h", "1h -5m", "1..5h", "1:30m", "abc", "1h 30",
+            "h", "1x", "1:5", "1:60", "-1h", "1,,5h", "1.,5h", "1h -5m", "1..5h", "1:30m", "abc",
+            "1h 30",
         ] {
             assert!(p(bad).is_err(), "{bad}");
         }
         assert!(matches!(p("99999999999h"), Err(DurationError::TooLong(_))));
         assert!(matches!(p("1.0000001h"), Err(DurationError::TooLong(_))));
+    }
+
+    #[test]
+    fn a_decimal_comma_is_a_decimal_point() {
+        assert_eq!(p("1,5h"), Ok(90));
+        assert_eq!(p("0,25d"), Ok(120));
+        assert_eq!(p("1,5h 10m"), Ok(100));
+        assert_eq!(p(",5h"), Ok(30));
+    }
+
+    #[test]
+    fn formats_in_weeks_and_days() {
+        let units = DurationUnits::default();
+        assert_eq!(format_duration(0, units), "0m");
+        assert_eq!(format_duration(45, units), "45m");
+        assert_eq!(format_duration(90, units), "1h 30m");
+        assert_eq!(format_duration(8 * 60, units), "1d");
+        assert_eq!(
+            format_duration(2400 + 960 + 240 + 30, units),
+            "1w 2d 4h 30m"
+        );
+        assert_eq!(format_duration(-(8 * 60 + 120), units), "-1d 2h");
+        let short = DurationUnits::new(6, 4).unwrap();
+        assert_eq!(format_duration(6 * 60 * 4 + 60, short), "1w 1h");
     }
 
     #[test]
@@ -304,6 +362,16 @@ mod tests {
         #[test]
         fn formatted_durations_parse_back(minutes in 0i64..=MAX_MINUTES) {
             prop_assert_eq!(p(&format_minutes(minutes)), Ok(minutes));
+        }
+
+        #[test]
+        fn weeks_and_days_parse_back(
+            minutes in 0i64..=MAX_MINUTES,
+            hours in 1u32..=24,
+            days in 1u32..=7,
+        ) {
+            let units = DurationUnits::new(hours, days).unwrap();
+            prop_assert_eq!(parse_minutes(&format_duration(minutes, units), units), Ok(minutes));
         }
     }
 }

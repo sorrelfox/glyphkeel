@@ -1,0 +1,28 @@
+---
+source: crates/gk-cli/tests/commands.rs
+expression: "ws.ok(&[\"task\", \"move\", \"gk-1\", \"--status\", \"in progress\", \"--at\", \"top\"])"
+---
+group: [id]
+task:
+  key: GK-1
+  title: Write the release notes
+  id: [id]
+  checklist:
+    done: 0
+    total: 0
+  created_at: [time]
+  created_by: You
+  description: 
+  edited_at: [time]
+  estimate: 1d 2h
+  estimate_minutes: 600
+  labels: (none)
+  priority: high
+  project: GK
+  rank: i
+  spent_minutes: 0
+  status: In progress
+  status_entered_at: [time]
+  type: Task
+  updated_at: [time]
+  version: 2

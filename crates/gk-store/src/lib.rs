@@ -58,6 +58,7 @@ mod connection;
 mod error;
 mod layout;
 mod readers;
+mod requests;
 mod schema;
 mod store;
 mod writer;
@@ -70,7 +71,10 @@ pub use checkpoint::{
 };
 pub use connection::{COLLATION, JOURNAL_SIZE_LIMIT, collate};
 pub use error::{Result, StoreError, WriteError};
-pub use layout::{DATABASE_FILE, LockFile, WorkspaceLayout};
+pub use layout::{
+    DATABASE_FILE, DEFAULT_WORKSPACE, Location, LockFile, WORKSPACE_ENV, WorkspaceLayout, data_dir,
+};
+pub use requests::{REQUEST_WINDOW_MS, RequestKey, purge_requests, remember, remembered};
 pub use schema::{SCHEMA_VERSION, SchemaState};
 pub use store::{Store, StoreConfig, open_raw};
 pub use writer::{SlowWrite, WriterStats};

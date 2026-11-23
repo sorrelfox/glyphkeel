@@ -27,7 +27,7 @@ use gk_store::rusqlite::types::Value as SqlValue;
 use gk_store::rusqlite::{OptionalExtension, Row, Transaction, params, params_from_iter};
 use serde_json::{Map, Value};
 
-use super::{agent, desc, settings};
+use super::{agent, board, desc, fields, project, settings, task};
 use crate::failure::Failure;
 use crate::registry::{QueryCtx, Registry};
 use crate::time::rfc3339;
@@ -259,25 +259,205 @@ fn newest_first(tx: &Transaction<'_>, groups: Vec<Id>) -> Result<Vec<Id>, StoreE
     Ok(keyed.into_iter().map(|(_, g)| g).collect())
 }
 
-/// Reads and writes the fields of one kind of item for revert.
-struct Applier {
-    current: fn(&Transaction<'_>, Id, &str) -> Result<Option<Value>, StoreError>,
-    set: fn(&mut WriteCtx<'_>, Id, &str, Option<Value>) -> Result<(), Failure>,
+/// The fields of a row that revert writes back: all of them, or for a row
+/// that created an item, only its existence.
+fn revertible_fields(row: &GroupRow) -> Vec<&String> {
+    match row.fields.keys().find(|f| *f == "created") {
+        Some(created) => vec![created],
+        None => row.fields.keys().collect(),
+    }
 }
 
-fn applier(entity: &str) -> Option<Applier> {
-    match entity {
-        settings::ENTITY => Some(Applier {
-            current: |tx, _, field| settings::raw(tx, field),
-            set: |w, _, field, value| settings::write_raw(w, field, value),
-        }),
-        _ => None,
+/// The current value of a recorded field, as history records it; `None`
+/// (outer) when this kind of change can't be reverted.
+fn current(
+    tx: &Transaction<'_>,
+    entity: &str,
+    id: Id,
+    field: &str,
+) -> Result<Option<Option<Value>>, StoreError> {
+    Ok(Some(match (entity, field) {
+        (settings::ENTITY, _) => settings::raw(tx, field)?,
+        (board::ENTITY, "settings") => board::raw(tx, id)?,
+        (_, "deleted") => return Ok(None),
+        (fields::PROJECT | fields::TASK, "created") => {
+            let table = if entity == fields::TASK {
+                "tasks"
+            } else {
+                "projects"
+            };
+            let live: Option<bool> = tx
+                .query_row(
+                    &format!("SELECT deleted_at IS NULL FROM {table} WHERE id = ?1"),
+                    [id.as_bytes().as_slice()],
+                    |r| r.get(0),
+                )
+                .optional()?;
+            live.filter(|l| *l).map(Value::Bool)
+        }
+        (fields::STATUS | fields::TYPE | fields::LABEL, "created") => {
+            let table = match entity {
+                fields::STATUS => "statuses",
+                fields::TYPE => "task_types",
+                _ => "labels",
+            };
+            let exists: Option<i64> = tx
+                .query_row(
+                    &format!("SELECT 1 FROM {table} WHERE id = ?1"),
+                    [id.as_bytes().as_slice()],
+                    |r| r.get(0),
+                )
+                .optional()?;
+            exists.map(|_| Value::Bool(true))
+        }
+        (fields::TASK, "labels") => {
+            let ids = task::label_ids(tx, id).map_err(|e| match e {
+                Failure::Store(s) => s,
+                Failure::Op(o) => StoreError::Corrupt(o.message),
+            })?;
+            task::labels_value(&ids)
+        }
+        (entity, field) if fields::is_column(entity, field) => fields::read(tx, entity, id, field)?,
+        _ => return Ok(None),
+    }))
+}
+
+/// Writes a recorded value back and records that change.
+fn apply(
+    w: &mut WriteCtx<'_>,
+    entity: &str,
+    id: Id,
+    project: Option<Id>,
+    field: &str,
+    value: Option<Value>,
+) -> Result<(), Failure> {
+    match (entity, field) {
+        (settings::ENTITY, _) => settings::write_raw(w, field, value),
+        (board::ENTITY, "settings") => {
+            let before = board::raw(w.tx(), id)?;
+            board::write_raw(w, id, value.as_ref())?;
+            w.record_field(entity, id, project, field, before, value);
+            Ok(())
+        }
+        (fields::PROJECT | fields::TASK, "created") => {
+            let is_task = entity == fields::TASK;
+            let (table, child) = if is_task {
+                (
+                    "tasks",
+                    "SELECT count(*) FROM tasks WHERE parent_id = ?1 AND deleted_at IS NULL",
+                )
+            } else {
+                (
+                    "projects",
+                    "SELECT (SELECT count(*) FROM tasks WHERE project_id = ?1 AND deleted_at IS NULL)
+                          + (SELECT count(*) FROM projects WHERE parent_id = ?1 AND deleted_at IS NULL)",
+                )
+            };
+            if value.is_none() {
+                let inside: i64 = w
+                    .tx()
+                    .query_row(child, [id.as_bytes().as_slice()], |r| r.get(0))?;
+                if inside > 0 {
+                    return Err(OpError::conflict(format!(
+                        "The {} now holds {}, so its creation can't be reverted.",
+                        if is_task { "task" } else { "project" },
+                        if is_task {
+                            "subtasks"
+                        } else {
+                            "tasks or sub-projects"
+                        }
+                    ))
+                    .into());
+                }
+                w.tx().execute(
+                    &format!(
+                        "UPDATE {table} SET deleted_at = ?2, deleted_group = ?3 WHERE id = ?1"
+                    ),
+                    params![
+                        id.as_bytes().as_slice(),
+                        w.now(),
+                        w.group().as_bytes().as_slice()
+                    ],
+                )?;
+            } else {
+                w.tx().execute(
+                    &format!(
+                        "UPDATE {table} SET deleted_at = NULL, deleted_group = NULL WHERE id = ?1"
+                    ),
+                    [id.as_bytes().as_slice()],
+                )?;
+            }
+            let before = (value.is_none()).then_some(Value::Bool(true));
+            w.record_field(entity, id, project, field, before, value);
+            Ok(())
+        }
+        (fields::STATUS | fields::TYPE | fields::LABEL, "created") => {
+            if value.is_some() {
+                return Err(OpError::conflict(format!(
+                    "A deleted {entity} can't be created again by a revert."
+                ))
+                .into());
+            }
+            let (table, used) = match entity {
+                fields::STATUS => (
+                    "statuses",
+                    "SELECT count(*) FROM tasks WHERE status_id = ?1",
+                ),
+                fields::TYPE => (
+                    "task_types",
+                    "SELECT count(*) FROM tasks WHERE type_id = ?1",
+                ),
+                _ => ("labels", "SELECT 0"),
+            };
+            let n: i64 = if table == "labels" {
+                0
+            } else {
+                w.tx()
+                    .query_row(used, [id.as_bytes().as_slice()], |r| r.get(0))?
+            };
+            if n > 0 {
+                return Err(OpError::conflict(format!(
+                    "The {entity} is in use by {n} tasks, so its creation can't be reverted."
+                ))
+                .into());
+            }
+            w.tx().execute(
+                &format!("DELETE FROM {table} WHERE id = ?1"),
+                [id.as_bytes().as_slice()],
+            )?;
+            w.record_field(entity, id, project, field, Some(Value::Bool(true)), None);
+            Ok(())
+        }
+        (fields::TASK, "labels") => {
+            let ids: Vec<Id> = value
+                .as_ref()
+                .and_then(Value::as_array)
+                .map(|a| a.iter().filter_map(|v| v.as_str()?.parse().ok()).collect())
+                .unwrap_or_default();
+            let project = project.ok_or_else(|| Failure::Op(OpError::storage("no project")))?;
+            task::set_labels(w, id, project, &ids).map(drop)
+        }
+        (fields::PROJECT, "key") => {
+            let old = fields::read(w.tx(), entity, id, field)?;
+            if let (Some(Value::String(old)), Some(Value::String(new))) = (&old, &value) {
+                project::rekey(w, id, old, new)?;
+            }
+            fields::set(w, entity, id, project, field, value).map(drop)
+        }
+        _ => {
+            fields::set(w, entity, id, project, field, value)?;
+            if entity == fields::TASK && matches!(field, "title" | "description") {
+                task::refresh_text(w, id)?;
+            }
+            Ok(())
+        }
     }
 }
 
 struct GroupRow {
     entity: String,
     id: Id,
+    project: Option<Id>,
     fields: Map<String, Value>,
     inverse: Map<String, Value>,
     reverted: bool,
@@ -285,7 +465,7 @@ struct GroupRow {
 
 fn group_rows(tx: &Transaction<'_>, group: Id) -> Result<Vec<GroupRow>, StoreError> {
     let mut stmt = tx.prepare_cached(
-        "SELECT entity_kind, entity_id, changes, inverse, reverted_by IS NOT NULL
+        "SELECT entity_kind, entity_id, changes, inverse, reverted_by IS NOT NULL, project_id
            FROM activity WHERE group_id = ?1 ORDER BY seq DESC",
     )?;
     let rows = stmt.query_map([group.as_bytes().as_slice()], |r| {
@@ -295,11 +475,12 @@ fn group_rows(tx: &Transaction<'_>, group: Id) -> Result<Vec<GroupRow>, StoreErr
             r.get::<_, String>(2)?,
             r.get::<_, Option<String>>(3)?,
             r.get::<_, bool>(4)?,
+            r.get::<_, Option<Vec<u8>>>(5)?,
         ))
     })?;
     let mut out = Vec::new();
     for row in rows {
-        let (entity, id, changes, inverse, reverted) = row?;
+        let (entity, id, changes, inverse, reverted, project) = row?;
         let object = |text: &str, key: &str| {
             serde_json::from_str::<Value>(text)
                 .ok()
@@ -309,6 +490,7 @@ fn group_rows(tx: &Transaction<'_>, group: Id) -> Result<Vec<GroupRow>, StoreErr
         out.push(GroupRow {
             entity,
             id: Id::from_slice(&id).map_err(|e| StoreError::Corrupt(e.to_string()))?,
+            project: project.and_then(|p| Id::from_slice(&p).ok()),
             fields: object(&changes, "fields"),
             inverse: inverse.map(|i| object(&i, "set")).unwrap_or_default(),
             reverted,
@@ -326,15 +508,16 @@ fn blocker(tx: &Transaction<'_>, rows: &[GroupRow]) -> Result<Option<String>, St
         return Ok(Some("it was already reverted".into()));
     }
     for row in rows {
-        let Some(applier) = applier(&row.entity) else {
-            return Ok(Some(format!(
-                "changes to {} can't be reverted yet",
-                row.entity
-            )));
-        };
-        for (field, change) in &row.fields {
-            let after = change.get("after").cloned();
-            if (applier.current)(tx, row.id, field)? != after {
+        for field in revertible_fields(row) {
+            let after = row.fields.get(field).and_then(|c| c.get("after")).cloned();
+            let Some(now) = current(tx, &row.entity, row.id, field)? else {
+                return Ok(Some(if field == "deleted" {
+                    format!("a deleted {} can't be brought back by a revert", row.entity)
+                } else {
+                    format!("changes to {} {field} can't be reverted yet", row.entity)
+                }));
+            };
+            if now != after {
                 return Ok(Some(format!(
                     "{} {field} was changed again since",
                     row.entity
@@ -364,12 +547,18 @@ pub(crate) fn revert_groups(
         }
         if !dry_run {
             for row in &rows {
-                let Some(applier) = applier(&row.entity) else {
-                    continue;
-                };
-                for (field, before) in &row.inverse {
-                    let value = (!before.is_null()).then(|| before.clone());
-                    (applier.set)(w, row.id, field, value)?;
+                let before = |field: &str| row.inverse.get(field).cloned().filter(|v| !v.is_null());
+                let home = row.entity == fields::TASK
+                    && row.fields.contains_key("project")
+                    && row.fields.contains_key("number");
+                if home {
+                    task::set_home(w, row.id, row.project, before("project"), before("number"))?;
+                }
+                for field in revertible_fields(row) {
+                    if home && matches!(field.as_str(), "project" | "number") {
+                        continue;
+                    }
+                    apply(w, &row.entity, row.id, row.project, field, before(field))?;
                 }
             }
             w.tx().execute(

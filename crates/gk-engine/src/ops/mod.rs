@@ -8,8 +8,13 @@ use gk_api::{OpDescriptor, Operation, descriptor};
 use crate::registry::Registry;
 
 pub(crate) mod agent;
+pub(crate) mod board;
+pub(crate) mod fields;
 pub(crate) mod history;
+pub(crate) mod lookup;
+pub(crate) mod project;
 pub(crate) mod settings;
+pub(crate) mod task;
 pub(crate) mod workspace;
 
 /// The catalog's descriptor of `O`.
@@ -22,4 +27,7 @@ pub(crate) fn register(r: &mut Registry) {
     settings::register(r);
     agent::register(r);
     history::register(r);
+    project::register(r);
+    task::register(r);
+    board::register(r);
 }

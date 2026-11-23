@@ -3,48 +3,27 @@
 
 //! Which workspace a command works on.
 
-use std::path::{Path, PathBuf};
-
 use gk_api::OpError;
-use gk_store::WorkspaceLayout;
+use gk_store::{Location, StoreError, WorkspaceLayout};
 
-/// The workspace used when `--workspace` is not given. It is created on
-/// first use, as the app does on its first start.
-pub(crate) const DEFAULT_NAME: &str = "Personal";
-
-/// The folder of the program's data: `$XDG_DATA_HOME/glyphkeel` on Linux,
-/// `%LOCALAPPDATA%\Glyphkeel` on Windows.
-fn data_dir() -> Result<PathBuf, OpError> {
-    let base = directories::BaseDirs::new().ok_or_else(|| {
-        OpError::storage("Can't find the home folder, so there is no default data folder.")
-            .with_hint("Name the workspace folder with --workspace <path>.")
-    })?;
-    let name = if cfg!(windows) {
-        "Glyphkeel"
-    } else {
-        "glyphkeel"
-    };
-    Ok(base.data_local_dir().join(name))
-}
-
-/// Whether `arg` names a folder rather than a workspace in the data folder.
-fn is_path(arg: &str) -> bool {
-    arg == "."
-        || arg == ".."
-        || arg.contains('/')
-        || arg.contains(std::path::MAIN_SEPARATOR)
-        || Path::new(arg).is_absolute()
-}
-
-/// The workspace `arg` names, and whether it may be created when it doesn't
-/// exist (only the default one is; a mistyped name must not make a new,
-/// empty workspace).
+/// The workspace `arg` (`--workspace`) names, else the one
+/// `GLYPHKEEL_WORKSPACE` names, else the default workspace, and whether it
+/// may be created when it doesn't exist. Only a workspace chosen without
+/// `--workspace` is created, as the app does on its first start; a mistyped
+/// name must not make a new, empty workspace.
 pub(crate) fn resolve(arg: Option<&str>) -> Result<WorkspaceLayout, OpError> {
-    let (layout, may_create) = match arg {
-        None => (in_data_dir(DEFAULT_NAME)?, true),
-        Some(a) if is_path(a) => (WorkspaceLayout::new(a), false),
-        Some(a) => (in_data_dir(a)?, false),
-    };
+    let may_create = arg.is_none_or(|a| a.trim().is_empty());
+    let layout = Location::find(arg)
+        .layout(gk_store::data_dir().as_deref())
+        .map_err(|e| match e {
+            StoreError::NoDataDir => OpError::storage(
+                "Can't find the home folder, so there is no default data folder.",
+            )
+            .with_hint("Name the workspace folder with --workspace <path>."),
+            e => OpError::invalid_at("workspace", format!("{e}.")).with_hint(
+                "A name has letters, digits, spaces, '-' and '_'; to name a folder, give a path such as ./my-workspace.",
+            ),
+        })?;
     if !may_create && !layout.database().is_file() {
         return Err(OpError::not_found(
             format!("There is no workspace at {}.", layout.root().display()),
@@ -55,30 +34,9 @@ pub(crate) fn resolve(arg: Option<&str>) -> Result<WorkspaceLayout, OpError> {
     Ok(layout)
 }
 
-fn in_data_dir(name: &str) -> Result<WorkspaceLayout, OpError> {
-    WorkspaceLayout::in_data_dir(&data_dir()?, name).map_err(|_| {
-        OpError::invalid_at(
-            "workspace",
-            format!("'{name}' is not a workspace name."),
-        )
-        .with_hint(
-            "A name has letters, digits, spaces, '-' and '_'; to name a folder, give a path such as ./my-workspace.",
-        )
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn paths_and_names_are_told_apart() {
-        assert!(is_path("."));
-        assert!(is_path("./work"));
-        assert!(is_path("/tmp/work"));
-        assert!(!is_path("Personal"));
-        assert!(!is_path("Side project"));
-    }
 
     #[test]
     fn a_missing_named_workspace_is_not_created() {
@@ -91,7 +49,7 @@ mod tests {
 
     #[test]
     fn a_bad_name_is_invalid() {
-        let err = resolve(Some("..hidden")).expect_err("bad name");
+        let err = resolve(Some("a:b")).expect_err("bad name");
         assert_eq!(err.code, gk_api::ErrorCode::Invalid);
     }
 }

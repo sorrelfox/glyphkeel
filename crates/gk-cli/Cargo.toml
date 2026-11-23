@@ -21,7 +21,6 @@ path = "src/main.rs"
 clap = { workspace = true, features = ["string"] }
 clap_complete = { workspace = true }
 clap_mangen = { workspace = true }
-directories = { workspace = true }
 gk-api = { workspace = true }
 gk-engine = { workspace = true }
 gk-mcp = { workspace = true }

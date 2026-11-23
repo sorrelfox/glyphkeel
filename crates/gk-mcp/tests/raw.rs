@@ -145,7 +145,11 @@ async fn legacy_results_carry_no_result_type() {
         .request(json!({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}))
         .await;
     assert!(r["result"].get("resultType").is_none(), "{r}");
-    assert_eq!(r["result"]["tools"].as_array().unwrap().len(), 3, "{r}");
+    assert_eq!(
+        r["result"]["tools"].as_array().unwrap().len(),
+        common::golden_names("standard").len(),
+        "{r}"
+    );
     let r = raw
         .request(json!({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
                         "params": {"name": "get_workspace", "arguments": {}}}))

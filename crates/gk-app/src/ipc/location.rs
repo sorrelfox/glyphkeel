@@ -1,108 +1,67 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-//! Which workspace the app opens: the default one under the data folder
-//! (`$XDG_DATA_HOME/glyphkeel/workspaces/default` on Linux), created on the
-//! first run, or the one `GLYPHKEEL_WORKSPACE` names, by name or by path.
+//! Which workspace the app opens: the one `GLYPHKEEL_WORKSPACE` names, by
+//! name or by path, or else the default workspace "Personal" in the data
+//! folder, created on the first run. The rule is the storage layer's, shared
+//! with the command line and the agent server.
 
 use std::path::{Path, PathBuf};
 
 use gk_api::OpError;
-use gk_store::WorkspaceLayout;
+use gk_store::{Location, StoreError, WorkspaceLayout};
 
-/// The variable that picks another workspace, for development and tests.
-pub(crate) const ENV: &str = "GLYPHKEEL_WORKSPACE";
-
-/// The name of the workspace the app opens when nothing else is asked for.
-pub(crate) const DEFAULT_NAME: &str = "default";
-
-/// The workspace to open.
+/// The workspace to open, as the environment names it.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum Location {
-    /// A workspace in the data folder, by name.
-    Named(String),
-    /// A workspace folder anywhere.
-    Path(PathBuf),
-}
+pub(crate) struct AppLocation(Location);
 
 /// The workspace `GLYPHKEEL_WORKSPACE` names, or the default one.
-pub(crate) fn from_env() -> Location {
-    parse(std::env::var(ENV).ok().as_deref())
+pub(crate) fn from_env() -> AppLocation {
+    AppLocation(Location::find(None))
 }
 
-/// A value with a path separator, or one that starts with `.` or `~`, is
-/// a folder; any other value is a name in the data folder.
-pub(crate) fn parse(value: Option<&str>) -> Location {
-    match value.map(str::trim).filter(|v| !v.is_empty()) {
-        None => Location::Named(DEFAULT_NAME.to_owned()),
-        Some(v) if v.contains(std::path::MAIN_SEPARATOR) || v.contains('/') => {
-            Location::Path(PathBuf::from(v))
-        }
-        Some(v) if v.starts_with('.') || v.starts_with('~') => Location::Path(PathBuf::from(v)),
-        Some(v) => Location::Named(v.to_owned()),
-    }
-}
-
-impl Location {
-    /// The workspace folder's layout. `data_dir` is the app's data folder
-    /// (`$XDG_DATA_HOME/glyphkeel`); a named workspace needs it.
-    pub(crate) fn layout(&self, data_dir: Option<&Path>) -> Result<WorkspaceLayout, OpError> {
-        match self {
-            Self::Path(path) => Ok(WorkspaceLayout::new(expand_home(path))),
-            Self::Named(name) => {
-                let data_dir = data_dir.ok_or_else(|| {
-                    OpError::storage("The data folder could not be found.")
-                        .with_hint("Set XDG_DATA_HOME or HOME.")
-                })?;
-                WorkspaceLayout::in_data_dir(data_dir, name).map_err(|e| {
-                    OpError::invalid(format!("\"{name}\" can't be a workspace name: {e}."))
-                })
-            }
-        }
-    }
-}
-
-fn expand_home(path: &Path) -> PathBuf {
-    match path.strip_prefix("~") {
-        Ok(rest) => std::env::var_os("HOME")
-            .map_or_else(|| path.to_path_buf(), |home| PathBuf::from(home).join(rest)),
-        Err(_) => path.to_path_buf(),
+impl AppLocation {
+    /// The workspace folder's layout. A named workspace lives in the shared
+    /// data folder; `fallback_data_dir` is used only when that can't be
+    /// found.
+    pub(crate) fn layout(
+        &self,
+        fallback_data_dir: Option<&Path>,
+    ) -> Result<WorkspaceLayout, OpError> {
+        let data_dir: Option<PathBuf> =
+            gk_store::data_dir().or_else(|| fallback_data_dir.map(Path::to_path_buf));
+        self.0.layout(data_dir.as_deref()).map_err(|e| match e {
+            StoreError::NoDataDir => OpError::storage("The data folder could not be found.")
+                .with_hint("Set XDG_DATA_HOME or HOME, or name a folder in GLYPHKEEL_WORKSPACE."),
+            e => OpError::invalid(format!("{e}.")),
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::path::{Path, PathBuf};
+    use std::path::Path;
 
-    use super::{DEFAULT_NAME, Location, parse};
+    use gk_store::Location;
+
+    use super::AppLocation;
 
     #[test]
-    fn nothing_set_means_the_default_workspace() {
-        assert_eq!(parse(None), Location::Named(DEFAULT_NAME.to_owned()));
-        assert_eq!(parse(Some("  ")), Location::Named(DEFAULT_NAME.to_owned()));
+    fn the_default_is_the_shared_personal_workspace() {
+        let location = AppLocation(Location::choose(None, None));
+        assert!(location.0.is_default());
+        if gk_store::data_dir().is_some() {
+            let layout = location.layout(None).expect("layout");
+            assert!(layout.root().ends_with("workspaces/Personal"));
+        }
     }
 
     #[test]
-    fn names_and_paths_are_told_apart() {
-        assert_eq!(parse(Some("work")), Location::Named("work".to_owned()));
-        assert_eq!(
-            parse(Some("/tmp/ws")),
-            Location::Path(PathBuf::from("/tmp/ws"))
-        );
-        assert_eq!(parse(Some("./ws")), Location::Path(PathBuf::from("./ws")));
-        assert_eq!(parse(Some("~/ws")), Location::Path(PathBuf::from("~/ws")));
-    }
-
-    #[test]
-    fn a_named_workspace_lives_under_the_data_folder() {
-        let data = Path::new("/data/glyphkeel");
-        let layout = Location::Named("default".to_owned())
-            .layout(Some(data))
-            .unwrap();
-        assert_eq!(
-            layout.root(),
-            Path::new("/data/glyphkeel/workspaces/default")
-        );
-        assert!(Location::Named("default".to_owned()).layout(None).is_err());
+    fn a_path_needs_no_data_folder() {
+        let location = AppLocation(Location::choose(None, Some("/tmp/ws")));
+        let layout = location.layout(None).expect("layout");
+        assert_eq!(layout.root(), Path::new("/tmp/ws"));
+        let bad = AppLocation(Location::choose(None, Some("a:b")));
+        assert!(bad.layout(Some(Path::new("/data"))).is_err());
     }
 }

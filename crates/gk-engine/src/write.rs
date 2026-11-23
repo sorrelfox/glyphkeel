@@ -219,6 +219,14 @@ impl<'a> WriteCtx<'a> {
 }
 
 impl Finished {
+    /// A command that changed nothing.
+    pub(crate) fn nothing() -> Self {
+        Self {
+            seq: None,
+            changes: Vec::new(),
+        }
+    }
+
     /// The change event for this command, if it changed anything.
     pub(crate) fn event(&self, meta: &CommandMeta) -> Option<Changed> {
         let seq = self.seq?;

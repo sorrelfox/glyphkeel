@@ -15,6 +15,7 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+directories = { workspace = true }
 gk-core = { workspace = true }
 icu_collator = { workspace = true }
 rusqlite = { workspace = true }

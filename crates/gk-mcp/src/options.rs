@@ -4,15 +4,15 @@
 //! The options of `glyphkeel mcp` and the workspace they name.
 
 use std::ffi::OsString;
-use std::path::{Path, PathBuf};
 
 use clap::Parser;
 use gk_api::{OpError, Profile, Toolset};
-use gk_engine::store_error;
-use gk_store::WorkspaceLayout;
+use gk_store::{Location, StoreError, WorkspaceLayout};
 
-/// The workspace opened when `--workspace` is not given.
-pub const DEFAULT_WORKSPACE: &str = "Default";
+/// The workspace opened when neither `--workspace` nor
+/// `GLYPHKEEL_WORKSPACE` names one, shared with the app and the command
+/// line.
+pub const DEFAULT_WORKSPACE: &str = gk_store::DEFAULT_WORKSPACE;
 
 /// Serve Glyphkeel to an AI agent over MCP, on standard input and output.
 ///
@@ -22,7 +22,8 @@ pub const DEFAULT_WORKSPACE: &str = "Default";
 #[command(name = "glyphkeel mcp", no_binary_name = true, version)]
 pub struct Options {
     /// Which workspace: a name under the data folder, or a path to a
-    /// workspace folder. Default: the default workspace.
+    /// workspace folder. Default: the one `GLYPHKEEL_WORKSPACE` names, else
+    /// "Personal".
     #[arg(long, value_name = "NAME|PATH")]
     pub workspace: Option<String>,
 
@@ -95,47 +96,21 @@ impl Options {
     }
 }
 
-/// The workspace named by `--workspace`: a path when it contains a path
-/// separator or starts with `.` or `~`, otherwise a name under the data
-/// folder (`$XDG_DATA_HOME/glyphkeel/workspaces/<name>`).
+/// The workspace named by `--workspace`, else by `GLYPHKEEL_WORKSPACE`,
+/// else the default one: a path when it contains a path separator or starts
+/// with `.` or `~`, otherwise a name under the data folder
+/// (`$XDG_DATA_HOME/glyphkeel/workspaces/<name>`).
 ///
 /// # Errors
 /// As [`Options::layout`].
 pub fn workspace_layout(arg: Option<&str>) -> Result<WorkspaceLayout, OpError> {
-    let arg = arg.unwrap_or(DEFAULT_WORKSPACE);
-    if let Some(rest) = arg.strip_prefix("~/") {
-        let home = home_dir().ok_or_else(no_home)?;
-        return Ok(WorkspaceLayout::new(home.join(rest)));
-    }
-    if arg.contains(std::path::MAIN_SEPARATOR) || arg.contains('/') || arg.starts_with('.') {
-        return Ok(WorkspaceLayout::new(PathBuf::from(arg)));
-    }
-    let data_dir = data_dir().ok_or_else(no_home)?;
-    WorkspaceLayout::in_data_dir(&data_dir, arg).map_err(|e| {
-        let mut error = store_error(&e);
-        error.code = gk_api::ErrorCode::Invalid;
-        error
-    })
-}
-
-/// `$XDG_DATA_HOME/glyphkeel`, or `~/.local/share/glyphkeel`.
-fn data_dir() -> Option<PathBuf> {
-    let base = std::env::var_os("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .filter(|p| p.is_absolute())
-        .or_else(|| home_dir().map(|h| h.join(".local").join("share")))?;
-    Some(base.join("glyphkeel"))
-}
-
-fn home_dir() -> Option<PathBuf> {
-    std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .filter(|p| Path::new(p).is_absolute())
-}
-
-fn no_home() -> OpError {
-    OpError::storage("No data folder found: HOME is not set.")
-        .with_hint("Set HOME or XDG_DATA_HOME, or pass --workspace with a path.")
+    Location::find(arg)
+        .layout(gk_store::data_dir().as_deref())
+        .map_err(|e| match e {
+            StoreError::NoDataDir => OpError::storage("No data folder found: HOME is not set.")
+                .with_hint("Set HOME or XDG_DATA_HOME, or pass --workspace with a path."),
+            e => OpError::invalid(format!("{e}.")),
+        })
 }
 
 fn parse_profile(s: &str) -> Result<Profile, String> {
@@ -206,13 +181,15 @@ mod tests {
 
     #[test]
     fn workspace_names_and_paths() {
+        use std::path::Path;
+
         let dir = tempfile::tempdir().expect("temp dir");
         let path = dir.path().join("ws");
         let layout = workspace_layout(Some(path.to_str().expect("utf-8"))).expect("path");
         assert_eq!(layout.root(), path);
         let layout = workspace_layout(Some("./ws")).expect("relative path");
         assert_eq!(layout.root(), Path::new("./ws"));
-        if data_dir().is_some() {
+        if gk_store::data_dir().is_some() {
             let layout = workspace_layout(Some("Work")).expect("name");
             assert!(layout.root().ends_with("glyphkeel/workspaces/Work"));
             assert!(workspace_layout(None).is_ok());
