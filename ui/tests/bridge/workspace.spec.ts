@@ -419,3 +419,87 @@ test("descriptions and comments in Markdown on the engine: edit, tick, a conflic
   await a.close();
   await b.close();
 });
+
+test("time on the engine: log, edit and delete time, run the timer in two windows, set a reminder", async ({ browser }) => {
+  test.setTimeout(60_000);
+  const page = await browser.newPage();
+  const other = await browser.newPage();
+  await page.goto(PAGE);
+  await other.goto(PAGE);
+  await expect(page.getByTestId("status-workspace")).toHaveText("Personal");
+  await page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: "New project" }).click();
+  const dialog = page.getByRole("dialog", { name: "New project" });
+  await dialog.getByRole("textbox", { name: "Name" }).fill("Attic");
+  await dialog.getByRole("button", { name: "Create project" }).click();
+  await expect(page.getByRole("group", { name: /Board of/ })).toBeVisible();
+  await page.keyboard.type("Insulate the roof");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Escape");
+  const card = lane(page, "Backlog").locator("[data-card]", { hasText: "Insulate the roof" });
+  const key = (await card.getAttribute("data-card")) ?? "";
+  await card.dblclick();
+  const panel = page.getByRole("complementary", { name: new RegExp(`^\\W*Task \\W*${key}`) });
+  await expect(panel.getByRole("heading", { name: "Insulate the roof" })).toBeVisible();
+
+  // Time entries: one typed with a decimal comma, then "+30m".
+  await panel.getByRole("tab", { name: "Time" }).click();
+  await panel.getByRole("button", { name: "Log time" }).click();
+  const form = panel.getByRole("group", { name: "Log time" });
+  await form.getByRole("textbox", { name: "Duration" }).fill("1,5h");
+  await form.getByRole("textbox", { name: "Note" }).fill("Measured the rafters");
+  await form.getByRole("textbox", { name: "Duration" }).press("Enter");
+  const entries = panel.getByRole("list", { name: "Time entries" });
+  await expect(entries.getByRole("listitem")).toHaveCount(1);
+  await expect(entries).toContainText("1h 30m");
+  await panel.getByRole("button", { name: "Log 30 minutes for today" }).click();
+  await expect(entries.getByRole("listitem")).toHaveCount(2);
+  await expect(panel.locator("[data-time-total]")).toHaveText("2h");
+  // The card shows the time spent.
+  await expect(card.getByLabel(/2h.*spent/)).toBeVisible();
+
+  // Edit an entry to a day's work in the workspace's units, then delete the other.
+  const rafters = entries.getByRole("listitem").filter({ hasText: "Measured the rafters" });
+  await rafters.getByRole("button", { name: "Time entry actions" }).click();
+  await page.getByRole("menuitem", { name: "Edit" }).click();
+  await panel.getByRole("textbox", { name: "Duration" }).fill("1d");
+  await panel.getByRole("textbox", { name: "Duration" }).press("Enter");
+  await expect(panel.locator("[data-time-total]")).toHaveText("1d 30m");
+  await entries.getByRole("listitem").filter({ hasNotText: "Measured the rafters" }).getByRole("button", { name: "Time entry actions" }).click();
+  await page.getByRole("menuitem", { name: "Delete" }).click();
+  await expect(entries.getByRole("listitem")).toHaveCount(1);
+  await expect(panel.locator("[data-time-total]")).toHaveText("1d");
+
+  // The timer: started here, it shows in the other window's sidebar, which stops it.
+  await panel.getByRole("button", { name: "Start timer" }).click();
+  await expect(panel.locator("[data-timer-clock]")).toHaveText(/^0:00:0\d$/);
+  const chip = other.getByRole("group", { name: "Timer" });
+  await expect(chip).toHaveAttribute("data-timer-chip", key);
+  await expect(page.getByRole("group", { name: "Timer" })).toBeVisible();
+  await chip.getByRole("button", { name: "Pause the timer" }).click();
+  await expect(panel.getByRole("button", { name: /^Timer paused at/ })).toBeVisible();
+  await chip.getByRole("button", { name: "Stop the timer and log the time" }).click();
+  await expect(other.getByText(/no time was logged/)).toBeVisible();
+  await expect(page.getByRole("group", { name: "Timer" })).toHaveCount(0);
+  await expect(panel.getByRole("button", { name: "Start timer" })).toBeVisible();
+
+  // A reminder some days before the due date, which the engine places on the calendar.
+  await panel.getByRole("button", { name: /^\W*Due\W*: / }).click();
+  await panel.getByLabel("Due", { exact: true }).fill("2030-06-15");
+  await panel.getByLabel("Due", { exact: true }).press("Enter");
+  await expect(panel.getByRole("button", { name: /^\W*Due\W*: \W*Jun 15/ })).toBeVisible();
+  await panel.getByRole("button", { name: /^\W*Reminder\W*: \W*None/ }).click();
+  const reminder = page.getByRole("dialog", { name: "Reminder" });
+  await reminder.getByRole("radio", { name: "Before the due date" }).click();
+  await reminder.getByRole("spinbutton", { name: "Days before the due date" }).fill("2");
+  await reminder.getByRole("button", { name: "Set reminder" }).click();
+  await expect(panel.getByRole("button", { name: /^\W*Reminder\W*: .*Jun 13, 2030.*2\W* days before due/ })).toBeVisible();
+
+  // The time report adds up the week.
+  await page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: "Time report" }).click();
+  await expect(page.locator(`[data-report-row="${key}"]`)).toContainText("1d");
+  await page.getByRole("radio", { name: "Project" }).click();
+  await expect(page.getByRole("columnheader", { name: "Project" })).toBeVisible();
+
+  await page.close();
+  await other.close();
+});

@@ -24,6 +24,7 @@ import {
   saveAttachment,
   type Attached,
 } from "../../ipc/files";
+import { attachmentMarkdown, editorDropAt } from "./MarkdownField";
 import styles from "./TaskPanel.module.css";
 
 /** A size in bytes as people read it: "12 KB", "3.4 MB". */
@@ -133,9 +134,19 @@ export function useFileDrop(task: string, enabled: boolean) {
       }
       setOver(false);
       if (here) {
-        attachDrop(event.id, task).then(report, (error: unknown) => {
-          toasts.show(errorToast(t, error));
-        });
+        // Dropped on an editor of this task, the files also go in its text as links, as when pasted.
+        const insert = editorDropAt(event.x, event.y, task);
+        attachDrop(event.id, task).then(
+          (attached) => {
+            report(attached);
+            if (insert && attached.files.length > 0) {
+              insert(attached.files.map((change) => attachmentMarkdown(change.file)).join(" "));
+            }
+          },
+          (error: unknown) => {
+            toasts.show(errorToast(t, error));
+          },
+        );
       }
     });
   }, [enabled, task, t, toasts, report]);

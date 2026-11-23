@@ -12,12 +12,13 @@ use std::time::Duration;
 
 use gk_api::ops::common::Via;
 use gk_api::{Changed, ErrorCode, OpError};
-use gk_engine::{Confirmation, Context, Engine, EngineConfig};
+use gk_engine::{Confirmation, Context, Engine, EngineConfig, system_clock};
 use gk_store::{WatcherHandle, WorkspaceLayout};
 use serde_json::Value;
 use tauri::ipc::Channel;
 
 use super::windows::Windows;
+use crate::reminders::{self, Notifier};
 
 /// How often other programs' commits are looked for.
 const WATCH_INTERVAL: Duration = Duration::from_millis(250);
@@ -43,6 +44,7 @@ struct Background {
     _watcher: Option<WatcherHandle>,
     stop: Arc<AtomicBool>,
     jobs: Option<JoinHandle<()>>,
+    reminders: Option<reminders::Running>,
 }
 
 impl Workspace {
@@ -81,6 +83,7 @@ impl Workspace {
                 _watcher: watcher,
                 stop,
                 jobs,
+                reminders: None,
             })),
         }
     }
@@ -132,11 +135,36 @@ impl Workspace {
         self.windows.unsubscribe(label);
     }
 
+    /// Starts showing reminders through `notifier`, until the workspace
+    /// closes. Runs whether or not a window is open.
+    pub(crate) fn start_reminders(&self, notifier: Arc<dyn Notifier>) {
+        let Ok(engine) = self.engine() else {
+            return;
+        };
+        let mut background = lock(&self.background);
+        let Some(background) = background.as_mut() else {
+            return;
+        };
+        if background.reminders.is_some() {
+            return;
+        }
+        background.reminders = reminders::start(
+            Arc::downgrade(&engine),
+            engine.subscribe(),
+            system_clock(),
+            notifier,
+            reminders::LONGEST_WAIT,
+        );
+    }
+
     /// Stops the background work and closes the engine, checkpointing the
     /// log. Calls still running keep the engine alive; then it closes when
     /// the last one ends, without the checkpoint.
     pub(crate) fn close(&self) {
-        if let Some(background) = lock(&self.background).take() {
+        if let Some(mut background) = lock(&self.background).take() {
+            if let Some(reminders) = background.reminders.take() {
+                reminders.stop();
+            }
             background.stop.store(true, Ordering::Release);
             if let Some(jobs) = background.jobs {
                 jobs.thread().unpark();

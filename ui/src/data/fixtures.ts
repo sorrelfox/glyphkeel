@@ -12,6 +12,7 @@ export function settings(overrides: Partial<Settings> = {}): Settings {
     file_max_mb: 100,
     hours_per_day: 8,
     reminder_time: "09:00",
+    timer_reminder_hours: 8,
     trash_days: 30,
     week_start: "monday",
     ...overrides,

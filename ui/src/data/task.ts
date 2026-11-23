@@ -12,9 +12,9 @@ import { opPrefix } from "./queries";
 import { type OpFailure } from "./transport";
 
 /** What the panel reads with a task. */
-export const PANEL_PARTS: readonly TaskPart[] = ["subtasks", "links", "files"];
+export const PANEL_PARTS: readonly TaskPart[] = ["subtasks", "links", "files", "time", "reminder"];
 
-/** One task with its subtasks, links and files. */
+/** One task with its subtasks, links, files, time entries and reminder. */
 export function useTaskDetails(key: string) {
   return useOp("task.get", { keys: [key], include: [...PANEL_PARTS] });
 }

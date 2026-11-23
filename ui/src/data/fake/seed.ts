@@ -32,6 +32,12 @@ export function nextId(prefix: string): string {
   return `${prefix}-${ids.toString(36).padStart(5, "0")}`;
 }
 
+/** A new attachment ID: a lower-case UUID, the one form attachment links take. */
+export function nextFileId(): string {
+  ids += 1;
+  return `00000000-0000-4000-8000-${ids.toString(16).padStart(12, "0")}`;
+}
+
 interface StatusSeed {
   name: string;
   category: StatusCategory;
@@ -269,12 +275,16 @@ export function seed(today: Date, seedNumber = 7): FakeState {
     revisions: [],
     activity: [],
     layouts: {},
+    timeEntries: [],
+    timer: null,
+    reminders: [],
     settings: {
       agent_max_profile: "standard",
       days_per_week: 5,
       file_max_mb: 100,
       hours_per_day: 8,
       reminder_time: "09:00",
+      timer_reminder_hours: 8,
       trash_days: 30,
       week_start: "monday",
     },

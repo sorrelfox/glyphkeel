@@ -23,11 +23,14 @@ gk-api = { workspace = true }
 gk-engine = { workspace = true }
 # The workspace folder's layout and the change watcher's handle.
 gk-store = { workspace = true }
+# The moments the reminder list answers with (RFC 3339), for the scheduler.
+jiff = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 # Spelling in the Markdown editor, with the system's Hunspell dictionaries.
 spellbook = { workspace = true }
-tauri = { workspace = true }
+# The tray icon of background mode (libappindicator at run time on Linux).
+tauri = { workspace = true, features = ["tray-icon"] }
 
 # The web view's settings are tightened through WebKitGTK directly.
 [target.'cfg(target_os = "linux")'.dependencies]

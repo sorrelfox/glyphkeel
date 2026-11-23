@@ -16,6 +16,7 @@ import { onOpenLink } from "./ipc/openLinks";
 import { windowReady, type Transport } from "./ipc/ready";
 import { BoardScreen } from "./screens/board/BoardScreen";
 import { OpenTaskScreen, TaskWindowScreen } from "./screens/task/TaskWindow";
+import { TimeReportScreen } from "./screens/time/TimeReport";
 import { AllTasksScreen, TodayScreen } from "./screens/today/Placeholders";
 import { Shell } from "./shell/Shell";
 import { StartupFailure } from "./shell/StartupFailure";
@@ -60,6 +61,9 @@ const todayRoute = createRoute({ getParentRoute: () => shellRoute, path: "/", co
 
 const allTasksRoute = createRoute({ getParentRoute: () => shellRoute, path: "/all", component: AllTasksScreen });
 
+/** The time report: logged time over a range of days. */
+const timeReportRoute = createRoute({ getParentRoute: () => shellRoute, path: "/time", component: TimeReportScreen });
+
 /** A project's board; `task` is the task open in the panel beside it. */
 export const boardRoute = createRoute({
   getParentRoute: () => shellRoute,
@@ -79,7 +83,7 @@ const routeTree = rootRoute.addChildren([
   galleryRoute,
   editorPlaygroundRoute,
   taskWindowRoute,
-  shellRoute.addChildren([todayRoute, allTasksRoute, boardRoute, openTaskRoute]),
+  shellRoute.addChildren([todayRoute, allTasksRoute, timeReportRoute, boardRoute, openTaskRoute]),
 ]);
 
 /**

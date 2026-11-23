@@ -1,0 +1,127 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+   Copyright (C) 2026 Glyphkeel contributors */
+
+/* ---------- the Time tab ---------- */
+
+.timeHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.total {
+  font-weight: 600;
+}
+
+.entries {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.entry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--h-row);
+}
+
+.entryDay {
+  flex: 0 0 64px;
+  color: var(--fg-muted);
+}
+
+.entryDuration {
+  flex: 0 0 72px;
+  font-weight: 500;
+}
+
+.entryNote {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.logForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.logForm .duration {
+  flex: 0 0 110px;
+}
+
+.logForm .day {
+  flex: 0 0 150px;
+}
+
+.logForm .note {
+  flex: 1 1 160px;
+}
+
+.invalid {
+  box-shadow: inset 0 0 0 2px var(--danger);
+}
+
+.error {
+  flex-basis: 100%;
+  color: var(--danger);
+  font-size: var(--fs-small);
+}
+
+/* ---------- the timer button in the action row ---------- */
+
+.timerButton .clock {
+  min-width: 52px;
+  text-align: start;
+}
+
+.long {
+  color: var(--warning);
+}
+
+/* ---------- the reminder ---------- */
+
+.reminderValue {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.reminderDialog {
+  outline: none;
+}
+
+.reminderForm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 300px;
+  padding: 12px;
+}
+
+.reminderRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.reminderInput {
+  flex: 1 1 auto;
+}
+
+.reminderButtons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.daysInput {
+  flex: 0 0 72px;
+}

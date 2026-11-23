@@ -120,6 +120,11 @@ export interface MarkdownEditorHandle {
    * split a surrogate pair.
    */
   applyEdits(edits: readonly TextEdit[]): boolean;
-  /** Inserts text at the selection, with its line breaks converted. */
-  insert(text: string): void;
+  /**
+   * Inserts text at the selection, or at position `at` of the text, with its
+   * line breaks converted.
+   */
+  insert(text: string, at?: number): void;
+  /** The position in the text under a point of the window, if the point is on the text. */
+  positionAt(x: number, y: number): number | null;
 }

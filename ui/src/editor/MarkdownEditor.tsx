@@ -163,11 +163,17 @@ export default function MarkdownEditor(props: MarkdownEditorProps) {
       focus: () => view.current?.focus(),
       text: () => view.current?.state.sliceDoc() ?? known.current,
       applyEdits: (edits) => (view.current ? applyTextEdits(view.current, edits) : false),
-      insert: (text) => {
-        if (view.current) {
-          insertMarkdown(view.current, text, "input");
+      insert: (text, at) => {
+        const editor = view.current;
+        if (!editor) {
+          return;
         }
+        if (at !== undefined) {
+          editor.dispatch({ selection: { anchor: Math.min(at, editor.state.doc.length) } });
+        }
+        insertMarkdown(editor, text, "input");
       },
+      positionAt: (x, y) => view.current?.posAtCoords({ x, y }) ?? null,
     }),
     [],
   );

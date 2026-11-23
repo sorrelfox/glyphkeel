@@ -12,6 +12,7 @@ window-title = Glyphkeel: { $context }
 
 view-today = Today
 view-all-tasks = All tasks
+view-time-report = Time report
 view-gallery = Themes and components
 
 ## Sidebar
@@ -73,6 +74,7 @@ action-close-window = Close the window
 action-quit = Quit
 action-today = Today
 action-all-tasks = All tasks
+action-time-report = Time report
 action-gallery = Themes and components
 action-leave-gallery = Back to the app
 
@@ -561,3 +563,96 @@ preferences-accent = Accent colour
 preferences-density = Density
 theme-system = System
 accent-system = From the desktop
+
+## Time: the Time tab, the timer and quick log
+
+time-title = Time
+time-total = Total
+time-log = Log time
+time-log-save = Log
+time-none = No time logged yet.
+time-entries = Time entries
+time-duration = Duration
+time-duration-invalid = Type a duration from 1 minute to 24 hours, such as 1h 30m, 90m, 1,5h or 1:30.
+time-day = Day
+time-note = Note
+time-note-placeholder = What was done
+time-entry-label = { $day }, { $duration }, by { $author }
+time-entry-menu = Time entry actions
+time-edit = Edit
+time-edit-label = Edit the entry of { $day }
+time-delete = Delete
+time-deleted = Time entry deleted
+time-quick = +30m
+time-quick-label = Log 30 minutes for today
+time-logged-quick = 30 minutes logged on { $key }
+timer-start = Start timer
+timer-stop = Stop the timer and log the time
+timer-pause = Pause the timer
+timer-resume = Go on with the timer
+timer-running-label = Timer running, { $time }. Stop and log the time
+timer-paused-label = Timer paused at { $time }. Stop and log the time
+timer-logged = { $time } logged on { $key }
+timer-nothing-logged = The timer ran under half a minute; no time was logged.
+timer-chip-label = Timer
+timer-chip-open = Timer running, { $time }, on { $key }: { $title }. Open the task
+timer-chip-open-paused = Timer paused at { $time }, on { $key }: { $title }. Open the task
+timer-chip-open-long = Timer running for more than { $hours } hours, { $time }, on { $key }: { $title }. Open the task
+
+## Reminders
+
+prop-reminder = Reminder
+reminder-title = Reminder
+reminder-kind = When it reminds
+reminder-at = At a time
+reminder-due = Before the due date
+reminder-moment = Date and time
+reminder-days = Days before the due date
+reminder-days-before =
+    { $count ->
+        [one] day before due, at
+       *[other] days before due, at
+    }
+reminder-before-due =
+    { $count ->
+        [0] on the due date
+        [one] 1 day before due
+       *[other] { $count } days before due
+    }
+reminder-time = Time of day
+reminder-time-default = Empty: the workspace's reminder time, { $time }
+reminder-no-due = The task has no due date yet; the reminder waits for one.
+reminder-note = Reminder text
+reminder-note-placeholder = Text of the reminder (optional)
+reminder-set = Set reminder
+reminder-remove = Remove
+
+## History of time and reminders
+
+history-time-logged = Time logged: { $time }
+history-time-edited = Time entry changed
+history-time-deleted = Time entry deleted
+history-time-restored = Time entry restored
+history-reminder-set = Reminder set
+history-reminder-cleared = Reminder removed
+
+## The time report
+
+report-from = First day
+report-to = Last day
+report-this-week = This week
+report-last-week = Last week
+report-this-month = This month
+report-last-month = Last month
+report-project = Project
+report-all-projects = All projects
+report-group-by = Group by
+report-by-day = Day
+report-by-task = Task
+report-by-project = Project
+report-entries = Entries
+report-time = Time
+report-share = Share of the time
+report-total = Total
+report-none = No time logged in these days.
+report-table = Time logged from { $from } to { $to }

@@ -7,6 +7,7 @@
 // Release builds on Windows have no console window.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod background;
 mod files;
 #[cfg(target_os = "linux")]
 mod instance;
@@ -14,7 +15,10 @@ mod ipc;
 mod links;
 mod main_window;
 mod navigation;
+#[cfg(target_os = "linux")]
+mod notifications;
 mod open_links;
+mod reminders;
 mod spell;
 mod start;
 mod task_window;
@@ -25,12 +29,12 @@ mod window_state;
 
 use std::process::ExitCode;
 use std::sync::Arc;
-#[cfg(target_os = "linux")]
 use std::sync::atomic::Ordering;
 
 use gk_engine::{EngineConfig, Role};
 use tauri::{AppHandle, Manager, RunEvent, WindowEvent};
 
+use crate::background::{BackgroundMode, MainTitleBar};
 use crate::ipc::Workspace;
 use crate::start::Shown;
 use crate::title_bar::TitleBar;
@@ -61,6 +65,8 @@ fn main() -> ExitCode {
         .manage(Shown::default())
         .manage(open_links::OpenLinks::default())
         .manage(files::Drops::default())
+        .manage(BackgroundMode::from_env())
+        .manage(MainTitleBar(title_bar))
         .invoke_handler(tauri::generate_handler![
             start::window_ready,
             ipc::op,
@@ -74,7 +80,8 @@ fn main() -> ExitCode {
             files::save_file,
             links::open_link,
             open_links::watch_open_links,
-            task_window::open_task_window
+            task_window::open_task_window,
+            quit_app
         ])
         // Attached images, by attachment ID, for the page's <img> elements.
         .register_asynchronous_uri_scheme_protocol(files::SCHEME, |ctx, request, responder| {
@@ -96,6 +103,18 @@ fn main() -> ExitCode {
             // The workspace opens before the window, so the page's first
             // calls find it.
             app.manage(Arc::new(open_workspace(app.handle())));
+            // Reminders show whether or not a window is open.
+            app.state::<Arc<Workspace>>()
+                .start_reminders(notifier(app.handle()));
+            if app.state::<BackgroundMode>().enabled() {
+                match background::tray(app.handle()) {
+                    // The icon stays as long as the app keeps it.
+                    Ok(tray) => {
+                        app.manage(tray);
+                    }
+                    Err(err) => eprintln!("glyphkeel-app: no tray icon: {err}"),
+                }
+            }
             // A task named by the first link opens with the window; the
             // others go to the page once it listens.
             let mut first_links = first_links;
@@ -113,6 +132,10 @@ fn main() -> ExitCode {
         })
         .on_window_event(|window, event| match event {
             WindowEvent::Destroyed => {
+                // A main window opened again shows on its page's first screen.
+                if window.label() == main_window::LABEL {
+                    window.state::<Shown>().0.store(false, Ordering::SeqCst);
+                }
                 if let Some(workspace) = window.try_state::<Arc<Workspace>>() {
                     workspace.unsubscribe(window.label());
                 }
@@ -126,12 +149,18 @@ fn main() -> ExitCode {
         .build(tauri::generate_context!());
     match built {
         Ok(app) => {
-            app.run(|app, event| {
-                if matches!(event, RunEvent::Exit)
-                    && let Some(workspace) = app.try_state::<Arc<Workspace>>()
-                {
-                    workspace.close();
+            app.run(|app, event| match event {
+                // The last window closed: in background mode the app keeps
+                // running for reminders. Quitting asks with an exit code.
+                RunEvent::ExitRequested {
+                    code: None, api, ..
+                } if app.state::<BackgroundMode>().enabled() => api.prevent_exit(),
+                RunEvent::Exit => {
+                    if let Some(workspace) = app.try_state::<Arc<Workspace>>() {
+                        workspace.close();
+                    }
                 }
+                _ => {}
             });
             ExitCode::SUCCESS
         }
@@ -188,14 +217,48 @@ fn forward_activations(
 
 #[cfg(target_os = "linux")]
 fn on_activation(app: &AppHandle, activation: instance::Activation) {
-    // The page opens the tasks the links name.
+    // The page opens the tasks the links name, once it listens.
     app.state::<open_links::OpenLinks>().push(&activation.links);
-    // Before the page's first screen the window isn't shown yet; it comes
-    // forward by itself when it is.
-    if !app.state::<Shown>().0.load(Ordering::SeqCst) {
-        return;
+    // The window comes forward, or back after background mode closed it.
+    background::show_main(app, None, activation.token);
+}
+
+/// Ends the app, also in background mode: the page's Quit.
+#[tauri::command]
+fn quit_app(app: AppHandle) {
+    app.exit(0);
+}
+
+/// Where reminders show: the desktop's notification server, whose "Open"
+/// brings the task forward in the main window.
+#[cfg(target_os = "linux")]
+fn notifier(app: &AppHandle) -> Arc<dyn reminders::Notifier> {
+    let handle = app.clone();
+    let on_open: notifications::OnOpen = Box::new(move |task, token| {
+        let app = handle.clone();
+        let _ = handle.run_on_main_thread(move || {
+            background::show_main(&app, Some(task), token);
+        });
+    });
+    match notifications::DesktopNotifier::connect(on_open) {
+        Ok(notifier) => Arc::new(notifier),
+        Err(err) => {
+            eprintln!("glyphkeel-app: no desktop notifications, reminders go to the log: {err}");
+            Arc::new(LogNotifier)
+        }
     }
-    if let Some(window) = app.get_webview_window(main_window::LABEL) {
-        main_window::activate(&window, activation.token.as_deref());
+}
+
+#[cfg(not(target_os = "linux"))]
+fn notifier(_app: &AppHandle) -> Arc<dyn reminders::Notifier> {
+    Arc::new(LogNotifier)
+}
+
+/// Reminders without a notification server: written to the log.
+struct LogNotifier;
+
+impl reminders::Notifier for LogNotifier {
+    fn show(&self, notice: &reminders::Notice) {
+        eprintln!("glyphkeel-app: reminder: {}: {}", notice.title, notice.body);
     }
 }

@@ -21,9 +21,12 @@ export interface DrawOptions {
   current: () => boolean;
 }
 
-/** The attachment ID of a `gk-file:` address, as the renderer writes it. */
+/**
+ * The attachment ID of a `gk-file:` address, in the one form the renderer
+ * keeps: `gk-file://` and the attachment's ID, a UUID in lower case.
+ */
 export function attachmentOf(src: string): string | null {
-  const found = /^gk-file:\/\/(?:localhost\/)?([0-9A-Za-z-]+)\/?$/.exec(src);
+  const found = /^gk-file:\/\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/.exec(src);
   return found?.[1] ?? null;
 }
 

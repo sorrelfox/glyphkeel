@@ -11,16 +11,18 @@ import { PriorityGlyph, TypeGlyph } from "../../components/Glyphs";
 import { useToasts } from "../../components/Toasts";
 import { useProject, useUpdateTask } from "../../data/board";
 import { PRIORITIES, type Project, type Task, type TaskField, type TaskUpdateInput } from "../../data/catalog";
-import { errorToast, useCall, useCommand, useOp } from "../../data/hooks";
+import { errorToast, useCall, useCommand } from "../../data/hooks";
 import { useTaskDetails } from "../../data/task";
 import { useT } from "../../i18n/I18n";
 import { openTaskWindow } from "../../ipc/taskWindow";
 import { useDayFormat } from "../board/CardView";
-import { dueState, formatMinutes, isoDay, parseDuration } from "../board/model";
+import { useDurations } from "../../data/time";
+import { dueState, isoDay } from "../board/model";
 import { ActivityTabs, Composer, useMomentFormat } from "./Activity";
 import { DescriptionSection, type DescriptionView } from "./Description";
 import { FilesSection, useFileDrop } from "./Files";
 import { LinksSection, SubtasksSection } from "./Sections";
+import { QuickLog, ReminderValue, TimerButton } from "./Time";
 import styles from "./TaskPanel.module.css";
 
 interface TaskPanelProps {
@@ -102,7 +104,7 @@ function Loaded({
   const toasts = useToasts();
   const update = useUpdateTask();
   const call = useCall();
-  const settings = useOp("settings.get", {});
+  const durations = useDurations();
   const moment = useMomentFormat();
   const duplicate = useCommand("task.duplicate", { undoable: t("panel-duplicated") });
   const release = useCommand("task.release");
@@ -239,6 +241,8 @@ function Loaded({
               {t("card-blocked")}
             </span>
           )}
+          <TimerButton task={task} readOnly={readOnly} />
+          <QuickLog task={task} readOnly={readOnly} />
           {task.claim && (
             <span className={classes("chip hue-purple", styles.claim)} role="note" aria-label={t("panel-claimed", { agent: task.claim.agent, time: moment(task.claim.until) })}>
               <Bot className="ic s" />
@@ -301,17 +305,15 @@ function Loaded({
               label={t("prop-estimate")}
               value={estimate}
               readOnly={readOnly}
-              hoursPerDay={settings.data?.hours_per_day}
-              daysPerWeek={settings.data?.days_per_week}
               onChange={(minutes) => { setOrClear("estimate", minutes === null ? null : `${String(minutes)}m`); }}
             />
           </Prop>
           <Prop label={t("prop-spent")}>
             <span className={classes("num", styles.static)}>
-              {spent === 0 && left === null ? <span className="faint">{t("prop-none")}</span> : formatMinutes(spent)}
+              {spent === 0 && left === null ? <span className="faint">{t("prop-none")}</span> : durations.format(spent)}
               {left !== null && (
                 <span className={left < 0 ? styles.over : "faint"}>
-                  {left < 0 ? t("prop-over-by", { time: formatMinutes(-left) }) : t("prop-left", { time: formatMinutes(left) })}
+                  {left < 0 ? t("prop-over-by", { time: durations.format(-left) }) : t("prop-left", { time: durations.format(left) })}
                 </span>
               )}
             </span>
@@ -332,6 +334,9 @@ function Loaded({
             ) : (
               <span className="faint">{t("prop-none")}</span>
             )}
+          </Prop>
+          <Prop label={t("prop-reminder")} full>
+            <ReminderValue task={task} readOnly={readOnly} />
           </Prop>
         </div>
 
@@ -355,9 +360,9 @@ function Loaded({
   );
 }
 
-function Prop({ label, children, wide = false }: { label: string; children: ReactNode; wide?: boolean }) {
+function Prop({ label, children, wide = false, full = false }: { label: string; children: ReactNode; wide?: boolean; full?: boolean }) {
   return (
-    <dl className={classes("prop", styles.prop, wide && styles.wide)}>
+    <dl className={classes("prop", styles.prop, wide && styles.wide, full && styles.full)}>
       <dt>{label}</dt>
       <dd>{children}</dd>
     </dl>
@@ -489,18 +494,15 @@ function DurationValue({
   label,
   value,
   readOnly,
-  hoursPerDay,
-  daysPerWeek,
   onChange,
 }: {
   label: string;
   value: number | null;
   readOnly: boolean;
-  hoursPerDay: number | undefined;
-  daysPerWeek: number | undefined;
   onChange: (value: number | null) => void;
 }) {
   const t = useT();
+  const durations = useDurations();
   const [editing, setEditing] = useState<string | null>(null);
   const [invalid, setInvalid] = useState(false);
   if (editing !== null) {
@@ -512,7 +514,7 @@ function DurationValue({
         setEditing(null);
         return;
       }
-      const minutes = parseDuration(editing, hoursPerDay, daysPerWeek);
+      const minutes = durations.parse(editing);
       if (minutes === null) {
         setInvalid(true);
         return;
@@ -548,8 +550,8 @@ function DurationValue({
     );
   }
   return (
-    <Button className="val num" isDisabled={readOnly} aria-label={t("prop-date-value", { name: label, value: value === null ? t("prop-none") : formatMinutes(value) })} onPress={() => { setEditing(value === null ? "" : formatMinutes(value)); }}>
-      {value === null ? <span className="faint">{t("prop-none")}</span> : formatMinutes(value)}
+    <Button className="val num" isDisabled={readOnly} aria-label={t("prop-date-value", { name: label, value: value === null ? t("prop-none") : durations.format(value) })} onPress={() => { setEditing(value === null ? "" : durations.format(value)); }}>
+      {value === null ? <span className="faint">{t("prop-none")}</span> : durations.format(value)}
     </Button>
   );
 }

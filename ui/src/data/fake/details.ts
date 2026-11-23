@@ -5,6 +5,7 @@
 // comments and files, and the activity log's record of a change.
 
 import { type EntityChange, type FieldChange, type FileKind } from "../../generated/ops";
+import { nextFileId } from "./seed";
 import { type FakeState, type FakeTask } from "./state";
 
 /** What the bytes of a file are, from their first bytes, the way the engine sniffs them. */
@@ -76,7 +77,7 @@ export function materialize(state: FakeState, agent: string, nextId: (prefix: st
     for (let index = 0; index < task.files; index += 1) {
       const text = `Notes ${String(index + 1)} for ${task.title}.\n`;
       state.files.push({
-        id: nextId("f"),
+        id: nextFileId(),
         taskId: task.id,
         commentId: null,
         name: `notes-${String(index + 1)}.txt`,

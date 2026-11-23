@@ -153,6 +153,43 @@ export interface FakeClaim {
   until: string;
 }
 
+export interface FakeTimeEntry {
+  id: string;
+  taskId: string;
+  /** The day of the work, `YYYY-MM-DD`. */
+  date: string;
+  minutes: number;
+  note: string;
+  author: Actor;
+  createdAt: string;
+  editedAt: string | null;
+  version: number;
+  deletedAt: string | null;
+}
+
+/** The workspace's one timer. */
+export interface FakeTimer {
+  taskId: string;
+  startedAt: string;
+  /** When the current running stretch began; null while paused. */
+  runningSince: string | null;
+  /** Earlier running stretches, in milliseconds. */
+  elapsedMs: number;
+  note: string;
+}
+
+/** A task's personal reminder: a moment, or days before the due date. */
+export interface FakeReminder {
+  id: string;
+  taskId: string;
+  at: string | null;
+  daysBeforeDue: number | null;
+  time: string | null;
+  note: string;
+  createdAt: string;
+  acknowledged: boolean;
+}
+
 export interface FakeState {
   projects: FakeProject[];
   tasks: FakeTask[];
@@ -166,6 +203,9 @@ export interface FakeState {
   activity: ActivityEntry[];
   /** Board layouts by project ID. */
   layouts: Record<string, BoardLayout>;
+  timeEntries: FakeTimeEntry[];
+  timer: FakeTimer | null;
+  reminders: FakeReminder[];
   settings: Settings;
   workspaceName: string;
   seq: number;

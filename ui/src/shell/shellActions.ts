@@ -5,10 +5,10 @@ import { keysOf, type Action, type ActionGroup } from "../actions/actions";
 import { appWindow } from "../ipc/window";
 import { focusRegion } from "./regions";
 
-export type View = "today" | "all-tasks" | "project";
+export type View = "today" | "all-tasks" | "time" | "project";
 
 export interface ShellCommands {
-  setView: (view: "today" | "all-tasks") => void;
+  setView: (view: "today" | "all-tasks" | "time") => void;
   toggleSidebar: () => void;
   showShortcuts: () => void;
   openPreferences: () => void;
@@ -34,6 +34,7 @@ export function shellActions(commands: ShellCommands): Action[] {
     action("palette.open", "action-palette", "navigation", nothing, UNAVAILABLE),
     action("nav.today", "action-today", "navigation", () => { commands.setView("today"); }),
     action("nav.allTasks", "action-all-tasks", "navigation", () => { commands.setView("all-tasks"); }),
+    action("nav.timeReport", "action-time-report", "navigation", () => { commands.setView("time"); }),
     action("sidebar.toggle", "action-toggle-sidebar", "window", commands.toggleSidebar),
     action("focus.nextRegion", "action-next-region", "window", () => { focusRegion(1); }),
     action("focus.previousRegion", "action-previous-region", "window", () => { focusRegion(-1); }),
@@ -48,8 +49,8 @@ export function shellActions(commands: ShellCommands): Action[] {
     action("app.preferences", "action-preferences", "app", commands.openPreferences),
     action("app.about", "action-about", "app", nothing, UNAVAILABLE),
     action("window.close", "action-close-window", "window", () => void appWindow.close()),
-    // One window for now: quitting closes it.
-    action("app.quit", "action-quit", "app", () => void appWindow.close()),
+    // Quitting ends the app, also when it would keep running in the background.
+    action("app.quit", "action-quit", "app", () => void appWindow.quit()),
   ];
   if (commands.openGallery) {
     actions.push(action("dev.gallery", "action-gallery", "app", commands.openGallery));

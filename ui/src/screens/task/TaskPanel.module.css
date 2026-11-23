@@ -86,6 +86,11 @@
   grid-template-columns: 76px minmax(0, 1fr);
 }
 
+/* A row of its own, across both columns: the reminder. */
+.full {
+  grid-column: 1 / -1;
+}
+
 /* Labels wrap inside their cell. */
 .wide > dd {
   flex-wrap: wrap;
