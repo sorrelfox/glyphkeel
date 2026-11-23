@@ -8,7 +8,8 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::ops::{
-    agent, board, comment, description, file, history, project, settings, task, time, workspace,
+    agent, board, bulk, comment, description, file, history, project, query, settings, task, time,
+    view, workspace,
 };
 use crate::schema;
 
@@ -175,10 +176,12 @@ pub static CATALOG: &[OpDescriptor] = &[
     project::LABEL_CREATE,
     project::LABEL_UPDATE,
     project::LABEL_DELETE,
+    query::TASK_SEARCH,
     task::TASK_GET,
     task::TASK_CREATE,
     task::TASK_UPDATE,
     task::TASK_MOVE,
+    bulk::TASK_BULK_UPDATE,
     task::TASK_REORDER_SUBTASK,
     description::TASK_RESOLVE_CONFLICT,
     description::CHECKLIST_UPDATE,
@@ -209,6 +212,11 @@ pub static CATALOG: &[OpDescriptor] = &[
     board::BOARD_GET,
     board::LAYOUT_GET,
     board::LAYOUT_UPDATE,
+    view::VIEW_LIST,
+    view::VIEW_CREATE,
+    view::VIEW_UPDATE,
+    view::VIEW_DELETE,
+    query::QUERY_PARSE,
     file::FILE_GET,
     file::FILE_READ,
     file::FILE_THUMBNAIL,

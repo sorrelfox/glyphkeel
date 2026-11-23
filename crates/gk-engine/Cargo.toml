@@ -15,6 +15,7 @@ publish.workspace = true
 gk-api = { workspace = true }
 gk-core = { workspace = true }
 gk-markdown = { workspace = true }
+gk-query = { workspace = true }
 gk-store = { workspace = true }
 image = { workspace = true }
 jiff = { workspace = true }

@@ -1,0 +1,6 @@
+---
+source: crates/gk-cli/tests/commands.rs
+expression: stderr(&out)
+---
+glyphkeel: Unknown field "stauts". Did you mean "status"?
+field: query

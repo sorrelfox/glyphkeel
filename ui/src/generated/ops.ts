@@ -208,6 +208,88 @@ export type BoardLayout = {
 /** Where an agent brief comes from. */
 export type BriefSource = "wiki_page" | "description" | "none";
 
+/** The change to make to every task. Fields left out stay as they are. */
+export type BulkChanges = {
+  /** Labels to add. */
+  add_labels?: string[];
+  /** Fields to clear. */
+  clear?: TaskField[];
+  /** The due date, written as for `start_date`. */
+  due_date?: string | null;
+  /** The estimate, as a duration (`1d 4h`, `90m`). */
+  estimate?: string | null;
+  /** Replace the labels with these. */
+  labels?: string[] | null;
+  /** Make them subtasks of this task. */
+  parent?: string | null;
+  /** The priority. */
+  priority?: Priority | null;
+  /** Move them to this project (new keys; old keys forward). */
+  project?: string | null;
+  /** Labels to take off. */
+  remove_labels?: string[];
+  /** Move due dates the same way. */
+  shift_due?: string | null;
+  /** Move start dates by calendar days, weeks, months or years (`+2d`, `-1w`); tasks without one keep none. */
+  shift_start?: string | null;
+  /** The start date: `YYYY-MM-DD`, or `today`, `fri`, `next mon`, `+3d`. */
+  start_date?: string | null;
+  /** Move to the status of this name (in each task's project). */
+  status?: string | null;
+  /** The type of this name. */
+  type?: string | null;
+};
+
+/** A field of one task before and after. */
+export type BulkFieldChange = {
+  /** Its value after; left out when empty. */
+  after?: string;
+  /** Its value before; left out when empty. */
+  before?: string;
+  /** The field. */
+  field: string;
+};
+
+/** One task of a bulk change. */
+export type BulkItem = {
+  /** What changes, or changed; empty when it already was as asked. */
+  changes: BulkFieldChange[];
+  /** Its key (after the change). */
+  key: string;
+  /** Its title. */
+  title: string;
+};
+
+/** What a bulk change does or did. */
+export type BulkResult = {
+  /** How many of them change. */
+  changed: number;
+  /** How many tasks the change is for; pass it as `expected_count`. */
+  count: number;
+  /** Only a preview: nothing changed. */
+  dry_run: boolean;
+  /** The history group, for revert and Undo; left out for a preview or when nothing changed. */
+  group?: string;
+  /** Every task, with what changes. */
+  items: BulkItem[];
+  /** Problems that did not stop the change. */
+  warnings?: string[];
+};
+
+/** A bulk change. */
+export type BulkUpdateInput = {
+  /** The change. */
+  changes: BulkChanges;
+  /** Only show what would change; default true. Turn it off to make the change. */
+  dry_run?: boolean | null;
+  /** How many tasks the change is for, from the preview; needed to make the change, which stops when the tasks now number otherwise. */
+  expected_count?: number | null;
+  /** The tasks, by key or ID. Give these or `query`. */
+  keys?: string[];
+  /** A query choosing the tasks (`project:TM label:old is:open`). */
+  query?: string | null;
+};
+
 /** The caller of an operation as the engine sees it. */
 export type Caller = {
   /** The person or the agent. */
@@ -770,6 +852,78 @@ export type Link = {
 /** How a link reads from one task. */
 export type LinkKind = "blocks" | "blocked_by" | "relates" | "duplicates" | "duplicated_by" | "clones" | "cloned_by";
 
+/** Totals over every matching task, not only the page. */
+export type ListTotals = {
+  /** Matching tasks. */
+  count: number;
+  /** Their estimates added up, in minutes. */
+  estimate_minutes: number;
+  /** Of them, open. */
+  open: number;
+  /** Estimate minus logged time over the tasks with an estimate, in minutes. */
+  remaining_minutes: number;
+  /** Their logged time added up, in minutes. */
+  spent_minutes: number;
+};
+
+/** A task as lists show it. */
+export type ListedTask = {
+  /** Whether a task that blocks it is still open. */
+  blocked: boolean;
+  /** The description's checklist. */
+  checklist: Checklist;
+  /** The agent that claimed it, while the claim lasts. */
+  claim?: Claim;
+  /** When it was closed; left out while open. */
+  closed_at?: string;
+  /** How many comments it has. */
+  comment_count: number;
+  /** When it was created (RFC 3339, UTC). */
+  created_at: string;
+  /** Who created it. */
+  created_by: Actor;
+  /** The due date. */
+  due_date?: string;
+  /** The estimate in minutes. */
+  estimate_minutes?: number;
+  /** How many files are attached to it and to its comments. */
+  file_count: number;
+  /** The task's ID. */
+  id: string;
+  /** The task's key. */
+  key: string;
+  /** Its labels. */
+  labels: LabelRef[];
+  /** The parent task's key, for a subtask. */
+  parent?: string;
+  /** Its priority. */
+  priority: Priority;
+  /** Its progress in percent. */
+  progress_percent: number;
+  /** Its project's key. */
+  project: string;
+  /** Its place in its status column. */
+  rank: string;
+  /** Estimate minus logged time, in minutes; only with an estimate. */
+  remaining_minutes?: number;
+  /** Logged time in minutes. */
+  spent_minutes: number;
+  /** The start date. */
+  start_date?: string;
+  /** Its status. */
+  status: StatusRef;
+  /** Its subtasks: closed and all. */
+  subtask_count: Checklist;
+  /** Its title. */
+  title: string;
+  /** Its type. */
+  type: TypeRef;
+  /** When anything about it last changed. */
+  updated_at: string;
+  /** Its version, for `expected_version`. */
+  version: number;
+};
+
 /** Which parts of a project are switched on. */
 export type Modules = {
   /** The board. */
@@ -818,6 +972,26 @@ export type Origin = {
   session?: string;
   /** The program: the app, the command line or MCP. */
   via: Via;
+};
+
+/** A query as the query field shows it. */
+export type ParsedQuery = {
+  /** The query has `OR` or parentheses: it is edited as text. */
+  advanced: boolean;
+  /** The chips, when the query is a plain AND of conditions. */
+  chips?: QueryChip[];
+  /** The first mistake, if any. */
+  error?: QueryProblem;
+  /** The field registry, when asked for. */
+  fields?: QueryField[];
+  /** The query in its normal form; left out when it doesn't read. */
+  normalized?: string;
+  /** The sort keys of its `sort:`, `-` for descending. */
+  sort?: string[];
+  /** The highlighted pieces, in order. */
+  tokens: QueryToken[];
+  /** Whether the query can run: it reads, fits the fields and names only what exists. */
+  valid: boolean;
 };
 
 /** A task's priority. */
@@ -1030,6 +1204,69 @@ export type ProjectUpdateInput = {
   types?: TypeChange[];
 };
 
+/** One chip of the condition builder. */
+export type QueryChip = {
+  /** The field; left out for the free-text chip. */
+  field?: string;
+  /** "is not" or "doesn't contain". */
+  negated: boolean;
+  /** The operator (`:`, `=`, `<`, `<=`, `>`, `>=`); left out for text. */
+  op?: string;
+  /** The text the chip stands for; editing the chip replaces only these. */
+  ranges: TextRange[];
+  /** The values, or the words and phrases of the text chip. */
+  values: string[];
+};
+
+/** One field of the query language. */
+export type QueryField = {
+  /** Other names for it. */
+  aliases?: string[];
+  /** Its fixed values, when it has some. */
+  choices?: string[];
+  /** Its name. */
+  name: string;
+  /** The operators it takes. */
+  operators: string[];
+  /** Whether `a..b` ranges work. */
+  ranges: boolean;
+  /** Whether it can be a sort key. */
+  sortable: boolean;
+  /** The values it takes, in words. */
+  values: string;
+};
+
+/** A query to read for the query field. */
+export type QueryParseInput = {
+  /** Also return the field registry, for completion. */
+  fields?: boolean;
+  /** The query text. */
+  query: string;
+};
+
+/** A mistake in a query. */
+export type QueryProblem = {
+  /** The message's arguments. */
+  args?: Record<string, string>;
+  /** The message in English. */
+  message: string;
+  /** The message's ID in the message files, for translation. */
+  message_id: string;
+  /** Where the mistake is. */
+  range: TextRange;
+};
+
+/** A highlighted piece of the query text. */
+export type QueryToken = {
+  /** What it is. */
+  kind: QueryTokenKind;
+  /** Where it is. */
+  range: TextRange;
+};
+
+/** What a piece of the query text is. */
+export type QueryTokenKind = "field" | "operator" | "value" | "comma" | "keyword" | "negation" | "paren" | "text" | "key" | "sort" | "error";
+
 /** A link to add or remove. */
 export type RelationInput = {
   /** The task: its key or ID. */
@@ -1231,6 +1468,38 @@ export type RevisionList = {
 
 /** What became of a description that was saved. */
 export type SaveOutcome = "saved" | "merged" | "conflict" | "unchanged";
+
+/** A saved view. */
+export type SavedView = {
+  /** The columns shown, in order. */
+  columns?: string[];
+  /** When it was created (RFC 3339, UTC). */
+  created_at: string;
+  /** What it is for. */
+  description?: string;
+  /** The field rows are grouped by. */
+  group_by?: string;
+  /** Its ID. */
+  id: string;
+  /** Shown first when its screen opens. */
+  is_default: boolean;
+  /** The screen it is for. */
+  kind: ViewKind;
+  /** Its name. */
+  name: string;
+  /** The project's key; left out for a view of the whole workspace. */
+  project?: string;
+  /** The query text. */
+  query: string;
+  /** Its place among the views. */
+  rank: string;
+  /** The order when the query has no `sort:` (`due,-priority`). */
+  sort?: string;
+  /** The columns totalled (`estimate`, `spent`, `remaining`). */
+  totals?: string[];
+  /** When it last changed. */
+  updated_at: string;
+};
 
 /** A setting that can be set back to its default. */
 export type SettingKey = "trash_days" | "reminder_time" | "hours_per_day" | "days_per_week" | "week_start" | "file_max_mb" | "timer_reminder_hours";
@@ -1678,6 +1947,38 @@ export type TaskResolveInput = {
   text?: string | null;
 };
 
+/** Which tasks to list. */
+export type TaskSearchInput = {
+  /** The `next_cursor` of the page before. */
+  cursor?: string | null;
+  /** With `project`: its sub-projects' tasks too. */
+  include_subprojects?: boolean;
+  /** Tasks per page, 1 to 200; default 50. */
+  limit?: number | null;
+  /** Only this project (key or ID). */
+  project?: string | null;
+  /** The query, for example `is:open due<+7d sort:due`; empty lists every open and closed task of active projects. */
+  query?: string;
+  /** The order when the query has no `sort:`, written like its keys (`due,-priority`). Default: by relevance for text searches, else by status, then place on the board. */
+  sort?: string | null;
+};
+
+/** One page of matching tasks. */
+export type TaskSearchResult = {
+  /** The tasks of this page, in order. */
+  items: ListedTask[];
+  /** Pass as `cursor` for the next page; left out on the last page. */
+  next_cursor?: string;
+  /** The query in its normal form. */
+  query: string;
+  /** The order used, as sort keys (`-` for descending). */
+  sort: string[];
+  /** How many tasks match. */
+  total: number;
+  /** Totals over every matching task. */
+  totals: ListTotals;
+};
+
 /** A task type. */
 export type TaskType = {
   /** Its shape. */
@@ -1742,6 +2043,14 @@ export type TextEdit = {
   new_text: string;
   /** The text to replace; it must occur exactly once. */
   old_text: string;
+};
+
+/** A range of the query text, in UTF-16 code units (as the page's editor counts). */
+export type TextRange = {
+  /** The first unit. */
+  from: number;
+  /** One past the last unit. */
+  to: number;
 };
 
 /** A thumbnail of an attached image. */
@@ -2056,6 +2365,98 @@ export type UndoResult = {
 /** The program a change came through. */
 export type Via = "app" | "cli" | "mcp";
 
+/** A view after a change. */
+export type ViewChange = {
+  /** Whether it was deleted. */
+  deleted?: boolean;
+  /** The history group, for revert and Undo; left out when nothing changed. */
+  group?: string;
+  /** The view after the change (before it, for a deletion). */
+  view: SavedView;
+};
+
+/** A new saved view. */
+export type ViewCreateInput = {
+  /** The columns shown, in order. */
+  columns?: string[];
+  /** What it is for. */
+  description?: string | null;
+  /** The field rows are grouped by. */
+  group_by?: string | null;
+  /** Make it the screen's default view. */
+  is_default?: boolean;
+  /** The screen; default: the list. */
+  kind?: ViewKind | null;
+  /** Its name, unique among the views of its project and screen. */
+  name: string;
+  /** The project (key or ID); left out: the whole workspace. */
+  project?: string | null;
+  /** The query text; it must be valid. */
+  query: string;
+  /** The order when the query has no `sort:`. */
+  sort?: string | null;
+  /** The columns totalled. */
+  totals?: string[];
+};
+
+/** Which view to delete. */
+export type ViewDeleteInput = {
+  /** With a name: the view's project (key or ID). */
+  project?: string | null;
+  /** The view: its ID, or its name. */
+  view: string;
+};
+
+/** A view field that can be cleared. */
+export type ViewField = "description" | "columns" | "sort" | "group_by" | "totals";
+
+/** Which screen a view is for. */
+export type ViewKind = "list" | "board" | "gantt" | "calendar";
+
+/** Saved views, in order. */
+export type ViewList = {
+  /** The views. */
+  items: SavedView[];
+  /** How many. */
+  total: number;
+};
+
+/** Which views to list. */
+export type ViewListInput = {
+  /** Every view, of every project and the workspace. */
+  all?: boolean;
+  /** Only views for this screen. */
+  kind?: ViewKind | null;
+  /** The views of this project (key or ID); left out: the views of the whole workspace. */
+  project?: string | null;
+};
+
+/** Changes to a saved view; fields left out keep their value. */
+export type ViewUpdateInput = {
+  /** Fields to clear. */
+  clear?: ViewField[];
+  /** New columns. */
+  columns?: string[] | null;
+  /** A new description. */
+  description?: string | null;
+  /** A new grouping. */
+  group_by?: string | null;
+  /** Make it, or stop it being, the screen's default view. */
+  is_default?: boolean | null;
+  /** A new name. */
+  name?: string | null;
+  /** With a name: the view's project (key or ID). */
+  project?: string | null;
+  /** A new query. */
+  query?: string | null;
+  /** A new order. */
+  sort?: string | null;
+  /** New totals. */
+  totals?: string[] | null;
+  /** The view: its ID, or its name. */
+  view: string;
+};
+
 /** The first day of the week. */
 export type WeekStart = "monday" | "saturday" | "sunday";
 
@@ -2116,10 +2517,12 @@ export interface OpMap {
   "label.create": { input: LabelCreateInput; output: ProjectChange; safety: "write"; kind: "command" };
   "label.update": { input: LabelUpdateInput; output: ProjectChange; safety: "write"; kind: "command" };
   "label.delete": { input: LabelDeleteInput; output: ProjectChange; safety: "permanent"; kind: "command" };
+  "task.search": { input: TaskSearchInput; output: TaskSearchResult; safety: "read"; kind: "query" };
   "task.get": { input: TaskGetInput; output: TaskList; safety: "read"; kind: "query" };
   "task.create": { input: TaskCreateInput; output: TaskChange; safety: "write"; kind: "command" };
   "task.update": { input: TaskUpdateInput; output: TaskChange; safety: "write"; kind: "command" };
   "task.move": { input: TaskMoveInput; output: TaskChange; safety: "write"; kind: "command" };
+  "task.bulk_update": { input: BulkUpdateInput; output: BulkResult; safety: "write"; kind: "command" };
   "task.reorder_subtask": { input: SubtaskReorderInput; output: TaskChange; safety: "write"; kind: "command" };
   "task.resolve_conflict": { input: TaskResolveInput; output: TaskChange; safety: "write"; kind: "command" };
   "checklist.update": { input: ChecklistUpdateInput; output: ChecklistChange; safety: "write"; kind: "command" };
@@ -2150,6 +2553,11 @@ export interface OpMap {
   "board.get": { input: BoardGetInput; output: Board; safety: "read"; kind: "query" };
   "layout.get": { input: LayoutGetInput; output: LayoutChange; safety: "read"; kind: "query" };
   "layout.update": { input: LayoutUpdateInput; output: LayoutChange; safety: "write"; kind: "command" };
+  "view.list": { input: ViewListInput; output: ViewList; safety: "read"; kind: "query" };
+  "view.create": { input: ViewCreateInput; output: ViewChange; safety: "write"; kind: "command" };
+  "view.update": { input: ViewUpdateInput; output: ViewChange; safety: "write"; kind: "command" };
+  "view.delete": { input: ViewDeleteInput; output: ViewChange; safety: "write"; kind: "command" };
+  "query.parse": { input: QueryParseInput; output: ParsedQuery; safety: "read"; kind: "query" };
   "file.get": { input: FileRef; output: Attachment; safety: "read"; kind: "query" };
   "file.read": { input: FileRef; output: FileContent; safety: "read"; kind: "query" };
   "file.thumbnail": { input: FileRef; output: Thumbnail; safety: "read"; kind: "query" };
@@ -2191,10 +2599,12 @@ export const OP_SAFETY = {
   "label.create": "write",
   "label.update": "write",
   "label.delete": "permanent",
+  "task.search": "read",
   "task.get": "read",
   "task.create": "write",
   "task.update": "write",
   "task.move": "write",
+  "task.bulk_update": "write",
   "task.reorder_subtask": "write",
   "task.resolve_conflict": "write",
   "checklist.update": "write",
@@ -2225,6 +2635,11 @@ export const OP_SAFETY = {
   "board.get": "read",
   "layout.get": "read",
   "layout.update": "write",
+  "view.list": "read",
+  "view.create": "write",
+  "view.update": "write",
+  "view.delete": "write",
+  "query.parse": "read",
   "file.get": "read",
   "file.read": "read",
   "file.thumbnail": "read",
@@ -2336,6 +2751,10 @@ export function makeOps(call: Call) {
       /** The project's instructions for agents: the wiki page marked as the brief, else the project's description. (read) */
       brief: (input: OpMap["project.brief"]["input"]) => call("project.brief", input),
     },
+    query: {
+      /** Read a task query for the query field: highlighted pieces, the chips of the condition builder, the normal form and the first mistake with its place. (read) */
+      parse: (input: OpMap["query.parse"]["input"]) => call("query.parse", input),
+    },
     relation: {
       /** Link two tasks (blocks, relates, duplicates, clones, or make one a subtask of the other). (write) */
       add: (input: OpMap["relation.add"]["input"]) => call("relation.add", input),
@@ -2369,6 +2788,8 @@ export function makeOps(call: Call) {
       delete: (input: OpMap["status.delete"]["input"]) => call("status.delete", input),
     },
     task: {
+      /** List the tasks matching a query (is:open due<+7d label:bug sort:due), a page at a time, with totals of estimates and logged time. (read) */
+      search: (input: OpMap["task.search"]["input"] = {}) => call("task.search", input),
       /** One to 20 tasks by key, with their fields, description, labels and version; subtasks, links, comments and files on request. (read) */
       get: (input: OpMap["task.get"]["input"]) => call("task.get", input),
       /** Create a task from a title alone or with its fields; it gets the project's next key. (write) */
@@ -2377,6 +2798,8 @@ export function makeOps(call: Call) {
       update: (input: OpMap["task.update"]["input"]) => call("task.update", input),
       /** Move a task to another status or place in its column, or to another project (new key; the old one forwards). (write) */
       move: (input: OpMap["task.move"]["input"]) => call("task.move", input),
+      /** Make the same change to many tasks chosen by key or query (status, type, priority, labels, parent, dates set or shifted, estimate, project), previewed first, as one change for Undo and revert. (write) */
+      bulkUpdate: (input: OpMap["task.bulk_update"]["input"]) => call("task.bulk_update", input),
       /** Move a subtask to another place among its parent's subtasks (before or after another one, first or last); returns the parent with its subtasks in the new order. (write) */
       reorderSubtask: (input: OpMap["task.reorder_subtask"]["input"]) => call("task.reorder_subtask", input),
       /** Resolve a conflict copy of a task's description: keep the description, use the copy, or save a combined text. (write) */
@@ -2415,6 +2838,16 @@ export function makeOps(call: Call) {
       update: (input: OpMap["type.update"]["input"]) => call("type.update", input),
       /** Delete a task type; its tasks get another type. Can't be undone. (permanent) */
       delete: (input: OpMap["type.delete"]["input"]) => call("type.delete", input),
+    },
+    view: {
+      /** The saved views of a project or of the whole workspace: name, query, columns, order, grouping, totals and which is the default. (read) */
+      list: (input: OpMap["view.list"]["input"] = {}) => call("view.list", input),
+      /** Save a query as a named view of a project or of the whole workspace, with its columns, order, grouping and totals. (write) */
+      create: (input: OpMap["view.create"]["input"]) => call("view.create", input),
+      /** Rename a saved view, change its query, columns, order, grouping or totals, or make it the default. (write) */
+      update: (input: OpMap["view.update"]["input"]) => call("view.update", input),
+      /** Delete a saved view; it can be brought back with revert. (write) */
+      delete: (input: OpMap["view.delete"]["input"]) => call("view.delete", input),
     },
     workspace: {
       /** The open workspace: its name and ID, the schema and program versions, who is asking with which rights, the settings and a short guide. (read) */

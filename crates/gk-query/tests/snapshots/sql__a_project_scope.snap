@@ -1,0 +1,7 @@
+---
+source: crates/gk-query/tests/sql.rs
+expression: "golden(&[\"is:open\"],\nSome(Scope { project: \"TM\".to_owned(), subprojects: true, }),)"
+---
+-- is:open
+SELECT t.id FROM tasks t JOIN projects p ON p.id = t.project_id JOIN statuses s ON s.id = t.status_id JOIN task_types y ON y.id = t.type_id WHERE t.deleted_at IS NULL AND p.deleted_at IS NULL AND (p.state = 'active' OR t.project_id IN (SELECT * FROM (WITH RECURSIVE sub(id) AS (SELECT id FROM projects WHERE key = ? OR id IN (SELECT project_id FROM project_key_aliases WHERE key = ?) UNION SELECT c.id FROM projects c JOIN sub ON c.parent_id = sub.id) SELECT id FROM sub))) AND t.project_id IN (SELECT * FROM (WITH RECURSIVE sub(id) AS (SELECT id FROM projects WHERE key = ? OR id IN (SELECT project_id FROM project_key_aliases WHERE key = ?) UNION SELECT c.id FROM projects c JOIN sub ON c.parent_id = sub.id) SELECT id FROM sub)) AND coalesce(((s.category IN ('todo', 'in_progress'))), 0) ORDER BY s.rank ASC NULLS LAST, t.rank ASC NULLS LAST, p.key ASC, t.number ASC LIMIT ? OFFSET ?
+-- params: "TM", "TM", "TM", "TM", 50, 0

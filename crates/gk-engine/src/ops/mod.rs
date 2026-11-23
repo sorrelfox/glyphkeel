@@ -9,6 +9,7 @@ use crate::registry::Registry;
 
 pub(crate) mod agent;
 pub(crate) mod board;
+pub(crate) mod bulk;
 pub(crate) mod claim;
 pub(crate) mod comment;
 pub(crate) mod description;
@@ -19,12 +20,14 @@ pub(crate) mod history;
 pub(crate) mod lookup;
 pub(crate) mod project;
 pub(crate) mod project_delete;
+pub(crate) mod query;
 pub(crate) mod relation;
 pub(crate) mod reminder;
 pub(crate) mod rollup;
 pub(crate) mod settings;
 pub(crate) mod task;
 pub(crate) mod time;
+pub(crate) mod view;
 pub(crate) mod workspace;
 
 /// The catalog's descriptor of `O`.
@@ -49,4 +52,7 @@ pub(crate) fn register(r: &mut Registry) {
     file::register(r);
     time::register(r);
     reminder::register(r);
+    query::register(r);
+    bulk::register(r);
+    view::register(r);
 }

@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 501c20a8858fa6ae24468b5f4ed769d7f867ad3aa60aab36f53020bcbea3fcb3 # shrinks to src = "-AND"
+cc a164d990b9534e6c4940345c2addf16756a08e97cb5f172ea421c87c2097f376 # shrinks to tree = Not(Not(Group(Pred(Predicate { field: "status", field_span: Span { start: 0, end: 0 }, op: Is, op_span: Span { start: 0, end: 0 }, values: [Value { kind: Word { text: "a", quoted: false }, span: Span { start: 0, end: 0 } }], span: Span { start: 0, end: 0 } }), Span { start: 0, end: 0 }), Not, Span { start: 0, end: 0 }), Minus, Span { start: 0, end: 0 })

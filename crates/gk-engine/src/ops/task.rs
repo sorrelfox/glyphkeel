@@ -1004,7 +1004,7 @@ pub(crate) fn priority_index(p: Priority) -> i64 {
     }
 }
 
-fn update(w: &mut WriteCtx<'_>, input: TaskUpdateInput) -> Result<TaskChange, Failure> {
+pub(crate) fn update(w: &mut WriteCtx<'_>, input: TaskUpdateInput) -> Result<TaskChange, Failure> {
     let task = lookup::task(w.tx(), "key", &input.key)?;
     let project = lookup::project_by_id(w.tx(), task.project)?.ok_or_else(|| {
         Failure::Op(OpError::not_found(

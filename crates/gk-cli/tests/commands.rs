@@ -566,3 +566,71 @@ mod app {
         assert_eq!(code(&out), 1);
     }
 }
+
+#[test]
+fn tasks_are_listed_by_query_and_changed_in_bulk() {
+    let ws = Workspace::new();
+    ws.ok(&["project", "create", "--name", "Glyphkeel", "--key", "GK"]);
+    for (title, priority) in [
+        ("Fix the login", "high"),
+        ("Write docs", "low"),
+        ("Ship", "high"),
+    ] {
+        ws.ok(&[
+            "task",
+            "create",
+            "--project",
+            "GK",
+            "--title",
+            title,
+            "--priority",
+            priority,
+        ]);
+    }
+    let list = ws.json(&["task", "list", "--query", "priority:high sort:-key"]);
+    assert_eq!(list["total"], 2);
+    assert_eq!(list["items"][0]["key"], "GK-3");
+    assert_eq!(list["query"], "priority:high sort:-key");
+    let out = ws.run(&["task", "list", "--query", "stauts:Done"]);
+    assert_eq!(code(&out), 1);
+    snapshot!(stderr(&out));
+
+    let preview = ws.json(&[
+        "task",
+        "bulk",
+        "--query",
+        "priority:high",
+        "--changes",
+        r#"{"priority":"urgent"}"#,
+    ]);
+    assert_eq!(preview["dry_run"], true);
+    assert_eq!(preview["count"], 2);
+    let done = ws.json(&[
+        "task",
+        "bulk",
+        "--query",
+        "priority:high",
+        "--changes",
+        r#"{"priority":"urgent"}"#,
+        "--dry-run",
+        "false",
+        "--expected-count",
+        "2",
+    ]);
+    assert_eq!(done["changed"], 2);
+    let urgent = ws.json(&["task", "list", "--query", "priority:urgent"]);
+    assert_eq!(urgent["total"], 2);
+
+    ws.ok(&[
+        "view",
+        "create",
+        "--name",
+        "Urgent",
+        "--query",
+        "priority:urgent",
+        "--project",
+        "GK",
+    ]);
+    let views = ws.json(&["view", "list", "--project", "GK"]);
+    assert_eq!(views["items"][0]["query"], "priority:urgent");
+}

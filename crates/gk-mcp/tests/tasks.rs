@@ -250,3 +250,86 @@ async fn an_agent_logs_time_runs_the_timer_and_sets_a_reminder() {
     assert_eq!(ack["acknowledged"].as_array().unwrap().len(), 1);
     c.close().await;
 }
+
+#[tokio::test]
+async fn an_agent_searches_changes_in_bulk_and_saves_a_view() {
+    let (_dir, options) = workspace();
+    let (_, mode, version, _) = lifecycles().remove(0);
+    let c = connect(&options, mode, version, "Searcher").await;
+    output(
+        &c.call("create_project", json!({ "name": "Agents", "key": "AG" }))
+            .await,
+    );
+    for title in ["Plan the work", "Do the work", "Review the work"] {
+        output(
+            &c.call("create_task", json!({ "project": "AG", "title": title }))
+                .await,
+        );
+    }
+
+    let found = output(
+        &c.call(
+            "search_tasks",
+            json!({ "query": "work -review sort:-key", "limit": 1 }),
+        )
+        .await,
+    );
+    assert_eq!(found["total"], 2);
+    assert_eq!(found["items"][0]["key"], "AG-2");
+    assert_eq!(found["next_cursor"], "1");
+    let wrong = c
+        .call("search_tasks", json!({ "query": "stauts:Done" }))
+        .await;
+    assert_eq!(wrong.is_error, Some(true));
+
+    let preview = output(
+        &c.call(
+            "bulk_update_tasks",
+            json!({ "query": "project:AG", "changes": { "priority": "high" } }),
+        )
+        .await,
+    );
+    assert_eq!(preview["dry_run"], true);
+    assert_eq!(preview["count"], 3);
+    let done = output(
+        &c.call(
+            "bulk_update_tasks",
+            json!({ "query": "project:AG", "changes": { "priority": "high" },
+                    "dry_run": false, "expected_count": 3 }),
+        )
+        .await,
+    );
+    assert_eq!(done["changed"], 3);
+    let group = done["group"].as_str().unwrap().to_owned();
+    let reverted = output(&c.call("revert_changes", json!({ "groups": [group] })).await);
+    assert!(
+        reverted["reverted"]
+            .as_array()
+            .is_some_and(|r| !r.is_empty()),
+        "{reverted}"
+    );
+    let high = output(
+        &c.call("search_tasks", json!({ "query": "priority:high" }))
+            .await,
+    );
+    assert_eq!(high["total"], 0);
+
+    let saved = output(
+        &c.call(
+            "create_view",
+            json!({ "name": "Open work", "project": "AG", "query": "is:open" }),
+        )
+        .await,
+    );
+    assert_eq!(saved["view"]["name"], "Open work");
+    let views = output(&c.call("list_views", json!({ "project": "AG" })).await);
+    assert_eq!(views["total"], 1);
+    output(
+        &c.call(
+            "delete_view",
+            json!({ "view": "Open work", "project": "AG" }),
+        )
+        .await,
+    );
+    c.close().await;
+}

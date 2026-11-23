@@ -1,0 +1,19 @@
+---
+source: crates/gk-query/tests/sql.rs
+expression: "golden(&[\"timeout\", \"\\\"connection timeout\\\" -crash\",\n\"description:\\\"stack trace\\\" comment:flaky sort:updated\", \"%%\",], None,)"
+---
+-- timeout
+WITH m(docid, score) AS MATERIALIZED (SELECT rowid, bm25(fts_words) FROM fts_words WHERE fts_words MATCH ?), rel(task_id, score) AS (SELECT d.task_id, min(m.score) FROM m JOIN search_docs d ON d.docid = m.docid WHERE d.kind IN ('task', 'comment') GROUP BY d.task_id) SELECT t.id FROM tasks t JOIN projects p ON p.id = t.project_id JOIN statuses s ON s.id = t.status_id JOIN task_types y ON y.id = t.type_id LEFT JOIN rel ON rel.task_id = t.id WHERE t.deleted_at IS NULL AND p.deleted_at IS NULL AND p.state = 'active' AND coalesce((t.id IN (SELECT d.task_id FROM fts_words JOIN search_docs d ON d.docid = fts_words.rowid WHERE fts_words MATCH ? AND d.kind IN ('task', 'comment'))), 0) ORDER BY rel.score ASC NULLS LAST, p.key ASC, t.number ASC LIMIT ? OFFSET ?
+-- params: "\"timeout\"*", "\"timeout\"*", 50, 0
+
+-- "connection timeout" -crash
+WITH m(docid, score) AS MATERIALIZED (SELECT rowid, bm25(fts_words) FROM fts_words WHERE fts_words MATCH ?), rel(task_id, score) AS (SELECT d.task_id, min(m.score) FROM m JOIN search_docs d ON d.docid = m.docid WHERE d.kind IN ('task', 'comment') GROUP BY d.task_id) SELECT t.id FROM tasks t JOIN projects p ON p.id = t.project_id JOIN statuses s ON s.id = t.status_id JOIN task_types y ON y.id = t.type_id LEFT JOIN rel ON rel.task_id = t.id WHERE t.deleted_at IS NULL AND p.deleted_at IS NULL AND p.state = 'active' AND (coalesce((t.id IN (SELECT d.task_id FROM fts_words JOIN search_docs d ON d.docid = fts_words.rowid WHERE fts_words MATCH ? AND d.kind IN ('task', 'comment'))), 0) AND NOT coalesce((t.id IN (SELECT d.task_id FROM fts_words JOIN search_docs d ON d.docid = fts_words.rowid WHERE fts_words MATCH ? AND d.kind IN ('task', 'comment'))), 0)) ORDER BY rel.score ASC NULLS LAST, p.key ASC, t.number ASC LIMIT ? OFFSET ?
+-- params: "\"connection timeout\"", "\"connection timeout\"", "\"crash\"*", 50, 0
+
+-- description:"stack trace" comment:flaky sort:updated
+WITH m(docid, score) AS MATERIALIZED (SELECT rowid, bm25(fts_words) FROM fts_words WHERE fts_words MATCH ?), rel(task_id, score) AS (SELECT d.task_id, min(m.score) FROM m JOIN search_docs d ON d.docid = m.docid WHERE d.kind IN ('task', 'comment') GROUP BY d.task_id) SELECT t.id FROM tasks t JOIN projects p ON p.id = t.project_id JOIN statuses s ON s.id = t.status_id JOIN task_types y ON y.id = t.type_id LEFT JOIN rel ON rel.task_id = t.id WHERE t.deleted_at IS NULL AND p.deleted_at IS NULL AND p.state = 'active' AND (coalesce((t.id IN (SELECT d.task_id FROM fts_words JOIN search_docs d ON d.docid = fts_words.rowid WHERE fts_words MATCH ? AND d.kind IN ('task'))), 0) AND coalesce((t.id IN (SELECT d.task_id FROM fts_words JOIN search_docs d ON d.docid = fts_words.rowid WHERE fts_words MATCH ? AND d.kind IN ('comment'))), 0)) ORDER BY t.updated_at ASC NULLS LAST, p.key ASC, t.number ASC LIMIT ? OFFSET ?
+-- params: "\"stack trace\" OR \"flaky\"*", "body : \"stack trace\"", "body : \"flaky\"*", 50, 0
+
+-- %%
+WITH rel(task_id, score) AS (SELECT NULL, NULL WHERE 0) SELECT t.id FROM tasks t JOIN projects p ON p.id = t.project_id JOIN statuses s ON s.id = t.status_id JOIN task_types y ON y.id = t.type_id LEFT JOIN rel ON rel.task_id = t.id WHERE t.deleted_at IS NULL AND p.deleted_at IS NULL AND p.state = 'active' AND coalesce((t.title_fold LIKE ? ESCAPE '\'), 0) ORDER BY rel.score ASC NULLS LAST, p.key ASC, t.number ASC LIMIT ? OFFSET ?
+-- params: "%\\%\\%%", 50, 0

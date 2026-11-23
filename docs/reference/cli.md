@@ -50,12 +50,14 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel status delete` | `status.delete` | Delete a status; its tasks move to the status named. Can't be undone. |
 | `glyphkeel status edit` | `status.update` | Rename or recolour a status, change its category or its WIP limit. |
 | `glyphkeel status move` | `status.reorder` | Move a status in the project's board order. |
+| `glyphkeel task bulk` | `task.bulk_update` | Make the same change to many tasks chosen by key or query (status, type, priority, labels, parent, dates set or shifted, estimate, project), previewed first, as one change for Undo and revert. |
 | `glyphkeel task check <key>` | `checklist.update` | Tick, clear, add or remove checklist items in a task's description or a comment, by number plus expected text. |
 | `glyphkeel task claim <key>` | `task.claim` | Claim a task for your agent session for a while, so other agents leave it alone; moves it into progress. |
 | `glyphkeel task create` | `task.create` | Create a task from a title alone or with its fields; it gets the project's next key. |
 | `glyphkeel task duplicate <key>` | `task.duplicate` | Copy a task with its subtasks (in order), labels, checklist and files; the copy is linked as a clone. |
 | `glyphkeel task edit <key>` | `task.update` | Change a task's title, description (whole, with a base revision, or by targeted edits), type, priority, labels, parent, dates, estimate or progress. |
 | `glyphkeel task link <key>` | `relation.add` | Link two tasks (blocks, relates, duplicates, clones, or make one a subtask of the other). |
+| `glyphkeel task list` | `task.search` | List the tasks matching a query (is:open due<+7d label:bug sort:due), a page at a time, with totals of estimates and logged time. |
 | `glyphkeel task move <key>` | `task.move` | Move a task to another status or place in its column, or to another project (new key; the old one forwards). |
 | `glyphkeel task release <key>` | `task.release` | Give up a claim on a task, optionally moving it and adding a comment. |
 | `glyphkeel task reorder-subtask <key>` | `task.reorder_subtask` | Move a subtask to another place among its parent's subtasks (before or after another one, first or last); returns the parent with its subtasks in the new order. |
@@ -73,6 +75,10 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel type add` | `type.create` | Add a task type to a project. |
 | `glyphkeel type delete` | `type.delete` | Delete a task type; its tasks get another type. Can't be undone. |
 | `glyphkeel type edit` | `type.update` | Rename, reshape, recolour or reorder a task type, or make it the default. |
+| `glyphkeel view create` | `view.create` | Save a query as a named view of a project or of the whole workspace, with its columns, order, grouping and totals. |
+| `glyphkeel view delete <view>` | `view.delete` | Delete a saved view; it can be brought back with revert. |
+| `glyphkeel view edit <view>` | `view.update` | Rename a saved view, change its query, columns, order, grouping or totals, or make it the default. |
+| `glyphkeel view list` | `view.list` | The saved views of a project or of the whole workspace: name, query, columns, order, grouping, totals and which is the default. |
 
 ## Exit codes
 
