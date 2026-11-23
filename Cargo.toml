@@ -21,17 +21,35 @@ publish = false
 # Internal crates are added here as path dependencies when a crate first uses
 # another, for example `gk-core = { path = "crates/gk-core" }`. Which crate may
 # use which is checked by `cargo xtask check-deps`.
+gk-core = { path = "crates/gk-core" }
 
 # Third-party crates: shared versions live here, crates use `{ workspace = true }`.
 # Every new crate needs a reason in a comment and a licence that cargo-deny allows.
 anyhow = "1.0.105"
 # Command line of `glyphkeel` and of the task runner.
 clap = { version = "4.6.9", features = ["derive"] }
+# Unicode case folding and normalisation for the `*_fold` matching columns.
+icu_casemap = "2.4.0"
+icu_normalizer = "2.4.0"
+# The Unicode Collation Algorithm for sorting names, registered on every
+# database connection.
+icu_collator = "2.4.0"
+# Property tests (development only).
+proptest = "1.12.0"
+# The workspace database: SQLite bundled (with FTS5), custom collation and
+# busy handler.
+rusqlite = { version = "0.43.0", features = ["bundled", "collation"] }
 # Records of the test-data archive written by the seed tool.
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 # Content hashes of stored files (files are addressed by SHA-256).
 sha2 = "0.10.9"
+# Temporary workspaces in tests (development only).
+tempfile = "3.27.0"
+# Error types.
+thiserror = "2.0.21"
+# Structured logs (slow write transactions, checkpoints).
+tracing = "0.1.44"
 # The desktop app. Tauri 2 is pinned exactly and bumped deliberately, together
 # with `@tauri-apps/api` in ui/package.json.
 tauri = "=2.12.7"
@@ -39,6 +57,8 @@ tauri-build = "=2.7.6"
 # The WebKitGTK bindings Tauri itself uses, to switch off web-view features
 # the app never needs (Linux only).
 webkit2gtk = "=2.0.2"
+# IDs: UUIDv7.
+uuid = { version = "1.29.3", features = ["v7"] }
 
 [workspace.lints.rust]
 unsafe_code = "deny"
