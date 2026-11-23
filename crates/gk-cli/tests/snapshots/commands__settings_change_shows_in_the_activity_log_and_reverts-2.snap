@@ -1,0 +1,13 @@
+---
+source: crates/gk-cli/tests/commands.rs
+expression: "ws.ok(&[\"settings\", \"set\", \"--hours-per-day\", \"6\", \"--week-start\", \"sunday\"])"
+---
+changed: hours_per_day, week_start
+group: [id]
+settings:
+  agent_max_profile: standard
+  days_per_week: 5
+  hours_per_day: 6
+  reminder_time: 09:00
+  trash_days: 30
+  week_start: sunday

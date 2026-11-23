@@ -1,0 +1,6 @@
+---
+source: crates/gk-cli/tests/commands.rs
+expression: "ws.ok(&[\"activity\"])"
+---
+SEQ  ID                                    ACTOR  AT                        ENTITY    FIELDS                                        GROUP                                 OP               VIA
+1    [id]  You    [time]  settings  hours_per_day: – → 6; week_start: – → sunday  [id]  settings.update  cli

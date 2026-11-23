@@ -18,7 +18,20 @@ name = "glyphkeel"
 path = "src/main.rs"
 
 [dependencies]
-clap = { workspace = true }
+clap = { workspace = true, features = ["string"] }
+clap_complete = { workspace = true }
+clap_mangen = { workspace = true }
+directories = { workspace = true }
+gk-api = { workspace = true }
+gk-engine = { workspace = true }
+gk-mcp = { workspace = true }
+# Only for the workspace folder layout the engine opens.
+gk-store = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true, features = ["filters", "json", "redactions"] }
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

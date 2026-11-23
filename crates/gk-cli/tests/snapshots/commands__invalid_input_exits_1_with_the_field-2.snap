@@ -1,0 +1,13 @@
+---
+source: crates/gk-cli/tests/commands.rs
+expression: stderr(&out)
+---
+{
+  "code": "invalid",
+  "details": {
+    "max": 24,
+    "min": 1,
+    "path": "hours_per_day"
+  },
+  "message": "hours_per_day must be from 1 to 24; got 99."
+}
