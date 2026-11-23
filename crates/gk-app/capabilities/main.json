@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main-window",
-  "description": "The main window's page may run operations of the catalog through `op`, receive change events through `subscribe`, signal its first screen, set its title, and move, minimize, maximize and close its own window, for the header bar. Nothing else of Tauri's API is reachable from the page.",
+  "description": "The main window's page may run operations of the catalog through `op`, receive change events through `subscribe`, signal its first screen, check spelling in the editor, set its title, and move, minimize, maximize and close its own window, for the header bar. Nothing else of Tauri's API is reachable from the page.",
   "windows": [
     "main"
   ],
@@ -9,6 +9,8 @@
     "allow-op",
     "allow-subscribe",
     "allow-window-ready",
+    "allow-spell-check",
+    "allow-spell-suggest",
     "core:window:allow-set-title",
     "core:window:allow-start-dragging",
     "core:window:allow-internal-toggle-maximize",

@@ -20,3 +20,7 @@ allowBuilds: {}
 savePrefix: ""
 # The Node version in package.json `engines` is enforced.
 engineStrict: true
+# One KaTeX in the bundle: Mermaid asks for an older minor, but the page draws
+# all math with the same version.
+overrides:
+  katex: 0.19.1

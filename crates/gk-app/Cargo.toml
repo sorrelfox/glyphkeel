@@ -25,6 +25,8 @@ gk-engine = { workspace = true }
 gk-store = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+# Spelling in the Markdown editor, with the system's Hunspell dictionaries.
+spellbook = { workspace = true }
 tauri = { workspace = true }
 
 # The web view's settings are tightened through WebKitGTK directly.

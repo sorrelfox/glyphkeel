@@ -68,6 +68,9 @@ serde_path_to_error = "0.1.20"
 sha2 = "0.10.9"
 # Temporary workspaces in tests (development only).
 tempfile = "3.27.0"
+# Spelling in the Markdown editor: a Rust port of Hunspell that reads the
+# system's Hunspell dictionaries (MPL-2.0).
+spellbook = "=0.4.2"
 # Error types.
 thiserror = "2.0.21"
 # Structured logs (slow write transactions, checkpoints).

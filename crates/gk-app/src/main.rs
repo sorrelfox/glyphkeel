@@ -12,6 +12,7 @@ mod instance;
 mod ipc;
 mod main_window;
 mod navigation;
+mod spell;
 mod start;
 mod title_bar;
 #[cfg(target_os = "linux")]
@@ -63,7 +64,9 @@ fn main() -> ExitCode {
         .invoke_handler(tauri::generate_handler![
             start::window_ready,
             ipc::op,
-            ipc::subscribe
+            ipc::subscribe,
+            spell::spell_check,
+            spell::spell_suggest
         ])
         .setup(move |app| {
             // The workspace opens before the window, so the page's first

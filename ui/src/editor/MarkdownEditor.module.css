@@ -1,0 +1,18 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+   Copyright (C) 2026 Glyphkeel contributors */
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface);
+}
+
+.note {
+  flex: none;
+}
+
+.host {
+  flex: 1 1 auto;
+  min-height: 0;
+}

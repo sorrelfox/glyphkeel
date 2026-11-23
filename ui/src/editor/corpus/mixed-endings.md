@@ -1,0 +1,27 @@
+# Fix the sync bug
+
+Blocked by TM-41 and see [[Release plan#Dates|the plan]]; not XX-1 or `TM-9`.
+> [!WARNING]
+> Check TM-7 first. Math $e^{i\pi}+1=0$ inline.
+$$
+\int_0^1 x^2\,dx = \frac13$$
+
+- [ ] first item- [x] second **bold** item
+  - [ ] nested one
+> - [X] quoted item
+```rust
+fn main() { println!("hi"); }```
+
+```mermaidgraph TD; A-->B;
+```
+| a | b |
+|:-:|--:|
+| 1 | 2 |
+Footnote[^1]. <kbd>Ctrl</kbd>+<kbd>K</kbd>, H<sub>2</sub>O, <mark>hi</mark>.
+<details><summary>More</summary>
+
+Hidden *text*.
+</details>
+![shot](gk-file://abc123) ![ext](https://example.com/x.png)
+
+[^1]: The note.
