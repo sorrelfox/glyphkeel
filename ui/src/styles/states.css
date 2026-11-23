@@ -1,0 +1,187 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+   Copyright (C) 2026 Glyphkeel contributors
+
+   The design's classes in the states React Aria reports through data
+   attributes, and the floating surfaces the design describes in words
+   (tooltip, dialog, menu). Reads the tokens only. */
+
+/* ---------- motion: hover and press, popovers ---------- */
+.btn,
+.nav,
+.item,
+.win {
+  transition: background-color var(--dur-fast) var(--ease);
+}
+
+/* Disabled controls are dimmed in place and don't react to the pointer. */
+[data-disabled],
+.btn:disabled,
+.nav:disabled {
+  opacity: 0.5;
+}
+
+.btn:disabled:hover,
+.btn[data-disabled]:hover {
+  background: var(--hover);
+}
+
+.btn.flat:disabled:hover,
+.btn.flat[data-disabled]:hover,
+.nav:disabled:hover {
+  background: transparent;
+}
+
+.btn.primary:disabled:hover {
+  background: var(--accent);
+}
+
+.btn[data-pressed],
+.seg > [data-pressed] {
+  background: var(--pressed);
+}
+
+.btn.primary[data-pressed] {
+  background: color-mix(in srgb, var(--accent) 80%, var(--fg));
+}
+
+/* ---------- menus ---------- */
+.menuPopover {
+  min-width: 220px;
+  padding: 4px;
+  outline: none;
+}
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  outline: none;
+}
+
+.menu .item {
+  outline: none;
+}
+
+.menu .item[data-focused] {
+  background: var(--hover);
+}
+
+.menu .item[data-pressed] {
+  background: var(--pressed);
+}
+
+.menu .item[data-disabled] {
+  background: transparent;
+}
+
+.menuSeparator {
+  margin: 4px 8px;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+
+/* ---------- tooltip: --fg on --bg, small text ---------- */
+.tooltip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 8px;
+  border-radius: var(--r-s);
+  background: var(--fg);
+  color: var(--bg);
+  font-size: var(--fs-small);
+  pointer-events: none;
+}
+
+.tooltip .kbd {
+  color: inherit;
+  box-shadow: inset 0 0 0 1px currentcolor;
+  opacity: 0.8;
+}
+
+/* ---------- dialogs: small windows with their own header bar ---------- */
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  background: var(--scrim);
+}
+
+.dialogWindow {
+  max-width: 90vw;
+  max-height: 90vh;
+  border-radius: var(--r-xl);
+  background: var(--bg);
+  box-shadow: var(--shadow-pop);
+  overflow: hidden;
+  outline: none;
+}
+
+.dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: inherit;
+  outline: none;
+}
+
+.dialogHeader {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--h-headerbar);
+  padding: 0 48px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dialogTitle {
+  margin: 0;
+  font-size: var(--fs-title);
+  font-weight: 600;
+}
+
+.dialogClose {
+  position: absolute;
+  right: 12px;
+}
+
+.dialogBody {
+  padding: 16px 20px;
+  overflow: auto;
+  overscroll-behavior: none;
+}
+
+.dialogFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--gap);
+  padding: 0 20px 16px;
+}
+
+/* ---------- switch with its label ---------- */
+.switchField {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.switchField[data-focus-visible] .switch {
+  outline: var(--focus-w) solid var(--focus);
+  outline-offset: 1px;
+}
+
+/* Popovers and tooltips fade and scale in. */
+.menuPopover[data-entering],
+.tooltip[data-entering] {
+  animation: pop-in var(--dur) var(--ease);
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}

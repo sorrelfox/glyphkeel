@@ -19,11 +19,15 @@ path = "src/main.rs"
 tauri-build = { workspace = true }
 
 [dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
 tauri = { workspace = true }
 
 # The web view's settings are tightened through WebKitGTK directly.
 [target.'cfg(target_os = "linux")'.dependencies]
 webkit2gtk = { workspace = true, features = ["v2_40"] }
+gtk = { workspace = true }
+zbus = { workspace = true }
 
 [lints]
 workspace = true

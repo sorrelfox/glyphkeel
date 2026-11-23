@@ -15,8 +15,12 @@
     "tauri": "TAURI_APP_PATH=../crates/gk-app TAURI_FRONTEND_PATH=. tauri"
   },
   "dependencies": {
+    "@fluent/bundle": "0.19.1",
+    "@fluent/react": "0.15.2",
     "@tauri-apps/api": "2.12.4",
+    "lucide-react": "1.73.0",
     "react": "19.3.1",
+    "react-aria-components": "1.22.1",
     "react-dom": "19.3.1"
   },
   "devDependencies": {

@@ -54,6 +54,12 @@ tracing = "0.1.44"
 # with `@tauri-apps/api` in ui/package.json.
 tauri = "=2.12.7"
 tauri-build = "=2.7.6"
+# The GTK bindings Tauri itself uses, for the window's title bar, bringing it
+# forward with an activation token, and its remembered geometry (Linux only).
+gtk = "=0.18.2"
+# The session bus: a second start of the app hands its links and activation
+# token to the running one (Linux only).
+zbus = "5.19.0"
 # The WebKitGTK bindings Tauri itself uses, to switch off web-view features
 # the app never needs (Linux only).
 webkit2gtk = "=2.0.2"
