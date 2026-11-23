@@ -1,23 +1,39 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { AppWindow, Bot, ChevronDown, ChevronRight, Link2, MoreHorizontal, Plus, X } from "lucide-react";
+import { AppWindow, Bot, ChevronDown, ChevronRight, Link2, MoreHorizontal, Plus, Search, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { Button, Menu, MenuItem, MenuTrigger, Popover, useLocale, type Selection } from "react-aria-components";
+import {
+  Autocomplete,
+  Button,
+  Dialog as AriaDialog,
+  DialogTrigger,
+  Input,
+  Menu,
+  MenuItem,
+  MenuTrigger,
+  Popover,
+  SearchField,
+  useFilter,
+  useLocale,
+  type Selection,
+} from "react-aria-components";
 
 import { classes } from "../../classes";
 import { MenuEntries } from "../../components/ContextMenu";
 import { PriorityGlyph, TypeGlyph } from "../../components/Glyphs";
+import { Select } from "../../components/Select";
 import { useToasts } from "../../components/Toasts";
 import { useProject, useUpdateTask } from "../../data/board";
-import { PRIORITIES, type Project, type Task, type TaskField, type TaskUpdateInput } from "../../data/catalog";
+import { HUES, PRIORITIES, type Hue, type Project, type Task, type TaskField, type TaskUpdateInput } from "../../data/catalog";
 import { errorToast, useCall, useCommand } from "../../data/hooks";
 import { useTaskDetails } from "../../data/task";
 import { useT } from "../../i18n/I18n";
 import { openTaskWindow } from "../../ipc/taskWindow";
 import { useDayFormat } from "../board/CardView";
 import { useDurations } from "../../data/time";
-import { dueState, isoDay } from "../board/model";
+import { useToday } from "../../data/zone";
+import { dueState } from "../board/model";
 import { ActivityTabs, Composer, useMomentFormat } from "./Activity";
 import { DescriptionSection, type DescriptionView } from "./Description";
 import { FilesSection, useFileDrop } from "./Files";
@@ -445,7 +461,7 @@ function DateValue({
   const { locale } = useLocale();
   const day = useDayFormat();
   const [editing, setEditing] = useState(false);
-  const today = isoDay(new Date());
+  const today = useToday();
   if (editing) {
     return (
       <span className={classes("field", styles.inlineField)}>
@@ -556,8 +572,24 @@ function DurationValue({
   );
 }
 
+const CREATE_LABEL = "create-label";
+
+/**
+ * The task's labels and the "+" that changes them. With labels in the
+ * project it opens a picker with a search field, which also offers to
+ * create a label by the typed name; without any, a small form that creates
+ * the first one. A new label gets the colour the engine suggests and goes
+ * on the task at once.
+ */
 function Labels({ task, project, readOnly, onChange }: { task: Task; project: Project; readOnly: boolean; onChange: (labels: string[]) => void }) {
   const t = useT();
+  const createLabel = useCreateLabel(task, project);
+  const [query, setQuery] = useState("");
+  const [picking, setPicking] = useState(false);
+  const { contains } = useFilter({ sensitivity: "base" });
+  const typed = query.trim();
+  const exists = project.labels.some((label) => label.name.localeCompare(typed, undefined, { sensitivity: "base" }) === 0);
+  const offerCreate = typed !== "" && !exists;
   return (
     <>
       {task.labels.map((label) => (
@@ -565,34 +597,154 @@ function Labels({ task, project, readOnly, onChange }: { task: Task; project: Pr
           {label.name}
         </span>
       ))}
-      <MenuTrigger>
-        <Button className="btn flat icon sm" isDisabled={readOnly || project.labels.length === 0} aria-label={t("prop-labels-edit")}>
-          <Plus className="ic s" />
-        </Button>
-        <Popover className="pop menuPopover" placement="bottom start" offset={4}>
-          <Menu
-            className="menu"
-            aria-label={t("prop-labels")}
-            selectionMode="multiple"
-            selectedKeys={new Set(task.labels.map((label) => label.id))}
-            onSelectionChange={(keys: Selection) => {
-              onChange(project.labels.filter((label) => keys === "all" || keys.has(label.id)).map((label) => label.id));
-            }}
-          >
-            {project.labels.map((label) => (
-              <MenuItem key={label.id} id={label.id} className="item" textValue={label.name}>
-                {({ isSelected }) => (
-                  <>
-                    <input type="checkbox" className="check" checked={isSelected} readOnly tabIndex={-1} aria-hidden="true" />
-                    <span className={`dot hue-${label.hue}`} />
-                    <span className="grow truncate">{label.name}</span>
-                  </>
+      {project.labels.length === 0 ? (
+        <DialogTrigger>
+          <Button className="btn flat icon sm" isDisabled={readOnly} aria-label={t("prop-labels-edit")}>
+            <Plus className="ic s" />
+          </Button>
+          <Popover className="pop" placement="bottom start" offset={4}>
+            <AriaDialog className={classes(styles.labelDialog)} aria-label={t("label-create-title")}>
+              {({ close }) => (
+                <NewLabelForm
+                  suggested={project.next_label_hue}
+                  onCreate={(name, hue) => {
+                    createLabel(name, hue);
+                    close();
+                  }}
+                />
+              )}
+            </AriaDialog>
+          </Popover>
+        </DialogTrigger>
+      ) : (
+        <MenuTrigger
+          isOpen={picking}
+          onOpenChange={(isOpen) => {
+            setPicking(isOpen);
+            if (!isOpen) {
+              setQuery("");
+            }
+          }}
+        >
+          <Button className="btn flat icon sm" isDisabled={readOnly} aria-label={t("prop-labels-edit")}>
+            <Plus className="ic s" />
+          </Button>
+          <Popover className={classes("pop menuPopover", styles.labelPicker)} placement="bottom start" offset={4}>
+            <Autocomplete
+              inputValue={query}
+              onInputChange={setQuery}
+              filter={(text, _input, node) => node.key === CREATE_LABEL || contains(text, typed)}
+            >
+              <SearchField
+                className={classes("field", styles.labelSearch)}
+                aria-label={t("label-search")}
+                autoFocus
+                onKeyDown={(event) => {
+                  // Escape clears the search first; with nothing typed it closes the picker.
+                  if (event.key === "Escape" && query === "") {
+                    setPicking(false);
+                  }
+                }}
+              >
+                <Search className="ic s" aria-hidden="true" />
+                <Input placeholder={t("label-search-placeholder")} />
+              </SearchField>
+              <Menu
+                className="menu"
+                aria-label={t("prop-labels")}
+                selectionMode="multiple"
+                selectedKeys={new Set(task.labels.map((label) => label.id))}
+                onSelectionChange={(keys: Selection) => {
+                  if (keys !== "all" && keys.has(CREATE_LABEL)) {
+                    createLabel(typed, null);
+                    setQuery("");
+                    return;
+                  }
+                  onChange(project.labels.filter((label) => keys === "all" || keys.has(label.id)).map((label) => label.id));
+                }}
+              >
+                {project.labels.map((label) => (
+                  <MenuItem key={label.id} id={label.id} className="item" textValue={label.name}>
+                    {({ isSelected }) => (
+                      <>
+                        <input type="checkbox" className="check" checked={isSelected} readOnly tabIndex={-1} aria-hidden="true" />
+                        <span className={`dot hue-${label.hue}`} />
+                        <span className="grow truncate">{label.name}</span>
+                      </>
+                    )}
+                  </MenuItem>
+                ))}
+                {offerCreate && (
+                  <MenuItem key={CREATE_LABEL} id={CREATE_LABEL} className="item" textValue={typed}>
+                    <Plus className="ic s" aria-hidden="true" />
+                    <span className={`dot hue-${project.next_label_hue}`} />
+                    <span className="grow truncate">{t("label-create-named", { name: typed })}</span>
+                  </MenuItem>
                 )}
-              </MenuItem>
-            ))}
-          </Menu>
-        </Popover>
-      </MenuTrigger>
+              </Menu>
+            </Autocomplete>
+          </Popover>
+        </MenuTrigger>
+      )}
     </>
   );
+}
+
+/** The first label of a project: a name and a colour, the suggested one until another is picked. */
+function NewLabelForm({ suggested, onCreate }: { suggested: Hue; onCreate: (name: string, hue: Hue | null) => void }) {
+  const t = useT();
+  const [name, setName] = useState("");
+  const [hue, setHue] = useState<Hue | null>(null);
+  return (
+    <form
+      className={styles.labelForm}
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (name.trim() !== "") {
+          onCreate(name.trim(), hue);
+        }
+      }}
+    >
+      <p className={classes("muted", styles.small)}>{t("label-create-first")}</p>
+      <span className="field">
+        <input aria-label={t("label-name")} placeholder={t("label-name")} value={name} autoFocus onChange={(event) => { setName(event.target.value); }} />
+      </span>
+      <div className={styles.labelFormRow}>
+        <Select
+          label={t("label-colour")}
+          value={hue ?? suggested}
+          onChange={setHue}
+          options={HUES.map((each) => ({ id: each, label: t(`hue-${each}`), icon: <span className={`dot hue-${each}`} /> }))}
+        />
+        <span className="grow" />
+        <button type="submit" className="btn primary" disabled={name.trim() === ""}>
+          {t("label-create")}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/**
+ * Creates a label in the task's project and puts it on the task. They are
+ * two changes: Undo takes back the label on the task first, then the label.
+ */
+function useCreateLabel(task: Task, project: Project): (name: string, hue: Hue | null) => void {
+  const t = useT();
+  const call = useCall();
+  const toasts = useToasts();
+  return (name, hue) => {
+    const wanted = name.trim();
+    call("label.create", hue === null ? { project: project.key, name: wanted } : { project: project.key, name: wanted, hue })
+      .then((change) => {
+        const created = change.project.labels.find((label) => label.name.localeCompare(wanted, undefined, { sensitivity: "base" }) === 0);
+        if (!created) {
+          return undefined;
+        }
+        return call("task.update", { key: task.key, add_labels: [created.id] });
+      })
+      .catch((error: unknown) => {
+        toasts.show(errorToast(t, error));
+      });
+  };
 }

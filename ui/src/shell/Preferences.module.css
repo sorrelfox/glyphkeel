@@ -322,3 +322,24 @@
   padding: 8px 14px;
   color: var(--danger);
 }
+
+/* ---------- the time zone ---------- */
+.zone {
+  inline-size: 280px;
+  max-inline-size: 100%;
+}
+
+.zoneInput {
+  flex: 1;
+  min-inline-size: 0;
+}
+
+.zonePopover {
+  max-block-size: 320px;
+}
+
+.zoneEmpty {
+  margin: 0;
+  padding-block: 6px;
+  padding-inline: 8px;
+}

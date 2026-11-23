@@ -132,12 +132,27 @@ impl Workspace {
     }
 
     /// Switches the engine to the person's newly chosen zone (`"system"`
-    /// or an IANA name). Without an open workspace the name is only
+    /// or an IANA name), and wakes the reminders so that they count their
+    /// times in it at once. Without an open workspace the name is only
     /// checked.
     pub(crate) fn set_time_zone(&self, name: &str) -> Result<(), OpError> {
         match self.engine() {
-            Ok(engine) => engine.set_time_zone(name),
+            Ok(engine) => {
+                engine.set_time_zone(name)?;
+                self.wake_reminders();
+                Ok(())
+            }
             Err(_) => gk_engine::check_time_zone(name).map(|_| ()),
+        }
+    }
+
+    /// Makes the reminders look again now, if they are running.
+    pub(crate) fn wake_reminders(&self) {
+        if let Some(reminders) = lock(&self.background)
+            .as_ref()
+            .and_then(|background| background.reminders.as_ref())
+        {
+            reminders.wake();
         }
     }
 

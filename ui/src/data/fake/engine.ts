@@ -30,6 +30,7 @@ import {
   type OpMap,
   type Project,
   type ProjectChange,
+  type ProjectIcon,
   type ProjectSummary,
   type Reminder,
   type RevisionInfo,
@@ -45,6 +46,7 @@ import {
   type TimerStatus,
   type TypeRef,
 } from "../../generated/ops";
+import { PROJECT_ICONS, suggestHue } from "../catalog";
 import { formatDuration, parseDuration } from "../duration";
 import { decodeBase64, materialize, recordedFields, sniff } from "./details";
 import { checklistOf, merge3, publicChecklist, renderFake, setChecked, unifiedDiff } from "./markdown";
@@ -70,6 +72,7 @@ const fold = (text: string) => text.normalize("NFKC").toLowerCase().trim();
 const isClosed = (category: string) => category === "done" || category === "cancelled";
 const MAX_TITLE = 500;
 const MAX_DEPTH = 3;
+const PROJECT_ICON_NAMES: ReadonlySet<string> = new Set(PROJECT_ICONS);
 const KEY_PATTERN = /^[A-Z][A-Z0-9]{1,9}$/;
 
 /** What one command changed, for its change event. */
@@ -400,6 +403,7 @@ export class FakeWorkspace {
       key: project.key,
       name: project.name,
       hue: project.hue,
+      ...some("icon", project.icon),
       ...some("parent", parent?.key),
       depth: this.depth(project) - 1,
       path: this.path(project),
@@ -417,6 +421,7 @@ export class FakeWorkspace {
       key: project.key,
       name: project.name,
       hue: project.hue,
+      ...some("icon", project.icon),
       ...some("parent", summary.parent),
       path: summary.path,
       state: project.state,
@@ -434,7 +439,7 @@ export class FakeWorkspace {
       })),
       types: project.types.map((type) => ({ ...type, tasks: tasks.filter((task) => task.typeId === type.id).length })),
       labels: project.labels.map((label) => ({ ...label, tasks: tasks.filter((task) => task.labelIds.includes(label.id)).length })),
-      next_label_hue: "grey",
+      next_label_hue: suggestHue(project.labels.map((label) => label.hue)),
       children: this.children(project).map((child) => child.key),
       created_at: "2026-01-01T00:00:00Z",
       updated_at: "2026-01-01T00:00:00Z",
@@ -928,6 +933,12 @@ export class FakeWorkspace {
     }
   }
 
+  private validIcon(icon: ProjectIcon | null | undefined): void {
+    if (icon !== undefined && icon !== null && !PROJECT_ICON_NAMES.has(icon)) {
+      fail("invalid", `"${icon}" is not a project icon.`, { details: { path: "icon" } });
+    }
+  }
+
   private validHue(hue: Hue | null | undefined): void {
     if (hue !== undefined && hue !== null && !["red", "orange", "yellow", "green", "teal", "blue", "purple", "pink", "grey"].includes(hue)) {
       fail("invalid", `"${hue}" is not a colour.`, { details: { path: "hue" } });
@@ -1150,7 +1161,7 @@ export class FakeWorkspace {
       return { items: ordered.map((project) => this.summary(project)), total: ordered.length };
     },
     "project.get": ({ project }) => this.fullProject(this.project(project)),
-    "project.create": ({ name, key, parent, hue, description }) => {
+    "project.create": ({ name, key, parent, hue, icon, description }) => {
       const trimmed = name.trim();
       if (trimmed === "") {
         fail("invalid", "A project needs a name.", { details: { path: "name" } });
@@ -1170,14 +1181,17 @@ export class FakeWorkspace {
         fail("limit", "Sub-projects go at most three levels deep.");
       }
       const siblings = this.state.projects.filter((project) => project.parent === (parentProject?.id ?? null));
+      this.validIcon(icon);
       const project = newProject({
         key,
         name: trimmed,
-        hue: hue ?? parentProject?.hue ?? "blue",
+        // Without a colour: one its siblings don't use yet, as the engine does.
+        hue: hue ?? suggestHue(siblings.map((sibling) => sibling.hue)),
         parent: parentProject?.id ?? null,
         rank: Math.max(0, ...siblings.map((sibling) => sibling.rank)) + 1,
       });
       project.description = description ?? "";
+      project.icon = icon ?? undefined;
       if (parentProject) {
         // A sub-project starts with copies of its parent's statuses, types and labels.
         project.statuses = parentProject.statuses.map((status) => ({ ...status, id: nextId("s") }));
@@ -1190,7 +1204,7 @@ export class FakeWorkspace {
     },
     // The sample workspace changes the project's own fields here; statuses,
     // types and labels change through their own operations.
-    "project.update": ({ project: ref, name, description, hue, modules, archived, clear }) => {
+    "project.update": ({ project: ref, name, description, hue, icon, modules, archived, clear }) => {
       if (archived === false) {
         return this.handlers["project.unarchive"]?.({ project: ref }) ?? fail("not_found", "No unarchive.");
       }
@@ -1216,6 +1230,15 @@ export class FakeWorkspace {
         this.validHue(hue);
         project.hue = hue;
         fields.push("hue");
+      }
+      if (icon !== null && icon !== undefined) {
+        this.validIcon(icon);
+        project.icon = icon;
+        fields.push("icon");
+      }
+      if (clear?.includes("icon")) {
+        project.icon = undefined;
+        fields.push("icon");
       }
       if (modules !== null && modules !== undefined) {
         for (const [module, on] of Object.entries(modules)) {
@@ -1392,7 +1415,7 @@ export class FakeWorkspace {
     "label.create": ({ project: ref, name, hue }) => {
       const project = this.writable(ref);
       this.validHue(hue);
-      project.labels.push({ id: nextId("l"), name: this.uniqueName(project.labels, name, "label"), hue: hue ?? "grey" });
+      project.labels.push({ id: nextId("l"), name: this.uniqueName(project.labels, name, "label"), hue: hue ?? suggestHue(project.labels.map((label) => label.hue)) });
       return this.projectChange(project, "label", ["*"]);
     },
     "label.update": ({ project: ref, label: labelRef, name, hue }) => {

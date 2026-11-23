@@ -10,6 +10,7 @@ import { useBlockRenderer, useTaskCompletion } from "../../data/markdown";
 import { type Attachment } from "../../generated/ops";
 import { attachBrowserFiles } from "../../ipc/files";
 import { MarkdownEditor, type EditorMode, type MarkdownEditorHandle } from "../../editor";
+import { FormatToolbar } from "../../editor/FormatToolbar";
 import { useT } from "../../i18n/I18n";
 import styles from "./TaskPanel.module.css";
 
@@ -24,8 +25,10 @@ interface MarkdownFieldProps {
   mode?: EditorMode;
   autoFocus?: boolean;
   readOnly?: boolean;
-  /** The composer's one-line look. */
+  /** The composer's one-line look, with the short formatting toolbar. */
   compact?: boolean;
+  /** Without the formatting toolbar. */
+  plain?: boolean;
   className?: string | undefined;
   ref?: Ref<MarkdownEditorHandle>;
   /** The task that files pasted or dropped on the editor are attached to; they go in the text as links. */
@@ -63,9 +66,10 @@ export function editorDropAt(x: number, y: number, task: string): ((markdown: st
 /**
  * The Markdown editor as the task panel uses it: tables and callouts drawn
  * by the engine's renderer, task keys completed from the engine, Ctrl+Enter
- * to save or send and Escape to give up. The editor loads on first use.
+ * to save or send and Escape to give up, and the formatting toolbar above
+ * the text. The editor loads on first use.
  */
-export function MarkdownField({ label, value, onChange, onSubmit, onCancel, mode = "preview", autoFocus = false, readOnly = false, compact = false, className, ref, attachTo }: MarkdownFieldProps) {
+export function MarkdownField({ label, value, onChange, onSubmit, onCancel, mode = "preview", autoFocus = false, readOnly = false, compact = false, plain = false, className, ref, attachTo }: MarkdownFieldProps) {
   const t = useT();
   const call = useCall();
   const toasts = useToasts();
@@ -126,6 +130,15 @@ export function MarkdownField({ label, value, onChange, onSubmit, onCancel, mode
         }
       }}
     >
+      {!plain && (
+        <FormatToolbar
+          compact={compact}
+          isDisabled={readOnly}
+          onFormat={(kind) => {
+            editor.current?.format(kind);
+          }}
+        />
+      )}
       <Suspense fallback={<p className={classes("faint", styles.small)}>{t("editor-loading")}</p>}>
         <MarkdownEditor
           ref={setEditor}

@@ -10,6 +10,7 @@ import { Button } from "react-aria-components";
 import { useContextMenu, type MenuEntry } from "../components/ContextMenu";
 import { classes } from "../classes";
 import { useT } from "../i18n/I18n";
+import { applyFormat } from "./format";
 import { convertLineBreaks, openText, type LineBreak } from "./lineEndings";
 import styles from "./MarkdownEditor.module.css";
 import { filePasting, insertMarkdown } from "./paste";
@@ -172,6 +173,13 @@ export default function MarkdownEditor(props: MarkdownEditorProps) {
           editor.dispatch({ selection: { anchor: Math.min(at, editor.state.doc.length) } });
         }
         insertMarkdown(editor, text, "input");
+      },
+      format: (kind) => {
+        const editor = view.current;
+        if (editor) {
+          applyFormat(editor, kind);
+          editor.focus();
+        }
       },
       positionAt: (x, y) => view.current?.posAtCoords({ x, y }) ?? null,
     }),

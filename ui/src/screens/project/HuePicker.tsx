@@ -32,7 +32,7 @@ export function HuePicker({ label, value, onChange }: HuePickerProps) {
     >
       {HUES.map((hue) => (
         <RadioField key={hue} value={hue} aria-label={t(`hue-${hue}`)}>
-          <RadioButton className={({ isSelected, isFocusVisible }) => classes(styles.swatch, `hue-${hue}`, isSelected && styles.swatchOn, isFocusVisible && styles.swatchFocus)} />
+          <RadioButton data-hue={hue} className={({ isSelected, isFocusVisible }) => classes(styles.swatch, `hue-${hue}`, isSelected && styles.swatchOn, isFocusVisible && styles.swatchFocus)} />
         </RadioField>
       ))}
     </RadioGroup>

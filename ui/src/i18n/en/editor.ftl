@@ -31,3 +31,18 @@ editor-dev-source = Source
 editor-dev-engine-toggles = Checkboxes through the engine
 editor-dev-sample = Sample
 editor-dev-back = Back
+
+## The formatting toolbar
+
+editor-toolbar = Formatting
+editor-format-heading = Heading
+editor-format-bold = Bold
+editor-format-italic = Italic
+editor-format-strikethrough = Strikethrough
+editor-format-code = Inline code
+editor-format-link = Link
+editor-format-bullet-list = Bulleted list
+editor-format-numbered-list = Numbered list
+editor-format-checklist = Checklist
+editor-format-quote = Quote
+editor-format-code-block = Code block

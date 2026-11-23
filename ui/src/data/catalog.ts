@@ -10,6 +10,7 @@ import {
   type Category,
   type Edge,
   type Glyph,
+  type ProjectIcon,
   type Hue,
   type Modules,
   type Priority,
@@ -44,6 +45,32 @@ export type { CardSize };
 
 /** The nine hues of the design. */
 export const HUES = ["red", "orange", "yellow", "green", "teal", "blue", "purple", "pink", "grey"] as const satisfies readonly Hue[];
+
+/**
+ * The colour a new label (or project) gets when none is given, as the
+ * engine picks it: the first hue in palette order that `used` doesn't
+ * contain, else the least-used one, the earlier on a tie.
+ */
+export function suggestHue(used: readonly Hue[]): Hue {
+  let best: Hue = HUES[0];
+  let fewest = Number.POSITIVE_INFINITY;
+  for (const hue of HUES) {
+    const count = used.filter((each) => each === hue).length;
+    if (count < fewest) {
+      best = hue;
+      fewest = count;
+    }
+  }
+  return best;
+}
+
+/** The icons a project can have instead of its circle, in the picker's order. */
+export const PROJECT_ICONS = [
+  "folder", "star", "bug", "rocket", "book", "house", "briefcase", "code", "terminal", "globe",
+  "heart", "flag", "zap", "target", "lightbulb", "wrench", "hammer", "palette", "music", "camera",
+  "graduation-cap", "shopping-cart", "wallet", "chart-line", "calendar", "users", "building", "plane", "leaf", "coffee",
+  "gamepad", "puzzle", "shield", "flask-conical", "layers", "package", "compass", "mountain", "sparkles", "database",
+] as const satisfies readonly ProjectIcon[];
 
 /** What a status means across projects. */
 export const STATUS_CATEGORIES = ["todo", "in_progress", "done", "cancelled"] as const satisfies readonly Category[];

@@ -147,6 +147,24 @@ describe("the workspace in the window", () => {
   });
 });
 
+describe("time zone", () => {
+  it("offers System and every zone with its offset, filters as one types, and keeps the choice", async () => {
+    setUp({ page: "time" });
+    const field = await screen.findByRole("combobox", { name: "Time zone" });
+    expect((field as HTMLInputElement).value).toMatch(/^System/u);
+    act(() => {
+      field.focus();
+    });
+    fireEvent.change(field, { target: { value: "tokyo" } });
+    const option = await screen.findByRole("option", { name: /Asia\/Tokyo/u });
+    expect(option.textContent).toContain("+09:00");
+    fireEvent.click(option);
+    await waitFor(() => {
+      expect(JSON.parse(window.localStorage.getItem("glyphkeel.app") ?? "{}")).toMatchObject({ time_zone: "Asia/Tokyo" });
+    });
+  });
+});
+
 describe("reminders and background", () => {
   it("keeps the app's own switches, outside the app in the page's storage", async () => {
     setUp({ page: "reminders" });
@@ -162,7 +180,7 @@ describe("reminders and background", () => {
     const notifications = screen.getByRole("switch", { name: "Show reminders as desktop notifications" });
     fireEvent.click(notifications);
     await waitFor(() => {
-      expect(JSON.parse(window.localStorage.getItem("glyphkeel.app") ?? "{}")).toEqual({ background: false, notifications: false });
+      expect(JSON.parse(window.localStorage.getItem("glyphkeel.app") ?? "{}")).toEqual({ background: false, notifications: false, time_zone: "system" });
     });
   });
 

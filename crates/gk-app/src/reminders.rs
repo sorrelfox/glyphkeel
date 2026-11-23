@@ -188,6 +188,13 @@ pub(crate) struct Running {
 }
 
 impl Running {
+    /// Makes the scheduler look again now, as after a change: for example
+    /// when the person's time zone changes, which moves local reminder
+    /// times without any change event.
+    pub(crate) fn wake(&self) {
+        let _ = self.wake.send(Wake::Changed);
+    }
+
     /// Stops the scheduler and waits for its round to end.
     pub(crate) fn stop(mut self) {
         self.stopped.store(true, Ordering::Release);
@@ -539,6 +546,48 @@ mod tests {
         clock.store(START + HOUR, Ordering::SeqCst);
         std::thread::sleep(Duration::from_millis(300));
         assert_eq!(shown.titles().len(), 1);
+    }
+
+    #[test]
+    fn a_wake_makes_the_scheduler_look_again_at_once() {
+        let dir = TempDir::new().unwrap();
+        let clock = Arc::new(AtomicI64::new(START));
+        let engine = Arc::new(open(&dir, &clock));
+        call(
+            &engine,
+            "project.create",
+            json!({ "name": "T", "key": "TM" }),
+        );
+        let key = new_task(&engine, "Water the plants");
+        call(
+            &engine,
+            "reminder.set",
+            json!({ "key": key, "at": "2026-11-23 07:30" }),
+        );
+        let shown = Arc::new(Shown::default());
+        let tick = Arc::clone(&clock);
+        // It would sleep far longer than the test runs.
+        let running = start(
+            Arc::downgrade(&engine),
+            engine.subscribe(),
+            Arc::new(move || tick.load(Ordering::SeqCst)),
+            Arc::clone(&shown) as Arc<dyn Notifier>,
+            Duration::from_secs(3600),
+        )
+        .unwrap();
+        std::thread::sleep(Duration::from_millis(100));
+        clock.store(START + 30 * MINUTE, Ordering::SeqCst);
+        std::thread::sleep(Duration::from_millis(100));
+        assert!(shown.titles().is_empty());
+        running.wake();
+        for _ in 0..200 {
+            if !shown.titles().is_empty() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(shown.titles(), [format!("Reminder: {key}")]);
+        running.stop();
     }
 
     #[test]

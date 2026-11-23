@@ -18,6 +18,7 @@ import { useT, type Translate } from "../../i18n/I18n";
 import { MarkdownReader } from "../../markdown/Reader";
 import { formatDuration, type DurationUnits } from "../../data/duration";
 import { useDurationUnits } from "../../data/time";
+import { useTimeZone } from "../../data/zone";
 import { FileRow, useAttach } from "./Files";
 import { MarkdownField } from "./MarkdownField";
 import { TimeEntries } from "./Time";
@@ -26,7 +27,8 @@ import styles from "./TaskPanel.module.css";
 /** A moment as the panel shows it: "Nov 19, 2026, 16:20". */
 export function useMomentFormat(): (at: string) => string {
   const { locale } = useLocale();
-  const format = new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" });
+  const zone = useTimeZone();
+  const format = new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short", ...(zone === undefined ? {} : { timeZone: zone }) });
   return (at) => format.format(new Date(at));
 }
 

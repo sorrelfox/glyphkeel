@@ -9,9 +9,10 @@
 
 import type { Ref } from "react";
 
+import type { FormatKind } from "./formats";
 import type { LineBreak, LineBreakCounts, TextEdit } from "./lineEndings";
 
-export type { LineBreak, LineBreakCounts, TextEdit };
+export type { FormatKind, LineBreak, LineBreakCounts, TextEdit };
 
 /** The block kinds whose HTML comes from the Markdown renderer. */
 export type RenderedBlockKind = "table" | "callout";
@@ -125,6 +126,11 @@ export interface MarkdownEditorHandle {
    * line breaks converted.
    */
   insert(text: string, at?: number): void;
+  /**
+   * Applies a formatting command (bold, a list, a code block…) to the
+   * selection, as its shortcut does, and keeps the focus in the text.
+   */
+  format(kind: FormatKind): void;
   /** The position in the text under a point of the window, if the point is on the text. */
   positionAt(x: number, y: number): number | null;
 }
