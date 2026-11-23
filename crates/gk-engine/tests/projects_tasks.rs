@@ -822,6 +822,19 @@ fn settings_can_be_set_back_to_their_default() {
         .unwrap();
 }
 
+/// Takes a workspace back from schema version 4 to 3: the timer without
+/// pausing, reminders as version 3 had them.
+const BACK_TO_3: &str = "
+    ALTER TABLE timer DROP COLUMN running_since; ALTER TABLE timer DROP COLUMN elapsed_ms;
+    ALTER TABLE timer DROP COLUMN note; ALTER TABLE timer DROP COLUMN reminded_at;
+    DROP TABLE reminders;
+    CREATE TABLE reminders (
+      id BLOB PRIMARY KEY CHECK (length(id) = 16), task_id BLOB NOT NULL REFERENCES tasks (id),
+      remind_at INTEGER NOT NULL, fired_at INTEGER, dismissed_at INTEGER) STRICT;
+    CREATE INDEX reminders_task ON reminders (task_id);
+    CREATE INDEX reminders_due ON reminders (remind_at)
+      WHERE fired_at IS NULL AND dismissed_at IS NULL;";
+
 #[test]
 fn the_app_copies_an_older_workspace_before_upgrading_it() {
     let dir = tempfile::tempdir().unwrap();
@@ -830,6 +843,7 @@ fn the_app_copies_an_older_workspace_before_upgrading_it() {
     {
         // Back to the first schema version, as an older program left it.
         let conn = gk_store::open_raw(&layout.database()).unwrap();
+        conn.execute_batch(BACK_TO_3).unwrap();
         conn.execute_batch(
             "DROP INDEX tasks_subtasks; ALTER TABLE tasks DROP COLUMN subtask_rank;
              DROP TABLE request_log; DROP INDEX wiki_pages_name; PRAGMA user_version = 1;",
@@ -845,7 +859,7 @@ fn the_app_copies_an_older_workspace_before_upgrading_it() {
         .map(|f| f.unwrap().file_name().to_string_lossy().into_owned())
         .collect();
     assert_eq!(copies.len(), 1);
-    assert!(copies[0].starts_with("before-schema-3-v1-"), "{copies:?}");
+    assert!(copies[0].starts_with("before-schema-4-v1-"), "{copies:?}");
 }
 
 #[test]
@@ -874,6 +888,7 @@ fn upgrading_keeps_the_subtasks_in_the_order_they_were_shown() {
     e.close();
     {
         let conn = gk_store::open_raw(&layout.database()).unwrap();
+        conn.execute_batch(BACK_TO_3).unwrap();
         conn.execute_batch(
             "DROP INDEX tasks_subtasks; ALTER TABLE tasks DROP COLUMN subtask_rank;
              PRAGMA user_version = 2;",

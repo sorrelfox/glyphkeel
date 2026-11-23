@@ -30,6 +30,8 @@ pub struct Env {
     pub schema_version: i64,
     /// The workspace's folder, for its stored files.
     pub layout: gk_store::WorkspaceLayout,
+    /// The time zone of local days and times of day.
+    pub(crate) zone: crate::time::Zone,
 }
 
 /// A query's view of the workspace: one read transaction, one snapshot.

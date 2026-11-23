@@ -57,6 +57,18 @@ The safety class decides who may run an operation:
 | `comment.add` | write | app, command line, MCP | `add_comment` | `glyphkeel comment add <key>` |
 | `comment.update` | write | app, command line, MCP | `update_comment` | `glyphkeel comment edit <comment>` |
 | `comment.delete` | trash | app, command line, MCP | `delete_comment` | `glyphkeel comment delete <comment>` |
+| `time.log` | write | app, command line, MCP | `log_time` | `glyphkeel time log <key>` |
+| `time.update` | write | app, command line, MCP | `update_time_entry` | `glyphkeel time edit <entry>` |
+| `time.delete` | trash | app, command line, MCP | `delete_time_entry` | `glyphkeel time delete <entry>` |
+| `time.report` | read | app, command line, MCP | `get_time_report` | `glyphkeel time report` |
+| `timer.get` | read | app, command line, MCP | `get_workspace` | `glyphkeel timer status` |
+| `timer.start` | write | app, command line, MCP | `start_timer` | `glyphkeel timer start <key>` |
+| `timer.pause` | write | app, command line, MCP | `pause_timer` | `glyphkeel timer pause` |
+| `timer.stop` | write | app, command line, MCP | `stop_timer` | `glyphkeel timer stop` |
+| `reminder.set` | write | app, command line, MCP | `set_reminder` | `glyphkeel reminder set <key>` |
+| `reminder.clear` | write | app, command line, MCP | `clear_reminder` | `glyphkeel reminder clear <key>` |
+| `reminder.due` | read | app, command line, MCP | `get_reminders` | `glyphkeel reminder due` |
+| `reminder.acknowledge` | write | app, command line, MCP | `acknowledge_reminders` | `glyphkeel reminder ack <ids>` |
 | `board.get` | read | app, command line, MCP | `get_board` | `glyphkeel board <project>` |
 | `layout.get` | read | app, command line, MCP | `get_board` | `glyphkeel board layout show <project>` |
 | `layout.update` | write | app, command line, MCP | `set_board_layout` | `glyphkeel board layout set <project>` |
@@ -86,7 +98,7 @@ Input: `SettingsGetInput`. Output: `Settings`. Schemas: [catalog.schema.json](ca
 
 ## `settings.update`
 
-Change workspace settings that are not about agents: trash retention, reminder time, working hours and days, first day of the week.
+Change workspace settings that are not about agents: trash retention, reminder time, working hours and days, first day of the week, the timer reminder.
 
 Input: `SettingsPatch`. Output: `SettingsChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
@@ -325,6 +337,78 @@ Input: `CommentUpdateInput`. Output: `CommentChange`. Schemas: [catalog.schema.j
 Move a comment to the trash.
 
 Input: `CommentRef`. Output: `CommentChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `time.log`
+
+Log time on a task: a duration, the day of the work (default today) and a note.
+
+Input: `TimeLogInput`. Output: `TimeEntryChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `time.update`
+
+Change a time entry's duration, day or note.
+
+Input: `TimeUpdateInput`. Output: `TimeEntryChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `time.delete`
+
+Move a time entry to the trash.
+
+Input: `TimeEntryRef`. Output: `TimeEntryChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `time.report`
+
+Logged time over a range of days, grouped by day, task or project, with totals in the workspace's units.
+
+Input: `TimeReportInput`. Output: `TimeReport`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `timer.get`
+
+The workspace's timer: its task, whether it runs and the time so far.
+
+Input: `TimerGetInput`. Output: `TimerStatus`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `timer.start`
+
+Start the timer on a task, or start the paused timer again; a timer on another task is stopped and its time logged.
+
+Input: `TimerStartInput`. Output: `TimerChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `timer.pause`
+
+Pause the running timer; it keeps its time.
+
+Input: `TimerPauseInput`. Output: `TimerChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `timer.stop`
+
+Stop the timer and log its time as an entry on its task.
+
+Input: `TimerStopInput`. Output: `TimerChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `reminder.set`
+
+Set a task's personal reminder: a moment, or a number of days before its due date.
+
+Input: `ReminderSetInput`. Output: `ReminderChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `reminder.clear`
+
+Remove a task's personal reminder.
+
+Input: `ReminderClearInput`. Output: `ReminderChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `reminder.due`
+
+The reminders, deadline alerts and timer reminders that are due and not acknowledged, with those missed marked, and when the next one comes.
+
+Input: `ReminderDueInput`. Output: `DueReminders`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `reminder.acknowledge`
+
+Acknowledge reminders that were shown, so they don't come due again.
+
+Input: `ReminderAckInput`. Output: `ReminderAcknowledged`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `board.get`
 

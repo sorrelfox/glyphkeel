@@ -29,7 +29,8 @@ use serde_json::{Map, Value};
 
 use super::description::{self, Owner};
 use super::{
-    agent, board, claim, comment, desc, fields, file, lookup, project, relation, settings, task,
+    agent, board, claim, comment, desc, fields, file, lookup, project, relation, reminder,
+    settings, task, time,
 };
 use crate::failure::Failure;
 use crate::registry::{QueryCtx, Registry};
@@ -97,13 +98,15 @@ fn session_id(own: Option<Id>, text: &str) -> Result<Id, OpError> {
 }
 
 /// The activity rows of one task: its own (fields and description
-/// revisions), its comments', its files' (also those on its comments) and
-/// its links', live or removed. Takes the task's ID six times as bytes,
-/// then four times as text.
+/// revisions), its comments', its time entries', its files' (also those on
+/// its comments) and its links', live or removed. Takes the task's ID seven
+/// times as bytes, then four times as text.
 const OF_TASK: &str = "(
     (entity_kind = 'task' AND entity_id = ?)
     OR (entity_kind = 'comment'
         AND entity_id IN (SELECT id FROM comments WHERE task_id = ?))
+    OR (entity_kind = 'time_entry'
+        AND entity_id IN (SELECT id FROM time_entries WHERE task_id = ?))
     OR (entity_kind = 'attachment'
         AND entity_id IN (SELECT id FROM attachments
                            WHERE (owner_kind = 'task' AND owner_id = ?)
@@ -150,7 +153,7 @@ fn feed(q: &QueryCtx<'_>, input: ActivityQuery) -> Result<ActivityPage, Failure>
         let blob = SqlValue::Blob(id.as_bytes().to_vec());
         let text = SqlValue::Text(id.to_string());
         args.extend([blob.clone(), blob.clone(), blob.clone(), blob.clone()]);
-        args.extend([blob.clone(), blob]);
+        args.extend([blob.clone(), blob.clone(), blob]);
         args.extend(std::iter::repeat_n(text, 4));
     }
     let base = if filters.is_empty() {
@@ -319,6 +322,10 @@ fn current(
         (comment::ENTITY, "created" | "trashed") => comment::raw_life(tx, id, field)?,
         (comment::ENTITY, "body") => comment::raw_body(tx, id)?,
         (file::ENTITY, "created" | "trashed") => file::raw_life(tx, id, field)?,
+        (time::ENTRY, "created" | "trashed") => time::raw_life(tx, id, field)?,
+        (time::ENTRY, "date" | "minutes" | "note") => time::raw_field(tx, id, field)?,
+        (time::TIMER, "timer") => time::raw_timer(tx)?,
+        (fields::TASK, "reminder") => reminder::raw(tx, id)?,
         (fields::TASK, "claim") => claim::raw(tx, id)?,
         (fields::PROJECT | fields::TASK, "description") => match Owner::of_entity(entity, id) {
             Some(owner) => description::raw(tx, owner)?,
@@ -390,6 +397,12 @@ fn apply(
             comment::set_body(w, id, project, body).map(drop)
         }
         (file::ENTITY, "created" | "trashed") => file::set_live(w, id, project, field, value),
+        (time::ENTRY, "created" | "trashed") => time::set_live(w, id, project, field, value),
+        (time::ENTRY, "date" | "minutes" | "note") => {
+            time::apply_field(w, id, project, field, value)
+        }
+        (time::TIMER, "timer") => time::apply_timer(w, value.as_ref()),
+        (fields::TASK, "reminder") => reminder::write_value(w, id, project, value),
         (fields::TASK, "claim") => claim::apply(w, id, project, value),
         (fields::PROJECT | fields::TASK, "description") => match Owner::of_entity(entity, id) {
             Some(owner) => description::restore(w, owner, project, value.as_ref()),

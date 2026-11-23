@@ -195,6 +195,117 @@ fn subtasks_are_reordered_and_one_tasks_activity_is_listed() {
 }
 
 #[test]
+fn time_is_logged_edited_and_reported() {
+    let ws = Workspace::new();
+    ws.ok(&["project", "create", "--name", "Glyphkeel", "--key", "GK"]);
+    ws.ok(&["task", "create", "--project", "GK", "--title", "Notes"]);
+    let logged = ws.json(&[
+        "time",
+        "log",
+        "GK-1",
+        "--duration",
+        "+30m",
+        "--date",
+        "2026-11-23",
+        "--note",
+        "Draft",
+    ]);
+    assert_eq!(logged["spent_minutes"], 30);
+    let id = logged["entry"]["id"].as_str().unwrap().to_owned();
+    let edited = ws.json(&["time", "edit", &id, "--duration", "1h 15m"]);
+    assert_eq!(edited["entry"]["duration"], "1h 15m");
+    let report = ws.json(&[
+        "time",
+        "report",
+        "--from",
+        "2026-11-23",
+        "--to",
+        "2026-11-29",
+        "--group-by",
+        "day",
+    ]);
+    assert_eq!(report["items"][0]["key"], "2026-11-23");
+    assert_eq!(report["total_duration"], "1h 15m");
+    snapshot!(ws.ok(&[
+        "time",
+        "report",
+        "--from",
+        "2026-11-23",
+        "--to",
+        "2026-11-29"
+    ]));
+    let gone = ws.json(&["time", "delete", &id]);
+    assert_eq!(gone["spent_minutes"], 0);
+    let out = ws.run(&["time", "log", "GK-1", "--duration", "25h"]);
+    assert_eq!(code(&out), 1, "{}", stderr(&out));
+}
+
+/// The timer lives in the workspace, so each command is its own process:
+/// one starts it, others see it, pause it and stop it.
+#[test]
+fn the_timer_is_shared_between_processes() {
+    let ws = Workspace::new();
+    ws.ok(&["project", "create", "--name", "Glyphkeel", "--key", "GK"]);
+    ws.ok(&["task", "create", "--project", "GK", "--title", "Notes"]);
+    ws.ok(&["task", "create", "--project", "GK", "--title", "Review"]);
+    let none = ws.json(&["timer", "status"]);
+    assert!(none.get("timer").is_none());
+
+    let started = ws.json(&["timer", "start", "GK-1", "--note", "Writing"]);
+    assert_eq!(started["timer"]["state"], "running");
+    let seen = ws.json(&["timer", "status"]);
+    assert_eq!(seen["timer"]["task"]["key"], "GK-1");
+    assert_eq!(seen["timer"]["note"], "Writing");
+    let overview = ws.json(&["status"]);
+    assert_eq!(overview["timer"]["task"]["key"], "GK-1");
+
+    let paused = ws.json(&["timer", "pause"]);
+    assert_eq!(paused["timer"]["state"], "paused");
+    assert_eq!(ws.json(&["timer", "status"])["timer"]["state"], "paused");
+
+    // Starting on another task stops the paused one; it ran for under half
+    // a minute, so nothing is logged.
+    let switched = ws.json(&["timer", "start", "GK-2"]);
+    assert_eq!(switched["timer"]["task"]["key"], "GK-2");
+    assert!(switched.get("entry").is_none());
+    assert_eq!(switched["warnings"].as_array().unwrap().len(), 1);
+
+    let stopped = ws.json(&["timer", "stop", "--duration", "20m", "--note", "Read it"]);
+    assert_eq!(stopped["entry"]["task"], "GK-2");
+    assert_eq!(stopped["entry"]["minutes"], 20);
+    assert!(ws.json(&["timer", "status"]).get("timer").is_none());
+    let out = ws.run(&["timer", "stop"]);
+    assert_eq!(code(&out), 2, "{}", stderr(&out));
+}
+
+#[test]
+fn reminders_are_set_listed_and_acknowledged() {
+    let ws = Workspace::new();
+    ws.ok(&["project", "create", "--name", "Glyphkeel", "--key", "GK"]);
+    ws.ok(&["task", "create", "--project", "GK", "--title", "Call back"]);
+    let set = ws.json(&[
+        "reminder",
+        "set",
+        "GK-1",
+        "--at",
+        "2020-01-01T09:00:00Z",
+        "--note",
+        "Ring Anna",
+    ]);
+    assert_eq!(set["reminder"]["at"], "2020-01-01T09:00:00.000Z");
+    let due = ws.json(&["reminder", "due"]);
+    assert_eq!(due["total"], 1);
+    assert_eq!(due["items"][0]["kind"], "reminder");
+    assert_eq!(due["items"][0]["missed"], true);
+    let id = due["items"][0]["id"].as_str().unwrap().to_owned();
+    let ack = ws.json(&["reminder", "ack", &id]);
+    assert_eq!(ack["acknowledged"][0], id.as_str());
+    assert_eq!(ws.json(&["reminder", "due"])["total"], 0);
+    let cleared = ws.json(&["reminder", "clear", "GK-1"]);
+    assert!(cleared.get("reminder").is_none());
+}
+
+#[test]
 fn input_as_json_and_options_together() {
     let ws = Workspace::new();
     let out = ws.json(&[

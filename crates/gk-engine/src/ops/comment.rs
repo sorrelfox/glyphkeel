@@ -57,7 +57,7 @@ pub(super) fn register(r: &mut Registry) {
     });
 }
 
-fn actor(kind: &str, name: String) -> Actor {
+pub(crate) fn actor(kind: &str, name: String) -> Actor {
     Actor {
         kind: if kind == "agent" {
             ActorKind::Agent

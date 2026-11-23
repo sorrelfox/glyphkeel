@@ -19,7 +19,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 use crate::error::{Result, StoreError};
 
 /// The schema version this program is built for.
-pub const SCHEMA_VERSION: i64 = 3;
+pub const SCHEMA_VERSION: i64 = 4;
 
 /// One migration: the SQL that takes the schema from `version - 1` to
 /// `version`.
@@ -42,6 +42,10 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 3,
         sql: include_str!("../migrations/0003_subtask_order.sql"),
+    },
+    Migration {
+        version: 4,
+        sql: include_str!("../migrations/0004_time_and_reminders.sql"),
     },
 ];
 
@@ -260,5 +264,59 @@ mod tests {
                 .windows(2)
                 .all(|w| w[1].version == w[0].version + 1)
         );
+    }
+
+    #[test]
+    fn version_4_keeps_the_latest_reminder_and_the_running_timer() {
+        let mut conn = memory();
+        conn.execute_batch("PRAGMA foreign_keys = ON").unwrap();
+        migrate(&mut conn, &MIGRATIONS[..3], |_| Ok(())).unwrap();
+        conn.execute_batch(
+            "INSERT INTO projects (id, rank, key, name, name_fold, hue, modules, created_at,
+                                   updated_at)
+             VALUES (x'01000000000000000000000000000000', 'i', 'TM', 'TM', 'tm', 'blue',
+                     '{}', 0, 0);
+             INSERT INTO statuses (id, project_id, name, name_fold, category, hue, rank)
+             VALUES (x'02000000000000000000000000000000', x'01000000000000000000000000000000',
+                     'To do', 'to do', 'todo', 'blue', 'i');
+             INSERT INTO task_types (id, project_id, name, name_fold, glyph, hue, rank, is_default)
+             VALUES (x'03000000000000000000000000000000', x'01000000000000000000000000000000',
+                     'Task', 'task', 'task', 'blue', 'i', 1);
+             INSERT INTO tasks (id, project_id, number, title, title_fold, status_id,
+                                status_entered_at, type_id, rank, created_at, created_by_kind,
+                                created_by_name, edited_at, updated_at)
+             VALUES (x'04000000000000000000000000000000', x'01000000000000000000000000000000',
+                     1, 'A', 'a', x'02000000000000000000000000000000', 0,
+                     x'03000000000000000000000000000000', 'i', 0, 'user', 'Me', 0, 0);
+             INSERT INTO reminders (id, task_id, remind_at, fired_at)
+             VALUES (x'05000000000000000000000000000000', x'04000000000000000000000000000000',
+                     1000, 1500),
+                    (x'06000000000000000000000000000000', x'04000000000000000000000000000000',
+                     2000, NULL);
+             INSERT INTO timer (id, task_id, started_at, actor_kind, actor_name)
+             VALUES (1, x'04000000000000000000000000000000', 777, 'user', 'Me');",
+        )
+        .unwrap();
+        migrate(&mut conn, MIGRATIONS, |_| Ok(())).unwrap();
+        let kept: (i64, Option<i64>) = conn
+            .query_row("SELECT remind_at, acked_at FROM reminders", [], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })
+            .unwrap();
+        assert_eq!(kept, (2000, None));
+        let timer: (i64, i64) = conn
+            .query_row("SELECT running_since, elapsed_ms FROM timer", [], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })
+            .unwrap();
+        assert_eq!(timer, (777, 0));
+        let both = conn.execute(
+            "INSERT INTO reminders (id, task_id, remind_at, days_before_due, actor_kind,
+                                    actor_name, created_at)
+             VALUES (x'07000000000000000000000000000000', x'04000000000000000000000000000000',
+                     1, 1, 'user', 'Me', 0)",
+            [],
+        );
+        assert!(both.is_err(), "a moment and days before due together");
     }
 }

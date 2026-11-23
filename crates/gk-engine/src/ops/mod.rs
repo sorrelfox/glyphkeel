@@ -20,9 +20,11 @@ pub(crate) mod lookup;
 pub(crate) mod project;
 pub(crate) mod project_delete;
 pub(crate) mod relation;
+pub(crate) mod reminder;
 pub(crate) mod rollup;
 pub(crate) mod settings;
 pub(crate) mod task;
+pub(crate) mod time;
 pub(crate) mod workspace;
 
 /// The catalog's descriptor of `O`.
@@ -45,4 +47,6 @@ pub(crate) fn register(r: &mut Registry) {
     description::register(r);
     board::register(r);
     file::register(r);
+    time::register(r);
+    reminder::register(r);
 }

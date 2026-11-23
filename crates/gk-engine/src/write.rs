@@ -24,6 +24,7 @@ pub(crate) struct CommandMeta {
     pub(crate) ctx: Context,
     pub(crate) workspace_id: Id,
     pub(crate) layout: gk_store::WorkspaceLayout,
+    pub(crate) zone: crate::time::Zone,
 }
 
 /// A command's view of the workspace: the open write transaction and a
@@ -95,6 +96,11 @@ impl<'a> WriteCtx<'a> {
     #[must_use]
     pub fn layout(&self) -> &gk_store::WorkspaceLayout {
         &self.meta.layout
+    }
+
+    /// The time zone of local days and times of day.
+    pub(crate) fn zone(&self) -> &crate::time::Zone {
+        &self.meta.zone
     }
 
     /// The operation running.

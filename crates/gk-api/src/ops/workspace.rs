@@ -32,6 +32,9 @@ pub struct WorkspaceInfo {
     pub caller: Caller,
     /// The workspace settings.
     pub settings: Settings,
+    /// The timer, while one runs or is paused.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timer: Option<crate::ops::time::Timer>,
     /// A short guide to keys, references and the query language.
     pub guide: String,
 }

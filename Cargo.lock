@@ -1739,6 +1739,7 @@ dependencies = [
  "gk-markdown",
  "gk-store",
  "image",
+ "jiff 1.0.2",
  "schemars 1.2.3",
  "serde",
  "serde_json",

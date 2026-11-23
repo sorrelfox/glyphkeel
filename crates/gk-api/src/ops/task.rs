@@ -153,6 +153,12 @@ pub struct Task {
     /// included, when asked for with `include`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub revisions: Option<Vec<RevisionInfo>>,
+    /// Its time entries, newest day first, when asked for with `include`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub time_entries: Option<Vec<crate::ops::time::TimeEntry>>,
+    /// Its personal reminder, when asked for with `include` and it has one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reminder: Option<crate::ops::time::Reminder>,
     /// Its place in its status column.
     pub rank: String,
     /// Keys it had before; they still find it.
@@ -266,6 +272,10 @@ pub enum TaskPart {
     Checklist,
     /// The description's revisions and conflict copies.
     Revisions,
+    /// The time entries, newest day first.
+    Time,
+    /// The personal reminder.
+    Reminder,
 }
 
 /// A task changed, with the history group of the change.
@@ -295,7 +305,7 @@ pub struct TaskGetInput {
     /// One to 20 task keys or IDs.
     pub keys: Vec<String>,
     /// What to add to each task: `subtasks`, `links`, `comments`, `files`,
-    /// `checklist`, `revisions`.
+    /// `checklist`, `revisions`, `time`, `reminder`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub include: Vec<TaskPart>,
 }
