@@ -1,0 +1,165 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+   Copyright (C) 2026 Glyphkeel contributors */
+
+.panel {
+  display: flex;
+  flex: 0 1 var(--w-inspector);
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-left: 1px solid var(--border);
+  background: var(--bg);
+  outline: none;
+}
+
+.bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  height: var(--h-toolbar);
+  padding: 0 8px 0 16px;
+}
+
+.ownKey {
+  padding: 0 6px;
+  color: var(--fg);
+}
+
+.body {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  padding: 4px 20px 20px;
+  overflow: auto;
+  overscroll-behavior: none;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--fs-h1);
+  font-weight: 700;
+  line-height: 1.3;
+  text-wrap: pretty;
+  outline: none;
+  border-radius: var(--r-m);
+}
+
+.title:focus-visible {
+  outline: var(--focus-w) solid var(--focus);
+  outline-offset: 2px;
+}
+
+.titleField {
+  margin: 0;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: var(--r-m);
+  box-shadow: inset 0 0 0 2px var(--focus);
+  background: var(--surface);
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--fs-h1);
+  font-weight: 700;
+  line-height: 1.3;
+  resize: none;
+  outline: none;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.props {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 16px;
+}
+
+.prop {
+  grid-template-columns: 76px minmax(0, 1fr);
+}
+
+/* Labels wrap inside their cell. */
+.wide > dd {
+  flex-wrap: wrap;
+  padding: 3px 0;
+}
+
+.static {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.over {
+  color: var(--danger);
+}
+
+.small {
+  font-size: var(--fs-small);
+}
+
+.dateText {
+  font-size: var(--fs);
+}
+
+.inlineField {
+  flex: 1;
+  min-width: 0;
+}
+
+.invalid {
+  box-shadow: inset 0 0 0 2px var(--danger);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.description {
+  white-space: pre-wrap;
+}
+
+.description:empty {
+  display: none;
+}
+
+.descriptionField {
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--r-m);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  background: var(--surface);
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  line-height: var(--lh-read);
+  resize: vertical;
+  outline: none;
+}
+
+.descriptionField:focus {
+  box-shadow: inset 0 0 0 2px var(--focus);
+}
+
+.refRow {
+  width: auto;
+  margin: 0 -8px;
+}
+
+.relationKind {
+  flex: 0 0 84px;
+}

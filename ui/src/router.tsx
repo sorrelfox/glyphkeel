@@ -1,0 +1,107 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Glyphkeel contributors
+
+import {
+  createMemoryHistory,
+  createRootRouteWithContext,
+  createRoute,
+  createRouter,
+  Outlet,
+  useNavigate,
+  useRouteContext,
+} from "@tanstack/react-router";
+import { lazy, Suspense, useEffect, useState } from "react";
+
+import { windowReady, type Transport } from "./ipc/ready";
+import { BoardScreen } from "./screens/board/BoardScreen";
+import { AllTasksScreen, TodayScreen } from "./screens/today/Placeholders";
+import { Shell } from "./shell/Shell";
+import { StartupFailure } from "./shell/StartupFailure";
+import { type StartData } from "./start";
+
+// Loaded on first use, so that it costs the app's start nothing.
+const Gallery = lazy(() => import("./dev/Gallery"));
+
+/** The path that opens the gallery directly, for the browser tests. */
+export const GALLERY_PATH = "/dev/themes";
+
+export interface RouterContext {
+  start: StartData;
+}
+
+/**
+ * The window's screens. Navigation is app state in memory, not the address
+ * bar: back and forward work inside the window, and a link such as
+ * `glyphkeel://open/TM-41` becomes a navigation.
+ */
+const rootRoute = createRootRouteWithContext<RouterContext>()({ component: Root });
+
+const galleryRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: GALLERY_PATH,
+  component: GalleryScreen,
+});
+
+const shellRoute = createRoute({ getParentRoute: () => rootRoute, id: "shell", component: ShellScreen });
+
+const todayRoute = createRoute({ getParentRoute: () => shellRoute, path: "/", component: TodayScreen });
+
+const allTasksRoute = createRoute({ getParentRoute: () => shellRoute, path: "/all", component: AllTasksScreen });
+
+/** A project's board; `task` is the task open in the panel beside it. */
+export const boardRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: "/projects/$key",
+  validateSearch: (search: Record<string, unknown>): { task?: string } =>
+    typeof search.task === "string" && search.task !== "" ? { task: search.task } : {},
+  component: BoardScreen,
+});
+
+const routeTree = rootRoute.addChildren([galleryRoute, shellRoute.addChildren([todayRoute, allTasksRoute, boardRoute])]);
+
+/** The first screen: the gallery from its path (browser tests), else Today. */
+export function initialPath(pathname: string): string {
+  return pathname.startsWith(GALLERY_PATH) ? GALLERY_PATH : "/";
+}
+
+export function createAppRouter(path: string, context: RouterContext) {
+  return createRouter({ routeTree, history: createMemoryHistory({ initialEntries: [path] }), context });
+}
+
+declare module "@tanstack/react-router" {
+  interface Register {
+    router: ReturnType<typeof createAppRouter>;
+  }
+}
+
+function Root() {
+  const [transport, setTransport] = useState<Transport | null>(null);
+
+  // React's first commit: the window may be shown now. The answer also says
+  // whether the page's calls travel the way they should.
+  useEffect(() => {
+    windowReady().then(setTransport, (error: unknown) => {
+      console.error("the app did not answer the first-screen signal", error);
+    });
+  }, []);
+
+  if (transport === "postMessage") {
+    return <StartupFailure reason="startup-ipc-fallback" />;
+  }
+  return <Outlet />;
+}
+
+function ShellScreen() {
+  const { start } = useRouteContext({ from: "__root__" });
+  const navigate = useNavigate();
+  return <Shell titleBar={start.titleBar} openGallery={import.meta.env.DEV ? () => void navigate({ to: GALLERY_PATH }) : undefined} />;
+}
+
+function GalleryScreen() {
+  const navigate = useNavigate();
+  return (
+    <Suspense>
+      <Gallery onLeave={() => void navigate({ to: "/" })} />
+    </Suspense>
+  );
+}

@@ -14,7 +14,9 @@ export default defineConfig(({ mode }) => ({
   // `vite --mode bridge` builds a page for an ordinary browser that talks to
   // the development bridge on loopback. In every other build this is false,
   // and the bridge's code is dropped as dead code.
-  define: { __BRIDGE__: JSON.stringify(mode === "bridge") },
+  // `vite --mode fake` works on sample data in memory instead of the engine,
+  // for work on the screens and their browser flows.
+  define: { __BRIDGE__: JSON.stringify(mode === "bridge"), __FAKE__: JSON.stringify(mode === "fake") },
   clearScreen: false,
   server: {
     host: "127.0.0.1",
