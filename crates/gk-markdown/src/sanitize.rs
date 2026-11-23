@@ -79,11 +79,26 @@ pub mod allowlist {
     ];
 
     /// Schemes a link (`<a href>`) may use. Links to a fragment (`#fn-…`) are
-    /// allowed too.
+    /// allowed too, and links to an attachment in the exact form of
+    /// [`is_attachment_link`].
     pub const LINK_SCHEMES: &[&str] = &["http", "https", "mailto"];
 
     /// The only scheme an image (`<img src>`) may load from: attachments.
     pub const IMAGE_SCHEME: &str = "gk-file";
+
+    /// Whether `url` is a link to an attachment exactly as the editor writes
+    /// it: `gk-file://` and the attachment's ID, a UUID in lower case. No
+    /// other host, path, query, fragment or spelling is accepted.
+    #[must_use]
+    pub fn is_attachment_link(url: &str) -> bool {
+        url.strip_prefix("gk-file://").is_some_and(|id| {
+            id.len() == 36
+                && id.bytes().enumerate().all(|(i, b)| match i {
+                    8 | 13 | 18 | 23 => b == b'-',
+                    _ => b.is_ascii_digit() || (b'a'..=b'f').contains(&b),
+                })
+        })
+    }
 
     /// The attributes allowed on `tag` besides [`GENERIC_ATTRIBUTES`].
     #[must_use]
@@ -117,7 +132,7 @@ pub mod allowlist {
 
 use allowlist::{
     GENERIC_ATTRIBUTES, IMAGE_SCHEME, LINK_SCHEMES, READER_TAGS, RENDERER_ATTRIBUTES,
-    reader_attributes,
+    is_attachment_link, reader_attributes,
 };
 
 /// Sanitizes `html` written by one render. `mark` is that render's mark on
@@ -199,7 +214,10 @@ fn filter_attribute(
         ("a", "href") => {
             let trimmed = value.trim();
             let fragment = trimmed.starts_with('#') && !trimmed.starts_with("#/");
-            let allowed = fragment || is_web_url(trimmed) || has_scheme(trimmed, "mailto");
+            let allowed = fragment
+                || is_web_url(trimmed)
+                || has_scheme(trimmed, "mailto")
+                || is_attachment_link(value);
             allowed.then(|| value.to_owned())
         }
         ("img", "src") => has_scheme(value.trim(), IMAGE_SCHEME).then(|| value.to_owned()),
@@ -257,5 +275,35 @@ mod tests {
         assert!(!has_scheme("https", "https"));
         assert!(!has_scheme("httpsx://", "https"));
         assert!(!has_scheme("é:", "https"));
+    }
+
+    #[test]
+    fn attachment_links_have_one_exact_form() {
+        let id = "0b5e2c1a-7f3d-4e8a-9c21-5d6f7a8b9c0d";
+        assert!(is_attachment_link(&format!("gk-file://{id}")));
+        for bad in [
+            String::from("gk-file://"),
+            String::from("gk-file://abc"),
+            format!("GK-FILE://{id}"),
+            format!("gk-file:{id}"),
+            format!("gk-file:/{id}"),
+            format!("gk-file:///{id}"),
+            format!("gk-file://localhost/{id}"),
+            format!("gk-file://{id}/"),
+            format!("gk-file://{id}/thumb"),
+            format!("gk-file://{id}/../x"),
+            format!("gk-file://{id}?x=1"),
+            format!("gk-file://{id}#x"),
+            format!("gk-file://{id} "),
+            format!(" gk-file://{id}"),
+            format!("gk-file://{}", id.to_uppercase()),
+            format!("gk-file://{}", id.replace('-', "")),
+            format!("gk-file://{}", id.replacen('-', "%2d", 1)),
+            format!("gk-file://{id}0"),
+            format!("gk-file://{}", &id[..35]),
+            format!("gk-file://user@{}", &id[5..]),
+        ] {
+            assert!(!is_attachment_link(&bad), "{bad:?}");
+        }
     }
 }

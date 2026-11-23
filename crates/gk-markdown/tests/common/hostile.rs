@@ -110,6 +110,13 @@ pub(crate) const PAYLOADS: &[&str] = &[
     // links and images with the wrong scheme for their place
     "<a href=\"gk-file://abc\">x</a>",
     "[x](gk-file://abc)",
+    "[x](gk-file://0b5e2c1a-7f3d-4e8a-9c21-5d6f7a8b9c0d/../../secret)",
+    "[x](gk-file://0b5e2c1a-7f3d-4e8a-9c21-5d6f7a8b9c0d?x=\"onmouseover=alert(1))",
+    "<a href=\"gk-file://0b5e2c1a-7f3d-4e8a-9c21-5d6f7a8b9c0d#x\">x</a>",
+    "<a href=\"gk-file://localhost/0b5e2c1a-7f3d-4e8a-9c21-5d6f7a8b9c0d\">x</a>",
+    "<a href=\" gk-file://0b5e2c1a-7f3d-4e8a-9c21-5d6f7a8b9c0d\">x</a>",
+    "<a href=\"gk-file://0b5e2c1a-7f3d-4e8a-9c21-5d6f7a8b9c0d\" onclick=\"alert(1)\">x</a>",
+    "[x](gk-app://open) [y](tauri://localhost) [z](ipc://localhost/x)",
     "![x](GK-FILE://abc)",
     "![x](HTTPS://example.com/a.png)",
     "![x](ftp://example.com/a.png)",

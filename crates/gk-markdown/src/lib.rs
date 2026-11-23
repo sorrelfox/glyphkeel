@@ -42,8 +42,8 @@
 //!   tags are renamed before sanitizing, so they are removed; their text
 //!   stays.
 //! - The finished HTML may only contain [`allowlist::READER_TAGS`], each with
-//!   its own attributes, and links only to the web, to mail addresses and to
-//!   footnotes. Images load only from `gk-file:` attachments; a web image
+//!   its own attributes, and links only to the web, to mail addresses, to
+//!   footnotes and to attachments (`gk-file://<id>`, nothing more). Images load only from `gk-file:` attachments; a web image
 //!   becomes an `<img>` without `src` that carries the address in
 //!   `data-external-src`, for the reader to load on request.
 //!

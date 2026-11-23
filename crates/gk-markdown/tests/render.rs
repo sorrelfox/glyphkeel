@@ -116,6 +116,44 @@ fn code_languages_keep_non_ascii_names() {
 }
 
 #[test]
+fn links_to_attachments_are_kept_in_their_exact_form() {
+    let id = "0b5e2c1a-7f3d-4e8a-9c21-5d6f7a8b9c0d";
+    let out = html(&format!(
+        "[report.pdf](gk-file://{id}) <a href=\"gk-file://{id}\">raw</a>"
+    ));
+    assert_eq!(
+        out.matches(&format!(
+            "<a href=\"gk-file://{id}\" rel=\"noopener noreferrer\">"
+        ))
+        .count(),
+        2,
+        "{out}"
+    );
+    for bad in [
+        format!("[x](gk-file://{id}/thumb)"),
+        format!("[x](gk-file://localhost/{id})"),
+        format!("[x](gk-file://{id}?a=1)"),
+        format!("[x](gk-file://{id}#top)"),
+        format!("[x](gk-file://{id}/../../etc/passwd)"),
+        format!("[x](gk-file://{id}%2F..)"),
+        format!("[x](GK-FILE://{id})"),
+        format!("[x](gk-file:{id})"),
+        format!("[x](gk-file:///{id})"),
+        format!("[x](gk-file://{})", id.to_uppercase()),
+        String::from("[x](gk-file://abc123)"),
+        format!("[x](gk-files://{id})"),
+        format!("[x](gk-app://{id})"),
+        format!("[x](tauri://{id})"),
+        format!("[x](file:///{id})"),
+        format!("[x](ipc://localhost/{id})"),
+        format!("[x](asset://localhost/{id})"),
+    ] {
+        let out = html(&bad);
+        assert!(!out.contains("href"), "{bad:?} -> {out:?}");
+    }
+}
+
+#[test]
 fn images_load_only_from_attachments() {
     let out = html(
         "![shot](gk-file://abc123 \"t\") ![ext](https://example.com/x.png) ![rel](x.png) \

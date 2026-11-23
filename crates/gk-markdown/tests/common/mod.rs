@@ -12,7 +12,8 @@ pub mod hostile;
 use std::sync::OnceLock;
 
 use gk_markdown::allowlist::{
-    GENERIC_ATTRIBUTES, IMAGE_SCHEME, LINK_SCHEMES, READER_TAGS, reader_attributes,
+    GENERIC_ATTRIBUTES, IMAGE_SCHEME, LINK_SCHEMES, READER_TAGS, is_attachment_link,
+    reader_attributes,
 };
 use gk_markdown::{RenderOptions, render};
 use regex::Regex;
@@ -73,7 +74,7 @@ pub fn violations(html: &str) -> Vec<String> {
                         .iter()
                         .any(|s| lower.starts_with(&format!("{s}:")));
                     let fragment = lower.starts_with('#') && !lower.starts_with("#/");
-                    if !(scheme_ok || fragment) {
+                    if !(scheme_ok || fragment || is_attachment_link(&value)) {
                         found.push(format!("href {value:?}"));
                     }
                 }
