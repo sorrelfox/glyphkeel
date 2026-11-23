@@ -95,7 +95,8 @@ describe("the task panel's sections", () => {
   it("links another task, shows Blocked on the blocked one, and removes the link", async () => {
     const { panel, other, transport } = await renderPanel();
     fireEvent.click(within(panel).getByRole("button", { name: "Add link" }));
-    fireEvent.change(within(panel).getByRole("combobox", { name: "Kind of link" }), { target: { value: "blocked_by" } });
+    fireEvent.click(within(panel).getByRole("button", { name: /Kind of link/ }));
+    fireEvent.click(within(await screen.findByRole("listbox")).getByRole("option", { name: "Blocked by" }));
     const field = within(panel).getByRole("textbox", { name: "Task key" });
     fireEvent.change(field, { target: { value: other.key.toLowerCase() } });
     fireEvent.keyDown(field, { key: "Enter" });

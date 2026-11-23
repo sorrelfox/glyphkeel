@@ -7,6 +7,7 @@ import { Button, Tab, TabList, TabPanel, Tabs } from "react-aria-components";
 
 import { classes } from "../../classes";
 import { Dialog } from "../../components/Dialog";
+import { Select } from "../../components/Select";
 import { TypeGlyph } from "../../components/Glyphs";
 import { Switch } from "../../components/Switch";
 import { useProject } from "../../data/board";
@@ -171,25 +172,13 @@ function General({ project }: { project: Project }) {
 function HueSelect({ label, value, onChange }: { label: string; value: Hue; onChange: (hue: Hue) => void }) {
   const t = useT();
   return (
-    <span className={classes("field", styles.select)}>
-      <span className={`dot hue-${value}`} />
-      <select
-        aria-label={label}
-        value={value}
-        onChange={(event) => {
-          const hue = HUES.find((candidate) => candidate === event.target.value);
-          if (hue) {
-            onChange(hue);
-          }
-        }}
-      >
-        {HUES.map((hue) => (
-          <option key={hue} value={hue}>
-            {t(`hue-${hue}`)}
-          </option>
-        ))}
-      </select>
-    </span>
+    <Select
+      className={classes(styles.select)}
+      label={label}
+      value={value}
+      onChange={onChange}
+      options={HUES.map((hue) => ({ id: hue, label: t(`hue-${hue}`), icon: <span className={`dot hue-${hue}`} /> }))}
+    />
   );
 }
 
@@ -217,24 +206,15 @@ function Statuses({ project }: { project: Project }) {
         <div key={status.id} className={styles.statusRow} data-testid={`status-${status.name}`}>
           <span className={`dot hue-${status.hue}`} />
           <SaveField label={t("status-name")} value={status.name} onSave={(value) => { update.mutate({ ...ref, status: status.id, name: value }); }} />
-          <span className={classes("field", styles.select)}>
-            <select
-              aria-label={t("status-category")}
-              value={status.category}
-              onChange={(event) => {
-                const category = STATUS_CATEGORIES.find((candidate) => candidate === event.target.value);
-                if (category) {
-                  update.mutate({ ...ref, status: status.id, category });
-                }
-              }}
-            >
-              {STATUS_CATEGORIES.map((category) => (
-                <option key={category} value={category}>
-                  {t(`category-${category}`)}
-                </option>
-              ))}
-            </select>
-          </span>
+          <Select
+            className={classes(styles.select)}
+            label={t("status-category")}
+            value={status.category}
+            onChange={(category) => {
+              update.mutate({ ...ref, status: status.id, category });
+            }}
+            options={STATUS_CATEGORIES.map((category) => ({ id: category, label: t(`category-${category}`) }))}
+          />
           <HueSelect label={t("status-colour")} value={status.hue} onChange={(hue) => { update.mutate({ ...ref, status: status.id, hue }); }} />
           <SaveField
             className={classes(styles.narrow)}
@@ -290,23 +270,17 @@ function Statuses({ project }: { project: Project }) {
       {deleting && (
         <div className={styles.confirm} role="group" aria-label={t("status-delete-title", { name: deleting.status.name })}>
           <span>{t("status-delete-move", { name: deleting.status.name })}</span>
-          <span className={classes("field", styles.select)}>
-            <select
-              aria-label={t("status-delete-target")}
-              value={deleting.target}
-              onChange={(event) => {
-                setDeleting({ ...deleting, target: event.target.value });
-              }}
-            >
-              {project.statuses
-                .filter((candidate) => candidate.id !== deleting.status.id)
-                .map((candidate) => (
-                  <option key={candidate.id} value={candidate.id}>
-                    {candidate.name}
-                  </option>
-                ))}
-            </select>
-          </span>
+          <Select
+            className={classes(styles.select)}
+            label={t("status-delete-target")}
+            value={deleting.target}
+            onChange={(target) => {
+              setDeleting({ ...deleting, target });
+            }}
+            options={project.statuses
+              .filter((candidate) => candidate.id !== deleting.status.id)
+              .map((candidate) => ({ id: candidate.id, label: candidate.name, icon: <span className={`dot hue-${candidate.hue}`} /> }))}
+          />
           <Button className="btn" onPress={() => { setDeleting(null); }}>
             {t("dialog-cancel")}
           </Button>
@@ -356,24 +330,15 @@ function Types({ project }: { project: Project }) {
         <div key={type.id} className={styles.simpleRow}>
           <TypeGlyph glyph={type.glyph} />
           <SaveField className={classes(styles.growField)} label={t("type-name")} value={type.name} onSave={(value) => { update.mutate({ ...ref, type: type.id, name: value }); }} />
-          <span className={classes("field", styles.select)}>
-            <select
-              aria-label={t("type-glyph")}
-              value={type.glyph}
-              onChange={(event) => {
-                const glyph = GLYPHS.find((candidate) => candidate === event.target.value);
-                if (glyph) {
-                  update.mutate({ ...ref, type: type.id, glyph });
-                }
-              }}
-            >
-              {GLYPHS.map((glyph) => (
-                <option key={glyph} value={glyph}>
-                  {t(`glyph-${glyph}`)}
-                </option>
-              ))}
-            </select>
-          </span>
+          <Select
+            className={classes(styles.select)}
+            label={t("type-glyph")}
+            value={type.glyph}
+            onChange={(glyph) => {
+              update.mutate({ ...ref, type: type.id, glyph });
+            }}
+            options={GLYPHS.map((glyph) => ({ id: glyph, label: t(`glyph-${glyph}`), icon: <TypeGlyph glyph={glyph} /> }))}
+          />
           {type.is_default && <span className="chip outline">{t("type-default")}</span>}
           <Button
             className="btn flat icon sm"

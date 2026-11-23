@@ -43,6 +43,15 @@ const uiText = [
   },
 ];
 
+// The platform's own drop-down list ignores the theme (WebKitGTK opens an
+// unstyled GTK list); choices use the shared Select component instead.
+const nativeControls = [
+  {
+    selector: "JSXOpeningElement[name.name=/^(select|option|optgroup|datalist)$/]",
+    message: "Use the Select component (src/components/Select.tsx), not a native <select>.",
+  },
+];
+
 // The app never goes online: the page talks to Rust over Tauri's IPC only.
 const networkGlobals = ["fetch", "XMLHttpRequest", "WebSocket", "EventSource", "Request"].map((name) => ({
   name,
@@ -67,14 +76,14 @@ export default defineConfig([
       "@typescript-eslint/no-implied-eval": "error",
       "no-new-func": "error",
       "no-script-url": "error",
-      "no-restricted-syntax": ["error", ...htmlInsertion, ...uiText],
+      "no-restricted-syntax": ["error", ...htmlInsertion, ...uiText, ...nativeControls],
       "no-restricted-globals": ["error", ...networkGlobals],
     },
   },
   {
     // Tests may write the text they look for.
     files: ["src/**/*.test.{ts,tsx}"],
-    rules: { "no-restricted-syntax": ["error", ...htmlInsertion] },
+    rules: { "no-restricted-syntax": ["error", ...htmlInsertion, ...nativeControls] },
   },
   {
     // Build and test configuration runs in Node, not in the app.

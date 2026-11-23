@@ -6,12 +6,16 @@ import { useState } from "react";
 import { Button, useLocale } from "react-aria-components";
 
 import { classes } from "../../classes";
+import { Select } from "../../components/Select";
 import { useOp } from "../../data/hooks";
 import { useDurations } from "../../data/time";
 import { type TimeGroupBy, type WeekStart } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { isoDay } from "../board/model";
 import styles from "./TimeReport.module.css";
+
+/** The list's key for "all projects"; no project key has this form. */
+const ALL_PROJECTS = "*";
 
 const GROUPS = ["day", "task", "project"] as const satisfies readonly TimeGroupBy[];
 
@@ -95,14 +99,15 @@ export function TimeReportScreen() {
           </Button>
         ))}
         <div className="grow" />
-        <select className={styles.select} aria-label={t("report-project")} value={project} onChange={(event) => { setProject(event.target.value); }}>
-          <option value="">{t("report-all-projects")}</option>
-          {(projects.data?.items ?? []).map((each) => (
-            <option key={each.id} value={each.key}>
-              {each.path}
-            </option>
-          ))}
-        </select>
+        <Select
+          className={styles.select}
+          label={t("report-project")}
+          value={project === "" ? ALL_PROJECTS : project}
+          onChange={(key) => {
+            setProject(key === ALL_PROJECTS ? "" : key);
+          }}
+          options={[{ id: ALL_PROJECTS, label: t("report-all-projects") }, ...(projects.data?.items ?? []).map((each) => ({ id: each.key, label: each.path }))]}
+        />
         <div className="seg" role="radiogroup" aria-label={t("report-group-by")}>
           {GROUPS.map((group) => (
             <button key={group} type="button" role="radio" aria-checked={groupBy === group} className={classes(groupBy === group && "on")} onClick={() => { setGroupBy(group); }}>

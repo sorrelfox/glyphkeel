@@ -158,14 +158,14 @@
   flex: 1;
 }
 
-.select select {
-  flex: 1;
+/* A select fills its column in the status grid and has a fixed width elsewhere. */
+.select {
   min-width: 0;
-  border: 0;
-  outline: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
+}
+
+.simpleRow > .select,
+.confirm > .select {
+  width: 160px;
 }
 
 .narrow {

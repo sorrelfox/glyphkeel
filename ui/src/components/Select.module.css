@@ -1,0 +1,54 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+   Copyright (C) 2026 Glyphkeel contributors
+
+   The select: a `.field` with the chosen value and a chevron, opening the
+   design's menu popover. */
+
+.select {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.trigger {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  color: var(--fg);
+  font: inherit;
+  text-align: start;
+  cursor: default;
+}
+
+/* The ring shows for the keyboard only, as on every other control. */
+.select .trigger:focus-within {
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+.select .trigger.focus {
+  box-shadow: inset 0 0 0 2px var(--focus);
+}
+
+.value {
+  flex: 1;
+  min-width: 0;
+}
+
+.chevron {
+  color: var(--fg-muted);
+}
+
+.popover {
+  min-width: max(var(--trigger-width), 160px);
+  max-width: 320px;
+  overflow: auto;
+  color: var(--fg);
+}
+
+.check {
+  color: var(--accent-fg);
+}
+
+.hidden {
+  visibility: hidden;
+}

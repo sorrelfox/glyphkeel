@@ -193,4 +193,22 @@ describe("the appearance", () => {
     });
     expect(kept.at(-1)).toMatchObject({ theme: "slate", density: "compact" });
   });
+
+  it("offers the accent colours as swatches, after the desktop's own", async () => {
+    const kept: Appearance[] = [];
+    setUp({ onAppearance: (appearance) => kept.push(appearance), page: "appearance" });
+    const accents = await screen.findByRole("radiogroup", { name: "Accent colour" });
+    const names = within(accents)
+      .getAllByRole("radio")
+      .map((radio) => radio.getAttribute("aria-label") ?? radio.closest("label")?.textContent);
+    expect(names).toEqual(["From the desktop", "Blue", "Teal", "Green", "Amber", "Orange", "Red", "Pink", "Purple", "Slate"]);
+    // Each swatch is drawn in its own accent.
+    expect(within(accents).getByRole("radio", { name: "Teal" }).closest("[data-accent]")?.getAttribute("data-accent")).toBe("teal");
+    fireEvent.click(within(accents).getByRole("radio", { name: "Teal" }));
+    await waitFor(() => {
+      expect(document.documentElement.dataset.accent).toBe("teal");
+    });
+    expect(kept.at(-1)).toMatchObject({ accent: "teal" });
+    expect(document.querySelector("select")).toBeNull();
+  });
 });

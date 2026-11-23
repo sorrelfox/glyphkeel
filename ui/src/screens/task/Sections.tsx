@@ -10,6 +10,7 @@ import { Button, Menu, MenuTrigger, Popover } from "react-aria-components";
 
 import { classes } from "../../classes";
 import { MenuEntries } from "../../components/ContextMenu";
+import { Select } from "../../components/Select";
 import { type Project } from "../../data/catalog";
 import { useCommand } from "../../data/hooks";
 import { type Link, type LinkKind, type RelationKind, type Task, type TaskRef } from "../../generated/ops";
@@ -374,20 +375,13 @@ export function LinksSection({
       ))}
       {adding && (
         <div className={styles.addLink}>
-          <select
+          <Select
             className={styles.select}
-            aria-label={t("links-kind")}
+            label={t("links-kind")}
             value={kind}
-            onChange={(event) => {
-              setKind(event.target.value as RelationKind);
-            }}
-          >
-            {ADDABLE.map((option) => (
-              <option key={option} value={option}>
-                {label(option)}
-              </option>
-            ))}
-          </select>
+            onChange={setKind}
+            options={ADDABLE.map((option) => ({ id: option, label: label(option) }))}
+          />
           <AddField
             label={t("links-other")}
             placeholder={t("links-other-placeholder")}

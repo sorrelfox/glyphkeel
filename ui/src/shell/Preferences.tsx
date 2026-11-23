@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
+import { Monitor } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { RadioButton, RadioField, RadioGroup, Tab, TabList, TabPanel, Tabs } from "react-aria-components";
 
@@ -93,6 +94,59 @@ function Row({ label, about, children }: { label: string; about?: string | undef
 }
 
 // ---------- Appearance ----------
+
+const ACCENT_CHOICES = ["system", ...ACCENTS] as const;
+type AccentChoice = (typeof ACCENT_CHOICES)[number];
+
+/**
+ * The accent colours as swatches, after a "from the desktop" button. Each
+ * swatch is drawn in its own colour and shows its name, as a tooltip, while
+ * the pointer rests on it or it has the keyboard focus; the name is also its
+ * accessible name. Arrow keys move.
+ */
+function AccentSwatches({ label, value, onChange }: { label: string; value: AccentChoice; onChange: (accent: AccentChoice) => void }) {
+  const t = useT();
+  return (
+    <RadioGroup
+      aria-label={label}
+      orientation="horizontal"
+      className={classes(styles.swatches)}
+      value={value}
+      onChange={(next) => {
+        const accent = ACCENT_CHOICES.find((candidate) => candidate === next);
+        if (accent) {
+          onChange(accent);
+        }
+      }}
+    >
+      {ACCENT_CHOICES.map((accent) => (
+        <RadioField
+          key={accent}
+          value={accent}
+          className={classes(styles.swatchField)}
+          {...(accent === "system" ? {} : { "aria-label": t(`accent-${accent}`) })}
+        >
+          {accent === "system" ? (
+            <RadioButton className={({ isSelected, isFocusVisible }) => classes("btn sm", isSelected && "on", isFocusVisible && styles.tileFocus)}>
+              <Monitor className="ic s" aria-hidden="true" />
+              <span>{t("accent-system")}</span>
+            </RadioButton>
+          ) : (
+            <RadioButton
+              data-accent={accent}
+              className={({ isSelected, isFocusVisible }) => classes(styles.swatch, isSelected && styles.swatchOn, isFocusVisible && styles.swatchFocus)}
+            >
+              <span className={styles.swatchName} aria-hidden="true">
+                {t(`accent-${accent}`)}
+              </span>
+            </RadioButton>
+          )}
+        </RadioField>
+      ))}
+    </RadioGroup>
+  );
+}
+
 
 const THEME_CHOICES = ["system", ...THEMES] as const;
 type ThemeChoice = (typeof THEME_CHOICES)[number];
@@ -190,24 +244,13 @@ function AppearancePage() {
         }
       >
         <Row label={t("preferences-accent")} about={t("preferences-accent-about")}>
-          <span className={classes("field", styles.select)}>
-            <select
-              aria-label={t("preferences-accent")}
-              value={appearance.accent}
-              onChange={(event) => {
-                const accent = (["system", ...ACCENTS] as const).find((candidate) => candidate === event.target.value);
-                if (accent) {
-                  update({ accent });
-                }
-              }}
-            >
-              {(["system", ...ACCENTS] as const).map((accent) => (
-                <option key={accent} value={accent}>
-                  {t(`accent-${accent}`)}
-                </option>
-              ))}
-            </select>
-          </span>
+          <AccentSwatches
+            label={t("preferences-accent")}
+            value={appearance.accent}
+            onChange={(accent) => {
+              update({ accent });
+            }}
+          />
         </Row>
       </Group>
       <Group title={t("preferences-interface")}>

@@ -212,7 +212,8 @@ test("task details on the engine: a subtask, a link, a comment and an attachment
   // A link: the walls wait for the paint; both cards and the panel say so.
   const links = panel.getByRole("region", { name: "Links" });
   await links.getByRole("button", { name: "Add link" }).click();
-  await links.getByRole("combobox", { name: "Kind of link" }).selectOption("blocked_by");
+  await links.getByRole("button", { name: /Kind of link/ }).click();
+  await page.getByRole("listbox").getByRole("option", { name: "Blocked by" }).click();
   await links.getByRole("textbox", { name: "Task key" }).fill(paint);
   await links.getByRole("textbox", { name: "Task key" }).press("Enter");
   await expect(links.getByRole("button", { name: new RegExp(`^\\W*Blocked by.*${paint}.*Buy paint`) })).toBeVisible();

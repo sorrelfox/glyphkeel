@@ -101,19 +101,69 @@
   max-width: 100%;
 }
 
-.select {
-  width: 200px;
+/* The accent colours: a "from the desktop" button, then a swatch per colour. */
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
   max-width: 100%;
 }
 
-.select select {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  outline: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
+.swatchField {
+  display: flex;
+}
+
+/* A 26 px circle in its own accent (`data-accent` on the swatch). */
+.swatch {
+  position: relative;
+  flex: none;
+  width: 26px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* Chosen: a gap in the card's colour, then a ring in the swatch's colour. */
+.swatchOn {
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent);
+}
+
+.swatchFocus {
+  outline: var(--focus-w) solid var(--focus);
+  outline-offset: 5px;
+}
+
+/* The colour's name, drawn as the design's tooltip above the swatch while it
+   is pointed at or focused. It is also the swatch's accessible name. */
+.swatchName {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  z-index: 1;
+  padding: 3px 8px;
+  border-radius: var(--r-s);
+  background: var(--fg);
+  color: var(--bg);
+  font-size: var(--fs-small);
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+/* Hidden, it takes no room, so it never sticks out of the card. */
+.swatch:not(:hover, .swatchFocus) .swatchName {
+  display: none;
+}
+
+.swatch:hover .swatchName {
+  animation: swatch-name var(--dur-fast) var(--ease) 500ms backwards;
+}
+
+@keyframes swatch-name {
+  from {
+    opacity: 0;
+  }
 }
 
 .number {
