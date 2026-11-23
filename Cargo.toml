@@ -68,6 +68,14 @@ serde_path_to_error = "0.1.20"
 sha2 = "0.10.9"
 # Temporary workspaces in tests (development only).
 tempfile = "3.27.0"
+# Markdown: the parser and HTML renderer of `gk-markdown` (CommonMark, GFM and
+# the extensions). Pinned to the minor version: before 1.0 its option names
+# change between minors.
+comrak = { version = "~0.59.0", default-features = false }
+# The final allowlist on the reader's HTML in `gk-markdown`.
+ammonia = "4.2.5"
+# Regular expressions in tests only (the allowlist checker of `gk-markdown`).
+regex = "1.13.2"
 # Error types.
 thiserror = "2.0.21"
 # Structured logs (slow write transactions, checkpoints).

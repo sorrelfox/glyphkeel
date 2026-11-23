@@ -67,7 +67,12 @@ allow = [
 ]
 confidence-threshold = 0.93
 # Per-crate exceptions, each with a comment that says why.
-exceptions = []
+exceptions = [
+    # Unicode character categories for the Markdown parser (comrak). Its data
+    # tables are under the Unicode licence, a permissive licence compatible
+    # with the GPL; the newer Unicode-3.0 is allowed above.
+    { crate = "finl_unicode", allow = ["Unicode-DFS-2016"] },
+]
 # Not every allowed licence is in use yet.
 unused-allowed-license = "allow"
 
