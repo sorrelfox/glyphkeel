@@ -19,6 +19,7 @@ mod navigation;
 #[cfg(target_os = "linux")]
 mod notifications;
 mod open_links;
+mod page;
 mod reminders;
 mod spell;
 mod start;

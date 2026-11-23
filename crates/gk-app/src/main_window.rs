@@ -8,10 +8,10 @@
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use tauri::webview::{NewWindowResponse, PageLoadEvent};
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::webview::PageLoadEvent;
+use tauri::{AppHandle, Manager, WebviewWindow};
 
-use crate::navigation;
+use crate::page;
 use crate::start::{self, Shown, StartData};
 use crate::title_bar::TitleBar;
 use crate::window_state::{self, MIN_SIZE};
@@ -46,7 +46,7 @@ pub(crate) fn open(
             .map(|settings| settings.ui()),
     };
 
-    let window = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("index.html".into()))
+    let window = page::window(app, LABEL, &start)
         .title("Glyphkeel")
         .inner_size(geometry.width, geometry.height)
         .min_inner_size(MIN_SIZE.0, MIN_SIZE.1)
@@ -56,13 +56,6 @@ pub(crate) fn open(
         // window manager draws the frame.
         .decorations(true)
         .visible(false)
-        .initialization_script(start.script())
-        // Nothing the page stores outlives the process.
-        .incognito(true)
-        .zoom_hotkeys_enabled(false)
-        // The page never leaves the app and never opens windows of its own.
-        .on_navigation(navigation::is_app_url)
-        .on_new_window(|_url, _features| NewWindowResponse::Deny)
         .on_page_load(|window, payload| {
             if payload.event() == PageLoadEvent::Finished {
                 show_if_page_stays_silent(&window);

@@ -11,10 +11,10 @@
 use std::time::Duration;
 
 use gk_api::OpError;
-use tauri::webview::{NewWindowResponse, PageLoadEvent};
-use tauri::{AppHandle, Manager, Runtime, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::webview::PageLoadEvent;
+use tauri::{AppHandle, Manager, Runtime, WebviewWindow};
 
-use crate::navigation;
+use crate::page;
 use crate::start::{self, StartData};
 use crate::title_bar::TitleBar;
 
@@ -78,17 +78,12 @@ fn open(app: &AppHandle, key: &str) -> tauri::Result<WebviewWindow> {
             .try_state::<crate::app_settings::AppSettings>()
             .map(|settings| settings.ui()),
     };
-    let window = WebviewWindowBuilder::new(app, label(key), WebviewUrl::App("index.html".into()))
+    let window = page::window(app, label(key), &start)
         .title(key)
         .inner_size(SIZE.0, SIZE.1)
         .min_inner_size(MIN_SIZE.0, MIN_SIZE.1)
         .decorations(true)
         .visible(false)
-        .initialization_script(start.script())
-        .incognito(true)
-        .zoom_hotkeys_enabled(false)
-        .on_navigation(navigation::is_app_url)
-        .on_new_window(|_url, _features| NewWindowResponse::Deny)
         .on_page_load(|window, payload| {
             if payload.event() == PageLoadEvent::Finished {
                 show_if_page_stays_silent(&window);
