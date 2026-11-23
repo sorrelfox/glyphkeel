@@ -4,6 +4,7 @@
 //! Repository automation, run as `cargo xtask <command>`.
 
 mod ci;
+mod codegen;
 mod deps;
 mod headers;
 
@@ -25,6 +26,11 @@ Commands:
   check-deps          Check the dependency rules: the command line and the
                       library crates never link the desktop toolkit or the web
                       view, and the shipped programs link no HTTP client.
+  gen [--check]       Generate the files that come from the operation
+                      catalog: the JSON Schemas, the MCP tool list, the
+                      reference pages and the TypeScript client. With
+                      --check, write nothing and fail when a file is stale.
+                      `codegen` is the same command.
 ";
 
 fn main() -> ExitCode {
@@ -60,6 +66,7 @@ fn run() -> Result<bool> {
             no_args(cmd, rest)?;
             deps::run(&root)
         }
+        "gen" | "codegen" => codegen::run(&root, rest),
         other => {
             eprint!("unknown command `{other}`\n\n{HELP}");
             Ok(false)

@@ -1,0 +1,792 @@
+{
+  "profiles": {
+    "full": [
+      "get_workspace",
+      "get_activity",
+      "revert_changes"
+    ],
+    "read-only": [
+      "get_workspace",
+      "get_activity"
+    ],
+    "standard": [
+      "get_workspace",
+      "get_activity",
+      "revert_changes"
+    ]
+  },
+  "tools": [
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Workspace overview"
+      },
+      "covers": [
+        "workspace.get",
+        "settings.get"
+      ],
+      "description": "Start here. Returns the workspace's name, your own name, profile and session, the workspace settings (working hours per day, first day of the week, trash retention) and a short guide to keys and references. Call it once at the start of a session; it changes nothing. Example: get_workspace {}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "No input.",
+        "title": "WorkspaceGetInput",
+        "type": "object"
+      },
+      "name": "get_workspace",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "The open workspace and who is asking.",
+        "properties": {
+          "caller": {
+            "additionalProperties": false,
+            "description": "Who is asking, through which program, with which rights.",
+            "properties": {
+              "actor": {
+                "additionalProperties": false,
+                "description": "The person or the agent.",
+                "properties": {
+                  "kind": {
+                    "description": "Person or agent.",
+                    "oneOf": [
+                      {
+                        "const": "user",
+                        "description": "The person who owns the workspace.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "agent",
+                        "description": "An agent working through MCP.",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "name": {
+                    "description": "The display name (\"You\", \"Claude Code\").",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "name"
+                ],
+                "type": "object"
+              },
+              "profile": {
+                "description": "The agent's profile, after the workspace's cap; left out for the\nperson.",
+                "oneOf": [
+                  {
+                    "const": "read-only",
+                    "description": "Reads only.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "standard",
+                    "description": "Reads, changes and moves to the trash; nothing permanent.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "full",
+                    "description": "Everything except operations on the application itself.",
+                    "type": "string"
+                  }
+                ]
+              },
+              "session": {
+                "description": "The agent session; left out for the person.",
+                "type": "string"
+              },
+              "via": {
+                "description": "The program.",
+                "oneOf": [
+                  {
+                    "const": "app",
+                    "description": "The desktop app.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "cli",
+                    "description": "The `glyphkeel` command.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "mcp",
+                    "description": "An agent through `glyphkeel mcp`.",
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "actor",
+              "via"
+            ],
+            "type": "object"
+          },
+          "guide": {
+            "description": "A short guide to keys, references and the query language.",
+            "type": "string"
+          },
+          "id": {
+            "description": "The workspace's ID.",
+            "type": "string"
+          },
+          "name": {
+            "description": "The workspace's name (its folder name).",
+            "type": "string"
+          },
+          "program_version": {
+            "description": "The version of the program answering.",
+            "type": "string"
+          },
+          "schema_version": {
+            "description": "The schema version of its database.",
+            "type": "integer"
+          },
+          "settings": {
+            "additionalProperties": false,
+            "description": "The workspace settings.",
+            "properties": {
+              "agent_max_profile": {
+                "description": "The most an agent may do, whatever profile it asks for.",
+                "oneOf": [
+                  {
+                    "const": "read-only",
+                    "description": "Reads only.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "standard",
+                    "description": "Reads, changes and moves to the trash; nothing permanent.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "full",
+                    "description": "Everything except operations on the application itself.",
+                    "type": "string"
+                  }
+                ]
+              },
+              "days_per_week": {
+                "description": "Working days in a week, for durations written in weeks (`1w`).",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "hours_per_day": {
+                "description": "Working hours in a day, for durations written in days (`2d`).",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "reminder_time": {
+                "description": "When reminders for a due date fire, as `HH:MM`.",
+                "type": "string"
+              },
+              "trash_days": {
+                "description": "Days an item stays in the trash before it is purged.",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "week_start": {
+                "description": "The first day of the week in calendars and in `this-week`.",
+                "oneOf": [
+                  {
+                    "const": "monday",
+                    "description": "Monday.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "saturday",
+                    "description": "Saturday.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "sunday",
+                    "description": "Sunday.",
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "trash_days",
+              "reminder_time",
+              "hours_per_day",
+              "days_per_week",
+              "week_start",
+              "agent_max_profile"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "schema_version",
+          "program_version",
+          "caller",
+          "settings",
+          "guide"
+        ],
+        "title": "WorkspaceInfo",
+        "type": "object"
+      },
+      "title": "Workspace overview",
+      "toolset": "workspace"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Activity log"
+      },
+      "covers": [
+        "history.feed",
+        "agent.sessions"
+      ],
+      "description": "Lists recent changes, newest first: who changed what, when, and through which program, with each field's value before and after. Filter by `session` (\"current\" for your own changes), `actor` or `group`; page with `cursor`. Set `sessions: true` to also list agent sessions. Use it to check what you or another agent changed before reverting. Example: get_activity {\"session\": \"current\", \"limit\": 20}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Which changes to list.",
+        "properties": {
+          "actor": {
+            "description": "Only changes by this actor, by name (case-insensitive).",
+            "type": "string"
+          },
+          "cursor": {
+            "description": "`next_cursor` of the previous page.",
+            "type": "string"
+          },
+          "group": {
+            "description": "Only the changes of this history group.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "At most this many changes (default 50, at most 200).",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "session": {
+            "description": "Only changes of this agent session; `\"current\"` is the caller's own.",
+            "type": "string"
+          },
+          "sessions": {
+            "default": false,
+            "description": "Also list the agent sessions.",
+            "type": "boolean"
+          }
+        },
+        "title": "ActivityQuery",
+        "type": "object"
+      },
+      "name": "get_activity",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "A page of the activity log, newest first.",
+        "properties": {
+          "items": {
+            "description": "The changes.",
+            "items": {
+              "additionalProperties": false,
+              "description": "One changed item in the activity log.",
+              "properties": {
+                "actor": {
+                  "additionalProperties": false,
+                  "description": "Who.",
+                  "properties": {
+                    "kind": {
+                      "description": "Person or agent.",
+                      "oneOf": [
+                        {
+                          "const": "user",
+                          "description": "The person who owns the workspace.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "agent",
+                          "description": "An agent working through MCP.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "name": {
+                      "description": "The display name (\"You\", \"Claude Code\").",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "at": {
+                  "description": "When (RFC 3339, UTC).",
+                  "type": "string"
+                },
+                "entity": {
+                  "description": "What kind of item changed.",
+                  "type": "string"
+                },
+                "fields": {
+                  "additionalProperties": {
+                    "additionalProperties": false,
+                    "description": "One field's change. A side is left out when the field had no value.",
+                    "properties": {
+                      "after": {
+                        "description": "The value after."
+                      },
+                      "before": {
+                        "description": "The value before."
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "description": "The changed fields, each with its value before and after.",
+                  "type": "object"
+                },
+                "group": {
+                  "description": "Its history group: everything one command changed.",
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The item's ID.",
+                  "type": "string"
+                },
+                "op": {
+                  "description": "The operation (`settings.update`).",
+                  "type": "string"
+                },
+                "project": {
+                  "description": "The project of the changed item, if any.",
+                  "type": "string"
+                },
+                "reverted_by": {
+                  "description": "The group that reverted this change, if one did.",
+                  "type": "string"
+                },
+                "seq": {
+                  "description": "The change's sequence number.",
+                  "type": "integer"
+                },
+                "session": {
+                  "description": "The agent session, for changes through MCP.",
+                  "type": "string"
+                },
+                "via": {
+                  "description": "Through which program.",
+                  "oneOf": [
+                    {
+                      "const": "app",
+                      "description": "The desktop app.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "cli",
+                      "description": "The `glyphkeel` command.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "mcp",
+                      "description": "An agent through `glyphkeel mcp`.",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "seq",
+                "group",
+                "at",
+                "op",
+                "actor",
+                "via",
+                "entity",
+                "id",
+                "fields"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "description": "Pass as `cursor` for the next page; left out on the last page.",
+            "type": "string"
+          },
+          "sessions": {
+            "description": "The agent sessions, newest first, when asked for.",
+            "items": {
+              "additionalProperties": false,
+              "description": "One run of `glyphkeel mcp`.",
+              "properties": {
+                "client": {
+                  "description": "The client's own ID (`claude-code`), when it sent one.",
+                  "type": "string"
+                },
+                "client_version": {
+                  "description": "The client's version, when it sent one.",
+                  "type": "string"
+                },
+                "ended_at": {
+                  "description": "When it ended; left out while it runs.",
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The session's ID.",
+                  "type": "string"
+                },
+                "last_seen_at": {
+                  "description": "When it was last seen working.",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "The agent's display name.",
+                  "type": "string"
+                },
+                "profile": {
+                  "description": "The profile the session ran with.",
+                  "oneOf": [
+                    {
+                      "const": "read-only",
+                      "description": "Reads only.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "standard",
+                      "description": "Reads, changes and moves to the trash; nothing permanent.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "full",
+                      "description": "Everything except operations on the application itself.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "reads": {
+                  "description": "Operations that read.",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "started_at": {
+                  "description": "When it started (RFC 3339, UTC).",
+                  "type": "string"
+                },
+                "writes": {
+                  "description": "Operations that changed something.",
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "profile",
+                "started_at",
+                "last_seen_at",
+                "reads",
+                "writes"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "total": {
+            "description": "How many changes match in all.",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "ActivityPage",
+        "type": "object"
+      },
+      "title": "Activity log",
+      "toolset": "workspace"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Revert changes"
+      },
+      "covers": [
+        "history.revert"
+      ],
+      "description": "Reverts history groups (the `group` of a change, from get_activity or from a tool's result) or everything an agent session changed. Groups that were changed again since are skipped and listed with the reason, so a newer change is never overwritten. Run with `dry_run: true` first to see what would be reverted. Example: revert_changes {\"session\": \"current\", \"dry_run\": true}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "What to revert: history groups, or everything an agent session changed.",
+        "properties": {
+          "dry_run": {
+            "default": false,
+            "description": "Only report what would be reverted.",
+            "type": "boolean"
+          },
+          "groups": {
+            "description": "History groups to revert.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "session": {
+            "description": "An agent session whose changes to revert.",
+            "type": "string"
+          }
+        },
+        "title": "RevertInput",
+        "type": "object"
+      },
+      "name": "revert_changes",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "What a revert did.",
+        "properties": {
+          "group": {
+            "description": "The history group of the revert itself; left out in a dry run or when\nnothing was reverted.",
+            "type": "string"
+          },
+          "reverted": {
+            "description": "The groups reverted (or that would be, in a dry run), newest first.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "skipped": {
+            "description": "Groups left alone, with the reason.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A group a revert left alone.",
+              "properties": {
+                "group": {
+                  "description": "The group.",
+                  "type": "string"
+                },
+                "reason": {
+                  "description": "Why: something changed it since, it was already reverted, and so on.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "group",
+                "reason"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "reverted",
+          "skipped"
+        ],
+        "title": "RevertResult",
+        "type": "object"
+      },
+      "title": "Revert changes",
+      "toolset": "workspace"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Update workspace settings"
+      },
+      "covers": [
+        "settings.update"
+      ],
+      "description": "Changes workspace settings: `trash_days` (1 to 3650), `reminder_time` (HH:MM), `hours_per_day` (1 to 24), `days_per_week` (1 to 7), `week_start`. Fields left out keep their value. Only change settings the person asked you to. Settings about agents can't be changed here. Example: update_settings {\"hours_per_day\": 6}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "The settings to change; fields left out keep their value. Settings that\ncontrol agents are changed in the app only.",
+        "properties": {
+          "days_per_week": {
+            "description": "Working days in a week, 1 to 7.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "hours_per_day": {
+            "description": "Working hours in a day, 1 to 24.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "reminder_time": {
+            "description": "Reminder time, `HH:MM` (24-hour).",
+            "type": "string"
+          },
+          "trash_days": {
+            "description": "Days in the trash before purging, 1 to 3650.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "week_start": {
+            "description": "First day of the week.",
+            "oneOf": [
+              {
+                "const": "monday",
+                "description": "Monday.",
+                "type": "string"
+              },
+              {
+                "const": "saturday",
+                "description": "Saturday.",
+                "type": "string"
+              },
+              {
+                "const": "sunday",
+                "description": "Sunday.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "title": "SettingsPatch",
+        "type": "object"
+      },
+      "name": "update_settings",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "The settings after a change.",
+        "properties": {
+          "changed": {
+            "description": "The settings whose value changed.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "group": {
+            "description": "The history group of the change, for revert and Undo; left out when\nnothing changed.",
+            "type": "string"
+          },
+          "settings": {
+            "additionalProperties": false,
+            "description": "All settings, after the change.",
+            "properties": {
+              "agent_max_profile": {
+                "description": "The most an agent may do, whatever profile it asks for.",
+                "oneOf": [
+                  {
+                    "const": "read-only",
+                    "description": "Reads only.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "standard",
+                    "description": "Reads, changes and moves to the trash; nothing permanent.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "full",
+                    "description": "Everything except operations on the application itself.",
+                    "type": "string"
+                  }
+                ]
+              },
+              "days_per_week": {
+                "description": "Working days in a week, for durations written in weeks (`1w`).",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "hours_per_day": {
+                "description": "Working hours in a day, for durations written in days (`2d`).",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "reminder_time": {
+                "description": "When reminders for a due date fire, as `HH:MM`.",
+                "type": "string"
+              },
+              "trash_days": {
+                "description": "Days an item stays in the trash before it is purged.",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "week_start": {
+                "description": "The first day of the week in calendars and in `this-week`.",
+                "oneOf": [
+                  {
+                    "const": "monday",
+                    "description": "Monday.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "saturday",
+                    "description": "Saturday.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "sunday",
+                    "description": "Sunday.",
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "trash_days",
+              "reminder_time",
+              "hours_per_day",
+              "days_per_week",
+              "week_start",
+              "agent_max_profile"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "settings",
+          "changed"
+        ],
+        "title": "SettingsChange",
+        "type": "object"
+      },
+      "title": "Update workspace settings",
+      "toolset": "admin"
+    }
+  ],
+  "toolsets": {
+    "admin": {
+      "on_by_default": false
+    },
+    "comments": {
+      "on_by_default": true
+    },
+    "files": {
+      "on_by_default": true
+    },
+    "projects": {
+      "on_by_default": true
+    },
+    "schedule": {
+      "on_by_default": true
+    },
+    "tasks": {
+      "on_by_default": true
+    },
+    "time": {
+      "on_by_default": true
+    },
+    "views": {
+      "on_by_default": true
+    },
+    "wiki": {
+      "on_by_default": true
+    },
+    "workspace": {
+      "on_by_default": true
+    }
+  }
+}

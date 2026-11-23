@@ -1,0 +1,129 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Glyphkeel contributors
+
+//! Workspace settings.
+
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
+use crate::catalog::{Exposure, Meta, OpDescriptor, OpKind, Safety};
+use crate::profile::Profile;
+
+/// The workspace's settings, with defaults filled in.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Settings {
+    /// Days an item stays in the trash before it is purged.
+    pub trash_days: u32,
+    /// When reminders for a due date fire, as `HH:MM`.
+    pub reminder_time: String,
+    /// Working hours in a day, for durations written in days (`2d`).
+    pub hours_per_day: u32,
+    /// Working days in a week, for durations written in weeks (`1w`).
+    pub days_per_week: u32,
+    /// The first day of the week in calendars and in `this-week`.
+    pub week_start: WeekStart,
+    /// The most an agent may do, whatever profile it asks for.
+    pub agent_max_profile: Profile,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            trash_days: 30,
+            reminder_time: "09:00".to_owned(),
+            hours_per_day: 8,
+            days_per_week: 5,
+            week_start: WeekStart::Monday,
+            agent_max_profile: Profile::Standard,
+        }
+    }
+}
+
+/// The first day of the week.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WeekStart {
+    /// Monday.
+    Monday,
+    /// Saturday.
+    Saturday,
+    /// Sunday.
+    Sunday,
+}
+
+/// No input.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SettingsGetInput {}
+
+/// The settings to change; fields left out keep their value. Settings that
+/// control agents are changed in the app only.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SettingsPatch {
+    /// Days in the trash before purging, 1 to 3650.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trash_days: Option<u32>,
+    /// Reminder time, `HH:MM` (24-hour).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reminder_time: Option<String>,
+    /// Working hours in a day, 1 to 24.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hours_per_day: Option<u32>,
+    /// Working days in a week, 1 to 7.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub days_per_week: Option<u32>,
+    /// First day of the week.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub week_start: Option<WeekStart>,
+}
+
+/// The settings after a change.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SettingsChange {
+    /// All settings, after the change.
+    pub settings: Settings,
+    /// The settings whose value changed.
+    pub changed: Vec<String>,
+    /// The history group of the change, for revert and Undo; left out when
+    /// nothing changed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
+}
+
+op!(
+    /// Read the workspace settings.
+    SettingsGet,
+    "settings.get",
+    SettingsGetInput,
+    Settings
+);
+op!(
+    /// Change workspace settings that are not about agents.
+    SettingsUpdate,
+    "settings.update",
+    SettingsPatch,
+    SettingsChange
+);
+
+pub(crate) const SETTINGS_GET: OpDescriptor = OpDescriptor::of::<SettingsGet>(Meta {
+    summary: "Read the workspace settings.",
+    kind: OpKind::Query,
+    safety: Safety::Read,
+    exposure: Exposure::Data,
+    cli: Some("settings get"),
+    input_name: "SettingsGetInput",
+    output_name: "Settings",
+});
+
+pub(crate) const SETTINGS_UPDATE: OpDescriptor = OpDescriptor::of::<SettingsUpdate>(Meta {
+    summary: "Change workspace settings that are not about agents: trash retention, reminder time, working hours and days, first day of the week.",
+    kind: OpKind::Command,
+    safety: Safety::Write,
+    exposure: Exposure::Data,
+    cli: Some("settings set"),
+    input_name: "SettingsPatch",
+    output_name: "SettingsChange",
+});
