@@ -41,6 +41,8 @@ pub struct QueryCtx<'a> {
     pub profile: Option<Profile>,
     /// The open workspace.
     pub env: &'a Env,
+    /// The query's time, in milliseconds since 1970 UTC.
+    pub now: i64,
 }
 
 pub(crate) type QueryFn = Arc<dyn Fn(&QueryCtx<'_>, Value) -> Result<Value, Failure> + Send + Sync>;
@@ -67,7 +69,14 @@ pub(crate) struct Entry {
     pub(crate) desc: &'static OpDescriptor,
     pub(crate) validate: fn(&Value) -> Result<(), OpError>,
     pub(crate) handler: Handler,
+    /// For an operation that runs several catalog operations as one
+    /// change: the ones a given input asks for, each checked against its
+    /// own safety class.
+    pub(crate) parts: Option<PartsFn>,
 }
+
+/// The catalog operations one input of a combined operation runs.
+pub(crate) type PartsFn = fn(&Value) -> Vec<&'static str>;
 
 /// The handlers the engine dispatches to, by operation name.
 #[derive(Clone, Default)]
@@ -123,6 +132,20 @@ impl Registry {
         self.insert::<O>(desc, Handler::Command(handler));
     }
 
+    /// Registers a command that runs several catalog operations as one
+    /// change; `parts` names the ones an input asks for, so each is
+    /// authorized (and, when permanent, confirmed) by its own class.
+    pub(crate) fn combined<O, F>(&mut self, desc: &'static OpDescriptor, parts: PartsFn, f: F)
+    where
+        O: Operation,
+        F: Fn(&mut WriteCtx<'_>, O::Input) -> Result<O::Output, Failure> + Send + Sync + 'static,
+    {
+        self.command::<O, F>(desc, f);
+        if let Some(entry) = self.entries.get_mut(desc.id) {
+            entry.parts = Some(parts);
+        }
+    }
+
     pub(crate) fn engine_op<O, F>(&mut self, desc: &'static OpDescriptor, f: F)
     where
         O: Operation,
@@ -143,6 +166,7 @@ impl Registry {
                 desc,
                 validate: validate::<O::Input>,
                 handler,
+                parts: None,
             },
         );
     }

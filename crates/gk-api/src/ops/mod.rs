@@ -22,7 +22,10 @@ macro_rules! op {
 }
 
 pub mod agent;
+pub mod board;
 pub mod common;
 pub mod history;
+pub mod project;
 pub mod settings;
+pub mod task;
 pub mod workspace;

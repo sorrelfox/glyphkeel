@@ -138,7 +138,18 @@ async fn changes_record_the_agent_and_can_be_reverted() {
         let (_dir, mut options) = workspace();
         options.toolsets = Some(vec![Toolset::Workspace, Toolset::Admin]);
         let conn = connect(&options, mode, asked, "claude-code").await;
-        let mut names = golden_names("standard");
+        // The standard profile's tools of the two toolsets switched on.
+        let workspace_tools: Vec<String> = common::golden()["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|t| t["toolset"] == "workspace")
+            .map(|t| t["name"].as_str().unwrap().to_owned())
+            .collect();
+        let mut names: Vec<String> = golden_names("standard")
+            .into_iter()
+            .filter(|n| workspace_tools.contains(n))
+            .collect();
         names.push("update_settings".to_owned());
         assert_eq!(conn.tool_names().await, names, "{label}");
 

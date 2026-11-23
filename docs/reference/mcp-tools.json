@@ -3,16 +3,40 @@
     "full": [
       "get_workspace",
       "get_activity",
-      "revert_changes"
+      "revert_changes",
+      "list_projects",
+      "get_project",
+      "create_project",
+      "update_project",
+      "get_task",
+      "create_task",
+      "update_task",
+      "move_task",
+      "get_board",
+      "set_board_layout"
     ],
     "read-only": [
       "get_workspace",
-      "get_activity"
+      "get_activity",
+      "list_projects",
+      "get_project",
+      "get_task",
+      "get_board"
     ],
     "standard": [
       "get_workspace",
       "get_activity",
-      "revert_changes"
+      "revert_changes",
+      "list_projects",
+      "get_project",
+      "create_project",
+      "update_project",
+      "get_task",
+      "create_task",
+      "update_task",
+      "move_task",
+      "get_board",
+      "set_board_layout"
     ]
   },
   "tools": [
@@ -601,6 +625,5133 @@
         "destructiveHint": false,
         "idempotentHint": true,
         "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "List projects"
+      },
+      "covers": [
+        "project.list"
+      ],
+      "description": "Lists the project tree in sidebar order: each project's key, name, path, parent, depth and open-task counts (alone and with its sub-projects). Archived projects only with `include_archived: true`. Use the keys it returns in every other tool. Example: list_projects {}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Which projects to list.",
+        "properties": {
+          "include_archived": {
+            "default": false,
+            "description": "Also list archived projects.",
+            "type": "boolean"
+          }
+        },
+        "title": "ProjectListInput",
+        "type": "object"
+      },
+      "name": "list_projects",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "The project tree, in sidebar order: each project followed by its\nsub-projects.",
+        "properties": {
+          "items": {
+            "description": "The projects.",
+            "items": {
+              "additionalProperties": false,
+              "description": "One project in the tree.",
+              "properties": {
+                "depth": {
+                  "description": "0 for a top-level project, 1 for its sub-projects, 2 below them.",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "hue": {
+                  "description": "Its colour.",
+                  "oneOf": [
+                    {
+                      "const": "red",
+                      "description": "Red.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "orange",
+                      "description": "Orange.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "yellow",
+                      "description": "Yellow.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "green",
+                      "description": "Green.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "teal",
+                      "description": "Teal.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "blue",
+                      "description": "Blue.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "purple",
+                      "description": "Purple.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "pink",
+                      "description": "Pink.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "grey",
+                      "description": "Grey.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "icon": {
+                  "description": "Its icon, if one was chosen.",
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The project's ID.",
+                  "type": "string"
+                },
+                "key": {
+                  "description": "The project's key (`TM`).",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "Its name.",
+                  "type": "string"
+                },
+                "open_tasks": {
+                  "description": "Open tasks in this project alone.",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "open_tasks_with_subprojects": {
+                  "description": "Open tasks in this project and all its sub-projects.",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "parent": {
+                  "description": "The parent's key; left out for a top-level project.",
+                  "type": "string"
+                },
+                "path": {
+                  "description": "The names from the top-level project down to this one, joined by\n\" / \".",
+                  "type": "string"
+                },
+                "state": {
+                  "description": "Active or archived.",
+                  "oneOf": [
+                    {
+                      "const": "active",
+                      "description": "In use.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "archived",
+                      "description": "Read-only and hidden from the sidebar until unarchived.",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "key",
+                "name",
+                "path",
+                "depth",
+                "hue",
+                "state",
+                "open_tasks",
+                "open_tasks_with_subprojects",
+                "id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "total": {
+            "description": "How many there are.",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "ProjectList",
+        "type": "object"
+      },
+      "title": "List projects",
+      "toolset": "projects"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Get a project"
+      },
+      "covers": [
+        "project.get"
+      ],
+      "description": "Returns one project with its configuration: statuses in board order (with category and WIP limit), task types, labels, modules, sub-projects, old keys and task counts. Read it before creating tasks so you use status, type and label names that exist. Example: get_project {\"project\": \"TM\"}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Names one project.",
+        "properties": {
+          "project": {
+            "description": "The project: its key (current or old) or ID.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "title": "ProjectRef",
+        "type": "object"
+      },
+      "name": "get_project",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "One project with its configuration.",
+        "properties": {
+          "children": {
+            "description": "The sub-projects' keys, in order.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "created_at": {
+            "description": "When it was created (RFC 3339, UTC).",
+            "type": "string"
+          },
+          "description": {
+            "description": "Its description (Markdown).",
+            "type": "string"
+          },
+          "hue": {
+            "description": "Its colour.",
+            "oneOf": [
+              {
+                "const": "red",
+                "description": "Red.",
+                "type": "string"
+              },
+              {
+                "const": "orange",
+                "description": "Orange.",
+                "type": "string"
+              },
+              {
+                "const": "yellow",
+                "description": "Yellow.",
+                "type": "string"
+              },
+              {
+                "const": "green",
+                "description": "Green.",
+                "type": "string"
+              },
+              {
+                "const": "teal",
+                "description": "Teal.",
+                "type": "string"
+              },
+              {
+                "const": "blue",
+                "description": "Blue.",
+                "type": "string"
+              },
+              {
+                "const": "purple",
+                "description": "Purple.",
+                "type": "string"
+              },
+              {
+                "const": "pink",
+                "description": "Pink.",
+                "type": "string"
+              },
+              {
+                "const": "grey",
+                "description": "Grey.",
+                "type": "string"
+              }
+            ]
+          },
+          "icon": {
+            "description": "Its icon, if one was chosen.",
+            "type": "string"
+          },
+          "id": {
+            "description": "The project's ID.",
+            "type": "string"
+          },
+          "key": {
+            "description": "Its key (`TM`).",
+            "type": "string"
+          },
+          "labels": {
+            "description": "The labels, in order.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A label.",
+              "properties": {
+                "hue": {
+                  "description": "Its colour.",
+                  "oneOf": [
+                    {
+                      "const": "red",
+                      "description": "Red.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "orange",
+                      "description": "Orange.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "yellow",
+                      "description": "Yellow.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "green",
+                      "description": "Green.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "teal",
+                      "description": "Teal.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "blue",
+                      "description": "Blue.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "purple",
+                      "description": "Purple.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "pink",
+                      "description": "Pink.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "grey",
+                      "description": "Grey.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "id": {
+                  "description": "The label's ID.",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "Its name.",
+                  "type": "string"
+                },
+                "tasks": {
+                  "description": "Tasks with this label.",
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "hue",
+                "tasks"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "modules": {
+            "additionalProperties": false,
+            "description": "Which parts are switched on.",
+            "properties": {
+              "board": {
+                "description": "The board.",
+                "type": "boolean"
+              },
+              "gantt": {
+                "description": "The Gantt chart.",
+                "type": "boolean"
+              },
+              "list": {
+                "description": "The task list.",
+                "type": "boolean"
+              },
+              "time": {
+                "description": "Time tracking.",
+                "type": "boolean"
+              },
+              "wiki": {
+                "description": "The wiki.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "board",
+              "list",
+              "gantt",
+              "wiki",
+              "time"
+            ],
+            "type": "object"
+          },
+          "name": {
+            "description": "Its name.",
+            "type": "string"
+          },
+          "old_keys": {
+            "description": "Keys it had before; they still find it.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "open_tasks": {
+            "description": "Open tasks in this project alone.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "parent": {
+            "description": "The parent's key; left out for a top-level project.",
+            "type": "string"
+          },
+          "path": {
+            "description": "The names from the top-level project down to this one, joined by\n\" / \".",
+            "type": "string"
+          },
+          "state": {
+            "description": "Active or archived.",
+            "oneOf": [
+              {
+                "const": "active",
+                "description": "In use.",
+                "type": "string"
+              },
+              {
+                "const": "archived",
+                "description": "Read-only and hidden from the sidebar until unarchived.",
+                "type": "string"
+              }
+            ]
+          },
+          "statuses": {
+            "description": "The statuses, in board order.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A status: one board column.",
+              "properties": {
+                "category": {
+                  "description": "What it means for the work in it.",
+                  "oneOf": [
+                    {
+                      "const": "todo",
+                      "description": "Not started.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "in_progress",
+                      "description": "Being worked on.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "done",
+                      "description": "Finished; closes the task.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "cancelled",
+                      "description": "Dropped; closes the task.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "hue": {
+                  "description": "Its colour.",
+                  "oneOf": [
+                    {
+                      "const": "red",
+                      "description": "Red.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "orange",
+                      "description": "Orange.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "yellow",
+                      "description": "Yellow.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "green",
+                      "description": "Green.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "teal",
+                      "description": "Teal.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "blue",
+                      "description": "Blue.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "purple",
+                      "description": "Purple.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "pink",
+                      "description": "Pink.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "grey",
+                      "description": "Grey.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "id": {
+                  "description": "The status's ID.",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "Its name.",
+                  "type": "string"
+                },
+                "tasks": {
+                  "description": "Tasks in this status.",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "wip_limit": {
+                  "description": "Most tasks the column should hold; left out when there is no limit.",
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "category",
+                "hue",
+                "tasks"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "total_tasks": {
+            "description": "All tasks in this project alone, open or closed (not in the trash).",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "types": {
+            "description": "The task types, in order.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A task type.",
+              "properties": {
+                "glyph": {
+                  "description": "Its shape.",
+                  "oneOf": [
+                    {
+                      "const": "task",
+                      "description": "A plain task.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "bug",
+                      "description": "A bug.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "feature",
+                      "description": "A feature.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "milestone",
+                      "description": "A milestone.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "hue": {
+                  "description": "Its colour.",
+                  "oneOf": [
+                    {
+                      "const": "red",
+                      "description": "Red.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "orange",
+                      "description": "Orange.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "yellow",
+                      "description": "Yellow.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "green",
+                      "description": "Green.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "teal",
+                      "description": "Teal.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "blue",
+                      "description": "Blue.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "purple",
+                      "description": "Purple.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "pink",
+                      "description": "Pink.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "grey",
+                      "description": "Grey.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "id": {
+                  "description": "The type's ID.",
+                  "type": "string"
+                },
+                "is_default": {
+                  "description": "Whether new tasks get it unless told otherwise.",
+                  "type": "boolean"
+                },
+                "name": {
+                  "description": "Its name.",
+                  "type": "string"
+                },
+                "tasks": {
+                  "description": "Tasks of this type.",
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "glyph",
+                "hue",
+                "is_default",
+                "tasks"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "updated_at": {
+            "description": "When it last changed (RFC 3339, UTC).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "key",
+          "name",
+          "path",
+          "description",
+          "hue",
+          "state",
+          "children",
+          "modules",
+          "statuses",
+          "types",
+          "labels",
+          "open_tasks",
+          "total_tasks",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "Project",
+        "type": "object"
+      },
+      "title": "Get a project",
+      "toolset": "projects"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Create a project"
+      },
+      "covers": [
+        "project.create"
+      ],
+      "description": "Creates a project, or a sub-project with `parent` (at most 3 levels), which copies its parent's statuses, types and labels. The key is 2 to 10 capital letters and digits starting with a letter, and starts every task key. Pass `client_request_id` so a retry doesn't create a second project. Example: create_project {\"name\": \"Website\", \"key\": \"WEB\"}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "A new project or sub-project.",
+        "properties": {
+          "client_request_id": {
+            "description": "Your own ID for this request; repeating it within 24 hours returns\nthe first answer instead of creating a second project.",
+            "type": "string"
+          },
+          "description": {
+            "description": "The description (Markdown).",
+            "type": "string"
+          },
+          "hue": {
+            "description": "The colour; default: the parent's, or blue.",
+            "oneOf": [
+              {
+                "const": "red",
+                "description": "Red.",
+                "type": "string"
+              },
+              {
+                "const": "orange",
+                "description": "Orange.",
+                "type": "string"
+              },
+              {
+                "const": "yellow",
+                "description": "Yellow.",
+                "type": "string"
+              },
+              {
+                "const": "green",
+                "description": "Green.",
+                "type": "string"
+              },
+              {
+                "const": "teal",
+                "description": "Teal.",
+                "type": "string"
+              },
+              {
+                "const": "blue",
+                "description": "Blue.",
+                "type": "string"
+              },
+              {
+                "const": "purple",
+                "description": "Purple.",
+                "type": "string"
+              },
+              {
+                "const": "pink",
+                "description": "Pink.",
+                "type": "string"
+              },
+              {
+                "const": "grey",
+                "description": "Grey.",
+                "type": "string"
+              }
+            ]
+          },
+          "icon": {
+            "description": "An icon name.",
+            "type": "string"
+          },
+          "key": {
+            "description": "The key: 2 to 10 capital letters and digits, starting with a letter\n(`TM`). Task keys start with it.",
+            "type": "string"
+          },
+          "name": {
+            "description": "The name, 1 to 100 characters.",
+            "type": "string"
+          },
+          "parent": {
+            "description": "The parent, for a sub-project (at most 3 levels). It copies the\nparent's statuses, types and labels.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "key"
+        ],
+        "title": "ProjectCreateInput",
+        "type": "object"
+      },
+      "name": "create_project",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "A project changed, with the history group of the change.",
+        "properties": {
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "project": {
+            "additionalProperties": false,
+            "description": "The project after the change.",
+            "properties": {
+              "children": {
+                "description": "The sub-projects' keys, in order.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "description": {
+                "description": "Its description (Markdown).",
+                "type": "string"
+              },
+              "hue": {
+                "description": "Its colour.",
+                "oneOf": [
+                  {
+                    "const": "red",
+                    "description": "Red.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "orange",
+                    "description": "Orange.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "yellow",
+                    "description": "Yellow.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "green",
+                    "description": "Green.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "teal",
+                    "description": "Teal.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "blue",
+                    "description": "Blue.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "purple",
+                    "description": "Purple.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "pink",
+                    "description": "Pink.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "grey",
+                    "description": "Grey.",
+                    "type": "string"
+                  }
+                ]
+              },
+              "icon": {
+                "description": "Its icon, if one was chosen.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The project's ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "Its key (`TM`).",
+                "type": "string"
+              },
+              "labels": {
+                "description": "The labels, in order.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "A label.",
+                  "properties": {
+                    "hue": {
+                      "description": "Its colour.",
+                      "oneOf": [
+                        {
+                          "const": "red",
+                          "description": "Red.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "orange",
+                          "description": "Orange.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "yellow",
+                          "description": "Yellow.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "green",
+                          "description": "Green.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "teal",
+                          "description": "Teal.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "blue",
+                          "description": "Blue.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "purple",
+                          "description": "Purple.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "pink",
+                          "description": "Pink.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "grey",
+                          "description": "Grey.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "id": {
+                      "description": "The label's ID.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    },
+                    "tasks": {
+                      "description": "Tasks with this label.",
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "hue",
+                    "tasks"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "modules": {
+                "additionalProperties": false,
+                "description": "Which parts are switched on.",
+                "properties": {
+                  "board": {
+                    "description": "The board.",
+                    "type": "boolean"
+                  },
+                  "gantt": {
+                    "description": "The Gantt chart.",
+                    "type": "boolean"
+                  },
+                  "list": {
+                    "description": "The task list.",
+                    "type": "boolean"
+                  },
+                  "time": {
+                    "description": "Time tracking.",
+                    "type": "boolean"
+                  },
+                  "wiki": {
+                    "description": "The wiki.",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "board",
+                  "list",
+                  "gantt",
+                  "wiki",
+                  "time"
+                ],
+                "type": "object"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "old_keys": {
+                "description": "Keys it had before; they still find it.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "open_tasks": {
+                "description": "Open tasks in this project alone.",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "parent": {
+                "description": "The parent's key; left out for a top-level project.",
+                "type": "string"
+              },
+              "path": {
+                "description": "The names from the top-level project down to this one, joined by\n\" / \".",
+                "type": "string"
+              },
+              "state": {
+                "description": "Active or archived.",
+                "oneOf": [
+                  {
+                    "const": "active",
+                    "description": "In use.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "archived",
+                    "description": "Read-only and hidden from the sidebar until unarchived.",
+                    "type": "string"
+                  }
+                ]
+              },
+              "statuses": {
+                "description": "The statuses, in board order.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "A status: one board column.",
+                  "properties": {
+                    "category": {
+                      "description": "What it means for the work in it.",
+                      "oneOf": [
+                        {
+                          "const": "todo",
+                          "description": "Not started.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "in_progress",
+                          "description": "Being worked on.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "done",
+                          "description": "Finished; closes the task.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "cancelled",
+                          "description": "Dropped; closes the task.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "hue": {
+                      "description": "Its colour.",
+                      "oneOf": [
+                        {
+                          "const": "red",
+                          "description": "Red.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "orange",
+                          "description": "Orange.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "yellow",
+                          "description": "Yellow.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "green",
+                          "description": "Green.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "teal",
+                          "description": "Teal.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "blue",
+                          "description": "Blue.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "purple",
+                          "description": "Purple.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "pink",
+                          "description": "Pink.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "grey",
+                          "description": "Grey.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "id": {
+                      "description": "The status's ID.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    },
+                    "tasks": {
+                      "description": "Tasks in this status.",
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "wip_limit": {
+                      "description": "Most tasks the column should hold; left out when there is no limit.",
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "category",
+                    "hue",
+                    "tasks"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "total_tasks": {
+                "description": "All tasks in this project alone, open or closed (not in the trash).",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "types": {
+                "description": "The task types, in order.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "A task type.",
+                  "properties": {
+                    "glyph": {
+                      "description": "Its shape.",
+                      "oneOf": [
+                        {
+                          "const": "task",
+                          "description": "A plain task.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "bug",
+                          "description": "A bug.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "feature",
+                          "description": "A feature.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "milestone",
+                          "description": "A milestone.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "hue": {
+                      "description": "Its colour.",
+                      "oneOf": [
+                        {
+                          "const": "red",
+                          "description": "Red.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "orange",
+                          "description": "Orange.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "yellow",
+                          "description": "Yellow.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "green",
+                          "description": "Green.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "teal",
+                          "description": "Teal.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "blue",
+                          "description": "Blue.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "purple",
+                          "description": "Purple.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "pink",
+                          "description": "Pink.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "grey",
+                          "description": "Grey.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "id": {
+                      "description": "The type's ID.",
+                      "type": "string"
+                    },
+                    "is_default": {
+                      "description": "Whether new tasks get it unless told otherwise.",
+                      "type": "boolean"
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    },
+                    "tasks": {
+                      "description": "Tasks of this type.",
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "glyph",
+                    "hue",
+                    "is_default",
+                    "tasks"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "description": "When it last changed (RFC 3339, UTC).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "key",
+              "name",
+              "path",
+              "description",
+              "hue",
+              "state",
+              "children",
+              "modules",
+              "statuses",
+              "types",
+              "labels",
+              "open_tasks",
+              "total_tasks",
+              "created_at",
+              "updated_at"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "title": "ProjectChange",
+        "type": "object"
+      },
+      "title": "Create a project",
+      "toolset": "projects"
+    },
+    {
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Update a project"
+      },
+      "covers": [
+        "project.update",
+        "project.move",
+        "project.change_key",
+        "project.archive",
+        "project.unarchive",
+        "status.create",
+        "status.update",
+        "status.reorder",
+        "status.delete",
+        "type.create",
+        "type.update",
+        "type.delete",
+        "label.create",
+        "label.update",
+        "label.delete"
+      ],
+      "description": "Changes a project in one step: `name`, `description`, `hue`, `icon`, `modules`, a new `key` (old keys keep working), a new `parent` or place (`before`/`after`/`at`), `archived`, and lists of `statuses`, `types` and `labels` to add (no `status`/`type`/`label` given), change or `remove`. Removing a status needs `move_tasks_to` when it has tasks; removals can't be undone and need the full profile. To clear a field, list it in `clear`. Example: update_project {\"project\": \"TM\", \"statuses\": [{\"name\": \"Blocked\", \"category\": \"in_progress\", \"after\": \"In progress\"}]}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Changes to a project; fields left out keep their value. Everything is\none change with one history group. Removing a status, type or label\ncan't be undone, so it needs the `permanent` class (the person confirms\nit; an agent needs the full profile).",
+        "properties": {
+          "after": {
+            "description": "Place it after this sibling project.",
+            "type": "string"
+          },
+          "archived": {
+            "description": "Archive (`true`) or unarchive (`false`) it with its sub-projects.",
+            "type": "boolean"
+          },
+          "at": {
+            "description": "Place it first or last among its siblings.",
+            "oneOf": [
+              {
+                "const": "top",
+                "description": "First.",
+                "type": "string"
+              },
+              {
+                "const": "bottom",
+                "description": "Last.",
+                "type": "string"
+              }
+            ]
+          },
+          "before": {
+            "description": "Place it before this sibling project.",
+            "type": "string"
+          },
+          "clear": {
+            "description": "Fields to clear.",
+            "items": {
+              "description": "A project field that can be cleared.",
+              "oneOf": [
+                {
+                  "const": "icon",
+                  "description": "The icon.",
+                  "type": "string"
+                },
+                {
+                  "const": "description",
+                  "description": "The description.",
+                  "type": "string"
+                },
+                {
+                  "const": "parent",
+                  "description": "The parent: the project becomes a top-level project.",
+                  "type": "string"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "description": {
+            "description": "A new description (Markdown).",
+            "type": "string"
+          },
+          "hue": {
+            "description": "A new colour.",
+            "oneOf": [
+              {
+                "const": "red",
+                "description": "Red.",
+                "type": "string"
+              },
+              {
+                "const": "orange",
+                "description": "Orange.",
+                "type": "string"
+              },
+              {
+                "const": "yellow",
+                "description": "Yellow.",
+                "type": "string"
+              },
+              {
+                "const": "green",
+                "description": "Green.",
+                "type": "string"
+              },
+              {
+                "const": "teal",
+                "description": "Teal.",
+                "type": "string"
+              },
+              {
+                "const": "blue",
+                "description": "Blue.",
+                "type": "string"
+              },
+              {
+                "const": "purple",
+                "description": "Purple.",
+                "type": "string"
+              },
+              {
+                "const": "pink",
+                "description": "Pink.",
+                "type": "string"
+              },
+              {
+                "const": "grey",
+                "description": "Grey.",
+                "type": "string"
+              }
+            ]
+          },
+          "icon": {
+            "description": "A new icon name.",
+            "type": "string"
+          },
+          "key": {
+            "description": "A new key; the old one keeps finding the project and its tasks.",
+            "type": "string"
+          },
+          "labels": {
+            "description": "Labels to add, change or remove, in order.",
+            "items": {
+              "additionalProperties": false,
+              "description": "Adds, changes or removes a label inside [`ProjectUpdateInput`].",
+              "properties": {
+                "hue": {
+                  "description": "Its colour.",
+                  "oneOf": [
+                    {
+                      "const": "red",
+                      "description": "Red.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "orange",
+                      "description": "Orange.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "yellow",
+                      "description": "Yellow.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "green",
+                      "description": "Green.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "teal",
+                      "description": "Teal.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "blue",
+                      "description": "Blue.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "purple",
+                      "description": "Purple.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "pink",
+                      "description": "Pink.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "grey",
+                      "description": "Grey.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "label": {
+                  "description": "The label to change or remove; left out to add one.",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "Its (new) name.",
+                  "type": "string"
+                },
+                "remove": {
+                  "default": false,
+                  "description": "Delete the label and take it off every task. Can't be undone.",
+                  "type": "boolean"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "modules": {
+            "additionalProperties": false,
+            "description": "Modules to switch on or off.",
+            "properties": {
+              "board": {
+                "description": "The board.",
+                "type": "boolean"
+              },
+              "gantt": {
+                "description": "The Gantt chart.",
+                "type": "boolean"
+              },
+              "list": {
+                "description": "The task list.",
+                "type": "boolean"
+              },
+              "time": {
+                "description": "Time tracking.",
+                "type": "boolean"
+              },
+              "wiki": {
+                "description": "The wiki.",
+                "type": "boolean"
+              }
+            },
+            "type": "object"
+          },
+          "name": {
+            "description": "A new name, 1 to 100 characters.",
+            "type": "string"
+          },
+          "parent": {
+            "description": "Move it under this project (at most 3 levels, never under its own\nsub-project). To make it a top-level project, list `parent` in\n`clear`.",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project: its key (current or old) or ID.",
+            "type": "string"
+          },
+          "statuses": {
+            "description": "Statuses to add, change, reorder or remove, in order.",
+            "items": {
+              "additionalProperties": false,
+              "description": "Changes to a status, a task type or a label inside\n[`ProjectUpdateInput`]. Without `status`/`type`/`label` (`name`) it adds\none; with `remove` it deletes the named one; otherwise it changes it.",
+              "properties": {
+                "after": {
+                  "description": "Place it after this status.",
+                  "type": "string"
+                },
+                "at": {
+                  "description": "Place it first or last.",
+                  "oneOf": [
+                    {
+                      "const": "top",
+                      "description": "First.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "bottom",
+                      "description": "Last.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "before": {
+                  "description": "Place it before this status.",
+                  "type": "string"
+                },
+                "category": {
+                  "description": "Its category.",
+                  "oneOf": [
+                    {
+                      "const": "todo",
+                      "description": "Not started.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "in_progress",
+                      "description": "Being worked on.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "done",
+                      "description": "Finished; closes the task.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "cancelled",
+                      "description": "Dropped; closes the task.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "clear": {
+                  "description": "Fields to clear.",
+                  "items": {
+                    "description": "A status field that can be cleared.",
+                    "oneOf": [
+                      {
+                        "const": "wip_limit",
+                        "description": "The WIP limit.",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "type": "array"
+                },
+                "hue": {
+                  "description": "Its colour.",
+                  "oneOf": [
+                    {
+                      "const": "red",
+                      "description": "Red.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "orange",
+                      "description": "Orange.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "yellow",
+                      "description": "Yellow.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "green",
+                      "description": "Green.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "teal",
+                      "description": "Teal.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "blue",
+                      "description": "Blue.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "purple",
+                      "description": "Purple.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "pink",
+                      "description": "Pink.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "grey",
+                      "description": "Grey.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "move_tasks_to": {
+                  "description": "When removing a status that has tasks: the status they move to.",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "Its (new) name.",
+                  "type": "string"
+                },
+                "remove": {
+                  "default": false,
+                  "description": "Delete the status. Can't be undone.",
+                  "type": "boolean"
+                },
+                "status": {
+                  "description": "The status to change or remove; left out to add one.",
+                  "type": "string"
+                },
+                "wip_limit": {
+                  "description": "Its WIP limit, 1 or more.",
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "types": {
+            "description": "Task types to add, change, reorder or remove, in order.",
+            "items": {
+              "additionalProperties": false,
+              "description": "Adds, changes or removes a task type inside [`ProjectUpdateInput`].",
+              "properties": {
+                "after": {
+                  "description": "Place it after this type.",
+                  "type": "string"
+                },
+                "at": {
+                  "description": "Place it first or last.",
+                  "oneOf": [
+                    {
+                      "const": "top",
+                      "description": "First.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "bottom",
+                      "description": "Last.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "before": {
+                  "description": "Place it before this type.",
+                  "type": "string"
+                },
+                "glyph": {
+                  "description": "Its shape.",
+                  "oneOf": [
+                    {
+                      "const": "task",
+                      "description": "A plain task.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "bug",
+                      "description": "A bug.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "feature",
+                      "description": "A feature.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "milestone",
+                      "description": "A milestone.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "hue": {
+                  "description": "Its colour.",
+                  "oneOf": [
+                    {
+                      "const": "red",
+                      "description": "Red.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "orange",
+                      "description": "Orange.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "yellow",
+                      "description": "Yellow.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "green",
+                      "description": "Green.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "teal",
+                      "description": "Teal.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "blue",
+                      "description": "Blue.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "purple",
+                      "description": "Purple.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "pink",
+                      "description": "Pink.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "grey",
+                      "description": "Grey.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "make_default": {
+                  "default": false,
+                  "description": "Make it the type new tasks get.",
+                  "type": "boolean"
+                },
+                "move_tasks_to": {
+                  "description": "When removing a type that tasks have: the type they get instead;\ndefault: the default type.",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "Its (new) name.",
+                  "type": "string"
+                },
+                "remove": {
+                  "default": false,
+                  "description": "Delete the type. Can't be undone.",
+                  "type": "boolean"
+                },
+                "type": {
+                  "description": "The type to change or remove; left out to add one.",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "title": "ProjectUpdateInput",
+        "type": "object"
+      },
+      "name": "update_project",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "A project changed, with the history group of the change.",
+        "properties": {
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "project": {
+            "additionalProperties": false,
+            "description": "The project after the change.",
+            "properties": {
+              "children": {
+                "description": "The sub-projects' keys, in order.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "description": {
+                "description": "Its description (Markdown).",
+                "type": "string"
+              },
+              "hue": {
+                "description": "Its colour.",
+                "oneOf": [
+                  {
+                    "const": "red",
+                    "description": "Red.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "orange",
+                    "description": "Orange.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "yellow",
+                    "description": "Yellow.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "green",
+                    "description": "Green.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "teal",
+                    "description": "Teal.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "blue",
+                    "description": "Blue.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "purple",
+                    "description": "Purple.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "pink",
+                    "description": "Pink.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "grey",
+                    "description": "Grey.",
+                    "type": "string"
+                  }
+                ]
+              },
+              "icon": {
+                "description": "Its icon, if one was chosen.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The project's ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "Its key (`TM`).",
+                "type": "string"
+              },
+              "labels": {
+                "description": "The labels, in order.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "A label.",
+                  "properties": {
+                    "hue": {
+                      "description": "Its colour.",
+                      "oneOf": [
+                        {
+                          "const": "red",
+                          "description": "Red.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "orange",
+                          "description": "Orange.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "yellow",
+                          "description": "Yellow.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "green",
+                          "description": "Green.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "teal",
+                          "description": "Teal.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "blue",
+                          "description": "Blue.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "purple",
+                          "description": "Purple.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "pink",
+                          "description": "Pink.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "grey",
+                          "description": "Grey.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "id": {
+                      "description": "The label's ID.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    },
+                    "tasks": {
+                      "description": "Tasks with this label.",
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "hue",
+                    "tasks"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "modules": {
+                "additionalProperties": false,
+                "description": "Which parts are switched on.",
+                "properties": {
+                  "board": {
+                    "description": "The board.",
+                    "type": "boolean"
+                  },
+                  "gantt": {
+                    "description": "The Gantt chart.",
+                    "type": "boolean"
+                  },
+                  "list": {
+                    "description": "The task list.",
+                    "type": "boolean"
+                  },
+                  "time": {
+                    "description": "Time tracking.",
+                    "type": "boolean"
+                  },
+                  "wiki": {
+                    "description": "The wiki.",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "board",
+                  "list",
+                  "gantt",
+                  "wiki",
+                  "time"
+                ],
+                "type": "object"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "old_keys": {
+                "description": "Keys it had before; they still find it.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "open_tasks": {
+                "description": "Open tasks in this project alone.",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "parent": {
+                "description": "The parent's key; left out for a top-level project.",
+                "type": "string"
+              },
+              "path": {
+                "description": "The names from the top-level project down to this one, joined by\n\" / \".",
+                "type": "string"
+              },
+              "state": {
+                "description": "Active or archived.",
+                "oneOf": [
+                  {
+                    "const": "active",
+                    "description": "In use.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "archived",
+                    "description": "Read-only and hidden from the sidebar until unarchived.",
+                    "type": "string"
+                  }
+                ]
+              },
+              "statuses": {
+                "description": "The statuses, in board order.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "A status: one board column.",
+                  "properties": {
+                    "category": {
+                      "description": "What it means for the work in it.",
+                      "oneOf": [
+                        {
+                          "const": "todo",
+                          "description": "Not started.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "in_progress",
+                          "description": "Being worked on.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "done",
+                          "description": "Finished; closes the task.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "cancelled",
+                          "description": "Dropped; closes the task.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "hue": {
+                      "description": "Its colour.",
+                      "oneOf": [
+                        {
+                          "const": "red",
+                          "description": "Red.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "orange",
+                          "description": "Orange.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "yellow",
+                          "description": "Yellow.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "green",
+                          "description": "Green.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "teal",
+                          "description": "Teal.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "blue",
+                          "description": "Blue.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "purple",
+                          "description": "Purple.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "pink",
+                          "description": "Pink.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "grey",
+                          "description": "Grey.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "id": {
+                      "description": "The status's ID.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    },
+                    "tasks": {
+                      "description": "Tasks in this status.",
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "wip_limit": {
+                      "description": "Most tasks the column should hold; left out when there is no limit.",
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "category",
+                    "hue",
+                    "tasks"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "total_tasks": {
+                "description": "All tasks in this project alone, open or closed (not in the trash).",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "types": {
+                "description": "The task types, in order.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "A task type.",
+                  "properties": {
+                    "glyph": {
+                      "description": "Its shape.",
+                      "oneOf": [
+                        {
+                          "const": "task",
+                          "description": "A plain task.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "bug",
+                          "description": "A bug.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "feature",
+                          "description": "A feature.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "milestone",
+                          "description": "A milestone.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "hue": {
+                      "description": "Its colour.",
+                      "oneOf": [
+                        {
+                          "const": "red",
+                          "description": "Red.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "orange",
+                          "description": "Orange.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "yellow",
+                          "description": "Yellow.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "green",
+                          "description": "Green.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "teal",
+                          "description": "Teal.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "blue",
+                          "description": "Blue.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "purple",
+                          "description": "Purple.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "pink",
+                          "description": "Pink.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "grey",
+                          "description": "Grey.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "id": {
+                      "description": "The type's ID.",
+                      "type": "string"
+                    },
+                    "is_default": {
+                      "description": "Whether new tasks get it unless told otherwise.",
+                      "type": "boolean"
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    },
+                    "tasks": {
+                      "description": "Tasks of this type.",
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "glyph",
+                    "hue",
+                    "is_default",
+                    "tasks"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "description": "When it last changed (RFC 3339, UTC).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "key",
+              "name",
+              "path",
+              "description",
+              "hue",
+              "state",
+              "children",
+              "modules",
+              "statuses",
+              "types",
+              "labels",
+              "open_tasks",
+              "total_tasks",
+              "created_at",
+              "updated_at"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "title": "ProjectChange",
+        "type": "object"
+      },
+      "title": "Update a project",
+      "toolset": "projects"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Get tasks"
+      },
+      "covers": [
+        "task.get"
+      ],
+      "description": "Returns one to 20 tasks by key (`TM-41`; old keys work too) with every field, the description, labels and `version`. Pass the version as `expected_version` to update_task or move_task so you never overwrite a change you haven't seen. Example: get_task {\"keys\": [\"TM-41\"]}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Which tasks to read.",
+        "properties": {
+          "keys": {
+            "description": "One to 20 task keys or IDs.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "keys"
+        ],
+        "title": "TaskGetInput",
+        "type": "object"
+      },
+      "name": "get_task",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "The tasks asked for, in the order asked.",
+        "properties": {
+          "items": {
+            "description": "The tasks.",
+            "items": {
+              "additionalProperties": false,
+              "description": "One task.",
+              "properties": {
+                "checklist": {
+                  "additionalProperties": false,
+                  "description": "The description's checklist.",
+                  "properties": {
+                    "done": {
+                      "description": "Ticked items.",
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "total": {
+                      "description": "All items.",
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "done",
+                    "total"
+                  ],
+                  "type": "object"
+                },
+                "closed_at": {
+                  "description": "When it was closed; left out while it is open.",
+                  "type": "string"
+                },
+                "created_at": {
+                  "description": "When it was created (RFC 3339, UTC).",
+                  "type": "string"
+                },
+                "created_by": {
+                  "additionalProperties": false,
+                  "description": "Who created it.",
+                  "properties": {
+                    "kind": {
+                      "description": "Person or agent.",
+                      "oneOf": [
+                        {
+                          "const": "user",
+                          "description": "The person who owns the workspace.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "agent",
+                          "description": "An agent working through MCP.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "name": {
+                      "description": "The display name (\"You\", \"Claude Code\").",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "description": {
+                  "description": "Its description (Markdown).",
+                  "type": "string"
+                },
+                "due_date": {
+                  "description": "The due date.",
+                  "type": "string"
+                },
+                "edited_at": {
+                  "description": "When its own fields last changed.",
+                  "type": "string"
+                },
+                "estimate": {
+                  "description": "The estimate, as a duration (`1d 4h`).",
+                  "type": "string"
+                },
+                "estimate_minutes": {
+                  "description": "The estimate in minutes.",
+                  "type": "integer"
+                },
+                "id": {
+                  "description": "The task's ID.",
+                  "type": "string"
+                },
+                "key": {
+                  "description": "The task's key (`TM-41`).",
+                  "type": "string"
+                },
+                "labels": {
+                  "description": "Its labels, in the project's order.",
+                  "items": {
+                    "additionalProperties": false,
+                    "description": "A label on a task.",
+                    "properties": {
+                      "hue": {
+                        "description": "Its colour.",
+                        "oneOf": [
+                          {
+                            "const": "red",
+                            "description": "Red.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "orange",
+                            "description": "Orange.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "yellow",
+                            "description": "Yellow.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "green",
+                            "description": "Green.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "teal",
+                            "description": "Teal.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "blue",
+                            "description": "Blue.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "purple",
+                            "description": "Purple.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "pink",
+                            "description": "Pink.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "grey",
+                            "description": "Grey.",
+                            "type": "string"
+                          }
+                        ]
+                      },
+                      "id": {
+                        "description": "The label's ID.",
+                        "type": "string"
+                      },
+                      "name": {
+                        "description": "Its name.",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "hue"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "old_keys": {
+                  "description": "Keys it had before; they still find it.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "parent": {
+                  "description": "The parent task's key, for a subtask.",
+                  "type": "string"
+                },
+                "priority": {
+                  "description": "Its priority.",
+                  "oneOf": [
+                    {
+                      "const": "none",
+                      "description": "No priority (the default).",
+                      "type": "string"
+                    },
+                    {
+                      "const": "low",
+                      "description": "Low.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "normal",
+                      "description": "Normal.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "high",
+                      "description": "High.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "urgent",
+                      "description": "Urgent.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "progress": {
+                  "description": "Progress set by hand, 0 to 100.",
+                  "maximum": 255,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "project": {
+                  "description": "Its project's key.",
+                  "type": "string"
+                },
+                "rank": {
+                  "description": "Its place in its status column.",
+                  "type": "string"
+                },
+                "spent_minutes": {
+                  "description": "Logged time in minutes.",
+                  "type": "integer"
+                },
+                "start_date": {
+                  "description": "The start date.",
+                  "type": "string"
+                },
+                "status": {
+                  "additionalProperties": false,
+                  "description": "Its status.",
+                  "properties": {
+                    "category": {
+                      "description": "Its category.",
+                      "oneOf": [
+                        {
+                          "const": "todo",
+                          "description": "Not started.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "in_progress",
+                          "description": "Being worked on.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "done",
+                          "description": "Finished; closes the task.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "cancelled",
+                          "description": "Dropped; closes the task.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "id": {
+                      "description": "The status's ID.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "category"
+                  ],
+                  "type": "object"
+                },
+                "status_entered_at": {
+                  "description": "When it entered its status.",
+                  "type": "string"
+                },
+                "title": {
+                  "description": "Its title.",
+                  "type": "string"
+                },
+                "type": {
+                  "additionalProperties": false,
+                  "description": "Its type.",
+                  "properties": {
+                    "glyph": {
+                      "description": "Its shape.",
+                      "oneOf": [
+                        {
+                          "const": "task",
+                          "description": "A plain task.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "bug",
+                          "description": "A bug.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "feature",
+                          "description": "A feature.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "milestone",
+                          "description": "A milestone.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "id": {
+                      "description": "The type's ID.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "glyph"
+                  ],
+                  "type": "object"
+                },
+                "updated_at": {
+                  "description": "When anything about it last changed.",
+                  "type": "string"
+                },
+                "version": {
+                  "description": "Goes up by one with every change; pass it as `expected_version` to\nmake sure nobody changed the task since you read it.",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "key",
+                "title",
+                "project",
+                "status",
+                "type",
+                "priority",
+                "labels",
+                "description",
+                "spent_minutes",
+                "checklist",
+                "rank",
+                "created_by",
+                "created_at",
+                "edited_at",
+                "updated_at",
+                "status_entered_at",
+                "version",
+                "id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "total": {
+            "description": "How many.",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "TaskList",
+        "type": "object"
+      },
+      "title": "Get tasks",
+      "toolset": "tasks"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Create a task"
+      },
+      "covers": [
+        "task.create"
+      ],
+      "description": "Creates a task in a project from a title alone, or with `description`, `status`, `type`, `priority` (none, low, normal, high, urgent), `labels`, `parent`, `start_date`, `due_date` (YYYY-MM-DD) and `estimate` (`1d 4h`, `90m`). It lands in the first to-do status at the bottom unless told otherwise, and gets the project's next key. Pass `client_request_id` so a retry doesn't create a second task. Example: create_task {\"project\": \"TM\", \"title\": \"Write the release notes\", \"due_date\": \"2026-12-01\"}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "A new task. Only the project and the title are needed.",
+        "properties": {
+          "after": {
+            "description": "Place it after this task of the same status.",
+            "type": "string"
+          },
+          "at": {
+            "description": "Place it first or last in its status; default: last.",
+            "oneOf": [
+              {
+                "const": "top",
+                "description": "First.",
+                "type": "string"
+              },
+              {
+                "const": "bottom",
+                "description": "Last.",
+                "type": "string"
+              }
+            ]
+          },
+          "before": {
+            "description": "Place it before this task of the same status.",
+            "type": "string"
+          },
+          "client_request_id": {
+            "description": "Your own ID for this request; repeating it within 24 hours returns\nthe first answer instead of creating a second task.",
+            "type": "string"
+          },
+          "description": {
+            "description": "The description (Markdown).",
+            "type": "string"
+          },
+          "due_date": {
+            "description": "The due date, `YYYY-MM-DD`.",
+            "type": "string"
+          },
+          "estimate": {
+            "description": "The estimate, as a duration (`1d 4h`, `90m`, `1.5h`).",
+            "type": "string"
+          },
+          "labels": {
+            "description": "Labels, by name or ID.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "parent": {
+            "description": "The parent task, for a subtask (same project, at most 5 levels).",
+            "type": "string"
+          },
+          "priority": {
+            "description": "The priority; default: none.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No priority (the default).",
+                "type": "string"
+              },
+              {
+                "const": "low",
+                "description": "Low.",
+                "type": "string"
+              },
+              {
+                "const": "normal",
+                "description": "Normal.",
+                "type": "string"
+              },
+              {
+                "const": "high",
+                "description": "High.",
+                "type": "string"
+              },
+              {
+                "const": "urgent",
+                "description": "Urgent.",
+                "type": "string"
+              }
+            ]
+          },
+          "project": {
+            "description": "The project: its key (current or old) or ID.",
+            "type": "string"
+          },
+          "start_date": {
+            "description": "The start date, `YYYY-MM-DD`.",
+            "type": "string"
+          },
+          "status": {
+            "description": "The status; default: the project's first to-do status.",
+            "type": "string"
+          },
+          "title": {
+            "description": "The title, 1 to 500 characters; tabs and line breaks become spaces.",
+            "type": "string"
+          },
+          "type": {
+            "description": "The type; default: the project's default type.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project",
+          "title"
+        ],
+        "title": "TaskCreateInput",
+        "type": "object"
+      },
+      "name": "create_task",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "A task changed, with the history group of the change.",
+        "properties": {
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "task": {
+            "additionalProperties": false,
+            "description": "The task after the change.",
+            "properties": {
+              "checklist": {
+                "additionalProperties": false,
+                "description": "The description's checklist.",
+                "properties": {
+                  "done": {
+                    "description": "Ticked items.",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "total": {
+                    "description": "All items.",
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "done",
+                  "total"
+                ],
+                "type": "object"
+              },
+              "closed_at": {
+                "description": "When it was closed; left out while it is open.",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "created_by": {
+                "additionalProperties": false,
+                "description": "Who created it.",
+                "properties": {
+                  "kind": {
+                    "description": "Person or agent.",
+                    "oneOf": [
+                      {
+                        "const": "user",
+                        "description": "The person who owns the workspace.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "agent",
+                        "description": "An agent working through MCP.",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "name": {
+                    "description": "The display name (\"You\", \"Claude Code\").",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "name"
+                ],
+                "type": "object"
+              },
+              "description": {
+                "description": "Its description (Markdown).",
+                "type": "string"
+              },
+              "due_date": {
+                "description": "The due date.",
+                "type": "string"
+              },
+              "edited_at": {
+                "description": "When its own fields last changed.",
+                "type": "string"
+              },
+              "estimate": {
+                "description": "The estimate, as a duration (`1d 4h`).",
+                "type": "string"
+              },
+              "estimate_minutes": {
+                "description": "The estimate in minutes.",
+                "type": "integer"
+              },
+              "id": {
+                "description": "The task's ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "The task's key (`TM-41`).",
+                "type": "string"
+              },
+              "labels": {
+                "description": "Its labels, in the project's order.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "A label on a task.",
+                  "properties": {
+                    "hue": {
+                      "description": "Its colour.",
+                      "oneOf": [
+                        {
+                          "const": "red",
+                          "description": "Red.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "orange",
+                          "description": "Orange.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "yellow",
+                          "description": "Yellow.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "green",
+                          "description": "Green.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "teal",
+                          "description": "Teal.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "blue",
+                          "description": "Blue.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "purple",
+                          "description": "Purple.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "pink",
+                          "description": "Pink.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "grey",
+                          "description": "Grey.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "id": {
+                      "description": "The label's ID.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "hue"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "old_keys": {
+                "description": "Keys it had before; they still find it.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "parent": {
+                "description": "The parent task's key, for a subtask.",
+                "type": "string"
+              },
+              "priority": {
+                "description": "Its priority.",
+                "oneOf": [
+                  {
+                    "const": "none",
+                    "description": "No priority (the default).",
+                    "type": "string"
+                  },
+                  {
+                    "const": "low",
+                    "description": "Low.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "normal",
+                    "description": "Normal.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "high",
+                    "description": "High.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "urgent",
+                    "description": "Urgent.",
+                    "type": "string"
+                  }
+                ]
+              },
+              "progress": {
+                "description": "Progress set by hand, 0 to 100.",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "project": {
+                "description": "Its project's key.",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place in its status column.",
+                "type": "string"
+              },
+              "spent_minutes": {
+                "description": "Logged time in minutes.",
+                "type": "integer"
+              },
+              "start_date": {
+                "description": "The start date.",
+                "type": "string"
+              },
+              "status": {
+                "additionalProperties": false,
+                "description": "Its status.",
+                "properties": {
+                  "category": {
+                    "description": "Its category.",
+                    "oneOf": [
+                      {
+                        "const": "todo",
+                        "description": "Not started.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "in_progress",
+                        "description": "Being worked on.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "done",
+                        "description": "Finished; closes the task.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "cancelled",
+                        "description": "Dropped; closes the task.",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "id": {
+                    "description": "The status's ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "category"
+                ],
+                "type": "object"
+              },
+              "status_entered_at": {
+                "description": "When it entered its status.",
+                "type": "string"
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              },
+              "type": {
+                "additionalProperties": false,
+                "description": "Its type.",
+                "properties": {
+                  "glyph": {
+                    "description": "Its shape.",
+                    "oneOf": [
+                      {
+                        "const": "task",
+                        "description": "A plain task.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "bug",
+                        "description": "A bug.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "feature",
+                        "description": "A feature.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "milestone",
+                        "description": "A milestone.",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "id": {
+                    "description": "The type's ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "glyph"
+                ],
+                "type": "object"
+              },
+              "updated_at": {
+                "description": "When anything about it last changed.",
+                "type": "string"
+              },
+              "version": {
+                "description": "Goes up by one with every change; pass it as `expected_version` to\nmake sure nobody changed the task since you read it.",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "project",
+              "status",
+              "type",
+              "priority",
+              "labels",
+              "description",
+              "spent_minutes",
+              "checklist",
+              "rank",
+              "created_by",
+              "created_at",
+              "edited_at",
+              "updated_at",
+              "status_entered_at",
+              "version",
+              "id"
+            ],
+            "type": "object"
+          },
+          "warnings": {
+            "description": "Problems that did not stop the change, such as closing a task whose\nsubtasks are still open.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "task"
+        ],
+        "title": "TaskChange",
+        "type": "object"
+      },
+      "title": "Create a task",
+      "toolset": "tasks"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Update a task"
+      },
+      "covers": [
+        "task.update"
+      ],
+      "description": "Changes the given fields of a task only: `title`, `description` (replaces it), `type`, `priority`, `labels` (replace) or `add_labels`/`remove_labels`, `parent`, `start_date`, `due_date`, `estimate`, `progress`. To clear a field, list it in `clear`. Status and position change with move_task. Pass `expected_version` from get_task. Example: update_task {\"key\": \"TM-41\", \"priority\": \"high\", \"clear\": [\"due_date\"]}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Changes to a task; fields left out keep their value. Status and\nposition change with `task.move`.",
+        "properties": {
+          "add_labels": {
+            "description": "Labels to add.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "clear": {
+            "description": "Fields to clear.",
+            "items": {
+              "description": "A task field that can be cleared.",
+              "oneOf": [
+                {
+                  "const": "description",
+                  "description": "The description.",
+                  "type": "string"
+                },
+                {
+                  "const": "parent",
+                  "description": "The parent: the task stops being a subtask.",
+                  "type": "string"
+                },
+                {
+                  "const": "start_date",
+                  "description": "The start date.",
+                  "type": "string"
+                },
+                {
+                  "const": "due_date",
+                  "description": "The due date.",
+                  "type": "string"
+                },
+                {
+                  "const": "estimate",
+                  "description": "The estimate.",
+                  "type": "string"
+                },
+                {
+                  "const": "progress",
+                  "description": "The progress set by hand.",
+                  "type": "string"
+                },
+                {
+                  "const": "labels",
+                  "description": "Every label.",
+                  "type": "string"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "description": {
+            "description": "A new description (Markdown), replacing the old one.",
+            "type": "string"
+          },
+          "due_date": {
+            "description": "A new due date, `YYYY-MM-DD`.",
+            "type": "string"
+          },
+          "estimate": {
+            "description": "A new estimate, as a duration.",
+            "type": "string"
+          },
+          "expected_version": {
+            "description": "Refuse the change unless the task still has this version.",
+            "type": "integer"
+          },
+          "key": {
+            "description": "The task: its key or ID.",
+            "type": "string"
+          },
+          "labels": {
+            "description": "Replace the labels with these.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "parent": {
+            "description": "A new parent task (same project, at most 5 levels, no loops).",
+            "type": "string"
+          },
+          "priority": {
+            "description": "A new priority.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No priority (the default).",
+                "type": "string"
+              },
+              {
+                "const": "low",
+                "description": "Low.",
+                "type": "string"
+              },
+              {
+                "const": "normal",
+                "description": "Normal.",
+                "type": "string"
+              },
+              {
+                "const": "high",
+                "description": "High.",
+                "type": "string"
+              },
+              {
+                "const": "urgent",
+                "description": "Urgent.",
+                "type": "string"
+              }
+            ]
+          },
+          "progress": {
+            "description": "Progress set by hand, 0 to 100.",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "remove_labels": {
+            "description": "Labels to take off.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "start_date": {
+            "description": "A new start date, `YYYY-MM-DD`.",
+            "type": "string"
+          },
+          "title": {
+            "description": "A new title.",
+            "type": "string"
+          },
+          "type": {
+            "description": "A new type.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "title": "TaskUpdateInput",
+        "type": "object"
+      },
+      "name": "update_task",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "A task changed, with the history group of the change.",
+        "properties": {
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "task": {
+            "additionalProperties": false,
+            "description": "The task after the change.",
+            "properties": {
+              "checklist": {
+                "additionalProperties": false,
+                "description": "The description's checklist.",
+                "properties": {
+                  "done": {
+                    "description": "Ticked items.",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "total": {
+                    "description": "All items.",
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "done",
+                  "total"
+                ],
+                "type": "object"
+              },
+              "closed_at": {
+                "description": "When it was closed; left out while it is open.",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "created_by": {
+                "additionalProperties": false,
+                "description": "Who created it.",
+                "properties": {
+                  "kind": {
+                    "description": "Person or agent.",
+                    "oneOf": [
+                      {
+                        "const": "user",
+                        "description": "The person who owns the workspace.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "agent",
+                        "description": "An agent working through MCP.",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "name": {
+                    "description": "The display name (\"You\", \"Claude Code\").",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "name"
+                ],
+                "type": "object"
+              },
+              "description": {
+                "description": "Its description (Markdown).",
+                "type": "string"
+              },
+              "due_date": {
+                "description": "The due date.",
+                "type": "string"
+              },
+              "edited_at": {
+                "description": "When its own fields last changed.",
+                "type": "string"
+              },
+              "estimate": {
+                "description": "The estimate, as a duration (`1d 4h`).",
+                "type": "string"
+              },
+              "estimate_minutes": {
+                "description": "The estimate in minutes.",
+                "type": "integer"
+              },
+              "id": {
+                "description": "The task's ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "The task's key (`TM-41`).",
+                "type": "string"
+              },
+              "labels": {
+                "description": "Its labels, in the project's order.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "A label on a task.",
+                  "properties": {
+                    "hue": {
+                      "description": "Its colour.",
+                      "oneOf": [
+                        {
+                          "const": "red",
+                          "description": "Red.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "orange",
+                          "description": "Orange.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "yellow",
+                          "description": "Yellow.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "green",
+                          "description": "Green.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "teal",
+                          "description": "Teal.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "blue",
+                          "description": "Blue.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "purple",
+                          "description": "Purple.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "pink",
+                          "description": "Pink.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "grey",
+                          "description": "Grey.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "id": {
+                      "description": "The label's ID.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "hue"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "old_keys": {
+                "description": "Keys it had before; they still find it.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "parent": {
+                "description": "The parent task's key, for a subtask.",
+                "type": "string"
+              },
+              "priority": {
+                "description": "Its priority.",
+                "oneOf": [
+                  {
+                    "const": "none",
+                    "description": "No priority (the default).",
+                    "type": "string"
+                  },
+                  {
+                    "const": "low",
+                    "description": "Low.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "normal",
+                    "description": "Normal.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "high",
+                    "description": "High.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "urgent",
+                    "description": "Urgent.",
+                    "type": "string"
+                  }
+                ]
+              },
+              "progress": {
+                "description": "Progress set by hand, 0 to 100.",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "project": {
+                "description": "Its project's key.",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place in its status column.",
+                "type": "string"
+              },
+              "spent_minutes": {
+                "description": "Logged time in minutes.",
+                "type": "integer"
+              },
+              "start_date": {
+                "description": "The start date.",
+                "type": "string"
+              },
+              "status": {
+                "additionalProperties": false,
+                "description": "Its status.",
+                "properties": {
+                  "category": {
+                    "description": "Its category.",
+                    "oneOf": [
+                      {
+                        "const": "todo",
+                        "description": "Not started.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "in_progress",
+                        "description": "Being worked on.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "done",
+                        "description": "Finished; closes the task.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "cancelled",
+                        "description": "Dropped; closes the task.",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "id": {
+                    "description": "The status's ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "category"
+                ],
+                "type": "object"
+              },
+              "status_entered_at": {
+                "description": "When it entered its status.",
+                "type": "string"
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              },
+              "type": {
+                "additionalProperties": false,
+                "description": "Its type.",
+                "properties": {
+                  "glyph": {
+                    "description": "Its shape.",
+                    "oneOf": [
+                      {
+                        "const": "task",
+                        "description": "A plain task.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "bug",
+                        "description": "A bug.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "feature",
+                        "description": "A feature.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "milestone",
+                        "description": "A milestone.",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "id": {
+                    "description": "The type's ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "glyph"
+                ],
+                "type": "object"
+              },
+              "updated_at": {
+                "description": "When anything about it last changed.",
+                "type": "string"
+              },
+              "version": {
+                "description": "Goes up by one with every change; pass it as `expected_version` to\nmake sure nobody changed the task since you read it.",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "project",
+              "status",
+              "type",
+              "priority",
+              "labels",
+              "description",
+              "spent_minutes",
+              "checklist",
+              "rank",
+              "created_by",
+              "created_at",
+              "edited_at",
+              "updated_at",
+              "status_entered_at",
+              "version",
+              "id"
+            ],
+            "type": "object"
+          },
+          "warnings": {
+            "description": "Problems that did not stop the change, such as closing a task whose\nsubtasks are still open.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "task"
+        ],
+        "title": "TaskChange",
+        "type": "object"
+      },
+      "title": "Update a task",
+      "toolset": "tasks"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Move a task"
+      },
+      "covers": [
+        "task.move"
+      ],
+      "description": "Moves a task to another `status` (by name), to a place in its column (`before` or `after` another task's key, or `at`: top or bottom), or to another `project`, where it gets a new key while the old one keeps finding it. Entering a done or cancelled status closes the task. Example: move_task {\"key\": \"TM-41\", \"status\": \"In progress\", \"at\": \"top\"}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Where to move a task: another status, another place in its column, or\nanother project.",
+        "properties": {
+          "after": {
+            "description": "Place it after this task of the target status.",
+            "type": "string"
+          },
+          "at": {
+            "description": "Place it first or last in the target status; default when the status\nchanges: last.",
+            "oneOf": [
+              {
+                "const": "top",
+                "description": "First.",
+                "type": "string"
+              },
+              {
+                "const": "bottom",
+                "description": "Last.",
+                "type": "string"
+              }
+            ]
+          },
+          "before": {
+            "description": "Place it before this task of the target status.",
+            "type": "string"
+          },
+          "expected_version": {
+            "description": "Refuse the move unless the task still has this version.",
+            "type": "integer"
+          },
+          "key": {
+            "description": "The task: its key or ID.",
+            "type": "string"
+          },
+          "project": {
+            "description": "Move it to another project: it gets the next key there, and the old\nkey keeps finding it. Its subtasks move with it.",
+            "type": "string"
+          },
+          "status": {
+            "description": "The new status, by name or ID.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "title": "TaskMoveInput",
+        "type": "object"
+      },
+      "name": "move_task",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "A task changed, with the history group of the change.",
+        "properties": {
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "task": {
+            "additionalProperties": false,
+            "description": "The task after the change.",
+            "properties": {
+              "checklist": {
+                "additionalProperties": false,
+                "description": "The description's checklist.",
+                "properties": {
+                  "done": {
+                    "description": "Ticked items.",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "total": {
+                    "description": "All items.",
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "done",
+                  "total"
+                ],
+                "type": "object"
+              },
+              "closed_at": {
+                "description": "When it was closed; left out while it is open.",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "created_by": {
+                "additionalProperties": false,
+                "description": "Who created it.",
+                "properties": {
+                  "kind": {
+                    "description": "Person or agent.",
+                    "oneOf": [
+                      {
+                        "const": "user",
+                        "description": "The person who owns the workspace.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "agent",
+                        "description": "An agent working through MCP.",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "name": {
+                    "description": "The display name (\"You\", \"Claude Code\").",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "name"
+                ],
+                "type": "object"
+              },
+              "description": {
+                "description": "Its description (Markdown).",
+                "type": "string"
+              },
+              "due_date": {
+                "description": "The due date.",
+                "type": "string"
+              },
+              "edited_at": {
+                "description": "When its own fields last changed.",
+                "type": "string"
+              },
+              "estimate": {
+                "description": "The estimate, as a duration (`1d 4h`).",
+                "type": "string"
+              },
+              "estimate_minutes": {
+                "description": "The estimate in minutes.",
+                "type": "integer"
+              },
+              "id": {
+                "description": "The task's ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "The task's key (`TM-41`).",
+                "type": "string"
+              },
+              "labels": {
+                "description": "Its labels, in the project's order.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "A label on a task.",
+                  "properties": {
+                    "hue": {
+                      "description": "Its colour.",
+                      "oneOf": [
+                        {
+                          "const": "red",
+                          "description": "Red.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "orange",
+                          "description": "Orange.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "yellow",
+                          "description": "Yellow.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "green",
+                          "description": "Green.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "teal",
+                          "description": "Teal.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "blue",
+                          "description": "Blue.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "purple",
+                          "description": "Purple.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "pink",
+                          "description": "Pink.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "grey",
+                          "description": "Grey.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "id": {
+                      "description": "The label's ID.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "hue"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "old_keys": {
+                "description": "Keys it had before; they still find it.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "parent": {
+                "description": "The parent task's key, for a subtask.",
+                "type": "string"
+              },
+              "priority": {
+                "description": "Its priority.",
+                "oneOf": [
+                  {
+                    "const": "none",
+                    "description": "No priority (the default).",
+                    "type": "string"
+                  },
+                  {
+                    "const": "low",
+                    "description": "Low.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "normal",
+                    "description": "Normal.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "high",
+                    "description": "High.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "urgent",
+                    "description": "Urgent.",
+                    "type": "string"
+                  }
+                ]
+              },
+              "progress": {
+                "description": "Progress set by hand, 0 to 100.",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "project": {
+                "description": "Its project's key.",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place in its status column.",
+                "type": "string"
+              },
+              "spent_minutes": {
+                "description": "Logged time in minutes.",
+                "type": "integer"
+              },
+              "start_date": {
+                "description": "The start date.",
+                "type": "string"
+              },
+              "status": {
+                "additionalProperties": false,
+                "description": "Its status.",
+                "properties": {
+                  "category": {
+                    "description": "Its category.",
+                    "oneOf": [
+                      {
+                        "const": "todo",
+                        "description": "Not started.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "in_progress",
+                        "description": "Being worked on.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "done",
+                        "description": "Finished; closes the task.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "cancelled",
+                        "description": "Dropped; closes the task.",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "id": {
+                    "description": "The status's ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "category"
+                ],
+                "type": "object"
+              },
+              "status_entered_at": {
+                "description": "When it entered its status.",
+                "type": "string"
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              },
+              "type": {
+                "additionalProperties": false,
+                "description": "Its type.",
+                "properties": {
+                  "glyph": {
+                    "description": "Its shape.",
+                    "oneOf": [
+                      {
+                        "const": "task",
+                        "description": "A plain task.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "bug",
+                        "description": "A bug.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "feature",
+                        "description": "A feature.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "milestone",
+                        "description": "A milestone.",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "id": {
+                    "description": "The type's ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "glyph"
+                ],
+                "type": "object"
+              },
+              "updated_at": {
+                "description": "When anything about it last changed.",
+                "type": "string"
+              },
+              "version": {
+                "description": "Goes up by one with every change; pass it as `expected_version` to\nmake sure nobody changed the task since you read it.",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "project",
+              "status",
+              "type",
+              "priority",
+              "labels",
+              "description",
+              "spent_minutes",
+              "checklist",
+              "rank",
+              "created_by",
+              "created_at",
+              "edited_at",
+              "updated_at",
+              "status_entered_at",
+              "version",
+              "id"
+            ],
+            "type": "object"
+          },
+          "warnings": {
+            "description": "Problems that did not stop the change, such as closing a task whose\nsubtasks are still open.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "task"
+        ],
+        "title": "TaskChange",
+        "type": "object"
+      },
+      "title": "Move a task",
+      "toolset": "tasks"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Get a board"
+      },
+      "covers": [
+        "board.get",
+        "layout.get"
+      ],
+      "description": "Returns a project's board as the person sees it: columns in their order with hidden ones flagged (and their cards left out), WIP limits and whether a column is over it, and compact cards. `include_subprojects: true` adds the sub-projects' tasks, matching columns by status name. Closed cards older than the layout's limit are counted, not listed, unless `show_older: true`. Example: get_board {\"project\": \"TM\"}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Which board to read.",
+        "properties": {
+          "include_subprojects": {
+            "description": "Show the sub-projects' tasks too; default: as the layout says.",
+            "type": "boolean"
+          },
+          "project": {
+            "description": "The project: its key (current or old) or ID.",
+            "type": "string"
+          },
+          "show_older": {
+            "default": false,
+            "description": "Show every closed card, however old.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "title": "BoardGetInput",
+        "type": "object"
+      },
+      "name": "get_board",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "A project's board as the person sees it.",
+        "properties": {
+          "columns": {
+            "description": "The columns, in the layout's order, hidden ones included and\nflagged.",
+            "items": {
+              "additionalProperties": false,
+              "description": "One column: a status, or with sub-projects, every status of that name.",
+              "properties": {
+                "cards": {
+                  "description": "The cards, in order.",
+                  "items": {
+                    "additionalProperties": false,
+                    "description": "One card.",
+                    "properties": {
+                      "checklist": {
+                        "additionalProperties": false,
+                        "description": "The description's checklist.",
+                        "properties": {
+                          "done": {
+                            "description": "Ticked items.",
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "total": {
+                            "description": "All items.",
+                            "minimum": 0,
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "done",
+                          "total"
+                        ],
+                        "type": "object"
+                      },
+                      "closed_at": {
+                        "description": "When it was closed; left out while open.",
+                        "type": "string"
+                      },
+                      "due_date": {
+                        "description": "The due date.",
+                        "type": "string"
+                      },
+                      "estimate_minutes": {
+                        "description": "The estimate in minutes.",
+                        "type": "integer"
+                      },
+                      "id": {
+                        "description": "The task's ID.",
+                        "type": "string"
+                      },
+                      "key": {
+                        "description": "The task's key.",
+                        "type": "string"
+                      },
+                      "labels": {
+                        "description": "Its labels.",
+                        "items": {
+                          "additionalProperties": false,
+                          "description": "A label on a task.",
+                          "properties": {
+                            "hue": {
+                              "description": "Its colour.",
+                              "oneOf": [
+                                {
+                                  "const": "red",
+                                  "description": "Red.",
+                                  "type": "string"
+                                },
+                                {
+                                  "const": "orange",
+                                  "description": "Orange.",
+                                  "type": "string"
+                                },
+                                {
+                                  "const": "yellow",
+                                  "description": "Yellow.",
+                                  "type": "string"
+                                },
+                                {
+                                  "const": "green",
+                                  "description": "Green.",
+                                  "type": "string"
+                                },
+                                {
+                                  "const": "teal",
+                                  "description": "Teal.",
+                                  "type": "string"
+                                },
+                                {
+                                  "const": "blue",
+                                  "description": "Blue.",
+                                  "type": "string"
+                                },
+                                {
+                                  "const": "purple",
+                                  "description": "Purple.",
+                                  "type": "string"
+                                },
+                                {
+                                  "const": "pink",
+                                  "description": "Pink.",
+                                  "type": "string"
+                                },
+                                {
+                                  "const": "grey",
+                                  "description": "Grey.",
+                                  "type": "string"
+                                }
+                              ]
+                            },
+                            "id": {
+                              "description": "The label's ID.",
+                              "type": "string"
+                            },
+                            "name": {
+                              "description": "Its name.",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "hue"
+                          ],
+                          "type": "object"
+                        },
+                        "type": "array"
+                      },
+                      "parent": {
+                        "description": "The parent task's key, for a subtask.",
+                        "type": "string"
+                      },
+                      "priority": {
+                        "description": "Its priority.",
+                        "oneOf": [
+                          {
+                            "const": "none",
+                            "description": "No priority (the default).",
+                            "type": "string"
+                          },
+                          {
+                            "const": "low",
+                            "description": "Low.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "normal",
+                            "description": "Normal.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "high",
+                            "description": "High.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "urgent",
+                            "description": "Urgent.",
+                            "type": "string"
+                          }
+                        ]
+                      },
+                      "project": {
+                        "description": "Its project's key (differs from the board's for sub-project tasks).",
+                        "type": "string"
+                      },
+                      "rank": {
+                        "description": "Its place in the column.",
+                        "type": "string"
+                      },
+                      "start_date": {
+                        "description": "The start date.",
+                        "type": "string"
+                      },
+                      "status_entered_at": {
+                        "description": "When it entered its status.",
+                        "type": "string"
+                      },
+                      "subtasks": {
+                        "additionalProperties": false,
+                        "description": "Its subtasks: closed and all.",
+                        "properties": {
+                          "done": {
+                            "description": "Ticked items.",
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "total": {
+                            "description": "All items.",
+                            "minimum": 0,
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "done",
+                          "total"
+                        ],
+                        "type": "object"
+                      },
+                      "title": {
+                        "description": "Its title.",
+                        "type": "string"
+                      },
+                      "type": {
+                        "additionalProperties": false,
+                        "description": "Its type.",
+                        "properties": {
+                          "glyph": {
+                            "description": "Its shape.",
+                            "oneOf": [
+                              {
+                                "const": "task",
+                                "description": "A plain task.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "bug",
+                                "description": "A bug.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "feature",
+                                "description": "A feature.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "milestone",
+                                "description": "A milestone.",
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "id": {
+                            "description": "The type's ID.",
+                            "type": "string"
+                          },
+                          "name": {
+                            "description": "Its name.",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "glyph"
+                        ],
+                        "type": "object"
+                      },
+                      "updated_at": {
+                        "description": "When anything about it last changed.",
+                        "type": "string"
+                      },
+                      "version": {
+                        "description": "Its version, for `expected_version`.",
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "title",
+                      "project",
+                      "type",
+                      "priority",
+                      "labels",
+                      "checklist",
+                      "subtasks",
+                      "rank",
+                      "status_entered_at",
+                      "updated_at",
+                      "version",
+                      "id"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "category": {
+                  "description": "Its category.",
+                  "oneOf": [
+                    {
+                      "const": "todo",
+                      "description": "Not started.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "in_progress",
+                      "description": "Being worked on.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "done",
+                      "description": "Finished; closes the task.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "cancelled",
+                      "description": "Dropped; closes the task.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "collapsed": {
+                  "description": "Collapsed by the layout.",
+                  "type": "boolean"
+                },
+                "count": {
+                  "description": "Tasks in the column, including hidden older ones.",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "hidden": {
+                  "description": "Hidden by the layout; its cards are left out.",
+                  "type": "boolean"
+                },
+                "hue": {
+                  "description": "Its colour.",
+                  "oneOf": [
+                    {
+                      "const": "red",
+                      "description": "Red.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "orange",
+                      "description": "Orange.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "yellow",
+                      "description": "Yellow.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "green",
+                      "description": "Green.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "teal",
+                      "description": "Teal.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "blue",
+                      "description": "Blue.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "purple",
+                      "description": "Purple.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "pink",
+                      "description": "Pink.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "grey",
+                      "description": "Grey.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "id": {
+                  "description": "The status's ID in the board's own project; a status that exists\nonly in sub-projects has the first sub-project's.",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "The status name.",
+                  "type": "string"
+                },
+                "older": {
+                  "description": "Closed cards hidden behind \"Show older\".",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "over_limit": {
+                  "description": "Whether the column holds more tasks than its WIP limit.",
+                  "type": "boolean"
+                },
+                "sort_mode": {
+                  "description": "How its cards are ordered.",
+                  "oneOf": [
+                    {
+                      "const": "manual",
+                      "description": "By hand, by dragging (the default).",
+                      "type": "string"
+                    },
+                    {
+                      "const": "priority",
+                      "description": "Highest priority first.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "due",
+                      "description": "Soonest due date first; no due date last.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "updated",
+                      "description": "Most recently changed first.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "statuses": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "description": "Every status shown in this column, by project key: one, or more when\nsub-projects are included.",
+                  "type": "object"
+                },
+                "wip_limit": {
+                  "description": "The WIP limit, if the status has one.",
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "category",
+                "hue",
+                "statuses",
+                "over_limit",
+                "count",
+                "older",
+                "hidden",
+                "collapsed",
+                "sort_mode",
+                "cards"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "hidden_columns": {
+            "description": "Hidden columns and the tasks in them.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "hidden_tasks": {
+            "description": "Tasks in hidden columns.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "layout": {
+            "additionalProperties": false,
+            "description": "The layout the board was built with.",
+            "properties": {
+              "card_fields": {
+                "description": "The fields shown on cards.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "collapsed": {
+                "description": "Collapsed columns, as status IDs.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "column_sort": {
+                "additionalProperties": {
+                  "description": "How a column's cards are ordered.",
+                  "oneOf": [
+                    {
+                      "const": "manual",
+                      "description": "By hand, by dragging (the default).",
+                      "type": "string"
+                    },
+                    {
+                      "const": "priority",
+                      "description": "Highest priority first.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "due",
+                      "description": "Soonest due date first; no due date last.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "updated",
+                      "description": "Most recently changed first.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "description": "Sort modes of single columns, by status ID.",
+                "type": "object"
+              },
+              "hidden": {
+                "description": "Hidden columns, as status IDs.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "hide_done_after_days": {
+                "description": "Cards closed more than this many days ago are hidden behind \"Show\nolder\"; 0 shows every card.",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "include_subprojects": {
+                "description": "Whether the sub-projects' tasks are on the board too.",
+                "type": "boolean"
+              },
+              "order": {
+                "description": "The column order, as status IDs. Statuses not listed keep their\nproject position between their neighbours.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "sort_mode": {
+                "description": "The sort mode of every column without its own.",
+                "oneOf": [
+                  {
+                    "const": "manual",
+                    "description": "By hand, by dragging (the default).",
+                    "type": "string"
+                  },
+                  {
+                    "const": "priority",
+                    "description": "Highest priority first.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "due",
+                    "description": "Soonest due date first; no due date last.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "updated",
+                    "description": "Most recently changed first.",
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "order",
+              "hidden",
+              "collapsed",
+              "sort_mode",
+              "column_sort",
+              "hide_done_after_days",
+              "card_fields",
+              "include_subprojects"
+            ],
+            "type": "object"
+          },
+          "project": {
+            "description": "The project's key.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project",
+          "columns",
+          "layout",
+          "hidden_columns",
+          "hidden_tasks"
+        ],
+        "title": "Board",
+        "type": "object"
+      },
+      "title": "Get a board",
+      "toolset": "views"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Set the board layout"
+      },
+      "covers": [
+        "layout.update"
+      ],
+      "description": "Changes the person's own layout of a project's board: `hide`, `show`, `collapse`, `expand` columns (by status name), set their `order`, the `sort_mode` (manual, priority, due, updated) or per-column `column_sort`, `card_fields`, `hide_done_after_days`, `include_subprojects`, or `reset` to the project's layout. It never changes the project's statuses. Only change the layout when the person asked. Example: set_board_layout {\"project\": \"TM\", \"hide\": [\"Backlog\"]}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Changes to a board layout; fields left out keep their value.",
+        "properties": {
+          "card_fields": {
+            "description": "The fields shown on cards.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "collapse": {
+            "description": "Columns to collapse.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "column_sort": {
+            "additionalProperties": {
+              "description": "How a column's cards are ordered.",
+              "oneOf": [
+                {
+                  "const": "manual",
+                  "description": "By hand, by dragging (the default).",
+                  "type": "string"
+                },
+                {
+                  "const": "priority",
+                  "description": "Highest priority first.",
+                  "type": "string"
+                },
+                {
+                  "const": "due",
+                  "description": "Soonest due date first; no due date last.",
+                  "type": "string"
+                },
+                {
+                  "const": "updated",
+                  "description": "Most recently changed first.",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Sort modes of single columns, by status name or ID; `manual` columns\ncan be reordered by hand.",
+            "type": "object"
+          },
+          "expand": {
+            "description": "Columns to expand again.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "hide": {
+            "description": "Columns to hide, by status name or ID.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "hide_done_after_days": {
+            "description": "Hide cards closed more than this many days ago; 0 shows all.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "include_subprojects": {
+            "description": "Show the sub-projects' tasks too.",
+            "type": "boolean"
+          },
+          "order": {
+            "description": "The column order, by status name or ID; columns left out follow in\nproject order.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "project": {
+            "description": "The project: its key (current or old) or ID.",
+            "type": "string"
+          },
+          "reset": {
+            "default": false,
+            "description": "Go back to the project's layout first: every column shown and\nexpanded, in project order, sorted by hand.",
+            "type": "boolean"
+          },
+          "show": {
+            "description": "Columns to show again.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "sort_mode": {
+            "description": "The sort mode of every column without its own.",
+            "oneOf": [
+              {
+                "const": "manual",
+                "description": "By hand, by dragging (the default).",
+                "type": "string"
+              },
+              {
+                "const": "priority",
+                "description": "Highest priority first.",
+                "type": "string"
+              },
+              {
+                "const": "due",
+                "description": "Soonest due date first; no due date last.",
+                "type": "string"
+              },
+              {
+                "const": "updated",
+                "description": "Most recently changed first.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "title": "LayoutUpdateInput",
+        "type": "object"
+      },
+      "name": "set_board_layout",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "A layout after a change.",
+        "properties": {
+          "group": {
+            "description": "The history group; left out when nothing changed.",
+            "type": "string"
+          },
+          "layout": {
+            "additionalProperties": false,
+            "description": "The layout after the change.",
+            "properties": {
+              "card_fields": {
+                "description": "The fields shown on cards.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "collapsed": {
+                "description": "Collapsed columns, as status IDs.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "column_sort": {
+                "additionalProperties": {
+                  "description": "How a column's cards are ordered.",
+                  "oneOf": [
+                    {
+                      "const": "manual",
+                      "description": "By hand, by dragging (the default).",
+                      "type": "string"
+                    },
+                    {
+                      "const": "priority",
+                      "description": "Highest priority first.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "due",
+                      "description": "Soonest due date first; no due date last.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "updated",
+                      "description": "Most recently changed first.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "description": "Sort modes of single columns, by status ID.",
+                "type": "object"
+              },
+              "hidden": {
+                "description": "Hidden columns, as status IDs.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "hide_done_after_days": {
+                "description": "Cards closed more than this many days ago are hidden behind \"Show\nolder\"; 0 shows every card.",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "include_subprojects": {
+                "description": "Whether the sub-projects' tasks are on the board too.",
+                "type": "boolean"
+              },
+              "order": {
+                "description": "The column order, as status IDs. Statuses not listed keep their\nproject position between their neighbours.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "sort_mode": {
+                "description": "The sort mode of every column without its own.",
+                "oneOf": [
+                  {
+                    "const": "manual",
+                    "description": "By hand, by dragging (the default).",
+                    "type": "string"
+                  },
+                  {
+                    "const": "priority",
+                    "description": "Highest priority first.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "due",
+                    "description": "Soonest due date first; no due date last.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "updated",
+                    "description": "Most recently changed first.",
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "order",
+              "hidden",
+              "collapsed",
+              "sort_mode",
+              "column_sort",
+              "hide_done_after_days",
+              "card_fields",
+              "include_subprojects"
+            ],
+            "type": "object"
+          },
+          "project": {
+            "description": "The project's key.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project",
+          "layout"
+        ],
+        "title": "LayoutChange",
+        "type": "object"
+      },
+      "title": "Set the board layout",
+      "toolset": "views"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
         "readOnlyHint": false,
         "title": "Update workspace settings"
       },
@@ -612,6 +5763,40 @@
         "additionalProperties": false,
         "description": "The settings to change; fields left out keep their value. Settings that\ncontrol agents are changed in the app only.",
         "properties": {
+          "clear": {
+            "description": "Settings to set back to their default.",
+            "items": {
+              "description": "A setting that can be set back to its default.",
+              "oneOf": [
+                {
+                  "const": "trash_days",
+                  "description": "Days in the trash before purging (default 30).",
+                  "type": "string"
+                },
+                {
+                  "const": "reminder_time",
+                  "description": "Reminder time (default 09:00).",
+                  "type": "string"
+                },
+                {
+                  "const": "hours_per_day",
+                  "description": "Working hours in a day (default 8).",
+                  "type": "string"
+                },
+                {
+                  "const": "days_per_week",
+                  "description": "Working days in a week (default 5).",
+                  "type": "string"
+                },
+                {
+                  "const": "week_start",
+                  "description": "First day of the week (default Monday).",
+                  "type": "string"
+                }
+              ]
+            },
+            "type": "array"
+          },
           "days_per_week": {
             "description": "Working days in a week, 1 to 7.",
             "minimum": 0,

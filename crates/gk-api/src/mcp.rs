@@ -5,8 +5,12 @@
 //! covering one or more catalog operations.
 //!
 //! A tool takes its input and output schemas from its main operation. It is
-//! listed for an agent when the agent's profile allows the safety class of
-//! every operation it covers and its toolset is switched on.
+//! listed for an agent when the agent's profile allows its main operation's
+//! safety class and its toolset is switched on. A tool that covers several
+//! operations runs the parts an input asks for as one change, and the engine
+//! checks each part against its own class: `update_project` is listed for
+//! the standard profile, but removing a status through it needs the full
+//! one.
 
 use serde_json::{Value, json};
 
@@ -127,9 +131,17 @@ impl McpTool {
             .unwrap_or_else(|| panic!("{} covers unknown {}", self.name, self.main))
     }
 
-    /// The highest safety class among the operations it covers.
+    /// The safety class that decides whether the tool is listed: its main
+    /// operation's.
     #[must_use]
     pub fn safety(&self) -> Safety {
+        self.main_op().safety
+    }
+
+    /// The highest safety class among the operations it covers, which its
+    /// annotations report.
+    #[must_use]
+    pub fn max_safety(&self) -> Safety {
         self.covers
             .iter()
             .filter_map(|id| descriptor(id))
@@ -149,6 +161,7 @@ impl McpTool {
     pub fn to_json(&self) -> Value {
         let op = self.main_op();
         let safety = self.safety();
+        let max = self.max_safety();
         json!({
             "name": self.name,
             "title": self.title,
@@ -158,7 +171,7 @@ impl McpTool {
             "annotations": {
                 "title": self.title,
                 "readOnlyHint": safety == Safety::Read,
-                "destructiveHint": matches!(safety, Safety::Trash | Safety::Permanent),
+                "destructiveHint": matches!(max, Safety::Trash | Safety::Permanent),
                 "idempotentHint": self.idempotent,
                 "openWorldHint": false,
             },
@@ -206,6 +219,155 @@ Example: revert_changes {\"session\": \"current\", \"dry_run\": true}",
         main: "history.revert",
         covers: &["history.revert"],
         idempotent: false,
+    },
+    McpTool {
+        name: "list_projects",
+        toolset: Toolset::Projects,
+        title: "List projects",
+        description: "Lists the project tree in sidebar order: each project's key, name, path, parent, \
+depth and open-task counts (alone and with its sub-projects). Archived projects only with \
+`include_archived: true`. Use the keys it returns in every other tool. \
+Example: list_projects {}",
+        main: "project.list",
+        covers: &["project.list"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "get_project",
+        toolset: Toolset::Projects,
+        title: "Get a project",
+        description: "Returns one project with its configuration: statuses in board order (with \
+category and WIP limit), task types, labels, modules, sub-projects, old keys and task counts. Read \
+it before creating tasks so you use status, type and label names that exist. \
+Example: get_project {\"project\": \"TM\"}",
+        main: "project.get",
+        covers: &["project.get"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "create_project",
+        toolset: Toolset::Projects,
+        title: "Create a project",
+        description: "Creates a project, or a sub-project with `parent` (at most 3 levels), which \
+copies its parent's statuses, types and labels. The key is 2 to 10 capital letters and digits \
+starting with a letter, and starts every task key. Pass `client_request_id` so a retry doesn't \
+create a second project. \
+Example: create_project {\"name\": \"Website\", \"key\": \"WEB\"}",
+        main: "project.create",
+        covers: &["project.create"],
+        idempotent: false,
+    },
+    McpTool {
+        name: "update_project",
+        toolset: Toolset::Projects,
+        title: "Update a project",
+        description: "Changes a project in one step: `name`, `description`, `hue`, `icon`, `modules`, \
+a new `key` (old keys keep working), a new `parent` or place (`before`/`after`/`at`), `archived`, \
+and lists of `statuses`, `types` and `labels` to add (no `status`/`type`/`label` given), change \
+or `remove`. Removing a status needs `move_tasks_to` when it has tasks; removals can't be undone \
+and need the full profile. To clear a field, list it in `clear`. \
+Example: update_project {\"project\": \"TM\", \"statuses\": [{\"name\": \"Blocked\", \"category\": \
+\"in_progress\", \"after\": \"In progress\"}]}",
+        main: "project.update",
+        covers: &[
+            "project.update",
+            "project.move",
+            "project.change_key",
+            "project.archive",
+            "project.unarchive",
+            "status.create",
+            "status.update",
+            "status.reorder",
+            "status.delete",
+            "type.create",
+            "type.update",
+            "type.delete",
+            "label.create",
+            "label.update",
+            "label.delete",
+        ],
+        idempotent: false,
+    },
+    McpTool {
+        name: "get_task",
+        toolset: Toolset::Tasks,
+        title: "Get tasks",
+        description: "Returns one to 20 tasks by key (`TM-41`; old keys work too) with every field, \
+the description, labels and `version`. Pass the version as `expected_version` to update_task or \
+move_task so you never overwrite a change you haven't seen. \
+Example: get_task {\"keys\": [\"TM-41\"]}",
+        main: "task.get",
+        covers: &["task.get"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "create_task",
+        toolset: Toolset::Tasks,
+        title: "Create a task",
+        description: "Creates a task in a project from a title alone, or with `description`, \
+`status`, `type`, `priority` (none, low, normal, high, urgent), `labels`, `parent`, `start_date`, \
+`due_date` (YYYY-MM-DD) and `estimate` (`1d 4h`, `90m`). It lands in the first to-do status at \
+the bottom unless told otherwise, and gets the project's next key. Pass `client_request_id` so \
+a retry doesn't create a second task. \
+Example: create_task {\"project\": \"TM\", \"title\": \"Write the release notes\", \"due_date\": \
+\"2026-12-01\"}",
+        main: "task.create",
+        covers: &["task.create"],
+        idempotent: false,
+    },
+    McpTool {
+        name: "update_task",
+        toolset: Toolset::Tasks,
+        title: "Update a task",
+        description: "Changes the given fields of a task only: `title`, `description` (replaces \
+it), `type`, `priority`, `labels` (replace) or `add_labels`/`remove_labels`, `parent`, \
+`start_date`, `due_date`, `estimate`, `progress`. To clear a field, list it in `clear`. Status \
+and position change with move_task. Pass `expected_version` from get_task. \
+Example: update_task {\"key\": \"TM-41\", \"priority\": \"high\", \"clear\": [\"due_date\"]}",
+        main: "task.update",
+        covers: &["task.update"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "move_task",
+        toolset: Toolset::Tasks,
+        title: "Move a task",
+        description: "Moves a task to another `status` (by name), to a place in its column \
+(`before` or `after` another task's key, or `at`: top or bottom), or to another `project`, where \
+it gets a new key while the old one keeps finding it. Entering a done or cancelled status closes \
+the task. \
+Example: move_task {\"key\": \"TM-41\", \"status\": \"In progress\", \"at\": \"top\"}",
+        main: "task.move",
+        covers: &["task.move"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "get_board",
+        toolset: Toolset::Views,
+        title: "Get a board",
+        description: "Returns a project's board as the person sees it: columns in their order with \
+hidden ones flagged (and their cards left out), WIP limits and whether a column is over it, and \
+compact cards. `include_subprojects: true` adds the sub-projects' tasks, matching columns by \
+status name. Closed cards older than the layout's limit are counted, not listed, unless \
+`show_older: true`. \
+Example: get_board {\"project\": \"TM\"}",
+        main: "board.get",
+        covers: &["board.get", "layout.get"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "set_board_layout",
+        toolset: Toolset::Views,
+        title: "Set the board layout",
+        description: "Changes the person's own layout of a project's board: `hide`, `show`, \
+`collapse`, `expand` columns (by status name), set their `order`, the `sort_mode` (manual, \
+priority, due, updated) or per-column `column_sort`, `card_fields`, `hide_done_after_days`, \
+`include_subprojects`, or `reset` to the project's layout. It never changes the project's \
+statuses. Only change the layout when the person asked. \
+Example: set_board_layout {\"project\": \"TM\", \"hide\": [\"Backlog\"]}",
+        main: "layout.update",
+        covers: &["layout.update"],
+        idempotent: true,
     },
     McpTool {
         name: "update_settings",
@@ -338,7 +500,17 @@ mod tests {
             .iter()
             .map(|t| t.name)
             .collect();
-        assert_eq!(read_only, ["get_workspace", "get_activity"]);
+        assert_eq!(
+            read_only,
+            [
+                "get_workspace",
+                "get_activity",
+                "list_projects",
+                "get_project",
+                "get_task",
+                "get_board"
+            ]
+        );
         assert!(
             tools_for(Profile::Standard, &all)
                 .iter()
@@ -346,6 +518,18 @@ mod tests {
         );
         let defaults = tools_for(Profile::Full, &Toolset::defaults());
         assert!(defaults.iter().all(|t| t.toolset != Toolset::Admin));
+    }
+
+    #[test]
+    fn a_tool_is_listed_by_its_main_operation_and_warns_of_its_riskiest_part() {
+        let update = TOOLS
+            .iter()
+            .find(|t| t.name == "update_project")
+            .expect("update_project");
+        assert_eq!(update.safety(), Safety::Write);
+        assert_eq!(update.max_safety(), Safety::Permanent);
+        assert!(update.allowed_for(Profile::Standard));
+        assert_eq!(update.to_json()["annotations"]["destructiveHint"], true);
     }
 
     #[test]

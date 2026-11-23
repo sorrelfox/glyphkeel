@@ -14,6 +14,15 @@
 //!
 //! Locks are advisory operating-system locks on the files in `locks/`: they
 //! disappear when the process that held them dies.
+//!
+//! # Which workspace
+//!
+//! The app, the command line and the agent server find the workspace the
+//! same way ([`Location::find`]): the one they are told (`--workspace`),
+//! else the one `GLYPHKEEL_WORKSPACE` names, else the default workspace
+//! [`DEFAULT_WORKSPACE`] in the data folder ([`data_dir`]). A value with a
+//! path separator, or one that starts with `.` or `~`, is a folder; any
+//! other value is a name in the data folder.
 
 use std::fs::{self, File, OpenOptions, TryLockError};
 use std::path::{Path, PathBuf};
@@ -22,6 +31,108 @@ use crate::error::{Result, StoreError};
 
 /// File name of the database inside a workspace folder.
 pub const DATABASE_FILE: &str = "workspace.db";
+
+/// The name of the workspace opened when nothing else is asked for. It is
+/// created on first use.
+pub const DEFAULT_WORKSPACE: &str = "Personal";
+
+/// The environment variable that names another workspace than the default
+/// one, by name or by path.
+pub const WORKSPACE_ENV: &str = "GLYPHKEEL_WORKSPACE";
+
+/// The program's data folder: `$XDG_DATA_HOME/glyphkeel` (normally
+/// `~/.local/share/glyphkeel`) on Linux, `%LOCALAPPDATA%\Glyphkeel` on
+/// Windows. `None` when no home folder can be found.
+#[must_use]
+pub fn data_dir() -> Option<PathBuf> {
+    let base = directories::BaseDirs::new()?;
+    let name = if cfg!(windows) {
+        "Glyphkeel"
+    } else {
+        "glyphkeel"
+    };
+    Some(base.data_local_dir().join(name))
+}
+
+/// Where a workspace is: a name in the data folder or a folder anywhere.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Location {
+    /// A workspace in the data folder, by name.
+    Named(String),
+    /// A workspace folder anywhere.
+    Path(PathBuf),
+}
+
+impl Location {
+    /// The workspace to open: `arg` when given (the program's
+    /// `--workspace`), else the value of [`WORKSPACE_ENV`], else the
+    /// default workspace. Empty values count as not given.
+    #[must_use]
+    pub fn find(arg: Option<&str>) -> Self {
+        let env = std::env::var(WORKSPACE_ENV).ok();
+        Self::choose(arg, env.as_deref())
+    }
+
+    /// As [`Location::find`], with the environment's value passed in.
+    #[must_use]
+    pub fn choose(arg: Option<&str>, env: Option<&str>) -> Self {
+        fn given(v: Option<&str>) -> Option<&str> {
+            v.map(str::trim).filter(|v| !v.is_empty())
+        }
+        given(arg)
+            .or_else(|| given(env))
+            .map_or_else(|| Self::Named(DEFAULT_WORKSPACE.to_owned()), Self::parse)
+    }
+
+    /// A folder when `value` has a path separator, starts with `.` or `~`,
+    /// or is absolute; otherwise a name in the data folder.
+    #[must_use]
+    pub fn parse(value: &str) -> Self {
+        let is_path = value.contains('/')
+            || value.contains(std::path::MAIN_SEPARATOR)
+            || value.starts_with(['.', '~'])
+            || Path::new(value).is_absolute();
+        if is_path {
+            Self::Path(PathBuf::from(value))
+        } else {
+            Self::Named(value.to_owned())
+        }
+    }
+
+    /// Whether this is the default workspace by name.
+    #[must_use]
+    pub fn is_default(&self) -> bool {
+        matches!(self, Self::Named(name) if name == DEFAULT_WORKSPACE)
+    }
+
+    /// The workspace folder's layout. A named workspace lives under
+    /// `data_dir` (normally [`data_dir`]); a leading `~` of a path is the
+    /// home folder.
+    ///
+    /// # Errors
+    /// [`StoreError::InvalidName`] for a name that can't be a folder name,
+    /// [`StoreError::NoDataDir`] for a name without a data folder.
+    pub fn layout(&self, data_dir: Option<&Path>) -> Result<WorkspaceLayout> {
+        match self {
+            Self::Path(path) => Ok(WorkspaceLayout::new(expand_home(path))),
+            Self::Named(name) => {
+                let data_dir = data_dir.ok_or(StoreError::NoDataDir)?;
+                WorkspaceLayout::in_data_dir(data_dir, name)
+            }
+        }
+    }
+}
+
+fn expand_home(path: &Path) -> PathBuf {
+    let home = || directories::BaseDirs::new().map(|b| b.home_dir().to_path_buf());
+    if path == Path::new("~") {
+        return home().unwrap_or_else(|| path.to_path_buf());
+    }
+    match path.strip_prefix("~") {
+        Ok(rest) => home().map_or_else(|| path.to_path_buf(), |h| h.join(rest)),
+        Err(_) => path.to_path_buf(),
+    }
+}
 
 /// Paths inside one workspace folder.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -116,6 +227,12 @@ impl WorkspaceLayout {
     #[must_use]
     pub fn migrate_lock(&self) -> PathBuf {
         self.locks_dir().join("migrate.lock")
+    }
+
+    /// Copies of the database made before a schema upgrade.
+    #[must_use]
+    pub fn backups_dir(&self) -> PathBuf {
+        self.root.join("backups")
     }
 
     /// Default target of exports.
@@ -270,6 +387,56 @@ mod tests {
             assert!(check_name(bad).is_err(), "{bad:?}");
         }
         assert!(check_name(&"a".repeat(65)).is_err());
+    }
+
+    #[test]
+    fn the_workspace_is_the_argument_then_the_environment_then_personal() {
+        assert_eq!(
+            Location::choose(None, None),
+            Location::Named("Personal".to_owned())
+        );
+        assert!(Location::choose(None, Some("  ")).is_default());
+        assert_eq!(
+            Location::choose(None, Some("Work")),
+            Location::Named("Work".to_owned())
+        );
+        assert_eq!(
+            Location::choose(Some("Side"), Some("Work")),
+            Location::Named("Side".to_owned())
+        );
+        assert_eq!(
+            Location::choose(Some("./ws"), None),
+            Location::Path(PathBuf::from("./ws"))
+        );
+        assert_eq!(
+            Location::choose(None, Some("/tmp/ws")),
+            Location::Path(PathBuf::from("/tmp/ws"))
+        );
+        assert_eq!(Location::parse("."), Location::Path(PathBuf::from(".")));
+        assert_eq!(
+            Location::parse("~/ws"),
+            Location::Path(PathBuf::from("~/ws"))
+        );
+    }
+
+    #[test]
+    fn named_workspaces_live_under_the_data_folder() {
+        let data = Path::new("/data/glyphkeel");
+        let layout = Location::choose(None, None).layout(Some(data)).unwrap();
+        assert_eq!(
+            layout.root(),
+            Path::new("/data/glyphkeel/workspaces/Personal")
+        );
+        assert!(matches!(
+            Location::choose(None, None).layout(None),
+            Err(StoreError::NoDataDir)
+        ));
+        assert!(matches!(
+            Location::Named("a:b".to_owned()).layout(Some(data)),
+            Err(StoreError::InvalidName(_))
+        ));
+        let path = Location::parse("/tmp/ws").layout(None).unwrap();
+        assert_eq!(path.root(), Path::new("/tmp/ws"));
     }
 
     #[test]

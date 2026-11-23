@@ -56,6 +56,10 @@ pub enum StoreError {
         "\"{0}\" cannot be a workspace name: use letters, digits, spaces, '-' or '_', at most 64 characters"
     )]
     InvalidName(String),
+    /// A workspace was named, but there is no data folder to find it in
+    /// (no home folder).
+    #[error("there is no data folder to find the workspace in: no home folder is set")]
+    NoDataDir,
     /// The store was closed, or its writer thread stopped.
     #[error("the workspace is closed")]
     Closed,

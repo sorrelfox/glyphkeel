@@ -15,7 +15,8 @@ use gk_core::{Id, fold};
 use gk_store::rusqlite::{self, Transaction, params};
 use gk_store::{
     COLLATION, CheckpointOutcome, CheckpointPolicy, CheckpointSchedule, JOURNAL_SIZE_LIMIT,
-    SCHEMA_VERSION, SchemaState, Store, StoreConfig, StoreError, WorkspaceLayout, open_raw,
+    REQUEST_WINDOW_MS, RequestKey, SCHEMA_VERSION, SchemaState, Store, StoreConfig, StoreError,
+    WorkspaceLayout, open_raw, remember, remembered,
 };
 use tempfile::TempDir;
 
@@ -651,4 +652,73 @@ fn checkpoint_truncates_the_log_and_never_stalls_writers_for_long() {
         None,
         "not due again before the check interval"
     );
+}
+
+#[test]
+fn repeated_requests_get_the_first_answer_for_a_day() {
+    let (_dir, layout) = workspace();
+    let store = open(&layout);
+    let key = RequestKey {
+        op: "task.create",
+        caller: "cli:You",
+        request_id: "r-1",
+    };
+    let other = RequestKey {
+        caller: "session-2",
+        ..key
+    };
+    store
+        .write("test", move |tx| {
+            assert_eq!(remembered(tx, key, 1_000)?, None);
+            remember(tx, key, r#"{"key":"TM-1"}"#, 1_000)?;
+            Ok::<_, StoreError>(())
+        })
+        .unwrap();
+    // Another connection, as another process would see it.
+    let second = open(&layout);
+    second
+        .write("test", move |tx| {
+            assert_eq!(
+                remembered(tx, key, 2_000)?.as_deref(),
+                Some(r#"{"key":"TM-1"}"#)
+            );
+            assert_eq!(remembered(tx, other, 2_000)?, None);
+            assert_eq!(remembered(tx, key, 1_000 + REQUEST_WINDOW_MS)?, None);
+            // A new answer purges the expired one.
+            remember(tx, other, "{}", 1_000 + REQUEST_WINDOW_MS)?;
+            let rows: i64 = tx.query_row("SELECT count(*) FROM request_log", [], |r| r.get(0))?;
+            assert_eq!(rows, 1);
+            Ok::<_, StoreError>(())
+        })
+        .unwrap();
+}
+
+#[test]
+fn wiki_page_names_are_unique_ignoring_case() {
+    let (_dir, layout) = workspace();
+    let store = open(&layout);
+    let result = store.write("test", |tx| {
+        let (project, _, _) = insert_project(tx, "WK")?;
+        let page = |title: &str, slug: &str, deleted: Option<i64>| {
+            tx.execute(
+                "INSERT INTO wiki_pages (id, project_id, rank, title, title_fold, slug,
+                                         created_at, updated_at, deleted_at)
+                 VALUES (?1, ?2, 'i', ?3, ?4, ?5, 0, 0, ?6)",
+                params![
+                    Id::generate().as_bytes(),
+                    project.as_bytes(),
+                    title,
+                    fold(title),
+                    slug,
+                    deleted
+                ],
+            )
+        };
+        page("Setup", "setup", Some(1))?;
+        page("SETUP", "setup-2", None)?;
+        let clash = page("setup", "setup-3", None);
+        assert!(clash.is_err(), "same name in another case");
+        Ok::<_, StoreError>(())
+    });
+    result.unwrap();
 }

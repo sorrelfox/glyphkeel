@@ -12,12 +12,14 @@ use std::time::{Duration, Instant};
 
 use gk_api::ops::common::Via;
 use gk_api::ops::history::RevertResult;
-use gk_api::{Changed, ErrorCode, OpDescriptor, OpError, OpKind, Operation, Profile, Safety};
+use gk_api::{
+    Changed, ErrorCode, OpDescriptor, OpError, OpKind, Operation, Profile, Safety, descriptor,
+};
 use gk_core::Id;
 use gk_store::rusqlite::params;
 use gk_store::{
-    CheckpointOutcome, CheckpointPolicy, CheckpointSchedule, Checkpointer, LockFile,
-    SCHEMA_VERSION, Store, StoreConfig, WatcherHandle, WorkspaceLayout,
+    CheckpointOutcome, CheckpointPolicy, CheckpointSchedule, Checkpointer, LockFile, RequestKey,
+    SCHEMA_VERSION, SchemaState, Store, StoreConfig, WatcherHandle, WorkspaceLayout,
 };
 use serde_json::{Value, json};
 
@@ -84,8 +86,6 @@ impl std::fmt::Debug for EngineConfig {
     }
 }
 
-/// How long an answer to a repeated `client_request_id` is kept.
-const IDEMPOTENCY_WINDOW_MS: i64 = 24 * 60 * 60 * 1000;
 /// How many groups the app's Undo stack keeps.
 const UNDO_DEPTH: usize = 200;
 
@@ -126,7 +126,6 @@ pub struct Engine {
     commit: Mutex<()>,
     upgraded: AtomicBool,
     undo: Mutex<UndoStacks>,
-    idempotency: Mutex<HashMap<String, (i64, Value)>>,
     pending_reads: Mutex<HashMap<Id, i64>>,
     jobs: Mutex<Jobs>,
     _app_lock: Option<LockFile>,
@@ -170,7 +169,14 @@ impl Engine {
         } else {
             None
         };
-        let store = Store::open(layout, config.store.clone()).map_err(|e| store_error(&e))?;
+        let mut store_config = config.store.clone();
+        if config.role == Role::App
+            && let SchemaState::Older(found) = Store::probe(layout).map_err(|e| store_error(&e))?
+        {
+            copy_before_upgrade(layout, found, (config.clock)())?;
+            store_config.allow_upgrade = true;
+        }
+        let store = Store::open(layout, store_config).map_err(|e| store_error(&e))?;
         let jobs_lock = if config.role == Role::Cli {
             None
         } else {
@@ -196,7 +202,6 @@ impl Engine {
             commit: Mutex::new(()),
             upgraded: AtomicBool::new(false),
             undo: Mutex::new(UndoStacks::default()),
-            idempotency: Mutex::new(HashMap::new()),
             pending_reads: Mutex::new(HashMap::new()),
             jobs: Mutex::new(Jobs {
                 lock: jobs_lock,
@@ -271,30 +276,32 @@ impl Engine {
         }
         let input = if input.is_null() { json!({}) } else { input };
         (entry.validate)(&input)?;
-        let profile = self.authorize(ctx, entry.desc)?;
-        self.confirm(ctx, entry.desc, &input)?;
+        let parts: Vec<&'static OpDescriptor> = entry
+            .parts
+            .map(|parts| parts(&input).into_iter().filter_map(descriptor).collect())
+            .unwrap_or_default();
+        let profile = self.authorize(ctx, entry.desc, &parts)?;
+        self.confirm(ctx, entry.desc, &parts, &input)?;
 
-        let key = idempotency_key(entry.desc, ctx, &input);
-        if let Some(key) = &key
-            && let Some(answer) = self.remembered(key)
-        {
-            return Ok(answer);
-        }
-        let output = match &entry.handler {
+        match &entry.handler {
             Handler::Query(f) => self.run_query(ctx, profile, f, input),
-            Handler::Command(f) => self
-                .execute(ctx, entry.desc.id, Arc::clone(f), input)
-                .map(|(output, _)| output),
+            Handler::Command(f) => {
+                let request = request_key(entry.desc, ctx, &input);
+                self.execute_once(ctx, entry.desc.id, Arc::clone(f), input, request)
+                    .map(|(output, _)| output)
+            }
             Handler::Engine(f) => f(self, ctx, input),
-        }?;
-        if let Some(key) = key {
-            self.remember(key, &output);
         }
-        Ok(output)
     }
 
-    /// Who may run `desc`, and the agent's effective profile.
-    fn authorize(&self, ctx: &Context, desc: &OpDescriptor) -> Result<Option<Profile>, OpError> {
+    /// Who may run `desc` (and each of the `parts` it runs), and the
+    /// agent's effective profile.
+    fn authorize(
+        &self,
+        ctx: &Context,
+        desc: &OpDescriptor,
+        parts: &[&'static OpDescriptor],
+    ) -> Result<Option<Profile>, OpError> {
         if desc.is_app_only() {
             let reachable = match ctx.via {
                 Via::App => !ctx.is_agent(),
@@ -318,13 +325,14 @@ impl Engine {
             .map_err(OpError::from)?
             .agent_max_profile;
         let profile = requested.capped_by(cap);
-        if profile.allows(desc.safety) {
-            Ok(Some(profile))
-        } else {
+        let refused = std::iter::once(desc)
+            .chain(parts.iter().copied())
+            .find(|d| !profile.allows(d.safety));
+        if let Some(refused) = refused {
             Err(OpError::forbidden(format!(
                 "Your profile ({profile}) doesn't allow {} operations such as {}.",
-                desc.safety.as_str(),
-                desc.id
+                refused.safety.as_str(),
+                refused.id
             ))
             .with_hint(if profile < cap {
                 "Ask the person to start the agent server with a higher --profile."
@@ -332,6 +340,8 @@ impl Engine {
                 "The workspace setting \"most an agent may do\" doesn't allow it; ask the person."
             })
             .with_detail("profile", profile.as_str()))
+        } else {
+            Ok(Some(profile))
         }
     }
 
@@ -341,9 +351,16 @@ impl Engine {
         &self,
         ctx: &Context,
         desc: &'static OpDescriptor,
+        parts: &[&'static OpDescriptor],
         input: &Value,
     ) -> Result<(), OpError> {
-        if desc.safety != Safety::Permanent || ctx.is_agent() {
+        let permanent = std::iter::once(desc)
+            .chain(parts.iter().copied())
+            .find(|d| d.safety == Safety::Permanent);
+        let Some(permanent) = permanent else {
+            return Ok(());
+        };
+        if ctx.is_agent() {
             return Ok(());
         }
         let confirmed = match &ctx.confirm {
@@ -359,7 +376,7 @@ impl Engine {
         } else {
             Err(OpError::forbidden(format!(
                 "{} can't be undone and was not confirmed.",
-                desc.id
+                permanent.id
             ))
             .with_hint("Confirm it in the dialog, or pass --yes on the command line."))
         }
@@ -379,6 +396,7 @@ impl Engine {
                     caller: ctx,
                     profile,
                     env: &self.env,
+                    now: (self.clock)(),
                 },
                 input,
             )
@@ -398,6 +416,20 @@ impl Engine {
         op: &'static str,
         f: CommandFn,
         input: Value,
+    ) -> Result<(Value, Option<Id>), OpError> {
+        self.execute_once(ctx, op, f, input, None)
+    }
+
+    /// As [`Engine::execute`]; with a request key, a repeat of the same
+    /// request within a day, from any process, gets the first answer back
+    /// without running again.
+    fn execute_once(
+        &self,
+        ctx: &Context,
+        op: &'static str,
+        f: CommandFn,
+        input: Value,
+        request: Option<(String, String)>,
     ) -> Result<(Value, Option<Id>), OpError> {
         let at = (self.clock)();
         let group = Id::generate_at(u64::try_from(at).unwrap_or(0));
@@ -419,9 +451,24 @@ impl Engine {
         self.store.own_groups().insert(group);
         let in_tx = meta.clone();
         let result = self.store.write(op, move |tx| {
+            let key = request.as_ref().map(|(caller, id)| RequestKey {
+                op,
+                caller,
+                request_id: id,
+            });
+            if let Some(key) = key
+                && let Some(answer) = gk_store::remembered(tx, key, in_tx.at)?
+            {
+                let answer = serde_json::from_str(&answer)
+                    .map_err(|e| Failure::Op(OpError::storage(e.to_string())))?;
+                return Ok((answer, crate::write::Finished::nothing()));
+            }
             let mut w = WriteCtx::new(tx, &in_tx);
             let output = f(&mut w, input.clone())?;
             let finished = w.finish()?;
+            if let Some(key) = key {
+                gk_store::remember(tx, key, &output.to_string(), in_tx.at)?;
+            }
             if let (Some(session), true) = (in_tx.ctx.session, reads > 0) {
                 tx.execute(
                     "UPDATE agent_sessions SET reads = reads + ?2, last_seen_at = ?3 WHERE id = ?1",
@@ -658,27 +705,6 @@ impl Engine {
         self.store.close();
     }
 
-    fn remembered(&self, key: &str) -> Option<Value> {
-        let now = (self.clock)();
-        let map = self
-            .idempotency
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
-        map.get(key)
-            .filter(|(at, _)| now - at < IDEMPOTENCY_WINDOW_MS)
-            .map(|(_, v)| v.clone())
-    }
-
-    fn remember(&self, key: String, output: &Value) {
-        let now = (self.clock)();
-        let mut map = self
-            .idempotency
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
-        map.retain(|_, (at, _)| now - *at < IDEMPOTENCY_WINDOW_MS);
-        map.insert(key, (now, output.clone()));
-    }
-
     fn lock_reads(&self) -> MutexGuard<'_, HashMap<Id, i64>> {
         self.pending_reads
             .lock()
@@ -695,15 +721,40 @@ impl Engine {
 }
 
 /// Commands that carry a `client_request_id` answer a repeat of the same ID
-/// by the same caller with the first answer instead of running again.
-fn idempotency_key(desc: &OpDescriptor, ctx: &Context, input: &Value) -> Option<String> {
+/// by the same caller with the first answer instead of running again. The
+/// caller is the agent session, or the program and the person.
+fn request_key(desc: &OpDescriptor, ctx: &Context, input: &Value) -> Option<(String, String)> {
     if desc.kind != OpKind::Command {
         return None;
     }
-    let id = input.get("client_request_id")?.as_str()?;
+    let id = input
+        .get("client_request_id")?
+        .as_str()
+        .filter(|id| !id.is_empty())?;
     let caller = ctx.session.map_or_else(
         || format!("{}:{}", ctx.via.as_str(), ctx.actor.name),
         |s| s.to_string(),
     );
-    Some(format!("{}\u{1f}{caller}\u{1f}{id}", desc.id))
+    Some((caller, id.to_owned()))
+}
+
+/// Copies the database into the workspace's `backups/` folder before an
+/// older schema is upgraded, so the upgrade can be undone by hand.
+fn copy_before_upgrade(layout: &WorkspaceLayout, found: i64, now: i64) -> Result<(), OpError> {
+    let dir = layout.backups_dir();
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| OpError::storage(format!("Can't create {}: {e}.", dir.display())))?;
+    let target = dir.join(format!(
+        "before-schema-{}-v{found}-{now}.db",
+        SCHEMA_VERSION
+    ));
+    let conn = gk_store::open_raw(&layout.database()).map_err(|e| store_error(&e))?;
+    conn.execute("VACUUM INTO ?1", [target.to_string_lossy().as_ref()])
+        .map_err(|e| {
+            OpError::storage(format!(
+                "Can't copy the workspace before upgrading it: {e}."
+            ))
+        })?;
+    tracing::info!(path = %target.display(), "workspace copied before the schema upgrade");
+    Ok(())
 }

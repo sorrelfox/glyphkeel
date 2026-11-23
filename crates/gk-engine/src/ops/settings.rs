@@ -8,7 +8,9 @@
 //! again.
 
 use gk_api::OpError;
-use gk_api::ops::settings::{Settings, SettingsChange, SettingsGet, SettingsPatch, SettingsUpdate};
+use gk_api::ops::settings::{
+    SettingKey, Settings, SettingsChange, SettingsGet, SettingsPatch, SettingsUpdate,
+};
 use gk_store::StoreError;
 use gk_store::rusqlite::{OptionalExtension, Transaction, params};
 use serde_json::{Map, Value};
@@ -30,6 +32,26 @@ pub(super) fn register(r: &mut Registry) {
 }
 
 fn update(w: &mut WriteCtx<'_>, patch: SettingsPatch) -> Result<SettingsChange, Failure> {
+    let mut cleared = Vec::new();
+    for key in &patch.clear {
+        let name = key.as_str();
+        let given = match key {
+            SettingKey::TrashDays => patch.trash_days.is_some(),
+            SettingKey::ReminderTime => patch.reminder_time.is_some(),
+            SettingKey::HoursPerDay => patch.hours_per_day.is_some(),
+            SettingKey::DaysPerWeek => patch.days_per_week.is_some(),
+            SettingKey::WeekStart => patch.week_start.is_some(),
+        };
+        if given {
+            return Err(
+                OpError::invalid_at("clear", format!("{name} is both given and cleared.")).into(),
+            );
+        }
+        if raw(w.tx(), name)?.is_some() {
+            write_raw(w, name, None)?;
+            cleared.push(name.to_owned());
+        }
+    }
     let mut wanted: Vec<(&str, Value)> = Vec::new();
     if let Some(days) = patch.trash_days {
         in_range("trash_days", days, 1, 3650)?;
@@ -56,7 +78,9 @@ fn update(w: &mut WriteCtx<'_>, patch: SettingsPatch) -> Result<SettingsChange, 
     if let Some(start) = patch.week_start {
         wanted.push(("week_start", to_value(start)?));
     }
-    set_all(w, &wanted)
+    let mut change = set_all(w, &wanted)?;
+    change.changed.extend(cleared);
+    Ok(change)
 }
 
 /// Sets each `(key, value)` that differs from the current value, and
