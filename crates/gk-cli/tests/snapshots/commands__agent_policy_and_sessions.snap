@@ -1,0 +1,5 @@
+---
+source: crates/gk-cli/tests/commands.rs
+expression: "ws.ok(&[\"agents\", \"sessions\"])"
+---
+(none)

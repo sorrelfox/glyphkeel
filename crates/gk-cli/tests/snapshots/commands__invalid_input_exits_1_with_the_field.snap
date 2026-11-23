@@ -1,0 +1,6 @@
+---
+source: crates/gk-cli/tests/commands.rs
+expression: stderr(&out)
+---
+glyphkeel: hours_per_day must be from 1 to 24; got 99.
+field: hours_per_day

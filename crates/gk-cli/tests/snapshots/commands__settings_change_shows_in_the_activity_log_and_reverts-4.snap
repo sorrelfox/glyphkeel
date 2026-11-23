@@ -1,0 +1,30 @@
+---
+source: crates/gk-cli/tests/commands.rs
+expression: "ws.ok(&[\"activity\", \"--json\"])"
+---
+{
+  "items": [
+    {
+      "actor": {
+        "kind": "user",
+        "name": "You"
+      },
+      "at": "[time]",
+      "entity": "settings",
+      "fields": {
+        "hours_per_day": {
+          "after": 6
+        },
+        "week_start": {
+          "after": "sunday"
+        }
+      },
+      "group": "[id]",
+      "id": "[id]",
+      "op": "settings.update",
+      "seq": 1,
+      "via": "cli"
+    }
+  ],
+  "total": 1
+}

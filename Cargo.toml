@@ -23,6 +23,8 @@ publish = false
 # use which is checked by `cargo xtask check-deps`.
 gk-api = { path = "crates/gk-api" }
 gk-core = { path = "crates/gk-core" }
+gk-engine = { path = "crates/gk-engine" }
+gk-mcp = { path = "crates/gk-mcp" }
 gk-store = { path = "crates/gk-store" }
 
 # Third-party crates: shared versions live here, crates use `{ workspace = true }`.
@@ -30,12 +32,19 @@ gk-store = { path = "crates/gk-store" }
 anyhow = "1.0.105"
 # Command line of `glyphkeel` and of the task runner.
 clap = { version = "4.6.9", features = ["derive"] }
+# Shell completions and the man page of `glyphkeel`.
+clap_complete = "4.6.12"
+clap_mangen = "0.3.4"
+# The platform's folders (data, config) for the default workspace.
+directories = "6.0.0"
 # Unicode case folding and normalisation for the `*_fold` matching columns.
 icu_casemap = "2.4.0"
 icu_normalizer = "2.4.0"
 # The Unicode Collation Algorithm for sorting names, registered on every
 # database connection.
 icu_collator = "2.4.0"
+# Snapshots of command output in tests (development only).
+insta = "1.49.0"
 # Property tests (development only).
 proptest = "1.12.0"
 # The workspace database: SQLite bundled (with FTS5), custom collation and

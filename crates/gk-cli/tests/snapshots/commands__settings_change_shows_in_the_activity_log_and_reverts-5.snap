@@ -1,0 +1,8 @@
+---
+source: crates/gk-cli/tests/commands.rs
+expression: "ws.ok(&[\"revert\", &group])"
+---
+reverted: (none)
+skipped:
+  GROUP                                 REASON
+  [id]  it was already reverted
