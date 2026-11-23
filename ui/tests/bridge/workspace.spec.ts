@@ -218,3 +218,127 @@ test("task details on the engine: a subtask, a link, a comment and an attachment
   await expect(history).toContainText("File attached");
   await expect(history).toContainText("Link added");
 });
+
+const BEDS = [
+  "Plan:",
+  "",
+  "- [ ] Dig the beds",
+  "- [ ] Sow the seeds",
+  "",
+  "| Bed | Crop |",
+  "|-----|------|",
+  "| 1 | Beans |",
+  "",
+  "Area: $w \\times l$",
+  "",
+  "```rust",
+  "fn main() {}",
+  "```",
+  "",
+  "```mermaid",
+  "graph LR; Dig-->Sow",
+  "```",
+  "",
+].join("\n");
+
+test("descriptions and comments in Markdown on the engine: edit, tick, a conflict copy and a comment", async ({ browser }) => {
+  const a = await browser.newPage();
+  const b = await browser.newPage();
+  await a.goto(PAGE);
+  await expect(a.getByTestId("status-workspace")).toHaveText("Personal");
+  await a.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: "New project" }).click();
+  const dialog = a.getByRole("dialog", { name: "New project" });
+  await dialog.getByRole("textbox", { name: "Name" }).fill("Allotment");
+  await dialog.getByRole("button", { name: "Create project" }).click();
+  await expect(a.getByRole("group", { name: /Board of/ })).toBeVisible();
+  await a.keyboard.type("Plan the beds");
+  await a.keyboard.press("Enter");
+  await a.keyboard.type("Buy seeds");
+  await a.keyboard.press("Enter");
+  await a.keyboard.press("Escape");
+  const cards = lane(a, "Backlog").locator("[data-card]");
+  await expect(cards).toHaveCount(2);
+  const beds = (await cards.filter({ hasText: "Plan the beds" }).getAttribute("data-card")) ?? "";
+  const seeds = (await cards.filter({ hasText: "Buy seeds" }).getAttribute("data-card")) ?? "";
+  await a.locator(`[data-card="${beds}"]`).dblclick();
+  // Fluent isolates the key with invisible marks.
+  const panel = a.getByRole("complementary", { name: new RegExp(`^Task \\W*${beds}\\W*$`) });
+  const description = panel.getByRole("region", { name: "Description" });
+
+  // Edit the description in the Markdown editor and save it.
+  await description.getByRole("button", { name: "Edit" }).click();
+  const field = description.getByRole("textbox", { name: "Description" });
+  await field.fill(BEDS);
+  await field.press("Control+Enter");
+  await expect(description.getByRole("checkbox", { name: "Dig the beds" })).toBeVisible();
+  // Drawn in the page: the table from the engine, KaTeX, Shiki and Mermaid.
+  await expect(description.locator("table td").first()).toHaveText("1");
+  await expect(description.locator(".katex")).toBeVisible();
+  await expect(description.locator("pre.shiki")).toContainText("fn main() {}");
+  await expect(description.locator(".gk-diagram svg")).toBeVisible();
+
+  // Tick a checkbox in the reader: the engine changes the text, and the card counts it.
+  await description.getByRole("checkbox", { name: "Sow the seeds" }).click();
+  await expect(description.getByRole("checkbox", { name: "Sow the seeds" })).toBeChecked();
+  await expect(a.locator(`[data-card="${beds}"]`)).toContainText("1/2");
+
+  // A second window opens the same task.
+  await b.goto(PAGE);
+  await b.getByRole("navigation", { name: "Workspace" }).getByRole("row", { name: /Allotment/ }).click();
+  await b.locator(`[data-card="${beds}"]`).dblclick();
+  const otherPanel = b.getByRole("complementary", { name: new RegExp(`^Task \\W*${beds}\\W*$`) });
+  const otherDescription = otherPanel.getByRole("region", { name: "Description" });
+  await expect(otherDescription.getByRole("checkbox", { name: "Sow the seeds" })).toBeChecked();
+
+  // Both edit the first line; the second window saves first.
+  await description.getByRole("button", { name: "Edit" }).click();
+  await otherDescription.getByRole("button", { name: "Edit" }).click();
+  const ticked = BEDS.replace("- [ ] Sow", "- [x] Sow");
+  await otherDescription.getByRole("textbox", { name: "Description" }).fill(ticked.replace("Plan:", "Plan for May:"));
+  await otherDescription.getByRole("button", { name: "Save" }).click();
+  await expect(otherDescription.getByText("Plan for May:")).toBeVisible();
+  await description.getByRole("textbox", { name: "Description" }).fill(ticked.replace("Plan:", "Plan for spring:"));
+  await description.getByRole("button", { name: "Save" }).click();
+
+  // The stored text stays as the other window left it; this edit is a conflict copy, shown in both windows.
+  await expect(a.getByRole("alert").filter({ hasText: "Your edit clashed with another change." })).toBeVisible();
+  const banner = description.getByRole("alert").filter({ hasText: "conflict copy" });
+  await expect(banner).toContainText("kept as a conflict copy");
+  await expect(description.getByText("Plan for May:")).toBeVisible();
+  await expect(otherDescription.getByRole("alert")).toContainText("kept as a conflict copy");
+
+  // Resolve it: the differences, then a merge by hand.
+  await banner.getByRole("button", { name: "Resolve" }).click();
+  const resolver = description.getByRole("group", { name: "Conflict copy" });
+  const diff = resolver.getByRole("group", { name: "Differences between the description and the copy" });
+  await expect(diff.locator("del")).toHaveText("Plan for May:");
+  await expect(diff.locator("ins")).toHaveText("Plan for spring:");
+  await resolver.getByRole("button", { name: "Merge by hand" }).click();
+  const merge = description.getByRole("textbox", { name: "Description" });
+  await merge.fill(ticked.replace("Plan:", "Plan for spring, sown in May:"));
+  await merge.press("Control+Enter");
+  await expect(description.getByText("Plan for spring, sown in May:")).toBeVisible();
+  await expect(description.getByRole("alert")).toHaveCount(0);
+  await expect(otherDescription.getByText("Plan for spring, sown in May:")).toBeVisible();
+  await expect(otherDescription.getByRole("alert")).toHaveCount(0);
+
+  // The description's history lists the revisions, the conflict copy among them.
+  await description.getByRole("button", { name: "History" }).click();
+  const revisions = description.getByRole("list", { name: "History" });
+  await expect(revisions.getByRole("listitem").filter({ hasText: "Conflict copy" })).toHaveCount(1);
+  await expect(revisions.getByRole("listitem").filter({ hasText: "Resolved" })).toHaveCount(1);
+  await description.getByRole("button", { name: "Close" }).click();
+
+  // A comment in Markdown, with a task key that links to the other task.
+  const composer = panel.getByRole("textbox", { name: "Write a comment" });
+  await composer.fill(`Use **compost** from \`bin 2\` and see ${seeds}.`);
+  await composer.press("Control+Enter");
+  const comment = panel.getByRole("article", { name: /Comment by/ });
+  await expect(comment.locator("strong")).toHaveText("compost");
+  await expect(comment.locator("code")).toHaveText("bin 2");
+  await comment.getByRole("link", { name: seeds }).click();
+  await expect(a.getByRole("complementary", { name: new RegExp(`^Task \\W*${seeds}\\W*$`) }).getByRole("heading", { name: "Buy seeds" })).toBeVisible();
+
+  await a.close();
+  await b.close();
+});

@@ -7,11 +7,12 @@
  * (or asks the engine to, when the engine owns the text).
  */
 
-import { ensureSyntaxTree } from "@codemirror/language";
+import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
+import type { SyntaxNode } from "@lezer/common";
 import { Facet, type EditorState } from "@codemirror/state";
 import { EditorView, WidgetType } from "@codemirror/view";
-import DOMPurify from "dompurify";
-
+import { insertSanitized } from "../markdown/insert";
+import { drawMath, renderDiagram } from "../markdown/libraries";
 import type { BlockRenderer, ChecklistToggle, RenderedBlockKind } from "./types";
 
 // ---------------------------------------------------------------- settings
@@ -32,13 +33,9 @@ export const blockRenderer = Facet.define<BlockRenderer, BlockRenderer>({
   combine: (values) => values[0] ?? placeholderRenderer,
 });
 
-/** Puts sanitized HTML into an element without parsing it as markup on the element itself. */
+/** Puts sanitized HTML into an element, through the app's one insertion point. */
 function setSanitized(element: HTMLElement, html: string, svg = false): void {
-  const fragment = DOMPurify.sanitize(html, {
-    RETURN_DOM_FRAGMENT: true,
-    ...(svg ? { USE_PROFILES: { svg: true, svgFilters: true } } : {}),
-  });
-  element.replaceChildren(fragment);
+  insertSanitized(element, html, svg ? "diagram" : "reader");
 }
 
 /** A click on a block widget puts the cursor into its source. */
@@ -53,24 +50,45 @@ function openOnMouseDown(element: HTMLElement, view: EditorView): void {
 
 // ---------------------------------------------------------------- checkboxes
 
-/** The item's number among all task items of the text, in order from 0. */
-export function checklistIndex(state: EditorState, pos: number): number {
+/**
+ * An item's text as the engine reports it: its inline Markdown as plain
+ * text, with spaces collapsed. The engine uses it to check that a number
+ * still names the item that was clicked.
+ */
+export function plainItemText(source: string): string {
+  return source
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]*))?\]\]/g, (_all, page: string, label?: string) => label ?? page)
+    .replace(/<[^>]*>/g, "")
+    .replace(/(\*\*|__|~~|\*|_|`)/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * The item's number at `pos` (its "["), as the engine and the reader's
+ * `data-item` count: from 1, in reading order. Lezer and the engine agree on
+ * which list items are task items in ordinary text; where they could differ
+ * (footnotes, which the engine numbers after the body), the item's text
+ * guards the click. 0 when there is no item at `pos`.
+ */
+export function checklistNumber(state: EditorState, pos: number): number {
   const tree = ensureSyntaxTree(state, state.doc.length, 200);
   if (!tree) {
-    return -1;
+    return 0;
   }
-  let index = 0;
-  let found = -1;
+  let count = 0;
+  let found = 0;
   tree.iterate({
     enter(node) {
-      if (found >= 0) {
+      if (found > 0) {
         return false;
       }
       if (node.name === "TaskMarker") {
+        count++;
         if (node.from === pos) {
-          found = index;
+          found = count;
         }
-        index++;
       }
       return undefined;
     },
@@ -83,7 +101,15 @@ export function checklistToggleAt(state: EditorState, pos: number): ChecklistTog
   const checked = state.sliceDoc(pos + 1, pos + 2) !== " ";
   const line = state.doc.lineAt(pos);
   const offset = pos + (state.lineBreak.length - 1) * (line.number - 1);
-  return { index: checklistIndex(state, pos), offset, checked, text: state.sliceDoc(pos + 3, line.to).trim() };
+  // The item's text is its whole paragraph, which may go on over several lines.
+  let end = line.to;
+  for (let node: SyntaxNode | null = syntaxTree(state).resolveInner(pos, 1); node; node = node.parent) {
+    if (node.name === "Task") {
+      end = node.to;
+      break;
+    }
+  }
+  return { number: checklistNumber(state, pos), offset, checked, text: plainItemText(state.sliceDoc(pos + 3, end)) };
 }
 
 /**
@@ -130,15 +156,6 @@ export class CheckboxWidget extends WidgetType {
 
 // ---------------------------------------------------------------- math
 
-type Katex = typeof import("katex").default;
-let katexLoading: Promise<Katex> | null = null;
-
-/** Loads KaTeX and its styles on the first formula. */
-export function loadKatex(): Promise<Katex> {
-  katexLoading ??= Promise.all([import("katex"), import("katex/dist/katex.min.css")]).then(([module]) => module.default);
-  return katexLoading;
-}
-
 export class MathWidget extends WidgetType {
   constructor(
     readonly tex: string,
@@ -153,13 +170,8 @@ export class MathWidget extends WidgetType {
     const element = document.createElement(this.display ? "div" : "span");
     element.className = this.display ? "cm-gk-math-block" : "cm-gk-math";
     element.textContent = this.tex;
-    void loadKatex().then((katex) => {
-      try {
-        katex.render(this.tex, element, { displayMode: this.display, throwOnError: true, trust: false });
-      } catch (error) {
-        element.textContent = error instanceof Error ? error.message : String(error);
-        element.classList.add("cm-gk-widget-error");
-      }
+    void drawMath(element, this.tex, this.display).then(() => {
+      element.classList.toggle("cm-gk-widget-error", element.classList.contains("gk-render-error"));
       view.requestMeasure();
     });
     openOnMouseDown(element, view);
@@ -175,21 +187,6 @@ export class MathWidget extends WidgetType {
 
 // ---------------------------------------------------------------- Mermaid
 
-type Mermaid = typeof import("mermaid").default;
-let mermaidLoading: Promise<Mermaid> | null = null;
-
-/** Loads Mermaid on the first diagram, in its strict mode. */
-function loadMermaid(): Promise<Mermaid> {
-  mermaidLoading ??= import("mermaid").then((module) => {
-    // Labels as SVG text: the sanitizer removes the HTML labels Mermaid
-    // would put in `foreignObject`.
-    module.default.initialize({ startOnLoad: false, securityLevel: "strict", htmlLabels: false, theme: "neutral" });
-    return module.default;
-  });
-  return mermaidLoading;
-}
-
-let diagramCount = 0;
 const diagramCache = new Map<string, string>();
 const CACHE_LIMIT = 200;
 
@@ -219,10 +216,8 @@ export class MermaidWidget extends WidgetType {
     } else {
       element.textContent = this.source;
       element.classList.add("cm-gk-pending");
-      diagramCount++;
-      loadMermaid()
-        .then((mermaid) => mermaid.render(`gk-diagram-${String(diagramCount)}`, this.source))
-        .then(({ svg }) => {
+      renderDiagram(this.source)
+        .then((svg) => {
           remember(diagramCache, this.source, svg);
           element.classList.remove("cm-gk-pending");
           setSanitized(element, svg, true);

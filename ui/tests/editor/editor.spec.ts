@@ -45,8 +45,8 @@ test("a checkbox click changes exactly one character, or asks the engine", async
 
   await page.getByText("Checkboxes through the engine").click();
   await page.locator("input.cm-gk-task").nth(1).click();
-  const toggles = JSON.parse((await page.getByTestId("editor-toggles").textContent()) ?? "[]") as { index: number; checked: boolean; text: string }[];
-  expect(toggles).toEqual([expect.objectContaining({ index: 1, checked: true, text: "second **bold** item" })]);
+  const toggles = JSON.parse((await page.getByTestId("editor-toggles").textContent()) ?? "[]") as { number: number; checked: boolean; text: string }[];
+  expect(toggles).toEqual([expect.objectContaining({ number: 2, checked: true, text: "second bold item" })]);
   expect(await text(page)).toContain("- [ ] second **bold** item");
 });
 

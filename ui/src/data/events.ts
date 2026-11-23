@@ -14,17 +14,18 @@ import { OP_ROOT, opPrefix } from "./queries";
 export const ENTITY_QUERIES: Readonly<Record<string, readonly OpId[]>> = {
   // `workspace.get` carries the settings too.
   settings: ["settings.get", "workspace.get"],
-  // Open-task counts show in the project tree.
-  task: ["task.get", "board.get", "project.list"],
+  // Open-task counts show in the project tree. Rendered texts link task keys
+  // only while the task exists, and descriptions keep their revisions.
+  task: ["task.get", "board.get", "project.list", "markdown.render", "description.history", "description.revision"],
   // Statuses, types and labels show on every card and in the task panel.
-  project: ["project.list", "project.get", "board.get", "task.get", "layout.get"],
+  project: ["project.list", "project.get", "board.get", "task.get", "layout.get", "markdown.render"],
   status: ["project.get", "board.get", "task.get", "project.list"],
   task_type: ["project.get", "board.get", "task.get"],
   label: ["project.get", "board.get", "task.get"],
   // The board leaves out the cards of hidden columns.
   layout: ["layout.get", "board.get"],
   // Cards count comments and files, and show the Blocked badge.
-  comment: ["comment.list", "task.get", "board.get"],
+  comment: ["comment.list", "task.get", "board.get", "markdown.render"],
   attachment: ["comment.list", "task.get", "board.get", "file.get", "file.read"],
   relation: ["task.get", "board.get"],
 };

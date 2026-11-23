@@ -15,6 +15,8 @@ import {
   type Column,
   type Comment,
   type CommentChange,
+  type ConflictAction,
+  type DescriptionSave,
   type Edge,
   type EntityChange,
   type FileChange,
@@ -28,6 +30,8 @@ import {
   type Project,
   type ProjectChange,
   type ProjectSummary,
+  type RevisionInfo,
+  type RevisionKind,
   type Settings,
   type SettingsPatch,
   type Task,
@@ -37,8 +41,9 @@ import {
   type TypeRef,
 } from "../../generated/ops";
 import { decodeBase64, materialize, recordedFields, sniff } from "./details";
+import { checklistOf, merge3, publicChecklist, renderFake, setChecked, unifiedDiff } from "./markdown";
 import { newProject, nextId, SAMPLE_AGENT } from "./seed";
-import { type FakeComment, type FakeFile, type FakeProject, type FakeRelation, type FakeState, type FakeTask } from "./state";
+import { type FakeComment, type FakeFile, type FakeProject, type FakeRelation, type FakeRevision, type FakeState, type FakeTask } from "./state";
 
 /** An operation failed: the engine's error, as the transports deliver it. */
 export class FakeError extends Error {
@@ -127,6 +132,12 @@ export class FakeWorkspace {
     this.state = state;
     this.today = today;
     materialize(state, SAMPLE_AGENT, nextId);
+    // Every description starts with a revision of its own, as the engine's do.
+    for (const task of state.tasks) {
+      if (task.description !== "" && !state.revisions.some((revision) => revision.taskId === task.id)) {
+        state.revisions.push({ id: nextId("r"), taskId: task.id, body: task.description, kind: "normal", base: null, author: { kind: "user", name: "You" }, createdAt: task.createdAt, resolvedAt: null });
+      }
+    }
     // One task in progress is claimed by an agent, as agents do while they work.
     const claimed = state.tasks.find((task) => task.closedAt === null && this.statusIn(this.projectOf(task), task.statusId).category === "in_progress");
     if (claimed) {
@@ -279,9 +290,68 @@ export class FakeWorkspace {
   }
 
   private checklist(task: FakeTask): { done: number; total: number } {
-    const items = task.description.match(/^\s*[-*+] \[[ xX]\]/gm) ?? [];
-    const done = items.filter((item) => /\[[xX]\]/.test(item)).length;
-    return { done, total: items.length };
+    const items = checklistOf(task.description);
+    return { done: items.filter((item) => item.checked).length, total: items.length };
+  }
+
+  /** Progress as the engine works it out: closed 100, else the checklist's share, else the subtasks' average, else 0. */
+  private progress(task: FakeTask): number {
+    if (task.closedAt !== null) {
+      return 100;
+    }
+    const { done, total } = this.checklist(task);
+    if (total > 0) {
+      return Math.round((done / total) * 100);
+    }
+    const subtasks = this.subtasksOf(task);
+    if (subtasks.length > 0) {
+      return Math.round(subtasks.reduce((sum, sub) => sum + this.progress(sub), 0) / subtasks.length);
+    }
+    return 0;
+  }
+
+  // ---------- descriptions ----------
+
+  private revisionsOf(task: FakeTask): FakeRevision[] {
+    return this.state.revisions.filter((revision) => revision.taskId === task.id);
+  }
+
+  /** The revision the description is at now. */
+  private currentRevision(task: FakeTask): FakeRevision | undefined {
+    return this.revisionsOf(task)
+      .filter((revision) => revision.kind !== "conflict")
+      .at(-1);
+  }
+
+  private revisionInfo(revision: FakeRevision, current: FakeRevision | undefined): RevisionInfo {
+    return {
+      id: revision.id,
+      author: revision.author,
+      ...some("base", revision.base),
+      bytes: new TextEncoder().encode(revision.body).length,
+      created_at: revision.createdAt,
+      current: revision === current,
+      kind: revision.kind,
+      ...some("resolved_at", revision.resolvedAt),
+    };
+  }
+
+  private revision(id: string): FakeRevision {
+    const revision = this.state.revisions.find((candidate) => candidate.id === id);
+    if (!revision) {
+      fail("not_found", `There is no description revision ${id}.`);
+    }
+    return revision;
+  }
+
+  /** Writes a new revision and makes it the description. */
+  private addRevision(task: FakeTask, body: string, kind: RevisionKind, base: string | null): FakeRevision {
+    const revision: FakeRevision = { id: nextId("r"), taskId: task.id, body, kind, base, author: { kind: "user", name: "You" }, createdAt: this.today().toISOString(), resolvedAt: null };
+    this.state.revisions.push(revision);
+    if (kind !== "conflict") {
+      task.description = body;
+    }
+    return revision;
   }
 
   // ---------- output shapes ----------
@@ -392,6 +462,7 @@ export class FakeWorkspace {
       ...some("due_date", task.dueDate),
       ...some("estimate_minutes", task.estimateMin),
       checklist: this.checklist(task),
+      progress_percent: this.progress(task),
       subtasks: this.subtaskCount(task),
       rank: String(task.rank),
       status_entered_at: task.statusEnteredAt,
@@ -411,6 +482,9 @@ export class FakeWorkspace {
       project: project.key,
       title: task.title,
       description: task.description,
+      ...some("description_revision", this.currentRevision(task)?.id),
+      conflict_copies: this.revisionsOf(task).filter((revision) => revision.kind === "conflict" && revision.resolvedAt === null).length,
+      progress_percent: this.progress(task),
       status: { id: status.id, name: status.name, category: status.category },
       type: this.typeRef(task),
       priority: task.priority,
@@ -594,6 +668,13 @@ export class FakeWorkspace {
         full.links = this.linksOf(task);
       } else if (part === "comments") {
         full.comments = this.liveComments(task).map((comment) => this.comment(comment, false));
+      } else if (part === "checklist") {
+        full.checklist_items = publicChecklist(task.description);
+      } else if (part === "revisions") {
+        const current = this.currentRevision(task);
+        full.revisions = this.revisionsOf(task)
+          .reverse()
+          .map((revision) => this.revisionInfo(revision, current));
       } else {
         full.files = this.state.files.filter((file) => file.taskId === task.id && file.commentId === null && file.deletedAt === null).map((file) => this.attachment(file));
       }
@@ -724,6 +805,43 @@ export class FakeWorkspace {
 
   private projectChange(project: FakeProject, entity: string, fields: string[]): Result<ProjectChange> {
     return { output: { project: this.fullProject(project) }, changes: [{ entity, id: project.id, fields, project: project.key }] };
+  }
+
+  /** Saves a description edited from `base`: as it is, merged with an edit made since, or as a conflict copy. */
+  private saveDescription(task: FakeTask, text: string, base: string | null): DescriptionSave {
+    const current = this.currentRevision(task);
+    if (text === task.description) {
+      return { outcome: "unchanged", ...some("revision", current?.id) };
+    }
+    if (base === null || current === undefined || base === current.id) {
+      return { outcome: "saved", revision: this.addRevision(task, text, "normal", current?.id ?? null).id };
+    }
+    const merged = merge3(this.revision(base).body, text, task.description);
+    if (merged !== null) {
+      return { outcome: "merged", revision: this.addRevision(task, merged, "merged", base).id };
+    }
+    const copy = this.addRevision(task, text, "conflict", base);
+    return { outcome: "conflict", revision: current.id, conflict_copy: copy.id };
+  }
+
+  private resolveConflict(task: FakeTask, copyId: string, action: ConflictAction, text: string | null): void {
+    const copy = this.revision(copyId);
+    if (copy.taskId !== task.id || copy.kind !== "conflict") {
+      fail("invalid", `${copyId} is not a conflict copy of ${this.keyOf(task)}.`, { details: { path: "copy" } });
+    }
+    if (copy.resolvedAt !== null) {
+      fail("conflict", "That conflict copy was resolved already.");
+    }
+    const current = this.currentRevision(task)?.id ?? null;
+    if (action === "use_copy") {
+      this.addRevision(task, copy.body, "resolved", current);
+    } else if (action === "use_text") {
+      if (text === null) {
+        fail("invalid", "Give the text to save.", { details: { path: "text" } });
+      }
+      this.addRevision(task, text, "resolved", current);
+    }
+    copy.resolvedAt = this.today().toISOString();
   }
 
   private enterStatus(task: FakeTask, statusId: string): void {
@@ -1447,6 +1565,9 @@ export class FakeWorkspace {
       };
       project.nextNumber += 1;
       this.state.tasks.push(task);
+      if (task.description !== "") {
+        this.addRevision(task, task.description, "normal", null);
+      }
       return this.taskChange(task, ["*"]);
     },
     "task.update": (input) => {
@@ -1464,12 +1585,18 @@ export class FakeWorkspace {
         task.title = this.checkTitle(input.title);
         fields.push("title");
       }
-      if (input.description !== null && input.description !== undefined) {
-        task.description = input.description;
-        fields.push("description");
+      let save: DescriptionSave | undefined;
+      const text = clear.includes("description") ? "" : input.description;
+      if (text !== null && text !== undefined) {
+        save = this.saveDescription(task, text, input.base_revision ?? null);
+        if (save.outcome === "conflict") {
+          fields.push("conflict_copy");
+        } else if (save.outcome !== "unchanged") {
+          fields.push("description");
+        }
       }
-      if (clear.includes("description")) {
-        task.description = "";
+      if (input.resolve_conflict) {
+        this.resolveConflict(task, input.resolve_conflict.copy, input.resolve_conflict.action, input.resolve_conflict.text ?? null);
         fields.push("description");
       }
       if (input.type !== null && input.type !== undefined) {
@@ -1514,10 +1641,154 @@ export class FakeWorkspace {
         fields.push("estimate");
       }
       if (fields.length === 0) {
-        return { output: { task: this.fullTask(task) }, changes: [] };
+        return { output: { task: this.fullTask(task), ...some("description_save", save) }, changes: [] };
       }
+      this.touch(task, !(fields.length === 1 && fields[0] === "conflict_copy"));
+      const change = this.taskChange(task, fields);
+      return { ...change, output: { ...change.output, ...some("description_save", save) } };
+    },
+    "task.resolve_conflict": ({ key, copy, action, text, base_revision }) => {
+      const task = this.task(key);
+      this.writable(this.projectOf(task).key);
+      if (base_revision !== null && base_revision !== undefined && base_revision !== this.currentRevision(task)?.id) {
+        fail("conflict", "The description changed since you read it.", { hint: "Read it again and resolve the copy once more." });
+      }
+      this.resolveConflict(task, copy, action, text ?? null);
       this.touch(task);
-      return this.taskChange(task, fields);
+      return this.taskChange(task, ["description"]);
+    },
+    "checklist.update": ({ key, comment: commentId, toggle, add, remove }) => {
+      if ((add?.length ?? 0) > 0 || (remove?.length ?? 0) > 0) {
+        fail("invalid", "The sample workspace only ticks and clears items.");
+      }
+      const comment = commentId === null || commentId === undefined ? null : this.liveComment(commentId);
+      const task = comment ? this.state.tasks.find((candidate) => candidate.id === comment.taskId) : this.task(key ?? "");
+      if (!task) {
+        fail("not_found", "There is no such task.");
+      }
+      this.writable(this.projectOf(task).key);
+      let text = comment ? comment.body : task.description;
+      for (const wanted of toggle ?? []) {
+        const items = checklistOf(text);
+        const expected = wanted.text.replace(/\s+/g, " ").trim();
+        const numbered = items[wanted.number - 1];
+        const same = items.filter((item) => item.text === expected);
+        const item = numbered?.text === expected ? numbered : same.length === 1 ? same[0] : undefined;
+        if (!item) {
+          fail("conflict", `The checklist changed; please tick it again. Item ${String(wanted.number)} reads "${numbered?.text ?? ""}", not "${expected}".`, {
+            details: { field: "toggle", number: wanted.number },
+          });
+        }
+        text = setChecked(text, item, wanted.checked ?? !item.checked);
+      }
+      const owner = this.keyOf(task);
+      const unchanged = text === (comment ? comment.body : task.description);
+      if (comment) {
+        if (!unchanged) {
+          const now = this.today().toISOString();
+          comment.revisions.unshift({ body: comment.body, replaced_at: now, replaced_by: { kind: "user", name: "You" } });
+          comment.body = text;
+          comment.editedAt = now;
+          comment.version += 1;
+        }
+        const items = publicChecklist(text);
+        return {
+          output: { checklist: { done: items.filter((item) => item.checked).length, total: items.length }, comment: comment.id, items, key: owner, version: comment.version },
+          changes: unchanged ? [] : this.commentChange(comment, ["body"]).changes,
+        };
+      }
+      if (!unchanged) {
+        this.addRevision(task, text, "normal", this.currentRevision(task)?.id ?? null);
+        this.touch(task);
+      }
+      const items = publicChecklist(text);
+      return {
+        output: {
+          checklist: this.checklist(task),
+          items,
+          key: owner,
+          ...some("revision", this.currentRevision(task)?.id),
+          version: task.version,
+        },
+        changes: unchanged ? [] : this.taskChange(task, ["description"]).changes,
+      };
+    },
+    "description.history": ({ task: key }) => {
+      if (key === null || key === undefined) {
+        fail("invalid", "The sample workspace keeps revisions for tasks only.", { details: { path: "task" } });
+      }
+      const task = this.task(key);
+      const current = this.currentRevision(task);
+      const items = this.revisionsOf(task)
+        .reverse()
+        .map((revision) => this.revisionInfo(revision, current));
+      return { items, total: items.length };
+    },
+    "description.revision": ({ revision: id, diff_from }) => {
+      const revision = this.revision(id);
+      const task = this.state.tasks.find((candidate) => candidate.id === revision.taskId);
+      const current = task && this.currentRevision(task);
+      const from = diff_from === null || diff_from === undefined ? null : this.revision(diff_from);
+      if (from && from.taskId !== revision.taskId) {
+        fail("invalid", "Both revisions must belong to the same description.", { details: { path: "diff_from" } });
+      }
+      return {
+        body: revision.body,
+        ...some("diff", from && unifiedDiff(from.body, revision.body, from.id, revision.id)),
+        owner: task ? this.keyOf(task) : "",
+        revision: this.revisionInfo(revision, current),
+      };
+    },
+    "markdown.render": ({ documents }) => {
+      if (documents.length === 0 || documents.length > 200) {
+        fail("invalid", "Render 1 to 200 texts at once.", { details: { path: "documents" } });
+      }
+      const known = (key: string) => {
+        try {
+          this.task(key);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      const items = documents.map((document) => {
+        let text: string;
+        let id: string;
+        let revision: string | undefined;
+        let version: number | undefined;
+        if (document.task !== null && document.task !== undefined) {
+          const task = this.task(document.task);
+          text = task.description;
+          id = task.id;
+          revision = this.currentRevision(task)?.id;
+          version = task.version;
+        } else if (document.comment !== null && document.comment !== undefined) {
+          const comment = this.liveComment(document.comment);
+          text = comment.body;
+          id = comment.id;
+          version = comment.version;
+        } else if (document.revision !== null && document.revision !== undefined) {
+          const found = this.revision(document.revision);
+          text = found.body;
+          id = found.id;
+          revision = found.id;
+        } else if (document.project !== null && document.project !== undefined) {
+          const project = this.project(document.project);
+          text = project.description;
+          id = project.id;
+        } else {
+          text = document.source ?? "";
+          id = "preview";
+        }
+        return {
+          html: renderFake(text, known),
+          checklist: publicChecklist(text),
+          document_id: document.document_id ?? id,
+          ...some("revision", revision),
+          ...some("version", version),
+        };
+      });
+      return { items };
     },
     "task.move": ({ key, status, project: toProject, expected_version, before, after, at }) => {
       const task = this.task(key);

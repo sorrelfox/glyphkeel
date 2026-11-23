@@ -18,6 +18,7 @@ import { openTaskWindow } from "../../ipc/taskWindow";
 import { useDayFormat } from "../board/CardView";
 import { dueState, formatMinutes, isoDay, parseDuration } from "../board/model";
 import { ActivityTabs, Composer, useMomentFormat } from "./Activity";
+import { DescriptionSection, type DescriptionView } from "./Description";
 import { FilesSection, useFileDrop } from "./Files";
 import { LinksSection, SubtasksSection } from "./Sections";
 import styles from "./TaskPanel.module.css";
@@ -35,8 +36,8 @@ interface TaskPanelProps {
 /**
  * The task panel, docked on the right of the board, which stays live beside
  * it, or filling a task window. Every field edits in place through the
- * engine. The description and comments are plain text until the Markdown
- * reader and editor arrive. Files dropped on the panel are attached to the
+ * engine. The description and comments show as rendered Markdown and edit
+ * in the Markdown editor. Files dropped on the panel are attached to the
  * task.
  */
 export function TaskPanel({ taskKey, onClose, onOpenTask, mode = "docked", onOpenWindow }: TaskPanelProps) {
@@ -71,7 +72,7 @@ export function TaskPanel({ taskKey, onClose, onOpenTask, mode = "docked", onOpe
         </div>
       )}
       {loaded && project.data && (
-        <Loaded task={loaded} project={project.data} mode={mode} onClose={onClose} onOpenTask={onOpenTask} onOpenWindow={onOpenWindow} />
+        <Loaded key={loaded.id} task={loaded} project={project.data} mode={mode} onClose={onClose} onOpenTask={onOpenTask} onOpenWindow={onOpenWindow} />
       )}
       {drop.over && (
         <div className={styles.dropNote} role="status">
@@ -106,6 +107,7 @@ function Loaded({
   const duplicate = useCommand("task.duplicate", { undoable: t("panel-duplicated") });
   const release = useCommand("task.release");
   const readOnly = project.state === "archived";
+  const [descriptionView, setDescriptionView] = useState<DescriptionView>({ kind: "read" });
   const blockers = (task.links ?? []).filter((link) => link.kind === "blocked_by" && !link.task.closed).map((link) => link.task.key);
   const copy = (withoutSubtasks: boolean) => {
     duplicate.mutate(
@@ -198,7 +200,17 @@ function Loaded({
         </Button>
       </div>
 
-      <div className={styles.body}>
+      <div
+        className={styles.body}
+        onKeyDown={(event) => {
+          const target = event.target as HTMLElement;
+          // E edits the description, as in the design, unless the key was typed into something.
+          if (event.key === "e" && !event.ctrlKey && !event.altKey && !event.metaKey && !readOnly && descriptionView.kind !== "edit" && !target.closest("input, textarea, select, [contenteditable], [role=textbox]")) {
+            event.preventDefault();
+            setDescriptionView({ kind: "edit" });
+          }
+        }}
+      >
         <Title task={task} readOnly={readOnly} onSave={(title) => { patch({ title }); }} />
 
         <div className={styles.actions}>
@@ -323,12 +335,20 @@ function Loaded({
           </Prop>
         </div>
 
-        <Description task={task} readOnly={readOnly} onSave={(description) => { patch({ description }); }} />
+        <DescriptionSection task={task} readOnly={readOnly} view={descriptionView} onView={setDescriptionView} onOpenTask={onOpenTask} />
 
         <SubtasksSection task={task} project={project} readOnly={readOnly} onOpenTask={onOpenTask} />
         <LinksSection task={task} project={project} readOnly={readOnly} onOpenTask={onOpenTask} />
         <FilesSection task={task.key} files={task.files ?? []} readOnly={readOnly} />
-        <ActivityTabs task={task} project={project} readOnly={readOnly} />
+        <ActivityTabs
+          task={task}
+          project={project}
+          readOnly={readOnly}
+          onOpenTask={onOpenTask}
+          onShowDescriptionDiff={(older, newer) => {
+            setDescriptionView({ kind: "history", compare: [older, newer] });
+          }}
+        />
       </div>
       <Composer taskKey={task.key} readOnly={readOnly} />
     </>
@@ -572,68 +592,5 @@ function Labels({ task, project, readOnly, onChange }: { task: Task; project: Pr
         </Popover>
       </MenuTrigger>
     </>
-  );
-}
-
-/**
- * The description, as text for now: Edit (or `E`) swaps in a text area;
- * Ctrl+Enter saves, Escape cancels.
- */
-function Description({ task, readOnly, onSave }: { task: Task; readOnly: boolean; onSave: (text: string) => void }) {
-  const t = useT();
-  const [editing, setEditing] = useState<string | null>(null);
-  const save = () => {
-    if (editing !== null && editing !== task.description) {
-      onSave(editing);
-    }
-    setEditing(null);
-  };
-  return (
-    <section className={styles.section} aria-label={t("panel-description")}>
-      <div className={styles.sectionHead}>
-        <span className="caption grow">{t("panel-description")}</span>
-        {editing === null ? (
-          <Button className="btn flat sm" isDisabled={readOnly} onPress={() => { setEditing(task.description); }}>
-            {t("panel-edit")}
-          </Button>
-        ) : (
-          <>
-            <Button className="btn flat sm" onPress={() => { setEditing(null); }}>
-              {t("dialog-cancel")}
-            </Button>
-            <Button className="btn primary sm" onPress={save}>
-              {t("panel-save")}
-            </Button>
-          </>
-        )}
-      </div>
-      {editing === null ? (
-        task.description === "" ? (
-          <p className="faint">{t("panel-no-description")}</p>
-        ) : (
-          <div className={classes("md", styles.description)}>{task.description}</div>
-        )
-      ) : (
-        <textarea
-          className={styles.descriptionField}
-          aria-label={t("panel-description")}
-          autoFocus
-          rows={10}
-          value={editing}
-          onChange={(event) => {
-            setEditing(event.target.value);
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && event.ctrlKey) {
-              event.preventDefault();
-              save();
-            } else if (event.key === "Escape") {
-              event.preventDefault();
-              setEditing(null);
-            }
-          }}
-        />
-      )}
-    </section>
   );
 }

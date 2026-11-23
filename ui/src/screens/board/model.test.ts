@@ -44,6 +44,7 @@ function card(key: string, overrides: Partial<Card> = {}): Card {
     file_count: 0,
     spent_minutes: 0,
     checklist: { done: 0, total: 0 },
+    progress_percent: 0,
     subtasks: { done: 0, total: 0 },
     rank: "a",
     status_entered_at: NOW.toISOString(),

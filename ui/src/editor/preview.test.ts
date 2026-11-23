@@ -106,8 +106,8 @@ describe("checkboxes", () => {
     expect(boxes.length).toBe(2);
     boxes[1]?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
     expect(view.state.sliceDoc()).toBe(text);
-    expect(handler).toHaveBeenCalledWith({ index: 1, offset: text.indexOf("[x]"), checked: true, text: "nested **one**" });
-    expect(checklistToggleAt(view.state, view.state.doc.line(3).from + 2)).toEqual({ index: 0, offset: text.indexOf("[ ]"), checked: false, text: "first" });
+    expect(handler).toHaveBeenCalledWith({ number: 2, offset: text.indexOf("[x]"), checked: true, text: "nested one" });
+    expect(checklistToggleAt(view.state, view.state.doc.line(3).from + 2)).toEqual({ number: 1, offset: text.indexOf("[ ]"), checked: false, text: "first" });
   });
 });
 

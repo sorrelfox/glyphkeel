@@ -42,13 +42,17 @@ export interface CompletionProviders {
 
 /** A click on a checkbox, when the engine owns the text. */
 export interface ChecklistToggle {
-  /** The item's number in the text, counting every task item in order from 0. */
-  index: number;
+  /**
+   * The item's number, as the engine's checklist and the reader's
+   * `data-item` count it: from 1, in reading order. Pass it with `text` to
+   * `checklist.update`.
+   */
+  number: number;
   /** Where the item's "[" is in the text, in UTF-16 code units (a CRLF counts two). */
   offset: number;
   /** Whether the item is ticked now, before the click. */
   checked: boolean;
-  /** The item's text after the checkbox, trimmed. */
+  /** The item's text after the checkbox as plain text, as the engine reports it. */
   text: string;
 }
 

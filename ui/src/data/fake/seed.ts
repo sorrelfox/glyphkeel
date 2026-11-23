@@ -266,6 +266,7 @@ export function seed(today: Date, seedNumber = 7): FakeState {
     comments: [],
     files: [],
     claims: [],
+    revisions: [],
     activity: [],
     layouts: {},
     settings: {

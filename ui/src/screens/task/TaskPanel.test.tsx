@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { EditorView } from "@codemirror/view";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { App } from "../../App";
@@ -9,6 +10,10 @@ import { fakeTransport } from "../../data/fake/transport";
 import { createClient } from "../../data/transport";
 import { type TaskChange } from "../../generated/ops";
 import { describeEntry } from "./Activity";
+
+// jsdom lays nothing out; the editor measures text ranges.
+Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
+Range.prototype.getBoundingClientRect = () => new DOMRect();
 
 afterEach(() => {
   cleanup();
@@ -34,6 +39,20 @@ async function renderPanel() {
 }
 
 const section = (panel: HTMLElement, name: string) => within(panel).getByRole("region", { name });
+
+/** Replaces the text of a Markdown editor, as typing would. */
+function typeInto(textbox: HTMLElement, text: string) {
+  const view = EditorView.findFromDOM(textbox);
+  if (!view) {
+    throw new Error("not an editor");
+  }
+  act(() => {
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text }, userEvent: "input.type" });
+  });
+}
+
+/** The text in a Markdown editor. */
+const editorText = (textbox: HTMLElement) => EditorView.findFromDOM(textbox)?.state.doc.toString();
 
 describe("the task panel's sections", () => {
   it("adds a subtask, closes it from its checkbox and counts it", async () => {
@@ -92,22 +111,25 @@ describe("the task panel's sections", () => {
 describe("comments and history", () => {
   it("adds a comment with Ctrl+Enter, edits it, shows the earlier version and moves it to the trash", async () => {
     const { panel } = await renderPanel();
-    const composer = within(panel).getByRole("textbox", { name: "Write a comment" });
-    fireEvent.change(composer, { target: { value: "Trains are cheaper in May." } });
+    const composer = await within(panel).findByRole("textbox", { name: "Write a comment" });
+    typeInto(composer, "Trains are **cheaper** in May.");
     fireEvent.keyDown(composer, { key: "Enter", ctrlKey: true });
     const comment = await within(panel).findByRole("article", { name: named(/^Comment by Me/) });
-    expect(within(comment).getByText("Trains are cheaper in May.")).toBeDefined();
-    expect((composer as HTMLTextAreaElement).value).toBe("");
+    // The comment shows as Markdown, rendered.
+    expect((await within(comment).findByText("cheaper")).tagName).toBe("STRONG");
+    await waitFor(() => {
+      expect(editorText(composer)).toBe("");
+    });
 
     fireEvent.click(within(comment).getByRole("button", { name: "Comment" }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "Edit" }));
-    const edit = within(comment).getByRole("textbox", { name: "Comment text" });
-    fireEvent.change(edit, { target: { value: "Trains are cheaper in June." } });
+    const edit = await within(comment).findByRole("textbox", { name: "Comment text" });
+    typeInto(edit, "Trains are cheaper in June.");
     fireEvent.keyDown(edit, { key: "Enter", ctrlKey: true });
     const edited = await within(comment).findByRole("button", { name: named(/edited · 1 earlier version/) });
     fireEvent.click(edited);
     const earlier = within(comment).getByRole("list", { name: "Earlier versions" });
-    expect(within(earlier).getByText("Trains are cheaper in May.")).toBeDefined();
+    expect(await within(earlier).findByText("cheaper")).toBeDefined();
 
     fireEvent.click(within(comment).getByRole("button", { name: "Comment" }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "Move to the trash" }));

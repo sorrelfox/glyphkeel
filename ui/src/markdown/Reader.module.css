@@ -1,0 +1,223 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+   Copyright (C) 2026 Glyphkeel contributors */
+
+/* The reader's HTML comes from the engine, so its classes are global; every
+   rule here is scoped under the reader. */
+
+.frame {
+  position: relative;
+  min-width: 0;
+}
+
+.reader {
+  /* Shiki's theme of CSS variables reads these names; the design's syntax
+     tokens fill them. */
+  --syn-foreground: var(--fg);
+  --syn-background: transparent;
+  --syn-token-keyword: var(--syn-keyword);
+  --syn-token-string: var(--syn-string);
+  --syn-token-string-expression: var(--syn-string);
+  --syn-token-constant: var(--syn-number);
+  --syn-token-function: var(--syn-func);
+  --syn-token-comment: var(--syn-comment);
+  --syn-token-parameter: var(--fg);
+  --syn-token-punctuation: var(--fg-muted);
+  --syn-token-link: var(--accent-fg);
+  --syn-token-inserted: var(--hue-green);
+  --syn-token-deleted: var(--hue-red);
+  --syn-token-changed: var(--hue-orange);
+
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.compact {
+  font-size: var(--fs);
+  line-height: var(--lh);
+}
+
+.reader > :last-child {
+  margin-bottom: 0;
+}
+
+.reader ol {
+  margin: 0 0 10px;
+  padding-left: 22px;
+}
+
+.reader blockquote {
+  margin: 0 0 10px;
+  padding-left: 12px;
+  border-left: 3px solid var(--border-strong);
+  color: var(--fg-muted);
+}
+
+.reader hr {
+  margin: 14px 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+
+.reader img {
+  max-width: 100%;
+  border-radius: var(--r-m);
+}
+
+.reader li[class~="task-item"] {
+  list-style: none;
+}
+
+.reader li[class~="task-item"] > input {
+  margin: 0 6px 0 -20px;
+  vertical-align: -2px;
+}
+
+.reader li[class~="task-item"] > input:disabled {
+  cursor: default;
+}
+
+.reader a[data-ref],
+.reader a[data-wiki] {
+  cursor: pointer;
+}
+
+.reader a[data-ref] {
+  font-family: var(--font-mono);
+}
+
+.reader a:focus-visible {
+  outline: var(--focus-w) solid var(--focus);
+  outline-offset: 1px;
+  border-radius: var(--r-s);
+}
+
+/* Callouts: the design's `.callout`, one hue per kind. */
+.reader [class~="markdown-alert"] {
+  --h: var(--info);
+
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: var(--r-m);
+  background: color-mix(in srgb, var(--h) 9%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--h) 34%, transparent);
+}
+
+.reader [class~="markdown-alert-tip"] {
+  --h: var(--success);
+}
+
+.reader [class~="markdown-alert-important"] {
+  --h: var(--hue-purple);
+}
+
+.reader [class~="markdown-alert-warning"] {
+  --h: var(--warning);
+}
+
+.reader [class~="markdown-alert-caution"] {
+  --h: var(--danger);
+}
+
+.reader [class~="markdown-alert-title"] {
+  margin: 0 0 4px;
+  color: var(--h);
+  font-weight: 650;
+}
+
+.reader [class~="markdown-alert"] > :last-child {
+  margin-bottom: 0;
+}
+
+/* Code blocks: a header with the language and Copy. */
+.reader [class~="gk-code"] {
+  margin: 0 0 12px;
+  border-radius: var(--r-m);
+  background: var(--sunken);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.reader [class~="gk-code"] pre {
+  margin: 0;
+  background: transparent;
+  box-shadow: none;
+  padding-top: 2px;
+}
+
+.reader [class~="gk-code"] pre[class~="shiki"] {
+  background: transparent !important;
+}
+
+.reader [class~="codehead"] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--h-control);
+  padding: 0 4px 0 12px;
+  color: var(--fg-muted);
+  font-size: var(--fs-small);
+}
+
+.reader [class~="gk-diagram"] {
+  margin: 0 0 12px;
+  overflow-x: auto;
+}
+
+.reader [class~="gk-diagram"] svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.reader [class~="gk-render-error"] {
+  display: block;
+  padding: 6px 10px;
+  border-radius: var(--r-m);
+  background: color-mix(in srgb, var(--danger) 9%, transparent);
+  color: var(--danger);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  white-space: pre-wrap;
+}
+
+.reader span[data-math="display"] {
+  display: block;
+  overflow-x: auto;
+}
+
+.reader [class~="gk-external-image"] {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 6px 10px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-m);
+  background: var(--sunken);
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: var(--fs-small);
+  cursor: pointer;
+}
+
+.reader section[data-footnotes] {
+  margin-top: 12px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  color: var(--fg-muted);
+  font-size: var(--fs-small);
+}
+
+.card {
+  position: absolute;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 280px;
+  padding: 8px 10px;
+  font-size: var(--fs-small);
+  pointer-events: none;
+}
+
+.cardTitle {
+  color: var(--fg);
+  font-weight: 600;
+}

@@ -6,10 +6,11 @@ import { FluentBundle, FluentResource } from "@fluent/bundle";
 import enApp from "./en/app.ftl?raw";
 import enDev from "./en/dev.ftl?raw";
 import enEditor from "./en/editor.ftl?raw";
+import enReader from "./en/reader.ftl?raw";
 
 /** The languages the app has text for, with their message files. */
 export const MESSAGES: Readonly<Record<string, readonly string[]>> = {
-  en: [enApp, enDev, enEditor],
+  en: [enApp, enDev, enEditor, enReader],
 };
 
 /** The language the app falls back to. */

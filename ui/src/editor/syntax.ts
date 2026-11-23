@@ -15,12 +15,29 @@ import { Language, LanguageSupport } from "@codemirror/language";
 import { markdownKeymap, markdownLanguage } from "@codemirror/lang-markdown";
 import { Prec } from "@codemirror/state";
 import { keymap } from "@codemirror/view";
-import type { BlockContext, InlineContext, Line, MarkdownConfig, MarkdownParser } from "@lezer/markdown";
+import type { BlockContext, InlineContext, LeafBlock, LeafBlockParser, Line, MarkdownConfig, MarkdownParser } from "@lezer/markdown";
 
 const isWordChar = (c: number) => (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 95 || c > 127;
 
 const TASK_KEY = /^[A-Z][A-Z0-9]{0,9}-[0-9]{1,7}/;
 const MATH_FENCE = /^\$\$\s*$/;
+
+/** A task item's checkbox, as the engine reads one: `[ ]`, `[x]` or `[X]`, then a space, a tab or the end of the line. */
+const TASK_MARKER = /^\[[ xX]\](?:[ \t\r\n]|$)/;
+
+/** A task item: the checkbox, then the item's text. */
+class TaskParser implements LeafBlockParser {
+  nextLine(): boolean {
+    return false;
+  }
+  finish(cx: BlockContext, leaf: LeafBlock): boolean {
+    cx.addLeafElement(
+      leaf,
+      cx.elt("Task", leaf.start, leaf.start + leaf.content.length, [cx.elt("TaskMarker", leaf.start, leaf.start + 3), ...cx.parser.parseInline(leaf.content.slice(3), leaf.start + 3)]),
+    );
+    return true;
+  }
+}
 
 /** Lezer extensions for task keys, wiki links and math. */
 export const glyphkeelSyntax: MarkdownConfig = {
@@ -95,6 +112,15 @@ export const glyphkeelSyntax: MarkdownConfig = {
     },
   ],
   parseBlock: [
+    {
+      // Replaces GFM's task items, which need text after the checkbox: the
+      // engine also counts an empty item, so the numbers stay the same.
+      name: "TaskList",
+      leaf(cx: BlockContext, leaf: LeafBlock): LeafBlockParser | null {
+        return TASK_MARKER.test(leaf.content) && cx.parentType().name === "ListItem" ? new TaskParser() : null;
+      },
+      after: "SetextHeading",
+    },
     {
       name: "BlockMath",
       before: "FencedCode",
