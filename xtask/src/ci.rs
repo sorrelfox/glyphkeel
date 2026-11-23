@@ -23,8 +23,8 @@ use anyhow::{Context, Result, bail};
 
 const HELP: &str = "\
 Usage: cargo xtask ci [--suite S[,S…]] [--distro D[,D…]] [--engine E] [--rebuild]
-                      [--cache-dir DIR] [--package-release N]
-       cargo xtask ci --here [--suite S[,S…]] [--package-release N]
+                      [--cache-dir DIR] [--package-release N] [--ui-flows F[,F…]]
+       cargo xtask ci --here [--suite S[,S…]] [--package-release N] [--ui-flows F[,F…]]
        cargo xtask ci --list
 
 Runs check suites in containers, one image per distribution.
@@ -45,6 +45,9 @@ Options:
   --package-release N
                 The rpm's release number, for a rebuild of the same version
                 (`package` suite only). Default: 1.
+  --ui-flows F  Run only these browser flows in the `ui` suite (repeatable or
+                comma-separated; see `--list`). Default: every flow, one
+                after another, each against a fresh workspace.
   --here        Run the suites on this machine, without containers. This is
                 what runs inside each container.
   --list        List the suites and distributions.
@@ -64,7 +67,8 @@ enum Suite {
     /// Every Rust test.
     Rust,
     /// The UI's component tests, its production build (checked for network
-    /// and bridge code) and the flows against the real engine in Chromium.
+    /// and bridge code) and every browser flow in Chromium, on sample data
+    /// and against the real engine.
     Ui,
     /// The desktop app built with the UI embedded, as it ships.
     App,
@@ -105,8 +109,8 @@ impl Suite {
             }
             Self::Rust => "cargo test for the whole workspace",
             Self::Ui => {
-                "the UI's component tests, release build and bundle check, bridge flows \
-                 (Chromium)"
+                "the UI's component tests, release build and bundle check, every browser \
+                 flow (Chromium)"
             }
             Self::App => "the desktop app with the UI embedded",
             Self::Deny => "cargo-deny: licences, advisories, bans, sources",
@@ -128,8 +132,9 @@ impl Suite {
     }
 
     /// The commands of this suite, in order. `package_release` is the rpm's
-    /// release number, for the `package` suite.
-    fn steps(self, package_release: Option<u32>) -> Vec<Step> {
+    /// release number, for the `package` suite; `flows` are the browser
+    /// flows of the `ui` suite.
+    fn steps(self, package_release: Option<u32>, flows: &[Flow]) -> Vec<Step> {
         match self {
             Self::Static => vec![
                 Step::cargo(&["fmt", "--all", "--check"]),
@@ -154,8 +159,9 @@ impl Suite {
                 Step::pnpm(&["build"]),
                 // The release bundle has no network code and no bridge.
                 Step::pnpm(&["--filter", "ui", "check:bundle"]),
-                // The UI against the engine, through the development bridge.
-                Step::pnpm(&["--filter", "ui", "test:bridge"]),
+                // The browser flows: on sample data, and against the engine
+                // through the development bridge.
+                Step::Flows(flows.to_vec()),
             ],
             Self::App => vec![
                 Step::pnpm(&["build"]),
@@ -283,6 +289,130 @@ fn write_cli_files(root: &Path) -> Result<bool> {
     )
 }
 
+/// One Playwright configuration of the UI: its flows, its servers and its
+/// ports.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Flow {
+    /// The name `--ui-flows` takes, the same as the `test:<name>` script in
+    /// ui/package.json.
+    name: &'static str,
+    /// The configuration file, relative to ui/.
+    config: &'static str,
+    about: &'static str,
+}
+
+impl Flow {
+    /// Every configuration, in the order the `ui` suite runs them. Several
+    /// share ports (5310–5319 for pages, 5320–5329 for the bridge), so they
+    /// run one after another, never side by side. Those against the engine
+    /// each make a fresh workspace of their own.
+    const ALL: [Self; 7] = [
+        Self {
+            name: "flow",
+            config: "playwright.config.ts",
+            about: "the release build: smoke test and themes",
+        },
+        Self {
+            name: "board",
+            config: "playwright.fake.config.ts",
+            about: "project screens and preferences on sample data",
+        },
+        Self {
+            name: "editor",
+            config: "playwright.editor.config.ts",
+            about: "the Markdown editor",
+        },
+        Self {
+            name: "bridge",
+            config: "playwright.bridge.config.ts",
+            about: "workspace, zones, labels and toolbar against the engine",
+        },
+        Self {
+            name: "list",
+            config: "playwright.list.config.ts",
+            about: "the list, against the engine and on sample data",
+        },
+        Self {
+            name: "palette",
+            config: "playwright.palette.config.ts",
+            about: "command palette and quick add against the engine",
+        },
+        Self {
+            name: "today",
+            config: "playwright.today.config.ts",
+            about: "Today, search and editor links against the engine",
+        },
+    ];
+
+    fn parse(name: &str) -> Result<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|flow| flow.name == name)
+            .with_context(|| format!("unknown UI flow `{name}` (see `cargo xtask ci --list`)"))
+    }
+
+    /// Where Playwright writes this configuration's results and traces.
+    fn output(self, root: &Path) -> PathBuf {
+        root.join("target/playwright").join(self.name)
+    }
+
+    /// Runs this configuration's flows in Chromium.
+    fn run(self, root: &Path) -> Result<bool> {
+        let mut cmd = Command::new("pnpm");
+        cmd.args(["--filter", "ui", "exec", "playwright", "test", "--config"])
+            .arg(self.config)
+            .arg("--project=chromium")
+            // Traces of failed flows land in the build cache, which outlives
+            // the container (under `--cache-dir` it is on the host).
+            .arg("--output")
+            .arg(self.output(root))
+            .current_dir(root);
+        // The configurations make a fresh workspace and token unless these
+        // are set; one left in the environment would be shared by all.
+        for name in FLOW_ENV_CLEARED {
+            cmd.env_remove(name);
+        }
+        status(&mut cmd)
+    }
+}
+
+/// Variables removed from the flows' environment, so that each
+/// configuration starts its bridge on a new workspace.
+const FLOW_ENV_CLEARED: [&str; 2] = ["GK_BRIDGE_WORKSPACE", "GK_BRIDGE_TOKEN"];
+
+/// Runs the flows one after another, all of them even when one fails, and
+/// prints how each went.
+fn run_flows(root: &Path, flows: &[Flow]) -> Result<bool> {
+    let mut results = Vec::new();
+    for &flow in flows {
+        eprintln!("==> [ui] flows `{}` ({})", flow.name, flow.config);
+        let started = Instant::now();
+        let ok = flow.run(root)?;
+        let seconds = started.elapsed().as_secs();
+        eprintln!(
+            "==> [ui] flows `{}`: {} in {seconds} s",
+            flow.name,
+            if ok { "passed" } else { "FAILED" }
+        );
+        results.push((flow, ok, seconds));
+    }
+    eprintln!("==> [ui] browser flows:");
+    for (flow, ok, seconds) in &results {
+        let verdict = if *ok { "passed" } else { "FAILED" };
+        eprintln!("      {:<8} {verdict:<7} {seconds:>5} s", flow.name);
+    }
+    for (flow, ok, _) in &results {
+        if !ok {
+            eprintln!(
+                "==> [ui] traces of `{}`: {}",
+                flow.name,
+                flow.output(root).display()
+            );
+        }
+    }
+    Ok(results.iter().all(|(_, ok, _)| *ok))
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Distro {
     Ubuntu2204,
@@ -352,6 +482,8 @@ impl Engine {
 enum Step {
     Cargo(Vec<String>),
     Pnpm(Vec<String>),
+    /// The UI's browser flows, one configuration after another.
+    Flows(Vec<Flow>),
     Headers,
     Deps,
     GenCheck,
@@ -372,6 +504,7 @@ impl Step {
         match self {
             Self::Cargo(args) => status(Command::new(crate::cargo()).args(args).current_dir(root)),
             Self::Pnpm(args) => status(Command::new("pnpm").args(args).current_dir(root)),
+            Self::Flows(flows) => run_flows(root, flows),
             Self::Headers => crate::headers::run(root),
             Self::Deps => crate::deps::run(root),
             Self::GenCheck => crate::codegen::run(root, &["--check".to_owned()]),
@@ -385,6 +518,10 @@ impl fmt::Display for Step {
         match self {
             Self::Cargo(args) => write!(f, "cargo {}", args.join(" ")),
             Self::Pnpm(args) => write!(f, "pnpm {}", args.join(" ")),
+            Self::Flows(flows) => {
+                let names: Vec<&str> = flows.iter().map(|flow| flow.name).collect();
+                write!(f, "playwright flows: {}", names.join(", "))
+            }
             Self::Headers => f.write_str("cargo xtask check-headers"),
             Self::Deps => f.write_str("cargo xtask check-deps"),
             Self::GenCheck => f.write_str("cargo xtask gen --check"),
@@ -402,6 +539,8 @@ struct Options {
     cache_dir: Option<PathBuf>,
     /// The rpm's release number; Tauri's default (1) when not given.
     package_release: Option<u32>,
+    /// The browser flows of the `ui` suite: every one unless some are named.
+    ui_flows: Vec<Flow>,
     here: bool,
     list: bool,
     help: bool,
@@ -416,6 +555,7 @@ impl Options {
             rebuild: false,
             cache_dir: None,
             package_release: None,
+            ui_flows: Vec::new(),
             here: false,
             list: false,
             help: false,
@@ -464,6 +604,11 @@ impl Options {
                         }
                     }
                 }
+                "--ui-flows" => {
+                    for name in value()?.split(',') {
+                        push_unique(&mut options.ui_flows, Flow::parse(name.trim())?);
+                    }
+                }
                 "--here" => options.here = true,
                 "--list" => options.list = true,
                 "-h" | "--help" => options.help = true,
@@ -478,6 +623,12 @@ impl Options {
         }
         if options.package_release.is_some() && !options.suites.contains(&Suite::Package) {
             bail!("`--package-release` applies to the `package` suite only");
+        }
+        if !options.ui_flows.is_empty() && !options.suites.contains(&Suite::Ui) {
+            bail!("`--ui-flows` applies to the `ui` suite only");
+        }
+        if options.ui_flows.is_empty() {
+            options.ui_flows = Flow::ALL.to_vec();
         }
         if options.here
             && (options.engine.is_some() || options.rebuild || options.cache_dir.is_some())
@@ -508,7 +659,12 @@ pub(crate) fn run(root: &Path, args: &[String]) -> Result<bool> {
         return Ok(true);
     }
     if options.here {
-        return run_here(root, &options.suites, options.package_release);
+        return run_here(
+            root,
+            &options.suites,
+            options.package_release,
+            &options.ui_flows,
+        );
     }
     let engine = match options.engine {
         Some(engine) => engine,
@@ -530,6 +686,7 @@ pub(crate) fn run(root: &Path, args: &[String]) -> Result<bool> {
                 distro,
                 &options.suites,
                 options.package_release,
+                &options.ui_flows,
                 options.cache_dir.as_deref(),
             )?;
         let seconds = started.elapsed().as_secs();
@@ -558,10 +715,19 @@ fn list() {
     for distro in Distro::ALL {
         eprintln!("  {}", distro.name());
     }
+    eprintln!("UI flows of the ui suite (default: all, in this order):");
+    for flow in Flow::ALL {
+        eprintln!("  {:<8} {} ({})", flow.name, flow.about, flow.config);
+    }
 }
 
 /// Runs the suites on this machine, stopping at the first failure.
-fn run_here(root: &Path, suites: &[Suite], package_release: Option<u32>) -> Result<bool> {
+fn run_here(
+    root: &Path,
+    suites: &[Suite],
+    package_release: Option<u32>,
+    flows: &[Flow],
+) -> Result<bool> {
     if suites.iter().any(|suite| suite.needs_node_modules()) {
         eprintln!("==> pnpm install --frozen-lockfile");
         if !Step::pnpm(&["install", "--frozen-lockfile"]).run(root)? {
@@ -569,7 +735,7 @@ fn run_here(root: &Path, suites: &[Suite], package_release: Option<u32>) -> Resu
         }
     }
     for &suite in suites {
-        for step in suite.steps(package_release) {
+        for step in suite.steps(package_release, flows) {
             eprintln!("==> [{}] {step}", suite.name());
             if !step.run(root)? {
                 eprintln!("==> FAILED: [{}] {step}", suite.name());
@@ -725,16 +891,23 @@ fn run_in_container(
     distro: Distro,
     suites: &[Suite],
     package_release: Option<u32>,
+    flows: &[Flow],
     cache_dir: Option<&Path>,
 ) -> Result<bool> {
     let names: Vec<&str> = suites.iter().map(|suite| suite.name()).collect();
+    // Only a choice of flows is passed on; the default is every flow.
+    let flows: Vec<&str> = if suites.contains(&Suite::Ui) && flows != Flow::ALL {
+        flows.iter().map(|flow| flow.name).collect()
+    } else {
+        Vec::new()
+    };
     // The source is mounted read-only and copied into the container, so the
     // host's tree is never written to. In a git checkout the copy is the
     // list of files git knows about, given on standard input, so ignored
     // files (build output, generated files) stay out; otherwise the whole
     // tree is copied without the build output.
     let files = crate::headers::git_files(root);
-    let script = copy_script(files.is_some(), &names, package_release);
+    let script = copy_script(files.is_some(), &names, package_release, &flows);
     let source = root
         .to_str()
         .context("the repository path is not valid UTF-8")?;
@@ -778,7 +951,12 @@ fn run_in_container(
 
 /// The shell script run in each container: copy the source into `/work`,
 /// then run the suites there.
-fn copy_script(from_list: bool, suites: &[&str], package_release: Option<u32>) -> String {
+fn copy_script(
+    from_list: bool,
+    suites: &[&str],
+    package_release: Option<u32>,
+    flows: &[&str],
+) -> String {
     let copy = if from_list {
         "tar -C /src --null --files-from=- -cf - | tar -C /work -xf -"
     } else {
@@ -788,8 +966,13 @@ fn copy_script(from_list: bool, suites: &[&str], package_release: Option<u32>) -
     let release = package_release
         .map(|release| format!(" --package-release {release}"))
         .unwrap_or_default();
+    let flows = if flows.is_empty() {
+        String::new()
+    } else {
+        format!(" --ui-flows {}", flows.join(","))
+    };
     format!(
-        "set -e; {copy}; exec cargo xtask ci --here --suite {}{release} </dev/null",
+        "set -e; {copy}; exec cargo xtask ci --here --suite {}{release}{flows} </dev/null",
         suites.join(",")
     )
 }
@@ -809,8 +992,8 @@ mod tests {
     use std::path::PathBuf;
 
     use super::{
-        CLI_FILES, CLI_FILES_DIR, Distro, Engine, Options, Pins, Step, Suite, cache_volumes,
-        copy_script, package_config,
+        CLI_FILES, CLI_FILES_DIR, Distro, Engine, FLOW_ENV_CLEARED, Flow, Options, Pins, Step,
+        Suite, cache_volumes, copy_script, package_config,
     };
 
     fn parse(args: &[&str]) -> anyhow::Result<Options> {
@@ -823,7 +1006,71 @@ mod tests {
         assert_eq!(options.suites, Suite::DEFAULT);
         assert_eq!(options.distros, Distro::ALL);
         assert_eq!(options.engine, None);
+        assert_eq!(options.ui_flows, Flow::ALL);
         assert!(!options.here);
+    }
+
+    #[test]
+    fn ui_flows_can_be_chosen() {
+        let options = parse(&[
+            "--suite",
+            "ui",
+            "--ui-flows",
+            "today,list",
+            "--ui-flows=today",
+        ])
+        .unwrap();
+        let names: Vec<&str> = options.ui_flows.iter().map(|flow| flow.name).collect();
+        assert_eq!(names, ["today", "list"]);
+        let options = parse(&["--here", "--ui-flows", "bridge"]).unwrap();
+        assert_eq!(options.ui_flows, [Flow::parse("bridge").unwrap()]);
+        assert!(parse(&["--ui-flows", "nope"]).is_err());
+        assert!(parse(&["--ui-flows"]).is_err());
+        assert!(
+            parse(&["--suite", "rust", "--ui-flows", "list"]).is_err(),
+            "ui suite only"
+        );
+    }
+
+    #[test]
+    fn every_playwright_config_is_a_flow_with_its_script() {
+        let ui = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../ui");
+        let mut configs: Vec<String> = std::fs::read_dir(&ui)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+            .filter(|name| name.starts_with("playwright") && name.ends_with(".config.ts"))
+            .collect();
+        configs.sort();
+        let mut known: Vec<String> = Flow::ALL
+            .iter()
+            .map(|flow| flow.config.to_owned())
+            .collect();
+        known.sort();
+        assert_eq!(
+            configs, known,
+            "every Playwright config runs in the ui suite"
+        );
+        let package: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(ui.join("package.json")).unwrap())
+                .unwrap();
+        for flow in Flow::ALL {
+            let script = package["scripts"][format!("test:{}", flow.name)]
+                .as_str()
+                .unwrap_or_else(|| panic!("ui/package.json has no `test:{}`", flow.name));
+            assert!(
+                script == "playwright test" && flow.config == "playwright.config.ts"
+                    || script.ends_with(&format!("--config {}", flow.config)),
+                "`test:{}` runs {}",
+                flow.name,
+                flow.config
+            );
+        }
+        assert!(FLOW_ENV_CLEARED.contains(&"GK_BRIDGE_WORKSPACE"));
+        let today = Flow::parse("today").unwrap();
+        assert_eq!(
+            today.output(std::path::Path::new("/work")),
+            std::path::Path::new("/work/target/playwright/today")
+        );
     }
 
     #[test]
@@ -959,13 +1206,13 @@ mod tests {
         assert_eq!(config["bundle"]["linux"]["rpm"]["release"], "3");
 
         let steps: Vec<String> = Suite::Package
-            .steps(Some(3))
+            .steps(Some(3), &Flow::ALL)
             .iter()
             .map(ToString::to_string)
             .collect();
         assert!(steps[0].starts_with("cargo build --package gk-cli"));
         assert!(steps[0].ends_with("--profile dist"));
-        assert_eq!(Suite::Package.steps(None)[1], Step::CliFiles);
+        assert_eq!(Suite::Package.steps(None, &Flow::ALL)[1], Step::CliFiles);
         assert!(steps[2].starts_with("pnpm tauri build"));
         assert!(steps[2].contains(r#""release":"3""#));
     }
@@ -999,10 +1246,14 @@ mod tests {
     }
 
     #[test]
-    fn the_suites_check_generated_files_the_bundle_and_the_bridge_flows() {
-        assert!(Suite::Static.steps(None).contains(&Step::GenCheck));
+    fn the_suites_check_generated_files_the_bundle_and_every_flow() {
+        assert!(
+            Suite::Static
+                .steps(None, &Flow::ALL)
+                .contains(&Step::GenCheck)
+        );
         let ui: Vec<String> = Suite::Ui
-            .steps(None)
+            .steps(None, &Flow::ALL)
             .iter()
             .map(ToString::to_string)
             .collect();
@@ -1012,18 +1263,28 @@ mod tests {
             .position(|step| step == "pnpm --filter ui check:bundle")
             .unwrap();
         assert!(build < bundle, "the bundle is checked after it is built");
-        assert!(ui.contains(&"pnpm --filter ui test:bridge".to_owned()));
+        let flows = ui
+            .iter()
+            .position(|step| step.starts_with("playwright flows: flow, board, editor, bridge"))
+            .unwrap();
+        assert!(
+            bundle < flows,
+            "the flows rebuild dist/ after the bundle check"
+        );
+        assert!(ui[flows].ends_with("list, palette, today"));
         assert_eq!(Step::GenCheck.to_string(), "cargo xtask gen --check");
     }
 
     #[test]
     fn the_container_copies_the_listed_files_or_the_tree() {
-        let script = copy_script(true, &["static", "ui"], None);
+        let script = copy_script(true, &["static", "ui"], None, &[]);
         assert!(script.contains("--null --files-from=-"));
         assert!(script.ends_with("exec cargo xtask ci --here --suite static,ui </dev/null"));
-        let script = copy_script(true, &["package"], Some(2));
+        let script = copy_script(true, &["ui"], None, &["list", "today"]);
+        assert!(script.ends_with("--suite ui --ui-flows list,today </dev/null"));
+        let script = copy_script(true, &["package"], Some(2), &[]);
         assert!(script.ends_with("--suite package --package-release 2 </dev/null"));
-        let script = copy_script(false, &["rust"], None);
+        let script = copy_script(false, &["rust"], None, &[]);
         assert!(script.contains("--exclude=./target"));
         assert!(!script.contains("--files-from"));
     }
