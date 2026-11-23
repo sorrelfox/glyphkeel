@@ -17,9 +17,11 @@ export interface ShellHooks {
   setStatus: (info: StatusInfo | null) => void;
   /** What New task does on the current screen; null for the default. */
   setNewTask: (run: (() => void) | null) => void;
+  /** The task `T` starts or stops the timer on: the open or selected one; null for none. */
+  setTimerTask: (key: string | null) => void;
 }
 
-export const ShellContext = createContext<ShellHooks>({ setStatus: () => undefined, setNewTask: () => undefined });
+export const ShellContext = createContext<ShellHooks>({ setStatus: () => undefined, setNewTask: () => undefined, setTimerTask: () => undefined });
 
 /** Shows the screen's counts and selection in the status bar while it is on screen. */
 export function useStatus(info: StatusInfo): void {
@@ -48,4 +50,15 @@ export function useNewTask(run: () => void): void {
       setNewTask(null);
     };
   }, [setNewTask]);
+}
+
+/** Makes `T` start or stop the timer on task `key` while the screen is on screen; null for none. */
+export function useTimerTask(key: string | null): void {
+  const { setTimerTask } = use(ShellContext);
+  useEffect(() => {
+    setTimerTask(key);
+  }, [setTimerTask, key]);
+  useEffect(() => () => {
+    setTimerTask(null);
+  }, [setTimerTask]);
 }

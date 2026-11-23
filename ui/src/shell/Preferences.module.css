@@ -1,15 +1,91 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
    Copyright (C) 2026 Glyphkeel contributors */
 
-.body {
+/* The dialog's body holds the list of pages and the page, edge to edge. */
+.layout {
+  display: flex;
+  width: min(880px, 86vw);
+  height: 74vh;
+  margin: -16px -20px;
+}
+
+.pages {
+  display: flex;
+  flex: 0 0 224px;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px;
+}
+
+.pages > * {
+  white-space: nowrap;
+}
+
+.page {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px 28px 20px;
+  overflow: auto;
+  outline: none;
+}
+
+.group {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  width: min(640px, 84vw);
+  gap: 8px;
+}
+
+.groupTitle {
+  margin: 0;
+  padding: 0 2px;
+  font-size: inherit;
+  font-weight: 600;
+}
+
+.boxed {
+  border-radius: var(--r-l);
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+.boxed > * + * {
+  border-top: 1px solid var(--border);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--h-headerbar);
+  padding: 8px 14px;
+}
+
+.text {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 18px;
+}
+
+.text small {
+  font-size: var(--fs-small);
+  color: var(--fg-muted);
+}
+
+.control {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  max-width: 60%;
 }
 
 .select {
-  width: 220px;
+  width: 200px;
 }
 
 .select select {
@@ -22,43 +98,30 @@
   font: inherit;
 }
 
-.section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--gap);
+.number {
+  width: 72px;
 }
 
-.heading {
-  margin: 0;
+.number input {
+  text-align: right;
+}
+
+.time {
+  width: 112px;
+}
+
+.unit {
+  min-width: 40px;
+}
+
+.path {
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
   font-size: var(--fs-small);
-  font-weight: 600;
-  color: var(--fg-muted);
-}
-
-.rows {
-  display: flex;
-  flex-direction: column;
-  gap: var(--gap);
-  margin: 0;
-}
-
-.row {
-  display: grid;
-  grid-template-columns: 200px 1fr;
-  align-items: center;
-  gap: 12px;
-}
-
-.label {
-  color: var(--fg-muted);
-}
-
-.value {
-  margin: 0;
-  user-select: text;
 }
 
 .error {
   margin: 0;
+  padding: 8px 14px;
   color: var(--danger);
 }

@@ -51,6 +51,7 @@ describe("Shell", () => {
     expect(within(sheet).getByText("Show or hide the sidebar")).toBeDefined();
     expect(within(sheet).getByText("F9")).toBeDefined();
     expect(within(sheet).getByText("Ctrl K")).toBeDefined();
+    expect(within(sheet).getByText("Start or stop the timer")).toBeDefined();
   });
 
   it("doesn't take single-key shortcuts from text fields", async () => {

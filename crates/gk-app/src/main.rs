@@ -7,6 +7,7 @@
 // Release builds on Windows have no console window.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod app_settings;
 mod background;
 mod files;
 #[cfg(target_os = "linux")]
@@ -34,6 +35,7 @@ use std::sync::atomic::Ordering;
 use gk_engine::{EngineConfig, Role};
 use tauri::{AppHandle, Manager, RunEvent, WindowEvent};
 
+use crate::app_settings::AppSettings;
 use crate::background::{BackgroundMode, MainTitleBar};
 use crate::ipc::Workspace;
 use crate::start::Shown;
@@ -61,11 +63,15 @@ fn main() -> ExitCode {
     let first_links = Vec::new();
 
     let title_bar = TitleBar::from_env();
+    let app_settings = AppSettings::load();
+    let background_mode = BackgroundMode::new(app_settings.stored().background);
     let built = tauri::Builder::default()
         .manage(Shown::default())
         .manage(open_links::OpenLinks::default())
         .manage(files::Drops::default())
-        .manage(BackgroundMode::from_env())
+        .manage(background_mode)
+        .manage(background::Tray::default())
+        .manage(app_settings)
         .manage(MainTitleBar(title_bar))
         .invoke_handler(tauri::generate_handler![
             start::window_ready,
@@ -81,6 +87,9 @@ fn main() -> ExitCode {
             links::open_link,
             open_links::watch_open_links,
             task_window::open_task_window,
+            app_settings::app_settings,
+            app_settings::update_app_settings,
+            app_settings::set_ui_pref,
             quit_app
         ])
         // Attached images, by attachment ID, for the page's <img> elements.
@@ -103,18 +112,11 @@ fn main() -> ExitCode {
             // The workspace opens before the window, so the page's first
             // calls find it.
             app.manage(Arc::new(open_workspace(app.handle())));
-            // Reminders show whether or not a window is open.
-            app.state::<Arc<Workspace>>()
-                .start_reminders(notifier(app.handle()));
-            if app.state::<BackgroundMode>().enabled() {
-                match background::tray(app.handle()) {
-                    // The icon stays as long as the app keeps it.
-                    Ok(tray) => {
-                        app.manage(tray);
-                    }
-                    Err(err) => eprintln!("glyphkeel-app: no tray icon: {err}"),
-                }
-            }
+            // Reminders show whether or not a window is open, as
+            // notifications while Preferences has them on.
+            let notifier = app.state::<AppSettings>().switched(notifier(app.handle()));
+            app.state::<Arc<Workspace>>().start_reminders(notifier);
+            background::start(app.handle());
             // A task named by the first link opens with the window; the
             // others go to the page once it listens.
             let mut first_links = first_links;

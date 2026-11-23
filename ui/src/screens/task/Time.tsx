@@ -13,7 +13,7 @@ import { MenuEntries } from "../../components/ContextMenu";
 import { useToasts } from "../../components/Toasts";
 import { formatClock } from "../../data/duration";
 import { errorToast, useCall, useCommand, useOp } from "../../data/hooks";
-import { isLongRunning, useDurations, useElapsedSeconds, useTimer } from "../../data/time";
+import { isLongRunning, useDurations, useElapsedSeconds, useTimer, useTimerCommands } from "../../data/time";
 import { type Reminder, type Task, type TimeEntry } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { useDayFormat } from "../board/CardView";
@@ -248,29 +248,13 @@ export function TimeEntries({ task, readOnly }: { task: Task; readOnly: boolean 
  */
 export function TimerButton({ task, readOnly }: { task: Task; readOnly: boolean }) {
   const t = useT();
-  const toasts = useToasts();
-  const durations = useDurations();
   const settings = useOp("settings.get", {});
   const { timer, fetchedAt } = useTimer();
   const mine = timer !== undefined && timer.task.key === task.key ? timer : undefined;
   const seconds = useElapsedSeconds(mine, fetchedAt);
   const start = useCommand("timer.start");
-  const stop = useCommand("timer.stop");
   const pause = useCommand("timer.pause");
-  const stopAndLog = () => {
-    stop.mutate(
-      {},
-      {
-        onSuccess: (change) => {
-          toasts.show(
-            change.entry
-              ? { tone: "info", text: t("timer-logged", { time: durations.format(change.entry.minutes), key: change.entry.task }) }
-              : { tone: "info", text: t("timer-nothing-logged") },
-          );
-        },
-      },
-    );
-  };
+  const { stopAndLog, pending: stopping } = useTimerCommands();
   if (mine === undefined) {
     return (
       <Button className="btn" isDisabled={readOnly || start.isPending} onPress={() => { start.mutate({ key: task.key }); }}>
@@ -286,7 +270,7 @@ export function TimerButton({ task, readOnly }: { task: Task; readOnly: boolean 
       <Button
         className={classes("btn", running && "on", styles.timerButton)}
         aria-label={t(running ? "timer-running-label" : "timer-paused-label", { time: formatClock(seconds) })}
-        isDisabled={stop.isPending}
+        isDisabled={stopping}
         onPress={stopAndLog}
       >
         <Square className="ic" />

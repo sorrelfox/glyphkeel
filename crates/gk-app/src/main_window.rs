@@ -41,6 +41,9 @@ pub(crate) fn open(
         locale: start::locale_from_env(),
         task: None,
         open: first_task,
+        prefs: app
+            .try_state::<crate::app_settings::AppSettings>()
+            .map(|settings| settings.ui()),
     };
 
     let window = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("index.html".into()))

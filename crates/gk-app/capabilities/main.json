@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main-window",
-  "description": "The pages of the main window and of the task windows may run operations of the catalog through `op`, receive change events through `subscribe`, signal their first screen, check spelling in the editor, attach files the person chooses or drops (the page names the task, never a path), open or save a copy of an attached file through the system, open a web or mail address in the desktop's browser or mail program, receive in the main window the tasks of links handed to the running app, open a task in its own window, quit the app (also in background mode), set their title, and move, minimize, maximize and close their own window, for the header bar. Nothing else of Tauri's API is reachable from the page.",
+  "description": "The pages of the main window and of the task windows may run operations of the catalog through `op`, receive change events through `subscribe`, signal their first screen, check spelling in the editor, attach files the person chooses or drops (the page names the task, never a path), open or save a copy of an attached file through the system, open a web or mail address in the desktop's browser or mail program, receive in the main window the tasks of links handed to the running app, open a task in its own window, read and change the app's own settings (background mode and notifications) and keep the page's own preferences for the next start, quit the app (also in background mode), set their title, and move, minimize, maximize and close their own window, for the header bar. Nothing else of Tauri's API is reachable from the page.",
   "windows": [
     "main",
     "task-*"
@@ -20,6 +20,9 @@
     "allow-open-link",
     "allow-watch-open-links",
     "allow-open-task-window",
+    "allow-app-settings",
+    "allow-update-app-settings",
+    "allow-set-ui-pref",
     "allow-quit-app",
     "core:window:allow-set-title",
     "core:window:allow-start-dragging",

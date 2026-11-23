@@ -12,12 +12,16 @@ import { settings, workspaceInfo } from "../data/fixtures";
 import { changed, fakeEngine, rejectWith } from "../data/testing";
 import { type Settings } from "../generated/ops";
 import { I18n } from "../i18n/I18n";
-import { Preferences } from "./Preferences";
+import { Preferences, type PreferencePage } from "./Preferences";
 import { StatusBar } from "./StatusBar";
 
 afterEach(cleanup);
 
-function setUp(options: { failUpdate?: boolean; onAppearance?: (appearance: Appearance) => void } = {}) {
+afterEach(() => {
+  window.localStorage.clear();
+});
+
+function setUp(options: { failUpdate?: boolean; onAppearance?: (appearance: Appearance) => void; page?: PreferencePage } = {}) {
   const onAppearance = options.onAppearance ?? (() => undefined);
   let current: Settings = settings();
   const engine = fakeEngine({
@@ -27,8 +31,9 @@ function setUp(options: { failUpdate?: boolean; onAppearance?: (appearance: Appe
       if (options.failUpdate) {
         return rejectWith({ code: "busy", message: "Another program is writing.", hint: "Try again in a moment." });
       }
-      current = { ...current, ...(patch.week_start ? { week_start: patch.week_start } : {}) };
-      return { changed: ["week_start"], group: "g-1", settings: current };
+      const changes = Object.fromEntries(Object.entries(patch).filter(([name, value]) => name !== "clear" && value !== null));
+      current = { ...current, ...changes };
+      return { changed: Object.keys(changes), group: "g-1", settings: current };
     },
     "history.undo": () => ({ group: "g-2", op: "settings.update", target: "g-1" }),
   });
@@ -38,7 +43,7 @@ function setUp(options: { failUpdate?: boolean; onAppearance?: (appearance: Appe
         <ToastProvider>
           <DataProvider client={engine.client}>
             <StatusBar info={null} />
-            <Preferences isOpen onOpenChange={() => undefined} />
+            <Preferences isOpen onOpenChange={() => undefined} page={options.page ?? "time"} />
           </DataProvider>
         </ToastProvider>
       </I18n>
@@ -65,13 +70,38 @@ function selectedDay() {
 
 describe("the workspace in the window", () => {
   it("shows the open workspace's name and settings", async () => {
-    setUp();
+    setUp({ page: "workspace" });
     expect(await screen.findByText("Personal", { selector: "[data-testid=status-workspace] *, [data-testid=status-workspace]" })).toBeDefined();
+    const trash = await screen.findByRole("spinbutton", { name: "Keep items in the trash for" });
+    expect((trash as HTMLInputElement).value).toBe("30");
+    // Outside the desktop app the page can't know the folder.
+    expect(screen.getByText("Shown in the desktop app")).toBeDefined();
+    fireEvent.click(screen.getByRole("tab", { name: "Time" }));
     await waitFor(() => {
       expect(selectedDay()).toBe("Monday");
     });
-    // Fluent isolates the number with invisible marks.
-    expect(screen.getByText(/^\u206830\u2069 days$/u)).toBeDefined();
+  });
+
+  it("changes the working day and the timer's reminder, and keeps what is out of range", async () => {
+    const { engine } = setUp();
+    const hours = await screen.findByRole("spinbutton", { name: "Working hours per day" });
+    expect((hours as HTMLInputElement).value).toBe("8");
+    fireEvent.change(hours, { target: { value: "6" } });
+    fireEvent.blur(hours);
+    await waitFor(() => {
+      expect(engine.calls.at(-1)).toEqual({ op: "settings.update", input: { hours_per_day: 6 } });
+    });
+    const days = screen.getByRole("spinbutton", { name: "Working days per week" });
+    fireEvent.change(days, { target: { value: "9" } });
+    fireEvent.keyDown(days, { key: "Enter" });
+    expect((days as HTMLInputElement).value).toBe("5");
+    const timer = screen.getByRole("spinbutton", { name: "Remind about a running timer after" });
+    fireEvent.change(timer, { target: { value: "0" } });
+    fireEvent.keyDown(timer, { key: "Enter" });
+    await waitFor(() => {
+      expect(engine.calls.at(-1)).toEqual({ op: "settings.update", input: { timer_reminder_hours: 0 } });
+    });
+    expect(engine.calls.filter((call) => call.op === "settings.update")).toHaveLength(2);
   });
 
   it("follows a change made elsewhere, through its change event", async () => {
@@ -114,10 +144,40 @@ describe("the workspace in the window", () => {
   });
 });
 
+describe("reminders and background", () => {
+  it("keeps the app's own switches, outside the app in the page's storage", async () => {
+    setUp({ page: "reminders" });
+    const background = await screen.findByRole("switch", { name: "Keep running in the background" });
+    await waitFor(() => {
+      expect((background as HTMLInputElement).disabled).toBe(false);
+    });
+    expect((background as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(background);
+    await waitFor(() => {
+      expect((background as HTMLInputElement).checked).toBe(false);
+    });
+    const notifications = screen.getByRole("switch", { name: "Show reminders as desktop notifications" });
+    fireEvent.click(notifications);
+    await waitFor(() => {
+      expect(JSON.parse(window.localStorage.getItem("glyphkeel.app") ?? "{}")).toEqual({ background: false, notifications: false });
+    });
+  });
+
+  it("changes the time of due-date reminders", async () => {
+    const { engine } = setUp({ page: "reminders" });
+    const time = await screen.findByLabelText("Reminders for due dates at");
+    fireEvent.change(time, { target: { value: "08:30" } });
+    fireEvent.blur(time);
+    await waitFor(() => {
+      expect(engine.calls.at(-1)).toEqual({ op: "settings.update", input: { reminder_time: "08:30" } });
+    });
+  });
+});
+
 describe("the appearance", () => {
   it("changes theme and density at once on <html> and hands them over to be kept", async () => {
     const kept: Appearance[] = [];
-    setUp({ onAppearance: (appearance) => kept.push(appearance) });
+    setUp({ onAppearance: (appearance) => kept.push(appearance), page: "appearance" });
     const theme = await screen.findByRole("radiogroup", { name: "Theme" }).catch(() => screen.getByRole("group", { name: "Theme" }));
     fireEvent.click(within(theme).getByRole("radio", { name: "Slate" }));
     await waitFor(() => {

@@ -11,6 +11,7 @@ const PAGE = `/?bridge=5321&token=${token}`;
 async function openPreferences(page: Page) {
   await page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: /Preferences/ }).click();
   await expect(page.getByRole("dialog", { name: "Preferences" })).toBeVisible();
+  await page.getByRole("dialog", { name: "Preferences" }).getByRole("tab", { name: "Time" }).click();
 }
 
 function day(page: Page, name: string) {
@@ -502,4 +503,51 @@ test("time on the engine: log, edit and delete time, run the timer in two window
 
   await page.close();
   await other.close();
+});
+
+// Runs last: it changes the working day for the rest of the workspace.
+test("working time and the timer on the engine: hours per day re-format durations, T starts and stops the timer", async ({ page }) => {
+  await page.goto(PAGE);
+  await expect(page.getByTestId("status-workspace")).toHaveText("Personal");
+  await page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: "New project" }).click();
+  const dialog = page.getByRole("dialog", { name: "New project" });
+  await dialog.getByRole("textbox", { name: "Name" }).fill("Workshop");
+  await dialog.getByRole("button", { name: "Create project" }).click();
+  await expect(page.getByRole("group", { name: /Board of/ })).toBeVisible();
+  await page.keyboard.type("Sharpen the chisels");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Escape");
+  const card = page.locator("section[data-lane] [data-card]", { hasText: "Sharpen the chisels" });
+  const key = (await card.getAttribute("data-card")) ?? "";
+
+  // Twelve hours of estimate: a day and a half of eight hours.
+  await card.dblclick();
+  const panel = page.getByRole("complementary", { name: new RegExp(`^Task \\W*${key}\\W*$`) });
+  const estimate = panel.getByRole("button", { name: /Estimate\u2069?:/ });
+  await estimate.click();
+  await page.keyboard.type("12h");
+  await page.keyboard.press("Enter");
+  await expect(estimate).toHaveAccessibleName(/1d 4h/);
+
+  // Six-hour days: the same estimate is two days.
+  await openPreferences(page);
+  const preferences = page.getByRole("dialog", { name: "Preferences" });
+  const hours = preferences.getByRole("spinbutton", { name: "Working hours per day" });
+  await expect(hours).toHaveValue("8");
+  await hours.fill("6");
+  await hours.press("Enter");
+  await expect(page.getByRole("status").filter({ hasText: "Settings changed" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(preferences).toBeHidden();
+  await expect(estimate).toHaveAccessibleName(/2d/);
+
+  // T starts the timer on the open task, and T again stops it.
+  await panel.getByRole("button", { name: "Close panel" }).click();
+  await card.click();
+  await page.keyboard.press("t");
+  const chip = page.getByRole("group", { name: "Timer" });
+  await expect(chip).toHaveAttribute("data-timer-chip", key);
+  await page.keyboard.press("t");
+  await expect(chip).toBeHidden();
+  await expect(page.getByRole("status").filter({ hasText: /no time was logged|logged on/ })).toBeVisible();
 });

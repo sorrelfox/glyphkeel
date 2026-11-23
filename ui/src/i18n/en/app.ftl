@@ -75,26 +75,55 @@ action-quit = Quit
 action-today = Today
 action-all-tasks = All tasks
 action-time-report = Time report
+action-timer-toggle = Start or stop the timer
 action-gallery = Themes and components
 action-leave-gallery = Back to the app
 
 ## Preferences
 
 preferences-title = Preferences
+preferences-pages = Preference pages
+preferences-page-appearance = Appearance
+preferences-page-time = Time
+preferences-page-reminders = Reminders and background
+preferences-page-workspace = Workspace
 preferences-workspace = Workspace
 preferences-workspace-name = Name
+preferences-workspace-name-about = The name of the workspace's folder.
+preferences-workspace-location = Location
+preferences-workspace-location-unknown = Shown in the desktop app
 preferences-program-version = Program version
 preferences-schema-version = Database version
-preferences-time = Calendar and working time
+preferences-calendar = Calendar
 preferences-week-start = First day of the week
+preferences-week-start-about = For calendars, the time report and "this week" in searches.
+preferences-working-time = Working time
 preferences-hours-per-day = Working hours per day
+preferences-hours-per-day-about = How long a day is in estimates and logged time, such as 2d.
 preferences-days-per-week = Working days per week
+preferences-days-per-week-about = How long a week is, such as 1w.
+preferences-timer = Timer
+preferences-timer-reminder = Remind about a running timer after
+preferences-timer-reminder-about = A timer still running after this long gets a reminder. 0 never reminds.
+preferences-reminders = Reminders
 preferences-reminder-time = Reminders for due dates at
+preferences-reminder-time-about = The time of day a reminder on a due date comes, unless it has its own.
+preferences-notifications = Show reminders as desktop notifications
+preferences-notifications-about = When off, reminders are kept in the app's log only.
+preferences-background = Background
+preferences-run-in-background = Keep running in the background
+preferences-run-in-background-about = Closing the last window keeps Glyphkeel running for reminders and the timer, with an icon in the tray. Quit ends it.
+preferences-trash = Trash
 preferences-trash-days = Keep items in the trash for
-preferences-days =
+preferences-unit-hours =
     { $count ->
-        [one] One day
-       *[other] { $count } days
+        [one] hour
+       *[other] hours
+    }
+preferences-unit-days =
+    { $count ->
+        [one] day
+       *[other] days
     }
 weekday-monday = Monday
 weekday-saturday = Saturday
@@ -557,10 +586,14 @@ history-field-project = Project
 
 ## Preferences: appearance
 
-preferences-appearance = Appearance
 preferences-theme = Theme
 preferences-accent = Accent colour
 preferences-density = Density
+preferences-accent-about = Used for selection, focus and the main action.
+preferences-interface = Interface
+preferences-density-about = Compact fits more rows and cards on screen.
+preferences-reduce-motion = Reduce motion
+preferences-reduce-motion-about = Follows the desktop setting when off here.
 theme-system = System
 accent-system = From the desktop
 

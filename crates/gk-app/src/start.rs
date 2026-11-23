@@ -38,6 +38,10 @@ pub(crate) struct StartData {
     /// was started with.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) open: Option<String>,
+    /// The page's own preferences, kept by the app, since the web view
+    /// keeps nothing between starts.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) prefs: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
 impl StartData {
@@ -197,6 +201,7 @@ mod tests {
             locale: Some("de-DE".into()),
             task: None,
             open: None,
+            prefs: None,
         }
         .script();
         assert_eq!(
@@ -212,6 +217,7 @@ mod tests {
             locale: None,
             task: Some("TM-41".into()),
             open: None,
+            prefs: None,
         }
         .script();
         assert!(script.contains(r#""task":"TM-41""#), "{script}");

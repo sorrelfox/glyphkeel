@@ -15,6 +15,7 @@
 //! brings its window back.
 
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, PoisonError};
 
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{TrayIcon, TrayIconBuilder};
@@ -30,16 +31,59 @@ use crate::title_bar::TitleBar;
 pub(crate) struct BackgroundMode(AtomicBool);
 
 impl BackgroundMode {
-    /// On unless `GLYPHKEEL_BACKGROUND` is `0` or `off`. A setting in
-    /// Preferences replaces the variable when Preferences has it.
-    pub(crate) fn from_env() -> Self {
-        Self(AtomicBool::new(parse_switch(
-            std::env::var("GLYPHKEEL_BACKGROUND").ok().as_deref(),
-        )))
+    /// The switch in Preferences, once it has been set; until then on
+    /// unless `GLYPHKEEL_BACKGROUND` is `0` or `off`.
+    pub(crate) fn new(setting: Option<bool>) -> Self {
+        Self(AtomicBool::new(setting.unwrap_or_else(|| {
+            parse_switch(std::env::var("GLYPHKEEL_BACKGROUND").ok().as_deref())
+        })))
     }
 
     pub(crate) fn enabled(&self) -> bool {
         self.0.load(Ordering::SeqCst)
+    }
+
+    fn set(&self, on: bool) {
+        self.0.store(on, Ordering::SeqCst);
+    }
+}
+
+/// The tray icon, while background mode is on and the desktop has a tray.
+#[derive(Default)]
+pub(crate) struct Tray(Mutex<Option<TrayIcon>>);
+
+/// Puts the tray icon up when background mode is on. Call on the main thread.
+pub(crate) fn start(app: &AppHandle) {
+    if app.state::<BackgroundMode>().enabled() {
+        show_tray(app);
+    }
+}
+
+/// Switches background mode on or off while the app runs, with its tray
+/// icon. Call on the main thread.
+pub(crate) fn switch(app: &AppHandle, on: bool) {
+    app.state::<BackgroundMode>().set(on);
+    if on {
+        show_tray(app);
+    } else {
+        let tray = app.state::<Tray>();
+        let mut icon = tray.0.lock().unwrap_or_else(PoisonError::into_inner);
+        if icon.take().is_some() {
+            let _ = app.remove_tray_by_id(TRAY_ID);
+        }
+    }
+}
+
+fn show_tray(app: &AppHandle) {
+    let tray = app.state::<Tray>();
+    let mut icon = tray.0.lock().unwrap_or_else(PoisonError::into_inner);
+    if icon.is_some() {
+        return;
+    }
+    match build_tray(app) {
+        // The icon stays as long as the app keeps it.
+        Ok(built) => *icon = Some(built),
+        Err(err) => eprintln!("glyphkeel-app: no tray icon: {err}"),
     }
 }
 
@@ -64,7 +108,7 @@ const QUIT_LABEL: &str = "Quit";
 const TOOLTIP: &str = "Glyphkeel";
 
 /// Puts the app's icon in the tray, with Open and Quit.
-pub(crate) fn tray(app: &AppHandle) -> tauri::Result<TrayIcon> {
+fn build_tray(app: &AppHandle) -> tauri::Result<TrayIcon> {
     let open = MenuItem::with_id(app, OPEN_ID, OPEN_LABEL, true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, QUIT_ID, QUIT_LABEL, true, None::<&str>)?;

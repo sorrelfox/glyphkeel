@@ -9,6 +9,7 @@ import { ActionsProvider } from "../actions/ActionsProvider";
 import { useAppearance } from "../appearance/AppearanceProvider";
 import { useProject } from "../data/board";
 import { useUndo } from "../data/hooks";
+import { useTimerCommands } from "../data/time";
 import { useT } from "../i18n/I18n";
 import { appWindow } from "../ipc/window";
 import { NewProjectDialog, type NewProjectRequest } from "../screens/project/NewProjectDialog";
@@ -67,7 +68,9 @@ export function Shell({ titleBar, openGallery }: ShellProps) {
   const [settingsOf, setSettingsOf] = useState<string | null>(null);
   const [status, setStatus] = useState<StatusInfo | null>(null);
   const [newTask, setNewTask] = useState<(() => void) | null>(null);
+  const [timerTask, setTimerTask] = useState<string | null>(null);
   const { undo, redo } = useUndo();
+  const timer = useTimerCommands();
 
   const hooks = useMemo<ShellHooks>(
     () => ({
@@ -75,6 +78,7 @@ export function Shell({ titleBar, openGallery }: ShellProps) {
       setNewTask: (run) => {
         setNewTask(() => run);
       },
+      setTimerTask,
     }),
     [],
   );
@@ -93,6 +97,12 @@ export function Shell({ titleBar, openGallery }: ShellProps) {
       setPreferencesOpen(true);
     },
     newTask,
+    toggleTimer:
+      timerTask === null
+        ? null
+        : () => {
+            timer.toggle(timerTask);
+          },
     undo,
     redo,
     openGallery,

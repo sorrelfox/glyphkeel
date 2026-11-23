@@ -1,16 +1,32 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
+import { invoke, isTauri } from "@tauri-apps/api/core";
+
 import { ACCENTS, DEFAULT_APPEARANCE, DENSITIES, THEMES, type Appearance } from "../appearance/appearance";
 
 /**
  * Personal settings of this window that aren't workspace data: the
- * appearance, the sidebar's open projects and the board's card size. They live in the web view's
- * storage, behind this one module, until the app keeps them in its own
- * settings file. Storage that is missing or full is not an error: the
+ * appearance, the sidebar's closed projects and the board's card size. The
+ * web view keeps nothing between starts, so in the app they live in the
+ * app's settings file: the app hands them over before the page's first
+ * frame (so the theme doesn't flash) and keeps every change. A plain
+ * browser (the development bridge, the sample data, tests) keeps them in
+ * its own storage. Storage that is missing or full is not an error: the
  * defaults apply.
  */
 const PREFIX = "glyphkeel.";
+
+/** The preferences the app handed over, while the page runs in the app. */
+let kept: Map<string, unknown> | null = null;
+
+function fromApp(): Map<string, unknown> | null {
+  if (kept === null && typeof window !== "undefined" && isTauri()) {
+    const given = window.__GLYPHKEEL_START__?.prefs;
+    kept = new Map(typeof given === "object" && given !== null ? Object.entries(given as Record<string, unknown>) : []);
+  }
+  return kept;
+}
 
 function storage(): Storage | null {
   try {
@@ -21,6 +37,10 @@ function storage(): Storage | null {
 }
 
 export function readPref(name: string): unknown {
+  const app = fromApp();
+  if (app) {
+    return app.get(name);
+  }
   try {
     const text = storage()?.getItem(PREFIX + name);
     return text == null ? undefined : (JSON.parse(text) as unknown);
@@ -30,6 +50,13 @@ export function readPref(name: string): unknown {
 }
 
 export function writePref(name: string, value: unknown): void {
+  const app = fromApp();
+  if (app) {
+    app.set(name, value);
+    // The app keeps it for the next start; if it can't, the setting lasts until the window closes.
+    invoke("set_ui_pref", { name, value }).catch(() => undefined);
+    return;
+  }
   try {
     storage()?.setItem(PREFIX + name, JSON.stringify(value));
   } catch {

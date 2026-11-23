@@ -99,6 +99,27 @@ describe("the board", () => {
     expect(status()).toContain("In progress");
   });
 
+  it("starts and stops the timer with T on the selected card, and not from a text field", async () => {
+    const transport = await renderBoard();
+    const key = cardsIn("To do")[0] ?? "";
+    const card = document.querySelector<HTMLElement>(`[data-card="${key}"]`);
+    act(() => {
+      card?.focus();
+    });
+    const field = document.body.appendChild(document.createElement("input"));
+    fireEvent.keyDown(field, { key: "t" });
+    field.remove();
+    expect(transport.workspace.call("timer.get", {}).output).toEqual({});
+    fireEvent.keyDown(card ?? document.body, { key: "t" });
+    const chip = await screen.findByRole("group", { name: "Timer" });
+    expect(chip.getAttribute("data-timer-chip")).toBe(key);
+    fireEvent.keyDown(card ?? document.body, { key: "t" });
+    await waitFor(() => {
+      expect(screen.queryByRole("group", { name: "Timer" })).toBeNull();
+    });
+    expect(transport.workspace.call("timer.get", {}).output).toEqual({});
+  });
+
   it("opens the task panel with Enter and changes the priority there", async () => {
     await renderBoard();
     const key = cardsIn("To do")[0] ?? "";

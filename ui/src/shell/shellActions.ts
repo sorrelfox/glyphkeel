@@ -14,6 +14,8 @@ export interface ShellCommands {
   openPreferences: () => void;
   /** New task on the current screen; null where there is nowhere to put one. */
   newTask: (() => void) | null;
+  /** Starts or stops the timer on the open or selected task; null without one. */
+  toggleTimer: (() => void) | null;
   undo: () => void;
   redo: () => void;
   /** Opens the development gallery; absent in release builds. */
@@ -39,6 +41,7 @@ export function shellActions(commands: ShellCommands): Action[] {
     action("focus.nextRegion", "action-next-region", "window", () => { focusRegion(1); }),
     action("focus.previousRegion", "action-previous-region", "window", () => { focusRegion(-1); }),
     action("task.new", "action-new-task", "tasks", commands.newTask ?? nothing, commands.newTask ? {} : UNAVAILABLE),
+    action("timer.toggle", "action-timer-toggle", "tasks", commands.toggleTimer ?? nothing, commands.toggleTimer ? {} : UNAVAILABLE),
     // Inside a text field, the field's own undo comes first.
     action("app.undo", "action-undo", "app", commands.undo, { inText: false }),
     action("app.redo", "action-redo", "app", commands.redo, { inText: false }),

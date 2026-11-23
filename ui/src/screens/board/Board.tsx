@@ -27,7 +27,7 @@ import { cardsOf, columnsOf, useBoard, useCreateTask, useLayout, useMoveTask, us
 import { PRIORITIES, SORT_MODES, type Board as BoardData, type BoardLayout, type Card, type CardSize, type Place, type Project } from "../../data/catalog";
 import { loadCardSize, saveCardSize } from "../../prefs/store";
 import { useT } from "../../i18n/I18n";
-import { useNewTask, useStatus } from "../../shell/context";
+import { useNewTask, useStatus, useTimerTask } from "../../shell/context";
 import { CardView } from "./CardView";
 import { indexCoordinates, pointerThenCenter, step } from "./dnd";
 import { CollapsedLane, Lane, type CardHandlers } from "./Lane";
@@ -365,6 +365,8 @@ function LoadedBoard({ project, layout, board, openTask, now }: LoadedBoardProps
     const open = view.lanes.filter((lane) => !lane.collapsed);
     return open.find((lane) => lane.column.id === selectedColumn)?.column.id ?? open.find((lane) => lane.column.category === "todo")?.column.id ?? open[0]?.column.id ?? null;
   };
+  // `T` times the task open in the panel, or else the selected card.
+  useTimerTask(readOnly ? null : (openTask ?? selected));
   useNewTask(() => {
     if (!readOnly) {
       setAdding(newTaskColumn());
