@@ -10,6 +10,12 @@ fn main() {
         "subscribe",
         "spell_check",
         "spell_suggest",
+        "attach_files",
+        "watch_drops",
+        "attach_drop",
+        "open_file",
+        "save_file",
+        "open_task_window",
     ]);
     if let Err(err) = tauri_build::try_build(tauri_build::Attributes::new().app_manifest(manifest))
     {

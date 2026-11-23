@@ -139,3 +139,82 @@ test("a project's board on the engine: create a project and a task, drag the tas
   await newStatus.press("Enter");
   await expect(names).toHaveText(["Backlog", "To do", "In progress", "Review", "Done", "Waiting"]);
 });
+
+// A tiny PNG: one transparent pixel.
+const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
+
+test("task details on the engine: a subtask, a link, a comment and an attachment", async ({ page }) => {
+  await page.goto(PAGE);
+  await expect(page.getByTestId("status-workspace")).toHaveText("Personal");
+  await page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: "New project" }).click();
+  const dialog = page.getByRole("dialog", { name: "New project" });
+  await dialog.getByRole("textbox", { name: "Name" }).fill("Kitchen");
+  await dialog.getByRole("button", { name: "Create project" }).click();
+  await expect(page.getByRole("group", { name: /Board of/ })).toBeVisible();
+  await page.keyboard.type("Paint the walls");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("Buy paint");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Escape");
+  const cards = lane(page, "Backlog").locator("[data-card]");
+  await expect(cards).toHaveCount(2);
+  const walls = (await cards.filter({ hasText: "Paint the walls" }).getAttribute("data-card")) ?? "";
+  const paint = (await cards.filter({ hasText: "Buy paint" }).getAttribute("data-card")) ?? "";
+
+  await page.locator(`[data-card="${walls}"]`).dblclick();
+  const panel = page.getByRole("complementary", { name: /^Task / });
+  await expect(panel).toHaveAccessibleName(new RegExp(walls));
+
+  // A subtask, closed from its checkbox.
+  const subtasks = panel.getByRole("region", { name: "Subtasks" });
+  await subtasks.getByRole("button", { name: "Add subtask" }).click();
+  await subtasks.getByRole("textbox", { name: "New subtask" }).fill("Tape the edges");
+  await subtasks.getByRole("textbox", { name: "New subtask" }).press("Enter");
+  const box = subtasks.getByRole("checkbox", { name: /^Close / });
+  await expect(box).toBeVisible();
+  await box.click();
+  await expect(subtasks.getByRole("checkbox", { name: /^Reopen / })).toBeChecked();
+  await expect(subtasks.getByRole("img", { name: /subtasks done/ })).toBeVisible();
+  await expect(subtasks).toContainText("1/1");
+
+  // A link: the walls wait for the paint; both cards and the panel say so.
+  const links = panel.getByRole("region", { name: "Links" });
+  await links.getByRole("button", { name: "Add link" }).click();
+  await links.getByRole("combobox", { name: "Kind of link" }).selectOption("blocked_by");
+  await links.getByRole("textbox", { name: "Task key" }).fill(paint);
+  await links.getByRole("textbox", { name: "Task key" }).press("Enter");
+  await expect(links.getByRole("button", { name: new RegExp(`^\\W*Blocked by.*${paint}.*Buy paint`) })).toBeVisible();
+  await expect(panel.getByRole("note", { name: new RegExp(`Blocked by.*${paint}`) })).toBeVisible();
+  await expect(page.locator(`[data-card="${walls}"]`).getByText("Blocked")).toBeVisible();
+
+  // A comment, sent with Ctrl+Enter, then edited: the earlier text stays viewable.
+  const composer = panel.getByRole("textbox", { name: "Write a comment" });
+  await composer.fill("Two coats should do.");
+  await composer.press("Control+Enter");
+  const comment = panel.getByRole("article", { name: /Comment by/ });
+  await expect(comment).toContainText("Two coats should do.");
+  await comment.getByRole("button", { name: "Comment" }).click();
+  await page.getByRole("menuitem", { name: "Edit" }).click();
+  await comment.getByRole("textbox", { name: "Comment text" }).fill("Three coats, to be safe.");
+  await comment.getByRole("textbox", { name: "Comment text" }).press("Control+Enter");
+  await comment.getByRole("button", { name: /edited/ }).click();
+  await expect(comment.getByRole("list", { name: "Earlier versions" })).toContainText("Two coats should do.");
+
+  // An attachment from the file field; the image shows from its content.
+  const files = panel.getByRole("region", { name: "Files" });
+  await files.locator("input[type=file]").setInputFiles({ name: "swatch.png", mimeType: "image/png", buffer: PNG });
+  await expect(files.getByRole("img", { name: "swatch.png" })).toBeVisible();
+  await expect(files.getByText("swatch.png")).toBeVisible();
+
+  // The card counts the comment and the file.
+  const card = page.locator(`[data-card="${walls}"]`);
+  await expect(card.getByLabel(/1 comment/)).toBeVisible();
+  await expect(card.getByLabel(/1 file/)).toBeVisible();
+
+  // History lists what happened to the task.
+  await panel.getByRole("tab", { name: /History/ }).click();
+  const history = panel.getByRole("list", { name: "History" });
+  await expect(history).toContainText("Comment edited");
+  await expect(history).toContainText("File attached");
+  await expect(history).toContainText("Link added");
+});

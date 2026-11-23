@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { CalendarClock, CalendarDays, Clock, Hourglass, SquareCheck, Workflow } from "lucide-react";
+import { Bot, CalendarClock, CalendarDays, Clock, Hourglass, MessageSquare, Paperclip, SquareCheck, Timer, Workflow } from "lucide-react";
 import { forwardRef, type CSSProperties, type HTMLAttributes } from "react";
 import { useLocale } from "react-aria-components";
 
@@ -33,9 +33,11 @@ export function useDayFormat(): (day: string) => string {
 }
 
 /**
- * A task on the board. Rows, each left out when empty: type, key and
- * priority; the title; labels; start and due dates, checklist, subtasks,
- * estimate and days in the column, as the personal card fields choose.
+ * A task on the board. Rows, each left out when empty: type, key, Blocked,
+ * an agent's claim and priority; the title; labels; start and due dates,
+ * checklist, subtasks, estimate and days in the column, as the personal
+ * card fields choose; then comments, files and time spent, when there are
+ * any.
  */
 export const CardView = forwardRef<HTMLElement, CardViewProps>(function CardView(
   { card, fields, compact, today, selected = false, ghost = false, lifted = false, className, ...rest },
@@ -84,6 +86,25 @@ export const CardView = forwardRef<HTMLElement, CardViewProps>(function CardView
         {days}
       </span>
     ),
+    // The engine's card fields don't list these: they show whenever there are any.
+    !compact && card.comment_count > 0 && (
+      <span key="comments" className="meta" aria-label={t("card-comments", { count: card.comment_count })}>
+        <MessageSquare className="ic" />
+        {card.comment_count}
+      </span>
+    ),
+    !compact && card.file_count > 0 && (
+      <span key="files" className="meta" aria-label={t("card-files", { count: card.file_count })}>
+        <Paperclip className="ic" />
+        {card.file_count}
+      </span>
+    ),
+    !compact && card.spent_minutes > 0 && (
+      <span key="spent" className="meta" aria-label={t("card-spent", { time: formatMinutes(card.spent_minutes) })}>
+        <Timer className="ic" />
+        {formatMinutes(card.spent_minutes)}
+      </span>
+    ),
   ].filter(Boolean);
   const labels = show("labels") ? card.labels : [];
 
@@ -98,7 +119,13 @@ export const CardView = forwardRef<HTMLElement, CardViewProps>(function CardView
       <div className={styles.cardTop}>
         <TypeGlyph glyph={card.type.glyph} label={card.type.name} />
         <span className="key">{card.key}</span>
+        {card.blocked && !closed && <span className="chip hue-red">{t("card-blocked")}</span>}
         <div className="grow" />
+        {card.claim && (
+          <span className="meta" role="img" aria-label={t("card-claimed-label", { agent: card.claim.agent })}>
+            <Bot className="ic" />
+          </span>
+        )}
         <PriorityGlyph priority={card.priority} label={t(`priority-${card.priority}`)} />
       </div>
       <div className={classes("card-title", styles.cardTitle, compact && styles.compactTitle)}>{card.title}</div>

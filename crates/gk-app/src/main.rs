@@ -7,6 +7,7 @@
 // Release builds on Windows have no console window.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod files;
 #[cfg(target_os = "linux")]
 mod instance;
 mod ipc;
@@ -14,6 +15,7 @@ mod main_window;
 mod navigation;
 mod spell;
 mod start;
+mod task_window;
 mod title_bar;
 #[cfg(target_os = "linux")]
 mod webkit;
@@ -61,30 +63,70 @@ fn main() -> ExitCode {
     let built = tauri::Builder::default()
         .manage(Shown::default())
         .manage(PendingLinks(Mutex::new(first_links)))
+        .manage(files::Drops::default())
         .invoke_handler(tauri::generate_handler![
             start::window_ready,
             ipc::op,
             ipc::subscribe,
             spell::spell_check,
-            spell::spell_suggest
+            spell::spell_suggest,
+            files::attach_files,
+            files::watch_drops,
+            files::attach_drop,
+            files::open_file,
+            files::save_file,
+            task_window::open_task_window
         ])
+        // Attached images, by attachment ID, for the page's <img> elements.
+        .register_asynchronous_uri_scheme_protocol(files::SCHEME, |ctx, request, responder| {
+            let app = ctx.app_handle().clone();
+            let method = request.method().as_str().to_owned();
+            let path = request.uri().path().to_owned();
+            tauri::async_runtime::spawn_blocking(move || {
+                let response = match app.try_state::<Arc<Workspace>>() {
+                    Some(workspace) => files::respond(&workspace, &method, &path),
+                    None => tauri::http::Response::builder()
+                        .status(tauri::http::StatusCode::SERVICE_UNAVAILABLE)
+                        .body(Vec::new())
+                        .unwrap_or_default(),
+                };
+                responder.respond(response);
+            });
+        })
         .setup(move |app| {
             // The workspace opens before the window, so the page's first
             // calls find it.
             app.manage(Arc::new(open_workspace(app.handle())));
-            main_window::open(app.handle(), title_bar)?;
+            // A task named by the first link opens with the window; the
+            // links that arrive later wait for the part of the app that
+            // handles them.
+            let first_task = app
+                .state::<PendingLinks>()
+                .0
+                .lock()
+                .ok()
+                .and_then(|mut links| {
+                    let at = links.iter().position(|link| start::task_in_link(link).is_some())?;
+                    start::task_in_link(&links.remove(at))
+                });
+            main_window::open(app.handle(), title_bar, first_task)?;
             #[cfg(target_os = "linux")]
             if let Some(activations) = activations {
                 forward_activations(app.handle().clone(), activations);
             }
             Ok(())
         })
-        .on_window_event(|window, event| {
-            if matches!(event, WindowEvent::Destroyed)
-                && let Some(workspace) = window.try_state::<Arc<Workspace>>()
-            {
-                workspace.unsubscribe(window.label());
+        .on_window_event(|window, event| match event {
+            WindowEvent::Destroyed => {
+                if let Some(workspace) = window.try_state::<Arc<Workspace>>() {
+                    workspace.unsubscribe(window.label());
+                }
+                if let Some(drops) = window.try_state::<files::Drops>() {
+                    drops.forget(window.label());
+                }
             }
+            WindowEvent::DragDrop(drop) => files::on_drag_drop(window, drop),
+            _ => {}
         })
         .build(tauri::generate_context!());
     match built {

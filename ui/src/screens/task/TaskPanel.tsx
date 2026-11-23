@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { ChevronDown, ChevronRight, Link2, Plus, X } from "lucide-react";
+import { AppWindow, Bot, ChevronDown, ChevronRight, Link2, MoreHorizontal, Plus, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Button, Menu, MenuItem, MenuTrigger, Popover, useLocale, type Selection } from "react-aria-components";
 
@@ -9,36 +9,51 @@ import { classes } from "../../classes";
 import { MenuEntries } from "../../components/ContextMenu";
 import { PriorityGlyph, TypeGlyph } from "../../components/Glyphs";
 import { useToasts } from "../../components/Toasts";
-import { useProject, useTask, useUpdateTask } from "../../data/board";
+import { useProject, useUpdateTask } from "../../data/board";
 import { PRIORITIES, type Project, type Task, type TaskField, type TaskUpdateInput } from "../../data/catalog";
-import { errorToast, useCall, useOp } from "../../data/hooks";
+import { errorToast, useCall, useCommand, useOp } from "../../data/hooks";
+import { useTaskDetails } from "../../data/task";
 import { useT } from "../../i18n/I18n";
+import { openTaskWindow } from "../../ipc/taskWindow";
 import { useDayFormat } from "../board/CardView";
 import { dueState, formatMinutes, isoDay, parseDuration } from "../board/model";
+import { ActivityTabs, Composer, useMomentFormat } from "./Activity";
+import { FilesSection, useFileDrop } from "./Files";
+import { LinksSection, SubtasksSection } from "./Sections";
 import styles from "./TaskPanel.module.css";
 
 interface TaskPanelProps {
   taskKey: string;
   onClose: () => void;
   onOpenTask: (key: string) => void;
+  /** Docked beside the board, or filling a task window of its own. */
+  mode?: "docked" | "window";
+  /** Shows the task window's screen in this page, where there are no other windows. */
+  onOpenWindow?: (key: string) => void;
 }
 
 /**
  * The task panel, docked on the right of the board, which stays live beside
- * it. Every field edits in place through the engine. The description is
- * plain text until the Markdown editor arrives.
+ * it, or filling a task window. Every field edits in place through the
+ * engine. The description and comments are plain text until the Markdown
+ * reader and editor arrive. Files dropped on the panel are attached to the
+ * task.
  */
-export function TaskPanel({ taskKey, onClose, onOpenTask }: TaskPanelProps) {
+export function TaskPanel({ taskKey, onClose, onOpenTask, mode = "docked", onOpenWindow }: TaskPanelProps) {
   const t = useT();
-  const task = useTask(taskKey);
+  const task = useTaskDetails(taskKey);
   const loaded = task.data?.items[0];
   const project = useProject(loaded?.project);
+  const readOnly = project.data?.state === "archived";
+  const drop = useFileDrop(taskKey, loaded !== undefined && !readOnly);
   return (
     <aside
-      className={styles.panel}
+      className={classes(styles.panel, mode === "window" && styles.window, drop.over && styles.dropping)}
       aria-label={t("panel-label", { key: taskKey })}
       data-region="panel"
+      data-drop-task={taskKey}
       tabIndex={-1}
+      {...drop.handlers}
       onKeyDown={(event) => {
         const target = event.target as HTMLElement;
         if (event.key === "Escape" && !event.defaultPrevented && !target.closest("input, textarea, select")) {
@@ -55,18 +70,53 @@ export function TaskPanel({ taskKey, onClose, onOpenTask }: TaskPanelProps) {
           </Button>
         </div>
       )}
-      {loaded && project.data && <Loaded task={loaded} project={project.data} onClose={onClose} onOpenTask={onOpenTask} />}
+      {loaded && project.data && (
+        <Loaded task={loaded} project={project.data} mode={mode} onClose={onClose} onOpenTask={onOpenTask} onOpenWindow={onOpenWindow} />
+      )}
+      {drop.over && (
+        <div className={styles.dropNote} role="status">
+          {t("files-drop-here", { key: taskKey })}
+        </div>
+      )}
     </aside>
   );
 }
 
-function Loaded({ task, project, onClose, onOpenTask }: { task: Task; project: Project; onClose: () => void; onOpenTask: (key: string) => void }) {
+function Loaded({
+  task,
+  project,
+  mode,
+  onClose,
+  onOpenTask,
+  onOpenWindow,
+}: {
+  task: Task;
+  project: Project;
+  mode: "docked" | "window";
+  onClose: () => void;
+  onOpenTask: (key: string) => void;
+  onOpenWindow: ((key: string) => void) | undefined;
+}) {
   const t = useT();
   const toasts = useToasts();
   const update = useUpdateTask();
   const call = useCall();
   const settings = useOp("settings.get", {});
+  const moment = useMomentFormat();
+  const duplicate = useCommand("task.duplicate", { undoable: t("panel-duplicated") });
+  const release = useCommand("task.release");
   const readOnly = project.state === "archived";
+  const blockers = (task.links ?? []).filter((link) => link.kind === "blocked_by" && !link.task.closed).map((link) => link.task.key);
+  const copy = (withoutSubtasks: boolean) => {
+    duplicate.mutate(
+      { key: task.key, without_subtasks: withoutSubtasks, client_request_id: crypto.randomUUID() },
+      {
+        onSuccess: (change) => {
+          onOpenTask(change.task.key);
+        },
+      },
+    );
+  };
   const patch = (change: Omit<TaskUpdateInput, "key">) => {
     update.mutate({ key: task.key, ...change });
   };
@@ -110,7 +160,40 @@ function Loaded({ task, project, onClose, onOpenTask }: { task: Task; project: P
         >
           <Link2 className="ic" />
         </Button>
-        <Button className="btn flat icon" aria-label={t("panel-close")} onPress={onClose}>
+        {mode === "docked" && (
+          <Button
+            className="btn flat icon"
+            aria-label={t("panel-own-window")}
+            onPress={() => {
+              openTaskWindow(task.key, () => onOpenWindow?.(task.key)).catch((error: unknown) => {
+                toasts.show(errorToast(t, error));
+              });
+            }}
+          >
+            <AppWindow className="ic" />
+          </Button>
+        )}
+        <MenuTrigger>
+          <Button className="btn flat icon" aria-label={t("panel-menu")}>
+            <MoreHorizontal className="ic" />
+          </Button>
+          <Popover className="pop menuPopover" placement="bottom end" offset={4}>
+            <Menu className="menu" aria-label={t("panel-menu")}>
+              <MenuEntries
+                entries={[
+                  { id: "duplicate", label: t("panel-duplicate"), disabled: readOnly, run: () => { copy(false); } },
+                  ...(task.subtask_count.total > 0
+                    ? [{ id: "duplicate-alone", label: t("panel-duplicate-alone"), disabled: readOnly, run: () => { copy(true); } }]
+                    : []),
+                  ...(task.claim
+                    ? [{ id: "release", label: t("panel-release"), disabled: readOnly, run: () => { release.mutate({ key: task.key, override_claim: true }); } }]
+                    : []),
+                ]}
+              />
+            </Menu>
+          </Popover>
+        </MenuTrigger>
+        <Button className="btn flat icon" aria-label={t(mode === "window" ? "panel-close-window" : "panel-close")} onPress={onClose}>
           <X className="ic" />
         </Button>
       </div>
@@ -139,6 +222,17 @@ function Loaded({ task, project, onClose, onOpenTask }: { task: Task; project: P
               </Menu>
             </Popover>
           </MenuTrigger>
+          {task.blocked && (
+            <span className="chip hue-red" role="note" aria-label={t("panel-blocked-by", { keys: blockers.join(", "), count: blockers.length })}>
+              {t("card-blocked")}
+            </span>
+          )}
+          {task.claim && (
+            <span className={classes("chip hue-purple", styles.claim)} role="note" aria-label={t("panel-claimed", { agent: task.claim.agent, time: moment(task.claim.until) })}>
+              <Bot className="ic s" />
+              {t("card-claimed", { agent: task.claim.agent })}
+            </span>
+          )}
         </div>
 
         <div className={styles.props}>
@@ -231,7 +325,12 @@ function Loaded({ task, project, onClose, onOpenTask }: { task: Task; project: P
 
         <Description task={task} readOnly={readOnly} onSave={(description) => { patch({ description }); }} />
 
+        <SubtasksSection task={task} project={project} readOnly={readOnly} onOpenTask={onOpenTask} />
+        <LinksSection task={task} project={project} readOnly={readOnly} onOpenTask={onOpenTask} />
+        <FilesSection task={task.key} files={task.files ?? []} readOnly={readOnly} />
+        <ActivityTabs task={task} project={project} readOnly={readOnly} />
       </div>
+      <Composer taskKey={task.key} readOnly={readOnly} />
     </>
   );
 }

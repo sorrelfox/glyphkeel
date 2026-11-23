@@ -357,6 +357,20 @@ card-open = Open
 card-move-to = Move to
 card-priority = Priority
 card-copy-key = Copy key
+card-blocked = Blocked
+card-claimed = { $agent }
+card-claimed-label = Claimed by { $agent }
+card-comments =
+    { $count ->
+        [one] 1 comment
+       *[other] { $count } comments
+    }
+card-files =
+    { $count ->
+        [one] 1 file
+       *[other] { $count } files
+    }
+card-spent = { $time } spent
 due-today = Today
 
 move-done = { $key } moved to { $column }
@@ -407,6 +421,135 @@ prop-left = { $time } left
 prop-over-by = over by { $time }
 prop-date-value = { $name }: { $value }
 prop-duration-placeholder = e.g. 1h 30m
+
+## The task panel's bar, sections and tabs
+
+panel-own-window = Open in its own window
+panel-close-window = Close window
+panel-menu = Task menu
+panel-duplicate = Duplicate
+panel-duplicate-alone = Duplicate without subtasks
+panel-duplicated = Task duplicated
+panel-release = Release the agent's claim
+panel-blocked-by =
+    { $count ->
+        [0] Blocked
+        [one] Blocked by { $keys }
+       *[other] Blocked by { $keys }
+    }
+panel-claimed = Claimed by { $agent } until { $time }
+task-window-missing = This task can't be shown.
+
+subtasks-title = Subtasks
+subtasks-add = Add subtask
+subtasks-new = New subtask
+subtasks-new-placeholder = Title of the subtask
+subtasks-open = Open { $key }: { $title }
+subtasks-close = Close { $key }
+subtasks-reopen = Reopen { $key }
+subtasks-menu = Subtask { $key }
+subtasks-move-up = Move up
+subtasks-move-down = Move down
+
+links-title = Links
+links-add = Add link
+links-none = No links.
+links-kind = Kind of link
+links-other = Task key
+links-other-placeholder = Key, e.g. TM-12
+links-open = { $kind } { $key }: { $title }
+links-remove = Remove link: { $kind } { $key }
+links-removed = Link removed
+relation-blocks = Blocks
+relation-blocked_by = Blocked by
+relation-relates = Relates to
+relation-duplicates = Duplicates
+relation-duplicated_by = Duplicated by
+relation-clones = Copy of
+relation-cloned_by = Copied as
+relation-subtask_of = Subtask of
+relation-parent_of = Parent of
+
+files-title = Files
+files-attach = Attach files
+files-none = No files. Drop files here to attach them.
+files-attached =
+    { $count ->
+        [one] File attached
+       *[other] { $count } files attached
+    }
+files-attach-failed = { $name } wasn't attached
+files-drop-here = Drop to attach to { $key }
+files-open = Open
+files-open-named = Open { $name }
+files-save = Save a copy…
+files-remove = Remove
+files-removed = Removed { $name }
+files-menu = File { $name }
+
+activity-tabs = Comments and history
+comments-title = Comments
+comments-none = No comments yet.
+comment-me = Me
+comment-agent = Agent · { $via }
+comment-label = Comment by { $author }, { $time }
+comment-menu = Comment
+comment-edit = Edit
+comment-edit-field = Comment text
+comment-delete = Move to the trash
+comment-trashed = Comment moved to the trash
+comment-edited =
+    { $count ->
+        [one] edited · 1 earlier version
+       *[other] edited · { $count } earlier versions
+    }
+comment-earlier = Earlier versions
+comment-replaced = Replaced { $time } by { $actor }
+composer-label = Write a comment
+composer-placeholder = Write a comment. Ctrl+Enter sends.
+composer-send = Comment
+via-app = app
+via-cli = command line
+via-mcp = MCP
+
+history-title = History
+history-none = No changes recorded.
+history-by = { $actor } · { $via } · { $time }
+history-created = Created { $key }
+history-changed = { $field }: { $before } → { $after }
+history-set = { $field }: { $value }
+history-cleared = { $field } cleared
+history-description = Description changed
+history-moved = Moved in its column
+history-claimed = Claimed by { $agent }
+history-released = Claim released
+history-comment-added = Comment added
+history-comment-edited = Comment edited
+history-comment-trashed = Comment moved to the trash
+history-comment-restored = Comment restored
+history-file-attached = File attached: { $name }
+history-file-trashed = File removed
+history-file-restored = File restored
+history-link-added = Link added: { $kind } { $key }
+history-link-removed = Link removed: { $kind } { $key }
+history-another-task = another task
+history-revert = Revert the change of { $time }
+history-reverted-toast = Change reverted
+history-not-reverted = The change wasn't reverted
+history-was-reverted = reverted
+history-field-title = Title
+history-field-description = Description
+history-field-status = Status
+history-field-type = Type
+history-field-priority = Priority
+history-field-labels = Labels
+history-field-parent = Parent
+history-field-start_date = Start
+history-field-due_date = Due
+history-field-estimate = Estimate
+history-field-progress = Progress
+history-field-rank = Place
+history-field-project = Project
 
 ## Preferences: appearance
 

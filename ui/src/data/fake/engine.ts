@@ -7,13 +7,20 @@
 // layouts, typed errors, change events and Undo.
 
 import {
+  type ActivityEntry,
+  type Attachment,
   type Board,
   type BoardLayout,
   type Card,
   type Column,
+  type Comment,
+  type CommentChange,
   type Edge,
   type EntityChange,
+  type FileChange,
   type Hue,
+  type Link,
+  type LinkKind,
   type LabelRef,
   type OpError,
   type OpId,
@@ -25,10 +32,13 @@ import {
   type SettingsPatch,
   type Task,
   type TaskChange,
+  type TaskPart,
+  type TaskRef,
   type TypeRef,
 } from "../../generated/ops";
-import { newProject, nextId } from "./seed";
-import { type FakeProject, type FakeState, type FakeTask } from "./state";
+import { decodeBase64, materialize, recordedFields, sniff } from "./details";
+import { newProject, nextId, SAMPLE_AGENT } from "./seed";
+import { type FakeComment, type FakeFile, type FakeProject, type FakeRelation, type FakeState, type FakeTask } from "./state";
 
 /** An operation failed: the engine's error, as the transports deliver it. */
 export class FakeError extends Error {
@@ -116,6 +126,12 @@ export class FakeWorkspace {
   constructor(state: FakeState, today: () => Date = () => new Date()) {
     this.state = state;
     this.today = today;
+    materialize(state, SAMPLE_AGENT, nextId);
+    // One task in progress is claimed by an agent, as agents do while they work.
+    const claimed = state.tasks.find((task) => task.closedAt === null && this.statusIn(this.projectOf(task), task.statusId).category === "in_progress");
+    if (claimed) {
+      state.claims.push({ taskId: claimed.id, agent: SAMPLE_AGENT, session: "session-1", until: new Date(today().getTime() + 45 * 60_000).toISOString() });
+    }
   }
 
   /** Runs one operation. Commands record an Undo step and return their changes. */
@@ -137,9 +153,44 @@ export class FakeWorkspace {
     }
     this.state.seq += 1;
     const group = `g-${String(this.state.seq)}`;
+    this.record(before, op, group, answer.changes);
     this.undoStack.push({ state: before, op, group });
     this.redoStack = [];
     return { output: withGroup(answer.output, group), changes: { group, seq: this.state.seq, changes: answer.changes } };
+  }
+
+  /** Adds one command's changes to the activity log. */
+  private record(before: FakeState, op: string, group: string, changes: readonly EntityChange[]): void {
+    const at = this.today().toISOString();
+    for (const change of changes) {
+      const project = this.state.projects.find((candidate) => candidate.key === change.project);
+      const entry: ActivityEntry = {
+        actor: { kind: "user", name: "You" },
+        at,
+        entity: change.entity,
+        fields: recordedFields(before, this.state, change, (task) => this.keyOf(task)),
+        group,
+        id: change.id,
+        op,
+        ...some("project", project?.id),
+        seq: this.state.seq,
+        via: "app",
+      };
+      this.state.activity.push(entry);
+    }
+  }
+
+  /** Takes back the latest command, keeping the activity log, which marks it reverted. */
+  private revertLatest(): void {
+    const step = this.undoStack.pop();
+    if (!step) {
+      return;
+    }
+    const { activity, seq } = this.state;
+    this.state = structuredClone(step.state);
+    this.state.seq = seq;
+    // The revert itself gets the next group.
+    this.state.activity = activity.map((entry) => (entry.group === step.group ? { ...entry, reverted_by: `g-${String(seq + 1)}` } : entry));
   }
 
   private undoOrRedo(op: "history.undo" | "history.redo"): FakeAnswer {
@@ -328,8 +379,9 @@ export class FakeWorkspace {
       key: this.keyOf(task),
       project: this.projectOf(task).key,
       blocked: this.blocked(task),
-      comment_count: task.comments,
-      file_count: task.files,
+      comment_count: this.liveComments(task).length,
+      file_count: this.fileCount(task),
+      ...some("claim", this.claimOf(task)),
       spent_minutes: task.spentMin,
       title: task.title,
       type: this.typeRef(task),
@@ -370,8 +422,9 @@ export class FakeWorkspace {
       spent_minutes: task.spentMin,
       checklist: this.checklist(task),
       blocked: this.blocked(task),
-      comment_count: task.comments,
-      file_count: task.files,
+      comment_count: this.liveComments(task).length,
+      file_count: this.fileCount(task),
+      ...some("claim", this.claimOf(task)),
       subtask_count: this.subtaskCount(task),
       rank: String(task.rank),
       created_at: task.createdAt,
@@ -445,6 +498,182 @@ export class FakeWorkspace {
       hidden_columns: hiddenColumns,
       hidden_tasks: hiddenTasks,
     };
+  }
+
+
+  // ---------- task details ----------
+
+  private liveComments(task: FakeTask): FakeComment[] {
+    return this.state.comments.filter((comment) => comment.taskId === task.id && comment.deletedAt === null);
+  }
+
+  /** Files of the task and of its live comments. */
+  private liveFiles(task: FakeTask): FakeFile[] {
+    const comments = new Set(this.liveComments(task).map((comment) => comment.id));
+    return this.state.files.filter((file) => file.taskId === task.id && file.deletedAt === null && (file.commentId === null || comments.has(file.commentId)));
+  }
+
+  private fileCount(task: FakeTask): number {
+    return this.liveFiles(task).length;
+  }
+
+  private claimOf(task: FakeTask) {
+    const now = this.today().toISOString();
+    const claim = this.state.claims.find((candidate) => candidate.taskId === task.id && candidate.until > now);
+    return claim && { agent: claim.agent, session: claim.session, until: claim.until };
+  }
+
+  private taskRef(task: FakeTask): TaskRef {
+    const status = this.statusIn(this.projectOf(task), task.statusId);
+    return { id: task.id, key: this.keyOf(task), title: task.title, closed: task.closedAt !== null, status: { id: status.id, name: status.name, category: status.category } };
+  }
+
+  /** Subtasks in board order: by status, then by place in the column. */
+  private subtasksOf(task: FakeTask): FakeTask[] {
+    const statuses = this.projectOf(task).statuses.map((status) => status.id);
+    return this.state.tasks
+      .filter((candidate) => candidate.parentId === task.id)
+      .sort((a, b) => statuses.indexOf(a.statusId) - statuses.indexOf(b.statusId) || a.rank - b.rank);
+  }
+
+  private linksOf(task: FakeTask): Link[] {
+    const backwards: Record<FakeRelation["kind"], LinkKind> = { blocks: "blocked_by", relates: "relates", duplicates: "duplicated_by", clones: "cloned_by" };
+    return this.state.relations.flatMap((relation) => {
+      const forward = relation.from === task.id;
+      if (!forward && relation.to !== task.id) {
+        return [];
+      }
+      const other = this.state.tasks.find((candidate) => candidate.id === (forward ? relation.to : relation.from));
+      return other ? [{ id: relation.id, kind: forward ? relation.kind : backwards[relation.kind], task: this.taskRef(other) }] : [];
+    });
+  }
+
+  private attachment(file: FakeFile): Attachment {
+    const task = this.state.tasks.find((candidate) => candidate.id === file.taskId);
+    return {
+      id: file.id,
+      name: file.name,
+      kind: file.kind,
+      mime: file.mime,
+      size: file.size,
+      sha256: `sample-${file.id}`,
+      task: task ? this.keyOf(task) : "",
+      ...some("comment", file.commentId),
+      ...some("width", file.width),
+      ...some("height", file.height),
+      added_by: { kind: "user", name: "You" },
+      created_at: file.createdAt,
+    };
+  }
+
+  private comment(comment: FakeComment, revisions: boolean): Comment {
+    const task = this.state.tasks.find((candidate) => candidate.id === comment.taskId);
+    const files = this.state.files.filter((file) => file.commentId === comment.id && file.deletedAt === null);
+    return {
+      id: comment.id,
+      task: task ? this.keyOf(task) : "",
+      author: comment.author,
+      via: comment.via,
+      body: comment.body,
+      created_at: comment.createdAt,
+      ...some("edited_at", comment.editedAt),
+      version: comment.version,
+      revision_count: comment.revisions.length,
+      ...(revisions ? { revisions: comment.revisions } : {}),
+      ...some("reply_to", comment.replyTo),
+      ...(files.length > 0 ? { files: files.map((file) => this.attachment(file)) } : {}),
+    };
+  }
+
+  private withParts(task: FakeTask, include: readonly TaskPart[] | undefined): Task {
+    const full = this.fullTask(task);
+    for (const part of include ?? []) {
+      if (part === "subtasks") {
+        full.subtasks = this.subtasksOf(task).map((sub) => this.taskRef(sub));
+      } else if (part === "links") {
+        full.links = this.linksOf(task);
+      } else if (part === "comments") {
+        full.comments = this.liveComments(task).map((comment) => this.comment(comment, false));
+      } else {
+        full.files = this.state.files.filter((file) => file.taskId === task.id && file.commentId === null && file.deletedAt === null).map((file) => this.attachment(file));
+      }
+    }
+    return full;
+  }
+
+  private liveComment(id: string): FakeComment {
+    const comment = this.state.comments.find((candidate) => candidate.id === id && candidate.deletedAt === null);
+    if (!comment) {
+      fail("not_found", `There is no comment ${id}.`);
+    }
+    return comment;
+  }
+
+  private liveFile(id: string): FakeFile {
+    const file = this.state.files.find((candidate) => candidate.id === id && candidate.deletedAt === null);
+    if (!file) {
+      fail("not_found", `There is no attached file ${id}.`);
+    }
+    return file;
+  }
+
+  private commentChange(comment: FakeComment, fields: string[]): Result<CommentChange> {
+    const task = this.state.tasks.find((candidate) => candidate.id === comment.taskId);
+    return {
+      output: { comment: this.comment(comment, false), deleted: comment.deletedAt !== null },
+      changes: [{ entity: "comment", id: comment.id, fields, ...some("project", task && this.projectOf(task).key) }],
+    };
+  }
+
+  private fileChange(file: FakeFile, fields: string[]): Result<FileChange> {
+    const task = this.state.tasks.find((candidate) => candidate.id === file.taskId);
+    return {
+      output: { file: this.attachment(file), deleted: file.deletedAt !== null },
+      changes: [{ entity: "attachment", id: file.id, fields, ...some("project", task && this.projectOf(task).key) }],
+    };
+  }
+
+  /** Whether `ancestor` is a parent, grandparent… of `task`. */
+  private isAncestor(ancestor: FakeTask, task: FakeTask): boolean {
+    const parent = this.state.tasks.find((candidate) => candidate.id === task.parentId);
+    return parent !== undefined && (parent === ancestor || this.isAncestor(ancestor, parent));
+  }
+
+  /** Copies `task` (and its subtasks) as a new task under `parent`. */
+  private copyTask(task: FakeTask, title: string, statusId: string, parentId: string | null, withSubtasks: boolean): FakeTask {
+    const project = this.projectOf(task);
+    const now = this.today().toISOString();
+    const status = this.statusIn(project, statusId);
+    const copy: FakeTask = {
+      ...structuredClone(task),
+      id: nextId("t"),
+      number: project.nextNumber,
+      title,
+      statusId,
+      parentId,
+      rank: this.rankAt(statusId, { at: "bottom" }, null),
+      spentMin: 0,
+      files: 0,
+      comments: 0,
+      createdAt: now,
+      editedAt: now,
+      statusEnteredAt: now,
+      updatedAt: now,
+      updatedBy: { kind: "user", name: "You" },
+      closedAt: isClosed(status.category) ? now : null,
+      version: 1,
+    };
+    project.nextNumber += 1;
+    this.state.tasks.push(copy);
+    for (const file of this.state.files.filter((candidate) => candidate.taskId === task.id && candidate.commentId === null && candidate.deletedAt === null)) {
+      this.state.files.push({ ...file, id: nextId("f"), taskId: copy.id, createdAt: now });
+    }
+    if (withSubtasks) {
+      for (const sub of this.subtasksOf(task)) {
+        this.copyTask(sub, sub.title, sub.statusId, copy.id, true);
+      }
+    }
+    return copy;
   }
 
   // ---------- changes ----------
@@ -612,7 +841,13 @@ export class FakeWorkspace {
       const settings: Settings = { ...this.state.settings };
       return { output: { changed, settings }, changes: changed.length ? [{ entity: "settings", id: "w-1", fields: changed }] : [] };
     },
-    "history.feed": () => ({ items: [], total: 0 }),
+    "history.feed": ({ limit, cursor }) => {
+      const all = [...this.state.activity].reverse();
+      const start = cursor ? Number(cursor) : 0;
+      const end = start + (limit ?? 50);
+      const items = all.slice(start, end);
+      return { items, total: all.length, ...(end < all.length ? { next_cursor: String(end) } : {}) };
+    },
     "agent.sessions": () => ({ items: [], total: 0 }),
     "project.list": ({ include_archived }) => {
       const ordered: FakeProject[] = [];
@@ -954,12 +1189,227 @@ export class FakeWorkspace {
         changes: [{ entity: "layout", id: project.id, fields: ["settings"], project: project.key }],
       };
     },
-    "task.get": ({ keys }) => {
-      const items = keys.map((key) => this.fullTask(this.task(key)));
+    "task.get": ({ keys, include }) => {
+      const items = keys.map((key) => this.withParts(this.task(key), include));
       return { items, total: items.length };
     },
-    "task.create": ({ project: ref, title, status, description, priority, before, after, at }) => {
+    "task.duplicate": ({ key, title, status, without_subtasks }) => {
+      const task = this.task(key);
+      const project = this.writable(this.projectOf(task).key);
+      const target = status ? this.statusIn(project, status) : (project.statuses.find((candidate) => candidate.category === "todo") ?? project.statuses[0]);
+      if (!target) {
+        fail("invalid", `Project ${project.key} has no statuses.`);
+      }
+      const before = new Set(this.state.tasks.map((candidate) => candidate.id));
+      const copy = this.copyTask(task, title ? this.checkTitle(title) : task.title, target.id, task.parentId, without_subtasks !== true);
+      const relation: FakeRelation = { id: nextId("r"), from: copy.id, to: task.id, kind: "clones" };
+      this.state.relations.push(relation);
+      const created = this.state.tasks.filter((candidate) => !before.has(candidate.id));
+      return {
+        output: { task: this.fullTask(copy) },
+        changes: [
+          ...created.map((made) => ({ entity: "task", id: made.id, fields: ["*"], project: project.key })),
+          { entity: "relation", id: relation.id, fields: ["link"], project: project.key },
+        ],
+      };
+    },
+    "task.claim": () => fail("forbidden", "Only agents claim tasks.", { hint: "Claims are for agent sessions through MCP." }),
+    "task.release": ({ key }) => {
+      const task = this.task(key);
+      const had = this.state.claims.some((claim) => claim.taskId === task.id);
+      this.state.claims = this.state.claims.filter((claim) => claim.taskId !== task.id);
+      return had ? this.taskChange(task, ["claim"]) : { output: { task: this.fullTask(task) }, changes: [] };
+    },
+    "relation.add": ({ key, kind, other: otherKey }) => {
+      const task = this.task(key);
+      const other = this.task(otherKey);
+      this.writable(this.projectOf(task).key);
+      if (task === other) {
+        fail("invalid", "A task can't be linked to itself.", { details: { path: "other" } });
+      }
+      if (kind === "subtask_of" || kind === "parent_of") {
+        const [child, parent] = kind === "subtask_of" ? [task, other] : [other, task];
+        if (child.projectId !== parent.projectId) {
+          fail("invalid", "A subtask belongs to its parent's project.", { details: { path: "other" } });
+        }
+        if (this.isAncestor(child, parent)) {
+          fail("invalid", `${this.keyOf(parent)} is a subtask of ${this.keyOf(child)}.`, { details: { path: "other" } });
+        }
+        child.parentId = parent.id;
+        this.touch(child);
+        return { output: { task: this.fullTask(task) }, changes: [{ entity: "task", id: child.id, fields: ["parent"], project: this.projectOf(child).key }] };
+      }
+      if (this.isAncestor(task, other) || this.isAncestor(other, task)) {
+        fail("invalid", "A task can't be linked to its own parent or subtask.", { details: { path: "other" } });
+      }
+      const forward = kind === "blocks" || kind === "relates" || kind === "duplicates" || kind === "clones";
+      const stored = { blocks: "blocks", blocked_by: "blocks", relates: "relates", duplicates: "duplicates", duplicated_by: "duplicates", clones: "clones", cloned_by: "clones" } as const;
+      const [from, to] = forward ? [task, other] : [other, task];
+      const relationKind = stored[kind];
+      const exists = this.state.relations.some(
+        (relation) =>
+          relation.kind === relationKind &&
+          ((relation.from === from.id && relation.to === to.id) || (relationKind === "relates" && relation.from === to.id && relation.to === from.id)),
+      );
+      if (exists) {
+        return { output: { task: this.fullTask(task) }, changes: [] };
+      }
+      if (relationKind === "blocks" && this.state.relations.some((relation) => relation.kind === "blocks" && relation.from === to.id && relation.to === from.id)) {
+        fail("invalid", `${this.keyOf(to)} already blocks ${this.keyOf(from)}.`, { details: { path: "kind" } });
+      }
+      const relation: FakeRelation = { id: nextId("r"), from: from.id, to: to.id, kind: relationKind };
+      this.state.relations.push(relation);
+      return { output: { task: this.fullTask(task) }, changes: [{ entity: "relation", id: relation.id, fields: ["link"], project: this.projectOf(task).key }] };
+    },
+    "relation.remove": ({ key, kind, other: otherKey }) => {
+      const task = this.task(key);
+      const other = this.task(otherKey);
+      this.writable(this.projectOf(task).key);
+      if (kind === "subtask_of" || kind === "parent_of") {
+        const [child, parent] = kind === "subtask_of" ? [task, other] : [other, task];
+        if (child.parentId !== parent.id) {
+          return { output: { task: this.fullTask(task) }, changes: [] };
+        }
+        child.parentId = null;
+        this.touch(child);
+        return { output: { task: this.fullTask(task) }, changes: [{ entity: "task", id: child.id, fields: ["parent"], project: this.projectOf(child).key }] };
+      }
+      const link = this.linksOf(task).find((candidate) => candidate.kind === kind && candidate.task.id === other.id);
+      if (!link) {
+        return { output: { task: this.fullTask(task) }, changes: [] };
+      }
+      this.state.relations = this.state.relations.filter((relation) => relation.id !== link.id);
+      return { output: { task: this.fullTask(task) }, changes: [{ entity: "relation", id: link.id, fields: ["link"], project: this.projectOf(task).key }] };
+    },
+    "comment.list": ({ key, revisions }) => {
+      const items = this.liveComments(this.task(key)).map((comment) => this.comment(comment, revisions === true));
+      return { items, total: items.length };
+    },
+    "comment.add": ({ key, body, reply_to }) => {
+      const task = this.task(key);
+      this.writable(this.projectOf(task).key);
+      if (body.trim() === "") {
+        fail("invalid", "A comment can't be empty.", { details: { path: "body" } });
+      }
+      if (reply_to !== null && reply_to !== undefined && this.liveComment(reply_to).taskId !== task.id) {
+        fail("invalid", "A reply belongs to the same task.", { details: { path: "reply_to" } });
+      }
+      const comment: FakeComment = {
+        id: nextId("c"),
+        taskId: task.id,
+        body,
+        author: { kind: "user", name: "You" },
+        via: "app",
+        createdAt: this.today().toISOString(),
+        editedAt: null,
+        version: 1,
+        revisions: [],
+        replyTo: reply_to ?? null,
+        deletedAt: null,
+      };
+      this.state.comments.push(comment);
+      this.touch(task, false);
+      return this.commentChange(comment, ["created"]);
+    },
+    "comment.update": ({ comment: id, body, expected_version }) => {
+      const comment = this.liveComment(id);
+      if (expected_version !== null && expected_version !== undefined && expected_version !== comment.version) {
+        fail("conflict", "The comment changed since you read it.", { details: { current_version: comment.version } });
+      }
+      if (body.trim() === "") {
+        fail("invalid", "A comment can't be empty.", { details: { path: "body" } });
+      }
+      if (body === comment.body) {
+        return { output: { comment: this.comment(comment, false), deleted: false }, changes: [] };
+      }
+      const now = this.today().toISOString();
+      comment.revisions.unshift({ body: comment.body, replaced_at: now, replaced_by: { kind: "user", name: "You" } });
+      comment.body = body;
+      comment.editedAt = now;
+      comment.version += 1;
+      return this.commentChange(comment, ["body"]);
+    },
+    "comment.delete": ({ comment: id }) => {
+      const comment = this.liveComment(id);
+      comment.deletedAt = this.today().toISOString();
+      return this.commentChange(comment, ["trashed"]);
+    },
+    "file.get": ({ attachment }) => this.attachment(this.liveFile(attachment)),
+    "file.read": ({ attachment }) => {
+      const file = this.liveFile(attachment);
+      if (file.kind === "image") {
+        return { file: this.attachment(file), data_base64: file.base64, truncated: false };
+      }
+      if (file.kind === "text") {
+        const bytes = decodeBase64(file.base64) ?? new Uint8Array();
+        return { file: this.attachment(file), text: new TextDecoder().decode(bytes), truncated: false };
+      }
+      return { file: this.attachment(file), note: "Only text files and images are shown.", truncated: false };
+    },
+    "file.attach": ({ task: key, comment: commentId, data_base64, name, path }) => {
+      if (path !== null && path !== undefined) {
+        fail("invalid", "The sample workspace can't read files from disk.", { details: { path: "path" } });
+      }
+      const comment = commentId === null || commentId === undefined ? null : this.liveComment(commentId);
+      const task = comment ? this.state.tasks.find((candidate) => candidate.id === comment.taskId) : key ? this.task(key) : undefined;
+      if (!task) {
+        fail("invalid", "Name the task or the comment to attach the file to.", { details: { path: "task" } });
+      }
+      this.writable(this.projectOf(task).key);
+      const bytes = decodeBase64(data_base64 ?? "");
+      if (!bytes || name === null || name === undefined || name.trim() === "") {
+        fail("invalid", "Give the file's content as Base64 and its name.", { details: { path: "data_base64" } });
+      }
+      const limit = this.state.settings.file_max_mb * 1024 * 1024;
+      if (bytes.length > limit) {
+        fail("limit", `A file has at most ${String(this.state.settings.file_max_mb)} MB.`, { details: { max: limit } });
+      }
+      const sniffed = sniff(bytes, name);
+      const file: FakeFile = {
+        id: nextId("f"),
+        taskId: task.id,
+        commentId: comment?.id ?? null,
+        name: name.trim(),
+        size: bytes.length,
+        base64: data_base64 ?? "",
+        createdAt: this.today().toISOString(),
+        deletedAt: null,
+        ...sniffed,
+      };
+      this.state.files.push(file);
+      this.touch(task, false);
+      return this.fileChange(file, ["created"]);
+    },
+    "file.delete": ({ attachment }) => {
+      const file = this.liveFile(attachment);
+      file.deletedAt = this.today().toISOString();
+      return this.fileChange(file, ["trashed"]);
+    },
+    "history.revert": ({ groups, dry_run }) => {
+      const reverted: string[] = [];
+      const skipped: { group: string; reason: string }[] = [];
+      for (const group of groups ?? []) {
+        const latest = this.undoStack[this.undoStack.length - 1];
+        if (latest?.group === group && dry_run !== true) {
+          this.revertLatest();
+          reverted.push(group);
+        } else if (latest?.group === group) {
+          reverted.push(group);
+        } else {
+          skipped.push({ group, reason: "The sample workspace reverts only its latest change." });
+        }
+      }
+      if (reverted.length === 0 || dry_run === true) {
+        return { reverted, skipped };
+      }
+      return { output: { reverted, skipped }, changes: [{ entity: "workspace", id: "w-1", fields: ["*"] }] };
+    },
+    "task.create": ({ project: ref, title, status, description, priority, before, after, at, parent: parentKey }) => {
       const project = this.writable(ref);
+      const parent = parentKey === null || parentKey === undefined ? null : this.task(parentKey);
+      if (parent && parent.projectId !== project.id) {
+        fail("invalid", "A subtask belongs to its parent's project.", { details: { path: "parent" } });
+      }
       const trimmed = this.checkTitle(title);
       const target = status
         ? this.statusIn(project, status)
@@ -979,7 +1429,7 @@ export class FakeWorkspace {
         typeId: type.id,
         priority: priority ?? "none",
         labelIds: [],
-        parentId: null,
+        parentId: parent?.id ?? null,
         rank: this.rankAt(target.id, { before, after, at }, null),
         startDate: null,
         dueDate: null,

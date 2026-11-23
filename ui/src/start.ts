@@ -9,12 +9,16 @@ export interface StartData {
   titleBar: TitleBar;
   /** The user's locale for dates and numbers, as a BCP 47 tag. */
   locale: string;
+  /** In a task window: its task, shown alone. */
+  task?: string;
+  /** A task to open first, from the link the app was started with. */
+  open?: string;
 }
 
 declare global {
   interface Window {
     /** Set by the app's initialization script; absent in a plain browser. */
-    readonly __GLYPHKEEL_START__?: { titleBar?: unknown; locale?: unknown };
+    readonly __GLYPHKEEL_START__?: { titleBar?: unknown; locale?: unknown; task?: unknown; open?: unknown };
   }
 }
 
@@ -27,7 +31,24 @@ export function readStart(win: Window = window): StartData {
   const given = win.__GLYPHKEEL_START__ ?? {};
   const titleBar: TitleBar = given.titleBar === "system" ? "system" : "app";
   const locale = typeof given.locale === "string" && isLocale(given.locale) ? given.locale : win.navigator.language;
-  return { titleBar, locale };
+  const start: StartData = { titleBar, locale };
+  if (isTaskKey(given.task)) {
+    start.task = given.task;
+  }
+  if (isTaskKey(given.open)) {
+    start.open = given.open;
+  }
+  return start;
+}
+
+/** A task key such as `TM-41`. */
+export function isTaskKey(value: unknown): value is string {
+  return typeof value === "string" && /^[A-Z][A-Z0-9]{1,9}-\d{1,12}$/.test(value);
+}
+
+/** The project key of a task key: `TM` of `TM-41`. */
+export function projectOfKey(key: string): string {
+  return key.slice(0, key.lastIndexOf("-"));
 }
 
 function isLocale(tag: string): boolean {

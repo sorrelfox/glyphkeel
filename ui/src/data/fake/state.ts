@@ -3,7 +3,20 @@
 
 // The in-memory engine's own records, shaped like the workspace's tables.
 
-import { type BoardLayout, type Category, type Glyph, type Hue, type Modules, type Priority, type Settings } from "../../generated/ops";
+import {
+  type ActivityEntry,
+  type Actor,
+  type BoardLayout,
+  type Category,
+  type CommentRevision,
+  type FileKind,
+  type Glyph,
+  type Hue,
+  type Modules,
+  type Priority,
+  type Settings,
+  type Via,
+} from "../../generated/ops";
 
 export interface FakeStatus {
   id: string;
@@ -63,7 +76,7 @@ export interface FakeTask {
   dueDate: string | null;
   estimateMin: number | null;
   spentMin: number;
-  /** Sample data for the files and comments to come. */
+  /** How many sample files and comments it starts with; made into records when the workspace opens. */
   files: number;
   comments: number;
   createdAt: string;
@@ -76,17 +89,62 @@ export interface FakeTask {
   version: number;
 }
 
-/** Sample links between tasks, for when tasks show them. */
+/** A link between two tasks, stored the way it reads from `from`. */
 export interface FakeRelation {
+  id: string;
   from: string;
   to: string;
   kind: "blocks" | "relates" | "duplicates" | "clones";
+}
+
+export interface FakeComment {
+  id: string;
+  taskId: string;
+  body: string;
+  author: Actor;
+  via: Via;
+  createdAt: string;
+  editedAt: string | null;
+  version: number;
+  /** Earlier texts, newest first. */
+  revisions: CommentRevision[];
+  replyTo: string | null;
+  deletedAt: string | null;
+}
+
+export interface FakeFile {
+  id: string;
+  taskId: string;
+  commentId: string | null;
+  name: string;
+  mime: string;
+  kind: FileKind;
+  size: number;
+  /** The content. */
+  base64: string;
+  width?: number;
+  height?: number;
+  createdAt: string;
+  deletedAt: string | null;
+}
+
+/** An agent's claim on a task. */
+export interface FakeClaim {
+  taskId: string;
+  agent: string;
+  session: string;
+  until: string;
 }
 
 export interface FakeState {
   projects: FakeProject[];
   tasks: FakeTask[];
   relations: FakeRelation[];
+  comments: FakeComment[];
+  files: FakeFile[];
+  claims: FakeClaim[];
+  /** The activity log, oldest first. */
+  activity: ActivityEntry[];
   /** Board layouts by project ID. */
   layouts: Record<string, BoardLayout>;
   settings: Settings;

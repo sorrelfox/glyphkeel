@@ -29,6 +29,7 @@ export function BoardScreen() {
             });
           }}
           onOpenTask={(other) => void navigate({ to: "/projects/$key", params: { key }, search: { task: other } })}
+          onOpenWindow={(other) => void navigate({ to: "/task/$key", params: { key: other } })}
         />
       )}
     </div>

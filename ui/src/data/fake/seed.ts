@@ -250,19 +250,23 @@ export function seed(today: Date, seedNumber = 7): FakeState {
     const from = open[index];
     const to = open[index + 1];
     if (from && to && from.projectId === to.projectId) {
-      relations.push({ from: from.id, to: to.id, kind: "blocks" });
+      relations.push({ id: nextId("r"), from: from.id, to: to.id, kind: "blocks" });
     }
   }
   const first = open[0];
   const second = open[2];
   if (first && second) {
-    relations.push({ from: first.id, to: second.id, kind: "relates" });
+    relations.push({ id: nextId("r"), from: first.id, to: second.id, kind: "relates" });
   }
 
   return {
     projects,
     tasks,
     relations,
+    comments: [],
+    files: [],
+    claims: [],
+    activity: [],
     layouts: {},
     settings: {
       agent_max_profile: "standard",

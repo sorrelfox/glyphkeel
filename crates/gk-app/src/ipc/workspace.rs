@@ -29,6 +29,8 @@ const JOBS_INTERVAL: Duration = Duration::from_secs(5);
 #[derive(Debug)]
 pub(crate) struct Workspace {
     engine: Mutex<Option<Arc<Engine>>>,
+    /// The workspace folder, for the stored files the app hands out.
+    layout: Option<WorkspaceLayout>,
     /// Why the workspace isn't open; every call answers with it.
     failure: Option<OpError>,
     windows: Arc<Windows>,
@@ -71,6 +73,7 @@ impl Workspace {
         let jobs = run_jobs(Arc::downgrade(&engine), Arc::clone(&stop));
         Self {
             engine: Mutex::new(Some(engine)),
+            layout: Some(layout.clone()),
             failure: None,
             windows,
             confirm,
@@ -86,6 +89,7 @@ impl Workspace {
     pub(crate) fn failed(failure: OpError) -> Self {
         Self {
             engine: Mutex::new(None),
+            layout: None,
             failure: Some(failure),
             windows: Arc::new(Windows::default()),
             confirm: Confirmation::Refuse,
@@ -96,6 +100,11 @@ impl Workspace {
     /// Why the workspace isn't open, if it isn't.
     pub(crate) fn failure(&self) -> Option<&OpError> {
         self.failure.as_ref()
+    }
+
+    /// The workspace folder, while it is open.
+    pub(crate) fn layout(&self) -> Option<&WorkspaceLayout> {
+        self.layout.as_ref()
     }
 
     /// Runs `op` for the person through the app. Blocks: call it from a

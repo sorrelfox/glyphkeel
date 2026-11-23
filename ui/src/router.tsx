@@ -14,6 +14,7 @@ import { lazy, Suspense, useEffect, useState } from "react";
 
 import { windowReady, type Transport } from "./ipc/ready";
 import { BoardScreen } from "./screens/board/BoardScreen";
+import { OpenTaskScreen, TaskWindowScreen } from "./screens/task/TaskWindow";
 import { AllTasksScreen, TodayScreen } from "./screens/today/Placeholders";
 import { Shell } from "./shell/Shell";
 import { StartupFailure } from "./shell/StartupFailure";
@@ -67,14 +68,34 @@ export const boardRoute = createRoute({
   component: BoardScreen,
 });
 
-const routeTree = rootRoute.addChildren([galleryRoute, editorPlaygroundRoute, shellRoute.addChildren([todayRoute, allTasksRoute, boardRoute])]);
+/** A task window: one task, without the board and the sidebar. */
+const taskWindowRoute = createRoute({ getParentRoute: () => rootRoute, path: "/task/$key", component: TaskWindowScreen });
 
-/** The first screen: a development page from its path (browser tests), else Today. */
-export function initialPath(pathname: string): string {
+/** A task named by a link: its board opens with the task beside it. */
+const openTaskRoute = createRoute({ getParentRoute: () => shellRoute, path: "/open/$key", component: OpenTaskScreen });
+
+const routeTree = rootRoute.addChildren([
+  galleryRoute,
+  editorPlaygroundRoute,
+  taskWindowRoute,
+  shellRoute.addChildren([todayRoute, allTasksRoute, boardRoute, openTaskRoute]),
+]);
+
+/**
+ * The first screen: a development page from its path (browser tests); a task
+ * window's task; the task of the link the app was started with; else Today.
+ */
+export function initialPath(pathname: string, start: Pick<StartData, "task" | "open"> = {}): string {
   for (const path of [GALLERY_PATH, EDITOR_PLAYGROUND_PATH]) {
     if (pathname.startsWith(path)) {
       return path;
     }
+  }
+  if (start.task !== undefined) {
+    return `/task/${start.task}`;
+  }
+  if (start.open !== undefined) {
+    return `/open/${start.open}`;
   }
   return "/";
 }
