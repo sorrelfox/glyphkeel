@@ -15,13 +15,17 @@ import { useCommand, useOp } from "../data/hooks";
 import { type SettingsPatch, type WeekStart } from "../generated/ops";
 import { useT } from "../i18n/I18n";
 import { SYSTEM_ZONE, useAppSettings, useTimeZones, useUpdateAppSettings } from "../ipc/appSettings";
+import { useQuickAddShortcut, useSetQuickAddShortcut, type QuickAddShortcut } from "../ipc/quickAdd";
+import { parseChord } from "../actions/keymap";
+import { chordLabel } from "../components/Kbd";
+import { Select } from "../components/Select";
 import styles from "./Preferences.module.css";
 import { TimeZonePicker } from "./TimeZonePicker";
 
 const WEEK_STARTS: readonly WeekStart[] = ["monday", "saturday", "sunday"];
 
 /** The pages, in the order of the list on the left. */
-export const PREFERENCE_PAGES = ["appearance", "time", "reminders", "workspace"] as const;
+export const PREFERENCE_PAGES = ["appearance", "time", "reminders", "quick-add", "workspace"] as const;
 export type PreferencePage = (typeof PREFERENCE_PAGES)[number];
 
 interface PreferencesProps {
@@ -57,6 +61,9 @@ export function Preferences({ isOpen, onOpenChange, page = "appearance" }: Prefe
         </TabPanel>
         <TabPanel id="reminders" className={classes(styles.page)}>
           <RemindersPage />
+        </TabPanel>
+        <TabPanel id="quick-add" className={classes(styles.page)}>
+          <QuickAddPage />
         </TabPanel>
         <TabPanel id="workspace" className={classes(styles.page)}>
           <WorkspacePage />
@@ -537,6 +544,87 @@ function RemindersPage() {
         </Row>
       </Group>
     </>
+  );
+}
+
+// ---------- Quick add ----------
+
+/** What the shortcut's state means, in a sentence; the command where the person binds it. */
+function ShortcutState({ shortcut, onAskAgain }: { shortcut: QuickAddShortcut; onAskAgain: () => void }) {
+  const t = useT();
+  const keys = chordLabel(parseChord(shortcut.keys), t);
+  const text = (() => {
+    switch (shortcut.state) {
+      case "off":
+        return t("preferences-shortcut-first-time");
+      case "waiting":
+        return t("preferences-shortcut-state-waiting");
+      case "portal":
+        return t("preferences-shortcut-state-portal", { trigger: shortcut.trigger ?? keys });
+      case "grab":
+        return t("preferences-shortcut-state-grab", { keys });
+      case "manual":
+        return t("preferences-shortcut-state-manual");
+      case "refused":
+        return t("preferences-shortcut-state-refused");
+    }
+  })();
+  const needsCommand = shortcut.state === "manual" || shortcut.state === "refused";
+  return (
+    <div className={styles.shortcutState} role="status" data-testid="shortcut-state" data-state={shortcut.state}>
+      <p>{text}</p>
+      {needsCommand && <code className={classes("selectable", styles.command)}>{shortcut.command}</code>}
+      {shortcut.detail !== undefined && needsCommand && <small className="faint">{shortcut.detail}</small>}
+      {shortcut.state === "refused" && (
+        <button type="button" className="btn sm" onClick={onAskAgain}>
+          {t("preferences-shortcut-try-again")}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function QuickAddPage() {
+  const t = useT();
+  const shortcut = useQuickAddShortcut();
+  const change = useSetQuickAddShortcut();
+  const data = shortcut.data ?? null;
+  return (
+    <Group title={t("preferences-quick-add")}>
+      {shortcut.isError && <Failure message={shortcut.error.error.message} />}
+      <Row label={t("preferences-shortcut")} about={t(data === null ? "preferences-shortcut-unavailable" : "preferences-shortcut-about")}>
+        <Switch
+          aria-label={t("preferences-shortcut")}
+          isDisabled={data === null}
+          isSelected={data?.enabled ?? false}
+          onChange={(enabled) => {
+            if (data) {
+              change({ enabled, keys: data.keys });
+            }
+          }}
+        />
+      </Row>
+      {data && (
+        <>
+          <Row label={t("preferences-shortcut-keys")}>
+            <Select
+              label={t("preferences-shortcut-keys")}
+              value={data.keys}
+              options={data.choices.map((choice) => ({ id: choice, label: chordLabel(parseChord(choice), t) }))}
+              onChange={(keys) => {
+                change({ enabled: data.enabled, keys });
+              }}
+            />
+          </Row>
+          <ShortcutState
+            shortcut={data}
+            onAskAgain={() => {
+              change({ enabled: true, keys: data.keys });
+            }}
+          />
+        </>
+      )}
+    </Group>
   );
 }
 

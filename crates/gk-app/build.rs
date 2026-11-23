@@ -23,6 +23,11 @@ fn main() {
         "update_app_settings",
         "set_ui_pref",
         "time_zones",
+        "show_quick_add",
+        "hide_quick_add",
+        "watch_quick_add",
+        "quick_add_shortcut",
+        "set_quick_add_shortcut",
         "quit_app",
     ]);
     if let Err(err) = tauri_build::try_build(tauri_build::Attributes::new().app_manifest(manifest))

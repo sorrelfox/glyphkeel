@@ -42,6 +42,9 @@ pub(crate) struct StartData {
     /// keeps nothing between starts.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) prefs: Option<serde_json::Map<String, serde_json::Value>>,
+    /// The quick-add window: the page shows the quick-add field alone.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) quick_add: bool,
 }
 
 impl StartData {
@@ -139,6 +142,9 @@ pub(crate) fn window_ready(
     }
     if window.label() == crate::main_window::LABEL {
         show(&window, &shown);
+    } else if window.label() == crate::quick_add::LABEL {
+        // It waits hidden until the shortcut shows it.
+        crate::quick_add::on_ready(&window);
     } else {
         // Task windows come forward each time they are opened.
         crate::task_window::show(&window);
@@ -202,6 +208,7 @@ mod tests {
             task: None,
             open: None,
             prefs: None,
+            quick_add: false,
         }
         .script();
         assert_eq!(
@@ -218,9 +225,24 @@ mod tests {
             task: Some("TM-41".into()),
             open: None,
             prefs: None,
+            quick_add: false,
         }
         .script();
         assert!(script.contains(r#""task":"TM-41""#), "{script}");
+    }
+
+    #[test]
+    fn the_quick_add_window_says_so() {
+        let script = StartData {
+            title_bar: TitleBar::System,
+            locale: None,
+            task: None,
+            open: None,
+            prefs: None,
+            quick_add: true,
+        }
+        .script();
+        assert!(script.contains(r#""quickAdd":true"#), "{script}");
     }
 
     #[test]

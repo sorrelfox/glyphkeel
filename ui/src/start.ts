@@ -13,12 +13,14 @@ export interface StartData {
   task?: string;
   /** A task to open first, from the link the app was started with. */
   open?: string;
+  /** The quick-add window: its page shows the quick-add field alone. */
+  quickAdd?: boolean;
 }
 
 declare global {
   interface Window {
     /** Set by the app's initialization script; absent in a plain browser. */
-    readonly __GLYPHKEEL_START__?: { titleBar?: unknown; locale?: unknown; task?: unknown; open?: unknown; prefs?: unknown };
+    readonly __GLYPHKEEL_START__?: { titleBar?: unknown; locale?: unknown; task?: unknown; open?: unknown; prefs?: unknown; quickAdd?: unknown };
   }
 }
 
@@ -37,6 +39,9 @@ export function readStart(win: Window = window): StartData {
   }
   if (isTaskKey(given.open)) {
     start.open = given.open;
+  }
+  if (given.quickAdd === true) {
+    start.quickAdd = true;
   }
   return start;
 }

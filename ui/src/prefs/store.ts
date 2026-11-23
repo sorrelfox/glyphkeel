@@ -70,7 +70,11 @@ function oneOf<T extends string>(value: unknown, allowed: readonly T[], fallback
 
 /** The stored appearance; anything missing or unknown takes its default. */
 export function loadAppearance(): Appearance {
-  const stored = readPref("appearance");
+  return appearanceFrom(readPref("appearance"));
+}
+
+/** An appearance as stored, checked; anything missing or unknown takes its default. */
+export function appearanceFrom(stored: unknown): Appearance {
   const value = typeof stored === "object" && stored !== null ? (stored as Record<string, unknown>) : {};
   return {
     theme: oneOf(value.theme, ["system", ...THEMES], DEFAULT_APPEARANCE.theme),

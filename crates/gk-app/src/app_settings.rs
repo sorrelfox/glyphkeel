@@ -34,6 +34,7 @@ use tauri::{AppHandle, State};
 use crate::background::{self, BackgroundMode};
 use crate::ipc::Workspace;
 use crate::reminders::{Notice, Notifier};
+use crate::shortcut::ShortcutSetting;
 
 /// The settings as stored. A field left out of the file keeps its default.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -48,6 +49,9 @@ pub(crate) struct Stored {
     /// The page's preferences, by name; the page checks their values.
     #[serde(skip_serializing_if = "Map::is_empty")]
     pub(crate) ui: Map<String, Value>,
+    /// The desktop-wide key that opens the quick-add window. Unset, it is off.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) quick_add_shortcut: Option<ShortcutSetting>,
 }
 
 impl Default for Stored {
@@ -56,6 +60,7 @@ impl Default for Stored {
             background: None,
             notifications: true,
             ui: Map::new(),
+            quick_add_shortcut: None,
         }
     }
 }
@@ -226,6 +231,21 @@ impl AppSettings {
         })
     }
 
+    /// The quick-add shortcut as chosen in Preferences; off by default.
+    pub(crate) fn shortcut(&self) -> ShortcutSetting {
+        self.stored
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .quick_add_shortcut
+            .clone()
+            .unwrap_or_default()
+    }
+
+    /// Keeps the quick-add shortcut's setting.
+    pub(crate) fn set_shortcut(&self, setting: ShortcutSetting) {
+        self.change(|stored| stored.quick_add_shortcut = Some(setting));
+    }
+
     /// Sets one of the page's preferences; `null` removes it.
     fn set_ui(&self, name: String, value: Value) -> Result<(), OpError> {
         check_ui_pref(&name, &value)?;
@@ -390,6 +410,10 @@ mod tests {
             background: Some(false),
             notifications: false,
             ui,
+            quick_add_shortcut: Some(crate::shortcut::ShortcutSetting {
+                enabled: true,
+                keys: "Ctrl+Alt+N".into(),
+            }),
         };
         save(&path, &stored).unwrap();
         assert_eq!(load(&path), stored);
@@ -476,6 +500,23 @@ mod tests {
         assert_eq!(ui["appearance"], serde_json::json!({ "theme": "sand" }));
         assert_eq!(ui["board.cardSize.p-1"], serde_json::json!("compact"));
         assert!(!ui.contains_key("sidebar.collapsed"));
+    }
+
+    #[test]
+    fn the_quick_add_shortcut_is_off_until_chosen_and_then_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("app.json");
+        let running = AppSettings::new(Some(path.clone()), load(&path));
+        assert!(!running.shortcut().enabled);
+        assert_eq!(running.shortcut().keys, crate::shortcut::DEFAULT_KEYS);
+        running.set_shortcut(crate::shortcut::ShortcutSetting {
+            enabled: true,
+            keys: "Ctrl+Alt+N".into(),
+        });
+        drop(running);
+        let restarted = AppSettings::new(Some(path.clone()), load(&path));
+        assert!(restarted.shortcut().enabled);
+        assert_eq!(restarted.shortcut().keys, "Ctrl+Alt+N");
     }
 
     #[test]

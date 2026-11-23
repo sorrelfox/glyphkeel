@@ -20,7 +20,9 @@ mod navigation;
 mod notifications;
 mod open_links;
 mod page;
+mod quick_add;
 mod reminders;
+mod shortcut;
 mod spell;
 mod start;
 mod task_window;
@@ -44,24 +46,28 @@ use crate::title_bar::TitleBar;
 
 fn main() -> ExitCode {
     #[cfg(target_os = "linux")]
-    let (activations, _bus, first_links) = {
+    let (activations, _bus, first_links, first_quick_add) = {
         let this_start = instance::this_start();
         match instance::claim(&this_start) {
-            instance::Claim::Primary { bus, activations } => {
-                (Some(activations), Some(bus), this_start.links)
-            }
+            instance::Claim::Primary { bus, activations } => (
+                Some(activations),
+                Some(bus),
+                this_start.links,
+                this_start.quick_add,
+            ),
             // The running app has the request; this process has nothing to do.
             instance::Claim::Forwarded => return ExitCode::SUCCESS,
             instance::Claim::Unavailable(err) => {
                 eprintln!(
                     "glyphkeel-app: no session bus, so a second start opens a second window: {err}"
                 );
-                (None, None, this_start.links)
+                (None, None, this_start.links, this_start.quick_add)
             }
         }
     };
     #[cfg(not(target_os = "linux"))]
-    let first_links = Vec::new();
+    let (first_links, first_quick_add) =
+        (Vec::new(), std::env::args().any(|arg| arg == "--quick-add"));
 
     let title_bar = TitleBar::from_env();
     let app_settings = AppSettings::load();
@@ -74,6 +80,7 @@ fn main() -> ExitCode {
         .manage(background::Tray::default())
         .manage(app_settings)
         .manage(MainTitleBar(title_bar))
+        .manage(quick_add::QuickAdd::default())
         .invoke_handler(tauri::generate_handler![
             start::window_ready,
             ipc::op,
@@ -93,6 +100,11 @@ fn main() -> ExitCode {
             app_settings::update_app_settings,
             app_settings::set_ui_pref,
             app_settings::time_zones,
+            quick_add::show_quick_add,
+            quick_add::hide_quick_add,
+            quick_add::watch_quick_add,
+            shortcut::quick_add_shortcut,
+            shortcut::set_quick_add_shortcut,
             quit_app
         ])
         // Attached images, by attachment ID, for the page's <img> elements.
@@ -128,7 +140,17 @@ fn main() -> ExitCode {
                 .position(|link| start::task_in_link(link).is_some())
                 .and_then(|at| start::task_in_link(&first_links.remove(at)));
             app.state::<open_links::OpenLinks>().push(&first_links);
-            main_window::open(app.handle(), title_bar, first_task)?;
+            // The quick-add window waits hidden, ready for the shortcut.
+            if let Err(err) = quick_add::create(app.handle()) {
+                eprintln!("glyphkeel-app: cannot make the quick-add window: {err}");
+            }
+            // Started for quick add, the app shows only that window.
+            if first_quick_add && first_task.is_none() {
+                quick_add::show(app.handle(), None);
+            } else {
+                main_window::open(app.handle(), title_bar, first_task)?;
+            }
+            shortcut::start(app.handle());
             #[cfg(target_os = "linux")]
             if let Some(activations) = activations {
                 forward_activations(app.handle().clone(), activations);
@@ -136,6 +158,12 @@ fn main() -> ExitCode {
             Ok(())
         })
         .on_window_event(|window, event| match event {
+            // The quick-add window is hidden, never closed (Alt+F4, say).
+            WindowEvent::CloseRequested { api, .. } if window.label() == quick_add::LABEL => {
+                api.prevent_close();
+                let _ = window.hide();
+                quick_add::exit_if_idle(window.app_handle(), None);
+            }
             WindowEvent::Destroyed => {
                 // A main window opened again shows on its page's first screen.
                 if window.label() == main_window::LABEL {
@@ -146,6 +174,10 @@ fn main() -> ExitCode {
                 }
                 if let Some(drops) = window.try_state::<files::Drops>() {
                     drops.forget(window.label());
+                }
+                // The hidden quick-add window alone doesn't keep the app.
+                if window.label() != quick_add::LABEL {
+                    quick_add::exit_if_idle(window.app_handle(), Some(window.label()));
                 }
             }
             WindowEvent::DragDrop(drop) => files::on_drag_drop(window, drop),
@@ -226,6 +258,10 @@ fn forward_activations(
 
 #[cfg(target_os = "linux")]
 fn on_activation(app: &AppHandle, activation: instance::Activation) {
+    if activation.quick_add {
+        quick_add::show(app, activation.token);
+        return;
+    }
     // The page opens the tasks the links name, once it listens.
     app.state::<open_links::OpenLinks>().push(&activation.links);
     // The window comes forward, or back after background mode closed it.

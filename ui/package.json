@@ -19,6 +19,7 @@
     "test:board": "playwright test --config playwright.fake.config.ts",
     "test:editor": "playwright test --config playwright.editor.config.ts",
     "test:list": "playwright test --config playwright.list.config.ts",
+    "test:palette": "playwright test --config playwright.palette.config.ts",
     "tauri": "TAURI_APP_PATH=../crates/gk-app TAURI_FRONTEND_PATH=. tauri"
   },
   "dependencies": {
@@ -41,6 +42,7 @@
     "@tanstack/react-table": "9.3.1",
     "@tanstack/react-virtual": "3.14.26",
     "@tauri-apps/api": "2.12.4",
+    "cmdk": "1.1.1",
     "dompurify": "3.4.18",
     "katex": "0.19.1",
     "lucide-react": "1.73.0",

@@ -44,6 +44,7 @@ pub(crate) fn open(
         prefs: app
             .try_state::<crate::app_settings::AppSettings>()
             .map(|settings| settings.ui()),
+        quick_add: false,
     };
 
     let window = page::window(app, LABEL, &start)

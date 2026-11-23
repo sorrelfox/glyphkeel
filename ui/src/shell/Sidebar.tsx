@@ -40,7 +40,7 @@ export function Sidebar({ view, project, width, onNewProject, onProjectSettings 
   return (
     <nav className={classes("sidebar", styles.sidebar)} style={{ flexBasis: width }} aria-label={t("sidebar-label")} data-region="sidebar" tabIndex={-1}>
       <div className={styles.sidebarTop} data-tauri-drag-region>
-        <button type="button" className={classes("field quiet", styles.search)} aria-label={t(palette.label)} disabled={palette.disabled}>
+        <button type="button" className={classes("field quiet", styles.search)} aria-label={t(palette.label)} disabled={palette.disabled} onClick={palette.run}>
           <Search className="ic" />
           <span className="grow faint">{t("sidebar-search")}</span>
           {palette.keys[0] && <Kbd chord={palette.keys[0]} />}
