@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { App } from "../../App";
 import { fakeTransport } from "../../data/fake/transport";
 import { createClient } from "../../data/transport";
-import { type TaskChange, type TaskList } from "../../generated/ops";
+import { type CommentChange, type CommentList, type TaskChange, type TaskList } from "../../generated/ops";
 import { diffLines } from "./DiffView";
 import { editorDropAt } from "./MarkdownField";
 
@@ -136,6 +136,67 @@ describe("the description", () => {
     await waitFor(() => {
       expect(within(section).queryByRole("alert")).toBeNull();
     });
+  });
+
+  it("keeps the revision it opened at when another window saves before the first keystroke: the edits are merged or kept as a copy, never overwritten", async () => {
+    const { transport, task, panel, section } = await renderDescription();
+    fireEvent.click(within(section).getByRole("button", { name: "Edit" }));
+    const field = await within(section).findByRole("textbox", { name: "Description" });
+    // Another window saves through the engine; its change reaches this one before anything is typed here.
+    await transport.call("task.update", { key: task.key, title: "Plan the journey", description: TEXT.replace("Before the trip:", "Before the journey:"), base_revision: task.description_revision ?? null });
+    await within(panel).findByRole("heading", { name: "Plan the journey" });
+    // The editor still holds the text it opened with, not the newer one.
+    expect(EditorView.findFromDOM(field)?.state.doc.toString()).toBe(TEXT);
+    typeInto(field, TEXT.replace("Before the trip:", "Before we go:"));
+    fireEvent.keyDown(field, { key: "Enter", ctrlKey: true });
+    const banner = await within(section).findByRole("alert");
+    expect(plain(banner.textContent)).toContain("kept as a conflict copy");
+    expect(await stored(transport, task.key)).toContain("Before the journey:");
+  });
+
+  it("merges an edit of another line saved elsewhere after editing started", async () => {
+    const { transport, task, panel, section } = await renderDescription();
+    fireEvent.click(within(section).getByRole("button", { name: "Edit" }));
+    const field = await within(section).findByRole("textbox", { name: "Description" });
+    await transport.call("task.update", { key: task.key, title: "Plan the journey", description: TEXT.replace("See the *list*.", "See the *full* list."), base_revision: task.description_revision ?? null });
+    await within(panel).findByRole("heading", { name: "Plan the journey" });
+    typeInto(field, TEXT.replace("Before the trip:", "Before we go:"));
+    fireEvent.click(within(section).getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("Saved, merged with a change made meanwhile.")).toBeDefined();
+    expect(await stored(transport, task.key)).toBe("Before we go:\n\n- [ ] Book the train\n- [x] Pack the bags\n\nSee the *full* list.\n");
+  });
+
+  it("closes an editor left untouched without saving, after a change elsewhere", async () => {
+    const { transport, task, panel, section } = await renderDescription();
+    fireEvent.click(within(section).getByRole("button", { name: "Edit" }));
+    const field = await within(section).findByRole("textbox", { name: "Description" });
+    await transport.call("task.update", { key: task.key, title: "Plan the journey", description: TEXT.replace("Before the trip:", "Before the journey:"), base_revision: task.description_revision ?? null });
+    await within(panel).findByRole("heading", { name: "Plan the journey" });
+    fireEvent.keyDown(field, { key: "Enter", ctrlKey: true });
+    await within(section).findByText("Before the journey:");
+    expect(within(section).queryByRole("alert")).toBeNull();
+    expect(await stored(transport, task.key)).toContain("Before the journey:");
+  });
+
+  it("refuses a comment edit when the comment changed elsewhere after editing started", async () => {
+    const transport = fakeTransport();
+    const task = ((await transport.call("task.create", { project: "PER", title: "Plan the trip" })) as TaskChange).task;
+    const { comment } = (await transport.call("comment.add", { key: task.key, body: "Book the train" })) as CommentChange;
+    render(<App start={{ titleBar: "app", locale: "en-US" }} client={createClient(transport)} path={`/projects/PER?task=${task.key}`} />);
+    const panel = await screen.findByRole("complementary", { name: (name) => plain(name).startsWith(`Task ${task.key}`) });
+    const article = await within(panel).findByRole("article", { name: (name) => plain(name).startsWith("Comment by Me") });
+    await within(article).findByText("Book the train");
+    fireEvent.click(within(article).getByRole("button", { name: "Comment" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Edit" }));
+    const field = await within(article).findByRole("textbox", { name: "Comment text" });
+    // Another window edits the comment meanwhile.
+    await transport.call("comment.update", { comment: comment.id, body: "Book the night train" });
+    await within(article).findByRole("button", { name: (name) => plain(name).includes("edited · 1 earlier version") });
+    typeInto(field, "Book the bus");
+    fireEvent.keyDown(field, { key: "Enter", ctrlKey: true });
+    expect(await screen.findByText(/The comment changed since you read it/)).toBeDefined();
+    const comments = (await transport.call("comment.list", { key: task.key })) as CommentList;
+    expect(comments.items.map((item) => item.body)).toEqual(["Book the night train"]);
   });
 
   it("lists the revisions and shows the differences between two", async () => {

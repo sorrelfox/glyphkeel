@@ -50,16 +50,22 @@ function CommentView({ comment, rendered, readOnly, onOpenTask }: { comment: Com
   const t = useT();
   const call = useCall();
   const moment = useMomentFormat();
-  const [editing, setEditing] = useState<string | null>(null);
+  // The text being edited, with the version it was opened at: a save names
+  // that version, so a change made meanwhile elsewhere refuses it instead of
+  // being overwritten.
+  const [editing, setEditingState] = useState<{ text: string; version: number } | null>(null);
+  const setEditing = (text: string | null) => {
+    setEditingState((was) => (text === null ? null : { text, version: was?.version ?? comment.version }));
+  };
   const [earlier, setEarlier] = useState(false);
   const update = useCommand("comment.update");
   const remove = useCommand("comment.delete", { undoable: t("comment-trashed") });
   const save = () => {
-    if (editing === null || editing.trim() === "" || editing === comment.body) {
+    if (editing === null || editing.text.trim() === "" || editing.text === comment.body) {
       setEditing(null);
       return;
     }
-    update.mutate({ comment: comment.id, body: editing, expected_version: comment.version }, { onSuccess: () => { setEditing(null); } });
+    update.mutate({ comment: comment.id, body: editing.text, expected_version: editing.version }, { onSuccess: () => { setEditing(null); } });
   };
   return (
     <article className={styles.comment} data-comment={comment.id} aria-label={t("comment-label", { author: comment.author.kind === "user" ? t("comment-me") : comment.author.name, time: moment(comment.created_at) })}>
@@ -109,7 +115,7 @@ function CommentView({ comment, rendered, readOnly, onOpenTask }: { comment: Com
         )
       ) : (
         <div className={styles.commentEdit}>
-          <MarkdownField label={t("comment-edit-field")} value={editing} autoFocus attachTo={comment.task} onChange={setEditing} onSubmit={save} onCancel={() => { setEditing(null); }} />
+          <MarkdownField label={t("comment-edit-field")} value={editing.text} autoFocus attachTo={comment.task} onChange={setEditing} onSubmit={save} onCancel={() => { setEditing(null); }} />
           <div className={styles.sectionHead}>
             <div className="grow" />
             <Button className="btn flat sm" onPress={() => { setEditing(null); }}>

@@ -47,8 +47,6 @@ export function DescriptionSection({ task, readOnly, view, onView, onOpenTask }:
   const t = useT();
   const [draft, setDraft] = useState<Draft | undefined>(() => readDraft(draftId(task.key)));
   const editing = view.kind === "edit" && !readOnly;
-  // Editing starts from the kept draft, or from the description as it is.
-  const editorDraft = draft ?? { text: task.description, base: task.description_revision };
 
   const startEditing = () => {
     onView({ kind: "edit" });
@@ -104,7 +102,7 @@ export function DescriptionSection({ task, readOnly, view, onView, onOpenTask }:
       {editing ? (
         <DescriptionEditor
           task={task}
-          draft={editorDraft}
+          kept={draft}
           onDraft={(next) => {
             writeDraft(draftId(task.key), next);
             setDraft(next ?? undefined);
@@ -193,13 +191,24 @@ function useSaveDescription(task: Task) {
   };
 }
 
-function DescriptionEditor({ task, draft, onDraft, onDone }: { task: Task; draft: Draft; onDraft: (draft: Draft | null) => void; onDone: () => void }) {
+/**
+ * The description's editor. Without a kept draft it starts from the text
+ * and revision as they are when it opens, and keeps both together: a save
+ * made meanwhile elsewhere doesn't move them, so this save names the
+ * revision its text came from and the engine merges the two, or keeps a
+ * conflict copy. Following the live text instead would let a save pair an
+ * old text with the newer revision and overwrite the other change.
+ */
+function DescriptionEditor({ task, kept, onDraft, onDone }: { task: Task; kept: Draft | undefined; onDraft: (draft: Draft | null) => void; onDone: () => void }) {
   const t = useT();
   const [source, setSource] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [opened] = useState<Draft>(() => ({ text: task.description, base: task.description_revision }));
+  const draft = kept ?? opened;
   const { save, pending } = useSaveDescription(task);
-  const original = draft.resolving === undefined ? task.description : null;
-  const changed = draft.text !== (original ?? task.description) || draft.resolving !== undefined;
+  // Nothing to save: the text as it opened, or as it is now.
+  const unchanged = draft.text === task.description || (draft.base === opened.base && draft.text === opened.text);
+  const changed = draft.resolving !== undefined || !unchanged;
   const submit = () => {
     if (pending) {
       return;

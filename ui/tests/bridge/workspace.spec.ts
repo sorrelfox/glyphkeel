@@ -369,14 +369,23 @@ test("descriptions and comments in Markdown on the engine: edit, tick, a conflic
   const otherDescription = otherPanel.getByRole("region", { name: "Description" });
   await expect(otherDescription.getByRole("checkbox", { name: "Sow the seeds" })).toBeChecked();
 
-  // Both edit the first line; the second window saves first.
+  // Both edit the first line; the second window saves first, then ticks another item.
   await description.getByRole("button", { name: "Edit" }).click();
+  const editor = description.getByRole("textbox", { name: "Description" });
+  await expect(editor).toBeVisible();
   await otherDescription.getByRole("button", { name: "Edit" }).click();
   const ticked = BEDS.replace("- [ ] Sow", "- [x] Sow");
   await otherDescription.getByRole("textbox", { name: "Description" }).fill(ticked.replace("Plan:", "Plan for May:"));
   await otherDescription.getByRole("button", { name: "Save" }).click();
   await expect(otherDescription.getByText("Plan for May:")).toBeVisible();
-  await description.getByRole("textbox", { name: "Description" }).fill(ticked.replace("Plan:", "Plan for spring:"));
+  await otherDescription.getByRole("checkbox", { name: "Dig the beds" }).click();
+  await expect(otherDescription.getByRole("checkbox", { name: "Dig the beds" })).toBeChecked();
+  // Both changes have reached the first window before anything is typed in its editor,
+  // which keeps the text and revision it opened with.
+  await expect(a.locator(`[data-card="${beds}"]`)).toContainText("2/2");
+  await expect(editor).not.toContainText("Plan for May:");
+  const both = ticked.replace("- [ ] Dig", "- [x] Dig");
+  await editor.fill(both.replace("Plan:", "Plan for spring:"));
   await description.getByRole("button", { name: "Save" }).click();
 
   // The stored text stays as the other window left it; this edit is a conflict copy, shown in both windows.
@@ -394,7 +403,7 @@ test("descriptions and comments in Markdown on the engine: edit, tick, a conflic
   await expect(diff.locator("ins")).toHaveText("Plan for spring:");
   await resolver.getByRole("button", { name: "Merge by hand" }).click();
   const merge = description.getByRole("textbox", { name: "Description" });
-  await merge.fill(ticked.replace("Plan:", "Plan for spring, sown in May:"));
+  await merge.fill(both.replace("Plan:", "Plan for spring, sown in May:"));
   await merge.press("Control+Enter");
   await expect(description.getByText("Plan for spring, sown in May:")).toBeVisible();
   await expect(description.getByRole("alert")).toHaveCount(0);
