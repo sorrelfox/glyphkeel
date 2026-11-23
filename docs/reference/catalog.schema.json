@@ -304,6 +304,31 @@
             ],
             "type": "object"
           },
+          "Category": {
+            "description": "What a status means for the work in it.",
+            "oneOf": [
+              {
+                "const": "todo",
+                "description": "Not started.",
+                "type": "string"
+              },
+              {
+                "const": "in_progress",
+                "description": "Being worked on.",
+                "type": "string"
+              },
+              {
+                "const": "done",
+                "description": "Finished; closes the task.",
+                "type": "string"
+              },
+              {
+                "const": "cancelled",
+                "description": "Dropped; closes the task.",
+                "type": "string"
+              }
+            ]
+          },
           "Profile": {
             "description": "What an agent may do. The workspace setting \"most an agent may do\" caps\nthe profile an agent asks for.",
             "oneOf": [
@@ -354,6 +379,12 @@
                 "description": "When reminders for a due date fire, as `HH:MM`.",
                 "type": "string"
               },
+              "timer_reminder_hours": {
+                "description": "Hours a timer runs before it reminds that it is still running; 0\nnever.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
               "trash_days": {
                 "description": "Days an item stays in the trash before it is purged.",
                 "format": "uint32",
@@ -372,9 +403,135 @@
               "days_per_week",
               "week_start",
               "file_max_mb",
-              "agent_max_profile"
+              "agent_max_profile",
+              "timer_reminder_hours"
             ],
             "type": "object"
+          },
+          "StatusRef": {
+            "additionalProperties": false,
+            "description": "A task's status, as tasks carry it.",
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/Category",
+                "description": "Its category."
+              },
+              "id": {
+                "description": "The status's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "category"
+            ],
+            "type": "object"
+          },
+          "TaskRef": {
+            "additionalProperties": false,
+            "description": "Another task, as links and subtask lists show it.",
+            "properties": {
+              "closed": {
+                "description": "Whether it is closed (done or cancelled).",
+                "type": "boolean"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "Its key.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/StatusRef",
+                "description": "Its status."
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "status",
+              "closed",
+              "id"
+            ],
+            "type": "object"
+          },
+          "Timer": {
+            "additionalProperties": false,
+            "description": "The workspace's timer.",
+            "properties": {
+              "elapsed": {
+                "description": "The time so far in the workspace's units, rounded to minutes.",
+                "type": "string"
+              },
+              "elapsed_seconds": {
+                "description": "The time so far, in seconds.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "note": {
+                "description": "The note the entry will get; left out when empty.",
+                "type": "string"
+              },
+              "running_since": {
+                "description": "When the current running stretch began; left out while paused.",
+                "type": "string"
+              },
+              "started_at": {
+                "description": "When it was first started (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "started_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who started it."
+              },
+              "state": {
+                "$ref": "#/$defs/TimerState",
+                "description": "Running or paused."
+              },
+              "task": {
+                "$ref": "#/$defs/TaskRef",
+                "description": "The task it times."
+              },
+              "task_trashed": {
+                "description": "Whether the task is in the trash; stop the timer with `discard`.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "task",
+              "state",
+              "started_at",
+              "elapsed_seconds",
+              "elapsed",
+              "started_by"
+            ],
+            "type": "object"
+          },
+          "TimerState": {
+            "description": "Whether the timer runs.",
+            "oneOf": [
+              {
+                "const": "running",
+                "description": "It counts.",
+                "type": "string"
+              },
+              {
+                "const": "paused",
+                "description": "It keeps its time but doesn't count.",
+                "type": "string"
+              }
+            ]
           },
           "Via": {
             "description": "The program a change came through.",
@@ -449,6 +606,10 @@
           "settings": {
             "$ref": "#/$defs/Settings",
             "description": "The workspace settings."
+          },
+          "timer": {
+            "$ref": "#/$defs/Timer",
+            "description": "The timer, while one runs or is paused."
           }
         },
         "required": [
@@ -554,6 +715,12 @@
             "description": "When reminders for a due date fire, as `HH:MM`.",
             "type": "string"
           },
+          "timer_reminder_hours": {
+            "description": "Hours a timer runs before it reminds that it is still running; 0\nnever.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
           "trash_days": {
             "description": "Days an item stays in the trash before it is purged.",
             "format": "uint32",
@@ -572,7 +739,8 @@
           "days_per_week",
           "week_start",
           "file_max_mb",
-          "agent_max_profile"
+          "agent_max_profile",
+          "timer_reminder_hours"
         ],
         "title": "Settings",
         "type": "object"
@@ -618,6 +786,11 @@
               {
                 "const": "file_max_mb",
                 "description": "The largest file that can be attached (default 100 MB).",
+                "type": "string"
+              },
+              {
+                "const": "timer_reminder_hours",
+                "description": "Hours before a running timer reminds (default 8).",
                 "type": "string"
               }
             ]
@@ -685,6 +858,15 @@
             "description": "Reminder time, `HH:MM` (24-hour).",
             "type": [
               "string",
+              "null"
+            ]
+          },
+          "timer_reminder_hours": {
+            "description": "Hours a timer runs before it reminds that it is still running, 0\n(never) to 24.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
               "null"
             ]
           },
@@ -767,6 +949,12 @@
                 "description": "When reminders for a due date fire, as `HH:MM`.",
                 "type": "string"
               },
+              "timer_reminder_hours": {
+                "description": "Hours a timer runs before it reminds that it is still running; 0\nnever.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
               "trash_days": {
                 "description": "Days an item stays in the trash before it is purged.",
                 "format": "uint32",
@@ -785,7 +973,8 @@
               "days_per_week",
               "week_start",
               "file_max_mb",
-              "agent_max_profile"
+              "agent_max_profile",
+              "timer_reminder_hours"
             ],
             "type": "object"
           },
@@ -839,7 +1028,7 @@
       },
       "output_name": "SettingsChange",
       "safety": "write",
-      "summary": "Change workspace settings that are not about agents: trash retention, reminder time, working hours and days, first day of the week."
+      "summary": "Change workspace settings that are not about agents: trash retention, reminder time, working hours and days, first day of the week, the timer reminder."
     },
     {
       "cli": "project list",
@@ -10009,6 +10198,16 @@
                 "const": "revisions",
                 "description": "The description's revisions and conflict copies.",
                 "type": "string"
+              },
+              {
+                "const": "time",
+                "description": "The time entries, newest day first.",
+                "type": "string"
+              },
+              {
+                "const": "reminder",
+                "description": "The personal reminder.",
+                "type": "string"
               }
             ]
           }
@@ -10018,7 +10217,7 @@
         "description": "Which tasks to read.",
         "properties": {
           "include": {
-            "description": "What to add to each task: `subtasks`, `links`, `comments`, `files`,\n`checklist`, `revisions`.",
+            "description": "What to add to each task: `subtasks`, `links`, `comments`, `files`,\n`checklist`, `revisions`, `time`, `reminder`.",
             "items": {
               "$ref": "#/$defs/TaskPart"
             },
@@ -10570,6 +10769,58 @@
               }
             ]
           },
+          "Reminder": {
+            "additionalProperties": false,
+            "description": "A task's personal reminder.",
+            "properties": {
+              "acknowledged": {
+                "description": "Whether it has fired and was acknowledged.",
+                "type": "boolean"
+              },
+              "at": {
+                "description": "When it fires (RFC 3339, UTC); left out while a reminder relative to\nthe due date has no due date to follow.",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was set (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "days_before_due": {
+                "description": "For a reminder that follows the due date: how many days before it.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "The reminder's ID.",
+                "type": "string"
+              },
+              "note": {
+                "description": "Its text; left out when empty.",
+                "type": "string"
+              },
+              "set_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who set it."
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "time": {
+                "description": "For a reminder that follows the due date: the time of day (`HH:MM`);\nleft out, the workspace's reminder time.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "acknowledged",
+              "set_by",
+              "created_at"
+            ],
+            "type": "object"
+          },
           "RevisionInfo": {
             "additionalProperties": false,
             "description": "One revision of a description, without its text.",
@@ -10828,6 +11079,10 @@
                 "description": "Its place in its status column.",
                 "type": "string"
               },
+              "reminder": {
+                "$ref": "#/$defs/Reminder",
+                "description": "Its personal reminder, when asked for with `include` and it has one."
+              },
               "revisions": {
                 "description": "The description's revisions, newest first, conflict copies\nincluded, when asked for with `include`.",
                 "items": {
@@ -10860,6 +11115,13 @@
                 "description": "Its subtasks in order, when asked for with `include`.",
                 "items": {
                   "$ref": "#/$defs/TaskRef"
+                },
+                "type": "array"
+              },
+              "time_entries": {
+                "description": "Its time entries, newest day first, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/TimeEntry"
                 },
                 "type": "array"
               },
@@ -10944,6 +11206,65 @@
               "status",
               "closed",
               "id"
+            ],
+            "type": "object"
+          },
+          "TimeEntry": {
+            "additionalProperties": false,
+            "description": "One time entry.",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who logged it."
+              },
+              "created_at": {
+                "description": "When it was logged (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "date": {
+                "description": "The day the work was done (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "duration": {
+                "description": "The time as a duration in the workspace's units (`1h 30m`).",
+                "type": "string"
+              },
+              "edited_at": {
+                "description": "When it was last edited; left out when never.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The entry's ID.",
+                "type": "string"
+              },
+              "minutes": {
+                "description": "The time in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "note": {
+                "description": "What was done; left out when empty.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "version": {
+                "description": "Goes up by one with every edit; pass it as `expected_version`.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "date",
+              "minutes",
+              "duration",
+              "author",
+              "created_at",
+              "version"
             ],
             "type": "object"
           },
@@ -11773,6 +12094,58 @@
               }
             ]
           },
+          "Reminder": {
+            "additionalProperties": false,
+            "description": "A task's personal reminder.",
+            "properties": {
+              "acknowledged": {
+                "description": "Whether it has fired and was acknowledged.",
+                "type": "boolean"
+              },
+              "at": {
+                "description": "When it fires (RFC 3339, UTC); left out while a reminder relative to\nthe due date has no due date to follow.",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was set (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "days_before_due": {
+                "description": "For a reminder that follows the due date: how many days before it.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "The reminder's ID.",
+                "type": "string"
+              },
+              "note": {
+                "description": "Its text; left out when empty.",
+                "type": "string"
+              },
+              "set_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who set it."
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "time": {
+                "description": "For a reminder that follows the due date: the time of day (`HH:MM`);\nleft out, the workspace's reminder time.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "acknowledged",
+              "set_by",
+              "created_at"
+            ],
+            "type": "object"
+          },
           "RevisionInfo": {
             "additionalProperties": false,
             "description": "One revision of a description, without its text.",
@@ -12056,6 +12429,10 @@
                 "description": "Its place in its status column.",
                 "type": "string"
               },
+              "reminder": {
+                "$ref": "#/$defs/Reminder",
+                "description": "Its personal reminder, when asked for with `include` and it has one."
+              },
               "revisions": {
                 "description": "The description's revisions, newest first, conflict copies\nincluded, when asked for with `include`.",
                 "items": {
@@ -12088,6 +12465,13 @@
                 "description": "Its subtasks in order, when asked for with `include`.",
                 "items": {
                   "$ref": "#/$defs/TaskRef"
+                },
+                "type": "array"
+              },
+              "time_entries": {
+                "description": "Its time entries, newest day first, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/TimeEntry"
                 },
                 "type": "array"
               },
@@ -12172,6 +12556,65 @@
               "status",
               "closed",
               "id"
+            ],
+            "type": "object"
+          },
+          "TimeEntry": {
+            "additionalProperties": false,
+            "description": "One time entry.",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who logged it."
+              },
+              "created_at": {
+                "description": "When it was logged (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "date": {
+                "description": "The day the work was done (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "duration": {
+                "description": "The time as a duration in the workspace's units (`1h 30m`).",
+                "type": "string"
+              },
+              "edited_at": {
+                "description": "When it was last edited; left out when never.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The entry's ID.",
+                "type": "string"
+              },
+              "minutes": {
+                "description": "The time in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "note": {
+                "description": "What was done; left out when empty.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "version": {
+                "description": "Goes up by one with every edit; pass it as `expected_version`.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "date",
+              "minutes",
+              "duration",
+              "author",
+              "created_at",
+              "version"
             ],
             "type": "object"
           },
@@ -13131,6 +13574,58 @@
               }
             ]
           },
+          "Reminder": {
+            "additionalProperties": false,
+            "description": "A task's personal reminder.",
+            "properties": {
+              "acknowledged": {
+                "description": "Whether it has fired and was acknowledged.",
+                "type": "boolean"
+              },
+              "at": {
+                "description": "When it fires (RFC 3339, UTC); left out while a reminder relative to\nthe due date has no due date to follow.",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was set (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "days_before_due": {
+                "description": "For a reminder that follows the due date: how many days before it.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "The reminder's ID.",
+                "type": "string"
+              },
+              "note": {
+                "description": "Its text; left out when empty.",
+                "type": "string"
+              },
+              "set_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who set it."
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "time": {
+                "description": "For a reminder that follows the due date: the time of day (`HH:MM`);\nleft out, the workspace's reminder time.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "acknowledged",
+              "set_by",
+              "created_at"
+            ],
+            "type": "object"
+          },
           "RevisionInfo": {
             "additionalProperties": false,
             "description": "One revision of a description, without its text.",
@@ -13414,6 +13909,10 @@
                 "description": "Its place in its status column.",
                 "type": "string"
               },
+              "reminder": {
+                "$ref": "#/$defs/Reminder",
+                "description": "Its personal reminder, when asked for with `include` and it has one."
+              },
               "revisions": {
                 "description": "The description's revisions, newest first, conflict copies\nincluded, when asked for with `include`.",
                 "items": {
@@ -13446,6 +13945,13 @@
                 "description": "Its subtasks in order, when asked for with `include`.",
                 "items": {
                   "$ref": "#/$defs/TaskRef"
+                },
+                "type": "array"
+              },
+              "time_entries": {
+                "description": "Its time entries, newest day first, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/TimeEntry"
                 },
                 "type": "array"
               },
@@ -13530,6 +14036,65 @@
               "status",
               "closed",
               "id"
+            ],
+            "type": "object"
+          },
+          "TimeEntry": {
+            "additionalProperties": false,
+            "description": "One time entry.",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who logged it."
+              },
+              "created_at": {
+                "description": "When it was logged (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "date": {
+                "description": "The day the work was done (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "duration": {
+                "description": "The time as a duration in the workspace's units (`1h 30m`).",
+                "type": "string"
+              },
+              "edited_at": {
+                "description": "When it was last edited; left out when never.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The entry's ID.",
+                "type": "string"
+              },
+              "minutes": {
+                "description": "The time in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "note": {
+                "description": "What was done; left out when empty.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "version": {
+                "description": "Goes up by one with every edit; pass it as `expected_version`.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "date",
+              "minutes",
+              "duration",
+              "author",
+              "created_at",
+              "version"
             ],
             "type": "object"
           },
@@ -14282,6 +14847,58 @@
               }
             ]
           },
+          "Reminder": {
+            "additionalProperties": false,
+            "description": "A task's personal reminder.",
+            "properties": {
+              "acknowledged": {
+                "description": "Whether it has fired and was acknowledged.",
+                "type": "boolean"
+              },
+              "at": {
+                "description": "When it fires (RFC 3339, UTC); left out while a reminder relative to\nthe due date has no due date to follow.",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was set (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "days_before_due": {
+                "description": "For a reminder that follows the due date: how many days before it.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "The reminder's ID.",
+                "type": "string"
+              },
+              "note": {
+                "description": "Its text; left out when empty.",
+                "type": "string"
+              },
+              "set_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who set it."
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "time": {
+                "description": "For a reminder that follows the due date: the time of day (`HH:MM`);\nleft out, the workspace's reminder time.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "acknowledged",
+              "set_by",
+              "created_at"
+            ],
+            "type": "object"
+          },
           "RevisionInfo": {
             "additionalProperties": false,
             "description": "One revision of a description, without its text.",
@@ -14565,6 +15182,10 @@
                 "description": "Its place in its status column.",
                 "type": "string"
               },
+              "reminder": {
+                "$ref": "#/$defs/Reminder",
+                "description": "Its personal reminder, when asked for with `include` and it has one."
+              },
               "revisions": {
                 "description": "The description's revisions, newest first, conflict copies\nincluded, when asked for with `include`.",
                 "items": {
@@ -14597,6 +15218,13 @@
                 "description": "Its subtasks in order, when asked for with `include`.",
                 "items": {
                   "$ref": "#/$defs/TaskRef"
+                },
+                "type": "array"
+              },
+              "time_entries": {
+                "description": "Its time entries, newest day first, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/TimeEntry"
                 },
                 "type": "array"
               },
@@ -14681,6 +15309,65 @@
               "status",
               "closed",
               "id"
+            ],
+            "type": "object"
+          },
+          "TimeEntry": {
+            "additionalProperties": false,
+            "description": "One time entry.",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who logged it."
+              },
+              "created_at": {
+                "description": "When it was logged (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "date": {
+                "description": "The day the work was done (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "duration": {
+                "description": "The time as a duration in the workspace's units (`1h 30m`).",
+                "type": "string"
+              },
+              "edited_at": {
+                "description": "When it was last edited; left out when never.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The entry's ID.",
+                "type": "string"
+              },
+              "minutes": {
+                "description": "The time in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "note": {
+                "description": "What was done; left out when empty.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "version": {
+                "description": "Goes up by one with every edit; pass it as `expected_version`.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "date",
+              "minutes",
+              "duration",
+              "author",
+              "created_at",
+              "version"
             ],
             "type": "object"
           },
@@ -15419,6 +16106,58 @@
               }
             ]
           },
+          "Reminder": {
+            "additionalProperties": false,
+            "description": "A task's personal reminder.",
+            "properties": {
+              "acknowledged": {
+                "description": "Whether it has fired and was acknowledged.",
+                "type": "boolean"
+              },
+              "at": {
+                "description": "When it fires (RFC 3339, UTC); left out while a reminder relative to\nthe due date has no due date to follow.",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was set (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "days_before_due": {
+                "description": "For a reminder that follows the due date: how many days before it.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "The reminder's ID.",
+                "type": "string"
+              },
+              "note": {
+                "description": "Its text; left out when empty.",
+                "type": "string"
+              },
+              "set_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who set it."
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "time": {
+                "description": "For a reminder that follows the due date: the time of day (`HH:MM`);\nleft out, the workspace's reminder time.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "acknowledged",
+              "set_by",
+              "created_at"
+            ],
+            "type": "object"
+          },
           "RevisionInfo": {
             "additionalProperties": false,
             "description": "One revision of a description, without its text.",
@@ -15702,6 +16441,10 @@
                 "description": "Its place in its status column.",
                 "type": "string"
               },
+              "reminder": {
+                "$ref": "#/$defs/Reminder",
+                "description": "Its personal reminder, when asked for with `include` and it has one."
+              },
               "revisions": {
                 "description": "The description's revisions, newest first, conflict copies\nincluded, when asked for with `include`.",
                 "items": {
@@ -15734,6 +16477,13 @@
                 "description": "Its subtasks in order, when asked for with `include`.",
                 "items": {
                   "$ref": "#/$defs/TaskRef"
+                },
+                "type": "array"
+              },
+              "time_entries": {
+                "description": "Its time entries, newest day first, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/TimeEntry"
                 },
                 "type": "array"
               },
@@ -15818,6 +16568,65 @@
               "status",
               "closed",
               "id"
+            ],
+            "type": "object"
+          },
+          "TimeEntry": {
+            "additionalProperties": false,
+            "description": "One time entry.",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who logged it."
+              },
+              "created_at": {
+                "description": "When it was logged (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "date": {
+                "description": "The day the work was done (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "duration": {
+                "description": "The time as a duration in the workspace's units (`1h 30m`).",
+                "type": "string"
+              },
+              "edited_at": {
+                "description": "When it was last edited; left out when never.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The entry's ID.",
+                "type": "string"
+              },
+              "minutes": {
+                "description": "The time in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "note": {
+                "description": "What was done; left out when empty.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "version": {
+                "description": "Goes up by one with every edit; pass it as `expected_version`.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "date",
+              "minutes",
+              "duration",
+              "author",
+              "created_at",
+              "version"
             ],
             "type": "object"
           },
@@ -16547,6 +17356,58 @@
               }
             ]
           },
+          "Reminder": {
+            "additionalProperties": false,
+            "description": "A task's personal reminder.",
+            "properties": {
+              "acknowledged": {
+                "description": "Whether it has fired and was acknowledged.",
+                "type": "boolean"
+              },
+              "at": {
+                "description": "When it fires (RFC 3339, UTC); left out while a reminder relative to\nthe due date has no due date to follow.",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was set (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "days_before_due": {
+                "description": "For a reminder that follows the due date: how many days before it.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "The reminder's ID.",
+                "type": "string"
+              },
+              "note": {
+                "description": "Its text; left out when empty.",
+                "type": "string"
+              },
+              "set_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who set it."
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "time": {
+                "description": "For a reminder that follows the due date: the time of day (`HH:MM`);\nleft out, the workspace's reminder time.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "acknowledged",
+              "set_by",
+              "created_at"
+            ],
+            "type": "object"
+          },
           "RevisionInfo": {
             "additionalProperties": false,
             "description": "One revision of a description, without its text.",
@@ -16830,6 +17691,10 @@
                 "description": "Its place in its status column.",
                 "type": "string"
               },
+              "reminder": {
+                "$ref": "#/$defs/Reminder",
+                "description": "Its personal reminder, when asked for with `include` and it has one."
+              },
               "revisions": {
                 "description": "The description's revisions, newest first, conflict copies\nincluded, when asked for with `include`.",
                 "items": {
@@ -16862,6 +17727,13 @@
                 "description": "Its subtasks in order, when asked for with `include`.",
                 "items": {
                   "$ref": "#/$defs/TaskRef"
+                },
+                "type": "array"
+              },
+              "time_entries": {
+                "description": "Its time entries, newest day first, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/TimeEntry"
                 },
                 "type": "array"
               },
@@ -16946,6 +17818,65 @@
               "status",
               "closed",
               "id"
+            ],
+            "type": "object"
+          },
+          "TimeEntry": {
+            "additionalProperties": false,
+            "description": "One time entry.",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who logged it."
+              },
+              "created_at": {
+                "description": "When it was logged (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "date": {
+                "description": "The day the work was done (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "duration": {
+                "description": "The time as a duration in the workspace's units (`1h 30m`).",
+                "type": "string"
+              },
+              "edited_at": {
+                "description": "When it was last edited; left out when never.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The entry's ID.",
+                "type": "string"
+              },
+              "minutes": {
+                "description": "The time in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "note": {
+                "description": "What was done; left out when empty.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "version": {
+                "description": "Goes up by one with every edit; pass it as `expected_version`.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "date",
+              "minutes",
+              "duration",
+              "author",
+              "created_at",
+              "version"
             ],
             "type": "object"
           },
@@ -17894,6 +18825,58 @@
               }
             ]
           },
+          "Reminder": {
+            "additionalProperties": false,
+            "description": "A task's personal reminder.",
+            "properties": {
+              "acknowledged": {
+                "description": "Whether it has fired and was acknowledged.",
+                "type": "boolean"
+              },
+              "at": {
+                "description": "When it fires (RFC 3339, UTC); left out while a reminder relative to\nthe due date has no due date to follow.",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was set (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "days_before_due": {
+                "description": "For a reminder that follows the due date: how many days before it.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "The reminder's ID.",
+                "type": "string"
+              },
+              "note": {
+                "description": "Its text; left out when empty.",
+                "type": "string"
+              },
+              "set_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who set it."
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "time": {
+                "description": "For a reminder that follows the due date: the time of day (`HH:MM`);\nleft out, the workspace's reminder time.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "acknowledged",
+              "set_by",
+              "created_at"
+            ],
+            "type": "object"
+          },
           "RevisionInfo": {
             "additionalProperties": false,
             "description": "One revision of a description, without its text.",
@@ -18177,6 +19160,10 @@
                 "description": "Its place in its status column.",
                 "type": "string"
               },
+              "reminder": {
+                "$ref": "#/$defs/Reminder",
+                "description": "Its personal reminder, when asked for with `include` and it has one."
+              },
               "revisions": {
                 "description": "The description's revisions, newest first, conflict copies\nincluded, when asked for with `include`.",
                 "items": {
@@ -18209,6 +19196,13 @@
                 "description": "Its subtasks in order, when asked for with `include`.",
                 "items": {
                   "$ref": "#/$defs/TaskRef"
+                },
+                "type": "array"
+              },
+              "time_entries": {
+                "description": "Its time entries, newest day first, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/TimeEntry"
                 },
                 "type": "array"
               },
@@ -18293,6 +19287,65 @@
               "status",
               "closed",
               "id"
+            ],
+            "type": "object"
+          },
+          "TimeEntry": {
+            "additionalProperties": false,
+            "description": "One time entry.",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who logged it."
+              },
+              "created_at": {
+                "description": "When it was logged (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "date": {
+                "description": "The day the work was done (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "duration": {
+                "description": "The time as a duration in the workspace's units (`1h 30m`).",
+                "type": "string"
+              },
+              "edited_at": {
+                "description": "When it was last edited; left out when never.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The entry's ID.",
+                "type": "string"
+              },
+              "minutes": {
+                "description": "The time in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "note": {
+                "description": "What was done; left out when empty.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "version": {
+                "description": "Goes up by one with every edit; pass it as `expected_version`.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "date",
+              "minutes",
+              "duration",
+              "author",
+              "created_at",
+              "version"
             ],
             "type": "object"
           },
@@ -19002,6 +20055,58 @@
               }
             ]
           },
+          "Reminder": {
+            "additionalProperties": false,
+            "description": "A task's personal reminder.",
+            "properties": {
+              "acknowledged": {
+                "description": "Whether it has fired and was acknowledged.",
+                "type": "boolean"
+              },
+              "at": {
+                "description": "When it fires (RFC 3339, UTC); left out while a reminder relative to\nthe due date has no due date to follow.",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was set (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "days_before_due": {
+                "description": "For a reminder that follows the due date: how many days before it.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "The reminder's ID.",
+                "type": "string"
+              },
+              "note": {
+                "description": "Its text; left out when empty.",
+                "type": "string"
+              },
+              "set_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who set it."
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "time": {
+                "description": "For a reminder that follows the due date: the time of day (`HH:MM`);\nleft out, the workspace's reminder time.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "acknowledged",
+              "set_by",
+              "created_at"
+            ],
+            "type": "object"
+          },
           "RevisionInfo": {
             "additionalProperties": false,
             "description": "One revision of a description, without its text.",
@@ -19285,6 +20390,10 @@
                 "description": "Its place in its status column.",
                 "type": "string"
               },
+              "reminder": {
+                "$ref": "#/$defs/Reminder",
+                "description": "Its personal reminder, when asked for with `include` and it has one."
+              },
               "revisions": {
                 "description": "The description's revisions, newest first, conflict copies\nincluded, when asked for with `include`.",
                 "items": {
@@ -19317,6 +20426,13 @@
                 "description": "Its subtasks in order, when asked for with `include`.",
                 "items": {
                   "$ref": "#/$defs/TaskRef"
+                },
+                "type": "array"
+              },
+              "time_entries": {
+                "description": "Its time entries, newest day first, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/TimeEntry"
                 },
                 "type": "array"
               },
@@ -19401,6 +20517,65 @@
               "status",
               "closed",
               "id"
+            ],
+            "type": "object"
+          },
+          "TimeEntry": {
+            "additionalProperties": false,
+            "description": "One time entry.",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who logged it."
+              },
+              "created_at": {
+                "description": "When it was logged (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "date": {
+                "description": "The day the work was done (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "duration": {
+                "description": "The time as a duration in the workspace's units (`1h 30m`).",
+                "type": "string"
+              },
+              "edited_at": {
+                "description": "When it was last edited; left out when never.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The entry's ID.",
+                "type": "string"
+              },
+              "minutes": {
+                "description": "The time in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "note": {
+                "description": "What was done; left out when empty.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "version": {
+                "description": "Goes up by one with every edit; pass it as `expected_version`.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "date",
+              "minutes",
+              "duration",
+              "author",
+              "created_at",
+              "version"
             ],
             "type": "object"
           },
@@ -20103,6 +21278,58 @@
               }
             ]
           },
+          "Reminder": {
+            "additionalProperties": false,
+            "description": "A task's personal reminder.",
+            "properties": {
+              "acknowledged": {
+                "description": "Whether it has fired and was acknowledged.",
+                "type": "boolean"
+              },
+              "at": {
+                "description": "When it fires (RFC 3339, UTC); left out while a reminder relative to\nthe due date has no due date to follow.",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was set (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "days_before_due": {
+                "description": "For a reminder that follows the due date: how many days before it.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "The reminder's ID.",
+                "type": "string"
+              },
+              "note": {
+                "description": "Its text; left out when empty.",
+                "type": "string"
+              },
+              "set_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who set it."
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "time": {
+                "description": "For a reminder that follows the due date: the time of day (`HH:MM`);\nleft out, the workspace's reminder time.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "acknowledged",
+              "set_by",
+              "created_at"
+            ],
+            "type": "object"
+          },
           "RevisionInfo": {
             "additionalProperties": false,
             "description": "One revision of a description, without its text.",
@@ -20386,6 +21613,10 @@
                 "description": "Its place in its status column.",
                 "type": "string"
               },
+              "reminder": {
+                "$ref": "#/$defs/Reminder",
+                "description": "Its personal reminder, when asked for with `include` and it has one."
+              },
               "revisions": {
                 "description": "The description's revisions, newest first, conflict copies\nincluded, when asked for with `include`.",
                 "items": {
@@ -20418,6 +21649,13 @@
                 "description": "Its subtasks in order, when asked for with `include`.",
                 "items": {
                   "$ref": "#/$defs/TaskRef"
+                },
+                "type": "array"
+              },
+              "time_entries": {
+                "description": "Its time entries, newest day first, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/TimeEntry"
                 },
                 "type": "array"
               },
@@ -20502,6 +21740,65 @@
               "status",
               "closed",
               "id"
+            ],
+            "type": "object"
+          },
+          "TimeEntry": {
+            "additionalProperties": false,
+            "description": "One time entry.",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who logged it."
+              },
+              "created_at": {
+                "description": "When it was logged (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "date": {
+                "description": "The day the work was done (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "duration": {
+                "description": "The time as a duration in the workspace's units (`1h 30m`).",
+                "type": "string"
+              },
+              "edited_at": {
+                "description": "When it was last edited; left out when never.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The entry's ID.",
+                "type": "string"
+              },
+              "minutes": {
+                "description": "The time in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "note": {
+                "description": "What was done; left out when empty.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "version": {
+                "description": "Goes up by one with every edit; pass it as `expected_version`.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "date",
+              "minutes",
+              "duration",
+              "author",
+              "created_at",
+              "version"
             ],
             "type": "object"
           },
@@ -21247,6 +22544,58 @@
               }
             ]
           },
+          "Reminder": {
+            "additionalProperties": false,
+            "description": "A task's personal reminder.",
+            "properties": {
+              "acknowledged": {
+                "description": "Whether it has fired and was acknowledged.",
+                "type": "boolean"
+              },
+              "at": {
+                "description": "When it fires (RFC 3339, UTC); left out while a reminder relative to\nthe due date has no due date to follow.",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was set (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "days_before_due": {
+                "description": "For a reminder that follows the due date: how many days before it.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "The reminder's ID.",
+                "type": "string"
+              },
+              "note": {
+                "description": "Its text; left out when empty.",
+                "type": "string"
+              },
+              "set_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who set it."
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "time": {
+                "description": "For a reminder that follows the due date: the time of day (`HH:MM`);\nleft out, the workspace's reminder time.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "acknowledged",
+              "set_by",
+              "created_at"
+            ],
+            "type": "object"
+          },
           "RevisionInfo": {
             "additionalProperties": false,
             "description": "One revision of a description, without its text.",
@@ -21530,6 +22879,10 @@
                 "description": "Its place in its status column.",
                 "type": "string"
               },
+              "reminder": {
+                "$ref": "#/$defs/Reminder",
+                "description": "Its personal reminder, when asked for with `include` and it has one."
+              },
               "revisions": {
                 "description": "The description's revisions, newest first, conflict copies\nincluded, when asked for with `include`.",
                 "items": {
@@ -21562,6 +22915,13 @@
                 "description": "Its subtasks in order, when asked for with `include`.",
                 "items": {
                   "$ref": "#/$defs/TaskRef"
+                },
+                "type": "array"
+              },
+              "time_entries": {
+                "description": "Its time entries, newest day first, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/TimeEntry"
                 },
                 "type": "array"
               },
@@ -21646,6 +23006,65 @@
               "status",
               "closed",
               "id"
+            ],
+            "type": "object"
+          },
+          "TimeEntry": {
+            "additionalProperties": false,
+            "description": "One time entry.",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who logged it."
+              },
+              "created_at": {
+                "description": "When it was logged (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "date": {
+                "description": "The day the work was done (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "duration": {
+                "description": "The time as a duration in the workspace's units (`1h 30m`).",
+                "type": "string"
+              },
+              "edited_at": {
+                "description": "When it was last edited; left out when never.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The entry's ID.",
+                "type": "string"
+              },
+              "minutes": {
+                "description": "The time in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "note": {
+                "description": "What was done; left out when empty.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "version": {
+                "description": "Goes up by one with every edit; pass it as `expected_version`.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "date",
+              "minutes",
+              "duration",
+              "author",
+              "created_at",
+              "version"
             ],
             "type": "object"
           },
@@ -22391,6 +23810,58 @@
               }
             ]
           },
+          "Reminder": {
+            "additionalProperties": false,
+            "description": "A task's personal reminder.",
+            "properties": {
+              "acknowledged": {
+                "description": "Whether it has fired and was acknowledged.",
+                "type": "boolean"
+              },
+              "at": {
+                "description": "When it fires (RFC 3339, UTC); left out while a reminder relative to\nthe due date has no due date to follow.",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was set (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "days_before_due": {
+                "description": "For a reminder that follows the due date: how many days before it.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "The reminder's ID.",
+                "type": "string"
+              },
+              "note": {
+                "description": "Its text; left out when empty.",
+                "type": "string"
+              },
+              "set_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who set it."
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "time": {
+                "description": "For a reminder that follows the due date: the time of day (`HH:MM`);\nleft out, the workspace's reminder time.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "acknowledged",
+              "set_by",
+              "created_at"
+            ],
+            "type": "object"
+          },
           "RevisionInfo": {
             "additionalProperties": false,
             "description": "One revision of a description, without its text.",
@@ -22674,6 +24145,10 @@
                 "description": "Its place in its status column.",
                 "type": "string"
               },
+              "reminder": {
+                "$ref": "#/$defs/Reminder",
+                "description": "Its personal reminder, when asked for with `include` and it has one."
+              },
               "revisions": {
                 "description": "The description's revisions, newest first, conflict copies\nincluded, when asked for with `include`.",
                 "items": {
@@ -22706,6 +24181,13 @@
                 "description": "Its subtasks in order, when asked for with `include`.",
                 "items": {
                   "$ref": "#/$defs/TaskRef"
+                },
+                "type": "array"
+              },
+              "time_entries": {
+                "description": "Its time entries, newest day first, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/TimeEntry"
                 },
                 "type": "array"
               },
@@ -22790,6 +24272,65 @@
               "status",
               "closed",
               "id"
+            ],
+            "type": "object"
+          },
+          "TimeEntry": {
+            "additionalProperties": false,
+            "description": "One time entry.",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who logged it."
+              },
+              "created_at": {
+                "description": "When it was logged (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "date": {
+                "description": "The day the work was done (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "duration": {
+                "description": "The time as a duration in the workspace's units (`1h 30m`).",
+                "type": "string"
+              },
+              "edited_at": {
+                "description": "When it was last edited; left out when never.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The entry's ID.",
+                "type": "string"
+              },
+              "minutes": {
+                "description": "The time in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "note": {
+                "description": "What was done; left out when empty.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "version": {
+                "description": "Goes up by one with every edit; pass it as `expected_version`.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "date",
+              "minutes",
+              "duration",
+              "author",
+              "created_at",
+              "version"
             ],
             "type": "object"
           },
@@ -24683,6 +26224,2543 @@
       "output_name": "CommentChange",
       "safety": "trash",
       "summary": "Move a comment to the trash."
+    },
+    {
+      "cli": "time log <key>",
+      "exposure": "data",
+      "id": "time.log",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Time to log on a task.",
+        "properties": {
+          "client_request_id": {
+            "description": "Your own ID for this request; repeating it within 24 hours returns\nthe first answer instead of logging the time twice.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "date": {
+            "description": "The day of the work: `YYYY-MM-DD`, `today` or `yesterday`; default\ntoday.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "duration": {
+            "description": "How long: `1h 30m`, `90m`, `1.5h`, `1:30`, `+30m`; at most 24 hours.",
+            "type": "string"
+          },
+          "key": {
+            "description": "The task: its key or ID.",
+            "type": "string"
+          },
+          "note": {
+            "description": "What was done, at most 2000 characters.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "key",
+          "duration"
+        ],
+        "title": "TimeLogInput",
+        "type": "object"
+      },
+      "input_name": "TimeLogInput",
+      "kind": "command",
+      "mcp_tool": "log_time",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person or agent."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person or an agent.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              }
+            ]
+          },
+          "TimeEntry": {
+            "additionalProperties": false,
+            "description": "One time entry.",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who logged it."
+              },
+              "created_at": {
+                "description": "When it was logged (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "date": {
+                "description": "The day the work was done (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "duration": {
+                "description": "The time as a duration in the workspace's units (`1h 30m`).",
+                "type": "string"
+              },
+              "edited_at": {
+                "description": "When it was last edited; left out when never.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The entry's ID.",
+                "type": "string"
+              },
+              "minutes": {
+                "description": "The time in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "note": {
+                "description": "What was done; left out when empty.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "version": {
+                "description": "Goes up by one with every edit; pass it as `expected_version`.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "date",
+              "minutes",
+              "duration",
+              "author",
+              "created_at",
+              "version"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A time entry changed, with the history group of the change.",
+        "properties": {
+          "deleted": {
+            "default": false,
+            "description": "Whether it is in the trash now.",
+            "type": "boolean"
+          },
+          "entry": {
+            "$ref": "#/$defs/TimeEntry",
+            "description": "The entry after the change."
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "spent_minutes": {
+            "description": "The task's logged time after the change, in minutes.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "entry",
+          "deleted",
+          "spent_minutes"
+        ],
+        "title": "TimeEntryChange",
+        "type": "object"
+      },
+      "output_name": "TimeEntryChange",
+      "safety": "write",
+      "summary": "Log time on a task: a duration, the day of the work (default today) and a note."
+    },
+    {
+      "cli": "time edit <entry>",
+      "exposure": "data",
+      "id": "time.update",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Changes to a time entry; fields left out keep their value.",
+        "properties": {
+          "date": {
+            "description": "The new day: `YYYY-MM-DD`, `today` or `yesterday`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "duration": {
+            "description": "The new duration.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "entry": {
+            "description": "The entry's ID.",
+            "type": "string"
+          },
+          "expected_version": {
+            "description": "Refuse the change unless the entry still has this version.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "note": {
+            "description": "The new note; an empty text removes it.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "entry"
+        ],
+        "title": "TimeUpdateInput",
+        "type": "object"
+      },
+      "input_name": "TimeUpdateInput",
+      "kind": "command",
+      "mcp_tool": "update_time_entry",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person or agent."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person or an agent.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              }
+            ]
+          },
+          "TimeEntry": {
+            "additionalProperties": false,
+            "description": "One time entry.",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who logged it."
+              },
+              "created_at": {
+                "description": "When it was logged (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "date": {
+                "description": "The day the work was done (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "duration": {
+                "description": "The time as a duration in the workspace's units (`1h 30m`).",
+                "type": "string"
+              },
+              "edited_at": {
+                "description": "When it was last edited; left out when never.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The entry's ID.",
+                "type": "string"
+              },
+              "minutes": {
+                "description": "The time in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "note": {
+                "description": "What was done; left out when empty.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "version": {
+                "description": "Goes up by one with every edit; pass it as `expected_version`.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "date",
+              "minutes",
+              "duration",
+              "author",
+              "created_at",
+              "version"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A time entry changed, with the history group of the change.",
+        "properties": {
+          "deleted": {
+            "default": false,
+            "description": "Whether it is in the trash now.",
+            "type": "boolean"
+          },
+          "entry": {
+            "$ref": "#/$defs/TimeEntry",
+            "description": "The entry after the change."
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "spent_minutes": {
+            "description": "The task's logged time after the change, in minutes.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "entry",
+          "deleted",
+          "spent_minutes"
+        ],
+        "title": "TimeEntryChange",
+        "type": "object"
+      },
+      "output_name": "TimeEntryChange",
+      "safety": "write",
+      "summary": "Change a time entry's duration, day or note."
+    },
+    {
+      "cli": "time delete <entry>",
+      "exposure": "data",
+      "id": "time.delete",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Names one time entry.",
+        "properties": {
+          "entry": {
+            "description": "The entry's ID.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "entry"
+        ],
+        "title": "TimeEntryRef",
+        "type": "object"
+      },
+      "input_name": "TimeEntryRef",
+      "kind": "command",
+      "mcp_tool": "delete_time_entry",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person or agent."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person or an agent.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              }
+            ]
+          },
+          "TimeEntry": {
+            "additionalProperties": false,
+            "description": "One time entry.",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who logged it."
+              },
+              "created_at": {
+                "description": "When it was logged (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "date": {
+                "description": "The day the work was done (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "duration": {
+                "description": "The time as a duration in the workspace's units (`1h 30m`).",
+                "type": "string"
+              },
+              "edited_at": {
+                "description": "When it was last edited; left out when never.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The entry's ID.",
+                "type": "string"
+              },
+              "minutes": {
+                "description": "The time in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "note": {
+                "description": "What was done; left out when empty.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "version": {
+                "description": "Goes up by one with every edit; pass it as `expected_version`.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "date",
+              "minutes",
+              "duration",
+              "author",
+              "created_at",
+              "version"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A time entry changed, with the history group of the change.",
+        "properties": {
+          "deleted": {
+            "default": false,
+            "description": "Whether it is in the trash now.",
+            "type": "boolean"
+          },
+          "entry": {
+            "$ref": "#/$defs/TimeEntry",
+            "description": "The entry after the change."
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "spent_minutes": {
+            "description": "The task's logged time after the change, in minutes.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "entry",
+          "deleted",
+          "spent_minutes"
+        ],
+        "title": "TimeEntryChange",
+        "type": "object"
+      },
+      "output_name": "TimeEntryChange",
+      "safety": "trash",
+      "summary": "Move a time entry to the trash."
+    },
+    {
+      "cli": "time report",
+      "exposure": "data",
+      "id": "time.report",
+      "input": {
+        "$defs": {
+          "TimeGroupBy": {
+            "description": "How the time report groups the entries.",
+            "oneOf": [
+              {
+                "const": "day",
+                "description": "By the day of the work.",
+                "type": "string"
+              },
+              {
+                "const": "task",
+                "description": "By task.",
+                "type": "string"
+              },
+              {
+                "const": "project",
+                "description": "By project.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Which time to report.",
+        "properties": {
+          "entries": {
+            "default": false,
+            "description": "Also list the entries, oldest first.",
+            "type": "boolean"
+          },
+          "from": {
+            "description": "The first day: `YYYY-MM-DD`, `today` or `yesterday`; default the\nfirst day of the current week.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "group_by": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TimeGroupBy"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How to group: `day`, `task` (default) or `project`."
+          },
+          "project": {
+            "description": "Only this project and its sub-projects: a key or ID.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "task": {
+            "description": "Only this task and its subtasks: a key or ID.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "to": {
+            "description": "The last day, included; default six days after `from`. At most 366\ndays after `from`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "TimeReportInput",
+        "type": "object"
+      },
+      "input_name": "TimeReportInput",
+      "kind": "query",
+      "mcp_tool": "get_time_report",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person or agent."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person or an agent.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              }
+            ]
+          },
+          "TimeEntry": {
+            "additionalProperties": false,
+            "description": "One time entry.",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who logged it."
+              },
+              "created_at": {
+                "description": "When it was logged (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "date": {
+                "description": "The day the work was done (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "duration": {
+                "description": "The time as a duration in the workspace's units (`1h 30m`).",
+                "type": "string"
+              },
+              "edited_at": {
+                "description": "When it was last edited; left out when never.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The entry's ID.",
+                "type": "string"
+              },
+              "minutes": {
+                "description": "The time in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "note": {
+                "description": "What was done; left out when empty.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "version": {
+                "description": "Goes up by one with every edit; pass it as `expected_version`.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "date",
+              "minutes",
+              "duration",
+              "author",
+              "created_at",
+              "version"
+            ],
+            "type": "object"
+          },
+          "TimeGroupBy": {
+            "description": "How the time report groups the entries.",
+            "oneOf": [
+              {
+                "const": "day",
+                "description": "By the day of the work.",
+                "type": "string"
+              },
+              {
+                "const": "task",
+                "description": "By task.",
+                "type": "string"
+              },
+              {
+                "const": "project",
+                "description": "By project.",
+                "type": "string"
+              }
+            ]
+          },
+          "TimeReportRow": {
+            "additionalProperties": false,
+            "description": "One group of the time report.",
+            "properties": {
+              "duration": {
+                "description": "The time in the workspace's units.",
+                "type": "string"
+              },
+              "entry_count": {
+                "description": "How many entries.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "key": {
+                "description": "The day, the task's key or the project's key.",
+                "type": "string"
+              },
+              "minutes": {
+                "description": "The time in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "title": {
+                "description": "The weekday, the task's title or the project's name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "minutes",
+              "duration",
+              "entry_count"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Logged time over a range of days, grouped, with the total.",
+        "properties": {
+          "days_per_week": {
+            "description": "The working week the units use, in days.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "entries": {
+            "description": "The entries, oldest first, when asked for.",
+            "items": {
+              "$ref": "#/$defs/TimeEntry"
+            },
+            "type": "array"
+          },
+          "from": {
+            "description": "The first day.",
+            "type": "string"
+          },
+          "group_by": {
+            "$ref": "#/$defs/TimeGroupBy",
+            "description": "How the rows are grouped."
+          },
+          "hours_per_day": {
+            "description": "The working day the units use, in hours.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "items": {
+            "description": "The groups: days in order; tasks and projects by most time first.",
+            "items": {
+              "$ref": "#/$defs/TimeReportRow"
+            },
+            "type": "array"
+          },
+          "to": {
+            "description": "The last day, included.",
+            "type": "string"
+          },
+          "total_duration": {
+            "description": "The total in the workspace's units.",
+            "type": "string"
+          },
+          "total_minutes": {
+            "description": "The total in minutes.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "group_by",
+          "items",
+          "total_minutes",
+          "total_duration",
+          "hours_per_day",
+          "days_per_week"
+        ],
+        "title": "TimeReport",
+        "type": "object"
+      },
+      "output_name": "TimeReport",
+      "safety": "read",
+      "summary": "Logged time over a range of days, grouped by day, task or project, with totals in the workspace's units."
+    },
+    {
+      "cli": "timer status",
+      "exposure": "data",
+      "id": "timer.get",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "No input.",
+        "title": "TimerGetInput",
+        "type": "object"
+      },
+      "input_name": "TimerGetInput",
+      "kind": "query",
+      "mcp_tool": "get_workspace",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person or agent."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person or an agent.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              }
+            ]
+          },
+          "Category": {
+            "description": "What a status means for the work in it.",
+            "oneOf": [
+              {
+                "const": "todo",
+                "description": "Not started.",
+                "type": "string"
+              },
+              {
+                "const": "in_progress",
+                "description": "Being worked on.",
+                "type": "string"
+              },
+              {
+                "const": "done",
+                "description": "Finished; closes the task.",
+                "type": "string"
+              },
+              {
+                "const": "cancelled",
+                "description": "Dropped; closes the task.",
+                "type": "string"
+              }
+            ]
+          },
+          "StatusRef": {
+            "additionalProperties": false,
+            "description": "A task's status, as tasks carry it.",
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/Category",
+                "description": "Its category."
+              },
+              "id": {
+                "description": "The status's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "category"
+            ],
+            "type": "object"
+          },
+          "TaskRef": {
+            "additionalProperties": false,
+            "description": "Another task, as links and subtask lists show it.",
+            "properties": {
+              "closed": {
+                "description": "Whether it is closed (done or cancelled).",
+                "type": "boolean"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "Its key.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/StatusRef",
+                "description": "Its status."
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "status",
+              "closed",
+              "id"
+            ],
+            "type": "object"
+          },
+          "Timer": {
+            "additionalProperties": false,
+            "description": "The workspace's timer.",
+            "properties": {
+              "elapsed": {
+                "description": "The time so far in the workspace's units, rounded to minutes.",
+                "type": "string"
+              },
+              "elapsed_seconds": {
+                "description": "The time so far, in seconds.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "note": {
+                "description": "The note the entry will get; left out when empty.",
+                "type": "string"
+              },
+              "running_since": {
+                "description": "When the current running stretch began; left out while paused.",
+                "type": "string"
+              },
+              "started_at": {
+                "description": "When it was first started (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "started_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who started it."
+              },
+              "state": {
+                "$ref": "#/$defs/TimerState",
+                "description": "Running or paused."
+              },
+              "task": {
+                "$ref": "#/$defs/TaskRef",
+                "description": "The task it times."
+              },
+              "task_trashed": {
+                "description": "Whether the task is in the trash; stop the timer with `discard`.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "task",
+              "state",
+              "started_at",
+              "elapsed_seconds",
+              "elapsed",
+              "started_by"
+            ],
+            "type": "object"
+          },
+          "TimerState": {
+            "description": "Whether the timer runs.",
+            "oneOf": [
+              {
+                "const": "running",
+                "description": "It counts.",
+                "type": "string"
+              },
+              {
+                "const": "paused",
+                "description": "It keeps its time but doesn't count.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The timer, if there is one.",
+        "properties": {
+          "timer": {
+            "$ref": "#/$defs/Timer",
+            "description": "The timer; left out when none runs or is paused."
+          }
+        },
+        "title": "TimerStatus",
+        "type": "object"
+      },
+      "output_name": "TimerStatus",
+      "safety": "read",
+      "summary": "The workspace's timer: its task, whether it runs and the time so far."
+    },
+    {
+      "cli": "timer start <key>",
+      "exposure": "data",
+      "id": "timer.start",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Start the timer, or start a paused one again.",
+        "properties": {
+          "key": {
+            "description": "The task: its key or ID. Left out, the paused timer runs again. A\ntimer on another task is stopped first and its time logged.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "note": {
+            "description": "The note the entry will get, at most 2000 characters.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "TimerStartInput",
+        "type": "object"
+      },
+      "input_name": "TimerStartInput",
+      "kind": "command",
+      "mcp_tool": "start_timer",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person or agent."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person or an agent.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              }
+            ]
+          },
+          "Category": {
+            "description": "What a status means for the work in it.",
+            "oneOf": [
+              {
+                "const": "todo",
+                "description": "Not started.",
+                "type": "string"
+              },
+              {
+                "const": "in_progress",
+                "description": "Being worked on.",
+                "type": "string"
+              },
+              {
+                "const": "done",
+                "description": "Finished; closes the task.",
+                "type": "string"
+              },
+              {
+                "const": "cancelled",
+                "description": "Dropped; closes the task.",
+                "type": "string"
+              }
+            ]
+          },
+          "StatusRef": {
+            "additionalProperties": false,
+            "description": "A task's status, as tasks carry it.",
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/Category",
+                "description": "Its category."
+              },
+              "id": {
+                "description": "The status's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "category"
+            ],
+            "type": "object"
+          },
+          "TaskRef": {
+            "additionalProperties": false,
+            "description": "Another task, as links and subtask lists show it.",
+            "properties": {
+              "closed": {
+                "description": "Whether it is closed (done or cancelled).",
+                "type": "boolean"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "Its key.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/StatusRef",
+                "description": "Its status."
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "status",
+              "closed",
+              "id"
+            ],
+            "type": "object"
+          },
+          "TimeEntry": {
+            "additionalProperties": false,
+            "description": "One time entry.",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who logged it."
+              },
+              "created_at": {
+                "description": "When it was logged (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "date": {
+                "description": "The day the work was done (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "duration": {
+                "description": "The time as a duration in the workspace's units (`1h 30m`).",
+                "type": "string"
+              },
+              "edited_at": {
+                "description": "When it was last edited; left out when never.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The entry's ID.",
+                "type": "string"
+              },
+              "minutes": {
+                "description": "The time in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "note": {
+                "description": "What was done; left out when empty.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "version": {
+                "description": "Goes up by one with every edit; pass it as `expected_version`.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "date",
+              "minutes",
+              "duration",
+              "author",
+              "created_at",
+              "version"
+            ],
+            "type": "object"
+          },
+          "Timer": {
+            "additionalProperties": false,
+            "description": "The workspace's timer.",
+            "properties": {
+              "elapsed": {
+                "description": "The time so far in the workspace's units, rounded to minutes.",
+                "type": "string"
+              },
+              "elapsed_seconds": {
+                "description": "The time so far, in seconds.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "note": {
+                "description": "The note the entry will get; left out when empty.",
+                "type": "string"
+              },
+              "running_since": {
+                "description": "When the current running stretch began; left out while paused.",
+                "type": "string"
+              },
+              "started_at": {
+                "description": "When it was first started (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "started_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who started it."
+              },
+              "state": {
+                "$ref": "#/$defs/TimerState",
+                "description": "Running or paused."
+              },
+              "task": {
+                "$ref": "#/$defs/TaskRef",
+                "description": "The task it times."
+              },
+              "task_trashed": {
+                "description": "Whether the task is in the trash; stop the timer with `discard`.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "task",
+              "state",
+              "started_at",
+              "elapsed_seconds",
+              "elapsed",
+              "started_by"
+            ],
+            "type": "object"
+          },
+          "TimerState": {
+            "description": "Whether the timer runs.",
+            "oneOf": [
+              {
+                "const": "running",
+                "description": "It counts.",
+                "type": "string"
+              },
+              {
+                "const": "paused",
+                "description": "It keeps its time but doesn't count.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The timer after a change.",
+        "properties": {
+          "entry": {
+            "$ref": "#/$defs/TimeEntry",
+            "description": "The entry the stopped timer logged."
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "timer": {
+            "$ref": "#/$defs/Timer",
+            "description": "The timer now; left out when it was stopped."
+          },
+          "warnings": {
+            "description": "What didn't stop the change, such as time under half a minute that\nwas not logged.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "TimerChange",
+        "type": "object"
+      },
+      "output_name": "TimerChange",
+      "safety": "write",
+      "summary": "Start the timer on a task, or start the paused timer again; a timer on another task is stopped and its time logged."
+    },
+    {
+      "cli": "timer pause",
+      "exposure": "data",
+      "id": "timer.pause",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "No input.",
+        "title": "TimerPauseInput",
+        "type": "object"
+      },
+      "input_name": "TimerPauseInput",
+      "kind": "command",
+      "mcp_tool": "pause_timer",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person or agent."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person or an agent.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              }
+            ]
+          },
+          "Category": {
+            "description": "What a status means for the work in it.",
+            "oneOf": [
+              {
+                "const": "todo",
+                "description": "Not started.",
+                "type": "string"
+              },
+              {
+                "const": "in_progress",
+                "description": "Being worked on.",
+                "type": "string"
+              },
+              {
+                "const": "done",
+                "description": "Finished; closes the task.",
+                "type": "string"
+              },
+              {
+                "const": "cancelled",
+                "description": "Dropped; closes the task.",
+                "type": "string"
+              }
+            ]
+          },
+          "StatusRef": {
+            "additionalProperties": false,
+            "description": "A task's status, as tasks carry it.",
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/Category",
+                "description": "Its category."
+              },
+              "id": {
+                "description": "The status's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "category"
+            ],
+            "type": "object"
+          },
+          "TaskRef": {
+            "additionalProperties": false,
+            "description": "Another task, as links and subtask lists show it.",
+            "properties": {
+              "closed": {
+                "description": "Whether it is closed (done or cancelled).",
+                "type": "boolean"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "Its key.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/StatusRef",
+                "description": "Its status."
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "status",
+              "closed",
+              "id"
+            ],
+            "type": "object"
+          },
+          "TimeEntry": {
+            "additionalProperties": false,
+            "description": "One time entry.",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who logged it."
+              },
+              "created_at": {
+                "description": "When it was logged (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "date": {
+                "description": "The day the work was done (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "duration": {
+                "description": "The time as a duration in the workspace's units (`1h 30m`).",
+                "type": "string"
+              },
+              "edited_at": {
+                "description": "When it was last edited; left out when never.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The entry's ID.",
+                "type": "string"
+              },
+              "minutes": {
+                "description": "The time in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "note": {
+                "description": "What was done; left out when empty.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "version": {
+                "description": "Goes up by one with every edit; pass it as `expected_version`.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "date",
+              "minutes",
+              "duration",
+              "author",
+              "created_at",
+              "version"
+            ],
+            "type": "object"
+          },
+          "Timer": {
+            "additionalProperties": false,
+            "description": "The workspace's timer.",
+            "properties": {
+              "elapsed": {
+                "description": "The time so far in the workspace's units, rounded to minutes.",
+                "type": "string"
+              },
+              "elapsed_seconds": {
+                "description": "The time so far, in seconds.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "note": {
+                "description": "The note the entry will get; left out when empty.",
+                "type": "string"
+              },
+              "running_since": {
+                "description": "When the current running stretch began; left out while paused.",
+                "type": "string"
+              },
+              "started_at": {
+                "description": "When it was first started (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "started_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who started it."
+              },
+              "state": {
+                "$ref": "#/$defs/TimerState",
+                "description": "Running or paused."
+              },
+              "task": {
+                "$ref": "#/$defs/TaskRef",
+                "description": "The task it times."
+              },
+              "task_trashed": {
+                "description": "Whether the task is in the trash; stop the timer with `discard`.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "task",
+              "state",
+              "started_at",
+              "elapsed_seconds",
+              "elapsed",
+              "started_by"
+            ],
+            "type": "object"
+          },
+          "TimerState": {
+            "description": "Whether the timer runs.",
+            "oneOf": [
+              {
+                "const": "running",
+                "description": "It counts.",
+                "type": "string"
+              },
+              {
+                "const": "paused",
+                "description": "It keeps its time but doesn't count.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The timer after a change.",
+        "properties": {
+          "entry": {
+            "$ref": "#/$defs/TimeEntry",
+            "description": "The entry the stopped timer logged."
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "timer": {
+            "$ref": "#/$defs/Timer",
+            "description": "The timer now; left out when it was stopped."
+          },
+          "warnings": {
+            "description": "What didn't stop the change, such as time under half a minute that\nwas not logged.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "TimerChange",
+        "type": "object"
+      },
+      "output_name": "TimerChange",
+      "safety": "write",
+      "summary": "Pause the running timer; it keeps its time."
+    },
+    {
+      "cli": "timer stop",
+      "exposure": "data",
+      "id": "timer.stop",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Stop the timer and log its time.",
+        "properties": {
+          "discard": {
+            "default": false,
+            "description": "Throw the time away instead of logging it.",
+            "type": "boolean"
+          },
+          "duration": {
+            "description": "Log this duration instead of the time measured, for example when the\ntimer ran on by mistake.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "note": {
+            "description": "The entry's note; default the timer's own note.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "TimerStopInput",
+        "type": "object"
+      },
+      "input_name": "TimerStopInput",
+      "kind": "command",
+      "mcp_tool": "stop_timer",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person or agent."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person or an agent.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              }
+            ]
+          },
+          "Category": {
+            "description": "What a status means for the work in it.",
+            "oneOf": [
+              {
+                "const": "todo",
+                "description": "Not started.",
+                "type": "string"
+              },
+              {
+                "const": "in_progress",
+                "description": "Being worked on.",
+                "type": "string"
+              },
+              {
+                "const": "done",
+                "description": "Finished; closes the task.",
+                "type": "string"
+              },
+              {
+                "const": "cancelled",
+                "description": "Dropped; closes the task.",
+                "type": "string"
+              }
+            ]
+          },
+          "StatusRef": {
+            "additionalProperties": false,
+            "description": "A task's status, as tasks carry it.",
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/Category",
+                "description": "Its category."
+              },
+              "id": {
+                "description": "The status's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "category"
+            ],
+            "type": "object"
+          },
+          "TaskRef": {
+            "additionalProperties": false,
+            "description": "Another task, as links and subtask lists show it.",
+            "properties": {
+              "closed": {
+                "description": "Whether it is closed (done or cancelled).",
+                "type": "boolean"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "Its key.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/StatusRef",
+                "description": "Its status."
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "status",
+              "closed",
+              "id"
+            ],
+            "type": "object"
+          },
+          "TimeEntry": {
+            "additionalProperties": false,
+            "description": "One time entry.",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who logged it."
+              },
+              "created_at": {
+                "description": "When it was logged (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "date": {
+                "description": "The day the work was done (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "duration": {
+                "description": "The time as a duration in the workspace's units (`1h 30m`).",
+                "type": "string"
+              },
+              "edited_at": {
+                "description": "When it was last edited; left out when never.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The entry's ID.",
+                "type": "string"
+              },
+              "minutes": {
+                "description": "The time in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "note": {
+                "description": "What was done; left out when empty.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "version": {
+                "description": "Goes up by one with every edit; pass it as `expected_version`.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "date",
+              "minutes",
+              "duration",
+              "author",
+              "created_at",
+              "version"
+            ],
+            "type": "object"
+          },
+          "Timer": {
+            "additionalProperties": false,
+            "description": "The workspace's timer.",
+            "properties": {
+              "elapsed": {
+                "description": "The time so far in the workspace's units, rounded to minutes.",
+                "type": "string"
+              },
+              "elapsed_seconds": {
+                "description": "The time so far, in seconds.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "note": {
+                "description": "The note the entry will get; left out when empty.",
+                "type": "string"
+              },
+              "running_since": {
+                "description": "When the current running stretch began; left out while paused.",
+                "type": "string"
+              },
+              "started_at": {
+                "description": "When it was first started (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "started_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who started it."
+              },
+              "state": {
+                "$ref": "#/$defs/TimerState",
+                "description": "Running or paused."
+              },
+              "task": {
+                "$ref": "#/$defs/TaskRef",
+                "description": "The task it times."
+              },
+              "task_trashed": {
+                "description": "Whether the task is in the trash; stop the timer with `discard`.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "task",
+              "state",
+              "started_at",
+              "elapsed_seconds",
+              "elapsed",
+              "started_by"
+            ],
+            "type": "object"
+          },
+          "TimerState": {
+            "description": "Whether the timer runs.",
+            "oneOf": [
+              {
+                "const": "running",
+                "description": "It counts.",
+                "type": "string"
+              },
+              {
+                "const": "paused",
+                "description": "It keeps its time but doesn't count.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The timer after a change.",
+        "properties": {
+          "entry": {
+            "$ref": "#/$defs/TimeEntry",
+            "description": "The entry the stopped timer logged."
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "timer": {
+            "$ref": "#/$defs/Timer",
+            "description": "The timer now; left out when it was stopped."
+          },
+          "warnings": {
+            "description": "What didn't stop the change, such as time under half a minute that\nwas not logged.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "TimerChange",
+        "type": "object"
+      },
+      "output_name": "TimerChange",
+      "safety": "write",
+      "summary": "Stop the timer and log its time as an entry on its task."
+    },
+    {
+      "cli": "reminder set <key>",
+      "exposure": "data",
+      "id": "reminder.set",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A personal reminder on a task; it replaces the one the task had.",
+        "properties": {
+          "at": {
+            "description": "When: RFC 3339, or a local `YYYY-MM-DD HH:MM`. Give this or\n`days_before_due`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "days_before_due": {
+            "description": "Fire this many days (0 to 365) before the due date, and again when\nthe due date changes.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "key": {
+            "description": "The task: its key or ID.",
+            "type": "string"
+          },
+          "note": {
+            "description": "Its text, at most 500 characters.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "time": {
+            "description": "With `days_before_due`: the time of day, `HH:MM`; default the\nworkspace's reminder time.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "title": "ReminderSetInput",
+        "type": "object"
+      },
+      "input_name": "ReminderSetInput",
+      "kind": "command",
+      "mcp_tool": "set_reminder",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person or agent."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person or an agent.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              }
+            ]
+          },
+          "Reminder": {
+            "additionalProperties": false,
+            "description": "A task's personal reminder.",
+            "properties": {
+              "acknowledged": {
+                "description": "Whether it has fired and was acknowledged.",
+                "type": "boolean"
+              },
+              "at": {
+                "description": "When it fires (RFC 3339, UTC); left out while a reminder relative to\nthe due date has no due date to follow.",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was set (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "days_before_due": {
+                "description": "For a reminder that follows the due date: how many days before it.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "The reminder's ID.",
+                "type": "string"
+              },
+              "note": {
+                "description": "Its text; left out when empty.",
+                "type": "string"
+              },
+              "set_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who set it."
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "time": {
+                "description": "For a reminder that follows the due date: the time of day (`HH:MM`);\nleft out, the workspace's reminder time.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "acknowledged",
+              "set_by",
+              "created_at"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A task's reminder after a change.",
+        "properties": {
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "reminder": {
+            "$ref": "#/$defs/Reminder",
+            "description": "The reminder now; left out when it was removed."
+          },
+          "task": {
+            "description": "The task's key.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task"
+        ],
+        "title": "ReminderChange",
+        "type": "object"
+      },
+      "output_name": "ReminderChange",
+      "safety": "write",
+      "summary": "Set a task's personal reminder: a moment, or a number of days before its due date."
+    },
+    {
+      "cli": "reminder clear <key>",
+      "exposure": "data",
+      "id": "reminder.clear",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Names the task whose reminder to remove.",
+        "properties": {
+          "key": {
+            "description": "The task: its key or ID.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "title": "ReminderClearInput",
+        "type": "object"
+      },
+      "input_name": "ReminderClearInput",
+      "kind": "command",
+      "mcp_tool": "clear_reminder",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person or agent."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person or an agent.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              }
+            ]
+          },
+          "Reminder": {
+            "additionalProperties": false,
+            "description": "A task's personal reminder.",
+            "properties": {
+              "acknowledged": {
+                "description": "Whether it has fired and was acknowledged.",
+                "type": "boolean"
+              },
+              "at": {
+                "description": "When it fires (RFC 3339, UTC); left out while a reminder relative to\nthe due date has no due date to follow.",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was set (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "days_before_due": {
+                "description": "For a reminder that follows the due date: how many days before it.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "The reminder's ID.",
+                "type": "string"
+              },
+              "note": {
+                "description": "Its text; left out when empty.",
+                "type": "string"
+              },
+              "set_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who set it."
+              },
+              "task": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "time": {
+                "description": "For a reminder that follows the due date: the time of day (`HH:MM`);\nleft out, the workspace's reminder time.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "task",
+              "acknowledged",
+              "set_by",
+              "created_at"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A task's reminder after a change.",
+        "properties": {
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "reminder": {
+            "$ref": "#/$defs/Reminder",
+            "description": "The reminder now; left out when it was removed."
+          },
+          "task": {
+            "description": "The task's key.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task"
+        ],
+        "title": "ReminderChange",
+        "type": "object"
+      },
+      "output_name": "ReminderChange",
+      "safety": "write",
+      "summary": "Remove a task's personal reminder."
+    },
+    {
+      "cli": "reminder due",
+      "exposure": "data",
+      "id": "reminder.due",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Which reminders are due.",
+        "properties": {
+          "limit": {
+            "description": "At most this many, 1 to 500; default 100.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "since": {
+            "description": "Reminders due before this moment are marked `missed`: pass the time\nyour program started, so what came due while it was closed shows as\nmissed. Default: due more than 5 minutes ago.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "until": {
+            "description": "Reminders due up to this moment (RFC 3339 or local `YYYY-MM-DD\nHH:MM`); default now. A later moment lists what is coming.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "ReminderDueInput",
+        "type": "object"
+      },
+      "input_name": "ReminderDueInput",
+      "kind": "query",
+      "mcp_tool": "get_reminders",
+      "output": {
+        "$defs": {
+          "Category": {
+            "description": "What a status means for the work in it.",
+            "oneOf": [
+              {
+                "const": "todo",
+                "description": "Not started.",
+                "type": "string"
+              },
+              {
+                "const": "in_progress",
+                "description": "Being worked on.",
+                "type": "string"
+              },
+              {
+                "const": "done",
+                "description": "Finished; closes the task.",
+                "type": "string"
+              },
+              {
+                "const": "cancelled",
+                "description": "Dropped; closes the task.",
+                "type": "string"
+              }
+            ]
+          },
+          "DueReminder": {
+            "additionalProperties": false,
+            "description": "One reminder that is due.",
+            "properties": {
+              "at": {
+                "description": "When it came due (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "due_date": {
+                "description": "The task's due date.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The ID to acknowledge it with.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/ReminderKind",
+                "description": "What reminds."
+              },
+              "missed": {
+                "description": "Whether it came due before `since`: missed while no program showed\nit.",
+                "type": "boolean"
+              },
+              "note": {
+                "description": "The reminder's text; left out when empty.",
+                "type": "string"
+              },
+              "task": {
+                "$ref": "#/$defs/TaskRef",
+                "description": "The task."
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "at",
+              "missed",
+              "task"
+            ],
+            "type": "object"
+          },
+          "ReminderKind": {
+            "description": "What reminds.",
+            "oneOf": [
+              {
+                "const": "reminder",
+                "description": "A personal reminder on a task.",
+                "type": "string"
+              },
+              {
+                "const": "deadline",
+                "description": "A task's due date is near: the day before it, at the reminder time.",
+                "type": "string"
+              },
+              {
+                "const": "timer",
+                "description": "The timer has run for longer than the workspace's setting.",
+                "type": "string"
+              }
+            ]
+          },
+          "StatusRef": {
+            "additionalProperties": false,
+            "description": "A task's status, as tasks carry it.",
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/Category",
+                "description": "Its category."
+              },
+              "id": {
+                "description": "The status's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "category"
+            ],
+            "type": "object"
+          },
+          "TaskRef": {
+            "additionalProperties": false,
+            "description": "Another task, as links and subtask lists show it.",
+            "properties": {
+              "closed": {
+                "description": "Whether it is closed (done or cancelled).",
+                "type": "boolean"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "Its key.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/StatusRef",
+                "description": "Its status."
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "status",
+              "closed",
+              "id"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The reminders that are due and not acknowledged, oldest first, and when\nthe next one comes.",
+        "properties": {
+          "items": {
+            "description": "The reminders due, oldest first.",
+            "items": {
+              "$ref": "#/$defs/DueReminder"
+            },
+            "type": "array"
+          },
+          "next_at": {
+            "description": "When the next reminder after `until` comes due (RFC 3339, UTC); left\nout when none is set. Schedule the next check for then.",
+            "type": "string"
+          },
+          "total": {
+            "description": "How many are due, also beyond `limit`.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "until": {
+            "description": "The moment the list was made for (`until`).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "until"
+        ],
+        "title": "DueReminders",
+        "type": "object"
+      },
+      "output_name": "DueReminders",
+      "safety": "read",
+      "summary": "The reminders, deadline alerts and timer reminders that are due and not acknowledged, with those missed marked, and when the next one comes."
+    },
+    {
+      "cli": "reminder ack <ids>",
+      "exposure": "data",
+      "id": "reminder.acknowledge",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Reminders that were shown.",
+        "properties": {
+          "ids": {
+            "description": "The `id`s of due reminders, as the list of due reminders gives them.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "title": "ReminderAckInput",
+        "type": "object"
+      },
+      "input_name": "ReminderAckInput",
+      "kind": "command",
+      "mcp_tool": "acknowledge_reminders",
+      "output": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "What became of the acknowledged reminders.",
+        "properties": {
+          "acknowledged": {
+            "description": "The reminders acknowledged; they won't come due again.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "unknown": {
+            "description": "IDs that name no due reminder (already acknowledged, changed or\nremoved).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "acknowledged"
+        ],
+        "title": "ReminderAcknowledged",
+        "type": "object"
+      },
+      "output_name": "ReminderAcknowledged",
+      "safety": "write",
+      "summary": "Acknowledge reminders that were shown, so they don't come due again."
     },
     {
       "cli": "board <project>",
@@ -26780,6 +30858,12 @@
                 "description": "When reminders for a due date fire, as `HH:MM`.",
                 "type": "string"
               },
+              "timer_reminder_hours": {
+                "description": "Hours a timer runs before it reminds that it is still running; 0\nnever.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
               "trash_days": {
                 "description": "Days an item stays in the trash before it is purged.",
                 "format": "uint32",
@@ -26798,7 +30882,8 @@
               "days_per_week",
               "week_start",
               "file_max_mb",
-              "agent_max_profile"
+              "agent_max_profile",
+              "timer_reminder_hours"
             ],
             "type": "object"
           },

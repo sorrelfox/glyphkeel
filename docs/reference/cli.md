@@ -38,9 +38,13 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel project rekey <project>` | `project.change_key` | Give a project a new key; the old key and the old task keys keep working. |
 | `glyphkeel project show <project>` | `project.get` | One project with its statuses (board order, category, WIP limit), task types, labels, modules, sub-projects and counts. |
 | `glyphkeel project unarchive <project>` | `project.unarchive` | Unarchive a project and its sub-projects. |
+| `glyphkeel reminder ack <ids>` | `reminder.acknowledge` | Acknowledge reminders that were shown, so they don't come due again. |
+| `glyphkeel reminder clear <key>` | `reminder.clear` | Remove a task's personal reminder. |
+| `glyphkeel reminder due` | `reminder.due` | The reminders, deadline alerts and timer reminders that are due and not acknowledged, with those missed marked, and when the next one comes. |
+| `glyphkeel reminder set <key>` | `reminder.set` | Set a task's personal reminder: a moment, or a number of days before its due date. |
 | `glyphkeel revert` | `history.revert` | Revert history groups or everything an agent session changed. Groups that something changed since are skipped and listed. |
 | `glyphkeel settings get` | `settings.get` | Read the workspace settings. |
-| `glyphkeel settings set` | `settings.update` | Change workspace settings that are not about agents: trash retention, reminder time, working hours and days, first day of the week. |
+| `glyphkeel settings set` | `settings.update` | Change workspace settings that are not about agents: trash retention, reminder time, working hours and days, first day of the week, the timer reminder. |
 | `glyphkeel status` | `workspace.get` | The open workspace: its name and ID, the schema and program versions, who is asking with which rights, the settings and a short guide. |
 | `glyphkeel status add` | `status.create` | Add a status (a board column) to a project. |
 | `glyphkeel status delete` | `status.delete` | Delete a status; its tasks move to the status named. Can't be undone. |
@@ -58,6 +62,14 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel task resolve <key>` | `task.resolve_conflict` | Resolve a conflict copy of a task's description: keep the description, use the copy, or save a combined text. |
 | `glyphkeel task show <keys>` | `task.get` | One to 20 tasks by key, with their fields, description, labels and version; subtasks, links, comments and files on request. |
 | `glyphkeel task unlink <key>` | `relation.remove` | Remove a link between two tasks, or a subtask from its parent. |
+| `glyphkeel time delete <entry>` | `time.delete` | Move a time entry to the trash. |
+| `glyphkeel time edit <entry>` | `time.update` | Change a time entry's duration, day or note. |
+| `glyphkeel time log <key>` | `time.log` | Log time on a task: a duration, the day of the work (default today) and a note. |
+| `glyphkeel time report` | `time.report` | Logged time over a range of days, grouped by day, task or project, with totals in the workspace's units. |
+| `glyphkeel timer pause` | `timer.pause` | Pause the running timer; it keeps its time. |
+| `glyphkeel timer start <key>` | `timer.start` | Start the timer on a task, or start the paused timer again; a timer on another task is stopped and its time logged. |
+| `glyphkeel timer status` | `timer.get` | The workspace's timer: its task, whether it runs and the time so far. |
+| `glyphkeel timer stop` | `timer.stop` | Stop the timer and log its time as an entry on its task. |
 | `glyphkeel type add` | `type.create` | Add a task type to a project. |
 | `glyphkeel type delete` | `type.delete` | Delete a task type; its tasks get another type. Can't be undone. |
 | `glyphkeel type edit` | `type.update` | Rename, reshape, recolour or reorder a task type, or make it the default. |

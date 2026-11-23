@@ -1,0 +1,14 @@
+---
+source: crates/gk-cli/tests/commands.rs
+expression: "ws.ok(&[\"time\", \"report\", \"--from\", \"2026-11-23\", \"--to\", \"2026-11-29\"])"
+---
+KEY   TITLE  DURATION  ENTRY_COUNT  MINUTES
+GK-1  Notes  1h 15m    1            75
+
+days_per_week: 5
+from: 2026-11-23
+group_by: task
+hours_per_day: 8
+to: 2026-11-29
+total_duration: 1h 15m
+total_minutes: 75

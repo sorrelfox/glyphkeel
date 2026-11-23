@@ -56,6 +56,9 @@ insta = "1.49.0"
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
 # Property tests (development only).
 proptest = "1.12.0"
+# Time zones: the local day of a moment and the moment of a local time, for
+# "today", reminders and the time report. Reads the system's zone database.
+jiff = "1.0.2"
 # The workspace database: SQLite bundled (with FTS5), custom collation and
 # busy handler.
 rusqlite = { version = "0.43.0", features = ["bundled", "collation"] }

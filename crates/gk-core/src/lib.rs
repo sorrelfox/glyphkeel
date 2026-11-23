@@ -21,6 +21,7 @@ pub mod progress;
 pub mod rank;
 pub mod status;
 pub mod text;
+pub mod worklog;
 
 pub use actor::{ActorKind, Via};
 pub use day::{Day, DayError, Weekday, check_date_range};

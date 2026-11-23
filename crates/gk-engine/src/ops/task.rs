@@ -55,7 +55,7 @@ pub(super) fn register(r: &mut Registry) {
         for (i, key) in input.keys.iter().enumerate() {
             let t = lookup::task(q.tx, &format!("keys[{i}]"), key)?;
             let mut task = load(q.tx, t.id, units, q.now)?;
-            add_parts(q.tx, &mut task, t.id, &input.include)?;
+            add_parts(q.tx, &q.env.zone, &mut task, t.id, &input.include)?;
             items.push(task);
         }
         Ok(TaskList {
@@ -285,6 +285,8 @@ pub(crate) fn load(
                 files: None,
                 checklist_items: None,
                 revisions: None,
+                time_entries: None,
+                reminder: None,
                 rank: r.get(19)?,
                 old_keys: Vec::new(),
                 created_by: Actor {
@@ -353,6 +355,7 @@ pub(crate) fn task_labels(tx: &Transaction<'_>, id: Id) -> Result<Vec<LabelRef>,
 /// Adds the parts `include` asks for to `task`.
 pub(crate) fn add_parts(
     tx: &Transaction<'_>,
+    zone: &crate::time::Zone,
     task: &mut Task,
     id: Id,
     include: &[TaskPart],
@@ -369,6 +372,10 @@ pub(crate) fn add_parts(
             TaskPart::Revisions => {
                 task.revisions = Some(description::revisions(tx, Owner::Task(id))?);
             }
+            TaskPart::Time => {
+                task.time_entries = Some(super::time::of_task(tx, id, units(tx)?)?);
+            }
+            TaskPart::Reminder => task.reminder = super::reminder::of_task(tx, id, zone)?,
         }
     }
     Ok(())
@@ -419,7 +426,7 @@ pub(crate) fn changed_with(
     include: &[TaskPart],
 ) -> Result<TaskChange, Failure> {
     let mut task = load(w.tx(), id, units(w.tx())?, w.now())?;
-    add_parts(w.tx(), &mut task, id, include)?;
+    add_parts(w.tx(), w.zone(), &mut task, id, include)?;
     Ok(TaskChange {
         task,
         group: w.group_if_changed(),

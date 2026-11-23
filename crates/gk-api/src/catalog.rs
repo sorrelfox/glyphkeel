@@ -8,7 +8,7 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::ops::{
-    agent, board, comment, description, file, history, project, settings, task, workspace,
+    agent, board, comment, description, file, history, project, settings, task, time, workspace,
 };
 use crate::schema;
 
@@ -194,6 +194,18 @@ pub static CATALOG: &[OpDescriptor] = &[
     comment::COMMENT_ADD,
     comment::COMMENT_UPDATE,
     comment::COMMENT_DELETE,
+    time::TIME_LOG,
+    time::TIME_UPDATE,
+    time::TIME_DELETE,
+    time::TIME_REPORT,
+    time::TIMER_GET,
+    time::TIMER_START,
+    time::TIMER_PAUSE,
+    time::TIMER_STOP,
+    time::REMINDER_SET,
+    time::REMINDER_CLEAR,
+    time::REMINDER_DUE,
+    time::REMINDER_ACKNOWLEDGE,
     board::BOARD_GET,
     board::LAYOUT_GET,
     board::LAYOUT_UPDATE,

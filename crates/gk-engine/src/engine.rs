@@ -59,6 +59,9 @@ pub struct EngineConfig {
     pub registry: Registry,
     /// When the write-ahead log is checkpointed by the jobs-lock holder.
     pub checkpoints: CheckpointPolicy,
+    /// The time zone of "today", reminder times and the days of time
+    /// entries, by its IANA name; `None`: the computer's.
+    pub time_zone: Option<String>,
 }
 
 impl EngineConfig {
@@ -72,6 +75,7 @@ impl EngineConfig {
             clock: system_clock(),
             registry: Registry::standard(),
             checkpoints: CheckpointPolicy::default(),
+            time_zone: None,
         }
     }
 }
@@ -192,6 +196,7 @@ impl Engine {
             program_version: config.program_version,
             schema_version: SCHEMA_VERSION,
             layout: layout.clone(),
+            zone: crate::time::Zone::new(config.time_zone.as_deref()),
         };
         Ok(Self {
             store,
@@ -456,6 +461,7 @@ impl Engine {
             ctx: ctx.clone(),
             workspace_id: self.env.workspace_id,
             layout: self.env.layout.clone(),
+            zone: self.env.zone.clone(),
         };
         let reads = ctx
             .session

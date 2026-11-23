@@ -538,6 +538,36 @@ export type DescriptionSave = {
   revision?: string;
 };
 
+/** One reminder that is due. */
+export type DueReminder = {
+  /** When it came due (RFC 3339, UTC). */
+  at: string;
+  /** The task's due date. */
+  due_date?: string;
+  /** The ID to acknowledge it with. */
+  id: string;
+  /** What reminds. */
+  kind: ReminderKind;
+  /** Whether it came due before `since`: missed while no program showed it. */
+  missed: boolean;
+  /** The reminder's text; left out when empty. */
+  note?: string;
+  /** The task. */
+  task: TaskRef;
+};
+
+/** The reminders that are due and not acknowledged, oldest first, and when the next one comes. */
+export type DueReminders = {
+  /** The reminders due, oldest first. */
+  items: DueReminder[];
+  /** When the next reminder after `until` comes due (RFC 3339, UTC); left out when none is set. Schedule the next check for then. */
+  next_at?: string;
+  /** How many are due, also beyond `limit`. */
+  total: number;
+  /** The moment the list was made for (`until`). */
+  until: string;
+};
+
 /** The two ends of an ordered list. */
 export type Edge = "top" | "bottom";
 
@@ -1013,6 +1043,85 @@ export type RelationInput = {
 /** The kinds of link, as read from the first task. */
 export type RelationKind = "blocks" | "blocked_by" | "relates" | "duplicates" | "duplicated_by" | "clones" | "cloned_by" | "subtask_of" | "parent_of";
 
+/** A task's personal reminder. */
+export type Reminder = {
+  /** Whether it has fired and was acknowledged. */
+  acknowledged: boolean;
+  /** When it fires (RFC 3339, UTC); left out while a reminder relative to the due date has no due date to follow. */
+  at?: string;
+  /** When it was set (RFC 3339, UTC). */
+  created_at: string;
+  /** For a reminder that follows the due date: how many days before it. */
+  days_before_due?: number;
+  /** The reminder's ID. */
+  id: string;
+  /** Its text; left out when empty. */
+  note?: string;
+  /** Who set it. */
+  set_by: Actor;
+  /** The task's key. */
+  task: string;
+  /** For a reminder that follows the due date: the time of day (`HH:MM`); left out, the workspace's reminder time. */
+  time?: string;
+};
+
+/** Reminders that were shown. */
+export type ReminderAckInput = {
+  /** The `id`s of due reminders, as the list of due reminders gives them. */
+  ids: string[];
+};
+
+/** What became of the acknowledged reminders. */
+export type ReminderAcknowledged = {
+  /** The reminders acknowledged; they won't come due again. */
+  acknowledged: string[];
+  /** IDs that name no due reminder (already acknowledged, changed or removed). */
+  unknown?: string[];
+};
+
+/** A task's reminder after a change. */
+export type ReminderChange = {
+  /** The history group, for revert and Undo; left out when nothing changed. */
+  group?: string;
+  /** The reminder now; left out when it was removed. */
+  reminder?: Reminder;
+  /** The task's key. */
+  task: string;
+};
+
+/** Names the task whose reminder to remove. */
+export type ReminderClearInput = {
+  /** The task: its key or ID. */
+  key: string;
+};
+
+/** Which reminders are due. */
+export type ReminderDueInput = {
+  /** At most this many, 1 to 500; default 100. */
+  limit?: number | null;
+  /** Reminders due before this moment are marked `missed`: pass the time your program started, so what came due while it was closed shows as missed. Default: due more than 5 minutes ago. */
+  since?: string | null;
+  /** Reminders due up to this moment (RFC 3339 or local `YYYY-MM-DD HH:MM`); default now. A later moment lists what is coming. */
+  until?: string | null;
+};
+
+/** What reminds. */
+export type ReminderKind = "reminder" | "deadline" | "timer";
+
+/** A personal reminder on a task; it replaces the one the task had. */
+export type ReminderSetInput = {
+  /** When: RFC 3339, or a local `YYYY-MM-DD HH:MM`. Give this or `days_before_due`. */
+  at?: string | null;
+  /** Fire this many days (0 to 365) before the due date, and again when the due date changes. */
+  days_before_due?: number | null;
+  /** The task: its key or ID. */
+  key: string;
+  /** Its text, at most 500 characters. */
+  note?: string | null;
+  /** With `days_before_due`: the time of day, `HH:MM`; default the workspace's reminder time. */
+  time?: string | null;
+};
+
 /** Texts to render for the reader. */
 export type RenderInput = {
   /** One to 200 texts. */
@@ -1124,7 +1233,7 @@ export type RevisionList = {
 export type SaveOutcome = "saved" | "merged" | "conflict" | "unchanged";
 
 /** A setting that can be set back to its default. */
-export type SettingKey = "trash_days" | "reminder_time" | "hours_per_day" | "days_per_week" | "week_start" | "file_max_mb";
+export type SettingKey = "trash_days" | "reminder_time" | "hours_per_day" | "days_per_week" | "week_start" | "file_max_mb" | "timer_reminder_hours";
 
 /** The workspace's settings, with defaults filled in. */
 export type Settings = {
@@ -1138,6 +1247,8 @@ export type Settings = {
   hours_per_day: number;
   /** When reminders for a due date fire, as `HH:MM`. */
   reminder_time: string;
+  /** Hours a timer runs before it reminds that it is still running; 0 never. */
+  timer_reminder_hours: number;
   /** Days an item stays in the trash before it is purged. */
   trash_days: number;
   /** The first day of the week in calendars and in `this-week`. */
@@ -1169,6 +1280,8 @@ export type SettingsPatch = {
   hours_per_day?: number | null;
   /** Reminder time, `HH:MM` (24-hour). */
   reminder_time?: string | null;
+  /** Hours a timer runs before it reminds that it is still running, 0 (never) to 24. */
+  timer_reminder_hours?: number | null;
   /** Days in the trash before purging, 1 to 3650. */
   trash_days?: number | null;
   /** First day of the week. */
@@ -1379,6 +1492,8 @@ export type Task = {
   project: string;
   /** Its place in its status column. */
   rank: string;
+  /** Its personal reminder, when asked for with `include` and it has one. */
+  reminder?: Reminder;
   /** The description's revisions, newest first, conflict copies included, when asked for with `include`. */
   revisions?: RevisionInfo[];
   /** Logged time in minutes. */
@@ -1393,6 +1508,8 @@ export type Task = {
   subtask_count: Checklist;
   /** Its subtasks in order, when asked for with `include`. */
   subtasks?: TaskRef[];
+  /** Its time entries, newest day first, when asked for with `include`. */
+  time_entries?: TimeEntry[];
   /** Its title. */
   title: string;
   /** Totals over the task and all its subtasks; only for a task with subtasks. */
@@ -1484,7 +1601,7 @@ export type TaskField = "description" | "parent" | "start_date" | "due_date" | "
 
 /** Which tasks to read. */
 export type TaskGetInput = {
-  /** What to add to each task: `subtasks`, `links`, `comments`, `files`, `checklist`, `revisions`. */
+  /** What to add to each task: `subtasks`, `links`, `comments`, `files`, `checklist`, `revisions`, `time`, `reminder`. */
   include?: TaskPart[];
   /** One to 20 task keys or IDs. */
   keys: string[];
@@ -1519,7 +1636,7 @@ export type TaskMoveInput = {
 };
 
 /** What `task.get` adds to each task. */
-export type TaskPart = "subtasks" | "links" | "comments" | "files" | "checklist" | "revisions";
+export type TaskPart = "subtasks" | "links" | "comments" | "files" | "checklist" | "revisions" | "time" | "reminder";
 
 /** Another task, as links and subtask lists show it. */
 export type TaskRef = {
@@ -1639,6 +1756,198 @@ export type Thumbnail = {
   path: string;
   /** Its width in pixels. */
   width: number;
+};
+
+/** One time entry. */
+export type TimeEntry = {
+  /** Who logged it. */
+  author: Actor;
+  /** When it was logged (RFC 3339, UTC). */
+  created_at: string;
+  /** The day the work was done (`YYYY-MM-DD`). */
+  date: string;
+  /** The time as a duration in the workspace's units (`1h 30m`). */
+  duration: string;
+  /** When it was last edited; left out when never. */
+  edited_at?: string;
+  /** The entry's ID. */
+  id: string;
+  /** The time in minutes. */
+  minutes: number;
+  /** What was done; left out when empty. */
+  note?: string;
+  /** The task's key. */
+  task: string;
+  /** Goes up by one with every edit; pass it as `expected_version`. */
+  version: number;
+};
+
+/** A time entry changed, with the history group of the change. */
+export type TimeEntryChange = {
+  /** Whether it is in the trash now. */
+  deleted: boolean;
+  /** The entry after the change. */
+  entry: TimeEntry;
+  /** The history group, for revert and Undo; left out when nothing changed. */
+  group?: string;
+  /** The task's logged time after the change, in minutes. */
+  spent_minutes: number;
+};
+
+/** Names one time entry. */
+export type TimeEntryRef = {
+  /** The entry's ID. */
+  entry: string;
+};
+
+/** How the time report groups the entries. */
+export type TimeGroupBy = "day" | "task" | "project";
+
+/** Time to log on a task. */
+export type TimeLogInput = {
+  /** Your own ID for this request; repeating it within 24 hours returns the first answer instead of logging the time twice. */
+  client_request_id?: string | null;
+  /** The day of the work: `YYYY-MM-DD`, `today` or `yesterday`; default today. */
+  date?: string | null;
+  /** How long: `1h 30m`, `90m`, `1.5h`, `1:30`, `+30m`; at most 24 hours. */
+  duration: string;
+  /** The task: its key or ID. */
+  key: string;
+  /** What was done, at most 2000 characters. */
+  note?: string | null;
+};
+
+/** Logged time over a range of days, grouped, with the total. */
+export type TimeReport = {
+  /** The working week the units use, in days. */
+  days_per_week: number;
+  /** The entries, oldest first, when asked for. */
+  entries?: TimeEntry[];
+  /** The first day. */
+  from: string;
+  /** How the rows are grouped. */
+  group_by: TimeGroupBy;
+  /** The working day the units use, in hours. */
+  hours_per_day: number;
+  /** The groups: days in order; tasks and projects by most time first. */
+  items: TimeReportRow[];
+  /** The last day, included. */
+  to: string;
+  /** The total in the workspace's units. */
+  total_duration: string;
+  /** The total in minutes. */
+  total_minutes: number;
+};
+
+/** Which time to report. */
+export type TimeReportInput = {
+  /** Also list the entries, oldest first. */
+  entries?: boolean;
+  /** The first day: `YYYY-MM-DD`, `today` or `yesterday`; default the first day of the current week. */
+  from?: string | null;
+  /** How to group: `day`, `task` (default) or `project`. */
+  group_by?: TimeGroupBy | null;
+  /** Only this project and its sub-projects: a key or ID. */
+  project?: string | null;
+  /** Only this task and its subtasks: a key or ID. */
+  task?: string | null;
+  /** The last day, included; default six days after `from`. At most 366 days after `from`. */
+  to?: string | null;
+};
+
+/** One group of the time report. */
+export type TimeReportRow = {
+  /** The time in the workspace's units. */
+  duration: string;
+  /** How many entries. */
+  entry_count: number;
+  /** The day, the task's key or the project's key. */
+  key: string;
+  /** The time in minutes. */
+  minutes: number;
+  /** The weekday, the task's title or the project's name. */
+  title: string;
+};
+
+/** Changes to a time entry; fields left out keep their value. */
+export type TimeUpdateInput = {
+  /** The new day: `YYYY-MM-DD`, `today` or `yesterday`. */
+  date?: string | null;
+  /** The new duration. */
+  duration?: string | null;
+  /** The entry's ID. */
+  entry: string;
+  /** Refuse the change unless the entry still has this version. */
+  expected_version?: number | null;
+  /** The new note; an empty text removes it. */
+  note?: string | null;
+};
+
+/** The workspace's timer. */
+export type Timer = {
+  /** The time so far in the workspace's units, rounded to minutes. */
+  elapsed: string;
+  /** The time so far, in seconds. */
+  elapsed_seconds: number;
+  /** The note the entry will get; left out when empty. */
+  note?: string;
+  /** When the current running stretch began; left out while paused. */
+  running_since?: string;
+  /** When it was first started (RFC 3339, UTC). */
+  started_at: string;
+  /** Who started it. */
+  started_by: Actor;
+  /** Running or paused. */
+  state: TimerState;
+  /** The task it times. */
+  task: TaskRef;
+  /** Whether the task is in the trash; stop the timer with `discard`. */
+  task_trashed?: boolean;
+};
+
+/** The timer after a change. */
+export type TimerChange = {
+  /** The entry the stopped timer logged. */
+  entry?: TimeEntry;
+  /** The history group, for revert and Undo; left out when nothing changed. */
+  group?: string;
+  /** The timer now; left out when it was stopped. */
+  timer?: Timer;
+  /** What didn't stop the change, such as time under half a minute that was not logged. */
+  warnings?: string[];
+};
+
+/** No input. */
+export type TimerGetInput = Record<string, never>;
+
+/** No input. */
+export type TimerPauseInput = Record<string, never>;
+
+/** Start the timer, or start a paused one again. */
+export type TimerStartInput = {
+  /** The task: its key or ID. Left out, the paused timer runs again. A timer on another task is stopped first and its time logged. */
+  key?: string | null;
+  /** The note the entry will get, at most 2000 characters. */
+  note?: string | null;
+};
+
+/** Whether the timer runs. */
+export type TimerState = "running" | "paused";
+
+/** The timer, if there is one. */
+export type TimerStatus = {
+  /** The timer; left out when none runs or is paused. */
+  timer?: Timer;
+};
+
+/** Stop the timer and log its time. */
+export type TimerStopInput = {
+  /** Throw the time away instead of logging it. */
+  discard?: boolean;
+  /** Log this duration instead of the time measured, for example when the timer ran on by mistake. */
+  duration?: string | null;
+  /** The entry's note; default the timer's own note. */
+  note?: string | null;
 };
 
 /** Estimate and time over a task and all its subtasks. */
@@ -1769,6 +2078,8 @@ export type WorkspaceInfo = {
   schema_version: number;
   /** The workspace settings. */
   settings: Settings;
+  /** The timer, while one runs or is paused. */
+  timer?: Timer;
 };
 
 /** An error from the IPC layer itself, before the engine saw the call. */
@@ -1824,6 +2135,18 @@ export interface OpMap {
   "comment.add": { input: CommentAddInput; output: CommentChange; safety: "write"; kind: "command" };
   "comment.update": { input: CommentUpdateInput; output: CommentChange; safety: "write"; kind: "command" };
   "comment.delete": { input: CommentRef; output: CommentChange; safety: "trash"; kind: "command" };
+  "time.log": { input: TimeLogInput; output: TimeEntryChange; safety: "write"; kind: "command" };
+  "time.update": { input: TimeUpdateInput; output: TimeEntryChange; safety: "write"; kind: "command" };
+  "time.delete": { input: TimeEntryRef; output: TimeEntryChange; safety: "trash"; kind: "command" };
+  "time.report": { input: TimeReportInput; output: TimeReport; safety: "read"; kind: "query" };
+  "timer.get": { input: TimerGetInput; output: TimerStatus; safety: "read"; kind: "query" };
+  "timer.start": { input: TimerStartInput; output: TimerChange; safety: "write"; kind: "command" };
+  "timer.pause": { input: TimerPauseInput; output: TimerChange; safety: "write"; kind: "command" };
+  "timer.stop": { input: TimerStopInput; output: TimerChange; safety: "write"; kind: "command" };
+  "reminder.set": { input: ReminderSetInput; output: ReminderChange; safety: "write"; kind: "command" };
+  "reminder.clear": { input: ReminderClearInput; output: ReminderChange; safety: "write"; kind: "command" };
+  "reminder.due": { input: ReminderDueInput; output: DueReminders; safety: "read"; kind: "query" };
+  "reminder.acknowledge": { input: ReminderAckInput; output: ReminderAcknowledged; safety: "write"; kind: "command" };
   "board.get": { input: BoardGetInput; output: Board; safety: "read"; kind: "query" };
   "layout.get": { input: LayoutGetInput; output: LayoutChange; safety: "read"; kind: "query" };
   "layout.update": { input: LayoutUpdateInput; output: LayoutChange; safety: "write"; kind: "command" };
@@ -1887,6 +2210,18 @@ export const OP_SAFETY = {
   "comment.add": "write",
   "comment.update": "write",
   "comment.delete": "trash",
+  "time.log": "write",
+  "time.update": "write",
+  "time.delete": "trash",
+  "time.report": "read",
+  "timer.get": "read",
+  "timer.start": "write",
+  "timer.pause": "write",
+  "timer.stop": "write",
+  "reminder.set": "write",
+  "reminder.clear": "write",
+  "reminder.due": "read",
+  "reminder.acknowledge": "write",
   "board.get": "read",
   "layout.get": "read",
   "layout.update": "write",
@@ -2007,10 +2342,20 @@ export function makeOps(call: Call) {
       /** Remove a link between two tasks, or a subtask from its parent. (write) */
       remove: (input: OpMap["relation.remove"]["input"]) => call("relation.remove", input),
     },
+    reminder: {
+      /** Set a task's personal reminder: a moment, or a number of days before its due date. (write) */
+      set: (input: OpMap["reminder.set"]["input"]) => call("reminder.set", input),
+      /** Remove a task's personal reminder. (write) */
+      clear: (input: OpMap["reminder.clear"]["input"]) => call("reminder.clear", input),
+      /** The reminders, deadline alerts and timer reminders that are due and not acknowledged, with those missed marked, and when the next one comes. (read) */
+      due: (input: OpMap["reminder.due"]["input"] = {}) => call("reminder.due", input),
+      /** Acknowledge reminders that were shown, so they don't come due again. (write) */
+      acknowledge: (input: OpMap["reminder.acknowledge"]["input"]) => call("reminder.acknowledge", input),
+    },
     settings: {
       /** Read the workspace settings. (read) */
       get: (input: OpMap["settings.get"]["input"] = {}) => call("settings.get", input),
-      /** Change workspace settings that are not about agents: trash retention, reminder time, working hours and days, first day of the week. (write) */
+      /** Change workspace settings that are not about agents: trash retention, reminder time, working hours and days, first day of the week, the timer reminder. (write) */
       update: (input: OpMap["settings.update"]["input"] = {}) => call("settings.update", input),
     },
     status: {
@@ -2042,6 +2387,26 @@ export function makeOps(call: Call) {
       claim: (input: OpMap["task.claim"]["input"]) => call("task.claim", input),
       /** Give up a claim on a task, optionally moving it and adding a comment. (write) */
       release: (input: OpMap["task.release"]["input"]) => call("task.release", input),
+    },
+    time: {
+      /** Log time on a task: a duration, the day of the work (default today) and a note. (write) */
+      log: (input: OpMap["time.log"]["input"]) => call("time.log", input),
+      /** Change a time entry's duration, day or note. (write) */
+      update: (input: OpMap["time.update"]["input"]) => call("time.update", input),
+      /** Move a time entry to the trash. (trash) */
+      delete: (input: OpMap["time.delete"]["input"]) => call("time.delete", input),
+      /** Logged time over a range of days, grouped by day, task or project, with totals in the workspace's units. (read) */
+      report: (input: OpMap["time.report"]["input"] = {}) => call("time.report", input),
+    },
+    timer: {
+      /** The workspace's timer: its task, whether it runs and the time so far. (read) */
+      get: (input: OpMap["timer.get"]["input"] = {}) => call("timer.get", input),
+      /** Start the timer on a task, or start the paused timer again; a timer on another task is stopped and its time logged. (write) */
+      start: (input: OpMap["timer.start"]["input"] = {}) => call("timer.start", input),
+      /** Pause the running timer; it keeps its time. (write) */
+      pause: (input: OpMap["timer.pause"]["input"] = {}) => call("timer.pause", input),
+      /** Stop the timer and log its time as an entry on its task. (write) */
+      stop: (input: OpMap["timer.stop"]["input"] = {}) => call("timer.stop", input),
     },
     type: {
       /** Add a task type to a project. (write) */

@@ -193,3 +193,60 @@ async fn an_agent_reorders_subtasks_and_reads_one_tasks_history() {
     assert_eq!(ops, ["task.reorder_subtask", "task.create"]);
     c.close().await;
 }
+
+#[tokio::test]
+async fn an_agent_logs_time_runs_the_timer_and_sets_a_reminder() {
+    let (_dir, options) = workspace();
+    let (_, mode, version, _) = lifecycles().remove(0);
+    let c = connect(&options, mode, version, "Time Agent").await;
+    output(
+        &c.call("create_project", json!({ "name": "Agents", "key": "AG" }))
+            .await,
+    );
+    output(
+        &c.call("create_task", json!({ "project": "AG", "title": "Parser" }))
+            .await,
+    );
+    let request = json!({ "key": "AG-1", "duration": "1h 30m", "date": "2026-11-23",
+                          "note": "Wrote it", "client_request_id": "t-1" });
+    let logged = output(&c.call("log_time", request.clone()).await);
+    assert_eq!(logged["spent_minutes"], 90);
+    assert_eq!(logged["entry"]["author"]["kind"], "agent");
+    // A retry logs nothing more.
+    assert_eq!(output(&c.call("log_time", request).await), logged);
+
+    let report = output(
+        &c.call(
+            "get_time_report",
+            json!({ "from": "2026-11-23", "to": "2026-11-23" }),
+        )
+        .await,
+    );
+    assert_eq!(report["items"][0]["key"], "AG-1");
+    assert_eq!(report["total_duration"], "1h 30m");
+
+    let started = output(&c.call("start_timer", json!({ "key": "AG-1" })).await);
+    assert_eq!(started["timer"]["started_by"]["name"], "Time Agent");
+    let overview = output(&c.call("get_workspace", json!({})).await);
+    assert_eq!(overview["timer"]["task"]["key"], "AG-1");
+    let stopped = output(&c.call("stop_timer", json!({ "discard": true })).await);
+    assert!(stopped.get("timer").is_none());
+
+    let set = output(
+        &c.call(
+            "set_reminder",
+            json!({ "key": "AG-1", "at": "2020-01-01T09:00:00Z" }),
+        )
+        .await,
+    );
+    assert_eq!(set["reminder"]["at"], "2020-01-01T09:00:00.000Z");
+    let due = output(&c.call("get_reminders", json!({})).await);
+    assert_eq!(due["items"][0]["kind"], "reminder");
+    let id = due["items"][0]["id"].clone();
+    let ack = output(
+        &c.call("acknowledge_reminders", json!({ "ids": [id] }))
+            .await,
+    );
+    assert_eq!(ack["acknowledged"].as_array().unwrap().len(), 1);
+    c.close().await;
+}

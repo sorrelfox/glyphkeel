@@ -27,6 +27,9 @@ pub struct Settings {
     pub file_max_mb: u32,
     /// The most an agent may do, whatever profile it asks for.
     pub agent_max_profile: Profile,
+    /// Hours a timer runs before it reminds that it is still running; 0
+    /// never.
+    pub timer_reminder_hours: u32,
 }
 
 impl Default for Settings {
@@ -39,6 +42,7 @@ impl Default for Settings {
             week_start: WeekStart::Monday,
             file_max_mb: 100,
             agent_max_profile: Profile::Standard,
+            timer_reminder_hours: 8,
         }
     }
 }
@@ -83,6 +87,10 @@ pub struct SettingsPatch {
     /// The largest file that can be attached, in megabytes, 1 to 1024.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub file_max_mb: Option<u32>,
+    /// Hours a timer runs before it reminds that it is still running, 0
+    /// (never) to 24.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timer_reminder_hours: Option<u32>,
     /// Settings to set back to their default.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub clear: Vec<SettingKey>,
@@ -104,6 +112,8 @@ pub enum SettingKey {
     WeekStart,
     /// The largest file that can be attached (default 100 MB).
     FileMaxMb,
+    /// Hours before a running timer reminds (default 8).
+    TimerReminderHours,
 }
 
 impl SettingKey {
@@ -117,6 +127,7 @@ impl SettingKey {
             Self::DaysPerWeek => "days_per_week",
             Self::WeekStart => "week_start",
             Self::FileMaxMb => "file_max_mb",
+            Self::TimerReminderHours => "timer_reminder_hours",
         }
     }
 }
@@ -161,7 +172,7 @@ pub(crate) const SETTINGS_GET: OpDescriptor = OpDescriptor::of::<SettingsGet>(Me
 });
 
 pub(crate) const SETTINGS_UPDATE: OpDescriptor = OpDescriptor::of::<SettingsUpdate>(Meta {
-    summary: "Change workspace settings that are not about agents: trash retention, reminder time, working hours and days, first day of the week.",
+    summary: "Change workspace settings that are not about agents: trash retention, reminder time, working hours and days, first day of the week, the timer reminder.",
     kind: OpKind::Command,
     safety: Safety::Write,
     exposure: Exposure::Data,
