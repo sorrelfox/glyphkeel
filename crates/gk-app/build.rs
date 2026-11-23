@@ -2,5 +2,11 @@
 // Copyright (C) 2026 Glyphkeel contributors
 
 fn main() {
-    tauri_build::build();
+    // Declaring the app's commands puts them under the capability files: a
+    // command that no capability grants is refused, even when registered.
+    let manifest = tauri_build::AppManifest::new().commands(&["window_ready"]);
+    if let Err(err) = tauri_build::try_build(tauri_build::Attributes::new().app_manifest(manifest))
+    {
+        panic!("tauri-build: {err:#}");
+    }
 }

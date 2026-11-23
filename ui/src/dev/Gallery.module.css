@@ -1,0 +1,205 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+   Copyright (C) 2026 Glyphkeel contributors */
+
+.gallery {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: auto;
+  background: var(--bg);
+}
+
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap);
+  padding: 0 12px 0 8px;
+  background: var(--bg);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--fs-title);
+  font-weight: 600;
+}
+
+.accentBar,
+.overlays {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 16px 0;
+}
+
+.accentDot {
+  display: block;
+  width: 14px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 16px;
+  padding: 16px;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: 18px 16px;
+  border-radius: var(--r-xl);
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+.columnHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.columnTitle {
+  margin: 0;
+  font-size: var(--fs-h1);
+  font-weight: 700;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.swatches {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.swatchCell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.swatch {
+  height: var(--h-control);
+  border-radius: var(--r-m);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+.swatchName {
+  overflow: hidden;
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.field {
+  flex: 1 1 140px;
+}
+
+.sidebarSample {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px;
+  border-radius: var(--r-l);
+  background: var(--sidebar);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.lane {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 6px 6px;
+}
+
+.laneHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px 2px;
+}
+
+.strong {
+  font-weight: 600;
+}
+
+.table {
+  overflow: hidden;
+  border-radius: var(--r-m);
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+.tableRow {
+  grid-template-columns: 56px minmax(0, 1fr) 88px 52px;
+}
+
+.properties {
+  margin: 0;
+}
+
+.menuSample {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-width: 260px;
+  padding: 4px;
+}
+
+.ganttBar {
+  position: relative;
+  flex: 3 1 0;
+  padding: 9px 0;
+  overflow: hidden;
+  border-radius: var(--r-s);
+  background: var(--gantt-bar);
+}
+
+.ganttBar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+}
+
+.ganttOverdue {
+  flex: 2 1 0;
+  background: color-mix(in srgb, var(--danger) 30%, var(--surface));
+}
+
+.ganttOnTrack {
+  width: 60%;
+  background: var(--gantt-progress);
+}
+
+.ganttLate {
+  width: 50%;
+  background: var(--danger);
+}
+
+.dialogText {
+  max-width: 360px;
+  margin: 0;
+}

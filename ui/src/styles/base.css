@@ -12,7 +12,15 @@ body,
 }
 
 html {
-  /* No rubber-band scrolling and no pull-to-refresh. */
+  /* No rubber-band scrolling and no pull-to-refresh, anywhere. */
+  overscroll-behavior: none;
+
+  /* No tap highlight, and no text resizing behind the app's back. */
+  -webkit-tap-highlight-color: transparent;
+  text-size-adjust: none;
+}
+
+* {
   overscroll-behavior: none;
 }
 
@@ -20,8 +28,16 @@ body {
   background: var(--bg);
 }
 
-/* Images and icons can't be dragged out of the window. */
+/* Images, icons and links can't be dragged out of the window. */
 img,
-svg {
+svg,
+a {
   -webkit-user-drag: none;
 }
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+/* Scrollbars are thin and in the border colour: components.css sets the
+   standard properties on every element. */

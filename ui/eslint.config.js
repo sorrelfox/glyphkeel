@@ -24,6 +24,25 @@ const htmlInsertion = [
   },
 ];
 
+// Every word the UI shows comes from the Fluent message files (src/i18n), so
+// it can be translated: no text between tags, and no literal text in the
+// attributes people read.
+const uiText = [
+  {
+    selector: "JSXText[value=/\\p{L}/u]",
+    message: "UI text comes from the Fluent message files (src/i18n); use t().",
+  },
+  {
+    selector: "JSXElement > JSXExpressionContainer > Literal[value=/\\p{L}/u]",
+    message: "UI text comes from the Fluent message files (src/i18n); use t().",
+  },
+  {
+    selector:
+      "JSXAttribute[name.name=/^(aria-label|aria-description|aria-placeholder|aria-roledescription|aria-valuetext|title|placeholder|alt|label)$/] > Literal",
+    message: "UI text comes from the Fluent message files (src/i18n); use t().",
+  },
+];
+
 // The app never goes online: the page talks to Rust over Tauri's IPC only.
 const networkGlobals = ["fetch", "XMLHttpRequest", "WebSocket", "EventSource", "Request"].map((name) => ({
   name,
@@ -48,9 +67,14 @@ export default defineConfig([
       "@typescript-eslint/no-implied-eval": "error",
       "no-new-func": "error",
       "no-script-url": "error",
-      "no-restricted-syntax": ["error", ...htmlInsertion],
+      "no-restricted-syntax": ["error", ...htmlInsertion, ...uiText],
       "no-restricted-globals": ["error", ...networkGlobals],
     },
+  },
+  {
+    // Tests may write the text they look for.
+    files: ["src/**/*.test.{ts,tsx}"],
+    rules: { "no-restricted-syntax": ["error", ...htmlInsertion] },
   },
   {
     // Build and test configuration runs in Node, not in the app.

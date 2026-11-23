@@ -7,22 +7,64 @@
 // Release builds on Windows have no console window.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+#[cfg(target_os = "linux")]
+mod instance;
+mod main_window;
 mod navigation;
+mod start;
+mod title_bar;
 #[cfg(target_os = "linux")]
 mod webkit;
+mod window_state;
 
 use std::process::ExitCode;
+use std::sync::Mutex;
+#[cfg(target_os = "linux")]
+use std::sync::atomic::Ordering;
 
-use tauri::webview::{NewWindowResponse, PageLoadEvent};
-use tauri::{AppHandle, Runtime, WebviewUrl, WebviewWindowBuilder};
+#[cfg(target_os = "linux")]
+use tauri::{AppHandle, Manager};
 
-/// The label of the main window. The capability file names it too.
-const MAIN_WINDOW: &str = "main";
+use crate::start::Shown;
+use crate::title_bar::TitleBar;
+
+/// Links the app was asked to open, waiting for the part of the app that
+/// opens them.
+#[derive(Debug, Default)]
+struct PendingLinks(Mutex<Vec<String>>);
 
 fn main() -> ExitCode {
+    #[cfg(target_os = "linux")]
+    let (activations, _bus, first_links) = {
+        let this_start = instance::this_start();
+        match instance::claim(&this_start) {
+            instance::Claim::Primary { bus, activations } => {
+                (Some(activations), Some(bus), this_start.links)
+            }
+            // The running app has the request; this process has nothing to do.
+            instance::Claim::Forwarded => return ExitCode::SUCCESS,
+            instance::Claim::Unavailable(err) => {
+                eprintln!(
+                    "glyphkeel-app: no session bus, so a second start opens a second window: {err}"
+                );
+                (None, None, this_start.links)
+            }
+        }
+    };
+    #[cfg(not(target_os = "linux"))]
+    let first_links = Vec::new();
+
+    let title_bar = TitleBar::from_env();
     let result = tauri::Builder::default()
-        .setup(|app| {
-            open_main_window(app.handle())?;
+        .manage(Shown::default())
+        .manage(PendingLinks(Mutex::new(first_links)))
+        .invoke_handler(tauri::generate_handler![start::window_ready])
+        .setup(move |app| {
+            main_window::open(app.handle(), title_bar)?;
+            #[cfg(target_os = "linux")]
+            if let Some(activations) = activations {
+                forward_activations(app.handle().clone(), activations);
+            }
             Ok(())
         })
         .run(tauri::generate_context!());
@@ -35,35 +77,38 @@ fn main() -> ExitCode {
     }
 }
 
-/// Opens the main window. It starts hidden and is shown once the page has
-/// loaded, so the user never sees an empty white frame.
-fn open_main_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
-    let window = WebviewWindowBuilder::new(app, MAIN_WINDOW, WebviewUrl::App("index.html".into()))
-        .title("Glyphkeel")
-        .inner_size(1280.0, 800.0)
-        .min_inner_size(760.0, 520.0)
-        // The UI draws its own header bar.
-        .decorations(false)
-        .visible(false)
-        // Nothing the page stores outlives the process.
-        .incognito(true)
-        .zoom_hotkeys_enabled(false)
-        // The page never leaves the app and never opens windows of its own.
-        .on_navigation(navigation::is_app_url)
-        .on_new_window(|_url, _features| NewWindowResponse::Deny)
-        .on_page_load(|window, payload| {
-            if payload.event() == PageLoadEvent::Finished
-                && let Err(err) = window.show()
-            {
-                eprintln!("glyphkeel-app: cannot show the main window: {err}");
+/// Handles later starts of the app on the main thread, in the order they
+/// arrive.
+#[cfg(target_os = "linux")]
+fn forward_activations(
+    app: AppHandle,
+    activations: std::sync::mpsc::Receiver<instance::Activation>,
+) {
+    std::thread::spawn(move || {
+        for activation in activations {
+            let handle = app.clone();
+            let result = app.run_on_main_thread(move || on_activation(&handle, activation));
+            if result.is_err() {
+                // The event loop has ended: the app is quitting.
+                break;
             }
-        })
-        .build()?;
+        }
+    });
+}
 
-    #[cfg(target_os = "linux")]
-    window.with_webview(|webview| webkit::restrict(&webview.inner()))?;
-    #[cfg(not(target_os = "linux"))]
-    let _ = window;
-
-    Ok(())
+#[cfg(target_os = "linux")]
+fn on_activation(app: &AppHandle, activation: instance::Activation) {
+    if !activation.links.is_empty()
+        && let Ok(mut pending) = app.state::<PendingLinks>().0.lock()
+    {
+        pending.extend(activation.links);
+    }
+    // Before the page's first screen the window isn't shown yet; it comes
+    // forward by itself when it is.
+    if !app.state::<Shown>().0.load(Ordering::SeqCst) {
+        return;
+    }
+    if let Some(window) = app.get_webview_window(main_window::LABEL) {
+        main_window::activate(&window, activation.token.as_deref());
+    }
 }

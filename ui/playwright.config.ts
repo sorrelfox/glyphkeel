@@ -3,8 +3,9 @@
 
 import { defineConfig, devices } from "@playwright/test";
 
-// Flows run against the web build in a browser. WebKit is the engine nearest
-// to the WebKitGTK web view the desktop app uses.
+// Flows run against the web build in Chromium. Playwright's own WebKit build
+// doesn't run on every Linux distribution; the checks that depend on WebKitGTK
+// itself run in the desktop app instead.
 const PORT = 5310;
 
 export default defineConfig({
@@ -17,7 +18,7 @@ export default defineConfig({
     baseURL: `http://127.0.0.1:${String(PORT)}`,
     trace: "retain-on-failure",
   },
-  projects: [{ name: "webkit", use: { ...devices["Desktop Safari"] } }],
+  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 1600, height: 1000 } } }],
   webServer: {
     command: "pnpm exec vite build && pnpm exec vite preview",
     url: `http://127.0.0.1:${String(PORT)}`,
