@@ -31,6 +31,13 @@ pub(crate) struct StartData {
     /// The user's locale from the environment, as a BCP 47 tag. WebKit takes
     /// its own from `LANG` alone, so the page gets it from here.
     pub(crate) locale: Option<String>,
+    /// A task window's task: the page shows that task alone.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) task: Option<String>,
+    /// The task to open first, from a `glyphkeel://open/<KEY>` link the app
+    /// was started with.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) open: Option<String>,
 }
 
 impl StartData {
@@ -126,8 +133,21 @@ pub(crate) fn window_ready(
              Check connect-src in tauri.conf.json."
         );
     }
-    show(&window, &shown);
+    if window.label() == crate::main_window::LABEL {
+        show(&window, &shown);
+    } else {
+        // Task windows come forward each time they are opened.
+        crate::task_window::show(&window);
+    }
     Ready { transport }
+}
+
+/// The task key in a `glyphkeel://open/<KEY>` link.
+pub(crate) fn task_in_link(link: &str) -> Option<String> {
+    let key = link
+        .strip_prefix("glyphkeel://open/")?
+        .trim_end_matches('/');
+    crate::task_window::is_task_key(key).then(|| key.to_owned())
 }
 
 /// Shows the window once.
@@ -147,7 +167,7 @@ pub(crate) fn show<R: Runtime>(window: &WebviewWindow<R>, shown: &Shown) {
 mod tests {
     use tauri::http::{HeaderMap, HeaderValue};
 
-    use super::{StartData, Transport, posix_to_bcp47};
+    use super::{StartData, Transport, posix_to_bcp47, task_in_link};
     use crate::title_bar::TitleBar;
 
     #[test]
@@ -175,11 +195,41 @@ mod tests {
         let script = StartData {
             title_bar: TitleBar::System,
             locale: Some("de-DE".into()),
+            task: None,
+            open: None,
         }
         .script();
         assert_eq!(
             script,
             r#"Object.defineProperty(window, "__GLYPHKEEL_START__", { value: Object.freeze({"titleBar":"system","locale":"de-DE"}) });"#
         );
+    }
+
+    #[test]
+    fn a_task_window_names_its_task() {
+        let script = StartData {
+            title_bar: TitleBar::System,
+            locale: None,
+            task: Some("TM-41".into()),
+            open: None,
+        }
+        .script();
+        assert!(script.contains(r#""task":"TM-41""#), "{script}");
+    }
+
+    #[test]
+    fn only_open_links_with_a_task_key_name_a_task() {
+        assert_eq!(
+            task_in_link("glyphkeel://open/TM-41").as_deref(),
+            Some("TM-41")
+        );
+        assert_eq!(
+            task_in_link("glyphkeel://open/TM-41/").as_deref(),
+            Some("TM-41")
+        );
+        assert_eq!(task_in_link("glyphkeel://open/tm-41"), None);
+        assert_eq!(task_in_link("glyphkeel://open/TM"), None);
+        assert_eq!(task_in_link("glyphkeel://view/TM-41"), None);
+        assert_eq!(task_in_link("https://open/TM-41"), None);
     }
 }

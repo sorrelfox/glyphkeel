@@ -23,7 +23,7 @@ interface AppProps {
 }
 
 export function App({ start = readStart(), client = defaultClient(), path }: AppProps) {
-  const [router] = useState(() => createAppRouter(path ?? initialPath(window.location.pathname), { start }));
+  const [router] = useState(() => createAppRouter(path ?? initialPath(window.location.pathname, start), { start }));
   const [appearance] = useState(loadAppearance);
   return (
     <AppearanceProvider initial={appearance} onChange={saveAppearance}>

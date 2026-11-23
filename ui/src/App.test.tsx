@@ -40,4 +40,9 @@ describe("initialPath", () => {
     expect(initialPath("/")).toBe("/");
     expect(initialPath("/index.html")).toBe("/");
   });
+
+  it("opens a task window's task, or the task of the link the app was started with", () => {
+    expect(initialPath("/index.html", { task: "TM-41" })).toBe("/task/TM-41");
+    expect(initialPath("/index.html", { open: "TM-41" })).toBe("/open/TM-41");
+  });
 });

@@ -2,6 +2,7 @@
    Copyright (C) 2026 Glyphkeel contributors */
 
 .panel {
+  position: relative;
   display: flex;
   flex: 0 1 var(--w-inspector);
   flex-direction: column;
@@ -153,4 +154,253 @@
 
 .descriptionField:focus {
   box-shadow: inset 0 0 0 2px var(--focus);
+}
+
+/* ---------- the panel as a window, and files dragged over it ---------- */
+
+.window {
+  flex: 1 1 auto;
+  border-left: 0;
+}
+
+.dropping {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.dropNote {
+  position: absolute;
+  inset: auto 16px 72px;
+  padding: 10px 12px;
+  border-radius: var(--r-m);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+  text-align: center;
+  pointer-events: none;
+}
+
+.claim {
+  gap: 4px;
+}
+
+/* ---------- section rows: subtasks, links, files ---------- */
+
+.row {
+  gap: 6px;
+  margin: 0 -8px;
+  width: auto;
+}
+
+.rowMain {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: var(--h-row);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  outline: none;
+  border-radius: var(--r-s);
+}
+
+.rowMain[data-focus-visible] {
+  outline: var(--focus-w) solid var(--focus);
+  outline-offset: 1px;
+}
+
+.linkKind {
+  flex: 0 0 84px;
+}
+
+.closedTitle {
+  color: var(--fg-muted);
+  text-decoration: line-through;
+}
+
+.sectionMeter {
+  max-width: 120px;
+  margin: 0 4px;
+}
+
+.emptyNote {
+  margin: 0;
+}
+
+.addField {
+  flex: 1 1 auto;
+}
+
+.addLink {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.select {
+  height: var(--h-control);
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--r-m);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  background: var(--surface);
+  color: var(--fg);
+  font: inherit;
+}
+
+.fileBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.thumb {
+  flex: none;
+  width: 28px;
+  aspect-ratio: 1;
+  border-radius: var(--r-s);
+  background: var(--hover);
+  object-fit: cover;
+}
+
+.preview {
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: 40vh;
+  aspect-ratio: auto;
+  object-fit: contain;
+}
+
+/* ---------- comments and history ---------- */
+
+.tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tabPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  outline: none;
+}
+
+.comment {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.commentHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-small);
+}
+
+.author {
+  font-weight: 600;
+}
+
+.edited {
+  font-size: var(--fs-small);
+}
+
+.commentBody {
+  font-size: var(--fs);
+  line-height: var(--lh);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.commentEdit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.commentField {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--r-m);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  background: var(--surface);
+  color: var(--fg);
+  font: inherit;
+  line-height: var(--lh);
+  resize: none;
+  outline: none;
+}
+
+.commentField:focus {
+  box-shadow: inset 0 0 0 2px var(--focus);
+}
+
+.revisions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 4px 0 0;
+  padding: 0 0 0 10px;
+  border-left: 2px solid var(--border);
+  list-style: none;
+}
+
+.revision {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.history {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.historyEntry {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.historyText {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.reverted .historyText > span:not(:last-child) {
+  color: var(--fg-muted);
+  text-decoration: line-through;
+}
+
+.composer {
+  display: flex;
+  flex: none;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.windowScreen {
+  display: flex;
+  height: 100vh;
+  min-height: 0;
+  background: var(--bg);
 }

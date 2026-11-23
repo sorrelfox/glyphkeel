@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { type ProjectList, type TaskList } from "../../generated/ops";
+import { type ActivityPage, type CommentChange, type CommentList, type FileChange, type FileContent, type ProjectList, type RevertResult, type TaskList } from "../../generated/ops";
 import { cardsOf, countsOf, moveOnBoard } from "../board";
 import { type Board, type Project, type TaskChange } from "../catalog";
 import { FakeError, FakeWorkspace } from "./engine";
@@ -211,5 +211,100 @@ describe("moveOnBoard", () => {
     expect(keysIn(moved, doing.id).slice(0, 2)).toEqual([card.key, anchor.key]);
     expect(keysIn(moved, todo.id)).not.toContain(card.key);
     expect(moved.columns[2]?.count).toBe(doing.count + 1);
+  });
+});
+
+describe("task details", () => {
+  const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+  const get = (ws: FakeWorkspace, key: string) => call<TaskList>(ws, "task.get", { keys: [key], include: ["subtasks", "links", "files"] }).items[0];
+
+  it("links tasks both ways, marks the blocked one, and refuses a loop", () => {
+    const ws = workspace();
+    const [a, b] = [call<TaskChange>(ws, "task.create", { project: "PER", title: "A" }).task, call<TaskChange>(ws, "task.create", { project: "PER", title: "B" }).task];
+    call(ws, "relation.add", { key: a.key, kind: "blocks", other: b.key });
+    expect(get(ws, a.key)?.links).toMatchObject([{ kind: "blocks", task: { key: b.key } }]);
+    expect(get(ws, b.key)?.links).toMatchObject([{ kind: "blocked_by", task: { key: a.key } }]);
+    expect(get(ws, b.key)?.blocked).toBe(true);
+    expect(failure(() => call(ws, "relation.add", { key: b.key, kind: "blocks", other: a.key })).code).toBe("invalid");
+    call(ws, "relation.remove", { key: b.key, kind: "blocked_by", other: a.key });
+    expect(get(ws, b.key)?.blocked).toBe(false);
+  });
+
+  it("makes subtasks through links and with a parent, in board order", () => {
+    const ws = workspace();
+    const parent = call<TaskChange>(ws, "task.create", { project: "PER", title: "Parent" }).task;
+    const first = call<TaskChange>(ws, "task.create", { project: "PER", title: "First", parent: parent.key }).task;
+    const second = call<TaskChange>(ws, "task.create", { project: "PER", title: "Second" }).task;
+    call(ws, "relation.add", { key: second.key, kind: "subtask_of", other: parent.key });
+    expect(get(ws, parent.key)?.subtasks?.map((sub) => sub.key)).toEqual([first.key, second.key]);
+    expect(get(ws, parent.key)?.subtask_count).toEqual({ done: 0, total: 2 });
+    expect(failure(() => call(ws, "relation.add", { key: parent.key, kind: "subtask_of", other: first.key })).code).toBe("invalid");
+  });
+
+  it("keeps a comment's earlier texts, refuses a stale version and trashes it", () => {
+    const ws = workspace();
+    const task = call<TaskChange>(ws, "task.create", { project: "PER", title: "Talk" }).task;
+    const added = call<CommentChange>(ws, "comment.add", { key: task.key, body: "first" }).comment;
+    expect(failure(() => call(ws, "comment.add", { key: task.key, body: "  " })).code).toBe("invalid");
+    call(ws, "comment.update", { comment: added.id, body: "second", expected_version: 1 });
+    expect(failure(() => call(ws, "comment.update", { comment: added.id, body: "third", expected_version: 1 })).code).toBe("conflict");
+    const [listed] = call<CommentList>(ws, "comment.list", { key: task.key, revisions: true }).items;
+    expect(listed).toMatchObject({ body: "second", version: 2, revision_count: 1, revisions: [{ body: "first" }] });
+    expect(listed?.edited_at).toBeDefined();
+    call(ws, "comment.delete", { comment: added.id });
+    expect(call<CommentList>(ws, "comment.list", { key: task.key }).total).toBe(0);
+    expect(get(ws, task.key)?.comment_count).toBe(0);
+  });
+
+  it("sniffs attached files, counts them on the card and trashes them", () => {
+    const ws = workspace();
+    const task = call<TaskChange>(ws, "task.create", { project: "PER", title: "Files" }).task;
+    const image = call<FileChange>(ws, "file.attach", { task: task.key, name: "dot.txt", data_base64: PNG }).file;
+    expect(image).toMatchObject({ kind: "image", mime: "image/png", width: 1, height: 1, task: task.key });
+    const text = call<FileChange>(ws, "file.attach", { task: task.key, name: "a.txt", data_base64: btoa("hello") }).file;
+    expect(call<FileContent>(ws, "file.read", { attachment: text.id }).text).toBe("hello");
+    expect(call<FileChange>(ws, "file.attach", { task: task.key, name: "run.sh", data_base64: btoa("echo") }).file.kind).toBe("executable");
+    expect(failure(() => call(ws, "file.attach", { task: task.key, path: "/etc/passwd" })).code).toBe("invalid");
+    expect(get(ws, task.key)?.file_count).toBe(3);
+    call(ws, "file.delete", { attachment: text.id });
+    expect(get(ws, task.key)?.files?.map((file) => file.name)).toEqual(["dot.txt", "run.sh"]);
+  });
+
+  it("duplicates a task with its subtasks and links the copy as a clone", () => {
+    const ws = workspace();
+    const parent = call<TaskChange>(ws, "task.create", { project: "PER", title: "Original" }).task;
+    call(ws, "task.create", { project: "PER", title: "Child", parent: parent.key });
+    const copy = call<TaskChange>(ws, "task.duplicate", { key: parent.key }).task;
+    expect(copy.title).toBe("Original");
+    expect(get(ws, copy.key)?.subtasks?.map((sub) => sub.title)).toEqual(["Child"]);
+    expect(get(ws, copy.key)?.links).toMatchObject([{ kind: "clones", task: { key: parent.key } }]);
+  });
+
+  it("records changes in the activity log and reverts the latest", () => {
+    const ws = workspace();
+    const task = call<TaskChange>(ws, "task.create", { project: "PER", title: "Log" }).task;
+    const change = ws.call("task.update", { key: task.key, priority: "high" });
+    const feed = call<ActivityPage>(ws, "history.feed", { limit: 1 });
+    expect(feed.items[0]).toMatchObject({ entity: "task", id: task.id, op: "task.update", fields: { priority: { before: "none", after: "high" } } });
+    expect(feed.next_cursor).toBe("1");
+    const group = change.changes?.group ?? "";
+    const result = call<RevertResult>(ws, "history.revert", { groups: [group] });
+    expect(result.reverted).toEqual([group]);
+    expect(get(ws, task.key)?.priority).toBe("none");
+    expect(call<ActivityPage>(ws, "history.feed", {}).items.find((entry) => entry.group === group)?.reverted_by).toBeDefined();
+    expect(call<RevertResult>(ws, "history.revert", { groups: ["g-1"] }).skipped).toHaveLength(1);
+  });
+
+  it("turns the sample counts into comments and files, and has one agent's claim", () => {
+    const ws = workspace();
+    const board = call<Board>(ws, "board.get", { project: "TM" });
+    const withComments = cards(board).find((card) => card.comment_count > 0);
+    expect(withComments).toBeDefined();
+    expect(call<CommentList>(ws, "comment.list", { key: withComments?.key }).total).toBe(withComments?.comment_count);
+    const claimed = ["TM", "PER", "LAB", "CLI", "DOC"].flatMap((key) => cards(call<Board>(ws, "board.get", { project: key }))).filter((card) => card.claim);
+    expect(claimed).toHaveLength(1);
+    expect(failure(() => call(ws, "task.claim", { key: claimed[0]?.key })).code).toBe("forbidden");
+    call(ws, "task.release", { key: claimed[0]?.key });
+    expect(get(ws, claimed[0]?.key ?? "")?.claim).toBeUndefined();
   });
 });

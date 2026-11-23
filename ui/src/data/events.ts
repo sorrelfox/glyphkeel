@@ -23,6 +23,10 @@ export const ENTITY_QUERIES: Readonly<Record<string, readonly OpId[]>> = {
   label: ["project.get", "board.get", "task.get"],
   // The board leaves out the cards of hidden columns.
   layout: ["layout.get", "board.get"],
+  // Cards count comments and files, and show the Blocked badge.
+  comment: ["comment.list", "task.get", "board.get"],
+  attachment: ["comment.list", "task.get", "board.get", "file.get", "file.read"],
+  relation: ["task.get", "board.get"],
 };
 
 /** Every committed change shows in the activity log. */

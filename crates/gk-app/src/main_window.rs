@@ -25,7 +25,12 @@ const READY_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Opens the main window, hidden until the page has committed its first
 /// screen.
-pub(crate) fn open(app: &AppHandle, title_bar: TitleBar) -> tauri::Result<WebviewWindow> {
+/// `first_task` is a task to open first, from a link the app was started with.
+pub(crate) fn open(
+    app: &AppHandle,
+    title_bar: TitleBar,
+    first_task: Option<String>,
+) -> tauri::Result<WebviewWindow> {
     let state_file = window_state::file();
     let geometry = state_file
         .as_deref()
@@ -34,6 +39,8 @@ pub(crate) fn open(app: &AppHandle, title_bar: TitleBar) -> tauri::Result<Webvie
     let start = StartData {
         title_bar,
         locale: start::locale_from_env(),
+        task: None,
+        open: first_task,
     };
 
     let window = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("index.html".into()))
