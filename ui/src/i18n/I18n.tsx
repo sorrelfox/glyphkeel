@@ -44,10 +44,15 @@ export function I18n({ locale, children }: I18nProps) {
   );
 }
 
-export type Translate = (id: string, vars?: Record<string, FluentVariable>) => string;
+export type Translate = ((id: string, vars?: Record<string, FluentVariable>) => string) & {
+  /** Whether a message exists, for IDs that come from elsewhere (the engine's). */
+  has?: (id: string) => boolean;
+};
 
 /** The function that turns a message ID into text. */
 export function useT(): Translate {
   const { l10n } = useLocalization();
-  return (id, vars) => l10n.getString(id, vars ?? null);
+  return Object.assign((id: string, vars?: Record<string, FluentVariable>) => l10n.getString(id, vars ?? null), {
+    has: (id: string) => l10n.getBundle(id) !== null,
+  });
 }

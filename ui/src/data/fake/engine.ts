@@ -20,6 +20,7 @@ import {
   type Comment,
   type CommentChange,
   type DueReminder,
+  type DueReminders,
   type ConflictAction,
   type DescriptionSave,
   type Edge,
@@ -52,13 +53,16 @@ import {
   type TimerChange,
   type TimerStatus,
   type TypeRef,
+  type WikiPage,
+  type WikiPageSummary,
 } from "../../generated/ops";
 import { PROJECT_ICONS, suggestHue } from "../catalog";
 import { formatDuration, parseDuration } from "../duration";
 import { decodeBase64, materialize, recordedFields, sniff } from "./details";
 import { checklistOf, merge3, publicChecklist, renderFake, setChecked, unifiedDiff } from "./markdown";
 import { newProject, nextFileId, nextId, SAMPLE_AGENT } from "./seed";
-import { type FakeComment, type FakeFile, type FakeProject, type FakeRelation, type FakeReminder, type FakeRevision, type FakeState, type FakeTask, type FakeTimeEntry } from "./state";
+import { type FakeComment, type FakeFile, type FakeProject, type FakeRelation, type FakeReminder, type FakeRevision, type FakeState, type FakeTask, type FakeTimeEntry, type FakeWikiPage } from "./state";
+import { naturalDay, nextDay, searchAll, searchWiki, slugOf, headingsOf } from "./overview";
 import { createView, deleteView, listViews, matchingKeys, parseQuery, queryError, searchTasks, updateView, type QueryNames } from "./query";
 import { addDays, localDay, MAX_ENTRY_MINUTES, momentOf, reminderAt, reminderOut, sortDue, timeEntryOut, timerElapsedMs, timerOut, unitsOf, weekStart, workDay } from "./time";
 
@@ -1163,6 +1167,80 @@ export class FakeWorkspace {
     };
   }
 
+
+  /** A date of `task.update`, as `YYYY-MM-DD` or in words. */
+  private dayInput(text: string, path: string): string {
+    return (
+      naturalDay(text, localDay(this.today())) ??
+      fail("invalid", `"${text}" is not a date. Write 2026-12-31, or today, fri, next mon, in 3d, +3d.`, { details: { path, message_id: "date-invalid", args: { text } } })
+    );
+  }
+
+  private wikiSummary(page: FakeWikiPage): WikiPageSummary {
+    const pages = this.state.wiki ?? [];
+    let depth = 0;
+    for (let parent = page.parentId; parent !== null; parent = pages.find((other) => other.id === parent)?.parentId ?? null) {
+      depth += 1;
+    }
+    return {
+      id: page.id,
+      title: page.title,
+      slug: page.slug,
+      project: this.state.projects.find((project) => project.id === page.projectId)?.key ?? "",
+      depth,
+      children: pages.filter((other) => other.parentId === page.id).length,
+      ...some("parent", page.parentId),
+      updated_at: page.updatedAt,
+    };
+  }
+
+  private wikiPage(ref: string, projectRef: string | null | undefined): FakeWikiPage {
+    const pages = this.state.wiki ?? [];
+    const byId = pages.find((page) => page.id === ref);
+    if (byId) {
+      return byId;
+    }
+    if (projectRef === null || projectRef === undefined) {
+      fail("not_found", `There is no page with the ID ${ref}.`, { details: { message_id: "wiki-page-id-not-found", args: { page: ref } } });
+    }
+    const project = this.project(projectRef);
+    return (
+      pages.find((page) => page.projectId === project.id && (fold(page.title) === fold(ref) || page.slug === ref)) ??
+      fail("not_found", `Project ${project.key} has no page "${ref}".`, { details: { message_id: "wiki-page-not-found", args: { project: project.key, page: ref } } })
+    );
+  }
+
+  private wikiOut(page: FakeWikiPage): WikiPage {
+    const pages = this.state.wiki ?? [];
+    const ref = (other: FakeWikiPage) => ({ id: other.id, slug: other.slug, title: other.title });
+    const path: FakeWikiPage[] = [];
+    for (let parentId = page.parentId; parentId !== null; ) {
+      const parent = pages.find((other) => other.id === parentId);
+      if (!parent) {
+        break;
+      }
+      path.unshift(parent);
+      parentId = parent.parentId;
+    }
+    const parent = path[path.length - 1];
+    return {
+      id: page.id,
+      title: page.title,
+      slug: page.slug,
+      project: this.state.projects.find((project) => project.id === page.projectId)?.key ?? "",
+      body: page.body,
+      current: true,
+      conflict_copies: 0,
+      headings: headingsOf(page.body),
+      ...(parent ? { parent: ref(parent) } : {}),
+      path: path.map(ref),
+      children: pages.filter((other) => other.parentId === page.id).map(ref),
+      ...(page.body === "" ? {} : { revision: `${page.id}-r` }),
+      created_at: page.createdAt,
+      updated_at: page.updatedAt,
+    };
+  }
+
   /** Every task as lists show it, worked out once per state of the workspace (lists may hold 20,000 tasks). */
   private searchCache = new WeakMap<FakeState, { seq: number; results: Map<string, { found: ListedTask[]; order: string[] }> }>();
   private listedCache = new WeakMap<FakeState, { seq: number; items: ListedTask[] }>();
@@ -1945,6 +2023,124 @@ export class FakeWorkspace {
       file.deletedAt = this.today().toISOString();
       return this.fileChange(file, ["trashed"]);
     },
+    "today.get": ({ project: ref, limit }) => {
+      const day = localDay(this.today());
+      const scope = ref === null || ref === undefined ? null : new Set([this.project(ref), ...this.descendants(this.project(ref))].map((project) => project.key));
+      const archived = this.archivedKeys();
+      const visible = (key: string) => (scope === null ? !archived.has(key) : scope.has(key));
+      const all = this.listedTasks().filter((task) => visible(task.project));
+      const open = all.filter((task) => task.closed_at === undefined);
+      const priority: Record<string, number> = { urgent: 0, high: 1, normal: 2, low: 3, none: 4 };
+      const overdue = open.filter((task) => task.due_date !== undefined && task.due_date < day).sort((a, b) => (a.due_date ?? "").localeCompare(b.due_date ?? ""));
+      const dueToday = open.filter((task) => task.due_date === day).sort((a, b) => (priority[a.priority] ?? 4) - (priority[b.priority] ?? 4));
+      const listed = new Set([...overdue, ...dueToday].map((task) => task.key));
+      const inProgress = open.filter((task) => task.status.category === "in_progress" && !listed.has(task.key));
+      const reminders = (this.handlers["reminder.due"]?.({ until: `${nextDay(day)}T00:00:00Z`, limit: 200 }) as DueReminders | undefined)?.items.filter((item) => item.kind === "reminder" && visible(item.task.key.slice(0, item.task.key.lastIndexOf("-")))) ?? [];
+      const claimed = all.filter((task) => task.claim !== undefined);
+      const since = this.today().getTime() - 86_400_000;
+      const recent = all
+        .filter((task) => Date.parse(task.updated_at) >= since)
+        .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+        .map((task) => ({ task, changed_at: task.updated_at, changed_by: this.state.tasks.find((candidate) => candidate.id === task.id)?.updatedBy ?? { kind: "user" as const, name: "You" } }));
+      const cap = Math.min(Math.max(limit ?? 50, 1), 200);
+      const timer = this.timerStatus().timer;
+      return {
+        date: day,
+        overdue: overdue.slice(0, cap),
+        due_today: dueToday.slice(0, cap),
+        in_progress: inProgress.slice(0, cap),
+        reminders: reminders.slice(0, cap),
+        claimed: claimed.slice(0, cap),
+        recent: recent.slice(0, cap),
+        ...some("timer", timer),
+        counts: {
+          overdue: overdue.length,
+          due_today: dueToday.length,
+          in_progress: inProgress.length,
+          reminders: reminders.length,
+          claimed: claimed.length,
+          recent: recent.length,
+          today: overdue.length + dueToday.length + inProgress.length,
+          open: open.length,
+        },
+      };
+    },
+    "search.query": (input) => {
+      const scope = input.project === null || input.project === undefined ? null : this.project(input.project);
+      const keys = scope === null ? null : new Set([scope, ...(input.include_subprojects === true ? this.descendants(scope) : [])].map((project) => project.key));
+      const archived = this.archivedKeys();
+      const filter = input.query === null || input.query === undefined || input.query.trim() === "" ? null : new Set(this.runQuery(() => matchingKeys(this.listedTasks(), input.query ?? "", this.queryNames(), archived)));
+      const listed = new Map(this.listedTasks().filter((task) => filter === null || filter.has(task.key)).map((task) => [task.id, task]));
+      const result = searchAll(
+        {
+          tasks: this.state.tasks.flatMap((task) => {
+            const item = listed.get(task.id);
+            return item ? [{ task: item, description: task.description, projectActive: !archived.has(item.project) || keys !== null }] : [];
+          }),
+          comments: this.state.comments.flatMap((comment) => {
+            const task = listed.get(comment.taskId);
+            return task && comment.deletedAt === null && !archived.has(task.project) ? [{ id: comment.id, task, body: comment.body, updatedAt: comment.editedAt ?? comment.createdAt }] : [];
+          }),
+          files: this.state.files.flatMap((file) => {
+            const task = listed.get(file.taskId);
+            return task && file.deletedAt === null && !archived.has(task.project) ? [{ id: file.id, task, name: file.name, createdAt: file.createdAt }] : [];
+          }),
+          pages: (this.state.wiki ?? []).map((page) => ({ page, project: this.state.projects.find((project) => project.id === page.projectId)?.key ?? "" })).filter((entry) => !archived.has(entry.project)),
+          projects: this.state.projects.map((project) => ({ id: project.id, key: project.key, name: project.name, active: project.state === "active" })),
+          inScope: (key) => keys === null || keys.has(key),
+        },
+        input,
+      );
+      return result === "empty" ? fail("invalid", "Type something to search for.", { details: { path: "text", message_id: "search-empty", args: {} } }) : result;
+    },
+    "wiki.list": ({ project: ref }) => {
+      const project = this.project(ref);
+      const pages = (this.state.wiki ?? []).filter((page) => page.projectId === project.id);
+      const ordered: FakeWikiPage[] = [];
+      const visit = (parent: string | null) => {
+        for (const page of pages.filter((candidate) => candidate.parentId === parent)) {
+          ordered.push(page);
+          visit(page.id);
+        }
+      };
+      visit(null);
+      return { items: ordered.map((page) => this.wikiSummary(page)), total: ordered.length };
+    },
+    "wiki.search": (input) => {
+      const scope = input.project === null || input.project === undefined ? null : this.project(input.project);
+      const archived = this.archivedKeys();
+      const pages = (this.state.wiki ?? [])
+        .map((page) => ({ page, summary: this.wikiSummary(page) }))
+        .filter(({ page, summary }) => (scope === null ? !archived.has(summary.project) : page.projectId === scope.id));
+      const hits = searchWiki(pages, input);
+      return { items: hits.slice(0, Math.min(Math.max(input.limit ?? 20, 1), 200)), total: hits.length };
+    },
+    "wiki.get": ({ page: ref, project }) => this.wikiOut(this.wikiPage(ref, project)),
+    "wiki.create": ({ project: ref, title, body, parent: parentRef }) => {
+      const project = this.writable(ref);
+      const pages = (this.state.wiki ??= []);
+      const trimmed = title.trim();
+      if (trimmed === "") {
+        fail("invalid", "A page needs a title.", { details: { path: "title", message_id: "wiki-title-empty", args: {} } });
+      }
+      if (pages.some((page) => page.projectId === project.id && fold(page.title) === fold(trimmed))) {
+        fail("conflict", `Project ${project.key} already has a page called "${trimmed}".`, { details: { message_id: "wiki-title-taken", args: { project: project.key, title: trimmed } } });
+      }
+      const parent = parentRef === null || parentRef === undefined ? null : this.wikiPage(parentRef, project.key);
+      const now = this.today().toISOString();
+      const page: FakeWikiPage = {
+        id: nextId("w"),
+        projectId: project.id,
+        title: trimmed,
+        slug: slugOf(trimmed, pages.filter((other) => other.projectId === project.id).map((other) => other.slug)),
+        parentId: parent?.id ?? null,
+        body: body ?? "",
+        createdAt: now,
+        updatedAt: now,
+      };
+      pages.push(page);
+      return { output: { page: this.wikiOut(page) }, changes: [{ entity: "wiki_page", id: page.id, fields: ["created"], project: project.key }] };
+    },
     "query.parse": ({ query, fields }) => parseQuery(query, this.queryNames(), fields === true),
     "task.search": (input) => {
       const scope = input.project === null || input.project === undefined ? null : this.project(input.project);
@@ -2107,8 +2303,9 @@ export class FakeWorkspace {
         task.labelIds = labels.filter((id) => !removed.includes(id));
         fields.push("labels");
       }
-      const start = clear.includes("start_date") ? null : (input.start_date ?? task.startDate);
-      const due = clear.includes("due_date") ? null : (input.due_date ?? task.dueDate);
+      const typed = (text: string | null | undefined, path: string) => (text === null || text === undefined ? null : this.dayInput(text, path));
+      const start = clear.includes("start_date") ? null : (typed(input.start_date, "start_date") ?? task.startDate);
+      const due = clear.includes("due_date") ? null : (typed(input.due_date, "due_date") ?? task.dueDate);
       if (start !== null && due !== null && start > due) {
         fail("invalid", "The start date is after the due date.", { details: { path: input.start_date ? "start_date" : "due_date" } });
       }

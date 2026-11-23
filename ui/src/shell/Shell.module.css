@@ -27,11 +27,17 @@
 
 .search {
   flex: 1;
+  min-width: 0;
   border: 0;
   font: inherit;
   color: inherit;
   text-align: left;
-  cursor: default;
+  cursor: text;
+}
+
+/* The browser's own clear button would crowd the shortcut hint. */
+.search input::-webkit-search-cancel-button {
+  display: none;
 }
 
 .navGroup {

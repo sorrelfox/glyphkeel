@@ -18,7 +18,8 @@ import { BoardScreen } from "./screens/board/BoardScreen";
 import { OpenTaskScreen, TaskWindowScreen } from "./screens/task/TaskWindow";
 import { AllTasksListScreen, ProjectListScreen } from "./screens/list/ListScreen";
 import { TimeReportScreen } from "./screens/time/TimeReport";
-import { TodayScreen } from "./screens/today/Placeholders";
+import { SearchScreen, searchParams } from "./screens/search/SearchScreen";
+import { TodayScreen } from "./screens/today/TodayScreen";
 import { Shell } from "./shell/Shell";
 import { StartupFailure } from "./shell/StartupFailure";
 import { type StartData } from "./start";
@@ -58,11 +59,15 @@ const editorPlaygroundRoute = createRoute({
 
 const shellRoute = createRoute({ getParentRoute: () => rootRoute, id: "shell", component: ShellScreen });
 
-const todayRoute = createRoute({ getParentRoute: () => shellRoute, path: "/", component: TodayScreen });
-
 /** The task open in the panel beside a board or a list. */
 const taskSearch = (search: Record<string, unknown>): { task?: string } =>
   typeof search.task === "string" && search.task !== "" ? { task: search.task } : {};
+
+/** Today; `task` is the task open in the panel beside it. */
+const todayRoute = createRoute({ getParentRoute: () => shellRoute, path: "/", validateSearch: taskSearch, component: TodayScreen });
+
+/** The search page: the text, filters and the task open beside the results. */
+const searchRoute = createRoute({ getParentRoute: () => shellRoute, path: "/search", validateSearch: searchParams, component: SearchScreen });
 
 /** Every task of the workspace, as a list. */
 const allTasksRoute = createRoute({ getParentRoute: () => shellRoute, path: "/all", validateSearch: taskSearch, component: AllTasksListScreen });
@@ -97,7 +102,7 @@ const routeTree = rootRoute.addChildren([
   galleryRoute,
   editorPlaygroundRoute,
   taskWindowRoute,
-  shellRoute.addChildren([todayRoute, allTasksRoute, timeReportRoute, boardRoute, projectListRoute, openTaskRoute]),
+  shellRoute.addChildren([todayRoute, searchRoute, allTasksRoute, timeReportRoute, boardRoute, projectListRoute, openTaskRoute]),
 ]);
 
 /**

@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 
 import { classes } from "../classes";
 import { useAppearance } from "../appearance/AppearanceProvider";
 import { useToasts } from "../components/Toasts";
 import { useImageSource, type CheckboxClick } from "../data/markdown";
+import { splitTarget } from "../data/wiki";
 import { errorToast, useOp } from "../data/hooks";
 import { useT } from "../i18n/I18n";
 import { openAttachment } from "../ipc/files";
@@ -14,6 +15,9 @@ import { openLink } from "../ipc/links";
 import { attachmentOf, drawReader } from "./draw";
 import { insertSanitized } from "./insert";
 import styles from "./Reader.module.css";
+
+// A wiki link opens its page read only; loaded on the first such click.
+const WikiPageDialog = lazy(() => import("../screens/search/WikiPageDialog"));
 
 interface MarkdownReaderProps {
   /** The engine's sanitized HTML. */
@@ -31,7 +35,7 @@ interface MarkdownReaderProps {
  * Markdown as the reader shows it: the engine's HTML, inserted through the
  * one sanitizing function, with formulas, diagrams and code drawn on top.
  * Checkboxes tick through the engine, task keys open the task (and show a
- * card on hover), wiki links name their page, other links open in the
+ * card on hover), wiki links open their page read only, other links open in the
  * browser, and external images wait as buttons.
  */
 export function MarkdownReader({ html, onToggle, onOpenTask, compact = false, className, label }: MarkdownReaderProps) {
@@ -43,6 +47,7 @@ export function MarkdownReader({ html, onToggle, onOpenTask, compact = false, cl
   const { resolved } = useAppearance();
   const theme = `${resolved.theme} ${resolved.accent}`;
   const [card, setCard] = useState<{ key: string; top: number; left: number } | null>(null);
+  const [wiki, setWiki] = useState<string | null>(null);
   const latest = useRef({ imageSource, t });
   const toggleable = onToggle !== undefined;
 
@@ -98,7 +103,7 @@ export function MarkdownReader({ html, onToggle, onOpenTask, compact = false, cl
       if (ref !== undefined) {
         onOpenTask(ref);
       } else if (link.dataset.wiki !== undefined) {
-        toasts.show({ tone: "info", text: t("reader-wiki-later", { page: link.dataset.wiki }) });
+        setWiki(link.dataset.wiki);
       } else if (attachmentOf(href) !== null) {
         // A link to an attached file opens it in the desktop's app for it.
         openAttachment(attachmentOf(href) ?? "").catch((error: unknown) => {
@@ -179,6 +184,18 @@ export function MarkdownReader({ html, onToggle, onOpenTask, compact = false, cl
         }}
       />
       {card && <TaskCard taskKey={card.key} top={card.top} left={card.left} />}
+      {wiki !== null && (
+        <Suspense>
+          <WikiPageDialog
+            page={{ title: splitTarget(wiki).title }}
+            heading={splitTarget(wiki).heading}
+            onClose={() => {
+              setWiki(null);
+            }}
+            onOpenTask={onOpenTask}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

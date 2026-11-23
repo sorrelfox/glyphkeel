@@ -441,7 +441,64 @@ function Title({ task, readOnly, onSave }: { task: Task; readOnly: boolean; onSa
   );
 }
 
-/** A day: shown as "Nov 24", edited with the platform's date field; empty clears it. */
+/**
+ * A day being edited: typed in words ("next fri", "in 3d", "dec 1"), which
+ * the engine reads in the workspace's calendar, or picked in the platform's
+ * date field. Answers the words, the picked day, null to clear it, or
+ * undefined to leave it.
+ */
+function DateEditor({ label, value, onDone }: { label: string; value: string | null; onDone: (next: string | null | undefined) => void }) {
+  const t = useT();
+  const [words, setWords] = useState("");
+  const [picked, setPicked] = useState(value ?? "");
+  const finish = () => {
+    onDone(words.trim() !== "" ? words.trim() : picked === "" ? null : picked);
+  };
+  return (
+    <span
+      className={classes("field", styles.inlineField)}
+      title={t("date-words-hint")}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) {
+          finish();
+        }
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          finish();
+        } else if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          onDone(undefined);
+        }
+      }}
+    >
+      <input
+        type="text"
+        aria-label={t("date-words-label", { name: label })}
+        placeholder={t("date-words-placeholder")}
+        autoFocus
+        size={12}
+        value={words}
+        onChange={(event) => {
+          setWords(event.target.value);
+        }}
+      />
+      <input
+        type="date"
+        aria-label={label}
+        value={picked}
+        onChange={(event) => {
+          setPicked(event.target.value);
+          setWords("");
+        }}
+      />
+    </span>
+  );
+}
+
+/** A day: shown as "Nov 24", edited in words or with the platform's date field; empty clears it. */
 function DateValue({
   label,
   value,
@@ -464,29 +521,16 @@ function DateValue({
   const today = useToday();
   if (editing) {
     return (
-      <span className={classes("field", styles.inlineField)}>
-        <input
-          type="date"
-          aria-label={label}
-          autoFocus
-          defaultValue={value ?? ""}
-          onBlur={(event) => {
-            const next = event.target.value === "" ? null : event.target.value;
-            if (next !== value) {
-              onChange(next);
-            }
-            setEditing(false);
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.currentTarget.blur();
-            } else if (event.key === "Escape") {
-              event.preventDefault();
-              setEditing(false);
-            }
-          }}
-        />
-      </span>
+      <DateEditor
+        label={label}
+        value={value}
+        onDone={(next) => {
+          setEditing(false);
+          if (next !== undefined && next !== value) {
+            onChange(next);
+          }
+        }}
+      />
     );
   }
   const state = relative ? dueState(value, closed, today) : null;

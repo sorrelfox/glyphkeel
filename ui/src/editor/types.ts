@@ -30,6 +30,14 @@ export interface TaskSuggestion {
   title: string;
 }
 
+/** A wiki page, or one heading of it, that a `[[` link may point at. */
+export interface PageSuggestion {
+  /** What goes between the brackets: `Page` or `Page#Heading`. */
+  target: string;
+  /** More about it: its project, or the heading's page. */
+  detail?: string | undefined;
+}
+
 /**
  * Completion sources. Each is asked as the person types, with the text typed
  * so far, and may answer from a cache or over IPC.
@@ -37,9 +45,20 @@ export interface TaskSuggestion {
 export interface CompletionProviders {
   /** Task keys: `query` is what follows the project key's dash, e.g. "4" for "TM-4", or a title word. */
   tasks?: (projectKey: string, query: string) => Promise<readonly TaskSuggestion[]> | readonly TaskSuggestion[];
-  /** Wiki pages, for `[[`: `query` is the text typed after the brackets. */
-  pages?: (query: string) => Promise<readonly string[]> | readonly string[];
+  /**
+   * Tasks found by a word of the title or by key, for `#`: `query` is the
+   * text typed after the `#`, which may be empty.
+   */
+  findTasks?: (query: string) => Promise<readonly TaskSuggestion[]> | readonly TaskSuggestion[];
+  /**
+   * Wiki pages, for `[[`: `query` is the text typed after the brackets;
+   * `Page#Heading` asks for the headings of a page.
+   */
+  pages?: (query: string) => Promise<readonly (string | PageSuggestion)[]> | readonly (string | PageSuggestion)[];
 }
+
+/** The searches a toolbar button can open in the text. */
+export type LinkKind = "task" | "page";
 
 /** A click on a checkbox, when the engine owns the text. */
 export interface ChecklistToggle {
@@ -131,6 +150,11 @@ export interface MarkdownEditorHandle {
    * selection, as its shortcut does, and keeps the focus in the text.
    */
   format(kind: FormatKind): void;
+  /**
+   * Opens the search for a link at the selection, as typing its trigger
+   * does: `#` for a task, `[[` for a wiki page.
+   */
+  startLink(kind: LinkKind): void;
   /** The position in the text under a point of the window, if the point is on the text. */
   positionAt(x: number, y: number): number | null;
 }
