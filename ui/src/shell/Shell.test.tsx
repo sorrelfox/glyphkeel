@@ -12,7 +12,14 @@ import { SIDEBAR_WIDTH } from "./Shell";
 afterEach(cleanup);
 
 async function renderShell() {
-  const engine = fakeEngine({ "workspace.get": () => workspaceInfo(), "settings.get": () => settings() });
+  const engine = fakeEngine({
+    "workspace.get": () => workspaceInfo(),
+    "settings.get": () => settings(),
+    // An empty workspace's list.
+    "view.list": () => ({ items: [], total: 0 }),
+    "query.parse": () => ({ advanced: false, chips: [], tokens: [], valid: true }),
+    "task.search": () => ({ items: [], query: "", sort: [], total: 0, totals: { count: 0, open: 0, estimate_minutes: 0, spent_minutes: 0, remaining_minutes: 0 } }),
+  });
   const view = render(<App start={{ titleBar: "app", locale: "en-US" }} client={engine.client} path="/" />);
   await screen.findByRole("navigation", { name: "Workspace" });
   return view;
@@ -38,7 +45,7 @@ describe("Shell", () => {
     await renderShell();
     const sidebar = screen.getByRole("navigation", { name: "Workspace" });
     fireEvent.click(within(sidebar).getByRole("button", { name: "All tasks" }));
-    expect(await screen.findByText("No tasks yet.")).toBeDefined();
+    expect(await screen.findByText("No tasks here yet.")).toBeDefined();
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("All tasks");
     expect(within(sidebar).getByRole("button", { name: "All tasks" }).getAttribute("aria-current")).toBe("page");
   });

@@ -4,6 +4,7 @@
 import { type Changed } from "../../generated/ops";
 import { type Transport } from "../transport";
 import { FakeError, FakeWorkspace } from "./engine";
+import { addManyTasks } from "./many";
 import { seed } from "./seed";
 
 export interface FakeOptions {
@@ -11,6 +12,8 @@ export interface FakeOptions {
   today?: () => Date;
   /** Milliseconds each call waits, to show loading states; none by default. */
   latency?: number;
+  /** Plain tasks added to the sample data, for long lists. */
+  extraTasks?: number;
 }
 
 /**
@@ -21,7 +24,11 @@ export interface FakeOptions {
  */
 export function fakeTransport(options: FakeOptions = {}): Transport & { workspace: FakeWorkspace } {
   const today = options.today ?? (() => new Date());
-  const workspace = new FakeWorkspace(seed(today()), today);
+  const state = seed(today());
+  if (options.extraTasks !== undefined && options.extraTasks > 0) {
+    addManyTasks(state, options.extraTasks);
+  }
+  const workspace = new FakeWorkspace(state, today);
   const listeners = new Set<(event: Changed) => void>();
   const wait = () => new Promise<void>((resolve) => setTimeout(resolve, options.latency ?? 0));
 

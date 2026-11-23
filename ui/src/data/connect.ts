@@ -19,7 +19,9 @@ export function connect(): Transport {
   if (__FAKE__) {
     // Sample data in memory, for work on the screens without the engine;
     // also inside the app, when it loads a page built this way.
-    return deferredTransport(import("./fake/transport").then(({ fakeTransport }) => fakeTransport()));
+    // `?tasks=20000` adds that many tasks, for long lists.
+    const extraTasks = Number(new URLSearchParams(window.location.search).get("tasks") ?? 0) || 0;
+    return deferredTransport(import("./fake/transport").then(({ fakeTransport }) => fakeTransport({ extraTasks })));
   }
   if (isTauri()) {
     return tauriTransport();
