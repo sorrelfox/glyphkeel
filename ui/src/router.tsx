@@ -12,6 +12,7 @@ import {
 } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useState } from "react";
 
+import { onOpenLink } from "./ipc/openLinks";
 import { windowReady, type Transport } from "./ipc/ready";
 import { BoardScreen } from "./screens/board/BoardScreen";
 import { OpenTaskScreen, TaskWindowScreen } from "./screens/task/TaskWindow";
@@ -130,6 +131,8 @@ function Root() {
 function ShellScreen() {
   const { start } = useRouteContext({ from: "__root__" });
   const navigate = useNavigate();
+  // Links handed to the running app open their task here, in the main window.
+  useEffect(() => onOpenLink((key) => void navigate({ to: "/open/$key", params: { key } })), [navigate]);
   return <Shell titleBar={start.titleBar} openGallery={import.meta.env.DEV ? () => void navigate({ to: GALLERY_PATH }) : undefined} />;
 }
 

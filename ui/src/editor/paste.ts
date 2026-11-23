@@ -8,6 +8,7 @@
  * document's line break.
  */
 
+import { Prec, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 
 import { convertLineBreaks } from "./lineEndings";
@@ -48,3 +49,51 @@ const htmlPaste = EditorView.domEventHandlers({
 const plainPaste = EditorView.clipboardInputFilter.of((text, state) => convertLineBreaks(text, state.lineBreak));
 
 export const pasting = [htmlPaste, plainPaste];
+
+/** Attaches pasted or dropped files and answers the Markdown that refers to them. */
+export type FileHandler = (files: readonly File[]) => Promise<string>;
+
+/**
+ * Files pasted or dropped on the editor: `handler` (when there is one)
+ * attaches them, and the Markdown it answers goes in at the cursor (for a
+ * drop, where they were dropped). Without a handler, or without files, the
+ * paste or drop is the editor's usual one.
+ */
+export function filePasting(handler: () => FileHandler | null): Extension {
+  const take = (view: EditorView, files: readonly File[], at: number | null): boolean => {
+    const attach = handler();
+    if (files.length === 0 || !attach || view.state.readOnly) {
+      return false;
+    }
+    if (at !== null) {
+      view.dispatch({ selection: { anchor: at } });
+    }
+    void attach(files).then((markdown) => {
+      if (markdown !== "" && !view.state.readOnly) {
+        insertMarkdown(view, markdown, "input.paste");
+      }
+    });
+    return true;
+  };
+  return Prec.high(
+    EditorView.domEventHandlers({
+      paste(event, view) {
+        const taken = take(view, [...(event.clipboardData?.files ?? [])], null);
+        if (taken) {
+          event.preventDefault();
+        }
+        return taken;
+      },
+      drop(event, view) {
+        const at = view.posAtCoords({ x: event.clientX, y: event.clientY });
+        const taken = take(view, [...(event.dataTransfer?.files ?? [])], at);
+        if (taken) {
+          event.preventDefault();
+          // The task panel attaches dropped files too; this drop is the editor's.
+          event.stopPropagation();
+        }
+        return taken;
+      },
+    }),
+  );
+}

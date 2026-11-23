@@ -383,6 +383,7 @@
 .thumb {
   flex: none;
   width: 28px;
+  height: auto;
   aspect-ratio: 1;
   border-radius: var(--r-s);
   background: var(--hover);
@@ -517,4 +518,40 @@
   height: 100vh;
   min-height: 0;
   background: var(--bg);
+}
+
+.olderHistory {
+  align-self: flex-start;
+  margin-top: 8px;
+}
+
+/* A subtask is dragged by its grip, shown while the pointer is on the row. */
+.subtaskRow {
+  position: relative;
+}
+
+.grip {
+  display: inline-flex;
+  flex: 0 0 auto;
+  margin-left: -4px;
+  color: var(--fg-faint);
+  cursor: grab;
+  opacity: 0;
+  touch-action: none;
+}
+
+.dragging .grip,
+.subtaskRow:hover .grip {
+  opacity: 1;
+}
+
+.gripOff {
+  visibility: hidden;
+}
+
+.dragging {
+  z-index: 1;
+  box-shadow: 0 0 0 1px var(--border), var(--shadow-pop);
+  background: var(--surface);
+  cursor: grabbing;
 }

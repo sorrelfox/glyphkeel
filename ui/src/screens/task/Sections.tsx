@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { ArrowDown, ArrowUp, MoreHorizontal, Plus, X } from "lucide-react";
-import { useState } from "react";
+import { closestCenter, DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent, type Modifier } from "@dnd-kit/core";
+import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS as DndCss } from "@dnd-kit/utilities";
+import { ArrowDown, ArrowUp, GripVertical, MoreHorizontal, Plus, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Button, Menu, MenuTrigger, Popover } from "react-aria-components";
 
 import { classes } from "../../classes";
@@ -70,10 +73,100 @@ function AddField({
   );
 }
 
+/** Where a subtask goes when it moves from `from` to `to` in `keys`: before or after the one it lands on. */
+export function subtaskPlace(keys: readonly string[], from: number, to: number): { before: string } | { after: string } | null {
+  const target = keys[to];
+  if (from === to || target === undefined || keys[from] === undefined) {
+    return null;
+  }
+  return to < from ? { before: target } : { after: target };
+}
+
+/** One subtask: a grip to drag it by, its checkbox, key, title and status; a menu to move it. */
+function SubtaskRow({
+  sub,
+  project,
+  readOnly,
+  first,
+  last,
+  closing,
+  reopening,
+  onShift,
+  onToggle,
+  onOpenTask,
+}: {
+  sub: TaskRef;
+  project: Project;
+  readOnly: boolean;
+  first: boolean;
+  last: boolean;
+  closing: boolean;
+  reopening: boolean;
+  onShift: (step: -1 | 1) => void;
+  onToggle: () => void;
+  onOpenTask: (key: string) => void;
+}) {
+  const t = useT();
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: sub.key, disabled: readOnly });
+  return (
+    <div
+      ref={setNodeRef}
+      className={classes("item", styles.row, styles.subtaskRow, isDragging && styles.dragging)}
+      style={{ transform: DndCss.Translate.toString(transform), transition }}
+      data-subtask={sub.key}
+      onKeyDown={(event) => {
+        if (event.altKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
+          event.preventDefault();
+          onShift(event.key === "ArrowUp" ? -1 : 1);
+        }
+      }}
+    >
+      {/* Dragging is for the pointer; the keyboard moves a subtask with Alt+↑ and Alt+↓, or from its menu. */}
+      <span ref={setActivatorNodeRef} className={classes(styles.grip, readOnly && styles.gripOff)} aria-hidden="true" data-subtask-grip={sub.key} {...attributes} {...listeners} tabIndex={-1} role="presentation">
+        <GripVertical className="ic s" />
+      </span>
+      <input
+        type="checkbox"
+        className="check"
+        checked={sub.closed}
+        disabled={readOnly || (sub.closed ? !reopening : !closing)}
+        aria-label={t(sub.closed ? "subtasks-reopen" : "subtasks-close", { key: sub.key })}
+        onChange={onToggle}
+      />
+      <Button
+        className={classes(styles.rowMain)}
+        aria-label={t("subtasks-open", { key: sub.key, title: sub.title })}
+        onPress={() => {
+          onOpenTask(sub.key);
+        }}
+      >
+        <span className="key">{sub.key}</span>
+        <span className={classes("truncate grow", sub.closed && styles.closedTitle)}>{sub.title}</span>
+        <StatusPill task={sub} project={project} />
+      </Button>
+      <MenuTrigger>
+        <Button className="btn flat icon sm" isDisabled={readOnly} aria-label={t("subtasks-menu", { key: sub.key })}>
+          <MoreHorizontal className="ic s" />
+        </Button>
+        <Popover className="pop menuPopover" placement="bottom end" offset={4}>
+          <Menu className="menu" aria-label={t("subtasks-menu", { key: sub.key })}>
+            <MenuEntries
+              entries={[
+                { id: "up", label: t("subtasks-move-up"), icon: <ArrowUp className="ic s" />, disabled: first, run: () => { onShift(-1); } },
+                { id: "down", label: t("subtasks-move-down"), icon: <ArrowDown className="ic s" />, disabled: last, run: () => { onShift(1); } },
+              ]}
+            />
+          </Menu>
+        </Popover>
+      </MenuTrigger>
+    </div>
+  );
+}
+
 /**
- * Subtasks, in board order: a checkbox that closes or reopens each, its key,
- * title and status; Add subtask. A subtask moves up or down among those of
- * the same status, from its menu or with Alt+↑ and Alt+↓.
+ * Subtasks in their own order, whatever their statuses: a checkbox that
+ * closes or reopens each, its key, title and status; Add subtask. A subtask
+ * moves by dragging its grip, from its menu, or with Alt+↑ and Alt+↓.
  */
 export function SubtasksSection({
   task,
@@ -90,22 +183,57 @@ export function SubtasksSection({
   const [adding, setAdding] = useState(false);
   const create = useCommand("task.create");
   const move = useCommand("task.move");
-  const subtasks = task.subtasks ?? [];
+  const reorder = useCommand("task.reorder_subtask");
+  const given = task.subtasks ?? [];
+  // The order just asked for, shown until the engine's answer differs from the order it was made from.
+  const [asked, setAsked] = useState<{ from: string; keys: string[] } | null>(null);
+  const [focusKey, setFocusKey] = useState<string | null>(null);
+  const givenKeys = given.map((sub) => sub.key);
+  const showAsked = asked !== null && asked.from === givenKeys.join(" ");
+  const subtasks = showAsked ? asked.keys.map((key) => given.find((sub) => sub.key === key)).filter((sub): sub is TaskRef => sub !== undefined) : given;
+  const keys = subtasks.map((sub) => sub.key);
   const done = subtasks.filter((sub) => sub.closed).length;
   const closing = project.statuses.find((status) => status.category === "done");
   const reopening = project.statuses.find((status) => status.category === "todo") ?? project.statuses[0];
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
-  /** The neighbour a subtask can move past: the one before or after it, in the same status. */
-  const neighbour = (index: number, step: -1 | 1) => {
-    const other = subtasks[index + step];
-    const sub = subtasks[index];
-    return other && sub && other.status.id === sub.status.id ? other : undefined;
+  // A subtask moved from the keyboard keeps the focus where it lands.
+  useEffect(() => {
+    if (focusKey === null) {
+      return;
+    }
+    const row = document.querySelector<HTMLElement>(`[data-subtask="${focusKey}"]`);
+    if (row && !row.contains(document.activeElement)) {
+      row.querySelector<HTMLElement>("button")?.focus();
+    }
+  });
+
+  const place = (from: number, to: number) => {
+    const sub = subtasks[from];
+    const where = subtaskPlace(keys, from, to);
+    if (!sub || !where || readOnly) {
+      return;
+    }
+    setAsked({ from: givenKeys.join(" "), keys: arrayMove(keys, from, to) });
+    reorder.mutate(
+      { key: sub.key, ...where },
+      {
+        onError: () => {
+          setAsked(null);
+        },
+      },
+    );
   };
   const shift = (index: number, step: -1 | 1) => {
     const sub = subtasks[index];
-    const other = neighbour(index, step);
-    if (sub && other) {
-      move.mutate({ key: sub.key, ...(step < 0 ? { before: other.key } : { after: other.key }) });
+    if (sub) {
+      setFocusKey(sub.key);
+      place(index, index + step);
+    }
+  };
+  const onDragEnd = ({ active, over }: DragEndEvent) => {
+    if (over) {
+      place(keys.indexOf(String(active.id)), keys.indexOf(String(over.id)));
     }
   };
 
@@ -135,59 +263,32 @@ export function SubtasksSection({
           <Plus className="ic s" />
         </Button>
       </div>
-      {subtasks.map((sub, index) => (
-        <div
-          key={sub.id}
-          className={classes("item", styles.row)}
-          data-subtask={sub.key}
-          onKeyDown={(event) => {
-            if (event.altKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
-              event.preventDefault();
-              shift(index, event.key === "ArrowUp" ? -1 : 1);
-            }
-          }}
-        >
-          <input
-            type="checkbox"
-            className="check"
-            checked={sub.closed}
-            disabled={readOnly || (sub.closed ? !reopening : !closing)}
-            aria-label={t(sub.closed ? "subtasks-reopen" : "subtasks-close", { key: sub.key })}
-            onChange={() => {
-              const target = sub.closed ? reopening : closing;
-              if (target) {
-                move.mutate({ key: sub.key, status: target.id });
-              }
-            }}
-          />
-          <Button
-            className={classes(styles.rowMain)}
-            aria-label={t("subtasks-open", { key: sub.key, title: sub.title })}
-            onPress={() => {
-              onOpenTask(sub.key);
-            }}
-          >
-            <span className="key">{sub.key}</span>
-            <span className={classes("truncate grow", sub.closed && styles.closedTitle)}>{sub.title}</span>
-            <StatusPill task={sub} project={project} />
-          </Button>
-          <MenuTrigger>
-            <Button className="btn flat icon sm" isDisabled={readOnly} aria-label={t("subtasks-menu", { key: sub.key })}>
-              <MoreHorizontal className="ic s" />
-            </Button>
-            <Popover className="pop menuPopover" placement="bottom end" offset={4}>
-              <Menu className="menu" aria-label={t("subtasks-menu", { key: sub.key })}>
-                <MenuEntries
-                  entries={[
-                    { id: "up", label: t("subtasks-move-up"), icon: <ArrowUp className="ic s" />, disabled: !neighbour(index, -1), run: () => { shift(index, -1); } },
-                    { id: "down", label: t("subtasks-move-down"), icon: <ArrowDown className="ic s" />, disabled: !neighbour(index, 1), run: () => { shift(index, 1); } },
-                  ]}
-                />
-              </Menu>
-            </Popover>
-          </MenuTrigger>
-        </div>
-      ))}
+      <DndContext sensors={readOnly ? [] : sensors} collisionDetection={closestCenter} modifiers={[restrictToVertical]} onDragEnd={onDragEnd}>
+        <SortableContext items={keys} strategy={verticalListSortingStrategy}>
+          {subtasks.map((sub, index) => (
+            <SubtaskRow
+              key={sub.id}
+              sub={sub}
+              project={project}
+              readOnly={readOnly}
+              first={index === 0}
+              last={index === subtasks.length - 1}
+              closing={closing !== undefined}
+              reopening={reopening !== undefined}
+              onShift={(step) => {
+                shift(index, step);
+              }}
+              onToggle={() => {
+                const target = sub.closed ? reopening : closing;
+                if (target) {
+                  move.mutate({ key: sub.key, status: target.id });
+                }
+              }}
+              onOpenTask={onOpenTask}
+            />
+          ))}
+        </SortableContext>
+      </DndContext>
       {adding && (
         <AddField
           label={t("subtasks-new")}
@@ -203,6 +304,9 @@ export function SubtasksSection({
     </section>
   );
 }
+
+/** Drags in a list move up and down only. */
+const restrictToVertical: Modifier = ({ transform }) => ({ ...transform, x: 0 });
 
 /** The kinds of link the person adds, as they read from this task. */
 const ADDABLE: readonly RelationKind[] = ["blocks", "blocked_by", "relates", "duplicates", "duplicated_by", "subtask_of", "parent_of"];

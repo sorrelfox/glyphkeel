@@ -71,6 +71,8 @@ export interface FakeTask {
   priority: Priority;
   labelIds: string[];
   parentId: string | null;
+  /** Order among its parent's subtasks, whatever their statuses; set while it has a parent. */
+  subtaskRank?: number | undefined;
   /** Order inside its status. */
   rank: number;
   startDate: string | null;

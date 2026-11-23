@@ -230,6 +230,7 @@ function DescriptionEditor({ task, draft, onDraft, onDone }: { task: Task; draft
         value={draft.text}
         mode={source ? "source" : "preview"}
         autoFocus
+        attachTo={task.key}
         onChange={(text) => {
           setConfirming(false);
           onDraft({ ...draft, text });

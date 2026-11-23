@@ -95,6 +95,11 @@ export interface MarkdownEditorProps {
   spellChecker?: SpellChecker | null;
   /** Called when mixed line breaks were converted on opening, in addition to the note the editor shows. */
   onLineBreaksConverted?: (note: LineBreakNote) => void;
+  /**
+   * Files pasted or dropped on the editor: attaches them and answers the
+   * Markdown to insert for them. Without it, files are left to the page.
+   */
+  onFiles?: (files: readonly File[]) => Promise<string>;
   readOnly?: boolean;
   autoFocus?: boolean;
   /** The accessible name of the text area. */

@@ -14,6 +14,7 @@ mod ipc;
 mod links;
 mod main_window;
 mod navigation;
+mod open_links;
 mod spell;
 mod start;
 mod task_window;
@@ -23,9 +24,9 @@ mod webkit;
 mod window_state;
 
 use std::process::ExitCode;
+use std::sync::Arc;
 #[cfg(target_os = "linux")]
 use std::sync::atomic::Ordering;
-use std::sync::{Arc, Mutex};
 
 use gk_engine::{EngineConfig, Role};
 use tauri::{AppHandle, Manager, RunEvent, WindowEvent};
@@ -33,11 +34,6 @@ use tauri::{AppHandle, Manager, RunEvent, WindowEvent};
 use crate::ipc::Workspace;
 use crate::start::Shown;
 use crate::title_bar::TitleBar;
-
-/// Links the app was asked to open, waiting for the part of the app that
-/// opens them.
-#[derive(Debug, Default)]
-struct PendingLinks(Mutex<Vec<String>>);
 
 fn main() -> ExitCode {
     #[cfg(target_os = "linux")]
@@ -63,7 +59,7 @@ fn main() -> ExitCode {
     let title_bar = TitleBar::from_env();
     let built = tauri::Builder::default()
         .manage(Shown::default())
-        .manage(PendingLinks(Mutex::new(first_links)))
+        .manage(open_links::OpenLinks::default())
         .manage(files::Drops::default())
         .invoke_handler(tauri::generate_handler![
             start::window_ready,
@@ -77,6 +73,7 @@ fn main() -> ExitCode {
             files::open_file,
             files::save_file,
             links::open_link,
+            open_links::watch_open_links,
             task_window::open_task_window
         ])
         // Attached images, by attachment ID, for the page's <img> elements.
@@ -100,17 +97,13 @@ fn main() -> ExitCode {
             // calls find it.
             app.manage(Arc::new(open_workspace(app.handle())));
             // A task named by the first link opens with the window; the
-            // links that arrive later wait for the part of the app that
-            // handles them.
-            let first_task = app
-                .state::<PendingLinks>()
-                .0
-                .lock()
-                .ok()
-                .and_then(|mut links| {
-                    let at = links.iter().position(|link| start::task_in_link(link).is_some())?;
-                    start::task_in_link(&links.remove(at))
-                });
+            // others go to the page once it listens.
+            let mut first_links = first_links;
+            let first_task = first_links
+                .iter()
+                .position(|link| start::task_in_link(link).is_some())
+                .and_then(|at| start::task_in_link(&first_links.remove(at)));
+            app.state::<open_links::OpenLinks>().push(&first_links);
             main_window::open(app.handle(), title_bar, first_task)?;
             #[cfg(target_os = "linux")]
             if let Some(activations) = activations {
@@ -195,11 +188,8 @@ fn forward_activations(
 
 #[cfg(target_os = "linux")]
 fn on_activation(app: &AppHandle, activation: instance::Activation) {
-    if !activation.links.is_empty()
-        && let Ok(mut pending) = app.state::<PendingLinks>().0.lock()
-    {
-        pending.extend(activation.links);
-    }
+    // The page opens the tasks the links name.
+    app.state::<open_links::OpenLinks>().push(&activation.links);
     // Before the page's first screen the window isn't shown yet; it comes
     // forward by itself when it is.
     if !app.state::<Shown>().0.load(Ordering::SeqCst) {

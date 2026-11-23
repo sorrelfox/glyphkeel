@@ -4,10 +4,10 @@
 //! Attached files between the app and the page.
 //!
 //! - **`gk-file:`** shows attached images to the page: `gk-file://localhost/<id>`
-//!   (`http://gk-file.localhost/<id>` with WebView2). It answers only for
-//!   known attachment IDs, only for images within the size limits, with the
-//!   type the engine sniffed from the content and `nosniff`. Other files are
-//!   never served to the page.
+//!   (`http://gk-file.localhost/<id>` with WebView2), and their thumbnails at
+//!   `<id>/thumb`. It answers only for known attachment IDs, only for images
+//!   within the size limits, with the type the engine sniffed from the
+//!   content and `nosniff`. Other files are never served to the page.
 //! - **The file chooser** and **files dropped on a window** are handled here
 //!   in Rust: the page names the task, never a path, so it can't make the app
 //!   read a file the person didn't choose.
@@ -35,6 +35,8 @@ pub(crate) const SCHEME: &str = "gk-file";
 const MAX_IMAGE_BYTES: u64 = 50 * 1024 * 1024;
 /// The most pixels of an image the protocol serves, when its size is known.
 const MAX_IMAGE_PIXELS: u64 = 100_000_000;
+/// The largest thumbnail the protocol serves (they are at most 256 pixels a side).
+const MAX_THUMB_BYTES: u64 = 4 * 1024 * 1024;
 /// Drops kept per window until the page attaches them.
 const KEPT_DROPS: usize = 8;
 
@@ -79,9 +81,22 @@ fn is_id(text: &str) -> bool {
         })
 }
 
-/// The attachment a request's path names: `/<id>`, nothing else.
-pub(crate) fn attachment_in(path: &str) -> Option<&str> {
-    path.strip_prefix('/').filter(|id| is_id(id))
+/// What a request asks for: an attached image, or its thumbnail.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Wanted {
+    Image,
+    Thumbnail,
+}
+
+/// The attachment a request's path names, and what of it: `/<id>` or
+/// `/<id>/thumb`, nothing else.
+pub(crate) fn attachment_in(path: &str) -> Option<(&str, Wanted)> {
+    let rest = path.strip_prefix('/')?;
+    let (id, wanted) = match rest.strip_suffix("/thumb") {
+        Some(id) => (id, Wanted::Thumbnail),
+        None => (rest, Wanted::Image),
+    };
+    is_id(id).then_some((id, wanted))
 }
 
 fn status(code: StatusCode) -> Response<Vec<u8>> {
@@ -95,7 +110,7 @@ pub(crate) fn respond(workspace: &Workspace, method: &str, path: &str) -> Respon
     if method != "GET" {
         return status(StatusCode::METHOD_NOT_ALLOWED);
     }
-    let Some(id) = attachment_in(path) else {
+    let Some((id, wanted)) = attachment_in(path) else {
         return status(StatusCode::NOT_FOUND);
     };
     let info = match file_info(workspace, id) {
@@ -112,6 +127,9 @@ pub(crate) fn respond(workspace: &Workspace, method: &str, path: &str) -> Respon
     // way never runs script. Every other file opens in its own app.
     if info.kind != "image" || !info.mime.starts_with("image/") {
         return status(StatusCode::FORBIDDEN);
+    }
+    if wanted == Wanted::Thumbnail {
+        return thumbnail(workspace, &info);
     }
     let pixels = info
         .width
@@ -130,9 +148,77 @@ pub(crate) fn respond(workspace: &Workspace, method: &str, path: &str) -> Respon
             return status(StatusCode::NOT_FOUND);
         }
     };
+    image_response(&info.mime, bytes)
+}
+
+/// The thumbnail of the image `info`, made by the engine (again, when the
+/// cache lost it). An image the engine can't decode has none: 404, and the
+/// page shows the file's icon.
+fn thumbnail(workspace: &Workspace, info: &FileInfo) -> Response<Vec<u8>> {
+    let made = workspace
+        .call("file.thumbnail", json!({ "attachment": info.id }), None)
+        .and_then(|value| {
+            serde_json::from_value::<ThumbInfo>(value)
+                .map_err(|e| OpError::storage(format!("The thumbnail can't be read: {e}.")))
+        });
+    let thumb = match made {
+        Ok(thumb) => thumb,
+        Err(err)
+            if matches!(
+                err.code,
+                gk_api::ErrorCode::NotFound | gk_api::ErrorCode::Invalid
+            ) =>
+        {
+            return status(StatusCode::NOT_FOUND);
+        }
+        Err(err) => {
+            eprintln!("glyphkeel-app: {SCHEME}: {}: {}", info.name, err.message);
+            return status(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+    // Only the workspace's own thumbnail of this file is read, whatever path
+    // the answer names.
+    let expected = workspace
+        .layout()
+        .and_then(|layout| layout.thumb_path(&info.sha256));
+    if thumb.mime != "image/png" || expected.as_deref() != Some(Path::new(&thumb.path)) {
+        eprintln!(
+            "glyphkeel-app: {SCHEME}: {}: unexpected thumbnail",
+            info.name
+        );
+        return status(StatusCode::INTERNAL_SERVER_ERROR);
+    }
+    let bytes = match read_limited(Path::new(&thumb.path), MAX_THUMB_BYTES) {
+        Ok(bytes) => bytes,
+        Err(err) => {
+            eprintln!("glyphkeel-app: {SCHEME}: {}: {err}", info.name);
+            return status(StatusCode::NOT_FOUND);
+        }
+    };
+    image_response("image/png", bytes)
+}
+
+/// What `file.thumbnail` answers: the fields the app needs.
+#[derive(Debug, Deserialize)]
+struct ThumbInfo {
+    path: String,
+    mime: String,
+}
+
+fn read_limited(path: &Path, limit: u64) -> std::io::Result<Vec<u8>> {
+    use std::io::Read as _;
+    let mut out = Vec::new();
+    std::fs::File::open(path)?
+        .take(limit)
+        .read_to_end(&mut out)?;
+    Ok(out)
+}
+
+/// An image for `<img>`, of the type the engine named.
+fn image_response(mime: &str, bytes: Vec<u8>) -> Response<Vec<u8>> {
     Response::builder()
         .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, info.mime)
+        .header(header::CONTENT_TYPE, mime)
         .header("X-Content-Type-Options", "nosniff")
         // An image opened on its own still can't run anything.
         .header(
@@ -648,16 +734,23 @@ mod tests {
     }
 
     #[test]
-    fn only_a_bare_attachment_id_is_a_path() {
+    fn only_an_attachment_id_or_its_thumbnail_is_a_path() {
         let id = "01a208d6-2413-7095-976e-c39bc5e073ec";
-        assert_eq!(attachment_in(&format!("/{id}")), Some(id));
+        assert_eq!(attachment_in(&format!("/{id}")), Some((id, Wanted::Image)));
+        assert_eq!(
+            attachment_in(&format!("/{id}/thumb")),
+            Some((id, Wanted::Thumbnail))
+        );
         for path in [
             "/",
             "",
             id,
             "/../workspace.db",
             "/01A208D6-2413-7095-976E-C39BC5E073EC",
-            "/01a208d6-2413-7095-976e-c39bc5e073ec/thumb",
+            "/01a208d6-2413-7095-976e-c39bc5e073ec/thumb/",
+            "/01a208d6-2413-7095-976e-c39bc5e073ec/full",
+            "/01a208d6-2413-7095-976e-c39bc5e073ec/../thumb",
+            "/thumb",
             "/01a208d6x2413-7095-976e-c39bc5e073ec",
         ] {
             assert_eq!(attachment_in(path), None, "{path}");
@@ -681,6 +774,46 @@ mod tests {
                 .contains("sandbox")
         );
         assert!(response.body().starts_with(b"\x89PNG"));
+        ws.close();
+    }
+
+    #[test]
+    fn thumbnails_are_served_as_png_and_rebuilt_when_the_cache_lost_them() {
+        let dir = TempDir::new().unwrap();
+        let ws = workspace(&dir);
+        let id = attach(&ws, "dot.png", PNG);
+        let response = respond(&ws, "GET", &format!("/{id}/thumb"));
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()[header::CONTENT_TYPE], "image/png");
+        assert_eq!(response.headers()["X-Content-Type-Options"], "nosniff");
+        assert!(response.body().starts_with(b"\x89PNG"));
+        // The cache is rebuildable: without it the thumbnail is made again.
+        std::fs::remove_dir_all(WorkspaceLayout::new(dir.path().join("Personal")).thumbs_dir())
+            .unwrap();
+        let again = respond(&ws, "GET", &format!("/{id}/thumb"));
+        assert_eq!(again.status(), StatusCode::OK);
+        assert!(again.body().starts_with(b"\x89PNG"));
+        ws.close();
+    }
+
+    #[test]
+    fn thumbnails_of_other_files_unknown_ids_and_other_methods_are_refused() {
+        let dir = TempDir::new().unwrap();
+        let ws = workspace(&dir);
+        let text = attach(&ws, "notes.txt", "aGVsbG8K");
+        let image = attach(&ws, "dot.png", PNG);
+        assert_eq!(
+            respond(&ws, "GET", &format!("/{text}/thumb")).status(),
+            StatusCode::FORBIDDEN
+        );
+        assert_eq!(
+            respond(&ws, "GET", "/01a208d6-2413-7095-976e-c39bc5e073ec/thumb").status(),
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            respond(&ws, "POST", &format!("/{image}/thumb")).status(),
+            StatusCode::METHOD_NOT_ALLOWED
+        );
         ws.close();
     }
 

@@ -68,6 +68,30 @@ describe("the task panel's sections", () => {
     expect(within(subtasks).getByRole("img", { name: named(/^1 of 1 subtasks done$/) })).toBeDefined();
   });
 
+  it("moves a subtask past one of another status, with Alt+Down and from its menu", async () => {
+    const { panel, task, transport } = await renderPanel();
+    const make = async (title: string) => ((await transport.call("task.create", { project: "PER", title, parent: task.key })) as TaskChange).task;
+    const first = await make("Pack the bags");
+    const second = await make("Water the plants");
+    await transport.call("task.move", { key: first.key, status: "Done" });
+    const subtasks = section(panel, "Subtasks");
+    const order = () => [...subtasks.querySelectorAll<HTMLElement>("[data-subtask]")].map((row) => row.dataset.subtask);
+    await waitFor(() => {
+      expect(order()).toEqual([first.key, second.key]);
+    });
+    const row = subtasks.querySelector<HTMLElement>(`[data-subtask="${first.key}"]`);
+    fireEvent.keyDown(within(row as HTMLElement).getByRole("button", { name: named(/^Open /) }), { key: "ArrowDown", altKey: true });
+    await waitFor(() => {
+      expect(order()).toEqual([second.key, first.key]);
+    });
+    expect(((await transport.call("task.get", { keys: [task.key], include: ["subtasks"] })) as { items: { subtasks: { key: string }[] }[] }).items[0]?.subtasks.map((sub) => sub.key)).toEqual([second.key, first.key]);
+    fireEvent.click(within(subtasks).getByRole("button", { name: named(new RegExp(`^Subtask ${first.key}$`)) }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Move up" }));
+    await waitFor(() => {
+      expect(order()).toEqual([first.key, second.key]);
+    });
+  });
+
   it("links another task, shows Blocked on the blocked one, and removes the link", async () => {
     const { panel, other, transport } = await renderPanel();
     fireEvent.click(within(panel).getByRole("button", { name: "Add link" }));
@@ -100,6 +124,8 @@ describe("the task panel's sections", () => {
     await waitFor(() => {
       expect(image.getAttribute("src")).toMatch(/^data:image\/png;base64,/);
     });
+    // The engine's thumbnail gives its size.
+    expect(image.dataset.thumbnail).toBe("1x1");
     fireEvent.click(within(files).getByRole("button", { name: named(/^File notes\.txt$/) }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "Remove" }));
     await waitFor(() => {
@@ -137,6 +163,17 @@ describe("comments and history", () => {
     expect(await screen.findByText("Comment moved to the trash")).toBeDefined();
   });
 
+  it("attaches a file pasted into the composer and links it in the text", async () => {
+    const { panel } = await renderPanel();
+    const composer = await within(panel).findByRole("textbox", { name: "Write a comment" });
+    const png = new File([Uint8Array.from(atob(PNG), (char) => char.charCodeAt(0))], "shot [1].png", { type: "image/png" });
+    fireEvent.paste(composer, { clipboardData: { files: [png], getData: () => "", types: ["Files"] } });
+    await waitFor(() => {
+      expect(editorText(composer)).toMatch(/^!\[shot \\\[1\\\]\.png\]\(gk-file:\/\/[^)]+\)$/);
+    });
+    await within(section(panel, "Files")).findByRole("button", { name: named(/^Open shot \[1\]\.png$/) });
+  });
+
   it("lists the task's changes and reverts the latest", async () => {
     const { panel } = await renderPanel();
     fireEvent.click(within(panel).getByRole("button", { name: named(/^Priority:/) }));
@@ -165,6 +202,11 @@ describe("comments and history", () => {
     ]);
     expect(describeEntry(t, names, { ...at, entity: "relation", id: "r", fields: { link: { after: { from: "t-2", to: "t-1", kind: "blocks" } } } })).toEqual([
       'history-link-added{"kind":"relation-blocked_by","key":"TM-2"}',
+    ]);
+    // A move among the parent's subtasks is told; the order set with a new parent isn't.
+    expect(describeEntry(t, names, { ...at, entity: "task", id: "t-1", fields: { subtask_rank: { before: "a", after: "b" } } })).toEqual(["history-subtask-moved"]);
+    expect(describeEntry(t, names, { ...at, entity: "task", id: "t-1", fields: { parent: { after: "t-2" }, subtask_rank: { after: "a" } } })).toEqual([
+      'history-set{"field":"history-field-parent","value":"TM-2"}',
     ]);
   });
 });

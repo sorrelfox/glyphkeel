@@ -241,6 +241,44 @@ describe("task details", () => {
     expect(failure(() => call(ws, "relation.add", { key: parent.key, kind: "subtask_of", other: first.key })).code).toBe("invalid");
   });
 
+  it("keeps subtasks in their own order across statuses and reorders them", () => {
+    const ws = workspace();
+    const parent = call<TaskChange>(ws, "task.create", { project: "PER", title: "Parent" }).task;
+    const [a, b, c] = ["A", "B", "C"].map((title) => call<TaskChange>(ws, "task.create", { project: "PER", title, parent: parent.key }).task);
+    if (!a || !b || !c) {
+      throw new Error("no subtasks");
+    }
+    const order = () => get(ws, parent.key)?.subtasks?.map((sub) => sub.key);
+    // A status doesn't reorder them.
+    call(ws, "task.move", { key: a.key, status: "Done" });
+    expect(order()).toEqual([a.key, b.key, c.key]);
+    // Past a subtask of another status.
+    const moved = call<TaskChange>(ws, "task.reorder_subtask", { key: a.key, after: b.key });
+    expect(moved.task.key).toBe(parent.key);
+    expect(moved.task.subtasks?.map((sub) => sub.key)).toEqual([b.key, a.key, c.key]);
+    call(ws, "task.reorder_subtask", { key: c.key, at: "top" });
+    expect(order()).toEqual([c.key, b.key, a.key]);
+    call(ws, "task.reorder_subtask", { key: a.key, before: b.key });
+    expect(order()).toEqual([c.key, a.key, b.key]);
+    // Where it already is: no change.
+    expect(call<TaskChange>(ws, "task.reorder_subtask", { key: a.key, after: c.key }).group).toBeUndefined();
+    expect(failure(() => call(ws, "task.reorder_subtask", { key: parent.key, at: "top" })).code).toBe("invalid");
+    const stranger = call<TaskChange>(ws, "task.create", { project: "PER", title: "Elsewhere" }).task;
+    expect(failure(() => call(ws, "task.reorder_subtask", { key: a.key, before: stranger.key })).code).toBe("invalid");
+    // The move is recorded on the subtask.
+    const history = call<ActivityPage>(ws, "history.feed", { task: a.key });
+    expect(history.items[0]?.fields.subtask_rank).toMatchObject({ before: expect.any(Number) as number, after: expect.any(Number) as number });
+  });
+
+  it("makes thumbnails of images only, at most 256 pixels a side", () => {
+    const ws = workspace();
+    const task = call<TaskChange>(ws, "task.create", { project: "PER", title: "Pictures" }).task;
+    const image = call<FileChange>(ws, "file.attach", { task: task.key, name: "dot.png", data_base64: PNG }).file;
+    expect(call(ws, "file.thumbnail", { attachment: image.id })).toMatchObject({ attachment: image.id, mime: "image/png", width: 1, height: 1 });
+    const text = call<FileChange>(ws, "file.attach", { task: task.key, name: "a.txt", data_base64: btoa("hello") }).file;
+    expect(failure(() => call(ws, "file.thumbnail", { attachment: text.id })).code).toBe("invalid");
+  });
+
   it("keeps a comment's earlier texts, refuses a stale version and trashes it", () => {
     const ws = workspace();
     const task = call<TaskChange>(ws, "task.create", { project: "PER", title: "Talk" }).task;

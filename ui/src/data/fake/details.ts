@@ -101,6 +101,7 @@ const TASK_FIELDS: Record<string, (task: FakeTask) => unknown> = {
   priority: (task) => task.priority,
   labels: (task) => task.labelIds,
   parent: (task) => task.parentId,
+  subtask_rank: (task) => task.subtaskRank,
   start_date: (task) => task.startDate,
   due_date: (task) => task.dueDate,
   estimate: (task) => task.estimateMin,

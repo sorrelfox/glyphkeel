@@ -138,6 +138,16 @@ export class FakeWorkspace {
         state.revisions.push({ id: nextId("r"), taskId: task.id, body: task.description, kind: "normal", base: null, author: { kind: "user", name: "You" }, createdAt: task.createdAt, resolvedAt: null });
       }
     }
+    // Subtasks keep the order they were shown in: by status, then by place in the column.
+    for (const parent of state.tasks) {
+      const statuses = this.projectOf(parent).statuses.map((status) => status.id);
+      state.tasks
+        .filter((candidate) => candidate.parentId === parent.id && candidate.subtaskRank === undefined)
+        .sort((a, b) => statuses.indexOf(a.statusId) - statuses.indexOf(b.statusId) || a.rank - b.rank)
+        .forEach((sub) => {
+          sub.subtaskRank = this.lastSubtaskRank(parent.id);
+        });
+    }
     // One task in progress is claimed by an agent, as agents do while they work.
     const claimed = state.tasks.find((task) => task.closedAt === null && this.statusIn(this.projectOf(task), task.statusId).category === "in_progress");
     if (claimed) {
@@ -602,12 +612,41 @@ export class FakeWorkspace {
     return { id: task.id, key: this.keyOf(task), title: task.title, closed: task.closedAt !== null, status: { id: status.id, name: status.name, category: status.category } };
   }
 
-  /** Subtasks in board order: by status, then by place in the column. */
+  /** Subtasks in their own order, which statuses don't change. */
   private subtasksOf(task: FakeTask): FakeTask[] {
-    const statuses = this.projectOf(task).statuses.map((status) => status.id);
-    return this.state.tasks
-      .filter((candidate) => candidate.parentId === task.id)
-      .sort((a, b) => statuses.indexOf(a.statusId) - statuses.indexOf(b.statusId) || a.rank - b.rank);
+    return this.state.tasks.filter((candidate) => candidate.parentId === task.id).sort((a, b) => (a.subtaskRank ?? 0) - (b.subtaskRank ?? 0));
+  }
+
+  /** Whether an activity entry is about the task `taskId`: its own fields, its comments, its files (also on its comments) and its links. */
+  private concerns(entry: ActivityEntry, taskId: string): boolean {
+    switch (entry.entity) {
+      case "task":
+        return entry.id === taskId;
+      case "comment":
+        return this.state.comments.some((comment) => comment.id === entry.id && comment.taskId === taskId);
+      case "attachment":
+        return this.state.files.some((file) => file.id === entry.id && file.taskId === taskId);
+      case "relation": {
+        const link = (entry.fields.link?.after ?? entry.fields.link?.before ?? {}) as { from?: string; to?: string };
+        return link.from === taskId || link.to === taskId;
+      }
+      default:
+        return false;
+    }
+  }
+
+  /** The place after the last of `parentId`'s subtasks. */
+  private lastSubtaskRank(parentId: string): number {
+    return Math.max(0, ...this.state.tasks.filter((candidate) => candidate.parentId === parentId).map((candidate) => candidate.subtaskRank ?? 0)) + 1;
+  }
+
+  /** Gives `child` a parent (last among its subtasks) or none. */
+  private adopt(child: FakeTask, parentId: string | null): void {
+    if (child.parentId === parentId) {
+      return;
+    }
+    child.subtaskRank = parentId === null ? undefined : this.lastSubtaskRank(parentId);
+    child.parentId = parentId;
   }
 
   private linksOf(task: FakeTask): Link[] {
@@ -732,6 +771,7 @@ export class FakeWorkspace {
       title,
       statusId,
       parentId,
+      subtaskRank: parentId === null ? undefined : this.lastSubtaskRank(parentId),
       rank: this.rankAt(statusId, { at: "bottom" }, null),
       spentMin: 0,
       files: 0,
@@ -959,8 +999,9 @@ export class FakeWorkspace {
       const settings: Settings = { ...this.state.settings };
       return { output: { changed, settings }, changes: changed.length ? [{ entity: "settings", id: "w-1", fields: changed }] : [] };
     },
-    "history.feed": ({ limit, cursor }) => {
-      const all = [...this.state.activity].reverse();
+    "history.feed": ({ limit, cursor, task: ref }) => {
+      const task = ref === null || ref === undefined ? null : this.task(ref);
+      const all = [...this.state.activity].reverse().filter((entry) => task === null || this.concerns(entry, task.id));
       const start = cursor ? Number(cursor) : 0;
       const end = start + (limit ?? 50);
       const items = all.slice(start, end);
@@ -1353,9 +1394,9 @@ export class FakeWorkspace {
         if (this.isAncestor(child, parent)) {
           fail("invalid", `${this.keyOf(parent)} is a subtask of ${this.keyOf(child)}.`, { details: { path: "other" } });
         }
-        child.parentId = parent.id;
+        this.adopt(child, parent.id);
         this.touch(child);
-        return { output: { task: this.fullTask(task) }, changes: [{ entity: "task", id: child.id, fields: ["parent"], project: this.projectOf(child).key }] };
+        return { output: { task: this.fullTask(task) }, changes: [{ entity: "task", id: child.id, fields: ["parent", "subtask_rank"], project: this.projectOf(child).key }] };
       }
       if (this.isAncestor(task, other) || this.isAncestor(other, task)) {
         fail("invalid", "A task can't be linked to its own parent or subtask.", { details: { path: "other" } });
@@ -1388,9 +1429,9 @@ export class FakeWorkspace {
         if (child.parentId !== parent.id) {
           return { output: { task: this.fullTask(task) }, changes: [] };
         }
-        child.parentId = null;
+        this.adopt(child, null);
         this.touch(child);
-        return { output: { task: this.fullTask(task) }, changes: [{ entity: "task", id: child.id, fields: ["parent"], project: this.projectOf(child).key }] };
+        return { output: { task: this.fullTask(task) }, changes: [{ entity: "task", id: child.id, fields: ["parent", "subtask_rank"], project: this.projectOf(child).key }] };
       }
       const link = this.linksOf(task).find((candidate) => candidate.kind === kind && candidate.task.id === other.id);
       if (!link) {
@@ -1463,6 +1504,20 @@ export class FakeWorkspace {
         return { file: this.attachment(file), text: new TextDecoder().decode(bytes), truncated: false };
       }
       return { file: this.attachment(file), note: "Only text files and images are shown.", truncated: false };
+    },
+    "file.thumbnail": ({ attachment }) => {
+      const file = this.liveFile(attachment);
+      if (file.kind !== "image" || file.width === undefined || file.height === undefined) {
+        fail("invalid", `${file.name} has no thumbnail.`, { hint: "Only images the engine can read have one." });
+      }
+      const scale = Math.min(1, 256 / Math.max(file.width, file.height));
+      return {
+        attachment: file.id,
+        path: `cache/thumbs/${file.id.slice(0, 2)}/${file.id}.png`,
+        mime: "image/png",
+        width: Math.max(1, Math.round(file.width * scale)),
+        height: Math.max(1, Math.round(file.height * scale)),
+      };
     },
     "file.attach": ({ task: key, comment: commentId, data_base64, name, path }) => {
       if (path !== null && path !== undefined) {
@@ -1548,6 +1603,7 @@ export class FakeWorkspace {
         priority: priority ?? "none",
         labelIds: [],
         parentId: parent?.id ?? null,
+        ...(parent ? { subtaskRank: this.lastSubtaskRank(parent.id) } : {}),
         rank: this.rankAt(target.id, { before, after, at }, null),
         startDate: null,
         dueDate: null,
@@ -1789,6 +1845,44 @@ export class FakeWorkspace {
         };
       });
       return { items };
+    },
+    "task.reorder_subtask": ({ key, before, after, at, expected_version }) => {
+      const sub = this.task(key);
+      this.writable(this.projectOf(sub).key);
+      const parent = this.state.tasks.find((candidate) => candidate.id === sub.parentId);
+      if (!parent) {
+        fail("invalid", `${this.keyOf(sub)} isn't a subtask.`, { details: { path: "key" } });
+      }
+      if (expected_version !== null && expected_version !== undefined && expected_version !== sub.version) {
+        fail("conflict", `${this.keyOf(sub)} changed since you read it.`, { details: { current_version: sub.version } });
+      }
+      const order = this.subtasksOf(parent).filter((candidate) => candidate !== sub);
+      const sibling = (ref: string, path: string) => {
+        const other = this.task(ref);
+        const index = order.indexOf(other);
+        if (index < 0) {
+          fail("invalid", `${this.keyOf(other)} isn't another subtask of ${this.keyOf(parent)}.`, { details: { path } });
+        }
+        return index;
+      };
+      const index =
+        before !== null && before !== undefined
+          ? sibling(before, "before")
+          : after !== null && after !== undefined
+            ? sibling(after, "after") + 1
+            : at === "top"
+              ? 0
+              : order.length;
+      order.splice(index, 0, sub);
+      const old = this.subtasksOf(parent);
+      if (order.every((candidate, place) => candidate === old[place])) {
+        return { output: { task: this.withParts(parent, ["subtasks"]) }, changes: [] };
+      }
+      const prev = order[index - 1]?.subtaskRank;
+      const next = order[index + 1]?.subtaskRank;
+      sub.subtaskRank = prev === undefined ? (next ?? 1) - 1 : next === undefined ? prev + 1 : (prev + next) / 2;
+      this.touch(sub, false);
+      return { output: { task: this.withParts(parent, ["subtasks"]) }, changes: [{ entity: "task", id: sub.id, fields: ["subtask_rank"], project: this.projectOf(sub).key }] };
     },
     "task.move": ({ key, status, project: toProject, expected_version, before, after, at }) => {
       const task = this.task(key);

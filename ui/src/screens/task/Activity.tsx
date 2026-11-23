@@ -105,7 +105,7 @@ function CommentView({ comment, rendered, readOnly, onOpenTask }: { comment: Com
         )
       ) : (
         <div className={styles.commentEdit}>
-          <MarkdownField label={t("comment-edit-field")} value={editing} autoFocus onChange={setEditing} onSubmit={save} onCancel={() => { setEditing(null); }} />
+          <MarkdownField label={t("comment-edit-field")} value={editing} autoFocus attachTo={comment.task} onChange={setEditing} onSubmit={save} onCancel={() => { setEditing(null); }} />
           <div className={styles.sectionHead}>
             <div className="grow" />
             <Button className="btn flat sm" onPress={() => { setEditing(null); }}>
@@ -265,6 +265,11 @@ export function describeEntry(t: Translate, names: Names, entry: ActivityEntry):
       lines.push(t("history-description"));
     } else if (field === "rank") {
       lines.push(t("history-moved"));
+    } else if (field === "subtask_rank") {
+      // Set and cleared with the parent, which has its own line; only a move among the parent's subtasks is told.
+      if (change.before !== undefined && change.after !== undefined && !has("parent")) {
+        lines.push(t("history-subtask-moved"));
+      }
     } else {
       const name = NAMED_FIELDS.includes(field) ? t(`history-field-${field}`) : field;
       lines.push(
@@ -294,8 +299,7 @@ function HistoryList({
   const call = useCall();
   const toasts = useToasts();
   const moment = useMomentFormat();
-  const files = (task.files ?? []).map((file) => file.id);
-  const history = useTaskHistory(task, files, true);
+  const history = useTaskHistory(task.id, true);
   const keys = new Map<string, string>([[task.id, task.key]]);
   for (const link of task.links ?? []) {
     keys.set(link.task.id, link.task.key);
@@ -320,20 +324,26 @@ function HistoryList({
   if (!history.data) {
     return null;
   }
-  if (history.data.length === 0) {
+  const entries = history.data.pages.flatMap((page) => page.items);
+  if (entries.length === 0) {
     return <p className={classes("faint", styles.small)}>{t("history-none")}</p>;
   }
   const seen = new Set<string>();
   return (
+    <>
     <ol className={styles.history} aria-label={t("history-title")}>
-      {history.data.map((entry) => {
+      {entries.map((entry) => {
+        const lines = describeEntry(t, { task, project, keys }, entry);
+        if (lines.length === 0) {
+          return null;
+        }
         const first = !seen.has(entry.group);
         seen.add(entry.group);
         const revisions = entry.entity === "task" ? descriptionRevisions(entry) : null;
         return (
           <li key={`${String(entry.seq)}-${entry.id}`} className={classes(styles.historyEntry, entry.reverted_by !== undefined && styles.reverted)} data-history={entry.op}>
             <div className={styles.historyText}>
-              {describeEntry(t, { task, project, keys }, entry).map((line) =>
+              {lines.map((line) =>
                 revisions !== null && line === t("history-description") ? (
                   <Button
                     key={line}
@@ -362,6 +372,12 @@ function HistoryList({
         );
       })}
     </ol>
+    {history.hasNextPage && (
+      <Button className={classes("btn flat sm", styles.olderHistory)} isDisabled={history.isFetchingNextPage} onPress={() => void history.fetchNextPage()}>
+        {t("history-older")}
+      </Button>
+    )}
+    </>
   );
 }
 
@@ -430,7 +446,7 @@ export function Composer({ taskKey, readOnly }: { taskKey: string; readOnly: boo
   };
   return (
     <div className={styles.composer}>
-      <MarkdownField compact label={t("composer-label")} value={text} readOnly={readOnly} onChange={setText} onSubmit={send} />
+      <MarkdownField compact label={t("composer-label")} value={text} readOnly={readOnly} attachTo={taskKey} onChange={setText} onSubmit={send} />
       <Button className="btn flat icon" isDisabled={readOnly || busy} aria-label={t("files-attach")} onPress={attach}>
         <Paperclip className="ic" />
       </Button>

@@ -18,6 +18,7 @@ import {
   dropTargetAt,
   imageUrl,
   inApp,
+  thumbnailUrl,
   onDesktopDrop,
   openAttachment,
   saveAttachment,
@@ -194,6 +195,51 @@ export function AttachedImage({ file, className }: { file: Attachment; className
   return <img className={classes(styles.thumb, className)} src={source} alt={file.name} draggable={false} />;
 }
 
+/**
+ * An attached image's thumbnail, made by the engine: in the app from
+ * `gk-file:`; in a browser, which can't reach the app's cache, the image's
+ * content drawn at the thumbnail's size. An image without one (one the
+ * engine can't read) shows the kind's icon.
+ */
+export function Thumbnail({ file }: { file: Attachment }) {
+  const app = inApp();
+  const [broken, setBroken] = useState(false);
+  const thumb = useOp("file.thumbnail", { attachment: file.id }, { enabled: !app });
+  const content = useOp("file.read", { attachment: file.id }, { enabled: !app && thumb.isSuccess });
+  if (broken || thumb.isError) {
+    return <KindIcon kind={file.kind} />;
+  }
+  if (app) {
+    return (
+      <img
+        className={styles.thumb}
+        src={thumbnailUrl(file.id)}
+        alt={file.name}
+        draggable={false}
+        data-thumbnail=""
+        onError={() => {
+          setBroken(true);
+        }}
+      />
+    );
+  }
+  const data = content.data?.data_base64;
+  if (!thumb.data || data === undefined) {
+    return <span className={styles.thumb} />;
+  }
+  return (
+    <img
+      className={styles.thumb}
+      src={`data:${file.mime};base64,${data}`}
+      alt={file.name}
+      width={thumb.data.width}
+      height={thumb.data.height}
+      draggable={false}
+      data-thumbnail={`${String(thumb.data.width)}x${String(thumb.data.height)}`}
+    />
+  );
+}
+
 /** One attached file: a thumbnail or an icon, its name and size; open, save, remove. */
 export function FileRow({ file, readOnly }: { file: Attachment; readOnly: boolean }) {
   const t = useT();
@@ -219,7 +265,7 @@ export function FileRow({ file, readOnly }: { file: Attachment; readOnly: boolea
     <div className={styles.fileBlock} data-file={file.name}>
       <div className={classes("item", styles.row)}>
         <Button className={classes(styles.rowMain)} aria-label={t("files-open-named", { name: file.name })} onPress={open}>
-          {image ? <AttachedImage file={file} /> : <KindIcon kind={file.kind} />}
+          {image ? <Thumbnail file={file} /> : <KindIcon kind={file.kind} />}
           <span className="truncate grow">{file.name}</span>
           <span className={classes("num faint", styles.small)}>{size(file.size)}</span>
         </Button>

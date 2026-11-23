@@ -12,7 +12,7 @@ import { classes } from "../classes";
 import { useT } from "../i18n/I18n";
 import { convertLineBreaks, openText, type LineBreak } from "./lineEndings";
 import styles from "./MarkdownEditor.module.css";
-import { insertMarkdown } from "./paste";
+import { filePasting, insertMarkdown } from "./paste";
 import { applyTextEdits, compartments, editorExtensions, labelExtension, modeExtension, readOnlyExtension, rendererExtension, spellingExtension } from "./setup";
 import { defaultSpellChecker, misspeltAt } from "./spell";
 import type { LineBreakNote, MarkdownEditorHandle, MarkdownEditorProps } from "./types";
@@ -74,6 +74,7 @@ export default function MarkdownEditor(props: MarkdownEditorProps) {
           toggle: () => latest.current.onToggleChecklist ?? null,
         },
         extensions: [
+          filePasting(() => latest.current.onFiles ?? null),
           EditorView.updateListener.of((update) => {
             if (!update.docChanged) {
               return;

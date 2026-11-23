@@ -38,6 +38,11 @@ export function imageUrl(attachment: string): string {
   return convertFileSrc(attachment, "gk-file");
 }
 
+/** The address of an attached image's thumbnail (a PNG, at most 256 pixels a side), served by the app. */
+export function thumbnailUrl(attachment: string): string {
+  return `${imageUrl(attachment)}/thumb`;
+}
+
 /** Lets the person choose files in the system's dialog and attaches them to `task`. */
 export function chooseAndAttach(task: string): Promise<Attached> {
   return command<Attached>("attach_files", { task });

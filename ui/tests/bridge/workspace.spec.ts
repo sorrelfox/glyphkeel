@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
+import { deflateSync } from "node:zlib";
+
 import { expect, test, type Page } from "@playwright/test";
 
 const token = process.env.GK_BRIDGE_TOKEN ?? "";
@@ -177,6 +179,35 @@ test("task details on the engine: a subtask, a link, a comment and an attachment
   await expect(subtasks.getByRole("img", { name: /subtasks done/ })).toBeVisible();
   await expect(subtasks).toContainText("1/1");
 
+  // A second, open subtask; the closed one moves past it with Alt+Down, and back by dragging.
+  await subtasks.getByRole("button", { name: "Add subtask" }).click();
+  await subtasks.getByRole("textbox", { name: "New subtask" }).fill("Sand the walls");
+  await subtasks.getByRole("textbox", { name: "New subtask" }).press("Enter");
+  await subtasks.getByRole("textbox", { name: "New subtask" }).press("Escape");
+  const rows = subtasks.locator("[data-subtask]");
+  await expect(rows).toHaveCount(2);
+  const tape = (await rows.filter({ hasText: "Tape the edges" }).getAttribute("data-subtask")) ?? "";
+  const sand = (await rows.filter({ hasText: "Sand the walls" }).getAttribute("data-subtask")) ?? "";
+  const order = () => rows.evaluateAll((all) => all.map((row) => row.getAttribute("data-subtask")));
+  await expect.poll(order).toEqual([tape, sand]);
+  await subtasks.getByRole("button", { name: new RegExp(`^\\W*Open \\W*${tape}`) }).press("Alt+ArrowDown");
+  await expect.poll(order).toEqual([sand, tape]);
+  await expect(subtasks.getByRole("button", { name: new RegExp(`^\\W*Open \\W*${tape}`) })).toBeFocused();
+  const grip = subtasks.locator(`[data-subtask-grip="${tape}"]`);
+  await rows.filter({ hasText: "Tape the edges" }).hover();
+  const from = await grip.boundingBox();
+  const to = await rows.filter({ hasText: "Sand the walls" }).boundingBox();
+  if (!from || !to) {
+    throw new Error("the subtask rows aren't laid out");
+  }
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(from.x + from.width / 2, to.y + 2, { steps: 12 });
+  await page.mouse.up();
+  await expect.poll(order).toEqual([tape, sand]);
+  // dnd-kit swallows clicks for 50 ms after a drop, against the click a drop can cause; a person is slower.
+  await page.waitForTimeout(100);
+
   // A link: the walls wait for the paint; both cards and the panel say so.
   const links = panel.getByRole("region", { name: "Links" });
   await links.getByRole("button", { name: "Add link" }).click();
@@ -205,11 +236,14 @@ test("task details on the engine: a subtask, a link, a comment and an attachment
   await files.locator("input[type=file]").setInputFiles({ name: "swatch.png", mimeType: "image/png", buffer: PNG });
   await expect(files.getByRole("img", { name: "swatch.png" })).toBeVisible();
   await expect(files.getByText("swatch.png")).toBeVisible();
+  // A wide image gets the engine's thumbnail, 256 pixels on its longer side.
+  await files.locator("input[type=file]").setInputFiles({ name: "banner.png", mimeType: "image/png", buffer: solidPng(512, 128) });
+  await expect(files.getByRole("img", { name: "banner.png" })).toHaveAttribute("data-thumbnail", "256x64");
 
   // The card counts the comment and the file.
   const card = page.locator(`[data-card="${walls}"]`);
   await expect(card.getByLabel(/1 comment/)).toBeVisible();
-  await expect(card.getByLabel(/1 file/)).toBeVisible();
+  await expect(card.getByLabel(/2\W*files/)).toBeVisible();
 
   // History lists what happened to the task.
   await panel.getByRole("tab", { name: /History/ }).click();
@@ -217,7 +251,50 @@ test("task details on the engine: a subtask, a link, a comment and an attachment
   await expect(history).toContainText("Comment edited");
   await expect(history).toContainText("File attached");
   await expect(history).toContainText("Link added");
+  // The engine keeps it to this task: the other task's creation isn't there.
+  await expect(history).toContainText(new RegExp(`Created\\W*${walls}`));
+  await expect(history).not.toContainText(new RegExp(`Created\\W*${paint}`));
+
+  // The subtask's own history tells its moves in words.
+  await subtasks.getByRole("button", { name: new RegExp(`^\\W*Open \\W*${tape}`) }).click();
+  await expect(panel).toHaveAccessibleName(new RegExp(tape));
+  await panel.getByRole("tab", { name: /History/ }).click();
+  await expect(panel.getByRole("list", { name: "History" })).toContainText("Moved among its parent's subtasks");
 });
+
+/** A PNG of one colour, `width` by `height` pixels. */
+function solidPng(width: number, height: number): Buffer {
+  const crcTable = Array.from({ length: 256 }, (_, n) => {
+    let c = n;
+    for (let k = 0; k < 8; k += 1) {
+      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    }
+    return c >>> 0;
+  });
+  const crc = (bytes: Buffer) => {
+    let c = 0xffffffff;
+    for (const byte of bytes) {
+      c = (crcTable[(c ^ byte) & 0xff] ?? 0) ^ (c >>> 8);
+    }
+    return (c ^ 0xffffffff) >>> 0;
+  };
+  const chunk = (type: string, data: Buffer) => {
+    const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
+    const length = Buffer.alloc(4);
+    length.writeUInt32BE(data.length);
+    const sum = Buffer.alloc(4);
+    sum.writeUInt32BE(crc(body));
+    return Buffer.concat([length, body, sum]);
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header.writeUInt8(8, 8); // 8 bits per sample
+  header.writeUInt8(2, 9); // RGB
+  const row = Buffer.concat([Buffer.from([0]), Buffer.alloc(width * 3, 0x5a)]);
+  const pixels = deflateSync(Buffer.concat(Array.from({ length: height }, () => row)));
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", header), chunk("IDAT", pixels), chunk("IEND", Buffer.alloc(0))]);
+}
 
 const BEDS = [
   "Plan:",
