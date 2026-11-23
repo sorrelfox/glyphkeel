@@ -1,0 +1,17 @@
+{
+  "name": "glyphkeel-workspace",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "packageManager": "pnpm@12.21.0",
+  "engines": {
+    "node": ">=24.18.0 <25"
+  },
+  "scripts": {
+    "dev": "pnpm --filter ui dev",
+    "build": "pnpm --filter ui build",
+    "lint": "pnpm --filter ui lint",
+    "typecheck": "pnpm --filter ui typecheck",
+    "test": "pnpm --filter ui test",
+    "tauri": "pnpm --filter ui tauri"
+  }
+}

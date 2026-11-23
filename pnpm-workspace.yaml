@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Glyphkeel contributors
+
+packages:
+  - ui
+
+# Supply-chain rules for the build-time JavaScript toolchain. None of it ships:
+# the app's release contains only the bundled UI, without Node.
+#
+# Versions younger than seven days are not taken (in minutes).
+minimumReleaseAge: 10080
+# A package whose trust evidence got weaker than in its earlier releases is
+# refused.
+trustPolicy: no-downgrade
+# Install scripts of dependencies never run unless listed here, and an
+# unlisted package that wants to run one fails the install.
+strictDepBuilds: true
+allowBuilds: {}
+# `pnpm add` writes exact versions.
+savePrefix: ""
+# The Node version in package.json `engines` is enforced.
+engineStrict: true

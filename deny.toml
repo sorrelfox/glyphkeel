@@ -1,0 +1,109 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Glyphkeel contributors
+#
+# cargo-deny configuration (cargo-deny 0.20). Run with `cargo deny check`.
+#
+# Every exception added to this file needs a comment that says why it is
+# acceptable.
+
+[graph]
+# Check every feature combination, not only the default one.
+all-features = true
+# The targets Glyphkeel ships for. Dependencies that exist only for other
+# targets (Tauri's mobile code, for example) never end up in a release.
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+    "x86_64-pc-windows-msvc",
+]
+# The task runner never ships.
+exclude = ["xtask"]
+
+[output]
+feature-depth = 1
+
+# ---------------------------------------------------------------------------
+[advisories]
+# Vulnerabilities always fail the check.
+# "workspace": fail only when one of our crates depends directly on an
+# unmaintained or unsound crate. Deeper ones (common under Tauri and GTK) are
+# shown with `cargo deny check -W unmaintained`.
+unmaintained = "workspace"
+unsound = "workspace"
+yanked = "warn"
+# Ignored advisories need an id and a reason.
+ignore = []
+
+# ---------------------------------------------------------------------------
+[licenses]
+# Only licences compatible with distributing Glyphkeel under
+# GPL-3.0-or-later. Everything not listed is denied, including:
+#   - EPL-2.0, unless offered with a listed licence as an alternative;
+#   - AGPL-3.0 and SSPL-1.0;
+#   - non-commercial licences;
+#   - unknown or unparseable licences.
+allow = [
+    "MIT",
+    "MIT-0",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "0BSD",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "CC0-1.0",
+    "MPL-2.0",
+    "LGPL-2.1-or-later",
+    "LGPL-3.0-only",
+    "LGPL-3.0-or-later",
+    "GPL-3.0-only",
+    "GPL-3.0-or-later",
+    "Unlicense",
+    "BSL-1.0",
+    # Fonts only.
+    "OFL-1.1",
+]
+confidence-threshold = 0.93
+# Per-crate exceptions, each with a comment that says why.
+exceptions = []
+# Not every allowed licence is in use yet.
+unused-allowed-license = "allow"
+
+[licenses.private]
+# Our own crates are unpublished and GPL-3.0-or-later.
+ignore = true
+
+# ---------------------------------------------------------------------------
+[bans]
+# Tauri and GTK pull in duplicate versions; report them but do not fail.
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+highlight = "all"
+workspace-default-features = "allow"
+external-default-features = "allow"
+allow = []
+# The app never goes online: no HTTP client or TLS stack in what ships.
+# `cargo xtask check-deps` checks the same per program.
+deny = [
+    { crate = "reqwest", reason = "the app has no network access" },
+    { crate = "ureq", reason = "the app has no network access" },
+    { crate = "hyper", reason = "the app has no network access" },
+    { crate = "isahc", reason = "the app has no network access" },
+    { crate = "curl", reason = "the app has no network access" },
+    { crate = "attohttpc", reason = "the app has no network access" },
+    { crate = "native-tls", reason = "the app has no network access" },
+    { crate = "openssl", reason = "the app has no network access" },
+    { crate = "rustls", reason = "the app has no network access" },
+]
+skip = []
+skip-tree = []
+
+# ---------------------------------------------------------------------------
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

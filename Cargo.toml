@@ -1,0 +1,73 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Glyphkeel contributors
+
+[workspace]
+resolver = "3"
+members = ["crates/*", "tools/*", "xtask"]
+# `cargo build` and `cargo test` without `-p` skip the task runner and the
+# development tools in `tools/`.
+default-members = ["crates/*"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+# Keep equal to the channel in rust-toolchain.toml and `msrv` in clippy.toml.
+rust-version = "1.100"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/sorrelfox/glyphkeel"
+publish = false
+
+[workspace.dependencies]
+# Internal crates are added here as path dependencies when a crate first uses
+# another, for example `gk-core = { path = "crates/gk-core" }`. Which crate may
+# use which is checked by `cargo xtask check-deps`.
+
+# Third-party crates: shared versions live here, crates use `{ workspace = true }`.
+# Every new crate needs a reason in a comment and a licence that cargo-deny allows.
+anyhow = "1.0.105"
+# Command line of `glyphkeel` and of the task runner.
+clap = { version = "4.6.9", features = ["derive"] }
+# Records of the test-data archive written by the seed tool.
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+# Content hashes of stored files (files are addressed by SHA-256).
+sha2 = "0.10.9"
+# The desktop app. Tauri 2 is pinned exactly and bumped deliberately, together
+# with `@tauri-apps/api` in ui/package.json.
+tauri = "=2.12.7"
+tauri-build = "=2.7.6"
+# The WebKitGTK bindings Tauri itself uses, to switch off web-view features
+# the app never needs (Linux only).
+webkit2gtk = "=2.0.2"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_debug_implementations = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+dbg_macro = "warn"
+todo = "warn"
+unwrap_used = "warn"
+print_stdout = "warn"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+debug = "line-tables-only"
+
+# Release artifacts: fat LTO and stripped symbols. Day-to-day release builds
+# keep the faster thin-LTO profile above.
+[profile.dist]
+inherits = "release"
+lto = "fat"
+codegen-units = 1
+debug = false
+strip = "symbols"
+
+# Dependencies are optimised a little in debug builds, so the app and the
+# engine stay usable while our own code keeps fast incremental builds.
+[profile.dev.package."*"]
+opt-level = 1

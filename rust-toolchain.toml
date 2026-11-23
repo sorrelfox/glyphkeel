@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Glyphkeel contributors
+
+# The pinned toolchain. Keep `rust-version` in Cargo.toml and `msrv` in
+# clippy.toml equal to it.
+[toolchain]
+channel = "1.100.0"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

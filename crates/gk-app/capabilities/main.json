@@ -1,0 +1,13 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main-window",
+  "description": "The main window's page may move, minimize, maximize and close its own window, for the header bar. Nothing else of Tauri's API is reachable from the page.",
+  "windows": ["main"],
+  "permissions": [
+    "core:window:allow-start-dragging",
+    "core:window:allow-internal-toggle-maximize",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close"
+  ]
+}

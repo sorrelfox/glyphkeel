@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Glyphkeel contributors
+#
+# git-cliff configuration: https://git-cliff.org/docs/configuration
+# Writes the changelog from Conventional Commits. The output is edited by hand
+# into release notes.
+
+[changelog]
+header = """
+# Changelog
+
+All notable changes to Glyphkeel are listed here. The format follows
+Conventional Commits, and versions follow Semantic Versioning.
+
+"""
+body = """
+{% if version %}\
+## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+## [Unreleased]
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | striptags | trim | upper_first }}
+{% for commit in commits %}
+- {% if commit.scope %}**{{ commit.scope }}:** {% endif %}\
+{% if commit.breaking %}[**breaking**] {% endif %}\
+{{ commit.message | upper_first }}\
+{% endfor %}
+{% endfor %}\n
+"""
+footer = ""
+trim = true
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+split_commits = false
+protect_breaking_commits = true
+filter_commits = false
+# Pre-releases (v0.1.0-rc.1) are tags too; a final release reuses the last one.
+tag_pattern = "v[0-9].*"
+sort_commits = "oldest"
+commit_preprocessors = [
+  # Drop pull request references such as " (#123)" left by squash merges.
+  { pattern = '\s*\(#[0-9]+\)$', replace = "" },
+]
+# The HTML comment prefix sets the order of the groups; `striptags` removes it.
+commit_parsers = [
+  { message = "^chore\\(release\\)", skip = true },
+  { message = "^chore\\(deps\\)", skip = true },
+  { message = "^feat\\((mcp|cli)\\)", group = "<!-- 2 -->Agents and the command line" },
+  { message = "^fix\\((mcp|cli)\\)", group = "<!-- 2 -->Agents and the command line" },
+  { message = "^feat", group = "<!-- 1 -->Features" },
+  { message = "^fix", group = "<!-- 3 -->Fixes" },
+  { message = "^perf", group = "<!-- 4 -->Performance" },
+  { message = "^docs", group = "<!-- 5 -->Documentation" },
+  { message = "^(ci|build)", group = "<!-- 6 -->Build and CI" },
+  { message = "^chore\\(ci\\)", group = "<!-- 6 -->Build and CI" },
+  { message = ".*", group = "<!-- 7 -->Other" },
+]

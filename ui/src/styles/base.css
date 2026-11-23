@@ -1,0 +1,27 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+   Copyright (C) 2026 Glyphkeel contributors
+
+   The rules that make the web view behave like a desktop window rather than
+   a web page. Colours, sizes and type come from tokens.css only. */
+
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+}
+
+html {
+  /* No rubber-band scrolling and no pull-to-refresh. */
+  overscroll-behavior: none;
+}
+
+body {
+  background: var(--bg);
+}
+
+/* Images and icons can't be dragged out of the window. */
+img,
+svg {
+  -webkit-user-drag: none;
+}

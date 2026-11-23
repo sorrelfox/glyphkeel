@@ -1,0 +1,224 @@
+/* =====================================================================
+   tokens.css: the single source of truth for colour, type, size, shape.
+
+   Set three attributes on the app root element:
+     data-theme    light | dark | slate | sand | contrast
+                   (light and dark are neutral; slate is a cool blue-grey dark,
+                    sand is a warm light; contrast is the accessibility theme)
+     data-accent   blue | teal | green | amber | orange | red | pink | purple | slate
+     data-density  regular | compact
+
+   Components read ONLY the semantic tokens below. No raw hex in components.
+   A theme is one block that sets the "theme contract" (section 2).
+   ===================================================================== */
+
+/* ---------- 1. Theme-independent tokens ---------- */
+[data-theme] {
+  /* type */
+  --font-ui: "Adwaita Sans", "Inter", "Cantarell", "Noto Sans", system-ui, sans-serif;
+  --font-mono: "Adwaita Mono", "JetBrains Mono", "Source Code Pro", ui-monospace, monospace;
+  --fs: 13px;          /* UI text */
+  --lh: 20px;
+  --fs-small: 12px;    /* meta, status bar, table headers */
+  --fs-micro: 11px;    /* task keys, chips, shortcuts, captions */
+  --fs-title: 15px;    /* pane and dialog titles */
+  --fs-h1: 20px;       /* task title */
+  --fs-read: 14px;     /* Markdown body */
+  --lh-read: 22px;
+
+  /* size (regular density) */
+  --h-control: 30px;   /* buttons, fields */
+  --h-row: 32px;       /* sidebar rows, table rows, menu items */
+  --h-headerbar: 46px;
+  --h-toolbar: 42px;
+  --h-statusbar: 26px;
+  --w-sidebar: 236px;
+  --w-inspector: 500px;
+  --pad-card: 10px;
+  --gap: 8px;
+
+  /* shape */
+  --r-s: 4px;          /* chips, checkboxes, segments */
+  --r-m: 6px;          /* buttons, fields, cards, rows */
+  --r-l: 8px;          /* lanes, popovers, menus */
+  --r-xl: 12px;        /* dialogs, window corners */
+  --focus-w: 2px;
+
+  /* motion (set both to 0ms when the desktop asks for reduced motion) */
+  --dur-fast: 90ms;
+  --dur: 160ms;
+  --ease: cubic-bezier(.2, 0, 0, 1);
+
+  /* accent: overridden by data-accent, section 4 */
+  --accent: #2a72d6;
+  --on-accent: #ffffff;
+  --focus: var(--accent);   /* focus ring and focused-card ring; dark themes switch to --accent-fg */
+
+  /* roles mapped onto the hue palette */
+  --danger: var(--hue-red);
+  --warning: var(--hue-yellow);
+  --success: var(--hue-green);
+  --info: var(--hue-blue);
+  --prio-urgent: var(--hue-red);
+  --prio-high: var(--hue-orange);
+  --prio-normal: var(--hue-blue);
+  --prio-low: var(--fg-faint);
+  --syn-keyword: var(--hue-purple);
+  --syn-string: var(--hue-green);
+  --syn-number: var(--hue-orange);
+  --syn-func: var(--hue-blue);
+  --syn-comment: var(--fg-faint);
+  --gantt-bar: color-mix(in srgb, var(--accent) 34%, var(--surface));
+  --gantt-progress: var(--accent);
+  --gantt-weekend: var(--sunken);
+  --gantt-today: var(--hue-orange);
+}
+
+/* ---------- 2. Themes: each block fills the same contract ---------- */
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #fafafb;             /* content area */
+  --surface: #ffffff;        /* cards, fields, table body */
+  --sunken: #f0f0f3;         /* board lanes, code blocks, table headers */
+  --sidebar: #ededf0;
+  --popover: #ffffff;        /* menus, dialogs, command palette */
+  --raised: #ffffff;         /* selected segment, switch knob */
+  --fg: #1e1e21;
+  --fg-muted: #55555e;       /* secondary text: 4.5:1 on every surface */
+  --fg-faint: #666670;       /* placeholders, timestamps: 4.5:1 on bg, surface, sunken */
+  --border: #dedee3;
+  --border-strong: #c2c2cb;  /* field and checkbox outlines */
+  --hover: rgba(30, 30, 33, .06);
+  --pressed: rgba(30, 30, 33, .11);
+  --accent-fg: color-mix(in srgb, var(--accent) 85%, #000);   /* accent-coloured text and icons */
+  --selected: color-mix(in srgb, var(--accent) 15%, transparent);
+  --scrim: rgba(20, 20, 24, .32);
+  --shadow-card: 0 1px 1px rgba(0, 0, 0, .04);
+  --shadow-pop: 0 0 0 1px rgba(0, 0, 0, .09), 0 8px 24px rgba(0, 0, 0, .16);
+  --hue-red: #b3261e; --hue-orange: #9c4600; --hue-yellow: #7a5c00; --hue-green: #1a6b32;
+  --hue-teal: #0f6b76; --hue-blue: #1a5fb4; --hue-purple: #7a3aa8; --hue-pink: #a6316a; --hue-grey: #55555e;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #222226;
+  --surface: #2e2e33;
+  --sunken: #1a1a1d;
+  --sidebar: #29292d;
+  --popover: #36363b;
+  --raised: rgba(255, 255, 255, .14);
+  --fg: #ededf0;
+  --fg-muted: #b0b0ba;
+  --fg-faint: #9a9aa6;
+  --border: #3b3b41;
+  --border-strong: #55555e;
+  --hover: rgba(255, 255, 255, .07);
+  --pressed: rgba(255, 255, 255, .12);
+  --accent-fg: color-mix(in srgb, var(--accent) 55%, #fff);
+  --selected: color-mix(in srgb, var(--accent) 34%, transparent);
+  --focus: var(--accent-fg);   /* the accent fill is too dark for a 3:1 ring on dark surfaces */
+  --scrim: rgba(0, 0, 0, .5);
+  --shadow-card: 0 1px 1px rgba(0, 0, 0, .2);
+  --shadow-pop: 0 0 0 1px rgba(255, 255, 255, .08), 0 10px 30px rgba(0, 0, 0, .5);
+  --hue-red: #ff8f87; --hue-orange: #ffa25c; --hue-yellow: #e8c35a; --hue-green: #7bd68f;
+  --hue-teal: #5fcfd8; --hue-blue: #8ab4f8; --hue-purple: #c79bf2; --hue-pink: #f59ac0; --hue-grey: #b0b0ba;
+}
+
+[data-theme="slate"] {
+  color-scheme: dark;
+  --bg: #20242c;
+  --surface: #2b313c;
+  --sunken: #181b21;
+  --sidebar: #262b35;
+  --popover: #333a47;
+  --raised: rgba(210, 225, 255, .14);
+  --fg: #e6e9ef;
+  --fg-muted: #aab3c2;
+  --fg-faint: #939dae;
+  --border: #363d4a;
+  --border-strong: #515b6d;
+  --hover: rgba(200, 215, 255, .07);
+  --pressed: rgba(200, 215, 255, .13);
+  --accent-fg: color-mix(in srgb, var(--accent) 55%, #fff);
+  --selected: color-mix(in srgb, var(--accent) 36%, transparent);
+  --focus: var(--accent-fg);
+  --scrim: rgba(8, 10, 14, .55);
+  --shadow-card: 0 1px 1px rgba(0, 0, 0, .22);
+  --shadow-pop: 0 0 0 1px rgba(210, 225, 255, .09), 0 10px 30px rgba(0, 0, 0, .5);
+  --hue-red: #ff8f87; --hue-orange: #ffa25c; --hue-yellow: #e8c35a; --hue-green: #7bd68f;
+  --hue-teal: #5fcfd8; --hue-blue: #8ab4f8; --hue-purple: #c79bf2; --hue-pink: #f59ac0; --hue-grey: #b7c0ce;
+}
+
+[data-theme="sand"] {
+  color-scheme: light;
+  --bg: #f6f1e7;
+  --surface: #fffdf8;
+  --sunken: #ebe4d5;
+  --sidebar: #ede6d8;
+  --popover: #fffdf8;
+  --raised: #fffdf8;
+  --fg: #2b2620;
+  --fg-muted: #5e5548;
+  --fg-faint: #6b6153;
+  --border: #ddd3c0;
+  --border-strong: #c0b39a;
+  --hover: rgba(60, 45, 20, .07);
+  --pressed: rgba(60, 45, 20, .13);
+  --accent-fg: color-mix(in srgb, var(--accent) 80%, #000);
+  --selected: color-mix(in srgb, var(--accent) 17%, transparent);
+  --scrim: rgba(40, 30, 15, .34);
+  --shadow-card: 0 1px 1px rgba(60, 45, 20, .06);
+  --shadow-pop: 0 0 0 1px rgba(60, 45, 20, .12), 0 8px 24px rgba(60, 45, 20, .18);
+  --hue-red: #a8231b; --hue-orange: #934200; --hue-yellow: #735600; --hue-green: #17642e;
+  --hue-teal: #0d6470; --hue-blue: #1859a8; --hue-purple: #72369e; --hue-pink: #9c2d63; --hue-grey: #5e5548;
+}
+
+[data-theme="contrast"] {
+  color-scheme: light;
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --sunken: #efefef;
+  --sidebar: #f3f3f3;
+  --popover: #ffffff;
+  --raised: #ffffff;
+  --fg: #000000;
+  --fg-muted: #2a2a2a;
+  --fg-faint: #444444;
+  --border: #6e6e6e;          /* 3:1 or better against every surface */
+  --border-strong: #000000;
+  --hover: rgba(0, 0, 0, .08);
+  --pressed: rgba(0, 0, 0, .16);
+  --accent-fg: color-mix(in srgb, var(--accent) 60%, #000);
+  --selected: color-mix(in srgb, var(--accent) 24%, transparent);
+  --scrim: rgba(0, 0, 0, .5);
+  --shadow-card: none;
+  --shadow-pop: 0 0 0 2px #000000;
+  --focus-w: 3px;
+  --hue-red: #8f1a14; --hue-orange: #7a3600; --hue-yellow: #5c4500; --hue-green: #0f5226;
+  --hue-teal: #0a525b; --hue-blue: #114a8f; --hue-purple: #5e2a85; --hue-pink: #822352; --hue-grey: #2a2a2a;
+}
+
+/* ---------- 3. Density ---------- */
+[data-density="compact"] {
+  --fs: 12.5px;
+  --lh: 18px;
+  --h-control: 26px;
+  --h-row: 27px;
+  --h-headerbar: 40px;
+  --h-toolbar: 36px;
+  --h-statusbar: 24px;
+  --w-sidebar: 216px;
+  --pad-card: 8px;
+  --gap: 6px;
+}
+
+/* ---------- 4. Accent: every fill passes 4.5:1 under white text ---------- */
+[data-accent="blue"]   { --accent: #2a72d6; }
+[data-accent="teal"]   { --accent: #1a7f8f; }
+[data-accent="green"]  { --accent: #2c8540; }
+[data-accent="amber"]  { --accent: #9a6a00; }
+[data-accent="orange"] { --accent: #c2500a; }
+[data-accent="red"]    { --accent: #d0333f; }
+[data-accent="pink"]   { --accent: #c2437d; }
+[data-accent="purple"] { --accent: #8a46b0; }
+[data-accent="slate"]  { --accent: #5c6f82; }

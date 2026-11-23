@@ -1,0 +1,23 @@
+# Rust build output
+/target
+**/*.rs.bk
+rustc-ice-*.txt
+
+# The UI's dependencies and build output
+node_modules/
+/ui/dist/
+/ui/test-results/
+/ui/playwright-report/
+/ui/blob-report/
+*.tsbuildinfo
+
+# Schemas that tauri-build writes on every build
+/crates/gk-app/gen/schemas/
+
+# Local environment and editor files
+.env
+.env.*
+.idea/
+.vscode/
+*.swp
+.DS_Store
