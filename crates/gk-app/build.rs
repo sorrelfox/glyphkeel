@@ -18,6 +18,7 @@ fn main() {
         "open_link",
         "watch_open_links",
         "open_task_window",
+        "quit_app",
     ]);
     if let Err(err) = tauri_build::try_build(tauri_build::Attributes::new().app_manifest(manifest))
     {

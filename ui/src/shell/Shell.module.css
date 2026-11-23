@@ -227,3 +227,52 @@
 .failure p {
   margin: 0;
 }
+
+/* ---------- the timer chip, above Trash ---------- */
+
+.timerChip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 8px 0;
+  padding: 6px 6px 6px 10px;
+  border-radius: var(--r-m);
+  background: var(--hover);
+}
+
+.timerOpen {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  border-radius: var(--r-s);
+  outline: none;
+}
+
+.timerOpen[data-focus-visible] {
+  outline: var(--focus-w) solid var(--focus);
+  outline-offset: 2px;
+}
+
+.timerText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 16px;
+}
+
+.timerClock {
+  font-weight: 600;
+}
+
+.timerLong .timerClock,
+.timerLong > .timerOpen > .ic {
+  color: var(--warning);
+}

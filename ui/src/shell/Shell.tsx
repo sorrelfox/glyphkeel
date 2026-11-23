@@ -38,6 +38,9 @@ export function viewOf(pathname: string): View {
   if (pathname.startsWith("/projects/")) {
     return "project";
   }
+  if (pathname.startsWith("/time")) {
+    return "time";
+  }
   return pathname.startsWith("/all") ? "all-tasks" : "today";
 }
 
@@ -78,7 +81,7 @@ export function Shell({ titleBar, openGallery }: ShellProps) {
 
   const actions = shellActions({
     setView: (next) => {
-      void navigate({ to: next === "all-tasks" ? "/all" : "/" });
+      void navigate({ to: next === "all-tasks" ? "/all" : next === "time" ? "/time" : "/" });
     },
     toggleSidebar: () => {
       setSidebarOpen((open) => !open);
@@ -96,7 +99,7 @@ export function Shell({ titleBar, openGallery }: ShellProps) {
   });
 
   const title =
-    view === "project" ? (project.data?.name ?? projectKey ?? "") : t(view === "today" ? "view-today" : "view-all-tasks");
+    view === "project" ? (project.data?.name ?? projectKey ?? "") : t(view === "today" ? "view-today" : view === "time" ? "view-time-report" : "view-all-tasks");
   const subtitle =
     view === "today" ? new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long" }).format(new Date()) : undefined;
 

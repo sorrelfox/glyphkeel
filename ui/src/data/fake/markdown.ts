@@ -116,7 +116,7 @@ function inline(text: string, knownKey: (key: string) => boolean): string {
       hold(`<a data-wiki="${escapeHtml(page)}" rel="noopener noreferrer">${escapeHtml(label ?? page)}</a>`),
     )
     .replace(/\[([^\]]+)\]\(([^)\s]*)\)/g, (_all, label: string, url: string) =>
-      hold(/^(https?:|mailto:)/.test(url) ? `<a href="${escapeHtml(url)}" rel="noopener noreferrer">${escapeHtml(label)}</a>` : `<a rel="noopener noreferrer">${escapeHtml(label)}</a>`),
+      hold(/^(https?:|mailto:)/.test(url) || /^gk-file:\/\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(url) ? `<a href="${escapeHtml(url)}" rel="noopener noreferrer">${escapeHtml(label)}</a>` : `<a rel="noopener noreferrer">${escapeHtml(label)}</a>`),
     );
   out = escapeHtml(out)
     .replace(TASK_KEY, (all, before: string, key: string) => (knownKey(key) ? `${before}<a data-ref="${key}">${key}</a>` : all))

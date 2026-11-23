@@ -15,6 +15,7 @@ import {
   type Column,
   type Comment,
   type CommentChange,
+  type DueReminder,
   type ConflictAction,
   type DescriptionSave,
   type Edge,
@@ -30,6 +31,7 @@ import {
   type Project,
   type ProjectChange,
   type ProjectSummary,
+  type Reminder,
   type RevisionInfo,
   type RevisionKind,
   type Settings,
@@ -38,12 +40,17 @@ import {
   type TaskChange,
   type TaskPart,
   type TaskRef,
+  type TimeEntryChange,
+  type TimerChange,
+  type TimerStatus,
   type TypeRef,
 } from "../../generated/ops";
+import { formatDuration, parseDuration } from "../duration";
 import { decodeBase64, materialize, recordedFields, sniff } from "./details";
 import { checklistOf, merge3, publicChecklist, renderFake, setChecked, unifiedDiff } from "./markdown";
-import { newProject, nextId, SAMPLE_AGENT } from "./seed";
-import { type FakeComment, type FakeFile, type FakeProject, type FakeRelation, type FakeRevision, type FakeState, type FakeTask } from "./state";
+import { newProject, nextFileId, nextId, SAMPLE_AGENT } from "./seed";
+import { type FakeComment, type FakeFile, type FakeProject, type FakeRelation, type FakeReminder, type FakeRevision, type FakeState, type FakeTask, type FakeTimeEntry } from "./state";
+import { addDays, localDay, MAX_ENTRY_MINUTES, momentOf, reminderAt, reminderOut, sortDue, timeEntryOut, timerElapsedMs, timerOut, unitsOf, weekStart, workDay } from "./time";
 
 /** An operation failed: the engine's error, as the transports deliver it. */
 export class FakeError extends Error {
@@ -136,6 +143,17 @@ export class FakeWorkspace {
     for (const task of state.tasks) {
       if (task.description !== "" && !state.revisions.some((revision) => revision.taskId === task.id)) {
         state.revisions.push({ id: nextId("r"), taskId: task.id, body: task.description, kind: "normal", base: null, author: { kind: "user", name: "You" }, createdAt: task.createdAt, resolvedAt: null });
+      }
+    }
+    // Time already spent shows as one entry on the day the task was last updated.
+    for (const task of state.tasks) {
+      if (task.spentMin > 0 && !state.timeEntries.some((entry) => entry.taskId === task.id)) {
+        let left = task.spentMin;
+        while (left > 0) {
+          const minutes = Math.min(left, MAX_ENTRY_MINUTES);
+          left -= minutes;
+          state.timeEntries.push({ id: nextId("te"), taskId: task.id, date: localDay(new Date(task.updatedAt)), minutes, note: "", author: { kind: "user", name: "You" }, createdAt: task.updatedAt, editedAt: null, version: 1, deletedAt: null });
+        }
       }
     }
     // Subtasks keep the order they were shown in: by status, then by place in the column.
@@ -630,6 +648,8 @@ export class FakeWorkspace {
         const link = (entry.fields.link?.after ?? entry.fields.link?.before ?? {}) as { from?: string; to?: string };
         return link.from === taskId || link.to === taskId;
       }
+      case "time_entry":
+        return this.state.timeEntries.some((each) => each.id === entry.id && each.taskId === taskId);
       default:
         return false;
     }
@@ -714,6 +734,14 @@ export class FakeWorkspace {
         full.revisions = this.revisionsOf(task)
           .reverse()
           .map((revision) => this.revisionInfo(revision, current));
+      } else if (part === "time") {
+        const units = unitsOf(this.state.settings);
+        full.time_entries = this.entriesOf(task).map((entry) => timeEntryOut(entry, this.keyOf(task), units));
+      } else if (part === "reminder") {
+        const reminder = this.reminderOf(task);
+        if (reminder) {
+          full.reminder = reminder;
+        }
       } else {
         full.files = this.state.files.filter((file) => file.taskId === task.id && file.commentId === null && file.deletedAt === null).map((file) => this.attachment(file));
       }
@@ -787,7 +815,7 @@ export class FakeWorkspace {
     project.nextNumber += 1;
     this.state.tasks.push(copy);
     for (const file of this.state.files.filter((candidate) => candidate.taskId === task.id && candidate.commentId === null && candidate.deletedAt === null)) {
-      this.state.files.push({ ...file, id: nextId("f"), taskId: copy.id, createdAt: now });
+      this.state.files.push({ ...file, id: nextFileId(), taskId: copy.id, createdAt: now });
     }
     if (withSubtasks) {
       for (const sub of this.subtasksOf(task)) {
@@ -973,6 +1001,105 @@ export class FakeWorkspace {
       fail("limit", `A title has at most ${String(MAX_TITLE)} characters.`, { details: { path: "title", max: MAX_TITLE } });
     }
     return trimmed;
+  }
+
+  // ---------- time ----------
+
+  /** Whether the running timer's long-running reminder was acknowledged. */
+  private timerReminded = false;
+
+  private entryMinutes(text: string, path: string): number {
+    const minutes = parseDuration(text, unitsOf(this.state.settings));
+    if (minutes === null) {
+      fail("invalid", `"${text}" isn't a duration.`, { hint: "For example 1h 30m, 90m, 1.5h or 1:30.", details: { path } });
+    }
+    if (minutes < 1 || minutes > MAX_ENTRY_MINUTES) {
+      fail("invalid", "A time entry holds from 1 minute to 24 hours.", { details: { path } });
+    }
+    return minutes;
+  }
+
+  private entryNote(note: string | null | undefined): string {
+    const text = (note ?? "").trim();
+    if (text.length > 2000) {
+      fail("limit", "A time entry's note has at most 2000 characters.", { details: { path: "note" } });
+    }
+    return text;
+  }
+
+  private liveEntry(id: string): FakeTimeEntry {
+    const entry = this.state.timeEntries.find((candidate) => candidate.id === id && candidate.deletedAt === null);
+    if (!entry) {
+      fail("not_found", `There is no time entry ${id}.`);
+    }
+    return entry;
+  }
+
+  private entriesOf(task: FakeTask): FakeTimeEntry[] {
+    return this.state.timeEntries
+      .filter((entry) => entry.taskId === task.id && entry.deletedAt === null)
+      .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
+  }
+
+  private entryOutput(entry: FakeTimeEntry): TimeEntryChange {
+    const task = this.task(entry.taskId);
+    return { deleted: entry.deletedAt !== null, entry: timeEntryOut(entry, this.keyOf(task), unitsOf(this.state.settings)), spent_minutes: task.spentMin };
+  }
+
+  private entryChange(entry: FakeTimeEntry, fields: string[]): Result<TimeEntryChange> {
+    const task = this.task(entry.taskId);
+    return { output: this.entryOutput(entry), changes: [{ entity: "time_entry", id: entry.id, fields, project: this.projectOf(task).key }] };
+  }
+
+  private timerStatus(): TimerStatus {
+    const timer = this.state.timer;
+    const task = timer && this.state.tasks.find((candidate) => candidate.id === timer.taskId);
+    return timer && task ? { timer: timerOut(timer, this.taskRef(task), this.today(), unitsOf(this.state.settings)) } : {};
+  }
+
+  private timerEvent(): EntityChange {
+    return { entity: "timer", id: "w-1", fields: ["timer"] };
+  }
+
+  /** Stops the timer: logs its time (rounded; under half a minute logs nothing) unless discarded. */
+  private stopTimer(minutes: number | null, discard: boolean, note?: string): Result<TimerChange> {
+    const timer = this.state.timer;
+    if (timer === null) {
+      return { output: {}, changes: [] };
+    }
+    this.state.timer = null;
+    this.timerReminded = false;
+    if (discard) {
+      return { output: {}, changes: [] };
+    }
+    const measured = Math.round(timerElapsedMs(timer, this.today()) / 60_000);
+    const logged = Math.min(minutes ?? measured, MAX_ENTRY_MINUTES);
+    if (logged < 1) {
+      return { output: { warnings: ["Under half a minute: no time was logged."] }, changes: [] };
+    }
+    const entry: FakeTimeEntry = {
+      id: nextId("te"),
+      taskId: timer.taskId,
+      date: localDay(new Date(timer.startedAt)),
+      minutes: logged,
+      note: this.entryNote(note ?? timer.note),
+      author: { kind: "user", name: "You" },
+      createdAt: this.today().toISOString(),
+      editedAt: null,
+      version: 1,
+      deletedAt: null,
+    };
+    this.state.timeEntries.push(entry);
+    const task = this.task(timer.taskId);
+    task.spentMin += logged;
+    task.updatedAt = entry.createdAt;
+    const change = this.entryChange(entry, ["created"]);
+    return { output: { entry: change.output.entry }, changes: change.changes };
+  }
+
+  private reminderOf(task: FakeTask): Reminder | undefined {
+    const reminder = this.state.reminders.find((candidate) => candidate.taskId === task.id);
+    return reminder && reminderOut(reminder, this.keyOf(task), reminderAt(reminder, task.dueDate, this.state.settings.reminder_time));
   }
 
   // ---------- the operations ----------
@@ -1539,7 +1666,7 @@ export class FakeWorkspace {
       }
       const sniffed = sniff(bytes, name);
       const file: FakeFile = {
-        id: nextId("f"),
+        id: nextFileId(),
         taskId: task.id,
         commentId: comment?.id ?? null,
         name: name.trim(),
@@ -1906,6 +2033,269 @@ export class FakeWorkspace {
       }
       this.touch(task, fields.includes("status"));
       return this.taskChange(task, fields);
+    },
+
+    // ---------- time ----------
+
+    "time.log": ({ key, duration, date, note }) => {
+      const task = this.task(key);
+      this.writable(this.projectOf(task).key);
+      const minutes = this.entryMinutes(duration, "duration");
+      const day = workDay(date, this.today()) ?? fail("invalid", `"${date ?? ""}" isn't a day.`, { details: { path: "date" } });
+      const entry: FakeTimeEntry = {
+        id: nextId("te"),
+        taskId: task.id,
+        date: day,
+        minutes,
+        note: this.entryNote(note),
+        author: { kind: "user", name: "You" },
+        createdAt: this.today().toISOString(),
+        editedAt: null,
+        version: 1,
+        deletedAt: null,
+      };
+      this.state.timeEntries.push(entry);
+      task.spentMin += minutes;
+      task.updatedAt = this.today().toISOString();
+      return this.entryChange(entry, ["created"]);
+    },
+    "time.update": ({ entry: id, date, duration, note, expected_version }) => {
+      const entry = this.liveEntry(id);
+      const task = this.task(entry.taskId);
+      this.writable(this.projectOf(task).key);
+      if (expected_version !== null && expected_version !== undefined && expected_version !== entry.version) {
+        fail("conflict", "The time entry changed since you read it.", { details: { current_version: entry.version } });
+      }
+      const fields: string[] = [];
+      if (duration !== null && duration !== undefined) {
+        const minutes = this.entryMinutes(duration, "duration");
+        if (minutes !== entry.minutes) {
+          task.spentMin += minutes - entry.minutes;
+          entry.minutes = minutes;
+          fields.push("minutes");
+        }
+      }
+      if (date !== null && date !== undefined) {
+        const day = workDay(date, this.today()) ?? fail("invalid", `"${date}" isn't a day.`, { details: { path: "date" } });
+        if (day !== entry.date) {
+          entry.date = day;
+          fields.push("date");
+        }
+      }
+      if (note !== null && note !== undefined && this.entryNote(note) !== entry.note) {
+        entry.note = this.entryNote(note);
+        fields.push("note");
+      }
+      if (fields.length === 0) {
+        return { output: this.entryOutput(entry), changes: [] };
+      }
+      entry.version += 1;
+      entry.editedAt = this.today().toISOString();
+      task.updatedAt = entry.editedAt;
+      return this.entryChange(entry, fields);
+    },
+    "time.delete": ({ entry: id }) => {
+      const entry = this.liveEntry(id);
+      const task = this.task(entry.taskId);
+      this.writable(this.projectOf(task).key);
+      entry.deletedAt = this.today().toISOString();
+      task.spentMin -= entry.minutes;
+      task.updatedAt = entry.deletedAt;
+      return this.entryChange(entry, ["trashed"]);
+    },
+    "time.report": ({ from, to, group_by, project, task: taskRef, entries }) => {
+      const now = this.today();
+      const first = from === null || from === undefined ? weekStart(localDay(now), this.state.settings.week_start) : (workDay(from, now) ?? fail("invalid", `"${from}" isn't a day.`, { details: { path: "from" } }));
+      const last = to === null || to === undefined ? addDays(first, 6) : (workDay(to, now) ?? fail("invalid", `"${to}" isn't a day.`, { details: { path: "to" } }));
+      if (last < first) {
+        fail("invalid", "The last day comes before the first.", { details: { path: "to" } });
+      }
+      const projects = project === null || project === undefined ? null : new Set([this.project(project), ...this.descendants(this.project(project))].map((each) => each.id));
+      const root = taskRef === null || taskRef === undefined ? null : this.task(taskRef);
+      const within = (task: FakeTask): boolean => root === null || task === root || this.isAncestor(root, task);
+      const units = unitsOf(this.state.settings);
+      const chosen = this.state.timeEntries
+        .filter((entry) => entry.deletedAt === null && entry.date >= first && entry.date <= last)
+        .flatMap((entry) => {
+          const task = this.state.tasks.find((candidate) => candidate.id === entry.taskId);
+          return task && (projects === null || projects.has(task.projectId)) && within(task) ? [{ entry, task }] : [];
+        })
+        .sort((a, b) => a.entry.date.localeCompare(b.entry.date) || a.entry.createdAt.localeCompare(b.entry.createdAt));
+      const grouping = group_by ?? "task";
+      const groups = new Map<string, { key: string; title: string; minutes: number; count: number }>();
+      for (const { entry, task } of chosen) {
+        const project = this.projectOf(task);
+        const [key, title] =
+          grouping === "day"
+            ? [entry.date, new Date(`${entry.date}T12:00:00`).toLocaleDateString("en", { weekday: "long" })]
+            : grouping === "project"
+              ? [project.key, project.name]
+              : [this.keyOf(task), task.title];
+        const group = groups.get(key) ?? { key, title, minutes: 0, count: 0 };
+        group.minutes += entry.minutes;
+        group.count += 1;
+        groups.set(key, group);
+      }
+      const rows = [...groups.values()];
+      rows.sort(grouping === "day" ? (a, b) => a.key.localeCompare(b.key) : (a, b) => b.minutes - a.minutes || a.key.localeCompare(b.key));
+      const total = chosen.reduce((sum, { entry }) => sum + entry.minutes, 0);
+      return {
+        days_per_week: units.daysPerWeek,
+        ...(entries === true ? { entries: chosen.map(({ entry, task }) => timeEntryOut(entry, this.keyOf(task), units)) } : {}),
+        from: first,
+        group_by: grouping,
+        hours_per_day: units.hoursPerDay,
+        items: rows.map((row) => ({ duration: formatDuration(row.minutes, units), entry_count: row.count, key: row.key, minutes: row.minutes, title: row.title })),
+        to: last,
+        total_duration: formatDuration(total, units),
+        total_minutes: total,
+      };
+    },
+
+    // ---------- timer ----------
+
+    "timer.get": () => this.timerStatus(),
+    "timer.start": ({ key, note }) => {
+      const current = this.state.timer;
+      const now = this.today().toISOString();
+      if (key === null || key === undefined) {
+        if (current === null) {
+          fail("not_found", "There is no paused timer to start again.", { hint: "Name the task to time." });
+        }
+        if (current.runningSince !== null) {
+          return { output: this.timerStatus(), changes: [] };
+        }
+        current.runningSince = now;
+        return { output: this.timerStatus(), changes: [this.timerEvent()] };
+      }
+      const task = this.task(key);
+      this.writable(this.projectOf(task).key);
+      if (current !== null && current.taskId === task.id) {
+        if (current.runningSince === null) {
+          current.runningSince = now;
+          return { output: this.timerStatus(), changes: [this.timerEvent()] };
+        }
+        return { output: this.timerStatus(), changes: [] };
+      }
+      const changes = current === null ? [] : this.stopTimer(null, false).changes;
+      this.state.timer = { taskId: task.id, startedAt: now, runningSince: now, elapsedMs: 0, note: note ?? "" };
+      return { output: this.timerStatus(), changes: [...changes, this.timerEvent()] };
+    },
+    "timer.pause": () => {
+      const current = this.state.timer;
+      if (current === null) {
+        fail("not_found", "No timer runs.");
+      }
+      if (current.runningSince === null) {
+        return { output: this.timerStatus(), changes: [] };
+      }
+      current.elapsedMs = timerElapsedMs(current, this.today());
+      current.runningSince = null;
+      return { output: this.timerStatus(), changes: [this.timerEvent()] };
+    },
+    "timer.stop": ({ discard, duration, note }) => {
+      if (this.state.timer === null) {
+        fail("not_found", "No timer runs.");
+      }
+      const minutes = duration === null || duration === undefined ? null : this.entryMinutes(duration, "duration");
+      const stopped = this.stopTimer(minutes, discard === true, note ?? undefined);
+      return { output: stopped.output, changes: [...stopped.changes, this.timerEvent()] };
+    },
+
+    // ---------- reminders ----------
+
+    "reminder.set": ({ key, at, days_before_due, time, note }) => {
+      const task = this.task(key);
+      this.writable(this.projectOf(task).key);
+      if ((at === null || at === undefined) === (days_before_due === null || days_before_due === undefined)) {
+        fail("invalid", "Give either a moment or the days before the due date.", { details: { path: "at" } });
+      }
+      const moment = at === null || at === undefined ? null : (momentOf(at) ?? fail("invalid", `"${at}" isn't a moment.`, { details: { path: "at" } }));
+      if (days_before_due !== null && days_before_due !== undefined && (days_before_due < 0 || days_before_due > 365)) {
+        fail("invalid", "Days before the due date go from 0 to 365.", { details: { path: "days_before_due" } });
+      }
+      if (time !== null && time !== undefined && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+        fail("invalid", `"${time}" isn't a time of day (HH:MM).`, { details: { path: "time" } });
+      }
+      if ((note ?? "").length > 500) {
+        fail("limit", "A reminder's text has at most 500 characters.", { details: { path: "note" } });
+      }
+      this.state.reminders = this.state.reminders.filter((reminder) => reminder.taskId !== task.id);
+      const reminder: FakeReminder = {
+        id: nextId("rm"),
+        taskId: task.id,
+        at: moment,
+        daysBeforeDue: days_before_due ?? null,
+        time: moment === null ? (time ?? null) : null,
+        note: note ?? "",
+        createdAt: this.today().toISOString(),
+        acknowledged: false,
+      };
+      this.state.reminders.push(reminder);
+      task.updatedAt = reminder.createdAt;
+      return {
+        output: { task: this.keyOf(task), reminder: this.reminderOf(task) ?? fail("storage", "The reminder went missing.") },
+        changes: [{ entity: "task", id: task.id, fields: ["reminder"], project: this.projectOf(task).key }],
+      };
+    },
+    "reminder.clear": ({ key }) => {
+      const task = this.task(key);
+      this.writable(this.projectOf(task).key);
+      const had = this.state.reminders.some((reminder) => reminder.taskId === task.id);
+      this.state.reminders = this.state.reminders.filter((reminder) => reminder.taskId !== task.id);
+      return { output: { task: this.keyOf(task) }, changes: had ? [{ entity: "task", id: task.id, fields: ["reminder"], project: this.projectOf(task).key }] : [] };
+    },
+    "reminder.due": ({ until, since, limit }) => {
+      const now = this.today();
+      const end = until === null || until === undefined ? now.toISOString() : (momentOf(until) ?? fail("invalid", `"${until}" isn't a moment.`, { details: { path: "until" } }));
+      const missedBefore = since === null || since === undefined ? new Date(now.getTime() - 5 * 60_000).toISOString() : (momentOf(since) ?? fail("invalid", `"${since}" isn't a moment.`, { details: { path: "since" } }));
+      const items: DueReminder[] = [];
+      let next: string | undefined;
+      const consider = (at: string, item: Omit<DueReminder, "at" | "missed">) => {
+        if (at <= end) {
+          items.push({ ...item, at, missed: at < missedBefore });
+        } else if (next === undefined || at < next) {
+          next = at;
+        }
+      };
+      for (const reminder of this.state.reminders.filter((candidate) => !candidate.acknowledged)) {
+        const task = this.state.tasks.find((candidate) => candidate.id === reminder.taskId);
+        if (!task || (reminder.at === null && task.closedAt !== null)) {
+          continue;
+        }
+        const at = reminderAt(reminder, task.dueDate, this.state.settings.reminder_time);
+        if (at !== null) {
+          consider(at, { id: `reminder:${reminder.id}`, kind: "reminder", task: this.taskRef(task), ...some("note", reminder.note === "" ? null : reminder.note), ...some("due_date", task.dueDate) });
+        }
+      }
+      const timer = this.state.timer;
+      const hours = this.state.settings.timer_reminder_hours;
+      if (timer !== null && hours > 0 && !this.timerReminded) {
+        const task = this.state.tasks.find((candidate) => candidate.id === timer.taskId);
+        const remaining = hours * 3_600_000 - timerElapsedMs(timer, now);
+        if (task && (timer.runningSince !== null || remaining <= 0)) {
+          consider(new Date(now.getTime() + Math.max(0, remaining)).toISOString(), { id: `timer:${String(Date.parse(timer.startedAt))}`, kind: "timer", task: this.taskRef(task) });
+        }
+      }
+      sortDue(items);
+      return { items: items.slice(0, limit ?? 100), total: items.length, until: end, ...some("next_at", next) };
+    },
+    "reminder.acknowledge": ({ ids }) => {
+      const acknowledged: string[] = [];
+      const unknown: string[] = [];
+      for (const id of ids) {
+        const reminder = this.state.reminders.find((candidate) => `reminder:${candidate.id}` === id && !candidate.acknowledged);
+        if (reminder) {
+          reminder.acknowledged = true;
+          acknowledged.push(id);
+        } else if (id.startsWith("timer:") && this.state.timer !== null && !this.timerReminded) {
+          this.timerReminded = true;
+          acknowledged.push(id);
+        } else {
+          unknown.push(id);
+        }
+      }
+      return { acknowledged, ...(unknown.length > 0 ? { unknown } : {}) };
     },
   };
 }

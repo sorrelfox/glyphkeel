@@ -59,6 +59,10 @@ test("create a task, drag it to another column, then move it with the keyboard",
   await card.focus();
   await page.keyboard.press("Space");
   await announced(`${key} is over Review.`);
+  // dnd-kit listens for the arrow keys only from the task after the pickup
+  // (a timer it sets while handling Space), but announces the pickup sooner.
+  // A key pressed in between is lost: wait for a timer set after its own.
+  await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 0)));
   await page.keyboard.press("ArrowRight");
   await announced(`${key} is over Done.`);
   await page.keyboard.press("Space");

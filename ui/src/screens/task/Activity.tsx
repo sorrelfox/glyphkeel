@@ -16,9 +16,11 @@ import { revertible, useComments, useTaskHistory } from "../../data/task";
 import { type ActivityEntry, type Actor, type Comment, type Rendered, type Task, type Via } from "../../generated/ops";
 import { useT, type Translate } from "../../i18n/I18n";
 import { MarkdownReader } from "../../markdown/Reader";
-import { formatMinutes } from "../board/model";
+import { formatDuration, type DurationUnits } from "../../data/duration";
+import { useDurationUnits } from "../../data/time";
 import { FileRow, useAttach } from "./Files";
 import { MarkdownField } from "./MarkdownField";
+import { TimeEntries } from "./Time";
 import styles from "./TaskPanel.module.css";
 
 /** A moment as the panel shows it: "Nov 19, 2026, 16:20". */
@@ -179,6 +181,8 @@ interface Names {
   project: Project;
   /** Task keys by task ID, as far as the panel knows them. */
   keys: ReadonlyMap<string, string>;
+  /** The workspace's working day and week, for durations. */
+  units?: DurationUnits;
 }
 
 const BACKWARDS: Record<string, string> = { blocks: "blocked_by", duplicates: "duplicated_by", clones: "cloned_by", relates: "relates" };
@@ -204,7 +208,7 @@ function shown(t: Translate, names: Names, field: string, value: unknown): strin
     case "priority":
       return typeof value === "string" && ["none", "low", "normal", "high", "urgent"].includes(value) ? t(`priority-${value}`) : plainText(value);
     case "estimate":
-      return typeof value === "number" ? formatMinutes(value) : plainText(value);
+      return typeof value === "number" ? formatDuration(value, names.units) : plainText(value);
     case "parent":
       return names.keys.get(plainText(value)) ?? plainText(value);
     default:
@@ -241,6 +245,17 @@ export function describeEntry(t: Translate, names: Names, entry: ActivityEntry):
       }
       return [t(fields.trashed?.after === true ? "history-file-trashed" : "history-file-restored")];
     }
+    case "time_entry": {
+      const minutes = typeof fields.minutes?.after === "number" ? fields.minutes.after : typeof fields.minutes?.before === "number" ? fields.minutes.before : null;
+      const time = minutes === null ? "" : formatDuration(minutes, names.units);
+      if (has("created")) {
+        return [t("history-time-logged", { time })];
+      }
+      if (has("trashed")) {
+        return [t(fields.trashed?.after === true ? "history-time-deleted" : "history-time-restored")];
+      }
+      return [t("history-time-edited")];
+    }
     case "relation": {
       const added = fields.link?.after !== undefined;
       const link = (fields.link?.after ?? fields.link?.before ?? {}) as { from?: string; to?: string; kind?: string };
@@ -263,6 +278,8 @@ export function describeEntry(t: Translate, names: Names, entry: ActivityEntry):
       lines.push(claim?.agent === undefined ? t("history-released") : t("history-claimed", { agent: claim.agent }));
     } else if (field === "description") {
       lines.push(t("history-description"));
+    } else if (field === "reminder") {
+      lines.push(t(change.after === undefined || change.after === null ? "history-reminder-cleared" : "history-reminder-set"));
     } else if (field === "rank") {
       lines.push(t("history-moved"));
     } else if (field === "subtask_rank") {
@@ -300,6 +317,7 @@ function HistoryList({
   const toasts = useToasts();
   const moment = useMomentFormat();
   const history = useTaskHistory(task.id, true);
+  const units = useDurationUnits();
   const keys = new Map<string, string>([[task.id, task.key]]);
   for (const link of task.links ?? []) {
     keys.set(link.task.id, link.task.key);
@@ -333,7 +351,7 @@ function HistoryList({
     <>
     <ol className={styles.history} aria-label={t("history-title")}>
       {entries.map((entry) => {
-        const lines = describeEntry(t, { task, project, keys }, entry);
+        const lines = describeEntry(t, { task, project, keys, units }, entry);
         if (lines.length === 0) {
           return null;
         }
@@ -381,7 +399,7 @@ function HistoryList({
   );
 }
 
-/** The tabs under the task's sections: its comments and its history. */
+/** The tabs under the task's sections: its comments, its time and its history. */
 export function ActivityTabs({
   task,
   project,
@@ -403,6 +421,10 @@ export function ActivityTabs({
           {t("comments-title")}
           {task.comment_count > 0 && <span className="count">{task.comment_count}</span>}
         </Tab>
+        <Tab id="time" className={({ isSelected }) => classes("tab", isSelected && "on")}>
+          {t("time-title")}
+          {(task.time_entries?.length ?? 0) > 0 && <span className="count">{task.time_entries?.length}</span>}
+        </Tab>
         <Tab id="history" className={({ isSelected }) => classes("tab", isSelected && "on")}>
           <HistoryIcon className="ic s" />
           {t("history-title")}
@@ -410,6 +432,9 @@ export function ActivityTabs({
       </TabList>
       <TabPanel id="comments" className={classes(styles.tabPanel)}>
         <CommentsList taskKey={task.key} readOnly={readOnly} onOpenTask={onOpenTask} />
+      </TabPanel>
+      <TabPanel id="time" className={classes(styles.tabPanel)}>
+        <TimeEntries task={task} readOnly={readOnly} />
       </TabPanel>
       <TabPanel id="history" className={classes(styles.tabPanel)}>
         <HistoryList task={task} project={project} readOnly={readOnly} onShowDescriptionDiff={onShowDescriptionDiff} />

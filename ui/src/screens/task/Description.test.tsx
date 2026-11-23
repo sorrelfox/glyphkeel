@@ -10,6 +10,7 @@ import { fakeTransport } from "../../data/fake/transport";
 import { createClient } from "../../data/transport";
 import { type TaskChange, type TaskList } from "../../generated/ops";
 import { diffLines } from "./DiffView";
+import { editorDropAt } from "./MarkdownField";
 
 // jsdom lays nothing out; the editor measures text ranges.
 Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
@@ -158,5 +159,25 @@ describe("diff lines", () => {
       { kind: "remove", text: "old" },
       { kind: "add", text: "new" },
     ]);
+  });
+});
+
+describe("files dropped from the desktop onto the editor", () => {
+  it("go in the text as links where they were dropped, as when pasted", async () => {
+    const { task, panel } = await renderDescription("Notes\n");
+    const composer = await within(panel).findByRole("textbox", { name: "Write a comment" });
+    // The window reports where the files were dropped; jsdom has no layout, so the point names the composer.
+    Object.defineProperty(document, "elementFromPoint", { configurable: true, value: () => composer });
+    try {
+      expect(editorDropAt(10, 10, "OTHER-1")).toBeNull();
+      const insert = editorDropAt(10, 10, task.key);
+      expect(insert).not.toBeNull();
+      act(() => {
+        insert?.("[notes.txt](gk-file://00000000-0000-4000-8000-000000000001)");
+      });
+      expect(EditorView.findFromDOM(composer)?.state.doc.toString()).toContain("[notes.txt](gk-file://00000000-0000-4000-8000-000000000001)");
+    } finally {
+      Reflect.deleteProperty(document, "elementFromPoint");
+    }
   });
 });

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { List, Plus, Search, SlidersHorizontal, Sun, Trash2 } from "lucide-react";
+import { Clock, List, Plus, Search, SlidersHorizontal, Sun, Trash2 } from "lucide-react";
 
 import { useAction } from "../actions/ActionsProvider";
 import { Kbd } from "../components/Kbd";
@@ -11,6 +11,7 @@ import { useT } from "../i18n/I18n";
 import { type NewProjectRequest } from "../screens/project/NewProjectDialog";
 import { ProjectTree } from "../screens/project/ProjectTree";
 import { type View } from "./shellActions";
+import { TimerChip } from "./TimerChip";
 import styles from "./Shell.module.css";
 
 interface SidebarProps {
@@ -24,13 +25,15 @@ interface SidebarProps {
 
 /**
  * The sidebar, top to bottom: the search field that opens the command
- * palette, Today and All tasks, the project tree, then Trash and Preferences.
+ * palette, Today, All tasks and the time report, the project tree, the
+ * timer chip while a timer runs, then Trash and Preferences.
  */
 export function Sidebar({ view, project, width, onNewProject, onProjectSettings }: SidebarProps) {
   const t = useT();
   const palette = useAction("palette.open");
   const today = useAction("nav.today");
   const allTasks = useAction("nav.allTasks");
+  const timeReport = useAction("nav.timeReport");
   const preferences = useAction("app.preferences");
   const counts = useCounts();
 
@@ -54,6 +57,10 @@ export function Sidebar({ view, project, width, onNewProject, onProjectSettings 
           <span>{t("view-all-tasks")}</span>
           {counts && <span className="count">{counts.all}</span>}
         </button>
+        <button type="button" className={classes("nav", view === "time" && "on")} aria-current={view === "time" ? "page" : undefined} onClick={timeReport.run}>
+          <Clock className="ic" />
+          <span>{t("view-time-report")}</span>
+        </button>
       </div>
 
       <div className={styles.projectsHeader}>
@@ -73,6 +80,7 @@ export function Sidebar({ view, project, width, onNewProject, onProjectSettings 
         <ProjectTree current={project} onNewProject={onNewProject} onSettings={onProjectSettings} />
       </div>
 
+      <TimerChip />
       <div className={styles.navGroup}>
         <button type="button" className="nav" disabled>
           <Trash2 className="ic" />

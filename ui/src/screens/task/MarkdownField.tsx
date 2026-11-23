@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { Suspense, type Ref } from "react";
+import { Suspense, useEffect, useRef, type Ref } from "react";
 
 import { classes } from "../../classes";
 import { useToasts } from "../../components/Toasts";
@@ -38,6 +38,28 @@ export function attachmentMarkdown(file: Pick<Attachment, "id" | "name" | "kind"
   return `${file.kind === "image" ? "!" : ""}[${name}](gk-file://${file.id})`;
 }
 
+/** The editors that take files dropped from the desktop, by their element. */
+const dropEditors = new WeakMap<Element, { task: string; editor: () => MarkdownEditorHandle | null }>();
+
+/**
+ * Where the Markdown of files dropped from the desktop at a point of the
+ * window goes: the editor under the point, when it takes files for `task`.
+ * In the app, desktop drops reach the page as one event of the window, not
+ * as the editor's own drop; the caller attaches the files, then inserts.
+ */
+export function editorDropAt(x: number, y: number, task: string): ((markdown: string) => void) | null {
+  const element = document.elementFromPoint(x, y)?.closest("[data-drop-editor]");
+  const target = element ? dropEditors.get(element) : undefined;
+  const editor = target?.task === task ? target.editor() : null;
+  if (!editor) {
+    return null;
+  }
+  const at = editor.positionAt(x, y);
+  return (markdown) => {
+    editor.insert(markdown, at ?? undefined);
+  };
+}
+
 /**
  * The Markdown editor as the task panel uses it: tables and callouts drawn
  * by the engine's renderer, task keys completed from the engine, Ctrl+Enter
@@ -59,8 +81,31 @@ export function MarkdownField({ label, value, onChange, onSubmit, onCancel, mode
   };
   const renderBlock = useBlockRenderer();
   const completion = useTaskCompletion();
+  const box = useRef<HTMLDivElement>(null);
+  const editor = useRef<MarkdownEditorHandle | null>(null);
+  const takesFiles = attachTo !== undefined && !readOnly;
+  useEffect(() => {
+    const element = box.current;
+    if (!element || !takesFiles) {
+      return;
+    }
+    dropEditors.set(element, { task: attachTo, editor: () => editor.current });
+    return () => {
+      dropEditors.delete(element);
+    };
+  }, [attachTo, takesFiles]);
+  const setEditor = (handle: MarkdownEditorHandle | null) => {
+    editor.current = handle;
+    if (typeof ref === "function") {
+      ref(handle);
+    } else if (ref) {
+      ref.current = handle;
+    }
+  };
   return (
     <div
+      ref={box}
+      data-drop-editor={takesFiles ? "" : undefined}
       className={classes(styles.markdownField, compact && styles.compactField, className)}
       // Ctrl+Enter is taken before the editor's own binding (a new line below).
       onKeyDownCapture={(event) => {
@@ -83,7 +128,7 @@ export function MarkdownField({ label, value, onChange, onSubmit, onCancel, mode
     >
       <Suspense fallback={<p className={classes("faint", styles.small)}>{t("editor-loading")}</p>}>
         <MarkdownEditor
-          {...(ref === undefined ? {} : { ref })}
+          ref={setEditor}
           label={label}
           value={value}
           onChange={onChange}

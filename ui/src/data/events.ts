@@ -13,12 +13,14 @@ import { OP_ROOT, opPrefix } from "./queries";
  */
 export const ENTITY_QUERIES: Readonly<Record<string, readonly OpId[]>> = {
   // `workspace.get` carries the settings too.
-  settings: ["settings.get", "workspace.get"],
+  // Durations are told in the workspace's units, and the timer reminds after its hours.
+  settings: ["settings.get", "workspace.get", "timer.get", "time.report"],
   // Open-task counts show in the project tree. Rendered texts link task keys
   // only while the task exists, and descriptions keep their revisions.
-  task: ["task.get", "board.get", "project.list", "markdown.render", "description.history", "description.revision"],
+  // A task's reminder is one of its fields; the time report shows titles.
+  task: ["task.get", "board.get", "project.list", "markdown.render", "description.history", "description.revision", "time.report", "timer.get"],
   // Statuses, types and labels show on every card and in the task panel.
-  project: ["project.list", "project.get", "board.get", "task.get", "layout.get", "markdown.render"],
+  project: ["project.list", "project.get", "board.get", "task.get", "layout.get", "markdown.render", "time.report"],
   status: ["project.get", "board.get", "task.get", "project.list"],
   task_type: ["project.get", "board.get", "task.get"],
   label: ["project.get", "board.get", "task.get"],
@@ -28,6 +30,10 @@ export const ENTITY_QUERIES: Readonly<Record<string, readonly OpId[]>> = {
   comment: ["comment.list", "task.get", "board.get", "markdown.render"],
   attachment: ["comment.list", "task.get", "board.get", "file.get", "file.read"],
   relation: ["task.get", "board.get"],
+  // Cards and the task show the time spent; the report adds it up.
+  time_entry: ["task.get", "board.get", "time.report"],
+  // The one timer: its chip, the task's timer button, and `workspace.get`, which carries it.
+  timer: ["timer.get", "workspace.get"],
 };
 
 /** Every committed change shows in the activity log. */

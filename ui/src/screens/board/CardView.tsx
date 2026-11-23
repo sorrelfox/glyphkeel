@@ -9,7 +9,8 @@ import { classes } from "../../classes";
 import { PriorityGlyph, TypeGlyph } from "../../components/Glyphs";
 import { type Card, type CardField } from "../../data/catalog";
 import { useT } from "../../i18n/I18n";
-import { dueState, formatMinutes } from "./model";
+import { useDurations } from "../../data/time";
+import { dueState } from "./model";
 import styles from "./Board.module.css";
 
 interface CardViewProps extends HTMLAttributes<HTMLElement> {
@@ -45,6 +46,7 @@ export const CardView = forwardRef<HTMLElement, CardViewProps>(function CardView
 ) {
   const t = useT();
   const day = useDayFormat();
+  const { format: duration } = useDurations();
   const show = (field: CardField) => !compact && fields.includes(field);
   const closed = card.closed_at !== undefined;
   const due = dueState(card.due_date, closed, today);
@@ -75,9 +77,9 @@ export const CardView = forwardRef<HTMLElement, CardViewProps>(function CardView
       </span>
     ),
     show("estimate") && card.estimate_minutes !== undefined && (
-      <span key="estimate" className="meta" aria-label={t("card-estimate", { time: formatMinutes(card.estimate_minutes) })}>
+      <span key="estimate" className="meta" aria-label={t("card-estimate", { time: duration(card.estimate_minutes) })}>
         <Clock className="ic" />
-        {formatMinutes(card.estimate_minutes)}
+        {duration(card.estimate_minutes)}
       </span>
     ),
     show("days_in_column") && !closed && days > 0 && (
@@ -100,9 +102,9 @@ export const CardView = forwardRef<HTMLElement, CardViewProps>(function CardView
       </span>
     ),
     !compact && card.spent_minutes > 0 && (
-      <span key="spent" className="meta" aria-label={t("card-spent", { time: formatMinutes(card.spent_minutes) })}>
+      <span key="spent" className="meta" aria-label={t("card-spent", { time: duration(card.spent_minutes) })}>
         <Timer className="ic" />
-        {formatMinutes(card.spent_minutes)}
+        {duration(card.spent_minutes)}
       </span>
     ),
   ].filter(Boolean);

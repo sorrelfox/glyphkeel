@@ -5,6 +5,7 @@
 // layout and the quick filters. Pure functions, so the rules are tested
 // without a page.
 
+import { parseDuration as parseTyped } from "../../data/duration";
 import { PRIORITIES, type Board, type BoardLayout, type Card, type Column, type Place, type Priority, type SortMode } from "../../data/catalog";
 
 export const DUE_FILTERS = ["overdue", "today", "week", "none"] as const;
@@ -241,29 +242,10 @@ export function formatMinutes(minutes: number): string {
 }
 
 /**
- * A duration as typed: "90m", "1.5h", "1:30", "2d", "1w", "1h 30m". Days and
- * weeks use the workspace's working hours and days. Null when it doesn't parse.
+ * A duration as typed: "90m", "1.5h", "1,5h", "1:30", "2d", "1w", "1h 30m".
+ * Days and weeks use the workspace's working hours and days. Null when it
+ * doesn't parse.
  */
 export function parseDuration(text: string, hoursPerDay = 8, daysPerWeek = 5): number | null {
-  const trimmed = text.trim().toLowerCase();
-  if (trimmed === "") {
-    return null;
-  }
-  const clock = /^(\d+):([0-5]\d)$/.exec(trimmed);
-  if (clock) {
-    return Number(clock[1]) * 60 + Number(clock[2]);
-  }
-  const unit: Record<string, number> = { m: 1, h: 60, d: 60 * hoursPerDay, w: 60 * hoursPerDay * daysPerWeek };
-  let total = 0;
-  let rest = trimmed;
-  const part = /^\s*(\d+(?:\.\d+)?)\s*([mhdw])/;
-  while (rest.trim() !== "") {
-    const found = part.exec(rest);
-    if (!found) {
-      return null;
-    }
-    total += Number(found[1]) * (unit[found[2] ?? "m"] ?? 1);
-    rest = rest.slice(found[0].length);
-  }
-  return Math.round(total);
+  return parseTyped(text, { hoursPerDay, daysPerWeek });
 }

@@ -9,8 +9,9 @@ import { useToasts } from "../components/Toasts";
 import { useImageSource, type CheckboxClick } from "../data/markdown";
 import { errorToast, useOp } from "../data/hooks";
 import { useT } from "../i18n/I18n";
+import { openAttachment } from "../ipc/files";
 import { openLink } from "../ipc/links";
-import { drawReader } from "./draw";
+import { attachmentOf, drawReader } from "./draw";
 import { insertSanitized } from "./insert";
 import styles from "./Reader.module.css";
 
@@ -98,6 +99,11 @@ export function MarkdownReader({ html, onToggle, onOpenTask, compact = false, cl
         onOpenTask(ref);
       } else if (link.dataset.wiki !== undefined) {
         toasts.show({ tone: "info", text: t("reader-wiki-later", { page: link.dataset.wiki }) });
+      } else if (attachmentOf(href) !== null) {
+        // A link to an attached file opens it in the desktop's app for it.
+        openAttachment(attachmentOf(href) ?? "").catch((error: unknown) => {
+          toasts.show(errorToast(t, error));
+        });
       } else if (href.startsWith("#")) {
         root.current?.querySelector(`[id="${CSS.escape(href.slice(1))}"]`)?.scrollIntoView({ block: "nearest" });
       } else {

@@ -62,9 +62,13 @@ describe("drawing on the reader's HTML", () => {
     expect(element.querySelector("input")?.getAttribute("aria-label")).toBe("Buy milk");
   });
 
-  it("reads attachment IDs from both address forms", () => {
-    expect(attachmentOf("gk-file://abc-123")).toBe("abc-123");
-    expect(attachmentOf("gk-file://localhost/abc-123")).toBe("abc-123");
+  it("reads attachment IDs only from the renderer's one address form", () => {
+    const id = "0192f3a4-5b6c-7d8e-9f01-23456789abcd";
+    expect(attachmentOf(`gk-file://${id}`)).toBe(id);
+    expect(attachmentOf(`gk-file://localhost/${id}`)).toBeNull();
+    expect(attachmentOf(`gk-file://${id}/`)).toBeNull();
+    expect(attachmentOf(`gk-file://${id.toUpperCase()}`)).toBeNull();
+    expect(attachmentOf("gk-file://abc-123")).toBeNull();
     expect(attachmentOf("https://example.com/x.png")).toBeNull();
     expect(attachmentOf("gk-file://localhost/../etc")).toBeNull();
   });
