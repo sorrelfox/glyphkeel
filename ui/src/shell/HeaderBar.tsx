@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Glyphkeel contributors
 
 import { BookOpen, ChartGantt, ChevronDown, Columns3, List, Menu as MenuIcon, Minus, PanelLeft, Plus, Square, X } from "lucide-react";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { Button, Menu, MenuTrigger, Popover } from "react-aria-components";
 
 import { useAction } from "../actions/ActionsProvider";
@@ -64,7 +65,7 @@ export function HeaderBar({ titleBar, title, subtitle, project, onProjectSetting
         <>
           <ProjectButton project={project} onSettings={onProjectSettings} onNewSubproject={onNewSubproject} />
           <div className={styles.spacer} data-tauri-drag-region />
-          <ViewSwitcher />
+          <ViewSwitcher project={project.key} />
           <div className={styles.spacer} data-tauri-drag-region />
         </>
       ) : (
@@ -158,14 +159,17 @@ function ProjectButton({ project, onSettings, onNewSubproject }: ProjectButtonPr
   );
 }
 
-/** Board, List, Gantt and Wiki. Only the board exists so far; the others are dimmed. */
-function ViewSwitcher() {
+/** Board, List, Gantt and Wiki. Board and List exist so far; the others are dimmed. */
+function ViewSwitcher({ project }: { project: string }) {
   const t = useT();
+  const navigate = useNavigate();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const current = pathname.endsWith("/list") ? "list" : "board";
   const views = [
-    { id: "board", icon: <Columns3 className="ic" />, on: true },
-    { id: "list", icon: <List className="ic" />, on: false },
-    { id: "gantt", icon: <ChartGantt className="ic" />, on: false },
-    { id: "wiki", icon: <BookOpen className="ic" />, on: false },
+    { id: "board", icon: <Columns3 className="ic" />, ready: true },
+    { id: "list", icon: <List className="ic" />, ready: true },
+    { id: "gantt", icon: <ChartGantt className="ic" />, ready: false },
+    { id: "wiki", icon: <BookOpen className="ic" />, ready: false },
   ];
   return (
     <div className="seg" role="group" aria-label={t("header-views")}>
@@ -173,10 +177,17 @@ function ViewSwitcher() {
         <button
           key={view.id}
           type="button"
-          className={view.on ? "on" : ""}
-          aria-current={view.on ? "page" : undefined}
-          disabled={!view.on}
+          className={view.id === current ? "on" : ""}
+          aria-current={view.id === current ? "page" : undefined}
+          disabled={!view.ready}
           aria-label={t(`view-${view.id}`)}
+          onClick={() => {
+            if (view.id === "list") {
+              void navigate({ to: "/projects/$key/list", params: { key: project } });
+            } else if (view.id === "board") {
+              void navigate({ to: "/projects/$key", params: { key: project } });
+            }
+          }}
         >
           {view.icon}
           <span className="hide-narrow">{t(`view-${view.id}`)}</span>

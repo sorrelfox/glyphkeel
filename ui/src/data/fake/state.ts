@@ -16,6 +16,7 @@ import {
   type Modules,
   type Priority,
   type RevisionKind,
+  type SavedView,
   type Settings,
   type Via,
 } from "../../generated/ops";
@@ -210,6 +211,8 @@ export interface FakeState {
   timer: FakeTimer | null;
   reminders: FakeReminder[];
   settings: Settings;
+  /** Saved views of the list and other screens; none until one is saved. */
+  views?: SavedView[];
   workspaceName: string;
   seq: number;
 }

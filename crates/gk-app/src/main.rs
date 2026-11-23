@@ -85,6 +85,7 @@ fn main() -> ExitCode {
             files::attach_drop,
             files::open_file,
             files::save_file,
+            files::save_export,
             links::open_link,
             open_links::watch_open_links,
             task_window::open_task_window,

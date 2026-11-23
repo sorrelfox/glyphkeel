@@ -15,6 +15,7 @@ fn main() {
         "attach_drop",
         "open_file",
         "save_file",
+        "save_export",
         "open_link",
         "watch_open_links",
         "open_task_window",

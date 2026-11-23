@@ -37,6 +37,10 @@ struct Args {
     /// The token pages must send; random unless given.
     #[arg(long)]
     token: Option<String>,
+    /// The port of the UI's server whose pages may connect, within 5310–5319,
+    /// for several UI servers side by side.
+    #[arg(long, default_value_t = UI_PORT, value_parser = clap::value_parser!(u16).range(5310..=5319))]
+    ui_port: u16,
     /// How permanent operations are answered, since there is no dialog.
     #[arg(long, value_parser = ["yes", "no"], default_value = "no")]
     confirm: String,
@@ -85,14 +89,21 @@ fn run() -> Result<()> {
         writeln!(out, "BRIDGE ws://127.0.0.1:{port}/?token={token}")?;
         writeln!(
             out,
-            "PAGE http://127.0.0.1:{UI_PORT}/?bridge={port}&token={token}"
+            "PAGE http://127.0.0.1:{}/?bridge={port}&token={token}",
+            args.ui_port
         )?;
         out.flush()?;
         drop(out);
         serve(
             listener,
             engine,
-            Guard::new(token),
+            Guard {
+                token,
+                origins: vec![
+                    format!("http://127.0.0.1:{}", args.ui_port),
+                    format!("http://localhost:{}", args.ui_port),
+                ],
+            },
             confirmation(args.confirm == "yes"),
         )
         .await;

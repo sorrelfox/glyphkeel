@@ -543,6 +543,32 @@ pub(crate) async fn save_file(
     .await
 }
 
+/// The largest export the page may hand over to be saved.
+const EXPORT_MAX_BYTES: usize = 256 * 1024 * 1024;
+
+/// Saves an export the page made (the list's tasks as CSV or JSON) where the
+/// person chooses, starting with `name`. Returns whether it was saved.
+#[tauri::command]
+pub(crate) async fn save_export(
+    window: WebviewWindow,
+    name: String,
+    contents: String,
+) -> Result<bool, OpError> {
+    if contents.len() > EXPORT_MAX_BYTES {
+        return Err(OpError::invalid("The export is too large to save."));
+    }
+    let chosen = dialog::choose(&window, dialog::Mode::Save(safe_name(&name))).await?;
+    let Some(target) = chosen.into_iter().next() else {
+        return Ok(false);
+    };
+    blocking(move || {
+        std::fs::write(&target, contents.as_bytes())
+            .map(|()| true)
+            .map_err(|e| OpError::storage(format!("{name} can't be saved there: {e}.")))
+    })
+    .await
+}
+
 // ---------- the platform's dialogs and launcher ----------
 
 #[cfg(target_os = "linux")]

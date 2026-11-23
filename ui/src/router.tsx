@@ -16,8 +16,9 @@ import { onOpenLink } from "./ipc/openLinks";
 import { windowReady, type Transport } from "./ipc/ready";
 import { BoardScreen } from "./screens/board/BoardScreen";
 import { OpenTaskScreen, TaskWindowScreen } from "./screens/task/TaskWindow";
+import { AllTasksListScreen, ProjectListScreen } from "./screens/list/ListScreen";
 import { TimeReportScreen } from "./screens/time/TimeReport";
-import { AllTasksScreen, TodayScreen } from "./screens/today/Placeholders";
+import { TodayScreen } from "./screens/today/Placeholders";
 import { Shell } from "./shell/Shell";
 import { StartupFailure } from "./shell/StartupFailure";
 import { type StartData } from "./start";
@@ -59,7 +60,12 @@ const shellRoute = createRoute({ getParentRoute: () => rootRoute, id: "shell", c
 
 const todayRoute = createRoute({ getParentRoute: () => shellRoute, path: "/", component: TodayScreen });
 
-const allTasksRoute = createRoute({ getParentRoute: () => shellRoute, path: "/all", component: AllTasksScreen });
+/** The task open in the panel beside a board or a list. */
+const taskSearch = (search: Record<string, unknown>): { task?: string } =>
+  typeof search.task === "string" && search.task !== "" ? { task: search.task } : {};
+
+/** Every task of the workspace, as a list. */
+const allTasksRoute = createRoute({ getParentRoute: () => shellRoute, path: "/all", validateSearch: taskSearch, component: AllTasksListScreen });
 
 /** The time report: logged time over a range of days. */
 const timeReportRoute = createRoute({ getParentRoute: () => shellRoute, path: "/time", component: TimeReportScreen });
@@ -73,6 +79,14 @@ export const boardRoute = createRoute({
   component: BoardScreen,
 });
 
+/** A project's list. */
+export const projectListRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: "/projects/$key/list",
+  validateSearch: taskSearch,
+  component: ProjectListScreen,
+});
+
 /** A task window: one task, without the board and the sidebar. */
 const taskWindowRoute = createRoute({ getParentRoute: () => rootRoute, path: "/task/$key", component: TaskWindowScreen });
 
@@ -83,7 +97,7 @@ const routeTree = rootRoute.addChildren([
   galleryRoute,
   editorPlaygroundRoute,
   taskWindowRoute,
-  shellRoute.addChildren([todayRoute, allTasksRoute, timeReportRoute, boardRoute, openTaskRoute]),
+  shellRoute.addChildren([todayRoute, allTasksRoute, timeReportRoute, boardRoute, projectListRoute, openTaskRoute]),
 ]);
 
 /**

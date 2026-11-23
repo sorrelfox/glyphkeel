@@ -8,6 +8,10 @@
 
 import {
   type ActivityEntry,
+  type BulkItem,
+  type BulkResult,
+  type BulkUpdateInput,
+  type ListedTask,
   type Attachment,
   type Board,
   type BoardLayout,
@@ -28,6 +32,7 @@ import {
   type OpError,
   type OpId,
   type OpMap,
+  OP_SAFETY,
   type Project,
   type ProjectChange,
   type ProjectIcon,
@@ -35,12 +40,14 @@ import {
   type Reminder,
   type RevisionInfo,
   type RevisionKind,
+  type SavedView,
   type Settings,
   type SettingsPatch,
   type Task,
   type TaskChange,
   type TaskPart,
   type TaskRef,
+  type TaskUpdateInput,
   type TimeEntryChange,
   type TimerChange,
   type TimerStatus,
@@ -52,6 +59,7 @@ import { decodeBase64, materialize, recordedFields, sniff } from "./details";
 import { checklistOf, merge3, publicChecklist, renderFake, setChecked, unifiedDiff } from "./markdown";
 import { newProject, nextFileId, nextId, SAMPLE_AGENT } from "./seed";
 import { type FakeComment, type FakeFile, type FakeProject, type FakeRelation, type FakeReminder, type FakeRevision, type FakeState, type FakeTask, type FakeTimeEntry } from "./state";
+import { createView, deleteView, listViews, matchingKeys, parseQuery, queryError, searchTasks, updateView, type QueryNames } from "./query";
 import { addDays, localDay, MAX_ENTRY_MINUTES, momentOf, reminderAt, reminderOut, sortDue, timeEntryOut, timerElapsedMs, timerOut, unitsOf, weekStart, workDay } from "./time";
 
 /** An operation failed: the engine's error, as the transports deliver it. */
@@ -184,6 +192,10 @@ export class FakeWorkspace {
     const handler = (this.handlers as Record<string, ((input: unknown) => unknown) | undefined>)[op];
     if (!handler) {
       fail("not_found", `There is no operation "${op}".`);
+    }
+    // Reading changes nothing, so it needs no Undo step (copying a large workspace takes long).
+    if ((OP_SAFETY as Record<string, string>)[op] === "read") {
+      return { output: handler(input ?? {}) };
     }
     const before = structuredClone(this.state);
     const answer = handler(input ?? {});
@@ -1114,6 +1126,230 @@ export class FakeWorkspace {
     return reminder && reminderOut(reminder, this.keyOf(task), reminderAt(reminder, task.dueDate, this.state.settings.reminder_time));
   }
 
+  // ---------- queries, saved views and bulk changes ----------
+
+  /** A task as lists show it. */
+  private listed(task: FakeTask): ListedTask {
+    const card = this.card(task);
+    const status = this.statusIn(this.projectOf(task), task.statusId);
+    return {
+      blocked: card.blocked,
+      checklist: card.checklist,
+      ...some("claim", card.claim),
+      ...some("closed_at", card.closed_at),
+      comment_count: card.comment_count,
+      created_at: task.createdAt,
+      created_by: { kind: "user", name: "You" },
+      ...some("due_date", card.due_date),
+      ...some("estimate_minutes", card.estimate_minutes),
+      file_count: card.file_count,
+      id: card.id,
+      key: card.key,
+      labels: card.labels,
+      ...some("parent", card.parent),
+      priority: card.priority,
+      progress_percent: card.progress_percent,
+      project: card.project,
+      rank: card.rank,
+      ...some("remaining_minutes", task.estimateMin === null ? null : task.estimateMin - task.spentMin),
+      spent_minutes: card.spent_minutes,
+      ...some("start_date", card.start_date),
+      status: { id: status.id, name: status.name, category: status.category },
+      subtask_count: card.subtasks,
+      title: card.title,
+      type: card.type,
+      updated_at: card.updated_at,
+      version: card.version,
+    };
+  }
+
+  /** Every task as lists show it, worked out once per state of the workspace (lists may hold 20,000 tasks). */
+  private searchCache = new WeakMap<FakeState, { seq: number; results: Map<string, { found: ListedTask[]; order: string[] }> }>();
+  private listedCache = new WeakMap<FakeState, { seq: number; items: ListedTask[] }>();
+
+  private listedTasks(): ListedTask[] {
+    const cached = this.listedCache.get(this.state);
+    if (cached?.seq === this.state.seq) {
+      return cached.items;
+    }
+    const children = new Map<string, FakeTask[]>();
+    for (const task of this.state.tasks) {
+      if (task.parentId !== null) {
+        children.set(task.parentId, [...(children.get(task.parentId) ?? []), task]);
+      }
+    }
+    const open = new Set(this.state.tasks.filter((task) => task.closedAt === null).map((task) => task.id));
+    const blocked = new Set(this.state.relations.filter((relation) => relation.kind === "blocks" && open.has(relation.from)).map((relation) => relation.to));
+    const count = (ids: readonly string[]) => {
+      const counts = new Map<string, number>();
+      for (const id of ids) {
+        counts.set(id, (counts.get(id) ?? 0) + 1);
+      }
+      return counts;
+    };
+    const liveComments = this.state.comments.filter((comment) => comment.deletedAt === null);
+    const commentIds = new Set(liveComments.map((comment) => comment.id));
+    const comments = count(liveComments.map((comment) => comment.taskId));
+    const files = count(this.state.files.filter((file) => file.deletedAt === null && (file.commentId === null || commentIds.has(file.commentId))).map((file) => file.taskId));
+    const progress = (task: FakeTask): number => {
+      if (task.closedAt !== null) {
+        return 100;
+      }
+      const { done, total } = this.checklist(task);
+      if (total > 0) {
+        return Math.round((done / total) * 100);
+      }
+      const subtasks = children.get(task.id) ?? [];
+      return subtasks.length > 0 ? Math.round(subtasks.reduce((sum, sub) => sum + progress(sub), 0) / subtasks.length) : 0;
+    };
+    const byId = new Map(this.state.tasks.map((task) => [task.id, task]));
+    const items = this.state.tasks.map((task): ListedTask => {
+      const project = this.projectOf(task);
+      const status = this.statusIn(project, task.statusId);
+      const parent = task.parentId === null ? undefined : byId.get(task.parentId);
+      const subtasks = children.get(task.id) ?? [];
+      return {
+        blocked: blocked.has(task.id),
+        checklist: this.checklist(task),
+        ...some("claim", this.claimOf(task)),
+        ...some("closed_at", task.closedAt),
+        comment_count: comments.get(task.id) ?? 0,
+        created_at: task.createdAt,
+        created_by: { kind: "user", name: "You" },
+        ...some("due_date", task.dueDate),
+        ...some("estimate_minutes", task.estimateMin),
+        file_count: files.get(task.id) ?? 0,
+        id: task.id,
+        key: `${project.key}-${String(task.number)}`,
+        labels: this.labelRefs(task),
+        ...some("parent", parent && this.keyOf(parent)),
+        priority: task.priority,
+        progress_percent: progress(task),
+        project: project.key,
+        rank: String(task.rank),
+        ...some("remaining_minutes", task.estimateMin === null ? null : task.estimateMin - task.spentMin),
+        spent_minutes: task.spentMin,
+        ...some("start_date", task.startDate),
+        status: { id: status.id, name: status.name, category: status.category },
+        subtask_count: { done: subtasks.filter((sub) => sub.closedAt !== null).length, total: subtasks.length },
+        title: task.title,
+        type: this.typeRef(task),
+        updated_at: task.updatedAt,
+        version: task.version,
+      };
+    });
+    this.listedCache.set(this.state, { seq: this.state.seq, items });
+    return items;
+  }
+
+  /** The names queries may use: statuses, types and labels of every project. */
+  private queryNames(): QueryNames {
+    const unique = (names: string[]) => [...new Set(names)];
+    return {
+      statuses: unique(this.state.projects.flatMap((project) => project.statuses.map((status) => status.name))),
+      types: unique(this.state.projects.flatMap((project) => project.types.map((type) => type.name))),
+      labels: unique(this.state.projects.flatMap((project) => project.labels.map((label) => label.name))),
+      projects: this.state.projects.map((project) => project.key),
+      today: localDay(this.today()),
+    };
+  }
+
+  private archivedKeys(): Set<string> {
+    return new Set(this.state.projects.filter((project) => project.state === "archived").map((project) => project.key));
+  }
+
+  /** Runs a query; a query that doesn't read fails as the engine's `invalid`. */
+  private runQuery<T>(run: () => T): T {
+    try {
+      return run();
+    } catch (error: unknown) {
+      const problem = queryError(error);
+      if (problem) {
+        fail("invalid", problem.message, { details: problem.details });
+      }
+      throw error;
+    }
+  }
+
+  /** `task.bulk_update`: every change through the single-task commands, in one Undo step; a preview is rolled back. */
+  private bulk(input: BulkUpdateInput): BulkResult | Result<BulkResult> {
+    const keys =
+      input.keys && input.keys.length > 0
+        ? input.keys
+        : input.query !== null && input.query !== undefined
+          ? this.runQuery(() => matchingKeys(this.listedTasks(), input.query ?? "", this.queryNames(), this.archivedKeys()))
+          : fail("invalid", "Give the tasks' keys or a query.");
+    const dryRun = input.dry_run !== false;
+    if (!dryRun && (input.expected_count === null || input.expected_count === undefined)) {
+      fail("invalid", "A bulk change needs expected_count from its preview.", { details: { path: "expected_count" } });
+    }
+    if (!dryRun && input.expected_count !== keys.length) {
+      fail("conflict", `The change is for ${String(keys.length)} tasks now, not ${String(input.expected_count)}.`, { hint: "Preview it again." });
+    }
+    const saved = structuredClone(this.state);
+    const changes: EntityChange[] = [];
+    const items: BulkItem[] = [];
+    const take = (answer: unknown) => {
+      if (isResult(answer)) {
+        changes.push(...answer.changes);
+      }
+    };
+    const shown = (task: ListedTask) => ({
+      status: task.status.name,
+      priority: task.priority,
+      labels: task.labels.map((label) => label.name).join(", "),
+      due_date: task.due_date ?? "",
+      start_date: task.start_date ?? "",
+      estimate: task.estimate_minutes === undefined ? "" : formatDuration(task.estimate_minutes),
+      type: task.type.name,
+      project: task.project,
+    });
+    const { changes: change } = input;
+    try {
+      for (const key of keys) {
+        const before = shown(this.listed(this.task(key)));
+        if ((change.status !== null && change.status !== undefined) || (change.project !== null && change.project !== undefined)) {
+          take(this.handlers["task.move"]?.({ key, ...some("status", change.status), ...some("project", change.project) }));
+        }
+        const update: TaskUpdateInput = {
+          key,
+          ...some("priority", change.priority),
+          ...some("labels", change.labels),
+          ...some("due_date", change.due_date),
+          ...some("start_date", change.start_date),
+          ...some("estimate", change.estimate),
+          ...some("type", change.type),
+          ...some("parent", change.parent),
+          ...(change.add_labels && change.add_labels.length > 0 ? { add_labels: change.add_labels } : {}),
+          ...(change.remove_labels && change.remove_labels.length > 0 ? { remove_labels: change.remove_labels } : {}),
+          ...(change.clear && change.clear.length > 0 ? { clear: change.clear } : {}),
+        };
+        if (Object.keys(update).length > 1) {
+          take(this.handlers["task.update"]?.(update));
+        }
+        const task = this.listed(this.task(key));
+        const after = shown(task);
+        const fields = (Object.keys(after) as (keyof typeof after)[]).filter((field) => after[field] !== before[field]);
+        items.push({
+          key: task.key,
+          title: task.title,
+          changes: fields.map((field) => ({ field, ...some("before", before[field] || null), ...some("after", after[field] || null) })),
+        });
+      }
+    } finally {
+      if (dryRun) {
+        this.state = saved;
+      }
+    }
+    const output: BulkResult = { changed: items.filter((item) => item.changes.length > 0).length, count: keys.length, dry_run: dryRun, items };
+    return dryRun ? output : { output, changes };
+  }
+
+  /** The change event of a saved view. */
+  private viewChange(view: SavedView, fields: string[]): EntityChange[] {
+    return [{ entity: "view", id: view.id, fields, ...some("project", view.project) }];
+  }
+
   // ---------- the operations ----------
 
   private readonly handlers: { [K in OpId]?: Handler<K> } = {
@@ -1708,6 +1944,55 @@ export class FakeWorkspace {
       const file = this.liveFile(attachment);
       file.deletedAt = this.today().toISOString();
       return this.fileChange(file, ["trashed"]);
+    },
+    "query.parse": ({ query, fields }) => parseQuery(query, this.queryNames(), fields === true),
+    "task.search": (input) => {
+      const scope = input.project === null || input.project === undefined ? null : this.project(input.project);
+      const projects = scope === null ? null : new Set([scope, ...(input.include_subprojects === true ? this.descendants(scope) : [])].map((project) => project.key));
+      const tasks = this.listedTasks().filter((task) => projects === null || projects.has(task.project));
+      const order = (task: ListedTask) => {
+        const project = this.state.projects.find((candidate) => candidate.key === task.project);
+        return project ? project.statuses.findIndex((status) => status.id === task.status.id) : 0;
+      };
+      let cache = this.searchCache.get(this.state);
+      if (cache?.seq !== this.state.seq) {
+        cache = { seq: this.state.seq, results: new Map() };
+        this.searchCache.set(this.state, cache);
+      }
+      const results = cache.results;
+      return this.runQuery(() => searchTasks(tasks, input, this.queryNames(), { archived: this.archivedKeys(), scoped: scope !== null, statusOrder: order, cache: results }));
+    },
+    "task.bulk_update": (input) => this.bulk(input),
+    "view.list": (input) => {
+      const items = listViews(this.state.views ?? [], { ...input, ...some("project", input.project && this.project(input.project).key) });
+      return { items: structuredClone(items), total: items.length };
+    },
+    "view.create": (input) => {
+      if (input.query.trim() !== "") {
+        this.runQuery(() => searchTasks([], { query: input.query }, this.queryNames(), { archived: new Set(), scoped: false, statusOrder: () => 0 }));
+      }
+      this.state.views ??= [];
+      const view = createView(this.state.views, { ...input, ...some("project", input.project && this.project(input.project).key) }, this.today().toISOString());
+      if ("code" in view) {
+        fail(view.code, view.message);
+      }
+      return { output: { view: structuredClone(view) }, changes: this.viewChange(view, ["created"]) };
+    },
+    "view.update": (input) => {
+      this.state.views ??= [];
+      const view = updateView(this.state.views, input, this.today().toISOString());
+      if ("code" in view) {
+        fail(view.code, view.message);
+      }
+      return { output: { view: structuredClone(view) }, changes: this.viewChange(view, ["record"]) };
+    },
+    "view.delete": (input) => {
+      this.state.views ??= [];
+      const view = deleteView(this.state.views, input);
+      if ("code" in view) {
+        fail(view.code, view.message);
+      }
+      return { output: { view, deleted: true }, changes: this.viewChange(view, ["deleted"]) };
     },
     "history.revert": ({ groups, dry_run }) => {
       const reverted: string[] = [];

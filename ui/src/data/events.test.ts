@@ -38,7 +38,7 @@ describe("change events", () => {
 
   it("refresh the timer chip on a timer change, and the task, cards and report on a time entry", () => {
     expect(invalidationsFor(changed(1, "timer", ["timer"]))).toEqual(["history.feed", "agent.sessions", "timer.get", "workspace.get"]);
-    expect(invalidationsFor(changed(2, "time_entry", ["created"]))).toEqual(["history.feed", "agent.sessions", "task.get", "board.get", "time.report"]);
+    expect(invalidationsFor(changed(2, "time_entry", ["created"]))).toEqual(["history.feed", "agent.sessions", "task.get", "board.get", "time.report", "task.search"]);
   });
 
   it("invalidate a query whatever its input", async () => {
