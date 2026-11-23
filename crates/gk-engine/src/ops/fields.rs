@@ -117,6 +117,7 @@ const SPECS: &[Spec] = &[
     spec(TASK, "priority", "tasks", "priority", Enc::Priority),
     spec(TASK, "parent", "tasks", "parent_id", Enc::Id),
     spec(TASK, "rank", "tasks", "rank", Enc::Text),
+    spec(TASK, "subtask_rank", "tasks", "subtask_rank", Enc::Text),
     spec(TASK, "start_date", "tasks", "start_date", Enc::Text),
     spec(TASK, "due_date", "tasks", "due_date", Enc::Text),
     spec(TASK, "estimate", "tasks", "estimate_min", Enc::Int),

@@ -204,6 +204,19 @@ impl WorkspaceLayout {
         self.cache_dir().join("thumbs")
     }
 
+    /// Where the thumbnail of the stored file `sha256` is cached:
+    /// `cache/thumbs/<first two digits>/<sha256>.png`. `None` for anything
+    /// that is not a hash, as with [`Self::blob_path`].
+    #[must_use]
+    pub fn thumb_path(&self, sha256: &str) -> Option<PathBuf> {
+        self.blob_path(sha256)?;
+        Some(
+            self.thumbs_dir()
+                .join(&sha256[..2])
+                .join(format!("{sha256}.png")),
+        )
+    }
+
     /// The folder of lock files.
     #[must_use]
     pub fn locks_dir(&self) -> PathBuf {

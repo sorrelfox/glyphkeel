@@ -12,12 +12,16 @@
 //! their files.
 //!
 //! History records an attachment's `created` (its life) and `trashed`.
+//!
+//! An image's thumbnail is made right after it is attached, outside the
+//! transaction; a failure there only leaves it to be made when first asked
+//! for (`file.thumbnail`).
 
 use std::sync::Arc;
 
 use gk_api::ops::file::{
     Attachment, FileAttach, FileAttachInput, FileChange, FileContent, FileDelete, FileGet,
-    FileKind, FileRead, FileRef,
+    FileKind, FileRead, FileRef, FileThumbnail, Thumbnail,
 };
 use gk_api::{ErrorCode, OpError, Operation, descriptor};
 use gk_core::Id;
@@ -51,16 +55,38 @@ pub(super) fn register(r: &mut Registry) {
         let id = find(q.tx, &input.attachment)?;
         read(&q.env.layout, load(q.tx, id)?)
     });
+    r.query::<FileThumbnail, _>(desc::<FileThumbnail>(), |q, input: FileRef| {
+        let id = find(q.tx, &input.attachment)?;
+        let file = load(q.tx, id)?;
+        let thumb = crate::thumbs::get(&q.env.layout, &file.sha256, &file.mime).map_err(|e| {
+            Failure::Op(
+                OpError::invalid_at(
+                    "attachment",
+                    format!("{} has no thumbnail: {e}.", file.name),
+                )
+                .with_hint("Thumbnails are made for PNG, JPEG, GIF and WebP images."),
+            )
+        })?;
+        Ok(Thumbnail {
+            attachment: file.id,
+            path: thumb.path.to_string_lossy().into_owned(),
+            mime: "image/png".to_owned(),
+            width: thumb.width,
+            height: thumb.height,
+        })
+    });
     r.engine_op::<FileAttach, _>(desc::<FileAttach>(), |engine, ctx, input| {
         let prepared = Arc::new(prepare(engine, &input)?);
         let value = serde_json::to_value(&input).map_err(|e| OpError::invalid(e.to_string()))?;
+        let for_command = Arc::clone(&prepared);
         let f: CommandFn = Arc::new(move |w, _| {
-            let change = attach(w, &input, &prepared)?;
+            let change = attach(w, &input, &for_command)?;
             serde_json::to_value(change).map_err(|e| Failure::Op(OpError::storage(e.to_string())))
         });
         let op = descriptor(FileAttach::ID)
             .ok_or_else(|| OpError::storage("file.attach is not in the catalog"))?;
         let output = engine.execute_command(ctx, op, f, value)?;
+        make_thumbnail(engine, &prepared);
         serde_json::from_value(output).map_err(|e| OpError::storage(e.to_string()))
     });
     r.command::<FileDelete, _>(desc::<FileDelete>(), |w, input: FileRef| {
@@ -367,6 +393,21 @@ fn prepare(engine: &crate::engine::Engine, input: &FileAttachInput) -> Result<Pr
         size,
         sha256: stored.sha256,
     })
+}
+
+/// Caches the thumbnail of a newly attached image, unless the cache has it
+/// already. A failure is only logged: the thumbnail is made again when
+/// asked for.
+fn make_thumbnail(engine: &crate::engine::Engine, prepared: &Prepared) {
+    let layout = &engine.env().layout;
+    if !crate::thumbs::supported(prepared.mime)
+        || gk_store::thumb_path(layout, &prepared.sha256).is_some()
+    {
+        return;
+    }
+    if let Err(e) = crate::thumbs::cache(layout, &prepared.sha256, prepared.mime, &prepared.bytes) {
+        tracing::warn!(sha256 = %prepared.sha256, "no thumbnail: {e}");
+    }
 }
 
 /// Makes sure the stored file `sha256` exists for a row about to point at

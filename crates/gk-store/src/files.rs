@@ -9,6 +9,10 @@
 //! complete file or none (and perhaps a stray temporary file). Stored files
 //! never change: the same content always has the same name, so writing it
 //! again is harmless and several processes can store the same file at once.
+//!
+//! Thumbnails live in the rebuildable cache, named by the hash of the file
+//! they show. They are written the same way but not flushed: losing one only
+//! means making it again.
 
 use std::fs::{self, File};
 use std::io::{self, Write as _};
@@ -117,16 +121,46 @@ pub fn read_file(layout: &WorkspaceLayout, sha256: &str, limit: u64) -> io::Resu
     Ok(out)
 }
 
-/// Removes the stored file `sha256`; a file that is already gone is fine.
+/// Removes the stored file `sha256` and its cached thumbnail; a file that
+/// is already gone is fine.
 pub fn remove_file(layout: &WorkspaceLayout, sha256: &str) -> io::Result<()> {
     let Some(path) = layout.blob_path(sha256) else {
         return Ok(());
     };
+    if let Some(thumb) = layout.thumb_path(sha256) {
+        let _ = fs::remove_file(thumb);
+    }
     match fs::remove_file(&path) {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
         Err(e) => Err(e),
     }
+}
+
+/// The cached thumbnail of the stored file `sha256`, if it is there.
+#[must_use]
+pub fn thumb_path(layout: &WorkspaceLayout, sha256: &str) -> Option<PathBuf> {
+    layout.thumb_path(sha256).filter(|p| p.is_file())
+}
+
+/// Caches `png` as the thumbnail of the stored file `sha256` and returns
+/// its path. Written to a temporary name and renamed, so a reader never sees
+/// half of it.
+pub fn store_thumb(layout: &WorkspaceLayout, sha256: &str, png: &[u8]) -> io::Result<PathBuf> {
+    let target = layout
+        .thumb_path(sha256)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "not a file hash"))?;
+    let folder = target
+        .parent()
+        .ok_or_else(|| io::Error::other("a thumbnail has no folder"))?;
+    fs::create_dir_all(folder)?;
+    let tmp = folder.join(temp_name());
+    let written = fs::write(&tmp, png).and_then(|()| fs::rename(&tmp, &target));
+    if let Err(e) = written {
+        let _ = fs::remove_file(&tmp);
+        return Err(e);
+    }
+    Ok(target)
 }
 
 #[cfg(test)]
@@ -179,5 +213,21 @@ mod tests {
         let layout = WorkspaceLayout::new(dir.path().join("W"));
         assert!(read_file(&layout, "../../etc/passwd", 10).is_err());
         assert!(file_path(&layout, "..").is_none());
+        assert!(layout.thumb_path("..").is_none());
+        assert!(store_thumb(&layout, "../x", b"png").is_err());
+    }
+
+    #[test]
+    fn a_thumbnail_is_cached_by_hash_and_goes_with_its_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let layout = WorkspaceLayout::new(dir.path().join("W"));
+        let a = store_file(&layout, b"picture").unwrap();
+        assert!(thumb_path(&layout, &a.sha256).is_none());
+        let path = store_thumb(&layout, &a.sha256, b"small").unwrap();
+        assert!(path.ends_with(format!("cache/thumbs/{}/{}.png", &a.sha256[..2], a.sha256)));
+        assert_eq!(thumb_path(&layout, &a.sha256), Some(path.clone()));
+        assert_eq!(fs::read_dir(path.parent().unwrap()).unwrap().count(), 1);
+        remove_file(&layout, &a.sha256).unwrap();
+        assert!(thumb_path(&layout, &a.sha256).is_none());
     }
 }

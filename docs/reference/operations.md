@@ -42,6 +42,7 @@ The safety class decides who may run an operation:
 | `task.create` | write | app, command line, MCP | `create_task` | `glyphkeel task create` |
 | `task.update` | write | app, command line, MCP | `update_task` | `glyphkeel task edit <key>` |
 | `task.move` | write | app, command line, MCP | `move_task` | `glyphkeel task move <key>` |
+| `task.reorder_subtask` | write | app, command line, MCP | `reorder_subtask` | `glyphkeel task reorder-subtask <key>` |
 | `task.resolve_conflict` | write | app, command line, MCP | `update_task` | `glyphkeel task resolve <key>` |
 | `checklist.update` | write | app, command line, MCP | `update_checklist` | `glyphkeel task check <key>` |
 | `task.duplicate` | write | app, command line, MCP | `duplicate_task` | `glyphkeel task duplicate <key>` |
@@ -61,6 +62,7 @@ The safety class decides who may run an operation:
 | `layout.update` | write | app, command line, MCP | `set_board_layout` | `glyphkeel board layout set <project>` |
 | `file.get` | read | app, command line, MCP | `read_attachment` | `glyphkeel file show <attachment>` |
 | `file.read` | read | app, command line, MCP | `read_attachment` | `glyphkeel file cat <attachment>` |
+| `file.thumbnail` | read | app | — | — |
 | `file.attach` | write | app, command line, MCP | `attach_file` | `glyphkeel file attach` |
 | `file.delete` | trash | app, command line, MCP | `delete_attachment` | `glyphkeel file delete <attachment>` |
 | `agent.sessions` | read | app, command line, MCP | `get_activity` | `glyphkeel agents sessions` |
@@ -232,6 +234,12 @@ Move a task to another status or place in its column, or to another project (new
 
 Input: `TaskMoveInput`. Output: `TaskChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
+## `task.reorder_subtask`
+
+Move a subtask to another place among its parent's subtasks (before or after another one, first or last); returns the parent with its subtasks in the new order.
+
+Input: `SubtaskReorderInput`. Output: `TaskChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
 ## `task.resolve_conflict`
 
 Resolve a conflict copy of a task's description: keep the description, use the copy, or save a combined text.
@@ -347,6 +355,14 @@ Input: `FileRef`. Output: `Attachment`. Schemas: [catalog.schema.json](catalog.s
 An attached file's content: text for text files, Base64 for images, otherwise only its details.
 
 Input: `FileRef`. Output: `FileContent`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `file.thumbnail`
+
+A small PNG of an attached PNG, JPEG, GIF or WebP image, at most 256 pixels wide and high, from the workspace's cache; made when the image is attached, and again when the cache has lost it.
+
+Input: `FileRef`. Output: `Thumbnail`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+Not available to agents: It gives a path in the workspace's cache, which the app serves to its pages; agents and the command line read images with file.read.
 
 ## `file.attach`
 

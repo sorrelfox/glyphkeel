@@ -170,6 +170,31 @@ fn a_task_is_created_and_moved_on_the_board() {
 }
 
 #[test]
+fn subtasks_are_reordered_and_one_tasks_activity_is_listed() {
+    let ws = Workspace::new();
+    ws.ok(&["project", "create", "--name", "Glyphkeel", "--key", "GK"]);
+    ws.ok(&["task", "create", "--project", "GK", "--title", "Parent"]);
+    for title in ["First", "Second"] {
+        ws.ok(&[
+            "task",
+            "create",
+            "--project",
+            "GK",
+            "--title",
+            title,
+            "--parent",
+            "GK-1",
+        ]);
+    }
+    let moved = ws.json(&["task", "reorder-subtask", "GK-3", "--at", "top"]);
+    assert_eq!(moved["task"]["subtasks"][0]["key"], "GK-3");
+    assert_eq!(moved["task"]["subtasks"][1]["key"], "GK-2");
+    let feed = ws.json(&["activity", "--task", "GK-3"]);
+    assert_eq!(feed["total"], 2);
+    assert_eq!(feed["items"][0]["op"], "task.reorder_subtask");
+}
+
+#[test]
 fn input_as_json_and_options_together() {
     let ws = Workspace::new();
     let out = ws.json(&[
@@ -303,12 +328,31 @@ fn a_broken_database_exits_4() {
 /// `glyphkeel open` with the app next to the program: copies the program
 /// into a folder with a stand-in app that records its arguments and keeps
 /// running, so the test sees that `glyphkeel` doesn't wait for it.
+///
+/// The programs these tests run are never written by the test process
+/// itself. Tests run on several threads, and a child started by another
+/// thread while this one has a program open for writing inherits that open
+/// file until it starts its own program; running the file then fails with
+/// "Text file busy". `cp` writes them in a process of its own instead, which
+/// has closed the file when it exits.
 #[cfg(unix)]
 mod app {
-    use std::os::unix::fs::PermissionsExt;
     use std::time::{Duration, Instant};
 
     use super::*;
+
+    /// Copies `from` to `to` as an executable, in other processes.
+    fn install(from: &Path, to: &Path) {
+        let copied = Command::new("cp").arg(from).arg(to).status().unwrap();
+        assert!(copied.success(), "cp {} failed", to.display());
+        let marked = Command::new("chmod").arg("755").arg(to).status().unwrap();
+        assert!(marked.success(), "chmod {} failed", to.display());
+    }
+
+    /// A copy of `glyphkeel` at `to`.
+    fn copy_program(to: &Path) {
+        install(Path::new(env!("CARGO_BIN_EXE_glyphkeel")), to);
+    }
 
     fn stand_in(dir: &Path, record: &Path) {
         let script = format!(
@@ -316,9 +360,10 @@ mod app {
             pid = record.with_extension("pid").display(),
             args = record.display(),
         );
-        let app = dir.join("glyphkeel-app");
-        std::fs::write(&app, script).unwrap();
-        std::fs::set_permissions(&app, std::fs::Permissions::from_mode(0o755)).unwrap();
+        // Written here but never run itself: only its copy is.
+        let source = record.with_extension("sh");
+        std::fs::write(&source, script).unwrap();
+        install(&source, &dir.join("glyphkeel-app"));
     }
 
     /// Waits for the stand-in to start, stops it and returns its
@@ -349,7 +394,7 @@ mod app {
         let bin = dir.path().join("bin");
         std::fs::create_dir_all(&bin).unwrap();
         let program = bin.join("glyphkeel");
-        std::fs::copy(env!("CARGO_BIN_EXE_glyphkeel"), &program).unwrap();
+        copy_program(&program);
         let record = dir.path().join("args");
         stand_in(&bin, &record);
 
@@ -378,7 +423,7 @@ mod app {
         std::fs::create_dir_all(&bin).unwrap();
         std::fs::create_dir_all(&elsewhere).unwrap();
         let program = bin.join("glyphkeel");
-        std::fs::copy(env!("CARGO_BIN_EXE_glyphkeel"), &program).unwrap();
+        copy_program(&program);
         let record = dir.path().join("args");
         stand_in(&elsewhere, &record);
 
@@ -394,7 +439,7 @@ mod app {
     fn without_the_app_open_exits_2() {
         let dir = tempfile::tempdir().unwrap();
         let program = dir.path().join("glyphkeel");
-        std::fs::copy(env!("CARGO_BIN_EXE_glyphkeel"), &program).unwrap();
+        copy_program(&program);
         let out = Command::new(&program)
             .arg("open")
             .env("PATH", dir.path().join("empty"))

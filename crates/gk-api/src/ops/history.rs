@@ -26,6 +26,11 @@ pub struct ActivityQuery {
     /// Only the changes of this history group.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<String>,
+    /// Only changes to this task (key or ID): its own fields and
+    /// description revisions, its links, its comments and its files,
+    /// including files attached to its comments.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub task: Option<String>,
     /// At most this many changes (default 50, at most 200).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub limit: Option<u32>,

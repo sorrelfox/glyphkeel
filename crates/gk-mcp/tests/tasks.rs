@@ -149,3 +149,47 @@ async fn an_agent_edits_a_description_and_ticks_its_checklist() {
     assert!(detail["diff"].as_str().unwrap().contains("+Plan, revised"));
     c.close().await;
 }
+
+#[tokio::test]
+async fn an_agent_reorders_subtasks_and_reads_one_tasks_history() {
+    let (_dir, options) = workspace();
+    let (_, mode, version, _) = lifecycles().remove(0);
+    let c = connect(&options, mode, version, "Order Agent").await;
+    output(
+        &c.call("create_project", json!({ "name": "Agents", "key": "AG" }))
+            .await,
+    );
+    output(
+        &c.call("create_task", json!({ "project": "AG", "title": "Parent" }))
+            .await,
+    );
+    for title in ["First", "Second"] {
+        output(
+            &c.call(
+                "create_task",
+                json!({ "project": "AG", "title": title, "parent": "AG-1" }),
+            )
+            .await,
+        );
+    }
+    let reordered = output(
+        &c.call(
+            "reorder_subtask",
+            json!({ "key": "AG-3", "before": "AG-2" }),
+        )
+        .await,
+    );
+    assert_eq!(reordered["task"]["key"], "AG-1");
+    assert_eq!(reordered["task"]["subtasks"][0]["key"], "AG-3");
+    assert_eq!(reordered["task"]["subtasks"][1]["key"], "AG-2");
+
+    let feed = output(&c.call("get_activity", json!({ "task": "AG-3" })).await);
+    let ops: Vec<&str> = feed["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i["op"].as_str().unwrap())
+        .collect();
+    assert_eq!(ops, ["task.reorder_subtask", "task.create"]);
+    c.close().await;
+}

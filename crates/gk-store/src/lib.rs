@@ -72,7 +72,10 @@ pub use checkpoint::{
 };
 pub use connection::{COLLATION, JOURNAL_SIZE_LIMIT, collate};
 pub use error::{Result, StoreError, WriteError};
-pub use files::{StoredFile, file_path, has_file, read_file, remove_file, sha256_hex, store_file};
+pub use files::{
+    StoredFile, file_path, has_file, read_file, remove_file, sha256_hex, store_file, store_thumb,
+    thumb_path,
+};
 pub use layout::{
     DATABASE_FILE, DEFAULT_WORKSPACE, Location, LockFile, WORKSPACE_ENV, WorkspaceLayout, data_dir,
 };

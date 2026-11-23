@@ -16,6 +16,7 @@ gk-api = { workspace = true }
 gk-core = { workspace = true }
 gk-markdown = { workspace = true }
 gk-store = { workspace = true }
+image = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_path_to_error = { workspace = true }

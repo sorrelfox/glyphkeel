@@ -698,3 +698,309 @@ fn the_brief_is_the_description_until_the_wiki_has_one() {
     assert_eq!(brief["project"], "TM");
     assert_eq!(brief["body"], "Branches are named after the task key.");
 }
+
+fn entities(feed: &Value) -> Vec<(String, String)> {
+    feed["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| {
+            let field = e["fields"]
+                .as_object()
+                .unwrap()
+                .keys()
+                .next()
+                .cloned()
+                .unwrap_or_default();
+            (e["entity"].as_str().unwrap().to_owned(), field)
+        })
+        .collect()
+}
+
+#[test]
+fn a_tasks_history_has_its_fields_description_links_comments_and_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let ws = open(&dir);
+    ws.call("project.create", json!({ "name": "T", "key": "TM" }));
+    let a = ws.new_task("TM", "A");
+    let b = ws.new_task("TM", "B");
+    ws.call("task.update", json!({ "key": a, "title": "A, renamed" }));
+    ws.call("task.update", json!({ "key": a, "description": "Steps" }));
+    ws.call(
+        "relation.add",
+        json!({ "key": a, "kind": "blocks", "other": b }),
+    );
+    ws.call(
+        "relation.remove",
+        json!({ "key": a, "kind": "blocks", "other": b }),
+    );
+    let comment = ws.call("comment.add", json!({ "key": a, "body": "Note" }));
+    let comment_id = comment["comment"]["id"].clone();
+    ws.call(
+        "comment.update",
+        json!({ "comment": comment_id, "body": "Note, edited" }),
+    );
+    let text = gk_core::base64_encode(b"log");
+    let on_task = ws.call(
+        "file.attach",
+        json!({ "task": a, "name": "a.txt", "data_base64": text }),
+    );
+    ws.call(
+        "file.attach",
+        json!({ "comment": comment_id, "name": "c.txt", "data_base64": text }),
+    );
+    ws.call(
+        "file.delete",
+        json!({ "attachment": on_task["file"]["id"] }),
+    );
+    // Changes elsewhere stay out.
+    ws.call("task.update", json!({ "key": b, "title": "B, renamed" }));
+    ws.call("comment.add", json!({ "key": b, "body": "Other" }));
+
+    let feed = ws.call("history.feed", json!({ "task": a, "limit": 200 }));
+    let seen = entities(&feed);
+    assert_eq!(feed["total"], seen.len());
+    for (entity, field) in [
+        ("task", "created"),
+        ("task", "title"),
+        ("task", "description"),
+        ("relation", "link"),
+        ("comment", "body"),
+        ("attachment", "created"),
+        ("attachment", "trashed"),
+    ] {
+        assert!(
+            seen.contains(&(entity.to_owned(), field.to_owned())),
+            "{entity}.{field} missing from {seen:?}"
+        );
+    }
+    let links = seen.iter().filter(|(e, _)| e == "relation").count();
+    assert_eq!(links, 2, "{seen:?}");
+    let files = seen.iter().filter(|(e, _)| e == "attachment").count();
+    assert_eq!(files, 3, "{seen:?}");
+    let comments = seen.iter().filter(|(e, _)| e == "comment").count();
+    assert_eq!(comments, 2, "{seen:?}");
+    assert!(feed["items"].as_array().unwrap().iter().all(|e| {
+        e["fields"]
+            .get("title")
+            .is_none_or(|t| t["after"] != "B, renamed")
+    }));
+    // By ID too, and a page at a time.
+    let id = ws.task(&a)["id"].clone();
+    let by_id = ws.call("history.feed", json!({ "task": id, "limit": 200 }));
+    assert_eq!(by_id["total"], feed["total"]);
+    let page = ws.call("history.feed", json!({ "task": a, "limit": 3 }));
+    assert_eq!(page["items"].as_array().unwrap().len(), 3);
+    let rest = ws.call(
+        "history.feed",
+        json!({ "task": a, "limit": 200, "cursor": page["next_cursor"] }),
+    );
+    assert_eq!(
+        rest["items"].as_array().unwrap().len() + 3,
+        seen.len(),
+        "{rest}"
+    );
+    // The other task sees the links but not A's comment or files.
+    let other = entities(&ws.call("history.feed", json!({ "task": b, "limit": 200 })));
+    assert_eq!(other.iter().filter(|(e, _)| e == "relation").count(), 2);
+    assert_eq!(other.iter().filter(|(e, _)| e == "attachment").count(), 0);
+    assert_eq!(other.iter().filter(|(e, _)| e == "comment").count(), 1);
+    let err = ws.fails(&me(), "history.feed", json!({ "task": "TM-99" }));
+    assert_eq!(err.code, ErrorCode::NotFound);
+}
+
+fn subtask_keys(ws: &Ws, parent: &str) -> Vec<String> {
+    ws.task_with(parent, &["subtasks"])["subtasks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["key"].as_str().unwrap().to_owned())
+        .collect()
+}
+
+#[test]
+fn subtasks_keep_their_own_order_across_statuses() {
+    let dir = tempfile::tempdir().unwrap();
+    let ws = open(&dir);
+    ws.call("project.create", json!({ "name": "T", "key": "TM" }));
+    let parent = ws.new_task("TM", "Parent");
+    let other_parent = ws.new_task("TM", "Other parent");
+    let sub = |title: &str| {
+        ws.call(
+            "task.create",
+            json!({ "project": "TM", "title": title, "parent": parent }),
+        )["task"]["key"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    };
+    let (one, two, three) = (sub("One"), sub("Two"), sub("Three"));
+    assert_eq!(
+        subtask_keys(&ws, &parent),
+        [one.as_str(), two.as_str(), three.as_str()]
+    );
+    // Statuses and board places don't change the list.
+    ws.call("task.move", json!({ "key": one, "status": "Done" }));
+    ws.call("task.move", json!({ "key": three, "at": "top" }));
+    assert_eq!(
+        subtask_keys(&ws, &parent),
+        [one.as_str(), two.as_str(), three.as_str()]
+    );
+
+    let moved = ws.call(
+        "task.reorder_subtask",
+        json!({ "key": three, "before": one }),
+    );
+    assert_eq!(moved["task"]["key"], parent.as_str());
+    let listed: Vec<_> = moved["task"]["subtasks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["key"].as_str().unwrap().to_owned())
+        .collect();
+    assert_eq!(listed, [three.as_str(), one.as_str(), two.as_str()]);
+    assert_eq!(
+        subtask_keys(&ws, &parent),
+        [three.as_str(), one.as_str(), two.as_str()]
+    );
+    // Already there: nothing changes.
+    let again = ws.call("task.reorder_subtask", json!({ "key": three, "at": "top" }));
+    assert!(again.get("group").is_none(), "{again}");
+    ws.call("task.reorder_subtask", json!({ "key": one, "after": two }));
+    assert_eq!(
+        subtask_keys(&ws, &parent),
+        [three.as_str(), two.as_str(), one.as_str()]
+    );
+    // Revert puts it back.
+    let last = ws.call(
+        "task.reorder_subtask",
+        json!({ "key": three, "at": "bottom" }),
+    );
+    assert_eq!(
+        subtask_keys(&ws, &parent),
+        [two.as_str(), one.as_str(), three.as_str()]
+    );
+    ws.call("history.revert", json!({ "groups": [last["group"]] }));
+    assert_eq!(
+        subtask_keys(&ws, &parent),
+        [three.as_str(), two.as_str(), one.as_str()]
+    );
+
+    // Refused: not a subtask, a task of another parent, no place.
+    let stranger = ws.call(
+        "task.create",
+        json!({ "project": "TM", "title": "Stranger", "parent": other_parent }),
+    )["task"]["key"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    for input in [
+        json!({ "key": parent, "at": "top" }),
+        json!({ "key": one, "before": stranger }),
+        json!({ "key": one, "before": one }),
+        json!({ "key": one }),
+        json!({ "key": one, "at": "top", "after": two }),
+    ] {
+        let err = ws.fails(&me(), "task.reorder_subtask", input.clone());
+        assert_eq!(err.code, ErrorCode::Invalid, "{input}");
+    }
+
+    // Leaving and joining again puts it last; a link does the same.
+    ws.call("task.update", json!({ "key": three, "clear": ["parent"] }));
+    assert_eq!(subtask_keys(&ws, &parent), [two.as_str(), one.as_str()]);
+    ws.call("task.update", json!({ "key": three, "parent": parent }));
+    assert_eq!(
+        subtask_keys(&ws, &parent),
+        [two.as_str(), one.as_str(), three.as_str()]
+    );
+    ws.call(
+        "relation.add",
+        json!({ "key": stranger, "kind": "subtask_of", "other": parent }),
+    );
+    assert_eq!(
+        subtask_keys(&ws, &parent),
+        [
+            two.as_str(),
+            one.as_str(),
+            three.as_str(),
+            stranger.as_str()
+        ]
+    );
+    assert!(subtask_keys(&ws, &other_parent).is_empty());
+
+    // A copy keeps the order.
+    let copy = ws.call("task.duplicate", json!({ "key": parent }));
+    let copy_key = copy["task"]["key"].as_str().unwrap().to_owned();
+    let titles: Vec<_> = ws.task_with(&copy_key, &["subtasks"])["subtasks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["title"].as_str().unwrap().to_owned())
+        .collect();
+    assert_eq!(titles, ["Two", "One", "Three", "Stranger"]);
+}
+
+fn real_png(width: u32, height: u32) -> Vec<u8> {
+    let mut out = Vec::new();
+    image::DynamicImage::new_rgb8(width, height)
+        .write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
+        .unwrap();
+    out
+}
+
+#[test]
+fn attached_images_get_thumbnails_in_the_cache() {
+    let dir = tempfile::tempdir().unwrap();
+    let ws = open(&dir);
+    ws.call("project.create", json!({ "name": "T", "key": "TM" }));
+    let a = ws.new_task("TM", "A");
+    let picture = ws.call(
+        "file.attach",
+        json!({ "task": a, "name": "wide.png", "data_base64": gk_core::base64_encode(&real_png(600, 300)) }),
+    );
+    let id = picture["file"]["id"].clone();
+    // Made on attach.
+    let cached = gk_store::thumb_path(&ws.layout, picture["file"]["sha256"].as_str().unwrap());
+    assert!(cached.is_some());
+    let app = Context::user(Via::App);
+    let thumb = ws.as_(&app, "file.thumbnail", json!({ "attachment": id }));
+    assert_eq!(thumb["attachment"], id);
+    assert_eq!(thumb["mime"], "image/png");
+    assert_eq!(
+        (thumb["width"].clone(), thumb["height"].clone()),
+        (json!(256), json!(128))
+    );
+    let path = std::path::PathBuf::from(thumb["path"].as_str().unwrap());
+    assert_eq!(Some(path.clone()), cached);
+    assert!(path.starts_with(ws.layout.thumbs_dir()));
+    // The cache can go; the thumbnail comes back.
+    std::fs::remove_dir_all(ws.layout.cache_dir()).unwrap();
+    assert_eq!(
+        ws.as_(&app, "file.thumbnail", json!({ "attachment": id })),
+        thumb
+    );
+
+    // Not for other files or broken images; only the app asks for it.
+    let text = ws.call(
+        "file.attach",
+        json!({ "task": a, "name": "a.txt", "data_base64": gk_core::base64_encode(b"text") }),
+    );
+    let err = ws.fails(
+        &app,
+        "file.thumbnail",
+        json!({ "attachment": text["file"]["id"] }),
+    );
+    assert_eq!(err.code, ErrorCode::Invalid);
+    let broken = ws.call(
+        "file.attach",
+        json!({ "task": a, "name": "broken.png", "data_base64": gk_core::base64_encode(&png(64, 64)) }),
+    );
+    let err = ws.fails(
+        &app,
+        "file.thumbnail",
+        json!({ "attachment": broken["file"]["id"] }),
+    );
+    assert_eq!(err.code, ErrorCode::Invalid);
+    let err = ws.fails(&me(), "file.thumbnail", json!({ "attachment": id }));
+    assert_eq!(err.code, ErrorCode::Forbidden);
+}

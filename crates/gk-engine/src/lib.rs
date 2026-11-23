@@ -15,6 +15,7 @@ mod events;
 mod failure;
 mod ops;
 mod registry;
+mod thumbs;
 mod time;
 mod write;
 

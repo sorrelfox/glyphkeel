@@ -51,6 +51,9 @@ icu_collator = "2.4.0"
 rmcp = { version = "~3.11.0", default-features = false, features = ["server", "transport-io"] }
 # Snapshots of command output in tests (development only).
 insta = "1.49.0"
+# Thumbnails of attached images. Only the decoders for the image types the
+# app shows (PNG, JPEG, GIF, WebP); PNG also writes the thumbnails.
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
 # Property tests (development only).
 proptest = "1.12.0"
 # The workspace database: SQLite bundled (with FTS5), custom collation and

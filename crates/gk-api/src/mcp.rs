@@ -378,6 +378,19 @@ Example: move_task {\"key\": \"TM-41\", \"status\": \"In progress\", \"at\": \"t
         idempotent: true,
     },
     McpTool {
+        name: "reorder_subtask",
+        toolset: Toolset::Tasks,
+        title: "Reorder a subtask",
+        description: "Moves a subtask to another place in its parent's list of subtasks: \
+`before` or `after` another subtask's key, or `at` top or bottom. The list has its own order, \
+apart from the board; the subtask's status and column stay as they are. Returns the parent with \
+its subtasks. To make a task a subtask, use update_task with `parent`. \
+Example: reorder_subtask {\"key\": \"TM-44\", \"before\": \"TM-42\"}",
+        main: "task.reorder_subtask",
+        covers: &["task.reorder_subtask"],
+        idempotent: true,
+    },
+    McpTool {
         name: "update_checklist",
         toolset: Toolset::Tasks,
         title: "Update a checklist",

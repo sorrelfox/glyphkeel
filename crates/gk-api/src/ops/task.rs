@@ -480,6 +480,30 @@ pub struct TaskMoveInput {
     pub override_claim: bool,
 }
 
+/// Where to put a subtask among its parent's subtasks. Subtasks keep an
+/// order of their own, apart from their places on the board.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SubtaskReorderInput {
+    /// The subtask: its key or ID.
+    pub key: String,
+    /// Refuse the change unless the subtask still has this version.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected_version: Option<i64>,
+    /// Place it before this subtask of the same parent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub before: Option<String>,
+    /// Place it after this subtask of the same parent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub after: Option<String>,
+    /// Place it first or last among the parent's subtasks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub at: Option<Edge>,
+    /// Reorder it although another agent claimed it (full profile only).
+    #[serde(default)]
+    pub override_claim: bool,
+}
+
 /// A copy of a task.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -606,6 +630,13 @@ op!(
     TaskMoveInput,
     TaskChange
 );
+op!(
+    /// Moves a subtask to another place among its parent's subtasks.
+    TaskReorderSubtask,
+    "task.reorder_subtask",
+    SubtaskReorderInput,
+    TaskChange
+);
 
 op!(
     /// A copy of a task, with its subtasks, labels, checklist and files.
@@ -655,6 +686,13 @@ const fn command(summary: &'static str, cli: &'static str, input: &'static str) 
     }
 }
 
+pub(crate) const TASK_REORDER_SUBTASK: OpDescriptor = OpDescriptor::of::<TaskReorderSubtask>(
+    command(
+        "Move a subtask to another place among its parent's subtasks (before or after another one, first or last); returns the parent with its subtasks in the new order.",
+        "task reorder-subtask <key>",
+        "SubtaskReorderInput",
+    ),
+);
 pub(crate) const TASK_DUPLICATE: OpDescriptor = OpDescriptor::of::<TaskDuplicate>(command(
     "Copy a task with its subtasks (in order), labels, checklist and files; the copy is linked as a clone.",
     "task duplicate <key>",

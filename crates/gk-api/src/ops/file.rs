@@ -113,6 +113,22 @@ pub struct FileContent {
     pub note: Option<String>,
 }
 
+/// A thumbnail of an attached image.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Thumbnail {
+    /// The attachment's ID.
+    pub attachment: String,
+    /// The thumbnail's file in the workspace's cache.
+    pub path: String,
+    /// Its media type: `image/png`.
+    pub mime: String,
+    /// Its width in pixels.
+    pub width: u32,
+    /// Its height in pixels.
+    pub height: u32,
+}
+
 /// A file attached or deleted, with the history group of the change.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -156,6 +172,13 @@ op!(
     FileRef,
     FileChange
 );
+op!(
+    /// A thumbnail of an attached image.
+    FileThumbnail,
+    "file.thumbnail",
+    FileRef,
+    Thumbnail
+);
 
 pub(crate) const FILE_GET: OpDescriptor = OpDescriptor::of::<FileGet>(Meta {
     summary: "An attached file's name, type, size and owner.",
@@ -195,4 +218,16 @@ pub(crate) const FILE_DELETE: OpDescriptor = OpDescriptor::of::<FileDelete>(Meta
     cli: Some("file delete <attachment>"),
     input_name: "FileRef",
     output_name: "FileChange",
+});
+
+pub(crate) const FILE_THUMBNAIL: OpDescriptor = OpDescriptor::of::<FileThumbnail>(Meta {
+    summary: "A small PNG of an attached PNG, JPEG, GIF or WebP image, at most 256 pixels wide and high, from the workspace's cache; made when the image is attached, and again when the cache has lost it.",
+    kind: OpKind::Query,
+    safety: Safety::Read,
+    exposure: Exposure::App {
+        reason: "It gives a path in the workspace's cache, which the app serves to its pages; agents and the command line read images with file.read.",
+    },
+    cli: None,
+    input_name: "FileRef",
+    output_name: "Thumbnail",
 });

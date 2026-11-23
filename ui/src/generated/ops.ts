@@ -60,6 +60,8 @@ export type ActivityQuery = {
   session?: string | null;
   /** Also list the agent sessions. */
   sessions?: boolean;
+  /** Only changes to this task (key or ID): its own fields and description revisions, its links, its comments and its files, including files attached to its comments. */
+  task?: string | null;
 };
 
 /** Who did something. */
@@ -1301,6 +1303,22 @@ export type StatusUpdateInput = {
   wip_limit?: number | null;
 };
 
+/** Where to put a subtask among its parent's subtasks. Subtasks keep an order of their own, apart from their places on the board. */
+export type SubtaskReorderInput = {
+  /** Place it after this subtask of the same parent. */
+  after?: string | null;
+  /** Place it first or last among the parent's subtasks. */
+  at?: Edge | null;
+  /** Place it before this subtask of the same parent. */
+  before?: string | null;
+  /** Refuse the change unless the subtask still has this version. */
+  expected_version?: number | null;
+  /** The subtask: its key or ID. */
+  key: string;
+  /** Reorder it although another agent claimed it (full profile only). */
+  override_claim?: boolean;
+};
+
 /** One task. */
 export type Task = {
   /** Whether a task that blocks it is still open. */
@@ -1609,6 +1627,20 @@ export type TextEdit = {
   old_text: string;
 };
 
+/** A thumbnail of an attached image. */
+export type Thumbnail = {
+  /** The attachment's ID. */
+  attachment: string;
+  /** Its height in pixels. */
+  height: number;
+  /** Its media type: `image/png`. */
+  mime: string;
+  /** The thumbnail's file in the workspace's cache. */
+  path: string;
+  /** Its width in pixels. */
+  width: number;
+};
+
 /** Estimate and time over a task and all its subtasks. */
 export type Totals = {
   /** The estimates added up, in minutes. */
@@ -1777,6 +1809,7 @@ export interface OpMap {
   "task.create": { input: TaskCreateInput; output: TaskChange; safety: "write"; kind: "command" };
   "task.update": { input: TaskUpdateInput; output: TaskChange; safety: "write"; kind: "command" };
   "task.move": { input: TaskMoveInput; output: TaskChange; safety: "write"; kind: "command" };
+  "task.reorder_subtask": { input: SubtaskReorderInput; output: TaskChange; safety: "write"; kind: "command" };
   "task.resolve_conflict": { input: TaskResolveInput; output: TaskChange; safety: "write"; kind: "command" };
   "checklist.update": { input: ChecklistUpdateInput; output: ChecklistChange; safety: "write"; kind: "command" };
   "task.duplicate": { input: TaskDuplicateInput; output: TaskChange; safety: "write"; kind: "command" };
@@ -1796,6 +1829,7 @@ export interface OpMap {
   "layout.update": { input: LayoutUpdateInput; output: LayoutChange; safety: "write"; kind: "command" };
   "file.get": { input: FileRef; output: Attachment; safety: "read"; kind: "query" };
   "file.read": { input: FileRef; output: FileContent; safety: "read"; kind: "query" };
+  "file.thumbnail": { input: FileRef; output: Thumbnail; safety: "read"; kind: "query" };
   "file.attach": { input: FileAttachInput; output: FileChange; safety: "write"; kind: "command" };
   "file.delete": { input: FileRef; output: FileChange; safety: "trash"; kind: "command" };
   "agent.sessions": { input: AgentSessionsInput; output: AgentSessionList; safety: "read"; kind: "query" };
@@ -1838,6 +1872,7 @@ export const OP_SAFETY = {
   "task.create": "write",
   "task.update": "write",
   "task.move": "write",
+  "task.reorder_subtask": "write",
   "task.resolve_conflict": "write",
   "checklist.update": "write",
   "task.duplicate": "write",
@@ -1857,6 +1892,7 @@ export const OP_SAFETY = {
   "layout.update": "write",
   "file.get": "read",
   "file.read": "read",
+  "file.thumbnail": "read",
   "file.attach": "write",
   "file.delete": "trash",
   "agent.sessions": "read",
@@ -1908,6 +1944,8 @@ export function makeOps(call: Call) {
       get: (input: OpMap["file.get"]["input"]) => call("file.get", input),
       /** An attached file's content: text for text files, Base64 for images, otherwise only its details. (read) */
       read: (input: OpMap["file.read"]["input"]) => call("file.read", input),
+      /** A small PNG of an attached PNG, JPEG, GIF or WebP image, at most 256 pixels wide and high, from the workspace's cache; made when the image is attached, and again when the cache has lost it. (read) */
+      thumbnail: (input: OpMap["file.thumbnail"]["input"]) => call("file.thumbnail", input),
       /** Attach a local file, or Base64 data with a name, to a task or a comment. (write) */
       attach: (input: OpMap["file.attach"]["input"] = {}) => call("file.attach", input),
       /** Move an attached file to the trash. (trash) */
@@ -1994,6 +2032,8 @@ export function makeOps(call: Call) {
       update: (input: OpMap["task.update"]["input"]) => call("task.update", input),
       /** Move a task to another status or place in its column, or to another project (new key; the old one forwards). (write) */
       move: (input: OpMap["task.move"]["input"]) => call("task.move", input),
+      /** Move a subtask to another place among its parent's subtasks (before or after another one, first or last); returns the parent with its subtasks in the new order. (write) */
+      reorderSubtask: (input: OpMap["task.reorder_subtask"]["input"]) => call("task.reorder_subtask", input),
       /** Resolve a conflict copy of a task's description: keep the description, use the copy, or save a combined text. (write) */
       resolveConflict: (input: OpMap["task.resolve_conflict"]["input"]) => call("task.resolve_conflict", input),
       /** Copy a task with its subtasks (in order), labels, checklist and files; the copy is linked as a clone. (write) */

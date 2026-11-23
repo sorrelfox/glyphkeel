@@ -54,6 +54,7 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel task link <key>` | `relation.add` | Link two tasks (blocks, relates, duplicates, clones, or make one a subtask of the other). |
 | `glyphkeel task move <key>` | `task.move` | Move a task to another status or place in its column, or to another project (new key; the old one forwards). |
 | `glyphkeel task release <key>` | `task.release` | Give up a claim on a task, optionally moving it and adding a comment. |
+| `glyphkeel task reorder-subtask <key>` | `task.reorder_subtask` | Move a subtask to another place among its parent's subtasks (before or after another one, first or last); returns the parent with its subtasks in the new order. |
 | `glyphkeel task resolve <key>` | `task.resolve_conflict` | Resolve a conflict copy of a task's description: keep the description, use the copy, or save a combined text. |
 | `glyphkeel task show <keys>` | `task.get` | One to 20 tasks by key, with their fields, description, labels and version; subtasks, links, comments and files on request. |
 | `glyphkeel task unlink <key>` | `relation.remove` | Remove a link between two tasks, or a subtask from its parent. |

@@ -24,7 +24,6 @@ use gk_store::rusqlite::{OptionalExtension, Transaction, params};
 use serde_json::{Value, json};
 
 use super::desc;
-use super::fields::{self, TASK, id_value};
 use super::lookup::{self, TaskRow, b, id_at};
 use crate::failure::Failure;
 use crate::registry::Registry;
@@ -288,15 +287,7 @@ fn set_parent(
     if let Some(parent) = parent {
         super::task::check_parent(w.tx(), Some(child.id), child.project, parent, child_key)?;
     }
-    fields::set(
-        w,
-        TASK,
-        child.id,
-        Some(child.project),
-        "parent",
-        parent.and_then(|p| id_value(p.id)),
-    )?;
-    Ok(())
+    super::task::set_parent(w, child.id, child.project, parent.map(|p| p.id))
 }
 
 fn add(w: &mut WriteCtx<'_>, input: RelationInput) -> Result<TaskChange, Failure> {

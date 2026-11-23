@@ -28,7 +28,9 @@ use gk_store::rusqlite::{OptionalExtension, Row, Transaction, params, params_fro
 use serde_json::{Map, Value};
 
 use super::description::{self, Owner};
-use super::{agent, board, claim, comment, desc, fields, file, project, relation, settings, task};
+use super::{
+    agent, board, claim, comment, desc, fields, file, lookup, project, relation, settings, task,
+};
 use crate::failure::Failure;
 use crate::registry::{QueryCtx, Registry};
 use crate::time::rfc3339;
@@ -94,6 +96,26 @@ fn session_id(own: Option<Id>, text: &str) -> Result<Id, OpError> {
     }
 }
 
+/// The activity rows of one task: its own (fields and description
+/// revisions), its comments', its files' (also those on its comments) and
+/// its links', live or removed. Takes the task's ID six times as bytes,
+/// then four times as text.
+const OF_TASK: &str = "(
+    (entity_kind = 'task' AND entity_id = ?)
+    OR (entity_kind = 'comment'
+        AND entity_id IN (SELECT id FROM comments WHERE task_id = ?))
+    OR (entity_kind = 'attachment'
+        AND entity_id IN (SELECT id FROM attachments
+                           WHERE (owner_kind = 'task' AND owner_id = ?)
+                              OR (owner_kind = 'comment'
+                                  AND owner_id IN (SELECT id FROM comments WHERE task_id = ?))))
+    OR (entity_kind = 'relation'
+        AND (entity_id IN (SELECT id FROM task_relations WHERE from_task = ? OR to_task = ?)
+             OR ? = json_extract(changes, '$.fields.link.before.from')
+             OR ? = json_extract(changes, '$.fields.link.before.to')
+             OR ? = json_extract(changes, '$.fields.link.after.from')
+             OR ? = json_extract(changes, '$.fields.link.after.to'))))";
+
 fn feed(q: &QueryCtx<'_>, input: ActivityQuery) -> Result<ActivityPage, Failure> {
     let limit = input.limit.unwrap_or(DEFAULT_LIMIT);
     if !(1..=MAX_LIMIT).contains(&limit) {
@@ -118,6 +140,18 @@ fn feed(q: &QueryCtx<'_>, input: ActivityQuery) -> Result<ActivityPage, Failure>
         args.push(SqlValue::Blob(
             parse_id("group", group)?.as_bytes().to_vec(),
         ));
+    }
+    if let Some(task) = &input.task {
+        let id = match task.trim().parse::<Id>() {
+            Ok(id) => id,
+            Err(_) => lookup::task(q.tx, "task", task)?.id,
+        };
+        filters.push(OF_TASK);
+        let blob = SqlValue::Blob(id.as_bytes().to_vec());
+        let text = SqlValue::Text(id.to_string());
+        args.extend([blob.clone(), blob.clone(), blob.clone(), blob.clone()]);
+        args.extend([blob.clone(), blob]);
+        args.extend(std::iter::repeat_n(text, 4));
     }
     let base = if filters.is_empty() {
         String::new()

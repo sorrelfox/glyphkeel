@@ -831,7 +831,8 @@ fn the_app_copies_an_older_workspace_before_upgrading_it() {
         // Back to the first schema version, as an older program left it.
         let conn = gk_store::open_raw(&layout.database()).unwrap();
         conn.execute_batch(
-            "DROP TABLE request_log; DROP INDEX wiki_pages_name; PRAGMA user_version = 1;",
+            "DROP INDEX tasks_subtasks; ALTER TABLE tasks DROP COLUMN subtask_rank;
+             DROP TABLE request_log; DROP INDEX wiki_pages_name; PRAGMA user_version = 1;",
         )
         .unwrap();
     }
@@ -844,5 +845,66 @@ fn the_app_copies_an_older_workspace_before_upgrading_it() {
         .map(|f| f.unwrap().file_name().to_string_lossy().into_owned())
         .collect();
     assert_eq!(copies.len(), 1);
-    assert!(copies[0].starts_with("before-schema-2-v1-"), "{copies:?}");
+    assert!(copies[0].starts_with("before-schema-3-v1-"), "{copies:?}");
+}
+
+#[test]
+fn upgrading_keeps_the_subtasks_in_the_order_they_were_shown() {
+    let dir = tempfile::tempdir().unwrap();
+    let layout = WorkspaceLayout::new(dir.path().join("Personal"));
+    let e = open(&dir);
+    project(&e, "TM", None);
+    let parent = task(&e, "TM", "Parent")["key"].as_str().unwrap().to_owned();
+    let mut subs = Vec::new();
+    for title in ["One", "Two", "Three"] {
+        let t = call(
+            &e,
+            "task.create",
+            json!({ "project": "TM", "title": title, "parent": parent }),
+        );
+        subs.push(t["task"]["key"].as_str().unwrap().to_owned());
+    }
+    // Before subtasks had an order of their own, they were shown by status,
+    // then by their place in the column: Two, Three, One.
+    call(
+        &e,
+        "task.move",
+        json!({ "key": subs[0], "status": "In progress" }),
+    );
+    e.close();
+    {
+        let conn = gk_store::open_raw(&layout.database()).unwrap();
+        conn.execute_batch(
+            "DROP INDEX tasks_subtasks; ALTER TABLE tasks DROP COLUMN subtask_rank;
+             PRAGMA user_version = 2;",
+        )
+        .unwrap();
+    }
+    let e = open(&dir);
+    let order = |e: &Engine| -> Vec<String> {
+        call(
+            e,
+            "task.get",
+            json!({ "keys": [parent], "include": ["subtasks"] }),
+        )["items"][0]["subtasks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|s| s["key"].as_str().unwrap().to_owned())
+            .collect()
+    };
+    let expected = [subs[1].clone(), subs[2].clone(), subs[0].clone()];
+    assert_eq!(order(&e), expected);
+    // From now on statuses don't reorder them.
+    call(&e, "task.move", json!({ "key": subs[2], "status": "Done" }));
+    assert_eq!(order(&e), expected);
+    call(
+        &e,
+        "task.reorder_subtask",
+        json!({ "key": subs[0], "at": "top" }),
+    );
+    assert_eq!(
+        order(&e),
+        [subs[0].clone(), subs[1].clone(), subs[2].clone()]
+    );
 }

@@ -10,13 +10,17 @@
 //! date is refused; entering a done or cancelled status closes a task and
 //! leaving it reopens it; a task moved to another project takes its subtasks
 //! along, gets new keys there, and its old keys keep finding it.
+//!
+//! Subtasks keep an order of their own under their parent (`subtask_rank`),
+//! apart from their places on the board: a new subtask comes last, and
+//! `task.reorder_subtask` moves one within the list.
 
 use gk_api::OpError;
 use gk_api::ops::common::{Actor, ActorKind, Category, Glyph, Hue, Priority};
 use gk_api::ops::task::{
-    Checklist, Claim, LabelRef, StatusRef, Task, TaskChange, TaskCreate, TaskCreateInput,
-    TaskField, TaskGet, TaskGetInput, TaskList, TaskMove, TaskMoveInput, TaskPart, TaskRef,
-    TaskUpdate, TaskUpdateInput, TypeRef,
+    Checklist, Claim, LabelRef, StatusRef, SubtaskReorderInput, Task, TaskChange, TaskCreate,
+    TaskCreateInput, TaskField, TaskGet, TaskGetInput, TaskList, TaskMove, TaskMoveInput, TaskPart,
+    TaskRef, TaskReorderSubtask, TaskUpdate, TaskUpdateInput, TypeRef,
 };
 use gk_core::{Day, DurationUnits, Id, Rank, StatusCategory, fold};
 use gk_store::rusqlite::{OptionalExtension, Transaction, params};
@@ -62,6 +66,7 @@ pub(super) fn register(r: &mut Registry) {
     r.command::<TaskCreate, _>(desc::<TaskCreate>(), create);
     r.command::<TaskUpdate, _>(desc::<TaskUpdate>(), update);
     r.command::<TaskMove, _>(desc::<TaskMove>(), move_task);
+    r.command::<TaskReorderSubtask, _>(desc::<TaskReorderSubtask>(), reorder_subtask);
 }
 
 /// The workspace's working day and week, for durations.
@@ -393,12 +398,12 @@ pub(crate) fn task_ref(tx: &Transaction<'_>, id: Id) -> Result<TaskRef, Failure>
     )?)
 }
 
-/// The live subtasks of `id`, in board order.
+/// The live subtasks of `id`, in their own order.
 fn subtasks(tx: &Transaction<'_>, id: Id) -> Result<Vec<TaskRef>, Failure> {
     let mut stmt = tx.prepare_cached(
         "SELECT t.id FROM tasks t JOIN statuses s ON s.id = t.status_id
           WHERE t.parent_id = ?1 AND t.deleted_at IS NULL
-          ORDER BY s.rank, t.rank, t.id",
+          ORDER BY t.subtask_rank, s.rank, t.rank, t.id",
     )?;
     let ids = stmt
         .query_map([b(id)], |r| id_at(r, 0))?
@@ -533,7 +538,8 @@ pub(crate) fn descendants(tx: &Transaction<'_>, id: Id) -> Result<Vec<Id>, Failu
     let mut i = 0;
     while i < out.len() {
         let mut stmt = tx.prepare_cached(
-            "SELECT id FROM tasks WHERE parent_id = ?1 AND deleted_at IS NULL ORDER BY rank, id",
+            "SELECT id FROM tasks WHERE parent_id = ?1 AND deleted_at IS NULL
+              ORDER BY subtask_rank, rank, id",
         )?;
         let children = stmt
             .query_map([b(out[i])], |r| id_at(r, 0))?
@@ -656,6 +662,167 @@ pub(crate) fn rank_in_column(
     Ok(mine)
 }
 
+/// The live subtasks of `parent` as `(id, subtask rank)`, in their order;
+/// a missing rank reads as empty, which makes [`lookup::place`] re-spread.
+fn subtask_ranks(tx: &Transaction<'_>, parent: Id) -> Result<Vec<(Id, String)>, Failure> {
+    let mut stmt = tx.prepare_cached(
+        "SELECT id, coalesce(subtask_rank, '') FROM tasks
+          WHERE parent_id = ?1 AND deleted_at IS NULL ORDER BY subtask_rank, rank, id",
+    )?;
+    let rows = stmt
+        .query_map([b(parent)], |r| Ok((id_at(r, 0)?, r.get::<_, String>(1)?)))?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+/// The subtask rank that places `task` among the subtasks of `parent` at
+/// `target`; subtask ranks of others that had to be spread out are recorded
+/// here.
+fn rank_among_subtasks(
+    w: &mut WriteCtx<'_>,
+    project: Id,
+    parent: Id,
+    task: Id,
+    target: Target,
+) -> Result<Rank, Failure> {
+    let siblings = subtask_ranks(w.tx(), parent)?;
+    let mut mine = Rank::first();
+    for (id, rank) in lookup::place(&siblings, task, target)? {
+        if id == task {
+            mine = rank;
+        } else {
+            fields::set(
+                w,
+                TASK,
+                id,
+                Some(project),
+                "subtask_rank",
+                text(rank.as_str()),
+            )?;
+        }
+    }
+    Ok(mine)
+}
+
+/// Makes `task` the last subtask of `parent`, or takes it out of its
+/// parent's list with `None`. Nothing changes when the parent stays the
+/// same. The parent is checked already.
+pub(crate) fn set_parent(
+    w: &mut WriteCtx<'_>,
+    task: Id,
+    project: Id,
+    parent: Option<Id>,
+) -> Result<(), Failure> {
+    let current: Option<Vec<u8>> = w.tx().query_row(
+        "SELECT parent_id FROM tasks WHERE id = ?1",
+        [b(task)],
+        |r| r.get(0),
+    )?;
+    if current.and_then(|c| Id::from_slice(&c).ok()) == parent {
+        return Ok(());
+    }
+    let pid = Some(project);
+    fields::set(w, TASK, task, pid, "parent", parent.and_then(id_value))?;
+    let rank = match parent {
+        Some(p) => text(rank_among_subtasks(w, project, p, task, Target::Bottom)?.as_str()),
+        None => None,
+    };
+    fields::set(w, TASK, task, pid, "subtask_rank", rank)?;
+    Ok(())
+}
+
+/// Moves a subtask within its parent's list; returns the parent with its
+/// subtasks.
+fn reorder_subtask(
+    w: &mut WriteCtx<'_>,
+    input: SubtaskReorderInput,
+) -> Result<TaskChange, Failure> {
+    let task = lookup::task(w.tx(), "key", &input.key)?;
+    let project = lookup::project_by_id(w.tx(), task.project)?.ok_or_else(|| {
+        Failure::Op(OpError::not_found(
+            format!("There is no task \"{}\".", input.key),
+            &[],
+        ))
+    })?;
+    lookup::ensure_active(&project)?;
+    lookup::check_version(&task, input.expected_version, &input.key)?;
+    super::claim::guard(w, task.id, &input.key, input.override_claim)?;
+    let Some(parent) = task.parent else {
+        return Err(OpError::invalid_at(
+            "key",
+            format!(
+                "{} is not a subtask, so it has no place to change.",
+                input.key
+            ),
+        )
+        .with_hint("Make it a subtask first: update_task with `parent`.")
+        .into());
+    };
+    let sibling = |w: &WriteCtx<'_>, field: &str, text: &str| -> Result<Id, Failure> {
+        let other = lookup::task(w.tx(), field, text)?;
+        if other.parent != Some(parent) || other.id == task.id {
+            return Err(OpError::invalid_at(
+                field,
+                format!("{text} is not another subtask of the same parent."),
+            )
+            .into());
+        }
+        Ok(other.id)
+    };
+    let before = input
+        .before
+        .as_deref()
+        .map(|t| sibling(w, "before", t))
+        .transpose()?;
+    let after = input
+        .after
+        .as_deref()
+        .map(|t| sibling(w, "after", t))
+        .transpose()?;
+    let target = Target::from_parts(before, after, input.at)?.ok_or_else(|| {
+        Failure::Op(
+            OpError::invalid("Say where the subtask goes.")
+                .with_hint("Pass `before` or `after` with another subtask's key, or `at`."),
+        )
+    })?;
+    let siblings = subtask_ranks(w.tx(), parent)?;
+    if !already_at(&siblings, task.id, target) {
+        let rank = rank_among_subtasks(w, task.project, parent, task.id, target)?;
+        fields::set(
+            w,
+            TASK,
+            task.id,
+            Some(task.project),
+            "subtask_rank",
+            text(rank.as_str()),
+        )?;
+    }
+    changed_with(w, parent, Vec::new(), &[TaskPart::Subtasks])
+}
+
+/// Whether `moving` already stands where `target` would put it in `list`,
+/// and every rank in the list is set.
+fn already_at(list: &[(Id, String)], moving: Id, target: Target) -> bool {
+    if list.iter().any(|(_, r)| r.is_empty()) {
+        return false;
+    }
+    let Some(now) = list.iter().position(|(id, _)| *id == moving) else {
+        return false;
+    };
+    let others: Vec<Id> = list
+        .iter()
+        .map(|(id, _)| *id)
+        .filter(|id| *id != moving)
+        .collect();
+    let wanted = match target {
+        Target::Top => Some(0),
+        Target::Bottom => Some(others.len()),
+        Target::Before(o) => others.iter().position(|id| *id == o),
+        Target::After(o) => others.iter().position(|id| *id == o).map(|i| i + 1),
+    };
+    wanted == Some(now)
+}
+
 /// Open subtasks of `task`, for the warning when it closes.
 fn open_subtasks(tx: &Transaction<'_>, task: Id) -> Result<i64, Failure> {
     Ok(tx.query_row(
@@ -763,6 +930,10 @@ pub(crate) struct NewTask {
 pub(crate) fn insert(w: &mut WriteCtx<'_>, t: NewTask) -> Result<Id, Failure> {
     let id = Id::generate_at(u64::try_from(w.now()).unwrap_or(0));
     let rank = rank_in_column(w, t.project, t.status, id, t.target)?;
+    let subtask_rank = t
+        .parent
+        .map(|p| rank_among_subtasks(w, t.project, p, id, Target::Bottom))
+        .transpose()?;
     let number: i64 = w.tx().query_row(
         "UPDATE projects SET next_number = next_number + 1, updated_at = ?2 WHERE id = ?1
          RETURNING next_number - 1",
@@ -776,9 +947,9 @@ pub(crate) fn insert(w: &mut WriteCtx<'_>, t: NewTask) -> Result<Id, Failure> {
         "INSERT INTO tasks (id, project_id, number, title, title_fold, description, status_id,
                             status_entered_at, type_id, priority, parent_id, rank, start_date,
                             due_date, estimate_min, created_at, created_by_kind, created_by_name,
-                            edited_at, updated_at, closed_at, progress_override)
+                            edited_at, updated_at, closed_at, progress_override, subtask_rank)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?8, ?16, ?17,
-                 ?8, ?8, ?18, ?19)",
+                 ?8, ?8, ?18, ?19, ?20)",
         params![
             b(id),
             b(t.project),
@@ -798,7 +969,8 @@ pub(crate) fn insert(w: &mut WriteCtx<'_>, t: NewTask) -> Result<Id, Failure> {
             caller.actor.kind.as_str(),
             caller.actor.name,
             closed_at,
-            t.progress
+            t.progress,
+            subtask_rank.as_ref().map(Rank::as_str)
         ],
     )?;
     write_labels(w, id, &t.labels)?;
@@ -963,10 +1135,10 @@ fn update(w: &mut WriteCtx<'_>, input: TaskUpdateInput) -> Result<TaskChange, Fa
     if let Some(p) = &input.parent {
         let parent = lookup::task(w.tx(), "parent", p)?;
         check_parent(w.tx(), Some(id), project.id, &parent, &input.key)?;
-        fields::set(w, TASK, id, pid, "parent", id_value(parent.id))?;
+        set_parent(w, id, project.id, Some(parent.id))?;
     }
     if clears(TaskField::Parent) {
-        fields::set(w, TASK, id, pid, "parent", None)?;
+        set_parent(w, id, project.id, None)?;
     }
     let start = match (&input.start_date, clears(TaskField::StartDate)) {
         (Some(d), _) => Some(text(day("start_date", d)?.to_string())),
@@ -1213,7 +1385,7 @@ fn move_to_project(
         }
         set_labels(w, id, to.id, &kept)?;
         if id == task.id && task.parent.is_some() {
-            fields::set(w, TASK, id, pid, "parent", None)?;
+            set_parent(w, id, to.id, None)?;
         }
         refresh_text(w, id)?;
     }
