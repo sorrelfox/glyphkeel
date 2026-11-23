@@ -5,16 +5,25 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AppearanceProvider } from "../appearance/AppearanceProvider";
+import { ToastProvider } from "../components/Toasts";
+import { DataProvider } from "../data/DataProvider";
+import { settings, workspaceInfo } from "../data/fixtures";
+import { fakeEngine } from "../data/testing";
 import { I18n } from "../i18n/I18n";
 import { Shell, SIDEBAR_WIDTH } from "./Shell";
 
 afterEach(cleanup);
 
 function renderShell(openGallery?: () => void) {
+  const engine = fakeEngine({ "workspace.get": () => workspaceInfo(), "settings.get": () => settings() });
   return render(
     <AppearanceProvider>
       <I18n locale="en-US">
-        <Shell titleBar="app" openGallery={openGallery} />
+        <ToastProvider>
+          <DataProvider client={engine.client}>
+            <Shell titleBar="app" openGallery={openGallery} />
+          </DataProvider>
+        </ToastProvider>
       </I18n>
     </AppearanceProvider>,
   );
@@ -90,6 +99,7 @@ describe("Shell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Main menu" }));
     const menu = await screen.findByRole("menu");
     expect(within(menu).getByText("Keyboard shortcuts")).toBeDefined();
-    expect(within(menu).getByRole("menuitem", { name: /Undo/ }).getAttribute("aria-disabled")).toBe("true");
+    expect(within(menu).getByRole("menuitem", { name: /Back up now/ }).getAttribute("aria-disabled")).toBe("true");
+    expect(within(menu).getByRole("menuitem", { name: /Undo/ }).getAttribute("aria-disabled")).toBeNull();
   });
 });

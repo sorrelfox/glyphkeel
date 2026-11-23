@@ -19,6 +19,10 @@ path = "src/main.rs"
 tauri-build = { workspace = true }
 
 [dependencies]
+gk-api = { workspace = true }
+gk-engine = { workspace = true }
+# The workspace folder's layout and the change watcher's handle.
+gk-store = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tauri = { workspace = true }
@@ -28,6 +32,12 @@ tauri = { workspace = true }
 webkit2gtk = { workspace = true, features = ["v2_40"] }
 gtk = { workspace = true }
 zbus = { workspace = true }
+
+[dev-dependencies]
+schemars = { workspace = true }
+tempfile = { workspace = true }
+# Tauri's mock runtime, to call the commands the way the page does.
+tauri = { workspace = true, features = ["test"] }
 
 [lints]
 workspace = true

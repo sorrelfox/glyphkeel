@@ -6,17 +6,21 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:bridge": "vite --mode bridge",
     "build": "tsc --build && vite build",
+    "check:bundle": "node scripts/check-bundle.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --build",
     "lint": "eslint . && stylelint \"src/**/*.css\"",
     "test": "vitest run",
     "test:flow": "playwright test",
+    "test:bridge": "playwright test --config playwright.bridge.config.ts",
     "tauri": "TAURI_APP_PATH=../crates/gk-app TAURI_FRONTEND_PATH=. tauri"
   },
   "dependencies": {
     "@fluent/bundle": "0.19.1",
     "@fluent/react": "0.15.2",
+    "@tanstack/react-query": "5.107.1",
     "@tauri-apps/api": "2.12.4",
     "lucide-react": "1.73.0",
     "react": "19.3.1",

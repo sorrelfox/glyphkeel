@@ -9,8 +9,12 @@ import { defineConfig } from "vitest/config";
 // in development; release builds embed the files from `dist/`.
 const DEV_PORT = 5310;
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react(), babel({ presets: [reactCompilerPreset()] })],
+  // `vite --mode bridge` builds a page for an ordinary browser that talks to
+  // the development bridge on loopback. In every other build this is false,
+  // and the bridge's code is dropped as dead code.
+  define: { __BRIDGE__: JSON.stringify(mode === "bridge") },
   clearScreen: false,
   server: {
     host: "127.0.0.1",
@@ -34,4 +38,4 @@ export default defineConfig({
     environment: "jsdom",
     include: ["src/**/*.test.{ts,tsx}"],
   },
-});
+}));

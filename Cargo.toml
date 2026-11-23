@@ -85,11 +85,17 @@ zbus = "5.19.0"
 # The WebKitGTK bindings Tauri itself uses, to switch off web-view features
 # the app never needs (Linux only).
 webkit2gtk = "=2.0.2"
-# The single-threaded async runtime the MCP server runs on.
+# The async runtime: the MCP server uses only the single-threaded parts; the
+# development bridge adds its own features in its manifest.
 tokio = { version = "1.54.1", default-features = false, features = ["rt", "time", "macros"] }
 # Log lines of `glyphkeel mcp` on standard error (standard output carries the
 # protocol).
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt", "std"] }
+# The development bridge only (tools/devbridge, never in a release): its
+# async runtime, its loopback WebSocket server and stream helpers. The
+# WebSocket crates are built without TLS.
+tokio-tungstenite = { version = "0.28.0", default-features = false, features = ["handshake"] }
+futures-util = { version = "0.3.34", default-features = false, features = ["sink", "std"] }
 # IDs: UUIDv7.
 uuid = { version = "1.29.3", features = ["v7"] }
 

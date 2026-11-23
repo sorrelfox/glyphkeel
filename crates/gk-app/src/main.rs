@@ -9,6 +9,7 @@
 
 #[cfg(target_os = "linux")]
 mod instance;
+mod ipc;
 mod main_window;
 mod navigation;
 mod start;
@@ -18,13 +19,14 @@ mod webkit;
 mod window_state;
 
 use std::process::ExitCode;
-use std::sync::Mutex;
 #[cfg(target_os = "linux")]
 use std::sync::atomic::Ordering;
+use std::sync::{Arc, Mutex};
 
-#[cfg(target_os = "linux")]
-use tauri::{AppHandle, Manager};
+use gk_engine::{EngineConfig, Role};
+use tauri::{AppHandle, Manager, RunEvent, WindowEvent};
 
+use crate::ipc::Workspace;
 use crate::start::Shown;
 use crate::title_bar::TitleBar;
 
@@ -55,11 +57,18 @@ fn main() -> ExitCode {
     let first_links = Vec::new();
 
     let title_bar = TitleBar::from_env();
-    let result = tauri::Builder::default()
+    let built = tauri::Builder::default()
         .manage(Shown::default())
         .manage(PendingLinks(Mutex::new(first_links)))
-        .invoke_handler(tauri::generate_handler![start::window_ready])
+        .invoke_handler(tauri::generate_handler![
+            start::window_ready,
+            ipc::op,
+            ipc::subscribe
+        ])
         .setup(move |app| {
+            // The workspace opens before the window, so the page's first
+            // calls find it.
+            app.manage(Arc::new(open_workspace(app.handle())));
             main_window::open(app.handle(), title_bar)?;
             #[cfg(target_os = "linux")]
             if let Some(activations) = activations {
@@ -67,14 +76,55 @@ fn main() -> ExitCode {
             }
             Ok(())
         })
-        .run(tauri::generate_context!());
-    match result {
-        Ok(()) => ExitCode::SUCCESS,
+        .on_window_event(|window, event| {
+            if matches!(event, WindowEvent::Destroyed)
+                && let Some(workspace) = window.try_state::<Arc<Workspace>>()
+            {
+                workspace.unsubscribe(window.label());
+            }
+        })
+        .build(tauri::generate_context!());
+    match built {
+        Ok(app) => {
+            app.run(|app, event| {
+                if matches!(event, RunEvent::Exit)
+                    && let Some(workspace) = app.try_state::<Arc<Workspace>>()
+                {
+                    workspace.close();
+                }
+            });
+            ExitCode::SUCCESS
+        }
         Err(err) => {
             eprintln!("glyphkeel-app: {err}");
             ExitCode::FAILURE
         }
     }
+}
+
+/// Opens the workspace (the default one, created on the first run, unless
+/// `GLYPHKEEL_WORKSPACE` names another). When that fails, the app still
+/// starts, and every call of the page answers with the reason.
+fn open_workspace(app: &AppHandle) -> Workspace {
+    let data_dir = app.path().data_dir().ok().map(|dir| dir.join("glyphkeel"));
+    let layout = match ipc::location_from_env().layout(data_dir.as_deref()) {
+        Ok(layout) => layout,
+        Err(err) => {
+            eprintln!("glyphkeel-app: {}", err.message);
+            return Workspace::failed(err);
+        }
+    };
+    let mut config = EngineConfig::new(Role::App);
+    config.program_version = env!("CARGO_PKG_VERSION").to_owned();
+    let workspace = Workspace::open(&layout, config, ipc::native_confirmation(app.clone()));
+    if let Some(err) = workspace.failure() {
+        eprintln!(
+            "glyphkeel-app: cannot open the workspace at {}: {}",
+            layout.root().display(),
+            err.message
+        );
+    }
+    workspace
 }
 
 /// Handles later starts of the app on the main thread, in the order they

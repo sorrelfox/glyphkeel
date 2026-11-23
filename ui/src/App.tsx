@@ -4,6 +4,10 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 
 import { AppearanceProvider } from "./appearance/AppearanceProvider";
+import { ToastProvider } from "./components/Toasts";
+import { defaultClient } from "./data/connect";
+import { DataProvider } from "./data/DataProvider";
+import { type Client } from "./data/transport";
 import { I18n } from "./i18n/I18n";
 import { windowReady, type Transport } from "./ipc/ready";
 import { Shell } from "./shell/Shell";
@@ -25,13 +29,19 @@ export function initialRoute(pathname: string): Route {
 
 interface AppProps {
   start?: StartData;
+  /** The engine's client; the page's own unless a test passes one. */
+  client?: Client;
 }
 
-export function App({ start = readStart() }: AppProps) {
+export function App({ start = readStart(), client = defaultClient() }: AppProps) {
   return (
     <AppearanceProvider>
       <I18n locale={start.locale}>
-        <Screens start={start} />
+        <ToastProvider>
+          <DataProvider client={client}>
+            <Screens start={start} />
+          </DataProvider>
+        </ToastProvider>
       </I18n>
     </AppearanceProvider>
   );
