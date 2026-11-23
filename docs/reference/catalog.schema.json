@@ -1,0 +1,1574 @@
+{
+  "error": {
+    "$defs": {
+      "ErrorCode": {
+        "description": "What kind of failure an operation error is. Adapters decide on the code, never\non the message.",
+        "oneOf": [
+          {
+            "const": "invalid",
+            "description": "The input doesn't parse or breaks a rule; `details.path` names the\nfield when there is one.",
+            "type": "string"
+          },
+          {
+            "const": "not_found",
+            "description": "No such item or name; `details.choices` lists the valid ones when the\nlist is short.",
+            "type": "string"
+          },
+          {
+            "const": "conflict",
+            "description": "The item changed since the caller read it, or the change collides\nwith a newer one.",
+            "type": "string"
+          },
+          {
+            "const": "forbidden",
+            "description": "The caller's profile doesn't allow this, the operation needs a\nconfirmation that wasn't given, or the item is archived.",
+            "type": "string"
+          },
+          {
+            "const": "limit",
+            "description": "A size limit, a cap on bulk changes or a rate limit.",
+            "type": "string"
+          },
+          {
+            "const": "busy",
+            "description": "Another program kept the workspace locked; trying again later works.",
+            "type": "string"
+          },
+          {
+            "const": "workspace_upgraded",
+            "description": "A newer program upgraded the workspace while this one was running.\nThe program must restart.",
+            "type": "string"
+          },
+          {
+            "const": "workspace_too_new",
+            "description": "The workspace was made by a newer program.",
+            "type": "string"
+          },
+          {
+            "const": "storage",
+            "description": "The disk, the file system or the database failed.",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "description": "An operation failed. The message says what happened, the hint what to do\nnext; both are written for the reader, person or agent.",
+    "properties": {
+      "code": {
+        "$ref": "#/$defs/ErrorCode",
+        "description": "What kind of failure."
+      },
+      "details": {
+        "additionalProperties": true,
+        "description": "Facts a program can act on: `path`, `choices`, `current_version`,\n`max`, `retry_after`, …",
+        "type": "object"
+      },
+      "hint": {
+        "description": "What to do next.",
+        "type": "string"
+      },
+      "message": {
+        "description": "What happened.",
+        "type": "string"
+      }
+    },
+    "required": [
+      "code",
+      "message"
+    ],
+    "title": "OpError",
+    "type": "object"
+  },
+  "event": {
+    "$defs": {
+      "Actor": {
+        "additionalProperties": false,
+        "description": "Who did something.",
+        "properties": {
+          "kind": {
+            "$ref": "#/$defs/ActorKind",
+            "description": "Person or agent."
+          },
+          "name": {
+            "description": "The display name (\"You\", \"Claude Code\").",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "name"
+        ],
+        "type": "object"
+      },
+      "ActorKind": {
+        "description": "A person or an agent.",
+        "oneOf": [
+          {
+            "const": "user",
+            "description": "The person who owns the workspace.",
+            "type": "string"
+          },
+          {
+            "const": "agent",
+            "description": "An agent working through MCP.",
+            "type": "string"
+          }
+        ]
+      },
+      "EntityChange": {
+        "additionalProperties": false,
+        "description": "One changed item.",
+        "properties": {
+          "entity": {
+            "description": "What kind of item (`task`, `project`, `settings`, …).",
+            "type": "string"
+          },
+          "fields": {
+            "description": "The fields that changed.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "description": "Its ID.",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project it belongs to, if any.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "entity",
+          "id",
+          "fields"
+        ],
+        "type": "object"
+      },
+      "Origin": {
+        "additionalProperties": false,
+        "description": "Who made a change.",
+        "properties": {
+          "actor": {
+            "$ref": "#/$defs/Actor",
+            "description": "The person or the agent."
+          },
+          "session": {
+            "description": "The agent session, for changes made through MCP.",
+            "type": "string"
+          },
+          "via": {
+            "$ref": "#/$defs/Via",
+            "description": "The program: the app, the command line or MCP."
+          }
+        },
+        "required": [
+          "via",
+          "actor"
+        ],
+        "type": "object"
+      },
+      "Via": {
+        "description": "The program a change came through.",
+        "oneOf": [
+          {
+            "const": "app",
+            "description": "The desktop app.",
+            "type": "string"
+          },
+          {
+            "const": "cli",
+            "description": "The `glyphkeel` command.",
+            "type": "string"
+          },
+          {
+            "const": "mcp",
+            "description": "An agent through `glyphkeel mcp`.",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "description": "One committed command. Events carry no content: a view re-reads what it\nshows, so there is one source of truth.",
+    "properties": {
+      "changes": {
+        "description": "One entry per changed item.",
+        "items": {
+          "$ref": "#/$defs/EntityChange"
+        },
+        "type": "array"
+      },
+      "group": {
+        "description": "The history group: what a revert or Undo names.",
+        "type": "string"
+      },
+      "origin": {
+        "$ref": "#/$defs/Origin",
+        "description": "Who made the change, and through which program."
+      },
+      "seq": {
+        "description": "The highest history sequence number of the command.",
+        "format": "int64",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "seq",
+      "group",
+      "origin",
+      "changes"
+    ],
+    "title": "Changed",
+    "type": "object"
+  },
+  "operations": [
+    {
+      "cli": "status",
+      "exposure": "data",
+      "id": "workspace.get",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "No input.",
+        "title": "WorkspaceGetInput",
+        "type": "object"
+      },
+      "input_name": "WorkspaceGetInput",
+      "kind": "query",
+      "mcp_tool": "get_workspace",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person or agent."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person or an agent.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              }
+            ]
+          },
+          "Caller": {
+            "additionalProperties": false,
+            "description": "The caller of an operation as the engine sees it.",
+            "properties": {
+              "actor": {
+                "$ref": "#/$defs/Actor",
+                "description": "The person or the agent."
+              },
+              "profile": {
+                "$ref": "#/$defs/Profile",
+                "description": "The agent's profile, after the workspace's cap; left out for the\nperson."
+              },
+              "session": {
+                "description": "The agent session; left out for the person.",
+                "type": "string"
+              },
+              "via": {
+                "$ref": "#/$defs/Via",
+                "description": "The program."
+              }
+            },
+            "required": [
+              "actor",
+              "via"
+            ],
+            "type": "object"
+          },
+          "Profile": {
+            "description": "What an agent may do. The workspace setting \"most an agent may do\" caps\nthe profile an agent asks for.",
+            "oneOf": [
+              {
+                "const": "read-only",
+                "description": "Reads only.",
+                "type": "string"
+              },
+              {
+                "const": "standard",
+                "description": "Reads, changes and moves to the trash; nothing permanent.",
+                "type": "string"
+              },
+              {
+                "const": "full",
+                "description": "Everything except operations on the application itself.",
+                "type": "string"
+              }
+            ]
+          },
+          "Settings": {
+            "additionalProperties": false,
+            "description": "The workspace's settings, with defaults filled in.",
+            "properties": {
+              "agent_max_profile": {
+                "$ref": "#/$defs/Profile",
+                "description": "The most an agent may do, whatever profile it asks for."
+              },
+              "days_per_week": {
+                "description": "Working days in a week, for durations written in weeks (`1w`).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "hours_per_day": {
+                "description": "Working hours in a day, for durations written in days (`2d`).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "reminder_time": {
+                "description": "When reminders for a due date fire, as `HH:MM`.",
+                "type": "string"
+              },
+              "trash_days": {
+                "description": "Days an item stays in the trash before it is purged.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "week_start": {
+                "$ref": "#/$defs/WeekStart",
+                "description": "The first day of the week in calendars and in `this-week`."
+              }
+            },
+            "required": [
+              "trash_days",
+              "reminder_time",
+              "hours_per_day",
+              "days_per_week",
+              "week_start",
+              "agent_max_profile"
+            ],
+            "type": "object"
+          },
+          "Via": {
+            "description": "The program a change came through.",
+            "oneOf": [
+              {
+                "const": "app",
+                "description": "The desktop app.",
+                "type": "string"
+              },
+              {
+                "const": "cli",
+                "description": "The `glyphkeel` command.",
+                "type": "string"
+              },
+              {
+                "const": "mcp",
+                "description": "An agent through `glyphkeel mcp`.",
+                "type": "string"
+              }
+            ]
+          },
+          "WeekStart": {
+            "description": "The first day of the week.",
+            "oneOf": [
+              {
+                "const": "monday",
+                "description": "Monday.",
+                "type": "string"
+              },
+              {
+                "const": "saturday",
+                "description": "Saturday.",
+                "type": "string"
+              },
+              {
+                "const": "sunday",
+                "description": "Sunday.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The open workspace and who is asking.",
+        "properties": {
+          "caller": {
+            "$ref": "#/$defs/Caller",
+            "description": "Who is asking, through which program, with which rights."
+          },
+          "guide": {
+            "description": "A short guide to keys, references and the query language.",
+            "type": "string"
+          },
+          "id": {
+            "description": "The workspace's ID.",
+            "type": "string"
+          },
+          "name": {
+            "description": "The workspace's name (its folder name).",
+            "type": "string"
+          },
+          "program_version": {
+            "description": "The version of the program answering.",
+            "type": "string"
+          },
+          "schema_version": {
+            "description": "The schema version of its database.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "settings": {
+            "$ref": "#/$defs/Settings",
+            "description": "The workspace settings."
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "schema_version",
+          "program_version",
+          "caller",
+          "settings",
+          "guide"
+        ],
+        "title": "WorkspaceInfo",
+        "type": "object"
+      },
+      "output_name": "WorkspaceInfo",
+      "safety": "read",
+      "summary": "The open workspace: its name and ID, the schema and program versions, who is asking with which rights, the settings and a short guide."
+    },
+    {
+      "cli": "settings get",
+      "exposure": "data",
+      "id": "settings.get",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "No input.",
+        "title": "SettingsGetInput",
+        "type": "object"
+      },
+      "input_name": "SettingsGetInput",
+      "kind": "query",
+      "mcp_tool": "get_workspace",
+      "output": {
+        "$defs": {
+          "Profile": {
+            "description": "What an agent may do. The workspace setting \"most an agent may do\" caps\nthe profile an agent asks for.",
+            "oneOf": [
+              {
+                "const": "read-only",
+                "description": "Reads only.",
+                "type": "string"
+              },
+              {
+                "const": "standard",
+                "description": "Reads, changes and moves to the trash; nothing permanent.",
+                "type": "string"
+              },
+              {
+                "const": "full",
+                "description": "Everything except operations on the application itself.",
+                "type": "string"
+              }
+            ]
+          },
+          "WeekStart": {
+            "description": "The first day of the week.",
+            "oneOf": [
+              {
+                "const": "monday",
+                "description": "Monday.",
+                "type": "string"
+              },
+              {
+                "const": "saturday",
+                "description": "Saturday.",
+                "type": "string"
+              },
+              {
+                "const": "sunday",
+                "description": "Sunday.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The workspace's settings, with defaults filled in.",
+        "properties": {
+          "agent_max_profile": {
+            "$ref": "#/$defs/Profile",
+            "description": "The most an agent may do, whatever profile it asks for."
+          },
+          "days_per_week": {
+            "description": "Working days in a week, for durations written in weeks (`1w`).",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "hours_per_day": {
+            "description": "Working hours in a day, for durations written in days (`2d`).",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "reminder_time": {
+            "description": "When reminders for a due date fire, as `HH:MM`.",
+            "type": "string"
+          },
+          "trash_days": {
+            "description": "Days an item stays in the trash before it is purged.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "week_start": {
+            "$ref": "#/$defs/WeekStart",
+            "description": "The first day of the week in calendars and in `this-week`."
+          }
+        },
+        "required": [
+          "trash_days",
+          "reminder_time",
+          "hours_per_day",
+          "days_per_week",
+          "week_start",
+          "agent_max_profile"
+        ],
+        "title": "Settings",
+        "type": "object"
+      },
+      "output_name": "Settings",
+      "safety": "read",
+      "summary": "Read the workspace settings."
+    },
+    {
+      "cli": "settings set",
+      "exposure": "data",
+      "id": "settings.update",
+      "input": {
+        "$defs": {
+          "WeekStart": {
+            "description": "The first day of the week.",
+            "oneOf": [
+              {
+                "const": "monday",
+                "description": "Monday.",
+                "type": "string"
+              },
+              {
+                "const": "saturday",
+                "description": "Saturday.",
+                "type": "string"
+              },
+              {
+                "const": "sunday",
+                "description": "Sunday.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The settings to change; fields left out keep their value. Settings that\ncontrol agents are changed in the app only.",
+        "properties": {
+          "days_per_week": {
+            "description": "Working days in a week, 1 to 7.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "hours_per_day": {
+            "description": "Working hours in a day, 1 to 24.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "reminder_time": {
+            "description": "Reminder time, `HH:MM` (24-hour).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "trash_days": {
+            "description": "Days in the trash before purging, 1 to 3650.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "week_start": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/WeekStart"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "First day of the week."
+          }
+        },
+        "title": "SettingsPatch",
+        "type": "object"
+      },
+      "input_name": "SettingsPatch",
+      "kind": "command",
+      "mcp_tool": "update_settings",
+      "output": {
+        "$defs": {
+          "Profile": {
+            "description": "What an agent may do. The workspace setting \"most an agent may do\" caps\nthe profile an agent asks for.",
+            "oneOf": [
+              {
+                "const": "read-only",
+                "description": "Reads only.",
+                "type": "string"
+              },
+              {
+                "const": "standard",
+                "description": "Reads, changes and moves to the trash; nothing permanent.",
+                "type": "string"
+              },
+              {
+                "const": "full",
+                "description": "Everything except operations on the application itself.",
+                "type": "string"
+              }
+            ]
+          },
+          "Settings": {
+            "additionalProperties": false,
+            "description": "The workspace's settings, with defaults filled in.",
+            "properties": {
+              "agent_max_profile": {
+                "$ref": "#/$defs/Profile",
+                "description": "The most an agent may do, whatever profile it asks for."
+              },
+              "days_per_week": {
+                "description": "Working days in a week, for durations written in weeks (`1w`).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "hours_per_day": {
+                "description": "Working hours in a day, for durations written in days (`2d`).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "reminder_time": {
+                "description": "When reminders for a due date fire, as `HH:MM`.",
+                "type": "string"
+              },
+              "trash_days": {
+                "description": "Days an item stays in the trash before it is purged.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "week_start": {
+                "$ref": "#/$defs/WeekStart",
+                "description": "The first day of the week in calendars and in `this-week`."
+              }
+            },
+            "required": [
+              "trash_days",
+              "reminder_time",
+              "hours_per_day",
+              "days_per_week",
+              "week_start",
+              "agent_max_profile"
+            ],
+            "type": "object"
+          },
+          "WeekStart": {
+            "description": "The first day of the week.",
+            "oneOf": [
+              {
+                "const": "monday",
+                "description": "Monday.",
+                "type": "string"
+              },
+              {
+                "const": "saturday",
+                "description": "Saturday.",
+                "type": "string"
+              },
+              {
+                "const": "sunday",
+                "description": "Sunday.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The settings after a change.",
+        "properties": {
+          "changed": {
+            "description": "The settings whose value changed.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "group": {
+            "description": "The history group of the change, for revert and Undo; left out when\nnothing changed.",
+            "type": "string"
+          },
+          "settings": {
+            "$ref": "#/$defs/Settings",
+            "description": "All settings, after the change."
+          }
+        },
+        "required": [
+          "settings",
+          "changed"
+        ],
+        "title": "SettingsChange",
+        "type": "object"
+      },
+      "output_name": "SettingsChange",
+      "safety": "write",
+      "summary": "Change workspace settings that are not about agents: trash retention, reminder time, working hours and days, first day of the week."
+    },
+    {
+      "cli": "agents sessions",
+      "exposure": "data",
+      "id": "agent.sessions",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Which sessions to list.",
+        "properties": {
+          "limit": {
+            "description": "At most this many, newest first (default 50, at most 200).",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "running_only": {
+            "default": false,
+            "description": "Only sessions that haven't ended.",
+            "type": "boolean"
+          }
+        },
+        "title": "AgentSessionsInput",
+        "type": "object"
+      },
+      "input_name": "AgentSessionsInput",
+      "kind": "query",
+      "mcp_tool": "get_activity",
+      "output": {
+        "$defs": {
+          "AgentSession": {
+            "additionalProperties": false,
+            "description": "One run of `glyphkeel mcp`.",
+            "properties": {
+              "client": {
+                "description": "The client's own ID (`claude-code`), when it sent one.",
+                "type": "string"
+              },
+              "client_version": {
+                "description": "The client's version, when it sent one.",
+                "type": "string"
+              },
+              "ended_at": {
+                "description": "When it ended; left out while it runs.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The session's ID.",
+                "type": "string"
+              },
+              "last_seen_at": {
+                "description": "When it was last seen working.",
+                "type": "string"
+              },
+              "name": {
+                "description": "The agent's display name.",
+                "type": "string"
+              },
+              "profile": {
+                "$ref": "#/$defs/Profile",
+                "description": "The profile the session ran with."
+              },
+              "reads": {
+                "description": "Operations that read.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "started_at": {
+                "description": "When it started (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "writes": {
+                "description": "Operations that changed something.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "profile",
+              "started_at",
+              "last_seen_at",
+              "reads",
+              "writes"
+            ],
+            "type": "object"
+          },
+          "Profile": {
+            "description": "What an agent may do. The workspace setting \"most an agent may do\" caps\nthe profile an agent asks for.",
+            "oneOf": [
+              {
+                "const": "read-only",
+                "description": "Reads only.",
+                "type": "string"
+              },
+              {
+                "const": "standard",
+                "description": "Reads, changes and moves to the trash; nothing permanent.",
+                "type": "string"
+              },
+              {
+                "const": "full",
+                "description": "Everything except operations on the application itself.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Agent sessions, newest first.",
+        "properties": {
+          "items": {
+            "description": "The sessions.",
+            "items": {
+              "$ref": "#/$defs/AgentSession"
+            },
+            "type": "array"
+          },
+          "total": {
+            "description": "How many sessions match in all.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "AgentSessionList",
+        "type": "object"
+      },
+      "output_name": "AgentSessionList",
+      "safety": "read",
+      "summary": "List agent sessions, newest first, with their client, profile, times and counts of reads and writes."
+    },
+    {
+      "app_reason": "It sets the rights of agents; an agent that could call it would raise its own rights beyond what the person allowed.",
+      "cli": "agents policy",
+      "exposure": "app",
+      "id": "agent.policy.update",
+      "input": {
+        "$defs": {
+          "Profile": {
+            "description": "What an agent may do. The workspace setting \"most an agent may do\" caps\nthe profile an agent asks for.",
+            "oneOf": [
+              {
+                "const": "read-only",
+                "description": "Reads only.",
+                "type": "string"
+              },
+              {
+                "const": "standard",
+                "description": "Reads, changes and moves to the trash; nothing permanent.",
+                "type": "string"
+              },
+              {
+                "const": "full",
+                "description": "Everything except operations on the application itself.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The agent policy to set.",
+        "properties": {
+          "max_profile": {
+            "$ref": "#/$defs/Profile",
+            "description": "The most an agent may do, whatever profile it asks for."
+          }
+        },
+        "required": [
+          "max_profile"
+        ],
+        "title": "AgentPolicyPatch",
+        "type": "object"
+      },
+      "input_name": "AgentPolicyPatch",
+      "kind": "command",
+      "output": {
+        "$defs": {
+          "Profile": {
+            "description": "What an agent may do. The workspace setting \"most an agent may do\" caps\nthe profile an agent asks for.",
+            "oneOf": [
+              {
+                "const": "read-only",
+                "description": "Reads only.",
+                "type": "string"
+              },
+              {
+                "const": "standard",
+                "description": "Reads, changes and moves to the trash; nothing permanent.",
+                "type": "string"
+              },
+              {
+                "const": "full",
+                "description": "Everything except operations on the application itself.",
+                "type": "string"
+              }
+            ]
+          },
+          "Settings": {
+            "additionalProperties": false,
+            "description": "The workspace's settings, with defaults filled in.",
+            "properties": {
+              "agent_max_profile": {
+                "$ref": "#/$defs/Profile",
+                "description": "The most an agent may do, whatever profile it asks for."
+              },
+              "days_per_week": {
+                "description": "Working days in a week, for durations written in weeks (`1w`).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "hours_per_day": {
+                "description": "Working hours in a day, for durations written in days (`2d`).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "reminder_time": {
+                "description": "When reminders for a due date fire, as `HH:MM`.",
+                "type": "string"
+              },
+              "trash_days": {
+                "description": "Days an item stays in the trash before it is purged.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "week_start": {
+                "$ref": "#/$defs/WeekStart",
+                "description": "The first day of the week in calendars and in `this-week`."
+              }
+            },
+            "required": [
+              "trash_days",
+              "reminder_time",
+              "hours_per_day",
+              "days_per_week",
+              "week_start",
+              "agent_max_profile"
+            ],
+            "type": "object"
+          },
+          "WeekStart": {
+            "description": "The first day of the week.",
+            "oneOf": [
+              {
+                "const": "monday",
+                "description": "Monday.",
+                "type": "string"
+              },
+              {
+                "const": "saturday",
+                "description": "Saturday.",
+                "type": "string"
+              },
+              {
+                "const": "sunday",
+                "description": "Sunday.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The settings after a change.",
+        "properties": {
+          "changed": {
+            "description": "The settings whose value changed.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "group": {
+            "description": "The history group of the change, for revert and Undo; left out when\nnothing changed.",
+            "type": "string"
+          },
+          "settings": {
+            "$ref": "#/$defs/Settings",
+            "description": "All settings, after the change."
+          }
+        },
+        "required": [
+          "settings",
+          "changed"
+        ],
+        "title": "SettingsChange",
+        "type": "object"
+      },
+      "output_name": "SettingsChange",
+      "safety": "app",
+      "summary": "Set the most an agent may do, whatever profile it asks for."
+    },
+    {
+      "cli": "activity",
+      "exposure": "data",
+      "id": "history.feed",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Which changes to list.",
+        "properties": {
+          "actor": {
+            "description": "Only changes by this actor, by name (case-insensitive).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cursor": {
+            "description": "`next_cursor` of the previous page.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "group": {
+            "description": "Only the changes of this history group.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "limit": {
+            "description": "At most this many changes (default 50, at most 200).",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "session": {
+            "description": "Only changes of this agent session; `\"current\"` is the caller's own.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sessions": {
+            "default": false,
+            "description": "Also list the agent sessions.",
+            "type": "boolean"
+          }
+        },
+        "title": "ActivityQuery",
+        "type": "object"
+      },
+      "input_name": "ActivityQuery",
+      "kind": "query",
+      "mcp_tool": "get_activity",
+      "output": {
+        "$defs": {
+          "ActivityEntry": {
+            "additionalProperties": false,
+            "description": "One changed item in the activity log.",
+            "properties": {
+              "actor": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who."
+              },
+              "at": {
+                "description": "When (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "entity": {
+                "description": "What kind of item changed.",
+                "type": "string"
+              },
+              "fields": {
+                "additionalProperties": {
+                  "$ref": "#/$defs/FieldChange"
+                },
+                "description": "The changed fields, each with its value before and after.",
+                "type": "object"
+              },
+              "group": {
+                "description": "Its history group: everything one command changed.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The item's ID.",
+                "type": "string"
+              },
+              "op": {
+                "description": "The operation (`settings.update`).",
+                "type": "string"
+              },
+              "project": {
+                "description": "The project of the changed item, if any.",
+                "type": "string"
+              },
+              "reverted_by": {
+                "description": "The group that reverted this change, if one did.",
+                "type": "string"
+              },
+              "seq": {
+                "description": "The change's sequence number.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "session": {
+                "description": "The agent session, for changes through MCP.",
+                "type": "string"
+              },
+              "via": {
+                "$ref": "#/$defs/Via",
+                "description": "Through which program."
+              }
+            },
+            "required": [
+              "seq",
+              "group",
+              "at",
+              "op",
+              "actor",
+              "via",
+              "entity",
+              "id",
+              "fields"
+            ],
+            "type": "object"
+          },
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person or agent."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person or an agent.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              }
+            ]
+          },
+          "AgentSession": {
+            "additionalProperties": false,
+            "description": "One run of `glyphkeel mcp`.",
+            "properties": {
+              "client": {
+                "description": "The client's own ID (`claude-code`), when it sent one.",
+                "type": "string"
+              },
+              "client_version": {
+                "description": "The client's version, when it sent one.",
+                "type": "string"
+              },
+              "ended_at": {
+                "description": "When it ended; left out while it runs.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The session's ID.",
+                "type": "string"
+              },
+              "last_seen_at": {
+                "description": "When it was last seen working.",
+                "type": "string"
+              },
+              "name": {
+                "description": "The agent's display name.",
+                "type": "string"
+              },
+              "profile": {
+                "$ref": "#/$defs/Profile",
+                "description": "The profile the session ran with."
+              },
+              "reads": {
+                "description": "Operations that read.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "started_at": {
+                "description": "When it started (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "writes": {
+                "description": "Operations that changed something.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "profile",
+              "started_at",
+              "last_seen_at",
+              "reads",
+              "writes"
+            ],
+            "type": "object"
+          },
+          "FieldChange": {
+            "additionalProperties": false,
+            "description": "One field's change. A side is left out when the field had no value.",
+            "properties": {
+              "after": {
+                "description": "The value after."
+              },
+              "before": {
+                "description": "The value before."
+              }
+            },
+            "type": "object"
+          },
+          "Profile": {
+            "description": "What an agent may do. The workspace setting \"most an agent may do\" caps\nthe profile an agent asks for.",
+            "oneOf": [
+              {
+                "const": "read-only",
+                "description": "Reads only.",
+                "type": "string"
+              },
+              {
+                "const": "standard",
+                "description": "Reads, changes and moves to the trash; nothing permanent.",
+                "type": "string"
+              },
+              {
+                "const": "full",
+                "description": "Everything except operations on the application itself.",
+                "type": "string"
+              }
+            ]
+          },
+          "Via": {
+            "description": "The program a change came through.",
+            "oneOf": [
+              {
+                "const": "app",
+                "description": "The desktop app.",
+                "type": "string"
+              },
+              {
+                "const": "cli",
+                "description": "The `glyphkeel` command.",
+                "type": "string"
+              },
+              {
+                "const": "mcp",
+                "description": "An agent through `glyphkeel mcp`.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A page of the activity log, newest first.",
+        "properties": {
+          "items": {
+            "description": "The changes.",
+            "items": {
+              "$ref": "#/$defs/ActivityEntry"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "description": "Pass as `cursor` for the next page; left out on the last page.",
+            "type": "string"
+          },
+          "sessions": {
+            "description": "The agent sessions, newest first, when asked for.",
+            "items": {
+              "$ref": "#/$defs/AgentSession"
+            },
+            "type": "array"
+          },
+          "total": {
+            "description": "How many changes match in all.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "ActivityPage",
+        "type": "object"
+      },
+      "output_name": "ActivityPage",
+      "safety": "read",
+      "summary": "The activity log, newest first: who changed what, when and through which program; optionally the agent sessions."
+    },
+    {
+      "cli": "revert",
+      "exposure": "data",
+      "id": "history.revert",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "What to revert: history groups, or everything an agent session changed.",
+        "properties": {
+          "dry_run": {
+            "default": false,
+            "description": "Only report what would be reverted.",
+            "type": "boolean"
+          },
+          "groups": {
+            "description": "History groups to revert.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "session": {
+            "description": "An agent session whose changes to revert.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "RevertInput",
+        "type": "object"
+      },
+      "input_name": "RevertInput",
+      "kind": "command",
+      "mcp_tool": "revert_changes",
+      "output": {
+        "$defs": {
+          "SkippedGroup": {
+            "additionalProperties": false,
+            "description": "A group a revert left alone.",
+            "properties": {
+              "group": {
+                "description": "The group.",
+                "type": "string"
+              },
+              "reason": {
+                "description": "Why: something changed it since, it was already reverted, and so on.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "group",
+              "reason"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "What a revert did.",
+        "properties": {
+          "group": {
+            "description": "The history group of the revert itself; left out in a dry run or when\nnothing was reverted.",
+            "type": "string"
+          },
+          "reverted": {
+            "description": "The groups reverted (or that would be, in a dry run), newest first.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "skipped": {
+            "description": "Groups left alone, with the reason.",
+            "items": {
+              "$ref": "#/$defs/SkippedGroup"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "reverted",
+          "skipped"
+        ],
+        "title": "RevertResult",
+        "type": "object"
+      },
+      "output_name": "RevertResult",
+      "safety": "write",
+      "summary": "Revert history groups or everything an agent session changed. Groups that something changed since are skipped and listed."
+    },
+    {
+      "app_reason": "Undo walks the app's own stack of changes made in this run; agents and the command line revert named groups instead.",
+      "exposure": "app",
+      "id": "history.undo",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "No input.",
+        "title": "UndoInput",
+        "type": "object"
+      },
+      "input_name": "UndoInput",
+      "kind": "command",
+      "output": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "What Undo or Redo did.",
+        "properties": {
+          "group": {
+            "description": "The history group of the Undo or Redo itself.",
+            "type": "string"
+          },
+          "op": {
+            "description": "The operation that was undone or redone.",
+            "type": "string"
+          },
+          "target": {
+            "description": "The group that was undone or redone.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target",
+          "group",
+          "op"
+        ],
+        "title": "UndoResult",
+        "type": "object"
+      },
+      "output_name": "UndoResult",
+      "safety": "app",
+      "summary": "Undo the last change made in this run of the app."
+    },
+    {
+      "app_reason": "Redo walks the app's own stack of changes made in this run; agents and the command line revert named groups instead.",
+      "exposure": "app",
+      "id": "history.redo",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "No input.",
+        "title": "UndoInput",
+        "type": "object"
+      },
+      "input_name": "UndoInput",
+      "kind": "command",
+      "output": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "What Undo or Redo did.",
+        "properties": {
+          "group": {
+            "description": "The history group of the Undo or Redo itself.",
+            "type": "string"
+          },
+          "op": {
+            "description": "The operation that was undone or redone.",
+            "type": "string"
+          },
+          "target": {
+            "description": "The group that was undone or redone.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target",
+          "group",
+          "op"
+        ],
+        "title": "UndoResult",
+        "type": "object"
+      },
+      "output_name": "UndoResult",
+      "safety": "app",
+      "summary": "Redo the change the last Undo took back."
+    }
+  ]
+}

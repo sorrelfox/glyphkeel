@@ -21,7 +21,9 @@ publish = false
 # Internal crates are added here as path dependencies when a crate first uses
 # another, for example `gk-core = { path = "crates/gk-core" }`. Which crate may
 # use which is checked by `cargo xtask check-deps`.
+gk-api = { path = "crates/gk-api" }
 gk-core = { path = "crates/gk-core" }
+gk-store = { path = "crates/gk-store" }
 
 # Third-party crates: shared versions live here, crates use `{ workspace = true }`.
 # Every new crate needs a reason in a comment and a licence that cargo-deny allows.
@@ -39,9 +41,15 @@ proptest = "1.12.0"
 # The workspace database: SQLite bundled (with FTS5), custom collation and
 # busy handler.
 rusqlite = { version = "0.43.0", features = ["bundled", "collation"] }
-# Records of the test-data archive written by the seed tool.
+# The operation catalog's JSON Schemas (inputs, outputs, the MCP tool list
+# and the generated TypeScript client).
+schemars = "1.2.3"
+# Records of the test-data archive written by the seed tool, and every
+# operation's input and output.
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
+# The JSON path of the field that made an operation's input invalid.
+serde_path_to_error = "0.1.20"
 # Content hashes of stored files (files are addressed by SHA-256).
 sha2 = "0.10.9"
 # Temporary workspaces in tests (development only).
