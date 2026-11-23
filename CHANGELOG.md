@@ -5,6 +5,35 @@ Conventional Commits, and versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.0.5] - 2026-11-23
+
+A task list with a query language, and a set of smaller improvements.
+
+### Features
+
+- **Task list:** every task of a project, or of all projects, in a fast table
+  with sortable columns, a column chooser, totals for estimates and time spent,
+  and inline editing of title, status, priority and due date.
+- **Query language:** a one-line query field with highlighting, completion and
+  clear error messages, natural dates such as "next fri", and saved views.
+  The same queries work in `glyphkeel task list --query` and for agents.
+- **Bulk changes:** change the status, priority or labels of many tasks at
+  once, or move them, with a preview and a single Undo.
+- **Export:** save the current list as CSV or JSON.
+- **Labels:** new labels get an unused colour, and you can create a label
+  straight from a task.
+- **Projects:** choose a project's colour and an icon to show next to its name.
+- **Time zone:** pick the time zone in which all times are shown; the app,
+  the command line and agents use the same setting.
+- **Editor toolbar:** bold, italic, links, lists, checklists and more while
+  you write descriptions and comments.
+
+### Fixes
+
+- Task windows open in the installed app.
+- Preferences rows stay inside their cards, and drop-down lists follow the
+  current theme.
+
 ## [0.0.4] - 2026-11-23
 
 The first test build: projects, tasks and the board, task details with a
