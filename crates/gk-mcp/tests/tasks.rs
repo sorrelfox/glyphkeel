@@ -333,3 +333,83 @@ async fn an_agent_searches_changes_in_bulk_and_saves_a_view() {
     );
     c.close().await;
 }
+
+#[tokio::test]
+async fn an_agent_keeps_a_wiki_page_and_searches_everything() {
+    let (_dir, options) = workspace();
+    let (_, mode, version, _) = lifecycles().remove(0);
+    let c = connect(&options, mode, version, "Writer").await;
+    output(
+        &c.call("create_project", json!({ "name": "Docs", "key": "DOC" }))
+            .await,
+    );
+    let made = output(
+        &c.call(
+            "create_wiki_page",
+            json!({ "project": "DOC", "title": "Style guide",
+                    "body": "# Headings\n\nUse sentence case.\n",
+                    "client_request_id": "w-1" }),
+        )
+        .await,
+    );
+    assert_eq!(made["page"]["slug"], "style-guide");
+    let taken = c
+        .call(
+            "create_wiki_page",
+            json!({ "project": "DOC", "title": "STYLE GUIDE" }),
+        )
+        .await;
+    assert_eq!(taken.is_error, Some(true));
+    let edited = output(
+        &c.call(
+            "update_wiki_page",
+            json!({ "project": "DOC", "page": "style guide",
+                    "edits": [{ "old_text": "sentence case", "new_text": "sentence case, always" }] }),
+        )
+        .await,
+    );
+    assert_eq!(edited["save"]["outcome"], "saved");
+    let page = output(
+        &c.call(
+            "get_wiki_page",
+            json!({ "project": "DOC", "page": "Style guide" }),
+        )
+        .await,
+    );
+    assert!(page["body"].as_str().unwrap().contains("always"));
+    let pages = output(&c.call("list_wiki_pages", json!({ "project": "DOC" })).await);
+    assert_eq!(pages["total"], 1);
+    let headings = output(
+        &c.call("search_wiki_pages", json!({ "text": "style#head" }))
+            .await,
+    );
+    assert_eq!(headings["items"][0]["heading"]["text"], "Headings");
+    let history = output(
+        &c.call(
+            "get_wiki_history",
+            json!({ "project": "DOC", "page": "Style guide" }),
+        )
+        .await,
+    );
+    assert_eq!(history["total"], 2);
+    output(
+        &c.call(
+            "create_task",
+            json!({ "project": "DOC", "title": "Apply the style guide", "due_date": "in 3d" }),
+        )
+        .await,
+    );
+    let found = output(&c.call("search", json!({ "text": "style" })).await);
+    assert_eq!(found["total"], 2);
+    let mut kinds: Vec<&str> = found["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|h| h["kind"].as_str().unwrap())
+        .collect();
+    kinds.sort_unstable();
+    assert_eq!(kinds, ["task", "wiki"]);
+    let today = output(&c.call("get_today", json!({})).await);
+    assert_eq!(today["counts"]["recent"], 1);
+    c.close().await;
+}

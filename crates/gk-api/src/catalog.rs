@@ -8,8 +8,8 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::ops::{
-    agent, board, bulk, comment, description, file, history, project, query, settings, task, time,
-    view, workspace,
+    agent, board, bulk, comment, description, file, history, project, query, search, settings,
+    task, time, today, view, wiki, workspace,
 };
 use crate::schema;
 
@@ -156,6 +156,7 @@ pub static CATALOG: &[OpDescriptor] = &[
     workspace::WORKSPACE_GET,
     settings::SETTINGS_GET,
     settings::SETTINGS_UPDATE,
+    search::SEARCH_QUERY,
     project::PROJECT_LIST,
     project::PROJECT_GET,
     project::PROJECT_CREATE,
@@ -209,6 +210,7 @@ pub static CATALOG: &[OpDescriptor] = &[
     time::REMINDER_CLEAR,
     time::REMINDER_DUE,
     time::REMINDER_ACKNOWLEDGE,
+    today::TODAY_GET,
     board::BOARD_GET,
     board::LAYOUT_GET,
     board::LAYOUT_UPDATE,
@@ -217,6 +219,12 @@ pub static CATALOG: &[OpDescriptor] = &[
     view::VIEW_UPDATE,
     view::VIEW_DELETE,
     query::QUERY_PARSE,
+    wiki::WIKI_LIST,
+    wiki::WIKI_SEARCH,
+    wiki::WIKI_GET,
+    wiki::WIKI_CREATE,
+    wiki::WIKI_UPDATE,
+    wiki::WIKI_HISTORY,
     file::FILE_GET,
     file::FILE_READ,
     file::FILE_THUMBNAIL,

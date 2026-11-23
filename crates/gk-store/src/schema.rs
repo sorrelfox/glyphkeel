@@ -19,7 +19,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 use crate::error::{Result, StoreError};
 
 /// The schema version this program is built for.
-pub const SCHEMA_VERSION: i64 = 5;
+pub const SCHEMA_VERSION: i64 = 6;
 
 /// One migration: the SQL that takes the schema from `version - 1` to
 /// `version`.
@@ -50,6 +50,10 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 5,
         sql: include_str!("../migrations/0005_project_icons.sql"),
+    },
+    Migration {
+        version: 6,
+        sql: include_str!("../migrations/0006_wiki_conflicts.sql"),
     },
 ];
 
@@ -362,7 +366,7 @@ mod tests {
                      x'11000000000000000000000000000000', 'i', 0, 'user', 'Me', 0, 0);",
         )
         .unwrap();
-        migrate(&mut conn, MIGRATIONS, |_| Ok(())).unwrap();
+        migrate(&mut conn, &MIGRATIONS[..5], |_| Ok(())).unwrap();
         assert_eq!(user_version(&conn).unwrap(), 5);
         let icons: Vec<(String, Option<String>)> = conn
             .prepare("SELECT key, icon FROM projects ORDER BY key")
@@ -392,6 +396,35 @@ mod tests {
             )
             .unwrap();
         assert_eq!(rows, (1, 1, 1), "nothing else changes");
+    }
+
+    #[test]
+    fn version_6_keeps_wiki_revisions_and_leaves_them_unresolved() {
+        let mut conn = memory();
+        migrate(&mut conn, &MIGRATIONS[..5], |_| Ok(())).unwrap();
+        conn.execute_batch(
+            "INSERT INTO projects (id, rank, key, name, name_fold, hue, modules, created_at,
+                                   updated_at)
+             VALUES (x'01010101010101010101010101010101', 'i', 'WK', 'WK', 'wk', 'blue', '{}',
+                     0, 0);
+             INSERT INTO wiki_pages (id, project_id, rank, title, title_fold, slug, created_at,
+                                     updated_at)
+             VALUES (x'02020202020202020202020202020202', x'01010101010101010101010101010101',
+                     'i', 'Plan', 'plan', 'plan', 0, 0);
+             INSERT INTO wiki_revisions (id, page_id, body, kind, actor_kind, actor_name,
+                                         created_at)
+             VALUES (x'03030303030303030303030303030303', x'02020202020202020202020202020202',
+                     'Text', 'conflict', 'user', 'Me', 0);",
+        )
+        .unwrap();
+        migrate(&mut conn, MIGRATIONS, |_| Ok(())).unwrap();
+        assert_eq!(user_version(&conn).unwrap(), 6);
+        let row: (String, Option<i64>) = conn
+            .query_row("SELECT body, resolved_at FROM wiki_revisions", [], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })
+            .unwrap();
+        assert_eq!(row, ("Text".to_owned(), None));
     }
 
     #[test]

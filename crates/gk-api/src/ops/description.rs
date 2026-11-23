@@ -144,7 +144,7 @@ pub struct DescriptionRevisionInput {
 pub struct RevisionDetail {
     /// The revision.
     pub revision: RevisionInfo,
-    /// The task's or project's key.
+    /// The task's or project's key, or the wiki page's title.
     pub owner: String,
     /// The text (Markdown).
     pub body: String,

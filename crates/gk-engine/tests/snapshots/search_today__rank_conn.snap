@@ -1,0 +1,7 @@
+---
+source: crates/gk-engine/tests/search_today.rs
+expression: "render(&ws.search(json!({ \"text\": \"CONN\" })))"
+---
+task     title     TM-1   [Connection] timeout on sync
+task     text      TM-4   Error codes | ERR_[CONN] appears when the user_id is missing.
+total: 2

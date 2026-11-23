@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-//! Descriptions of tasks and projects: revisions, merging, conflict copies,
-//! checklists, and the reader's HTML.
+//! Descriptions of tasks and projects, and the text of wiki pages:
+//! revisions, merging, conflict copies, checklists, and the reader's HTML.
 //!
 //! Rules: every save of a description is a revision. A save that names the
 //! revision it was edited from (its base) and finds another save in between
@@ -42,7 +42,7 @@ use gk_store::rusqlite::{OptionalExtension, Row, Transaction, params};
 use serde_json::{Value, json};
 
 use super::desc;
-use super::fields::{self, PROJECT, TASK};
+use super::fields::{self, PROJECT, TASK, WIKI};
 use super::lookup::{self, b, id_at, opt_id_at};
 use crate::failure::Failure;
 use crate::registry::{QueryCtx, Registry};
@@ -63,11 +63,12 @@ pub(super) fn register(r: &mut Registry) {
 // ---------------------------------------------------------------------
 // Owners and revisions
 
-/// Whose description.
+/// Whose text: a task's or project's description, or a wiki page's text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Owner {
     Task(Id),
     Project(Id),
+    Wiki(Id),
 }
 
 impl Owner {
@@ -75,12 +76,13 @@ impl Owner {
         match self {
             Self::Task(_) => "task",
             Self::Project(_) => "project",
+            Self::Wiki(_) => "wiki_page",
         }
     }
 
     fn id(self) -> Id {
         match self {
-            Self::Task(id) | Self::Project(id) => id,
+            Self::Task(id) | Self::Project(id) | Self::Wiki(id) => id,
         }
     }
 
@@ -88,6 +90,7 @@ impl Owner {
         match self {
             Self::Task(_) => TASK,
             Self::Project(_) => PROJECT,
+            Self::Wiki(_) => WIKI,
         }
     }
 
@@ -95,15 +98,41 @@ impl Owner {
         match self {
             Self::Task(_) => "tasks",
             Self::Project(_) => "projects",
+            Self::Wiki(_) => "wiki_pages",
         }
     }
 
-    /// The owner of history's `entity`/`id`, for the two kinds that have
-    /// descriptions.
+    /// The column that holds the current revision.
+    fn rev_column(self) -> &'static str {
+        match self {
+            Self::Task(_) | Self::Project(_) => "description_rev",
+            Self::Wiki(_) => "current_rev",
+        }
+    }
+
+    /// The text's name in history and in errors.
+    pub(crate) fn field(self) -> &'static str {
+        match self {
+            Self::Task(_) | Self::Project(_) => "description",
+            Self::Wiki(_) => "body",
+        }
+    }
+
+    /// The input field of targeted edits.
+    fn edits_field(self) -> &'static str {
+        match self {
+            Self::Task(_) | Self::Project(_) => "description_edits",
+            Self::Wiki(_) => "edits",
+        }
+    }
+
+    /// The owner of history's `entity`/`id`, for the kinds that have a
+    /// text with revisions.
     pub(crate) fn of_entity(entity: &str, id: Id) -> Option<Self> {
         match entity {
             TASK => Some(Self::Task(id)),
             PROJECT => Some(Self::Project(id)),
+            WIKI => Some(Self::Wiki(id)),
             _ => None,
         }
     }
@@ -117,20 +146,22 @@ struct Stored {
 }
 
 fn stored(tx: &Transaction<'_>, owner: Owner) -> Result<Stored, Failure> {
+    let sql = match owner {
+        Owner::Wiki(_) => "SELECT coalesce(r.body, ''), p.current_rev FROM wiki_pages p
+                             LEFT JOIN wiki_revisions r ON r.id = p.current_rev WHERE p.id = ?1"
+            .to_owned(),
+        _ => format!(
+            "SELECT description, description_rev FROM {} WHERE id = ?1",
+            owner.table()
+        ),
+    };
     let row = tx
-        .query_row(
-            &format!(
-                "SELECT description, description_rev FROM {} WHERE id = ?1",
-                owner.table()
-            ),
-            [b(owner.id())],
-            |r| {
-                Ok(Stored {
-                    text: r.get(0)?,
-                    rev: opt_id_at(r, 1)?,
-                })
-            },
-        )
+        .query_row(&sql, [b(owner.id())], |r| {
+            Ok(Stored {
+                text: r.get(0)?,
+                rev: opt_id_at(r, 1)?,
+            })
+        })
         .optional()?;
     row.ok_or_else(|| Failure::Op(OpError::not_found("The item is gone.", &[])))
 }
@@ -153,6 +184,9 @@ pub(crate) struct RevisionRow {
 
 const REVISION_COLUMNS: &str = "id, owner_kind, owner_id, body, base_rev, kind, message,
     actor_kind, actor_name, created_at, resolved_at";
+/// The same columns from `wiki_revisions`.
+const WIKI_REVISION_COLUMNS: &str = "id, 'wiki_page', page_id, body, base_rev, kind, message,
+    actor_kind, actor_name, created_at, resolved_at";
 
 fn revision_row(r: &Row<'_>) -> gk_store::rusqlite::Result<RevisionRow> {
     Ok(RevisionRow {
@@ -170,10 +204,21 @@ fn revision_row(r: &Row<'_>) -> gk_store::rusqlite::Result<RevisionRow> {
     })
 }
 
+/// The revision `id`, of a description or of a wiki page.
 fn revision(tx: &Transaction<'_>, id: Id) -> Result<Option<RevisionRow>, Failure> {
-    Ok(tx
+    let text = tx
         .query_row(
             &format!("SELECT {REVISION_COLUMNS} FROM text_revisions WHERE id = ?1"),
+            [b(id)],
+            revision_row,
+        )
+        .optional()?;
+    if text.is_some() {
+        return Ok(text);
+    }
+    Ok(tx
+        .query_row(
+            &format!("SELECT {WIKI_REVISION_COLUMNS} FROM wiki_revisions WHERE id = ?1"),
             [b(id)],
             revision_row,
         )
@@ -182,10 +227,10 @@ fn revision(tx: &Transaction<'_>, id: Id) -> Result<Option<RevisionRow>, Failure
 
 impl RevisionRow {
     fn owner(&self) -> Owner {
-        if self.owner_kind == "project" {
-            Owner::Project(self.owner_id)
-        } else {
-            Owner::Task(self.owner_id)
+        match self.owner_kind.as_str() {
+            "project" => Owner::Project(self.owner_id),
+            "wiki_page" => Owner::Wiki(self.owner_id),
+            _ => Owner::Task(self.owner_id),
         }
     }
 
@@ -227,11 +272,15 @@ fn revision_of(
     let missing = || {
         Failure::Op(
             OpError::not_found(
-                format!("There is no revision \"{text}\" of this description."),
+                crate::messages::text("revision-not-found", &[("revision", text.to_owned())]),
                 &[],
             )
             .with_detail("field", field)
-            .with_hint("Read the task again; its description_revision is the one to pass."),
+            .with_detail("message_id", "revision-not-found")
+            .with_hint(match owner {
+                Owner::Wiki(_) => "Read the page again; its revision is the one to pass.",
+                _ => "Read the task again; its description_revision is the one to pass.",
+            }),
         )
     };
     let id: Id = text.trim().parse().map_err(|_| missing())?;
@@ -240,6 +289,26 @@ fn revision_of(
         return Err(missing());
     }
     Ok(row)
+}
+
+/// The current text of `owner` and its revision.
+pub(crate) fn current_text(
+    tx: &Transaction<'_>,
+    owner: Owner,
+) -> Result<(String, Option<Id>), Failure> {
+    let s = stored(tx, owner)?;
+    Ok((s.text, s.rev))
+}
+
+/// The text of revision `text` (an ID a caller gave) of `owner`.
+pub(crate) fn revision_text(
+    tx: &Transaction<'_>,
+    owner: Owner,
+    field: &str,
+    text: &str,
+) -> Result<(Id, String), Failure> {
+    let row = revision_of(tx, owner, field, text)?;
+    Ok((row.id, row.body))
 }
 
 /// Writes a revision of `owner`'s description by the caller.
@@ -252,6 +321,25 @@ fn insert_revision(
 ) -> Result<Id, Failure> {
     let id = Id::generate_at(u64::try_from(w.now()).unwrap_or(0));
     let caller = w.caller();
+    if let Owner::Wiki(page) = owner {
+        w.tx().execute(
+            "INSERT INTO wiki_revisions (id, page_id, body, base_rev, kind, actor_kind,
+                                         actor_name, session_id, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![
+                b(id),
+                b(page),
+                body,
+                base.map(b),
+                kind,
+                caller.actor.kind.as_str(),
+                caller.actor.name,
+                caller.session.map(b),
+                w.now()
+            ],
+        )?;
+        return Ok(id);
+    }
     w.tx().execute(
         "INSERT INTO text_revisions (id, owner_kind, owner_id, body, base_rev, kind, actor_kind,
                                      actor_name, session_id, created_at)
@@ -280,10 +368,32 @@ pub(crate) fn initial(w: &WriteCtx<'_>, owner: Owner, body: &str) -> Result<(), 
     let rev = insert_revision(w, owner, body, None, "normal")?;
     w.tx().execute(
         &format!(
-            "UPDATE {} SET description_rev = ?2 WHERE id = ?1",
-            owner.table()
+            "UPDATE {} SET {} = ?2 WHERE id = ?1",
+            owner.table(),
+            owner.rev_column()
         ),
         params![b(owner.id()), b(rev)],
+    )?;
+    Ok(())
+}
+
+/// Writes a note on revision `rev`.
+pub(crate) fn set_message(
+    w: &WriteCtx<'_>,
+    owner: Owner,
+    rev: &str,
+    message: &str,
+) -> Result<(), Failure> {
+    let Ok(rev) = rev.parse::<Id>() else {
+        return Ok(());
+    };
+    let table = match owner {
+        Owner::Wiki(_) => "wiki_revisions",
+        _ => "text_revisions",
+    };
+    w.tx().execute(
+        &format!("UPDATE {table} SET message = ?2 WHERE id = ?1"),
+        params![b(rev), message],
     )?;
     Ok(())
 }
@@ -296,6 +406,8 @@ fn with_revision(w: &WriteCtx<'_>, owner: Owner) -> Result<Stored, Failure> {
         return Ok(s);
     }
     let (kind, name, at): (String, String, i64) = match owner {
+        // A page's text is always in a revision.
+        Owner::Wiki(_) => return Ok(s),
         Owner::Task(id) => w.tx().query_row(
             "SELECT created_by_kind, created_by_name, edited_at FROM tasks WHERE id = ?1",
             [b(id)],
@@ -335,7 +447,8 @@ pub(crate) fn raw(tx: &Transaction<'_>, owner: Owner) -> Result<Option<Value>, S
     let rev: Option<Option<Vec<u8>>> = tx
         .query_row(
             &format!(
-                "SELECT description_rev FROM {} WHERE id = ?1",
+                "SELECT {} FROM {} WHERE id = ?1",
+                owner.rev_column(),
                 owner.table()
             ),
             [b(owner.id())],
@@ -356,22 +469,31 @@ fn write_text(
     text: &str,
     rev: Id,
 ) -> Result<(), Failure> {
-    w.tx().execute(
-        &format!(
-            "UPDATE {} SET description = ?2, description_rev = ?3 WHERE id = ?1",
-            owner.table()
-        ),
-        params![b(owner.id()), text, b(rev)],
-    )?;
-    fields::touch(w, owner.entity(), owner.id(), "description")?;
-    if let Owner::Task(id) = owner {
-        super::task::refresh_text(w, id)?;
+    if let Owner::Wiki(page) = owner {
+        w.tx().execute(
+            "UPDATE wiki_pages SET current_rev = ?2 WHERE id = ?1",
+            params![b(page), b(rev)],
+        )?;
+    } else {
+        w.tx().execute(
+            &format!(
+                "UPDATE {} SET description = ?2, description_rev = ?3 WHERE id = ?1",
+                owner.table()
+            ),
+            params![b(owner.id()), text, b(rev)],
+        )?;
+    }
+    fields::touch(w, owner.entity(), owner.id(), owner.field())?;
+    match owner {
+        Owner::Task(id) => super::task::refresh_text(w, id)?,
+        Owner::Wiki(page) => super::wiki::reindex(w, page)?,
+        Owner::Project(_) => {}
     }
     w.record_field(
         owner.entity(),
         owner.id(),
         project,
-        "description",
+        owner.field(),
         rev_value(before),
         rev_value(Some(rev)),
     );
@@ -413,8 +535,8 @@ pub(crate) fn save(
             match gk_core::merge3(&base.body, &current.text, text) {
                 Merge::Clean(merged) if merged == current.text => Ok(unchanged(current.rev)),
                 Merge::Clean(merged) => {
-                    gk_core::check_markdown("description", &merged)
-                        .map_err(|e| super::task::invalid("description", e))?;
+                    gk_core::check_markdown(owner.field(), &merged)
+                        .map_err(|e| super::task::invalid(owner.field(), e))?;
                     let rev = insert_revision(w, owner, &merged, current.rev, "merged")?;
                     write_text(w, owner, project, current.rev, &merged, rev)?;
                     Ok(DescriptionSave {
@@ -471,23 +593,27 @@ pub(crate) fn save_edits(
         })
         .collect();
     let text = gk_core::apply_edits(&current.text, &list).map_err(|e| {
-        let field = format!("description_edits[{}].old_text", e.index());
+        let field = format!("{}[{}].old_text", owner.edits_field(), e.index());
+        let what = match owner {
+            Owner::Wiki(_) => "page",
+            _ => "description",
+        };
         let message = match e {
             gk_core::EditError::Empty { .. } => "The text to replace is empty.".to_owned(),
             gk_core::EditError::NotFound { .. } => {
-                "This text is not in the description (edits apply in order).".to_owned()
+                format!("This text is not in the {what} (edits apply in order).")
             }
-            gk_core::EditError::Ambiguous { count, .. } => format!(
-                "This text occurs {count} times in the description; include more around it."
-            ),
+            gk_core::EditError::Ambiguous { count, .. } => {
+                format!("This text occurs {count} times in the {what}; include more around it.")
+            }
         };
-        Failure::Op(
-            OpError::invalid_at(field, message)
-                .with_hint("Read the task again; nothing was changed."),
-        )
+        Failure::Op(OpError::invalid_at(field, message).with_hint(match owner {
+            Owner::Wiki(_) => "Read the page again; nothing was changed.",
+            _ => "Read the task again; nothing was changed.",
+        }))
     })?;
-    gk_core::check_markdown("description", &text)
-        .map_err(|e| super::task::invalid("description", e))?;
+    gk_core::check_markdown(owner.field(), &text)
+        .map_err(|e| super::task::invalid(owner.field(), e))?;
     save(w, owner, project, &text, None, "normal")
 }
 
@@ -526,17 +652,16 @@ pub(crate) fn restore(
 // ---------------------------------------------------------------------
 // Conflict copies
 
-/// Resolves the conflict copy `copy` of task `task`'s description.
+/// Resolves the conflict copy `copy` of `owner`'s text.
 pub(crate) fn resolve(
     w: &mut WriteCtx<'_>,
-    task: Id,
+    owner: Owner,
     project: Option<Id>,
     copy: &str,
     action: ConflictAction,
     text: Option<&str>,
     base: Option<&str>,
 ) -> Result<DescriptionSave, Failure> {
-    let owner = Owner::Task(task);
     let copy = revision_of(w.tx(), owner, "copy", copy)?;
     if copy.kind != "conflict" {
         return Err(OpError::invalid_at("copy", "That revision is not a conflict copy.").into());
@@ -552,9 +677,10 @@ pub(crate) fn resolve(
     if let Some(base) = base {
         let base = revision_of(w.tx(), owner, "base_revision", base)?;
         if Some(base.id) != current.rev {
-            return Err(OpError::conflict(
-                "The description changed again since you read it; nothing was resolved.",
-            )
+            return Err(OpError::conflict(match owner {
+                Owner::Wiki(_) => "The page changed again since you read it; nothing was resolved.",
+                _ => "The description changed again since you read it; nothing was resolved.",
+            })
             .with_detail(
                 "revision",
                 current.rev.map(|r| r.to_string()).unwrap_or_default(),
@@ -577,19 +703,23 @@ pub(crate) fn resolve(
                     "use_text needs the text to save.",
                 ))
             })?;
-            gk_core::check_markdown("description", text)
+            gk_core::check_markdown(owner.field(), text)
                 .map_err(|e| super::task::invalid("text", e))?;
             save(w, owner, project, text, None, "resolved")?
         }
     };
+    let table = match owner {
+        Owner::Wiki(_) => "wiki_revisions",
+        _ => "text_revisions",
+    };
     w.tx().execute(
-        "UPDATE text_revisions SET resolved_at = ?2 WHERE id = ?1",
+        &format!("UPDATE {table} SET resolved_at = ?2 WHERE id = ?1"),
         params![b(copy.id), w.now()],
     )?;
     bump(w, owner)?;
     w.record_field(
-        TASK,
-        task,
+        owner.entity(),
+        owner.id(),
         project,
         "conflict_resolved",
         None,
@@ -606,7 +736,7 @@ fn resolve_command(w: &mut WriteCtx<'_>, input: TaskResolveInput) -> Result<Task
     super::claim::guard(w, task.id, &input.key, false)?;
     let saved = resolve(
         w,
-        task.id,
+        Owner::Task(task.id),
         Some(project.id),
         &input.copy,
         input.action,
@@ -626,16 +756,28 @@ pub(crate) const CONFLICTS_SQL: &str = "(SELECT count(*) FROM text_revisions v
      WHERE v.owner_kind = 'task' AND v.owner_id = t.id AND v.kind = 'conflict'
        AND v.resolved_at IS NULL)";
 
-/// The revisions of `owner`'s description, newest first.
+/// The unresolved conflict copies of the wiki page `p`.
+pub(crate) const WIKI_CONFLICTS_SQL: &str = "(SELECT count(*) FROM wiki_revisions v
+     WHERE v.page_id = p.id AND v.kind = 'conflict' AND v.resolved_at IS NULL)";
+
+/// The revisions of `owner`'s text, newest first.
 pub(crate) fn revisions(tx: &Transaction<'_>, owner: Owner) -> Result<Vec<RevisionInfo>, Failure> {
     let current = stored(tx, owner)?.rev;
-    let mut stmt = tx.prepare_cached(&format!(
-        "SELECT {REVISION_COLUMNS} FROM text_revisions
-          WHERE owner_kind = ?1 AND owner_id = ?2 ORDER BY created_at DESC, rowid DESC"
-    ))?;
-    let rows = stmt
-        .query_map(params![owner.kind(), b(owner.id())], revision_row)?
-        .collect::<Result<Vec<_>, _>>()?;
+    let rows = if let Owner::Wiki(page) = owner {
+        let mut stmt = tx.prepare_cached(&format!(
+            "SELECT {WIKI_REVISION_COLUMNS} FROM wiki_revisions
+              WHERE page_id = ?1 ORDER BY created_at DESC, rowid DESC"
+        ))?;
+        stmt.query_map([b(page)], revision_row)?
+            .collect::<Result<Vec<_>, _>>()?
+    } else {
+        let mut stmt = tx.prepare_cached(&format!(
+            "SELECT {REVISION_COLUMNS} FROM text_revisions
+              WHERE owner_kind = ?1 AND owner_id = ?2 ORDER BY created_at DESC, rowid DESC"
+        ))?;
+        stmt.query_map(params![owner.kind(), b(owner.id())], revision_row)?
+            .collect::<Result<Vec<_>, _>>()?
+    };
     Ok(rows.iter().map(|r| r.info(current)).collect())
 }
 
@@ -669,6 +811,11 @@ fn owner_key(tx: &Transaction<'_>, owner: Owner) -> Result<String, Failure> {
         }
         Owner::Project(id) => {
             tx.query_row("SELECT key FROM projects WHERE id = ?1", [b(id)], |r| {
+                r.get(0)
+            })?
+        }
+        Owner::Wiki(id) => {
+            tx.query_row("SELECT title FROM wiki_pages WHERE id = ?1", [b(id)], |r| {
                 r.get(0)
             })?
         }

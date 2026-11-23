@@ -56,6 +56,7 @@
 //! [comrak]: https://docs.rs/comrak
 
 mod checklist;
+mod headings;
 mod keys;
 mod plain;
 mod raw_html;
@@ -65,6 +66,7 @@ mod sanitize;
 mod text;
 
 pub use checklist::{ChecklistItem, ToggleError, checklist, set_checked, toggle};
+pub use headings::{Heading, headings};
 pub use plain::plain_text;
 pub use references::{References, WikiLink, references};
 pub use render::{RenderOptions, render};

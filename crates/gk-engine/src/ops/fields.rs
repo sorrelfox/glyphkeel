@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-//! The recorded fields of projects, statuses, types, labels and tasks: how
-//! each maps to its column, how its value reads in history, and how it is
-//! written. Handlers change fields through [`set`], which records the
+//! The recorded fields of projects, statuses, types, labels, tasks and wiki
+//! pages: how each maps to its column, how its value reads in history, and
+//! how it is written. Handlers change fields through [`set`], which records the
 //! change; revert writes the recorded value back through the same path.
-//! Descriptions are not listed: they change through their revisions
-//! (`description.rs`).
+//! Descriptions and wiki pages' text are not listed: they change through
+//! their revisions (`description.rs`).
 
 use gk_core::{Id, fold};
 use gk_store::StoreError;
@@ -27,6 +27,8 @@ pub(crate) const TYPE: &str = "task_type";
 pub(crate) const LABEL: &str = "label";
 /// History's name for tasks.
 pub(crate) const TASK: &str = "task";
+/// History's name for wiki pages.
+pub(crate) const WIKI: &str = "wiki_page";
 
 /// How a column's value reads in history.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -125,6 +127,10 @@ const SPECS: &[Spec] = &[
     spec(TASK, "closed_at", "tasks", "closed_at", Enc::Int),
     spec(TASK, "project", "tasks", "project_id", Enc::Id),
     spec(TASK, "number", "tasks", "number", Enc::Int),
+    folded(WIKI, "title", "wiki_pages"),
+    spec(WIKI, "slug", "wiki_pages", "slug", Enc::Text),
+    spec(WIKI, "parent", "wiki_pages", "parent_id", Enc::Id),
+    spec(WIKI, "rank", "wiki_pages", "rank", Enc::Text),
 ];
 
 const PRIORITIES: [&str; 5] = ["none", "low", "normal", "high", "urgent"];
@@ -235,14 +241,21 @@ fn write_raw(w: &WriteCtx<'_>, s: &Spec, id: Id, value: Option<&Value>) -> Resul
     touch(w, s.entity, id, s.field)
 }
 
-/// Marks item `id` as changed now: projects get a new `updated_at`; tasks
-/// a new version and, for their own fields, a new `edited_at`.
+/// Marks item `id` as changed now: projects and wiki pages get a new
+/// `updated_at`; tasks a new version and, for their own fields, a new
+/// `edited_at`.
 pub(crate) fn touch(w: &WriteCtx<'_>, entity: &str, id: Id, field: &str) -> Result<(), Failure> {
     let id = id.as_bytes().as_slice();
     match entity {
         PROJECT => {
             w.tx().execute(
                 "UPDATE projects SET updated_at = ?2 WHERE id = ?1",
+                params![id, w.now()],
+            )?;
+        }
+        WIKI => {
+            w.tx().execute(
+                "UPDATE wiki_pages SET updated_at = ?2 WHERE id = ?1",
                 params![id, w.now()],
             )?;
         }

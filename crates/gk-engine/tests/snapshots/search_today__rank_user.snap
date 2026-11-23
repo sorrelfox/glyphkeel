@@ -1,0 +1,6 @@
+---
+source: crates/gk-engine/tests/search_today.rs
+expression: "render(&ws.search(json!({ \"text\": \"user\" })))"
+---
+task     text      TM-4   Error codes | ERR_CONN appears when the [user]_id is missing.
+total: 1

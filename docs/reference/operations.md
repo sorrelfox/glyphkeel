@@ -18,6 +18,7 @@ The safety class decides who may run an operation:
 | `workspace.get` | read | app, command line, MCP | `get_workspace` | `glyphkeel status` |
 | `settings.get` | read | app, command line, MCP | `get_workspace` | `glyphkeel settings get` |
 | `settings.update` | write | app, command line, MCP | `update_settings` | `glyphkeel settings set` |
+| `search.query` | read | app, command line, MCP | `search` | `glyphkeel search <text>` |
 | `project.list` | read | app, command line, MCP | `list_projects` | `glyphkeel project list` |
 | `project.get` | read | app, command line, MCP | `get_project` | `glyphkeel project show <project>` |
 | `project.create` | write | app, command line, MCP | `create_project` | `glyphkeel project create` |
@@ -71,6 +72,7 @@ The safety class decides who may run an operation:
 | `reminder.clear` | write | app, command line, MCP | `clear_reminder` | `glyphkeel reminder clear <key>` |
 | `reminder.due` | read | app, command line, MCP | `get_reminders` | `glyphkeel reminder due` |
 | `reminder.acknowledge` | write | app, command line, MCP | `acknowledge_reminders` | `glyphkeel reminder ack <ids>` |
+| `today.get` | read | app, command line, MCP | `get_today` | `glyphkeel today` |
 | `board.get` | read | app, command line, MCP | `get_board` | `glyphkeel board <project>` |
 | `layout.get` | read | app, command line, MCP | `get_board` | `glyphkeel board layout show <project>` |
 | `layout.update` | write | app, command line, MCP | `set_board_layout` | `glyphkeel board layout set <project>` |
@@ -79,6 +81,12 @@ The safety class decides who may run an operation:
 | `view.update` | write | app, command line, MCP | `update_view` | `glyphkeel view edit <view>` |
 | `view.delete` | write | app, command line, MCP | `delete_view` | `glyphkeel view delete <view>` |
 | `query.parse` | read | app | — | — |
+| `wiki.list` | read | app, command line, MCP | `list_wiki_pages` | `glyphkeel wiki list` |
+| `wiki.search` | read | app, command line, MCP | `search_wiki_pages` | `glyphkeel wiki search <text>` |
+| `wiki.get` | read | app, command line, MCP | `get_wiki_page` | `glyphkeel wiki get <page>` |
+| `wiki.create` | write | app, command line, MCP | `create_wiki_page` | `glyphkeel wiki new` |
+| `wiki.update` | write | app, command line, MCP | `update_wiki_page` | `glyphkeel wiki put <page>` |
+| `wiki.history` | read | app, command line, MCP | `get_wiki_history` | `glyphkeel wiki history <page>` |
 | `file.get` | read | app, command line, MCP | `read_attachment` | `glyphkeel file show <attachment>` |
 | `file.read` | read | app, command line, MCP | `read_attachment` | `glyphkeel file cat <attachment>` |
 | `file.thumbnail` | read | app | — | — |
@@ -108,6 +116,12 @@ Input: `SettingsGetInput`. Output: `Settings`. Schemas: [catalog.schema.json](ca
 Change workspace settings that are not about agents: trash retention, reminder time, working hours and days, first day of the week, the timer reminder.
 
 Input: `SettingsPatch`. Output: `SettingsChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `search.query`
+
+Search task titles and descriptions, comments, wiki pages and file names for words and fragments, ranked, with the matches marked; a task key finds that task.
+
+Input: `SearchInput`. Output: `SearchResult`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `project.list`
 
@@ -429,6 +443,12 @@ Acknowledge reminders that were shown, so they don't come due again.
 
 Input: `ReminderAckInput`. Output: `ReminderAcknowledged`. Schemas: [catalog.schema.json](catalog.schema.json).
 
+## `today.get`
+
+What needs attention today across projects: overdue tasks, tasks due today, tasks in progress, today's reminders, agents' claims, recent changes and the timer, with counts for the sidebar.
+
+Input: `TodayInput`. Output: `Today`. Schemas: [catalog.schema.json](catalog.schema.json).
+
 ## `board.get`
 
 A project's board as the person sees it: columns in the personal order with hidden ones flagged, WIP state and compact cards.
@@ -478,6 +498,42 @@ Read a task query for the query field: highlighted pieces, the chips of the cond
 Input: `QueryParseInput`. Output: `ParsedQuery`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 Not available to agents: It serves the app's query field as the person types; agents and scripts run queries with task.search, which reports the same mistakes.
+
+## `wiki.list`
+
+A project's wiki pages as a tree: titles, slugs, nesting and when each changed.
+
+Input: `WikiListInput`. Output: `WikiTree`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `wiki.search`
+
+Find wiki pages by title, heading or text, for example to link one; `Page#Heading` lists a page's headings.
+
+Input: `WikiSearchInput`. Output: `WikiSearchResult`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `wiki.get`
+
+One wiki page with its text, revision, headings, place in the tree and, on request, what links to it; or an older revision of it.
+
+Input: `WikiGetInput`. Output: `WikiPage`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `wiki.create`
+
+Create a wiki page with a title unique in its project, optionally inside another page and with its text.
+
+Input: `WikiCreateInput`. Output: `WikiChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `wiki.update`
+
+Change a wiki page: its text (whole, with a base revision, or by targeted edits), title, parent or place; or resolve a conflict copy.
+
+Input: `WikiUpdateInput`. Output: `WikiChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `wiki.history`
+
+List the revisions of a wiki page, newest first, conflict copies included; read one with wiki.get and its revision.
+
+Input: `WikiHistoryInput`. Output: `RevisionList`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `file.get`
 

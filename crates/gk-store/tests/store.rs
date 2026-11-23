@@ -722,3 +722,33 @@ fn wiki_page_names_are_unique_ignoring_case() {
     });
     result.unwrap();
 }
+
+#[test]
+fn wiki_conflict_copies_record_when_they_were_resolved() {
+    let (_dir, layout) = workspace();
+    let store = open(&layout);
+    let result = store.write("test", |tx| {
+        let (project, _, _) = insert_project(tx, "WK")?;
+        let page = Id::generate();
+        tx.execute(
+            "INSERT INTO wiki_pages (id, project_id, rank, title, title_fold, slug,
+                                     created_at, updated_at)
+             VALUES (?1, ?2, 'i', 'Plan', 'plan', 'plan', 0, 0)",
+            params![page.as_bytes(), project.as_bytes()],
+        )?;
+        tx.execute(
+            "INSERT INTO wiki_revisions (id, page_id, body, kind, actor_kind, actor_name,
+                                         created_at, resolved_at)
+             VALUES (?1, ?2, 'Late edit', 'conflict', 'agent', 'A', 1, 2)",
+            params![Id::generate().as_bytes(), page.as_bytes()],
+        )?;
+        let resolved: i64 = tx.query_row(
+            "SELECT resolved_at FROM wiki_revisions WHERE page_id = ?1",
+            [page.as_bytes()],
+            |r| r.get(0),
+        )?;
+        assert_eq!(resolved, 2);
+        Ok::<_, StoreError>(())
+    });
+    result.unwrap();
+}

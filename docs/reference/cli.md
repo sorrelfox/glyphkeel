@@ -43,6 +43,7 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel reminder due` | `reminder.due` | The reminders, deadline alerts and timer reminders that are due and not acknowledged, with those missed marked, and when the next one comes. |
 | `glyphkeel reminder set <key>` | `reminder.set` | Set a task's personal reminder: a moment, or a number of days before its due date. |
 | `glyphkeel revert` | `history.revert` | Revert history groups or everything an agent session changed. Groups that something changed since are skipped and listed. |
+| `glyphkeel search <text>` | `search.query` | Search task titles and descriptions, comments, wiki pages and file names for words and fragments, ranked, with the matches marked; a task key finds that task. |
 | `glyphkeel settings get` | `settings.get` | Read the workspace settings. |
 | `glyphkeel settings set` | `settings.update` | Change workspace settings that are not about agents: trash retention, reminder time, working hours and days, first day of the week, the timer reminder. |
 | `glyphkeel status` | `workspace.get` | The open workspace: its name and ID, the schema and program versions, who is asking with which rights, the settings and a short guide. |
@@ -72,6 +73,7 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel timer start <key>` | `timer.start` | Start the timer on a task, or start the paused timer again; a timer on another task is stopped and its time logged. |
 | `glyphkeel timer status` | `timer.get` | The workspace's timer: its task, whether it runs and the time so far. |
 | `glyphkeel timer stop` | `timer.stop` | Stop the timer and log its time as an entry on its task. |
+| `glyphkeel today` | `today.get` | What needs attention today across projects: overdue tasks, tasks due today, tasks in progress, today's reminders, agents' claims, recent changes and the timer, with counts for the sidebar. |
 | `glyphkeel type add` | `type.create` | Add a task type to a project. |
 | `glyphkeel type delete` | `type.delete` | Delete a task type; its tasks get another type. Can't be undone. |
 | `glyphkeel type edit` | `type.update` | Rename, reshape, recolour or reorder a task type, or make it the default. |
@@ -79,6 +81,12 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel view delete <view>` | `view.delete` | Delete a saved view; it can be brought back with revert. |
 | `glyphkeel view edit <view>` | `view.update` | Rename a saved view, change its query, columns, order, grouping or totals, or make it the default. |
 | `glyphkeel view list` | `view.list` | The saved views of a project or of the whole workspace: name, query, columns, order, grouping, totals and which is the default. |
+| `glyphkeel wiki get <page>` | `wiki.get` | One wiki page with its text, revision, headings, place in the tree and, on request, what links to it; or an older revision of it. |
+| `glyphkeel wiki history <page>` | `wiki.history` | List the revisions of a wiki page, newest first, conflict copies included; read one with wiki.get and its revision. |
+| `glyphkeel wiki list` | `wiki.list` | A project's wiki pages as a tree: titles, slugs, nesting and when each changed. |
+| `glyphkeel wiki new` | `wiki.create` | Create a wiki page with a title unique in its project, optionally inside another page and with its text. |
+| `glyphkeel wiki put <page>` | `wiki.update` | Change a wiki page: its text (whole, with a base revision, or by targeted edits), title, parent or place; or resolve a conflict copy. |
+| `glyphkeel wiki search <text>` | `wiki.search` | Find wiki pages by title, heading or text, for example to link one; `Page#Heading` lists a page's headings. |
 
 ## Exit codes
 

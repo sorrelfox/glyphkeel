@@ -1741,6 +1741,7 @@ dependencies = [
  "gk-query",
  "gk-store",
  "image",
+ "insta",
  "jiff 1.0.2",
  "schemars 1.2.3",
  "serde",

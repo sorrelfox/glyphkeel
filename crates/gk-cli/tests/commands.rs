@@ -702,3 +702,66 @@ fn tasks_are_listed_by_query_and_changed_in_bulk() {
     let views = ws.json(&["view", "list", "--project", "GK"]);
     assert_eq!(views["items"][0]["query"], "priority:urgent");
 }
+
+#[test]
+fn wiki_pages_search_and_today_from_the_command_line() {
+    let ws = Workspace::new();
+    ws.ok(&["project", "create", "--name", "Glyphkeel", "--key", "GK"]);
+    let page = ws.json(&[
+        "wiki",
+        "new",
+        "--project",
+        "GK",
+        "--title",
+        "Release plan",
+        "--body",
+        "# Dates\n\nShip the beta first.\n",
+    ]);
+    assert_eq!(page["page"]["slug"], "release-plan");
+    let revision = page["page"]["revision"].as_str().unwrap().to_owned();
+    let out = ws.run(&["wiki", "new", "--project", "GK", "--title", "release PLAN"]);
+    assert_eq!(code(&out), 3);
+    snapshot!(stderr(&out));
+    let put = ws.json(&[
+        "wiki",
+        "put",
+        "release plan",
+        "--project",
+        "GK",
+        "--body",
+        "# Dates\n\nShip the beta in December.\n",
+        "--base-revision",
+        &revision,
+    ]);
+    assert_eq!(put["save"]["outcome"], "saved");
+    let got = ws.json(&["wiki", "get", "release-plan", "--project", "GK"]);
+    assert_eq!(got["headings"][0]["text"], "Dates");
+    let list = ws.json(&["wiki", "list", "--project", "GK"]);
+    assert_eq!(list["total"], 1);
+    let headings = ws.json(&["wiki", "search", "release#"]);
+    assert_eq!(headings["items"][0]["heading"]["text"], "Dates");
+    let history = ws.json(&["wiki", "history", "Release plan", "--project", "GK"]);
+    assert_eq!(history["total"], 2);
+
+    ws.ok(&[
+        "task",
+        "create",
+        "--project",
+        "GK",
+        "--title",
+        "Beta announcement",
+        "--due-date",
+        "today",
+    ]);
+    let found = ws.json(&["search", "beta"]);
+    let kinds: Vec<&str> = found["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|h| h["kind"].as_str().unwrap())
+        .collect();
+    assert_eq!(kinds, ["task", "wiki"]);
+    let today = ws.json(&["today"]);
+    assert_eq!(today["due_today"][0]["key"], "GK-1");
+    assert_eq!(today["counts"]["today"], 1);
+}

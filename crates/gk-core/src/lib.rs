@@ -22,6 +22,7 @@ pub mod progress;
 pub mod rank;
 pub mod status;
 pub mod text;
+pub mod wiki;
 pub mod worklog;
 
 pub use actor::{ActorKind, Via};
@@ -43,3 +44,4 @@ pub use status::{DEFAULT_STATUSES, DEFAULT_TASK_TYPES, StatusCategory, closed_at
 pub use text::{
     TextError, check_comment, check_line, check_markdown, check_title, clean_line, fold,
 };
+pub use wiki::{PAGE_TITLE_MAX_CHARS, PageTitleError, check_page_title, slug};

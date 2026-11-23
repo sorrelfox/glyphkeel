@@ -259,7 +259,8 @@ fn next_date(today: Day, month: u8, day: u8, year: Option<u16>) -> Option<Day> {
 ///
 /// - a weekday (`fri`, `friday`): the next one after today;
 /// - `this fri`: that day of this week; `next fri`: that day of next week;
-/// - `in 3 days`, `in 2 weeks`, `in a month`, `in 1 year`;
+/// - `in 3 days`, `in 2 weeks`, `in a month`, `in 1 year`, and short:
+///   `in 3d`, `in 2w`, `in 1m` (a month), `in 1y`;
 /// - `dec 1`, `1 dec`, `december 1 2027`: the next such date;
 /// - `next week`, `next month`, `next year`: the first day of it;
 /// - `end of week`, `end of month`, `end of year`.
@@ -300,6 +301,12 @@ pub fn parse_natural(text: &str, cal: &dyn Calendar) -> Option<Day> {
                 n => n.parse().ok().filter(|n: &i64| *n <= 10_000)?,
             };
             unit_days(n, unit, today)
+        }
+        ["in", compact] => {
+            let digits = compact.find(|c: char| !c.is_ascii_digit())?;
+            let (n, unit) = compact.split_at(digits);
+            let n: i64 = n.parse().ok().filter(|n: &i64| *n <= 10_000)?;
+            unit_days(n, if unit == "m" { "month" } else { unit }, today)
         }
         ["end", "of", unit] | ["end", "of", "the", unit] => match *unit {
             "week" => Some(week_of(today, cal.week_start()).last),
@@ -423,6 +430,12 @@ mod tests {
         assert_eq!(n("next fri").as_deref(), Some("2026-12-04"));
         assert_eq!(n("this sun").as_deref(), Some("2026-11-29"));
         assert_eq!(n("in 2 weeks").as_deref(), Some("2026-12-07"));
+        assert_eq!(n("in 3d"), n("in 3 days"));
+        assert_eq!(n("in 2w"), n("in 2 weeks"));
+        assert_eq!(n("in 1m"), n("in a month"));
+        assert_eq!(n("in 1y"), n("in 1 year"));
+        assert_eq!(n("in d"), None);
+        assert_eq!(n("in 3x"), None);
         assert_eq!(n("in a month").as_deref(), Some("2026-12-23"));
         assert_eq!(n("in 3 days").as_deref(), Some("2026-11-26"));
         assert_eq!(n("dec 1").as_deref(), Some("2026-12-01"));

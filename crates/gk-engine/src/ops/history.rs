@@ -30,7 +30,7 @@ use serde_json::{Map, Value};
 use super::description::{self, Owner};
 use super::{
     agent, board, claim, comment, desc, fields, file, lookup, project, relation, reminder,
-    settings, task, time, view,
+    settings, task, time, view, wiki,
 };
 use crate::failure::Failure;
 use crate::registry::{QueryCtx, Registry};
@@ -328,10 +328,13 @@ fn current(
         (time::TIMER, "timer") => time::raw_timer(tx)?,
         (fields::TASK, "reminder") => reminder::raw(tx, id)?,
         (fields::TASK, "claim") => claim::raw(tx, id)?,
-        (fields::PROJECT | fields::TASK, "description") => match Owner::of_entity(entity, id) {
-            Some(owner) => description::raw(tx, owner)?,
-            None => return Ok(None),
-        },
+        (fields::PROJECT | fields::TASK, "description") | (fields::WIKI, "body") => {
+            match Owner::of_entity(entity, id) {
+                Some(owner) => description::raw(tx, owner)?,
+                None => return Ok(None),
+            }
+        }
+        (fields::WIKI, "created") => wiki::raw_life(tx, id)?,
         (fields::PROJECT | fields::TASK, "created") => {
             let table = if entity == fields::TASK {
                 "tasks"
@@ -411,10 +414,14 @@ fn apply(
         (time::TIMER, "timer") => time::apply_timer(w, value.as_ref()),
         (fields::TASK, "reminder") => reminder::write_value(w, id, project, value),
         (fields::TASK, "claim") => claim::apply(w, id, project, value),
-        (fields::PROJECT | fields::TASK, "description") => match Owner::of_entity(entity, id) {
-            Some(owner) => description::restore(w, owner, project, value.as_ref()),
-            None => Ok(()),
-        },
+        (fields::PROJECT | fields::TASK, "description") | (fields::WIKI, "body") => {
+            match Owner::of_entity(entity, id) {
+                Some(owner) => description::restore(w, owner, project, value.as_ref()),
+                None => Ok(()),
+            }
+        }
+        (fields::WIKI, "created") => wiki::set_live(w, id, project, value),
+        (fields::WIKI, _) => wiki::apply_field(w, id, project, field, value),
         (fields::PROJECT | fields::TASK, "created") => {
             let is_task = entity == fields::TASK;
             let (table, child) = if is_task {

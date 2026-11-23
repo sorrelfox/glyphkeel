@@ -1,0 +1,5 @@
+---
+source: crates/gk-cli/tests/commands.rs
+expression: stderr(&out)
+---
+glyphkeel: Project GK already has a page called "Release plan".

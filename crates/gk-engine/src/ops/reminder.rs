@@ -482,6 +482,34 @@ fn due(
     })
 }
 
+/// The personal reminders not acknowledged that come due up to `until`,
+/// the earliest first; those due before `since` are marked missed.
+pub(crate) fn personal_due(
+    tx: &Transaction<'_>,
+    zone: &Zone,
+    since: i64,
+    until: i64,
+) -> Result<Vec<DueReminder>, Failure> {
+    let mut due: Vec<Candidate> = candidates(tx, zone, until)?
+        .into_iter()
+        .filter(|c| c.kind == ReminderKind::Reminder && c.at <= until)
+        .collect();
+    due.sort_by(|a, b| a.at.cmp(&b.at).then_with(|| a.id.cmp(&b.id)));
+    due.into_iter()
+        .map(|c| {
+            Ok(DueReminder {
+                id: c.id,
+                kind: c.kind,
+                at: rfc3339(c.at),
+                missed: c.at < since,
+                task: task_ref(tx, c.task)?,
+                due_date: c.due,
+                note: c.note,
+            })
+        })
+        .collect()
+}
+
 // ---------------------------------------------------------------------
 // Acknowledging
 

@@ -161,6 +161,18 @@ export type Attachment = {
   width?: number;
 };
 
+/** What links to a page. */
+export type Backlink = {
+  /** The heading the link names, if any. */
+  heading?: string;
+  /** A page, for a link in its text. */
+  page?: WikiPageRef;
+  /** A task's key, for a link in its description. */
+  task?: string;
+  /** The title of the task or page. */
+  title: string;
+};
+
 /** A project's board as the person sees it. */
 export type Board = {
   /** The columns, in the layout's order, hidden ones included and flagged. */
@@ -924,6 +936,9 @@ export type ListedTask = {
   version: number;
 };
 
+/** Where a result matched. */
+export type MatchedIn = "key" | "title" | "text" | "fragment";
+
 /** Which parts of a project are switched on. */
 export type Modules = {
   /** The board. */
@@ -1272,6 +1287,16 @@ export type QueryToken = {
 /** What a piece of the query text is. */
 export type QueryTokenKind = "field" | "operator" | "value" | "comma" | "keyword" | "negation" | "paren" | "text" | "key" | "sort" | "error";
 
+/** A task that changed recently, with who changed it last. */
+export type RecentTask = {
+  /** When (RFC 3339, UTC). */
+  changed_at: string;
+  /** Who made its last change. */
+  changed_by: Actor;
+  /** The task. */
+  task: ListedTask;
+};
+
 /** A link to add or remove. */
 export type RelationInput = {
   /** The task: its key or ID. */
@@ -1432,7 +1457,7 @@ export type RevisionDetail = {
   body: string;
   /** The differences from `diff_from` as a unified diff; empty when the texts are the same. */
   diff?: string;
-  /** The task's or project's key. */
+  /** The task's or project's key, or the wiki page's title. */
   owner: string;
   /** The revision. */
   revision: RevisionInfo;
@@ -1504,6 +1529,67 @@ export type SavedView = {
   totals?: string[];
   /** When it last changed. */
   updated_at: string;
+};
+
+/** One search result. */
+export type SearchHit = {
+  /** The task's status category. */
+  category?: Category;
+  /** The ID of what was found: the task, comment, page, file or project. */
+  id: string;
+  /** What it is. */
+  kind: SearchKind;
+  /** Where it matched; results are grouped by it, best first. */
+  matched_in: MatchedIn;
+  /** The project's key. */
+  project: string;
+  /** The wiki page's slug. */
+  slug?: string;
+  /** A piece of the text around the matches; left out when only the title matched. */
+  snippet?: string;
+  /** The matches in `snippet`, in UTF-16 code units. */
+  snippet_matches?: TextRange[];
+  /** The task's status name, for tasks and their comments and files. */
+  status?: string;
+  /** The task's key, for tasks and their comments and files. */
+  task?: string;
+  /** The title as shown: the task's title, the page's title, the file's name, the project's name; a comment shows its task's title. */
+  title: string;
+  /** The matches in `title`, in UTF-16 code units. */
+  title_matches?: TextRange[];
+  /** When it last changed (RFC 3339, UTC). */
+  updated_at: string;
+};
+
+/** What to search for. */
+export type SearchInput = {
+  /** The `next_cursor` of the page before. */
+  cursor?: string | null;
+  /** With `project`: its sub-projects too. */
+  include_subprojects?: boolean;
+  /** Only these kinds; default: all. */
+  kinds?: SearchKind[];
+  /** Results per page, 1 to 200; default 50. */
+  limit?: number | null;
+  /** Only this project (key or ID). */
+  project?: string | null;
+  /** Only tasks matching this task query (`is:open label:bug`), with their comments and files; wiki pages are left out. */
+  query?: string | null;
+  /** Words (each found as a whole word or a word's beginning) and "quoted phrases"; all must occur. A task key such as `TM-41` also finds that task. */
+  text: string;
+};
+
+/** What a search result is. */
+export type SearchKind = "project" | "task" | "comment" | "wiki" | "file";
+
+/** One page of search results. */
+export type SearchResult = {
+  /** The results of this page, best first. */
+  items: SearchHit[];
+  /** Pass as `cursor` for the next page; left out on the last page. */
+  next_cursor?: string;
+  /** How many results there are. */
+  total: number;
 };
 
 /** A setting that can be set back to its default. */
@@ -1834,7 +1920,7 @@ export type TaskCreateInput = {
   client_request_id?: string | null;
   /** The description (Markdown). */
   description?: string | null;
-  /** The due date, `YYYY-MM-DD`. */
+  /** The due date: `YYYY-MM-DD`, or `today`, `fri`, `next mon`, `+3d`, `in 2 weeks`, `dec 1`, in the workspace's time zone. */
   due_date?: string | null;
   /** The estimate, as a duration (`1d 4h`, `90m`, `1.5h`). */
   estimate?: string | null;
@@ -1846,7 +1932,7 @@ export type TaskCreateInput = {
   priority?: Priority | null;
   /** The project: its key (current or old) or ID. */
   project: string;
-  /** The start date, `YYYY-MM-DD`. */
+  /** The start date: `YYYY-MM-DD`, or `today`, `fri`, `next mon`, `+3d`, `in 2 weeks`, `dec 1`, in the workspace's time zone. */
   start_date?: string | null;
   /** The status; default: the project's first to-do status. */
   status?: string | null;
@@ -2012,7 +2098,7 @@ export type TaskUpdateInput = {
   description?: string | null;
   /** Targeted changes to the description instead of a new one: each `old_text` must occur exactly once. */
   description_edits?: TextEdit[];
-  /** A new due date, `YYYY-MM-DD`. */
+  /** A new due date: `YYYY-MM-DD`, or a natural date such as `next fri` or `+3d`. */
   due_date?: string | null;
   /** A new estimate, as a duration. */
   estimate?: string | null;
@@ -2034,7 +2120,7 @@ export type TaskUpdateInput = {
   remove_labels?: string[];
   /** Resolve a conflict copy of the description. */
   resolve_conflict?: ConflictResolution | null;
-  /** A new start date, `YYYY-MM-DD`. */
+  /** A new start date: `YYYY-MM-DD`, or a natural date such as `fri` or `in 3d`. */
   start_date?: string | null;
   /** A new title. */
   title?: string | null;
@@ -2264,6 +2350,56 @@ export type TimerStopInput = {
   note?: string | null;
 };
 
+/** What needs attention today. */
+export type Today = {
+  /** Tasks agents are working on (claimed), by when the claim ends. */
+  claimed: ListedTask[];
+  /** The size of every list. */
+  counts: TodayCounts;
+  /** Today's date in the workspace's time zone (`YYYY-MM-DD`). */
+  date: string;
+  /** Open tasks due today, by priority. */
+  due_today: ListedTask[];
+  /** Open tasks in an in-progress status that are not in the two lists above, by project and place on the board. */
+  in_progress: ListedTask[];
+  /** Open tasks due before today, the oldest first. */
+  overdue: ListedTask[];
+  /** Tasks changed in the last 24 hours, the newest first. */
+  recent: RecentTask[];
+  /** Personal reminders that come due today or were missed and not acknowledged, the earliest first. */
+  reminders: DueReminder[];
+  /** The timer, while one runs or is paused. */
+  timer?: Timer;
+};
+
+/** How many items each list has, also beyond the limit. */
+export type TodayCounts = {
+  /** Tasks claimed by agents. */
+  claimed: number;
+  /** Open tasks due today. */
+  due_today: number;
+  /** Open tasks in an in-progress status, not due today or before. */
+  in_progress: number;
+  /** Every open task of the active projects; the sidebar shows it next to All tasks. */
+  open: number;
+  /** Open tasks overdue. */
+  overdue: number;
+  /** Tasks changed in the last 24 hours. */
+  recent: number;
+  /** Personal reminders due today or missed, not acknowledged. */
+  reminders: number;
+  /** Tasks on Today: overdue, due today and in progress, each once. The sidebar shows it next to Today. */
+  today: number;
+};
+
+/** Which part of the workspace. */
+export type TodayInput = {
+  /** At most this many tasks per list, 1 to 200; default 50. The counts are always complete. */
+  limit?: number | null;
+  /** Only this project (key or ID), with its sub-projects; default: every active project. */
+  project?: string | null;
+};
+
 /** Estimate and time over a task and all its subtasks. */
 export type Totals = {
   /** The estimates added up, in minutes. */
@@ -2465,6 +2601,225 @@ export type ViewUpdateInput = {
 /** The first day of the week. */
 export type WeekStart = "monday" | "saturday" | "sunday";
 
+/** A page changed, with the history group of the change. */
+export type WikiChange = {
+  /** The history group, for revert and Undo; left out when nothing changed. */
+  group?: string;
+  /** The page after the change. */
+  page: WikiPage;
+  /** What became of a new text: saved, merged with another edit, or kept as a conflict copy. */
+  save?: DescriptionSave;
+};
+
+/** A new page. */
+export type WikiCreateInput = {
+  /** Place it after this page of the same parent. */
+  after?: string | null;
+  /** Place it first or last; default: last. */
+  at?: Edge | null;
+  /** Place it before this page of the same parent. */
+  before?: string | null;
+  /** The text (Markdown). */
+  body?: string | null;
+  /** Your own ID for this request; repeating it within 24 hours returns the first answer instead of creating a second page. */
+  client_request_id?: string | null;
+  /** A note saved with the first revision. */
+  message?: string | null;
+  /** The page to put it in (title, slug or ID); default: at the top. */
+  parent?: string | null;
+  /** The project: its key or ID. */
+  project: string;
+  /** The title, 1 to 200 characters, unique in the project ignoring case, without `[`, `]`, `#` or `|`. */
+  title: string;
+};
+
+/** A page field that can be cleared. */
+export type WikiField = "parent";
+
+/** A page to read. */
+export type WikiGetInput = {
+  /** What to add: `backlinks`. */
+  include?: WikiPart[];
+  /** The page: its title (any case), slug or ID. */
+  page: string;
+  /** The project (key or ID); needed unless `page` is an ID. */
+  project?: string | null;
+  /** An older revision to read instead of the current text. */
+  revision?: string | null;
+};
+
+/** One heading of a page. */
+export type WikiHeading = {
+  /** 1 to 6. */
+  level: number;
+  /** The line it starts on, from 1. */
+  line: number;
+  /** Its text; a link to it is `[[Page#text]]`. */
+  text: string;
+};
+
+/** A page whose revisions to list. */
+export type WikiHistoryInput = {
+  /** The page: its title (any case), slug or ID. */
+  page: string;
+  /** The project (key or ID); needed unless `page` is an ID. */
+  project?: string | null;
+};
+
+/** A project's pages. */
+export type WikiListInput = {
+  /** The project: its key or ID. */
+  project: string;
+};
+
+/** Where a page matched. */
+export type WikiMatch = "title" | "heading" | "text" | "recent";
+
+/** One wiki page. */
+export type WikiPage = {
+  /** Whether it is the project's instructions for agents. */
+  agent_brief?: boolean;
+  /** What links to it, when asked for with `include`. */
+  backlinks?: Backlink[];
+  /** Its text (Markdown). */
+  body: string;
+  /** The pages it holds, in order. */
+  children?: WikiPageRef[];
+  /** Edits that clashed with another and wait to be resolved (conflict copies). */
+  conflict_copies: number;
+  /** When it was created (RFC 3339, UTC). */
+  created_at: string;
+  /** Whether `body` is the current text (false when an older revision was asked for). */
+  current: boolean;
+  /** The headings of `body`, for links to a heading. */
+  headings?: WikiHeading[];
+  /** The page's ID. */
+  id: string;
+  /** The parent page; left out for a page at the top. */
+  parent?: WikiPageRef;
+  /** The pages it is nested in, outermost first. */
+  path?: WikiPageRef[];
+  /** Its project's key. */
+  project: string;
+  /** The revision of `body`; pass it as `base_revision` when you save a new text. Left out while the page has no text yet. */
+  revision?: string;
+  /** Its name in addresses, made from the title. */
+  slug: string;
+  /** The page's title. */
+  title: string;
+  /** When it last changed. */
+  updated_at: string;
+};
+
+/** Another page, as a page names its parent and children. */
+export type WikiPageRef = {
+  /** Its ID. */
+  id: string;
+  /** Its slug. */
+  slug: string;
+  /** Its title. */
+  title: string;
+};
+
+/** A page as lists show it. */
+export type WikiPageSummary = {
+  /** Whether it is the project's instructions for agents. */
+  agent_brief?: boolean;
+  /** How many pages it holds directly. */
+  children: number;
+  /** How many pages it is nested in. */
+  depth: number;
+  /** The page's ID. */
+  id: string;
+  /** The parent page's ID; left out for a page at the top. */
+  parent?: string;
+  /** Its project's key. */
+  project: string;
+  /** Its name in addresses, made from the title. */
+  slug: string;
+  /** The page's title. */
+  title: string;
+  /** When it last changed (RFC 3339, UTC). */
+  updated_at: string;
+};
+
+/** What `wiki.get` adds to a page. */
+export type WikiPart = "backlinks";
+
+/** One page found. */
+export type WikiSearchHit = {
+  /** The heading that matched. */
+  heading?: WikiHeading;
+  /** The matches in the heading's text, in UTF-16 code units. */
+  heading_matches?: TextRange[];
+  /** Where it matched. */
+  matched_in: WikiMatch;
+  /** The page. */
+  page: WikiPageSummary;
+  /** A piece of the text around the matches, for a text match. */
+  snippet?: string;
+  /** The matches in `snippet`, in UTF-16 code units. */
+  snippet_matches?: TextRange[];
+  /** The matches in the page's title, in UTF-16 code units. */
+  title_matches?: TextRange[];
+};
+
+/** Pages to find, for example to complete a `[[` link. */
+export type WikiSearchInput = {
+  /** At most this many results, 1 to 200; default 20. */
+  limit?: number | null;
+  /** Only this project (key or ID); default: every active project. */
+  project?: string | null;
+  /** Words to find in titles, headings and text. Written `Page#Heading`, it finds the headings of the pages whose titles match `Page`. Empty lists the most recently changed pages. */
+  text?: string;
+};
+
+/** The pages found, best first: title matches (beginnings first), then headings, then text. */
+export type WikiSearchResult = {
+  /** The results. */
+  items: WikiSearchHit[];
+  /** How many results there are, also beyond `limit`. */
+  total: number;
+};
+
+/** A project's pages as a tree: each page followed by the pages it holds, in their order. */
+export type WikiTree = {
+  /** The pages, in tree order. */
+  items: WikiPageSummary[];
+  /** How many. */
+  total: number;
+};
+
+/** Changes to a page; fields left out keep their value. */
+export type WikiUpdateInput = {
+  /** Place it after this page of the same parent. */
+  after?: string | null;
+  /** Place it first or last among its parent's pages. */
+  at?: Edge | null;
+  /** The revision your new text was edited from. If somebody saved in between, the two edits are merged; when they changed the same lines, yours is kept as a conflict copy and the page stays as it is. */
+  base_revision?: string | null;
+  /** Place it before this page of the same parent. */
+  before?: string | null;
+  /** A new text (Markdown), replacing the old one. */
+  body?: string | null;
+  /** Fields to clear. */
+  clear?: WikiField[];
+  /** Targeted changes to the text instead of a new one: each `old_text` must occur exactly once. */
+  edits?: TextEdit[];
+  /** A note saved with the new revision. */
+  message?: string | null;
+  /** The page: its title (any case), slug or ID. */
+  page: string;
+  /** A new parent page (title, slug or ID, same project). */
+  parent?: string | null;
+  /** The project (key or ID); needed unless `page` is an ID. */
+  project?: string | null;
+  /** Resolve a conflict copy of the text. */
+  resolve_conflict?: ConflictResolution | null;
+  /** A new title; old links by the old title stop working. */
+  title?: string | null;
+};
+
 /** No input. */
 export type WorkspaceGetInput = Record<string, never>;
 
@@ -2502,6 +2857,7 @@ export interface OpMap {
   "workspace.get": { input: WorkspaceGetInput; output: WorkspaceInfo; safety: "read"; kind: "query" };
   "settings.get": { input: SettingsGetInput; output: Settings; safety: "read"; kind: "query" };
   "settings.update": { input: SettingsPatch; output: SettingsChange; safety: "write"; kind: "command" };
+  "search.query": { input: SearchInput; output: SearchResult; safety: "read"; kind: "query" };
   "project.list": { input: ProjectListInput; output: ProjectList; safety: "read"; kind: "query" };
   "project.get": { input: ProjectRef; output: Project; safety: "read"; kind: "query" };
   "project.create": { input: ProjectCreateInput; output: ProjectChange; safety: "write"; kind: "command" };
@@ -2555,6 +2911,7 @@ export interface OpMap {
   "reminder.clear": { input: ReminderClearInput; output: ReminderChange; safety: "write"; kind: "command" };
   "reminder.due": { input: ReminderDueInput; output: DueReminders; safety: "read"; kind: "query" };
   "reminder.acknowledge": { input: ReminderAckInput; output: ReminderAcknowledged; safety: "write"; kind: "command" };
+  "today.get": { input: TodayInput; output: Today; safety: "read"; kind: "query" };
   "board.get": { input: BoardGetInput; output: Board; safety: "read"; kind: "query" };
   "layout.get": { input: LayoutGetInput; output: LayoutChange; safety: "read"; kind: "query" };
   "layout.update": { input: LayoutUpdateInput; output: LayoutChange; safety: "write"; kind: "command" };
@@ -2563,6 +2920,12 @@ export interface OpMap {
   "view.update": { input: ViewUpdateInput; output: ViewChange; safety: "write"; kind: "command" };
   "view.delete": { input: ViewDeleteInput; output: ViewChange; safety: "write"; kind: "command" };
   "query.parse": { input: QueryParseInput; output: ParsedQuery; safety: "read"; kind: "query" };
+  "wiki.list": { input: WikiListInput; output: WikiTree; safety: "read"; kind: "query" };
+  "wiki.search": { input: WikiSearchInput; output: WikiSearchResult; safety: "read"; kind: "query" };
+  "wiki.get": { input: WikiGetInput; output: WikiPage; safety: "read"; kind: "query" };
+  "wiki.create": { input: WikiCreateInput; output: WikiChange; safety: "write"; kind: "command" };
+  "wiki.update": { input: WikiUpdateInput; output: WikiChange; safety: "write"; kind: "command" };
+  "wiki.history": { input: WikiHistoryInput; output: RevisionList; safety: "read"; kind: "query" };
   "file.get": { input: FileRef; output: Attachment; safety: "read"; kind: "query" };
   "file.read": { input: FileRef; output: FileContent; safety: "read"; kind: "query" };
   "file.thumbnail": { input: FileRef; output: Thumbnail; safety: "read"; kind: "query" };
@@ -2584,6 +2947,7 @@ export const OP_SAFETY = {
   "workspace.get": "read",
   "settings.get": "read",
   "settings.update": "write",
+  "search.query": "read",
   "project.list": "read",
   "project.get": "read",
   "project.create": "write",
@@ -2637,6 +3001,7 @@ export const OP_SAFETY = {
   "reminder.clear": "write",
   "reminder.due": "read",
   "reminder.acknowledge": "write",
+  "today.get": "read",
   "board.get": "read",
   "layout.get": "read",
   "layout.update": "write",
@@ -2645,6 +3010,12 @@ export const OP_SAFETY = {
   "view.update": "write",
   "view.delete": "write",
   "query.parse": "read",
+  "wiki.list": "read",
+  "wiki.search": "read",
+  "wiki.get": "read",
+  "wiki.create": "write",
+  "wiki.update": "write",
+  "wiki.history": "read",
   "file.get": "read",
   "file.read": "read",
   "file.thumbnail": "read",
@@ -2776,6 +3147,10 @@ export function makeOps(call: Call) {
       /** Acknowledge reminders that were shown, so they don't come due again. (write) */
       acknowledge: (input: OpMap["reminder.acknowledge"]["input"]) => call("reminder.acknowledge", input),
     },
+    search: {
+      /** Search task titles and descriptions, comments, wiki pages and file names for words and fragments, ranked, with the matches marked; a task key finds that task. (read) */
+      query: (input: OpMap["search.query"]["input"]) => call("search.query", input),
+    },
     settings: {
       /** Read the workspace settings. (read) */
       get: (input: OpMap["settings.get"]["input"] = {}) => call("settings.get", input),
@@ -2836,6 +3211,10 @@ export function makeOps(call: Call) {
       /** Stop the timer and log its time as an entry on its task. (write) */
       stop: (input: OpMap["timer.stop"]["input"] = {}) => call("timer.stop", input),
     },
+    today: {
+      /** What needs attention today across projects: overdue tasks, tasks due today, tasks in progress, today's reminders, agents' claims, recent changes and the timer, with counts for the sidebar. (read) */
+      get: (input: OpMap["today.get"]["input"] = {}) => call("today.get", input),
+    },
     type: {
       /** Add a task type to a project. (write) */
       create: (input: OpMap["type.create"]["input"]) => call("type.create", input),
@@ -2853,6 +3232,20 @@ export function makeOps(call: Call) {
       update: (input: OpMap["view.update"]["input"]) => call("view.update", input),
       /** Delete a saved view; it can be brought back with revert. (write) */
       delete: (input: OpMap["view.delete"]["input"]) => call("view.delete", input),
+    },
+    wiki: {
+      /** A project's wiki pages as a tree: titles, slugs, nesting and when each changed. (read) */
+      list: (input: OpMap["wiki.list"]["input"]) => call("wiki.list", input),
+      /** Find wiki pages by title, heading or text, for example to link one; `Page#Heading` lists a page's headings. (read) */
+      search: (input: OpMap["wiki.search"]["input"] = {}) => call("wiki.search", input),
+      /** One wiki page with its text, revision, headings, place in the tree and, on request, what links to it; or an older revision of it. (read) */
+      get: (input: OpMap["wiki.get"]["input"]) => call("wiki.get", input),
+      /** Create a wiki page with a title unique in its project, optionally inside another page and with its text. (write) */
+      create: (input: OpMap["wiki.create"]["input"]) => call("wiki.create", input),
+      /** Change a wiki page: its text (whole, with a base revision, or by targeted edits), title, parent or place; or resolve a conflict copy. (write) */
+      update: (input: OpMap["wiki.update"]["input"]) => call("wiki.update", input),
+      /** List the revisions of a wiki page, newest first, conflict copies included; read one with wiki.get and its revision. (read) */
+      history: (input: OpMap["wiki.history"]["input"]) => call("wiki.history", input),
     },
     workspace: {
       /** The open workspace: its name and ID, the schema and program versions, who is asking with which rights, the settings and a short guide. (read) */

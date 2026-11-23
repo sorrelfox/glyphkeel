@@ -5,7 +5,8 @@
 //!
 //! A task is named by its key (`TM-41`, any case; old keys after a move or a
 //! project's new key still work) or its ID. Statuses, types and labels are
-//! named by their name (ignoring case) or ID. Dates are `YYYY-MM-DD`;
+//! named by their name (ignoring case) or ID. Dates are `YYYY-MM-DD` or
+//! natural forms (`today`, `fri`, `next mon`, `+3d`, `in 2 weeks`);
 //! durations are written `1w 2d 4h 30m`, `90m`, `1.5h`, `1,5h` or `1:30`,
 //! with the workspace's working day and week.
 
@@ -346,10 +347,12 @@ pub struct TaskCreateInput {
     /// The parent task, for a subtask (same project, at most 5 levels).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,
-    /// The start date, `YYYY-MM-DD`.
+    /// The start date: `YYYY-MM-DD`, or `today`, `fri`, `next mon`, `+3d`,
+    /// `in 2 weeks`, `dec 1`, in the workspace's time zone.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub start_date: Option<String>,
-    /// The due date, `YYYY-MM-DD`.
+    /// The due date: `YYYY-MM-DD`, or `today`, `fri`, `next mon`, `+3d`,
+    /// `in 2 weeks`, `dec 1`, in the workspace's time zone.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub due_date: Option<String>,
     /// The estimate, as a duration (`1d 4h`, `90m`, `1.5h`).
@@ -437,10 +440,12 @@ pub struct TaskUpdateInput {
     /// A new parent task (same project, at most 5 levels, no loops).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,
-    /// A new start date, `YYYY-MM-DD`.
+    /// A new start date: `YYYY-MM-DD`, or a natural date such as `fri` or
+    /// `in 3d`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub start_date: Option<String>,
-    /// A new due date, `YYYY-MM-DD`.
+    /// A new due date: `YYYY-MM-DD`, or a natural date such as `next fri`
+    /// or `+3d`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub due_date: Option<String>,
     /// A new estimate, as a duration.

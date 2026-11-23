@@ -446,8 +446,26 @@ pub(crate) fn changed(
 // ---------------------------------------------------------------------
 // Values
 
-pub(crate) fn day(field: &str, text: &str) -> Result<Day, Failure> {
-    text.trim().parse::<Day>().map_err(|e| invalid(field, e))
+/// A date input: `YYYY-MM-DD`, or a natural form (`today`, `fri`, `next
+/// mon`, `in 3d`, `+3d`, `dec 1`) read in the workspace's time zone.
+pub(crate) fn date_input(w: &WriteCtx<'_>, field: &str, text: &str) -> Result<Day, Failure> {
+    let trimmed = text.trim();
+    match trimmed.parse::<Day>() {
+        Ok(day) => return Ok(day),
+        // Written as a date, but not a real one: say what is wrong with it.
+        Err(e)
+            if trimmed.len() >= 5
+                && trimmed[..4].bytes().all(|c| c.is_ascii_digit())
+                && trimmed.as_bytes()[4] == b'-' =>
+        {
+            return Err(invalid(field, e));
+        }
+        Err(_) => {}
+    }
+    let cal = super::query::calendar(w.tx(), w.zone(), w.now())?;
+    gk_query::parse_natural(trimmed, &cal).ok_or_else(|| {
+        crate::messages::invalid(field, "date-invalid", &[("text", trimmed.to_owned())])
+    })
 }
 
 fn duration(field: &str, text: &str, units: DurationUnits) -> Result<i64, Failure> {
@@ -869,12 +887,12 @@ fn create(w: &mut WriteCtx<'_>, input: TaskCreateInput) -> Result<TaskChange, Fa
     let start = input
         .start_date
         .as_deref()
-        .map(|d| day("start_date", d))
+        .map(|d| date_input(w, "start_date", d))
         .transpose()?;
     let due = input
         .due_date
         .as_deref()
-        .map(|d| day("due_date", d))
+        .map(|d| date_input(w, "due_date", d))
         .transpose()?;
     gk_core::check_date_range(start, due).map_err(|e| invalid("start_date", e))?;
     let units = units(w.tx())?;
@@ -1105,7 +1123,7 @@ pub(crate) fn update(w: &mut WriteCtx<'_>, input: TaskUpdateInput) -> Result<Tas
     if let Some(r) = &input.resolve_conflict {
         description_save = Some(description::resolve(
             w,
-            id,
+            Owner::Task(id),
             pid,
             &r.copy,
             r.action,
@@ -1148,12 +1166,12 @@ pub(crate) fn update(w: &mut WriteCtx<'_>, input: TaskUpdateInput) -> Result<Tas
         set_parent(w, id, project.id, None)?;
     }
     let start = match (&input.start_date, clears(TaskField::StartDate)) {
-        (Some(d), _) => Some(text(day("start_date", d)?.to_string())),
+        (Some(d), _) => Some(text(date_input(w, "start_date", d)?.to_string())),
         (None, true) => Some(None),
         (None, false) => None,
     };
     let due = match (&input.due_date, clears(TaskField::DueDate)) {
-        (Some(d), _) => Some(text(day("due_date", d)?.to_string())),
+        (Some(d), _) => Some(text(date_input(w, "due_date", d)?.to_string())),
         (None, true) => Some(None),
         (None, false) => None,
     };

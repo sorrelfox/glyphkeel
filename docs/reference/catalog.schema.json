@@ -1031,6 +1031,315 @@
       "summary": "Change workspace settings that are not about agents: trash retention, reminder time, working hours and days, first day of the week, the timer reminder."
     },
     {
+      "cli": "search <text>",
+      "exposure": "data",
+      "id": "search.query",
+      "input": {
+        "$defs": {
+          "SearchKind": {
+            "description": "What a search result is.",
+            "oneOf": [
+              {
+                "const": "project",
+                "description": "A project, found by its key.",
+                "type": "string"
+              },
+              {
+                "const": "task",
+                "description": "A task: its title or description.",
+                "type": "string"
+              },
+              {
+                "const": "comment",
+                "description": "A comment on a task.",
+                "type": "string"
+              },
+              {
+                "const": "wiki",
+                "description": "A wiki page: its title or text.",
+                "type": "string"
+              },
+              {
+                "const": "file",
+                "description": "A file attached to a task or comment, by its name.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "What to search for.",
+        "properties": {
+          "cursor": {
+            "description": "The `next_cursor` of the page before.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "include_subprojects": {
+            "default": false,
+            "description": "With `project`: its sub-projects too.",
+            "type": "boolean"
+          },
+          "kinds": {
+            "description": "Only these kinds; default: all.",
+            "items": {
+              "$ref": "#/$defs/SearchKind"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "description": "Results per page, 1 to 200; default 50.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "project": {
+            "description": "Only this project (key or ID).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "query": {
+            "description": "Only tasks matching this task query (`is:open label:bug`), with\ntheir comments and files; wiki pages are left out.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "text": {
+            "description": "Words (each found as a whole word or a word's beginning) and\n\"quoted phrases\"; all must occur. A task key such as `TM-41` also\nfinds that task.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "SearchInput",
+        "type": "object"
+      },
+      "input_name": "SearchInput",
+      "kind": "query",
+      "mcp_tool": "search",
+      "output": {
+        "$defs": {
+          "Category": {
+            "description": "What a status means for the work in it.",
+            "oneOf": [
+              {
+                "const": "todo",
+                "description": "Not started.",
+                "type": "string"
+              },
+              {
+                "const": "in_progress",
+                "description": "Being worked on.",
+                "type": "string"
+              },
+              {
+                "const": "done",
+                "description": "Finished; closes the task.",
+                "type": "string"
+              },
+              {
+                "const": "cancelled",
+                "description": "Dropped; closes the task.",
+                "type": "string"
+              }
+            ]
+          },
+          "MatchedIn": {
+            "description": "Where a result matched.",
+            "oneOf": [
+              {
+                "const": "key",
+                "description": "The key.",
+                "type": "string"
+              },
+              {
+                "const": "title",
+                "description": "The title (a file's name).",
+                "type": "string"
+              },
+              {
+                "const": "text",
+                "description": "The text: a description, a page's text or a comment.",
+                "type": "string"
+              },
+              {
+                "const": "fragment",
+                "description": "Only fragments of words, anywhere.",
+                "type": "string"
+              }
+            ]
+          },
+          "SearchHit": {
+            "additionalProperties": false,
+            "description": "One search result.",
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/Category",
+                "description": "The task's status category."
+              },
+              "id": {
+                "description": "The ID of what was found: the task, comment, page, file or project.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/SearchKind",
+                "description": "What it is."
+              },
+              "matched_in": {
+                "$ref": "#/$defs/MatchedIn",
+                "description": "Where it matched; results are grouped by it, best first."
+              },
+              "project": {
+                "description": "The project's key.",
+                "type": "string"
+              },
+              "slug": {
+                "description": "The wiki page's slug.",
+                "type": "string"
+              },
+              "snippet": {
+                "description": "A piece of the text around the matches; left out when only the\ntitle matched.",
+                "type": "string"
+              },
+              "snippet_matches": {
+                "description": "The matches in `snippet`, in UTF-16 code units.",
+                "items": {
+                  "$ref": "#/$defs/TextRange"
+                },
+                "type": "array"
+              },
+              "status": {
+                "description": "The task's status name, for tasks and their comments and files.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task's key, for tasks and their comments and files.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title as shown: the task's title, the page's title, the file's\nname, the project's name; a comment shows its task's title.",
+                "type": "string"
+              },
+              "title_matches": {
+                "description": "The matches in `title`, in UTF-16 code units.",
+                "items": {
+                  "$ref": "#/$defs/TextRange"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "description": "When it last changed (RFC 3339, UTC).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "matched_in",
+              "project",
+              "title",
+              "updated_at",
+              "id"
+            ],
+            "type": "object"
+          },
+          "SearchKind": {
+            "description": "What a search result is.",
+            "oneOf": [
+              {
+                "const": "project",
+                "description": "A project, found by its key.",
+                "type": "string"
+              },
+              {
+                "const": "task",
+                "description": "A task: its title or description.",
+                "type": "string"
+              },
+              {
+                "const": "comment",
+                "description": "A comment on a task.",
+                "type": "string"
+              },
+              {
+                "const": "wiki",
+                "description": "A wiki page: its title or text.",
+                "type": "string"
+              },
+              {
+                "const": "file",
+                "description": "A file attached to a task or comment, by its name.",
+                "type": "string"
+              }
+            ]
+          },
+          "TextRange": {
+            "additionalProperties": false,
+            "description": "A range of the query text, in UTF-16 code units (as the page's editor\ncounts).",
+            "properties": {
+              "from": {
+                "description": "The first unit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "to": {
+                "description": "One past the last unit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "from",
+              "to"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "One page of search results.",
+        "properties": {
+          "items": {
+            "description": "The results of this page, best first.",
+            "items": {
+              "$ref": "#/$defs/SearchHit"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "description": "Pass as `cursor` for the next page; left out on the last page.",
+            "type": "string"
+          },
+          "total": {
+            "description": "How many results there are.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "SearchResult",
+        "type": "object"
+      },
+      "output_name": "SearchResult",
+      "safety": "read",
+      "summary": "Search task titles and descriptions, comments, wiki pages and file names for words and fragments, ranked, with the matches marked; a task key finds that task."
+    },
+    {
       "cli": "project list",
       "exposure": "data",
       "id": "project.list",
@@ -13063,7 +13372,7 @@
             ]
           },
           "due_date": {
-            "description": "The due date, `YYYY-MM-DD`.",
+            "description": "The due date: `YYYY-MM-DD`, or `today`, `fri`, `next mon`, `+3d`,\n`in 2 weeks`, `dec 1`, in the workspace's time zone.",
             "type": [
               "string",
               "null"
@@ -13106,7 +13415,7 @@
             "type": "string"
           },
           "start_date": {
-            "description": "The start date, `YYYY-MM-DD`.",
+            "description": "The start date: `YYYY-MM-DD`, or `today`, `fri`, `next mon`, `+3d`,\n`in 2 weeks`, `dec 1`, in the workspace's time zone.",
             "type": [
               "string",
               "null"
@@ -14504,7 +14813,7 @@
             "type": "array"
           },
           "due_date": {
-            "description": "A new due date, `YYYY-MM-DD`.",
+            "description": "A new due date: `YYYY-MM-DD`, or a natural date such as `next fri`\nor `+3d`.",
             "type": [
               "string",
               "null"
@@ -14591,7 +14900,7 @@
             "description": "Resolve a conflict copy of the description."
           },
           "start_date": {
-            "description": "A new start date, `YYYY-MM-DD`.",
+            "description": "A new start date: `YYYY-MM-DD`, or a natural date such as `fri` or\n`in 3d`.",
             "type": [
               "string",
               "null"
@@ -26721,7 +27030,7 @@
             "type": "string"
           },
           "owner": {
-            "description": "The task's or project's key.",
+            "description": "The task's or project's key, or the wiki page's title.",
             "type": "string"
           },
           "revision": {
@@ -30702,6 +31011,803 @@
       "summary": "Acknowledge reminders that were shown, so they don't come due again."
     },
     {
+      "cli": "today",
+      "exposure": "data",
+      "id": "today.get",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Which part of the workspace.",
+        "properties": {
+          "limit": {
+            "description": "At most this many tasks per list, 1 to 200; default 50. The counts\nare always complete.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "project": {
+            "description": "Only this project (key or ID), with its sub-projects; default: every\nactive project.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "TodayInput",
+        "type": "object"
+      },
+      "input_name": "TodayInput",
+      "kind": "query",
+      "mcp_tool": "get_today",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person or agent."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person or an agent.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              }
+            ]
+          },
+          "Category": {
+            "description": "What a status means for the work in it.",
+            "oneOf": [
+              {
+                "const": "todo",
+                "description": "Not started.",
+                "type": "string"
+              },
+              {
+                "const": "in_progress",
+                "description": "Being worked on.",
+                "type": "string"
+              },
+              {
+                "const": "done",
+                "description": "Finished; closes the task.",
+                "type": "string"
+              },
+              {
+                "const": "cancelled",
+                "description": "Dropped; closes the task.",
+                "type": "string"
+              }
+            ]
+          },
+          "Checklist": {
+            "additionalProperties": false,
+            "description": "Ticked and all checklist items.",
+            "properties": {
+              "done": {
+                "description": "Ticked items.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "total": {
+                "description": "All items.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "done",
+              "total"
+            ],
+            "type": "object"
+          },
+          "Claim": {
+            "additionalProperties": false,
+            "description": "An agent's claim on a task.",
+            "properties": {
+              "agent": {
+                "description": "The agent's name.",
+                "type": "string"
+              },
+              "session": {
+                "description": "The agent session holding it.",
+                "type": "string"
+              },
+              "until": {
+                "description": "When the claim ends unless renewed (RFC 3339, UTC).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "agent",
+              "session",
+              "until"
+            ],
+            "type": "object"
+          },
+          "DueReminder": {
+            "additionalProperties": false,
+            "description": "One reminder that is due.",
+            "properties": {
+              "at": {
+                "description": "When it came due (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "due_date": {
+                "description": "The task's due date.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The ID to acknowledge it with.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/ReminderKind",
+                "description": "What reminds."
+              },
+              "missed": {
+                "description": "Whether it came due before `since`: missed while no program showed\nit.",
+                "type": "boolean"
+              },
+              "note": {
+                "description": "The reminder's text; left out when empty.",
+                "type": "string"
+              },
+              "task": {
+                "$ref": "#/$defs/TaskRef",
+                "description": "The task."
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "at",
+              "missed",
+              "task"
+            ],
+            "type": "object"
+          },
+          "Glyph": {
+            "description": "The shape that shows a task's type.",
+            "oneOf": [
+              {
+                "const": "task",
+                "description": "A plain task.",
+                "type": "string"
+              },
+              {
+                "const": "bug",
+                "description": "A bug.",
+                "type": "string"
+              },
+              {
+                "const": "feature",
+                "description": "A feature.",
+                "type": "string"
+              },
+              {
+                "const": "milestone",
+                "description": "A milestone.",
+                "type": "string"
+              }
+            ]
+          },
+          "Hue": {
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
+            "oneOf": [
+              {
+                "const": "red",
+                "description": "Red.",
+                "type": "string"
+              },
+              {
+                "const": "orange",
+                "description": "Orange.",
+                "type": "string"
+              },
+              {
+                "const": "yellow",
+                "description": "Yellow.",
+                "type": "string"
+              },
+              {
+                "const": "green",
+                "description": "Green.",
+                "type": "string"
+              },
+              {
+                "const": "teal",
+                "description": "Teal.",
+                "type": "string"
+              },
+              {
+                "const": "blue",
+                "description": "Blue.",
+                "type": "string"
+              },
+              {
+                "const": "purple",
+                "description": "Purple.",
+                "type": "string"
+              },
+              {
+                "const": "pink",
+                "description": "Pink.",
+                "type": "string"
+              },
+              {
+                "const": "grey",
+                "description": "Grey.",
+                "type": "string"
+              }
+            ]
+          },
+          "LabelRef": {
+            "additionalProperties": false,
+            "description": "A label on a task.",
+            "properties": {
+              "hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "Its colour."
+              },
+              "id": {
+                "description": "The label's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "hue"
+            ],
+            "type": "object"
+          },
+          "ListedTask": {
+            "additionalProperties": false,
+            "description": "A task as lists show it.",
+            "properties": {
+              "blocked": {
+                "description": "Whether a task that blocks it is still open.",
+                "type": "boolean"
+              },
+              "checklist": {
+                "$ref": "#/$defs/Checklist",
+                "description": "The description's checklist."
+              },
+              "claim": {
+                "$ref": "#/$defs/Claim",
+                "description": "The agent that claimed it, while the claim lasts."
+              },
+              "closed_at": {
+                "description": "When it was closed; left out while open.",
+                "type": "string"
+              },
+              "comment_count": {
+                "description": "How many comments it has.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "created_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who created it."
+              },
+              "due_date": {
+                "description": "The due date.",
+                "type": "string"
+              },
+              "estimate_minutes": {
+                "description": "The estimate in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "file_count": {
+                "description": "How many files are attached to it and to its comments.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "The task's ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "labels": {
+                "description": "Its labels.",
+                "items": {
+                  "$ref": "#/$defs/LabelRef"
+                },
+                "type": "array"
+              },
+              "parent": {
+                "description": "The parent task's key, for a subtask.",
+                "type": "string"
+              },
+              "priority": {
+                "$ref": "#/$defs/Priority",
+                "description": "Its priority."
+              },
+              "progress_percent": {
+                "description": "Its progress in percent.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "project": {
+                "description": "Its project's key.",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place in its status column.",
+                "type": "string"
+              },
+              "remaining_minutes": {
+                "description": "Estimate minus logged time, in minutes; only with an estimate.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "spent_minutes": {
+                "description": "Logged time in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "start_date": {
+                "description": "The start date.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/StatusRef",
+                "description": "Its status."
+              },
+              "subtask_count": {
+                "$ref": "#/$defs/Checklist",
+                "description": "Its subtasks: closed and all."
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              },
+              "type": {
+                "$ref": "#/$defs/TypeRef",
+                "description": "Its type."
+              },
+              "updated_at": {
+                "description": "When anything about it last changed.",
+                "type": "string"
+              },
+              "version": {
+                "description": "Its version, for `expected_version`.",
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "project",
+              "status",
+              "type",
+              "priority",
+              "labels",
+              "spent_minutes",
+              "progress_percent",
+              "checklist",
+              "subtask_count",
+              "blocked",
+              "comment_count",
+              "file_count",
+              "rank",
+              "created_by",
+              "created_at",
+              "updated_at",
+              "version",
+              "id"
+            ],
+            "type": "object"
+          },
+          "Priority": {
+            "description": "A task's priority.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No priority (the default).",
+                "type": "string"
+              },
+              {
+                "const": "low",
+                "description": "Low.",
+                "type": "string"
+              },
+              {
+                "const": "normal",
+                "description": "Normal.",
+                "type": "string"
+              },
+              {
+                "const": "high",
+                "description": "High.",
+                "type": "string"
+              },
+              {
+                "const": "urgent",
+                "description": "Urgent.",
+                "type": "string"
+              }
+            ]
+          },
+          "RecentTask": {
+            "additionalProperties": false,
+            "description": "A task that changed recently, with who changed it last.",
+            "properties": {
+              "changed_at": {
+                "description": "When (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "changed_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who made its last change."
+              },
+              "task": {
+                "$ref": "#/$defs/ListedTask",
+                "description": "The task."
+              }
+            },
+            "required": [
+              "task",
+              "changed_by",
+              "changed_at"
+            ],
+            "type": "object"
+          },
+          "ReminderKind": {
+            "description": "What reminds.",
+            "oneOf": [
+              {
+                "const": "reminder",
+                "description": "A personal reminder on a task.",
+                "type": "string"
+              },
+              {
+                "const": "deadline",
+                "description": "A task's due date is near: the day before it, at the reminder time.",
+                "type": "string"
+              },
+              {
+                "const": "timer",
+                "description": "The timer has run for longer than the workspace's setting.",
+                "type": "string"
+              }
+            ]
+          },
+          "StatusRef": {
+            "additionalProperties": false,
+            "description": "A task's status, as tasks carry it.",
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/Category",
+                "description": "Its category."
+              },
+              "id": {
+                "description": "The status's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "category"
+            ],
+            "type": "object"
+          },
+          "TaskRef": {
+            "additionalProperties": false,
+            "description": "Another task, as links and subtask lists show it.",
+            "properties": {
+              "closed": {
+                "description": "Whether it is closed (done or cancelled).",
+                "type": "boolean"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "Its key.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/StatusRef",
+                "description": "Its status."
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "status",
+              "closed",
+              "id"
+            ],
+            "type": "object"
+          },
+          "Timer": {
+            "additionalProperties": false,
+            "description": "The workspace's timer.",
+            "properties": {
+              "elapsed": {
+                "description": "The time so far in the workspace's units, rounded to minutes.",
+                "type": "string"
+              },
+              "elapsed_seconds": {
+                "description": "The time so far, in seconds.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "note": {
+                "description": "The note the entry will get; left out when empty.",
+                "type": "string"
+              },
+              "running_since": {
+                "description": "When the current running stretch began; left out while paused.",
+                "type": "string"
+              },
+              "started_at": {
+                "description": "When it was first started (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "started_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who started it."
+              },
+              "state": {
+                "$ref": "#/$defs/TimerState",
+                "description": "Running or paused."
+              },
+              "task": {
+                "$ref": "#/$defs/TaskRef",
+                "description": "The task it times."
+              },
+              "task_trashed": {
+                "description": "Whether the task is in the trash; stop the timer with `discard`.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "task",
+              "state",
+              "started_at",
+              "elapsed_seconds",
+              "elapsed",
+              "started_by"
+            ],
+            "type": "object"
+          },
+          "TimerState": {
+            "description": "Whether the timer runs.",
+            "oneOf": [
+              {
+                "const": "running",
+                "description": "It counts.",
+                "type": "string"
+              },
+              {
+                "const": "paused",
+                "description": "It keeps its time but doesn't count.",
+                "type": "string"
+              }
+            ]
+          },
+          "TodayCounts": {
+            "additionalProperties": false,
+            "description": "How many items each list has, also beyond the limit.",
+            "properties": {
+              "claimed": {
+                "description": "Tasks claimed by agents.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "due_today": {
+                "description": "Open tasks due today.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "in_progress": {
+                "description": "Open tasks in an in-progress status, not due today or before.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "open": {
+                "description": "Every open task of the active projects; the sidebar shows it next\nto All tasks.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "overdue": {
+                "description": "Open tasks overdue.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "recent": {
+                "description": "Tasks changed in the last 24 hours.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "reminders": {
+                "description": "Personal reminders due today or missed, not acknowledged.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "today": {
+                "description": "Tasks on Today: overdue, due today and in progress, each once. The\nsidebar shows it next to Today.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "today",
+              "overdue",
+              "due_today",
+              "in_progress",
+              "reminders",
+              "claimed",
+              "recent",
+              "open"
+            ],
+            "type": "object"
+          },
+          "TypeRef": {
+            "additionalProperties": false,
+            "description": "A task's type, as tasks carry it.",
+            "properties": {
+              "glyph": {
+                "$ref": "#/$defs/Glyph",
+                "description": "Its shape."
+              },
+              "id": {
+                "description": "The type's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "glyph"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "What needs attention today.",
+        "properties": {
+          "claimed": {
+            "description": "Tasks agents are working on (claimed), by when the claim ends.",
+            "items": {
+              "$ref": "#/$defs/ListedTask"
+            },
+            "type": "array"
+          },
+          "counts": {
+            "$ref": "#/$defs/TodayCounts",
+            "description": "The size of every list."
+          },
+          "date": {
+            "description": "Today's date in the workspace's time zone (`YYYY-MM-DD`).",
+            "type": "string"
+          },
+          "due_today": {
+            "description": "Open tasks due today, by priority.",
+            "items": {
+              "$ref": "#/$defs/ListedTask"
+            },
+            "type": "array"
+          },
+          "in_progress": {
+            "description": "Open tasks in an in-progress status that are not in the two lists\nabove, by project and place on the board.",
+            "items": {
+              "$ref": "#/$defs/ListedTask"
+            },
+            "type": "array"
+          },
+          "overdue": {
+            "description": "Open tasks due before today, the oldest first.",
+            "items": {
+              "$ref": "#/$defs/ListedTask"
+            },
+            "type": "array"
+          },
+          "recent": {
+            "description": "Tasks changed in the last 24 hours, the newest first.",
+            "items": {
+              "$ref": "#/$defs/RecentTask"
+            },
+            "type": "array"
+          },
+          "reminders": {
+            "description": "Personal reminders that come due today or were missed and not\nacknowledged, the earliest first.",
+            "items": {
+              "$ref": "#/$defs/DueReminder"
+            },
+            "type": "array"
+          },
+          "timer": {
+            "$ref": "#/$defs/Timer",
+            "description": "The timer, while one runs or is paused."
+          }
+        },
+        "required": [
+          "date",
+          "overdue",
+          "due_today",
+          "in_progress",
+          "reminders",
+          "claimed",
+          "recent",
+          "counts"
+        ],
+        "title": "Today",
+        "type": "object"
+      },
+      "output_name": "Today",
+      "safety": "read",
+      "summary": "What needs attention today across projects: overdue tasks, tasks due today, tasks in progress, today's reminders, agents' claims, recent changes and the timer, with counts for the sidebar."
+    },
+    {
       "cli": "board <project>",
       "exposure": "data",
       "id": "board.get",
@@ -32919,6 +34025,1594 @@
       "output_name": "ParsedQuery",
       "safety": "read",
       "summary": "Read a task query for the query field: highlighted pieces, the chips of the condition builder, the normal form and the first mistake with its place."
+    },
+    {
+      "cli": "wiki list",
+      "exposure": "data",
+      "id": "wiki.list",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A project's pages.",
+        "properties": {
+          "project": {
+            "description": "The project: its key or ID.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "title": "WikiListInput",
+        "type": "object"
+      },
+      "input_name": "WikiListInput",
+      "kind": "query",
+      "mcp_tool": "list_wiki_pages",
+      "output": {
+        "$defs": {
+          "WikiPageSummary": {
+            "additionalProperties": false,
+            "description": "A page as lists show it.",
+            "properties": {
+              "agent_brief": {
+                "description": "Whether it is the project's instructions for agents.",
+                "type": "boolean"
+              },
+              "children": {
+                "description": "How many pages it holds directly.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "depth": {
+                "description": "How many pages it is nested in.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "The page's ID.",
+                "type": "string"
+              },
+              "parent": {
+                "description": "The parent page's ID; left out for a page at the top.",
+                "type": "string"
+              },
+              "project": {
+                "description": "Its project's key.",
+                "type": "string"
+              },
+              "slug": {
+                "description": "Its name in addresses, made from the title.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The page's title.",
+                "type": "string"
+              },
+              "updated_at": {
+                "description": "When it last changed (RFC 3339, UTC).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "slug",
+              "project",
+              "depth",
+              "children",
+              "updated_at",
+              "id"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A project's pages as a tree: each page followed by the pages it holds,\nin their order.",
+        "properties": {
+          "items": {
+            "description": "The pages, in tree order.",
+            "items": {
+              "$ref": "#/$defs/WikiPageSummary"
+            },
+            "type": "array"
+          },
+          "total": {
+            "description": "How many.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "WikiTree",
+        "type": "object"
+      },
+      "output_name": "WikiTree",
+      "safety": "read",
+      "summary": "A project's wiki pages as a tree: titles, slugs, nesting and when each changed."
+    },
+    {
+      "cli": "wiki search <text>",
+      "exposure": "data",
+      "id": "wiki.search",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Pages to find, for example to complete a `[[` link.",
+        "properties": {
+          "limit": {
+            "description": "At most this many results, 1 to 200; default 20.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "project": {
+            "description": "Only this project (key or ID); default: every active project.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "text": {
+            "default": "",
+            "description": "Words to find in titles, headings and text. Written `Page#Heading`,\nit finds the headings of the pages whose titles match `Page`. Empty\nlists the most recently changed pages.",
+            "type": "string"
+          }
+        },
+        "title": "WikiSearchInput",
+        "type": "object"
+      },
+      "input_name": "WikiSearchInput",
+      "kind": "query",
+      "mcp_tool": "search_wiki_pages",
+      "output": {
+        "$defs": {
+          "TextRange": {
+            "additionalProperties": false,
+            "description": "A range of the query text, in UTF-16 code units (as the page's editor\ncounts).",
+            "properties": {
+              "from": {
+                "description": "The first unit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "to": {
+                "description": "One past the last unit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "from",
+              "to"
+            ],
+            "type": "object"
+          },
+          "WikiHeading": {
+            "additionalProperties": false,
+            "description": "One heading of a page.",
+            "properties": {
+              "level": {
+                "description": "1 to 6.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "line": {
+                "description": "The line it starts on, from 1.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "text": {
+                "description": "Its text; a link to it is `[[Page#text]]`.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "level",
+              "text",
+              "line"
+            ],
+            "type": "object"
+          },
+          "WikiMatch": {
+            "description": "Where a page matched.",
+            "oneOf": [
+              {
+                "const": "title",
+                "description": "The title.",
+                "type": "string"
+              },
+              {
+                "const": "heading",
+                "description": "A heading.",
+                "type": "string"
+              },
+              {
+                "const": "text",
+                "description": "The text.",
+                "type": "string"
+              },
+              {
+                "const": "recent",
+                "description": "Nothing; the text was empty.",
+                "type": "string"
+              }
+            ]
+          },
+          "WikiPageSummary": {
+            "additionalProperties": false,
+            "description": "A page as lists show it.",
+            "properties": {
+              "agent_brief": {
+                "description": "Whether it is the project's instructions for agents.",
+                "type": "boolean"
+              },
+              "children": {
+                "description": "How many pages it holds directly.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "depth": {
+                "description": "How many pages it is nested in.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "The page's ID.",
+                "type": "string"
+              },
+              "parent": {
+                "description": "The parent page's ID; left out for a page at the top.",
+                "type": "string"
+              },
+              "project": {
+                "description": "Its project's key.",
+                "type": "string"
+              },
+              "slug": {
+                "description": "Its name in addresses, made from the title.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The page's title.",
+                "type": "string"
+              },
+              "updated_at": {
+                "description": "When it last changed (RFC 3339, UTC).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "slug",
+              "project",
+              "depth",
+              "children",
+              "updated_at",
+              "id"
+            ],
+            "type": "object"
+          },
+          "WikiSearchHit": {
+            "additionalProperties": false,
+            "description": "One page found.",
+            "properties": {
+              "heading": {
+                "$ref": "#/$defs/WikiHeading",
+                "description": "The heading that matched."
+              },
+              "heading_matches": {
+                "description": "The matches in the heading's text, in UTF-16 code units.",
+                "items": {
+                  "$ref": "#/$defs/TextRange"
+                },
+                "type": "array"
+              },
+              "matched_in": {
+                "$ref": "#/$defs/WikiMatch",
+                "description": "Where it matched."
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageSummary",
+                "description": "The page."
+              },
+              "snippet": {
+                "description": "A piece of the text around the matches, for a text match.",
+                "type": "string"
+              },
+              "snippet_matches": {
+                "description": "The matches in `snippet`, in UTF-16 code units.",
+                "items": {
+                  "$ref": "#/$defs/TextRange"
+                },
+                "type": "array"
+              },
+              "title_matches": {
+                "description": "The matches in the page's title, in UTF-16 code units.",
+                "items": {
+                  "$ref": "#/$defs/TextRange"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "page",
+              "matched_in"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The pages found, best first: title matches (beginnings first), then\nheadings, then text.",
+        "properties": {
+          "items": {
+            "description": "The results.",
+            "items": {
+              "$ref": "#/$defs/WikiSearchHit"
+            },
+            "type": "array"
+          },
+          "total": {
+            "description": "How many results there are, also beyond `limit`.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "WikiSearchResult",
+        "type": "object"
+      },
+      "output_name": "WikiSearchResult",
+      "safety": "read",
+      "summary": "Find wiki pages by title, heading or text, for example to link one; `Page#Heading` lists a page's headings."
+    },
+    {
+      "cli": "wiki get <page>",
+      "exposure": "data",
+      "id": "wiki.get",
+      "input": {
+        "$defs": {
+          "WikiPart": {
+            "description": "What `wiki.get` adds to a page.",
+            "oneOf": [
+              {
+                "const": "backlinks",
+                "description": "The pages and tasks that link to it.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A page to read.",
+        "properties": {
+          "include": {
+            "description": "What to add: `backlinks`.",
+            "items": {
+              "$ref": "#/$defs/WikiPart"
+            },
+            "type": "array"
+          },
+          "page": {
+            "description": "The page: its title (any case), slug or ID.",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project (key or ID); needed unless `page` is an ID.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "revision": {
+            "description": "An older revision to read instead of the current text.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "page"
+        ],
+        "title": "WikiGetInput",
+        "type": "object"
+      },
+      "input_name": "WikiGetInput",
+      "kind": "query",
+      "mcp_tool": "get_wiki_page",
+      "output": {
+        "$defs": {
+          "Backlink": {
+            "additionalProperties": false,
+            "description": "What links to a page.",
+            "properties": {
+              "heading": {
+                "description": "The heading the link names, if any.",
+                "type": "string"
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "A page, for a link in its text."
+              },
+              "task": {
+                "description": "A task's key, for a link in its description.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the task or page.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "title"
+            ],
+            "type": "object"
+          },
+          "WikiHeading": {
+            "additionalProperties": false,
+            "description": "One heading of a page.",
+            "properties": {
+              "level": {
+                "description": "1 to 6.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "line": {
+                "description": "The line it starts on, from 1.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "text": {
+                "description": "Its text; a link to it is `[[Page#text]]`.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "level",
+              "text",
+              "line"
+            ],
+            "type": "object"
+          },
+          "WikiPageRef": {
+            "additionalProperties": false,
+            "description": "Another page, as a page names its parent and children.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "slug": {
+                "description": "Its slug.",
+                "type": "string"
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "slug",
+              "id"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "One wiki page.",
+        "properties": {
+          "agent_brief": {
+            "description": "Whether it is the project's instructions for agents.",
+            "type": "boolean"
+          },
+          "backlinks": {
+            "description": "What links to it, when asked for with `include`.",
+            "items": {
+              "$ref": "#/$defs/Backlink"
+            },
+            "type": "array"
+          },
+          "body": {
+            "description": "Its text (Markdown).",
+            "type": "string"
+          },
+          "children": {
+            "description": "The pages it holds, in order.",
+            "items": {
+              "$ref": "#/$defs/WikiPageRef"
+            },
+            "type": "array"
+          },
+          "conflict_copies": {
+            "description": "Edits that clashed with another and wait to be resolved (conflict\ncopies).",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "created_at": {
+            "description": "When it was created (RFC 3339, UTC).",
+            "type": "string"
+          },
+          "current": {
+            "description": "Whether `body` is the current text (false when an older revision was\nasked for).",
+            "type": "boolean"
+          },
+          "headings": {
+            "description": "The headings of `body`, for links to a heading.",
+            "items": {
+              "$ref": "#/$defs/WikiHeading"
+            },
+            "type": "array"
+          },
+          "id": {
+            "description": "The page's ID.",
+            "type": "string"
+          },
+          "parent": {
+            "$ref": "#/$defs/WikiPageRef",
+            "description": "The parent page; left out for a page at the top."
+          },
+          "path": {
+            "description": "The pages it is nested in, outermost first.",
+            "items": {
+              "$ref": "#/$defs/WikiPageRef"
+            },
+            "type": "array"
+          },
+          "project": {
+            "description": "Its project's key.",
+            "type": "string"
+          },
+          "revision": {
+            "description": "The revision of `body`; pass it as `base_revision` when you save a\nnew text. Left out while the page has no text yet.",
+            "type": "string"
+          },
+          "slug": {
+            "description": "Its name in addresses, made from the title.",
+            "type": "string"
+          },
+          "title": {
+            "description": "The page's title.",
+            "type": "string"
+          },
+          "updated_at": {
+            "description": "When it last changed.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "slug",
+          "project",
+          "body",
+          "current",
+          "conflict_copies",
+          "created_at",
+          "updated_at",
+          "id"
+        ],
+        "title": "WikiPage",
+        "type": "object"
+      },
+      "output_name": "WikiPage",
+      "safety": "read",
+      "summary": "One wiki page with its text, revision, headings, place in the tree and, on request, what links to it; or an older revision of it."
+    },
+    {
+      "cli": "wiki new",
+      "exposure": "data",
+      "id": "wiki.create",
+      "input": {
+        "$defs": {
+          "Edge": {
+            "description": "The two ends of an ordered list.",
+            "oneOf": [
+              {
+                "const": "top",
+                "description": "First.",
+                "type": "string"
+              },
+              {
+                "const": "bottom",
+                "description": "Last.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A new page.",
+        "properties": {
+          "after": {
+            "description": "Place it after this page of the same parent.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "at": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Edge"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Place it first or last; default: last."
+          },
+          "before": {
+            "description": "Place it before this page of the same parent.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "body": {
+            "description": "The text (Markdown).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "client_request_id": {
+            "description": "Your own ID for this request; repeating it within 24 hours returns\nthe first answer instead of creating a second page.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "message": {
+            "description": "A note saved with the first revision.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "parent": {
+            "description": "The page to put it in (title, slug or ID); default: at the top.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "project": {
+            "description": "The project: its key or ID.",
+            "type": "string"
+          },
+          "title": {
+            "description": "The title, 1 to 200 characters, unique in the project ignoring case,\nwithout `[`, `]`, `#` or `|`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project",
+          "title"
+        ],
+        "title": "WikiCreateInput",
+        "type": "object"
+      },
+      "input_name": "WikiCreateInput",
+      "kind": "command",
+      "mcp_tool": "create_wiki_page",
+      "output": {
+        "$defs": {
+          "Backlink": {
+            "additionalProperties": false,
+            "description": "What links to a page.",
+            "properties": {
+              "heading": {
+                "description": "The heading the link names, if any.",
+                "type": "string"
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "A page, for a link in its text."
+              },
+              "task": {
+                "description": "A task's key, for a link in its description.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the task or page.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "title"
+            ],
+            "type": "object"
+          },
+          "DescriptionSave": {
+            "additionalProperties": false,
+            "description": "The result of saving a description.",
+            "properties": {
+              "conflict_copy": {
+                "description": "The conflict copy that holds the edit, after a conflict.",
+                "type": "string"
+              },
+              "outcome": {
+                "$ref": "#/$defs/SaveOutcome",
+                "description": "What became of the edit."
+              },
+              "revision": {
+                "description": "The description's revision now; pass it as `base_revision` next\ntime. Left out while the description has none.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "outcome"
+            ],
+            "type": "object"
+          },
+          "SaveOutcome": {
+            "description": "What became of a description that was saved.",
+            "oneOf": [
+              {
+                "const": "saved",
+                "description": "Saved as the new description.",
+                "type": "string"
+              },
+              {
+                "const": "merged",
+                "description": "Somebody saved in between; both edits were merged.",
+                "type": "string"
+              },
+              {
+                "const": "conflict",
+                "description": "Somebody changed the same lines in between: the description stays\nas they left it, and this edit was kept as a conflict copy.",
+                "type": "string"
+              },
+              {
+                "const": "unchanged",
+                "description": "The text was already that.",
+                "type": "string"
+              }
+            ]
+          },
+          "WikiHeading": {
+            "additionalProperties": false,
+            "description": "One heading of a page.",
+            "properties": {
+              "level": {
+                "description": "1 to 6.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "line": {
+                "description": "The line it starts on, from 1.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "text": {
+                "description": "Its text; a link to it is `[[Page#text]]`.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "level",
+              "text",
+              "line"
+            ],
+            "type": "object"
+          },
+          "WikiPage": {
+            "additionalProperties": false,
+            "description": "One wiki page.",
+            "properties": {
+              "agent_brief": {
+                "description": "Whether it is the project's instructions for agents.",
+                "type": "boolean"
+              },
+              "backlinks": {
+                "description": "What links to it, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/Backlink"
+                },
+                "type": "array"
+              },
+              "body": {
+                "description": "Its text (Markdown).",
+                "type": "string"
+              },
+              "children": {
+                "description": "The pages it holds, in order.",
+                "items": {
+                  "$ref": "#/$defs/WikiPageRef"
+                },
+                "type": "array"
+              },
+              "conflict_copies": {
+                "description": "Edits that clashed with another and wait to be resolved (conflict\ncopies).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "current": {
+                "description": "Whether `body` is the current text (false when an older revision was\nasked for).",
+                "type": "boolean"
+              },
+              "headings": {
+                "description": "The headings of `body`, for links to a heading.",
+                "items": {
+                  "$ref": "#/$defs/WikiHeading"
+                },
+                "type": "array"
+              },
+              "id": {
+                "description": "The page's ID.",
+                "type": "string"
+              },
+              "parent": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "The parent page; left out for a page at the top."
+              },
+              "path": {
+                "description": "The pages it is nested in, outermost first.",
+                "items": {
+                  "$ref": "#/$defs/WikiPageRef"
+                },
+                "type": "array"
+              },
+              "project": {
+                "description": "Its project's key.",
+                "type": "string"
+              },
+              "revision": {
+                "description": "The revision of `body`; pass it as `base_revision` when you save a\nnew text. Left out while the page has no text yet.",
+                "type": "string"
+              },
+              "slug": {
+                "description": "Its name in addresses, made from the title.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The page's title.",
+                "type": "string"
+              },
+              "updated_at": {
+                "description": "When it last changed.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "slug",
+              "project",
+              "body",
+              "current",
+              "conflict_copies",
+              "created_at",
+              "updated_at",
+              "id"
+            ],
+            "type": "object"
+          },
+          "WikiPageRef": {
+            "additionalProperties": false,
+            "description": "Another page, as a page names its parent and children.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "slug": {
+                "description": "Its slug.",
+                "type": "string"
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "slug",
+              "id"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A page changed, with the history group of the change.",
+        "properties": {
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "page": {
+            "$ref": "#/$defs/WikiPage",
+            "description": "The page after the change."
+          },
+          "save": {
+            "$ref": "#/$defs/DescriptionSave",
+            "description": "What became of a new text: saved, merged with another edit, or kept\nas a conflict copy."
+          }
+        },
+        "required": [
+          "page"
+        ],
+        "title": "WikiChange",
+        "type": "object"
+      },
+      "output_name": "WikiChange",
+      "safety": "write",
+      "summary": "Create a wiki page with a title unique in its project, optionally inside another page and with its text."
+    },
+    {
+      "cli": "wiki put <page>",
+      "exposure": "data",
+      "id": "wiki.update",
+      "input": {
+        "$defs": {
+          "ConflictAction": {
+            "description": "What to do with a conflict copy.",
+            "oneOf": [
+              {
+                "const": "keep_current",
+                "description": "Keep the description as it is and close the copy.",
+                "type": "string"
+              },
+              {
+                "const": "use_copy",
+                "description": "Make the copy the description.",
+                "type": "string"
+              },
+              {
+                "const": "use_text",
+                "description": "Save `text` (for example both combined by hand) as the description.",
+                "type": "string"
+              }
+            ]
+          },
+          "ConflictResolution": {
+            "additionalProperties": false,
+            "description": "How to resolve a conflict copy, inside `task.update`.",
+            "properties": {
+              "action": {
+                "$ref": "#/$defs/ConflictAction",
+                "description": "What to do with it."
+              },
+              "copy": {
+                "description": "The conflict copy's revision ID.",
+                "type": "string"
+              },
+              "text": {
+                "description": "The text to save, for `use_text`.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "copy",
+              "action"
+            ],
+            "type": "object"
+          },
+          "Edge": {
+            "description": "The two ends of an ordered list.",
+            "oneOf": [
+              {
+                "const": "top",
+                "description": "First.",
+                "type": "string"
+              },
+              {
+                "const": "bottom",
+                "description": "Last.",
+                "type": "string"
+              }
+            ]
+          },
+          "TextEdit": {
+            "additionalProperties": false,
+            "description": "A targeted change to a text: `old_text` must occur exactly once.",
+            "properties": {
+              "new_text": {
+                "description": "What replaces it.",
+                "type": "string"
+              },
+              "old_text": {
+                "description": "The text to replace; it must occur exactly once.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "old_text",
+              "new_text"
+            ],
+            "type": "object"
+          },
+          "WikiField": {
+            "description": "A page field that can be cleared.",
+            "oneOf": [
+              {
+                "const": "parent",
+                "description": "The parent: the page moves to the top.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Changes to a page; fields left out keep their value.",
+        "properties": {
+          "after": {
+            "description": "Place it after this page of the same parent.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "at": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Edge"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Place it first or last among its parent's pages."
+          },
+          "base_revision": {
+            "description": "The revision your new text was edited from. If somebody saved in\nbetween, the two edits are merged; when they changed the same lines,\nyours is kept as a conflict copy and the page stays as it is.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "before": {
+            "description": "Place it before this page of the same parent.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "body": {
+            "description": "A new text (Markdown), replacing the old one.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "clear": {
+            "description": "Fields to clear.",
+            "items": {
+              "$ref": "#/$defs/WikiField"
+            },
+            "type": "array"
+          },
+          "edits": {
+            "description": "Targeted changes to the text instead of a new one: each `old_text`\nmust occur exactly once.",
+            "items": {
+              "$ref": "#/$defs/TextEdit"
+            },
+            "type": "array"
+          },
+          "message": {
+            "description": "A note saved with the new revision.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "page": {
+            "description": "The page: its title (any case), slug or ID.",
+            "type": "string"
+          },
+          "parent": {
+            "description": "A new parent page (title, slug or ID, same project).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "project": {
+            "description": "The project (key or ID); needed unless `page` is an ID.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resolve_conflict": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ConflictResolution"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Resolve a conflict copy of the text."
+          },
+          "title": {
+            "description": "A new title; old links by the old title stop working.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "page"
+        ],
+        "title": "WikiUpdateInput",
+        "type": "object"
+      },
+      "input_name": "WikiUpdateInput",
+      "kind": "command",
+      "mcp_tool": "update_wiki_page",
+      "output": {
+        "$defs": {
+          "Backlink": {
+            "additionalProperties": false,
+            "description": "What links to a page.",
+            "properties": {
+              "heading": {
+                "description": "The heading the link names, if any.",
+                "type": "string"
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "A page, for a link in its text."
+              },
+              "task": {
+                "description": "A task's key, for a link in its description.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the task or page.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "title"
+            ],
+            "type": "object"
+          },
+          "DescriptionSave": {
+            "additionalProperties": false,
+            "description": "The result of saving a description.",
+            "properties": {
+              "conflict_copy": {
+                "description": "The conflict copy that holds the edit, after a conflict.",
+                "type": "string"
+              },
+              "outcome": {
+                "$ref": "#/$defs/SaveOutcome",
+                "description": "What became of the edit."
+              },
+              "revision": {
+                "description": "The description's revision now; pass it as `base_revision` next\ntime. Left out while the description has none.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "outcome"
+            ],
+            "type": "object"
+          },
+          "SaveOutcome": {
+            "description": "What became of a description that was saved.",
+            "oneOf": [
+              {
+                "const": "saved",
+                "description": "Saved as the new description.",
+                "type": "string"
+              },
+              {
+                "const": "merged",
+                "description": "Somebody saved in between; both edits were merged.",
+                "type": "string"
+              },
+              {
+                "const": "conflict",
+                "description": "Somebody changed the same lines in between: the description stays\nas they left it, and this edit was kept as a conflict copy.",
+                "type": "string"
+              },
+              {
+                "const": "unchanged",
+                "description": "The text was already that.",
+                "type": "string"
+              }
+            ]
+          },
+          "WikiHeading": {
+            "additionalProperties": false,
+            "description": "One heading of a page.",
+            "properties": {
+              "level": {
+                "description": "1 to 6.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "line": {
+                "description": "The line it starts on, from 1.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "text": {
+                "description": "Its text; a link to it is `[[Page#text]]`.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "level",
+              "text",
+              "line"
+            ],
+            "type": "object"
+          },
+          "WikiPage": {
+            "additionalProperties": false,
+            "description": "One wiki page.",
+            "properties": {
+              "agent_brief": {
+                "description": "Whether it is the project's instructions for agents.",
+                "type": "boolean"
+              },
+              "backlinks": {
+                "description": "What links to it, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/Backlink"
+                },
+                "type": "array"
+              },
+              "body": {
+                "description": "Its text (Markdown).",
+                "type": "string"
+              },
+              "children": {
+                "description": "The pages it holds, in order.",
+                "items": {
+                  "$ref": "#/$defs/WikiPageRef"
+                },
+                "type": "array"
+              },
+              "conflict_copies": {
+                "description": "Edits that clashed with another and wait to be resolved (conflict\ncopies).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "current": {
+                "description": "Whether `body` is the current text (false when an older revision was\nasked for).",
+                "type": "boolean"
+              },
+              "headings": {
+                "description": "The headings of `body`, for links to a heading.",
+                "items": {
+                  "$ref": "#/$defs/WikiHeading"
+                },
+                "type": "array"
+              },
+              "id": {
+                "description": "The page's ID.",
+                "type": "string"
+              },
+              "parent": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "The parent page; left out for a page at the top."
+              },
+              "path": {
+                "description": "The pages it is nested in, outermost first.",
+                "items": {
+                  "$ref": "#/$defs/WikiPageRef"
+                },
+                "type": "array"
+              },
+              "project": {
+                "description": "Its project's key.",
+                "type": "string"
+              },
+              "revision": {
+                "description": "The revision of `body`; pass it as `base_revision` when you save a\nnew text. Left out while the page has no text yet.",
+                "type": "string"
+              },
+              "slug": {
+                "description": "Its name in addresses, made from the title.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The page's title.",
+                "type": "string"
+              },
+              "updated_at": {
+                "description": "When it last changed.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "slug",
+              "project",
+              "body",
+              "current",
+              "conflict_copies",
+              "created_at",
+              "updated_at",
+              "id"
+            ],
+            "type": "object"
+          },
+          "WikiPageRef": {
+            "additionalProperties": false,
+            "description": "Another page, as a page names its parent and children.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "slug": {
+                "description": "Its slug.",
+                "type": "string"
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "slug",
+              "id"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A page changed, with the history group of the change.",
+        "properties": {
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "page": {
+            "$ref": "#/$defs/WikiPage",
+            "description": "The page after the change."
+          },
+          "save": {
+            "$ref": "#/$defs/DescriptionSave",
+            "description": "What became of a new text: saved, merged with another edit, or kept\nas a conflict copy."
+          }
+        },
+        "required": [
+          "page"
+        ],
+        "title": "WikiChange",
+        "type": "object"
+      },
+      "output_name": "WikiChange",
+      "safety": "write",
+      "summary": "Change a wiki page: its text (whole, with a base revision, or by targeted edits), title, parent or place; or resolve a conflict copy."
+    },
+    {
+      "cli": "wiki history <page>",
+      "exposure": "data",
+      "id": "wiki.history",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A page whose revisions to list.",
+        "properties": {
+          "page": {
+            "description": "The page: its title (any case), slug or ID.",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project (key or ID); needed unless `page` is an ID.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "page"
+        ],
+        "title": "WikiHistoryInput",
+        "type": "object"
+      },
+      "input_name": "WikiHistoryInput",
+      "kind": "query",
+      "mcp_tool": "get_wiki_history",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person or agent."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person or an agent.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              }
+            ]
+          },
+          "RevisionInfo": {
+            "additionalProperties": false,
+            "description": "One revision of a description, without its text.",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who saved it."
+              },
+              "base": {
+                "description": "The revision it was edited from.",
+                "type": "string"
+              },
+              "bytes": {
+                "description": "Its size in bytes.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "created_at": {
+                "description": "When (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "current": {
+                "description": "Whether it is the description now.",
+                "type": "boolean"
+              },
+              "id": {
+                "description": "The revision's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/RevisionKind",
+                "description": "How it came about."
+              },
+              "message": {
+                "description": "A note saved with it.",
+                "type": "string"
+              },
+              "resolved_at": {
+                "description": "For a conflict copy: when it was resolved; left out while it is\nopen.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "author",
+              "created_at",
+              "current",
+              "bytes"
+            ],
+            "type": "object"
+          },
+          "RevisionKind": {
+            "description": "How a revision came about.",
+            "oneOf": [
+              {
+                "const": "normal",
+                "description": "A save.",
+                "type": "string"
+              },
+              {
+                "const": "merged",
+                "description": "Two edits of the same revision, merged.",
+                "type": "string"
+              },
+              {
+                "const": "conflict",
+                "description": "An edit that clashed with another; kept aside, not the description.",
+                "type": "string"
+              },
+              {
+                "const": "restored",
+                "description": "An earlier revision brought back (by Undo or a revert).",
+                "type": "string"
+              },
+              {
+                "const": "resolved",
+                "description": "The result of resolving a conflict copy.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A description's revisions, newest first, conflict copies included.",
+        "properties": {
+          "items": {
+            "description": "The revisions.",
+            "items": {
+              "$ref": "#/$defs/RevisionInfo"
+            },
+            "type": "array"
+          },
+          "total": {
+            "description": "How many.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "RevisionList",
+        "type": "object"
+      },
+      "output_name": "RevisionList",
+      "safety": "read",
+      "summary": "List the revisions of a wiki page, newest first, conflict copies included; read one with wiki.get and its revision."
     },
     {
       "cli": "file show <attachment>",

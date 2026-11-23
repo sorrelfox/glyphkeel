@@ -13,6 +13,7 @@ mod context;
 mod engine;
 mod events;
 mod failure;
+mod messages;
 mod ops;
 mod registry;
 mod thumbs;
@@ -22,6 +23,7 @@ mod write;
 pub use context::{ConfirmRequest, Confirmation, Context};
 pub use engine::{Engine, EngineConfig, Role, SessionStart};
 pub use failure::{Failure, store_error};
+pub use messages::MESSAGES_FTL;
 pub use registry::{Env, QueryCtx, Registry};
 pub use time::{
     Clock, ZoneChoice, check_time_zone, personal_time_zone, rfc3339, system_clock, time_zones,

@@ -1,0 +1,6 @@
+---
+source: crates/gk-engine/tests/search_today.rs
+expression: "render(&ws.search(json!({ \"text\": \"\\\"too short\\\" network\" })))"
+---
+task     text      TM-2   Sync engine | The timeout is [too short] when the [network] is slow.
+total: 1
