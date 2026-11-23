@@ -13,3 +13,12 @@ publish.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+icu_casemap = { workspace = true }
+icu_normalizer = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
