@@ -227,6 +227,27 @@ pub(crate) fn parse_enum<T: DeserializeOwned>(text: &str) -> Option<T> {
     serde_json::from_value(Value::String(text.to_owned())).ok()
 }
 
+/// The colour to give a new label or project whose neighbours have the
+/// stored colours `used`: the first palette colour none of them has, else
+/// the least-used one.
+fn suggest(used: impl IntoIterator<Item = String>) -> Hue {
+    let used: Vec<gk_core::Hue> = used.into_iter().filter_map(|h| h.parse().ok()).collect();
+    parse_enum(gk_core::suggest_hue(&used).as_str()).unwrap_or(Hue::Grey)
+}
+
+/// The stored colours of the rows `sql` selects with `param`.
+fn hues_of(
+    tx: &Transaction<'_>,
+    sql: &str,
+    param: &dyn gk_store::rusqlite::ToSql,
+) -> Result<Vec<String>, Failure> {
+    let mut stmt = tx.prepare_cached(sql)?;
+    let hues = stmt
+        .query_map([param], |r| r.get::<_, String>(0))?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(hues)
+}
+
 fn active(w: &WriteCtx<'_>, text: &str) -> Result<ProjectRow, Failure> {
     let p = lookup::project(w.tx(), "project", text)?;
     lookup::ensure_active(&p)?;
@@ -406,6 +427,7 @@ pub(crate) fn load(tx: &Transaction<'_>, id: Id) -> Result<Project, Failure> {
         |r| Ok((r.get(0)?, r.get(1)?)),
     )?;
     let (path, _) = path_of(tx, id)?;
+    let next_label_hue = suggest(labels.iter().map(|l| enum_text(l.hue)));
     Ok(Project {
         id: id.to_string(),
         key,
@@ -414,7 +436,7 @@ pub(crate) fn load(tx: &Transaction<'_>, id: Id) -> Result<Project, Failure> {
         path,
         description,
         hue: parse_enum(&hue).unwrap_or(Hue::Blue),
-        icon,
+        icon: icon.as_deref().and_then(parse_enum),
         state: if state == "archived" {
             ProjectState::Archived
         } else {
@@ -426,6 +448,7 @@ pub(crate) fn load(tx: &Transaction<'_>, id: Id) -> Result<Project, Failure> {
         statuses,
         types,
         labels,
+        next_label_hue,
         open_tasks: open.unsigned_abs(),
         total_tasks: total.unsigned_abs(),
         created_at: rfc3339(created),
@@ -504,7 +527,7 @@ fn list(q: &QueryCtx<'_>, input: ProjectListInput) -> Result<ProjectList, Failur
                 parent: parent_key.map(str::to_owned),
                 depth,
                 hue: parse_enum(&r.hue).unwrap_or(Hue::Blue),
-                icon: r.icon.clone(),
+                icon: r.icon.as_deref().and_then(parse_enum),
                 state: if r.archived {
                     ProjectState::Archived
                 } else {
@@ -621,18 +644,30 @@ fn create(w: &mut WriteCtx<'_>, input: ProjectCreateInput) -> Result<ProjectChan
     let description = input.description.unwrap_or_default();
     gk_core::check_markdown("description", &description).map_err(|e| invalid("description", e))?;
     let parent_id = parent.as_ref().map(|p| p.id);
-    let (hue, modules) = match parent_id {
-        Some(p) => w.tx().query_row(
-            "SELECT hue, modules FROM projects WHERE id = ?1",
-            [b(p)],
-            |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
-        )?,
-        None => (
-            "blue".to_owned(),
-            modules_value(Modules::default()).to_string(),
-        ),
+    let modules = match parent_id {
+        Some(p) => w
+            .tx()
+            .query_row("SELECT modules FROM projects WHERE id = ?1", [b(p)], |r| {
+                r.get::<_, String>(0)
+            })?,
+        None => modules_value(Modules::default()).to_string(),
     };
-    let hue = input.hue.map_or(hue, enum_text);
+    let hue = match input.hue {
+        Some(hue) => hue,
+        None => suggest(match parent_id {
+            Some(p) => hues_of(
+                w.tx(),
+                "SELECT hue FROM projects WHERE parent_id = ?1 AND deleted_at IS NULL",
+                &b(p),
+            )?,
+            None => hues_of(
+                w.tx(),
+                "SELECT hue FROM projects WHERE parent_id IS NULL AND deleted_at IS NULL AND ?1 = 1",
+                &1,
+            )?,
+        }),
+    };
+    let hue = enum_text(hue);
     let siblings = match parent_id {
         Some(p) => lookup::ranked(
             w.tx(),
@@ -669,11 +704,7 @@ fn create(w: &mut WriteCtx<'_>, input: ProjectCreateInput) -> Result<ProjectChan
             fold(&name),
             description,
             hue,
-            input
-                .icon
-                .as_deref()
-                .map(str::trim)
-                .filter(|i| !i.is_empty()),
+            input.icon.map(enum_text),
             modules,
             w.now()
         ],
@@ -954,16 +985,8 @@ fn update(w: &mut WriteCtx<'_>, input: ProjectUpdateInput) -> Result<ProjectChan
     if let Some(hue) = input.hue {
         fields::set(w, PROJECT, p.id, pid, "hue", text(enum_text(hue)))?;
     }
-    if let Some(icon) = &input.icon {
-        let icon = icon.trim();
-        fields::set(
-            w,
-            PROJECT,
-            p.id,
-            pid,
-            "icon",
-            (!icon.is_empty()).then(|| Value::from(icon)),
-        )?;
+    if let Some(icon) = input.icon {
+        fields::set(w, PROJECT, p.id, pid, "icon", text(enum_text(icon)))?;
     }
     if clears(ProjectField::Icon) {
         fields::set(w, PROJECT, p.id, pid, "icon", None)?;
@@ -1652,6 +1675,14 @@ fn apply_label(w: &mut WriteCtx<'_>, p: &ProjectRow, c: &LabelChange) -> Result<
         unique_name(w.tx(), List::Labels, p, &name, None)?;
         let id = Id::generate_at(u64::try_from(w.now()).unwrap_or(0));
         let rank = new_rank(w, List::Labels, LABEL, p, id, Target::Bottom)?;
+        let hue = match c.hue {
+            Some(hue) => hue,
+            None => suggest(hues_of(
+                w.tx(),
+                "SELECT hue FROM labels WHERE project_id = ?1",
+                &b(p.id),
+            )?),
+        };
         w.tx().execute(
             "INSERT INTO labels (id, project_id, name, name_fold, hue, rank)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
@@ -1660,7 +1691,7 @@ fn apply_label(w: &mut WriteCtx<'_>, p: &ProjectRow, c: &LabelChange) -> Result<
                 b(p.id),
                 name,
                 fold(&name),
-                enum_text(c.hue.unwrap_or(Hue::Grey)),
+                enum_text(hue),
                 rank.as_str()
             ],
         )?;
@@ -1740,5 +1771,39 @@ mod tests {
         let m = modules_of(r#"{"board":1,"wiki":0,"time":false}"#);
         assert!(m.board && m.list && m.gantt);
         assert!(!m.wiki && !m.time);
+    }
+
+    #[test]
+    fn the_api_knows_every_project_icon_of_the_core() {
+        let schema = serde_json::to_value(schemars::schema_for!(gk_api::ops::common::ProjectIcon))
+            .unwrap_or_default();
+        let api: Vec<String> = schema["enum"]
+            .as_array()
+            .map(|names| {
+                names
+                    .iter()
+                    .filter_map(|n| n.as_str().map(str::to_owned))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let core: Vec<String> = gk_core::ProjectIcon::ALL
+            .iter()
+            .map(|i| i.as_str().to_owned())
+            .collect();
+        assert_eq!(api, core);
+    }
+
+    #[test]
+    fn the_api_palette_is_the_cores() {
+        let core: Vec<Option<Hue>> = gk_core::PALETTE
+            .iter()
+            .map(|h| parse_enum(h.as_str()))
+            .collect();
+        assert!(core.iter().all(Option::is_some));
+        assert_eq!(suggest(Vec::new()), Hue::Red);
+        assert_eq!(
+            suggest(vec!["red".to_owned(), "nonsense".to_owned()]),
+            Hue::Orange
+        );
     }
 }

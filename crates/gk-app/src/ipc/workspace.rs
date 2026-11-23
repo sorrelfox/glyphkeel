@@ -124,6 +124,23 @@ impl Workspace {
         engine.call(&ctx, op, input)
     }
 
+    /// The time zone the engine counts "today" and local times in, by its
+    /// IANA name; `None` while no workspace is open or the system's zone
+    /// has no name.
+    pub(crate) fn time_zone(&self) -> Option<String> {
+        self.engine().ok().and_then(|engine| engine.time_zone())
+    }
+
+    /// Switches the engine to the person's newly chosen zone (`"system"`
+    /// or an IANA name). Without an open workspace the name is only
+    /// checked.
+    pub(crate) fn set_time_zone(&self, name: &str) -> Result<(), OpError> {
+        match self.engine() {
+            Ok(engine) => engine.set_time_zone(name),
+            Err(_) => gk_engine::check_time_zone(name).map(|_| ()),
+        }
+    }
+
     /// Sets the change-event channel of window `label`; see
     /// [`Windows::subscribe`].
     pub(crate) fn subscribe(&self, label: &str, channel: Channel<Changed>) -> bool {

@@ -62,6 +62,7 @@ mod readers;
 mod requests;
 mod schema;
 mod store;
+mod user_settings;
 mod writer;
 
 pub use changes::{
@@ -82,6 +83,9 @@ pub use layout::{
 pub use requests::{REQUEST_WINDOW_MS, RequestKey, purge_requests, remember, remembered};
 pub use schema::{SCHEMA_VERSION, SchemaState};
 pub use store::{Store, StoreConfig, open_raw};
+pub use user_settings::{
+    SYSTEM_TIME_ZONE, USER_SETTINGS_FILE, UserSettings, config_dir, user_settings_file,
+};
 pub use writer::{SlowWrite, WriterStats};
 
 /// The connection type handed to read and write closures.

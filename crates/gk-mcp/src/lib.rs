@@ -93,7 +93,12 @@ pub fn run_stdio(args: &[OsString]) -> ExitCode {
 /// When the workspace can't be found, opened or is too new.
 pub fn open(options: &Options) -> Result<Server, OpError> {
     let layout = options.layout()?;
-    let engine = Engine::open(&layout, EngineConfig::new(Role::Mcp))?;
+    let mut config = EngineConfig::new(Role::Mcp);
+    config.time_zone = gk_engine::personal_time_zone(
+        options.tz.as_deref(),
+        &gk_store::UserSettings::load_default(),
+    )?;
+    let engine = Engine::open(&layout, config)?;
     tracing::info!(
         workspace = %layout.root().display(),
         profile = %options.profile,

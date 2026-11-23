@@ -646,7 +646,7 @@ export type FileRef = {
 /** The shape that shows a task's type. */
 export type Glyph = "task" | "bug" | "feature" | "milestone";
 
-/** The design's nine colours, for projects, statuses, types and labels. */
+/** The design's nine colours, for projects, statuses, types and labels, in palette order: a new label or project without a colour gets the first one its neighbours don't use yet. */
 export type Hue = "red" | "orange" | "yellow" | "green" | "teal" | "blue" | "purple" | "pink" | "grey";
 
 /** A label. */
@@ -663,7 +663,7 @@ export type Label = {
 
 /** Adds, changes or removes a label inside [`ProjectUpdateInput`]. */
 export type LabelChange = {
-  /** Its colour. */
+  /** Its colour; for a new label, default: the first palette colour no label of the project uses yet. */
   hue?: Hue | null;
   /** The label to change or remove; left out to add one. */
   label?: string | null;
@@ -675,7 +675,7 @@ export type LabelChange = {
 
 /** A new label. */
 export type LabelCreateInput = {
-  /** Its colour; default: grey. */
+  /** Its colour; default: the first palette colour no label of the project uses yet, else the least-used one (the project's `next_label_hue`). */
   hue?: Hue | null;
   /** The name, 1 to 50 characters, unique in the project ignoring case. */
   name: string;
@@ -836,8 +836,8 @@ export type Project = {
   description: string;
   /** Its colour. */
   hue: Hue;
-  /** Its icon, if one was chosen. */
-  icon?: string;
+  /** Its icon, if one was chosen; without one it shows as a circle. */
+  icon?: ProjectIcon;
   /** The project's ID. */
   id: string;
   /** Its key (`TM`). */
@@ -848,6 +848,8 @@ export type Project = {
   modules: Modules;
   /** Its name. */
   name: string;
+  /** The colour a new label gets when none is given: the first palette colour no label uses yet, else the least-used one. */
+  next_label_hue: Hue;
   /** Keys it had before; they still find it. */
   old_keys?: string[];
   /** Open tasks in this project alone. */
@@ -882,10 +884,10 @@ export type ProjectCreateInput = {
   client_request_id?: string | null;
   /** The description (Markdown). */
   description?: string | null;
-  /** The colour; default: the parent's, or blue. */
+  /** The colour; default: the first palette colour that no sibling project uses yet (the least-used one when all are taken). */
   hue?: Hue | null;
-  /** An icon name. */
-  icon?: string | null;
+  /** An icon shown instead of the circle; default: none (the circle). */
+  icon?: ProjectIcon | null;
   /** The key: 2 to 10 capital letters and digits, starting with a letter (`TM`). Task keys start with it. */
   key: string;
   /** The name, 1 to 100 characters. */
@@ -920,6 +922,9 @@ export type ProjectDeleted = {
 
 /** A project field that can be cleared. */
 export type ProjectField = "icon" | "description" | "parent";
+
+/** An icon that stands for a project instead of its coloured circle, drawn in the project's colour. The names are those of the app's icon family (Lucide), so each variant's name says what it shows. */
+export type ProjectIcon = "folder" | "star" | "bug" | "rocket" | "book" | "house" | "briefcase" | "code" | "terminal" | "globe" | "heart" | "flag" | "zap" | "target" | "lightbulb" | "wrench" | "hammer" | "palette" | "music" | "camera" | "graduation-cap" | "shopping-cart" | "wallet" | "chart-line" | "calendar" | "users" | "building" | "plane" | "leaf" | "coffee" | "gamepad" | "puzzle" | "shield" | "flask-conical" | "layers" | "package" | "compass" | "mountain" | "sparkles" | "database";
 
 /** The project tree, in sidebar order: each project followed by its sub-projects. */
 export type ProjectList = {
@@ -974,8 +979,8 @@ export type ProjectSummary = {
   depth: number;
   /** Its colour. */
   hue: Hue;
-  /** Its icon, if one was chosen. */
-  icon?: string;
+  /** Its icon, if one was chosen; without one it shows as a circle. */
+  icon?: ProjectIcon;
   /** The project's ID. */
   id: string;
   /** The project's key (`TM`). */
@@ -1010,8 +1015,8 @@ export type ProjectUpdateInput = {
   description?: string | null;
   /** A new colour. */
   hue?: Hue | null;
-  /** A new icon name. */
-  icon?: string | null;
+  /** A new icon, shown instead of the circle. To go back to the circle, list `icon` in `clear`. */
+  icon?: ProjectIcon | null;
   /** A new key; the old one keeps finding the project and its tasks. */
   key?: string | null;
   /** Labels to add, change or remove, in order. */
@@ -2297,7 +2302,7 @@ export function makeOps(call: Call) {
       redo: (input: OpMap["history.redo"]["input"] = {}) => call("history.redo", input),
     },
     label: {
-      /** Add a label to a project. (write) */
+      /** Add a label to a project; without a colour it gets the first palette colour the project's labels don't use yet. (write) */
       create: (input: OpMap["label.create"]["input"]) => call("label.create", input),
       /** Rename or recolour a label. (write) */
       update: (input: OpMap["label.update"]["input"]) => call("label.update", input),
@@ -2319,7 +2324,7 @@ export function makeOps(call: Call) {
       list: (input: OpMap["project.list"]["input"] = {}) => call("project.list", input),
       /** One project with its statuses (board order, category, WIP limit), task types, labels, modules, sub-projects and counts. (read) */
       get: (input: OpMap["project.get"]["input"]) => call("project.get", input),
-      /** Create a project, or a sub-project that copies its parent's statuses, types and labels. (write) */
+      /** Create a project, or a sub-project that copies its parent's statuses, types and labels; without a colour it gets one its sibling projects don't use yet. (write) */
       create: (input: OpMap["project.create"]["input"]) => call("project.create", input),
       /** Change a project: name, description, colour, icon, modules, key, place in the tree, archived; add, change, reorder or remove statuses, types and labels, all in one change. (write) */
       update: (input: OpMap["project.update"]["input"]) => call("project.update", input),

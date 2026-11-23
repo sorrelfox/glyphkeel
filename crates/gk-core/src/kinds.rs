@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-//! Small closed sets of values: priorities, colours and task-type glyphs.
+//! Small closed sets of values: priorities, colours, task-type glyphs and
+//! project icons.
 //! Each is stored as text (or, for priorities, a small integer) and read
 //! back with `FromStr`.
 
@@ -106,6 +107,94 @@ text_enum!(
     }
 );
 
+text_enum!(
+    /// The icon that can stand for a project instead of its coloured
+    /// circle, drawn in the project's colour. The names are those of the
+    /// app's icon family (Lucide); a project without one shows the circle.
+    ProjectIcon, "project icon", {
+        /// Folder.
+        Folder = "folder",
+        /// Star.
+        Star = "star",
+        /// Bug.
+        Bug = "bug",
+        /// Rocket.
+        Rocket = "rocket",
+        /// Book.
+        Book = "book",
+        /// House.
+        House = "house",
+        /// Briefcase.
+        Briefcase = "briefcase",
+        /// Code.
+        Code = "code",
+        /// Terminal.
+        Terminal = "terminal",
+        /// Globe.
+        Globe = "globe",
+        /// Heart.
+        Heart = "heart",
+        /// Flag.
+        Flag = "flag",
+        /// Zap.
+        Zap = "zap",
+        /// Target.
+        Target = "target",
+        /// Lightbulb.
+        Lightbulb = "lightbulb",
+        /// Wrench.
+        Wrench = "wrench",
+        /// Hammer.
+        Hammer = "hammer",
+        /// Palette.
+        Palette = "palette",
+        /// Music.
+        Music = "music",
+        /// Camera.
+        Camera = "camera",
+        /// Graduation cap.
+        GraduationCap = "graduation-cap",
+        /// Shopping cart.
+        ShoppingCart = "shopping-cart",
+        /// Wallet.
+        Wallet = "wallet",
+        /// Chart line.
+        ChartLine = "chart-line",
+        /// Calendar.
+        Calendar = "calendar",
+        /// Users.
+        Users = "users",
+        /// Building.
+        Building = "building",
+        /// Plane.
+        Plane = "plane",
+        /// Leaf.
+        Leaf = "leaf",
+        /// Coffee.
+        Coffee = "coffee",
+        /// Gamepad.
+        Gamepad = "gamepad",
+        /// Puzzle.
+        Puzzle = "puzzle",
+        /// Shield.
+        Shield = "shield",
+        /// Flask conical.
+        FlaskConical = "flask-conical",
+        /// Layers.
+        Layers = "layers",
+        /// Package.
+        Package = "package",
+        /// Compass.
+        Compass = "compass",
+        /// Mountain.
+        Mountain = "mountain",
+        /// Sparkles.
+        Sparkles = "sparkles",
+        /// Database.
+        Database = "database",
+    }
+);
+
 /// A task's priority, stored as 0 (none) to 4 (urgent).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Priority {
@@ -190,6 +279,10 @@ mod tests {
         for g in Glyph::ALL {
             assert_eq!(g.as_str().parse::<Glyph>(), Ok(*g));
         }
+        for i in ProjectIcon::ALL {
+            assert_eq!(i.as_str().parse::<ProjectIcon>(), Ok(*i));
+        }
+        assert_eq!(ProjectIcon::ALL.len(), 40);
         for p in Priority::ALL {
             assert_eq!(Priority::from_i64(p.as_i64()), Ok(p));
             assert_eq!(p.as_str().parse::<Priority>(), Ok(p));
