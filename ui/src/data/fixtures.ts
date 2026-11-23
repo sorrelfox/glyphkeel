@@ -9,6 +9,7 @@ export function settings(overrides: Partial<Settings> = {}): Settings {
   return {
     agent_max_profile: "standard",
     days_per_week: 5,
+    file_max_mb: 100,
     hours_per_day: 8,
     reminder_time: "09:00",
     trash_days: 30,

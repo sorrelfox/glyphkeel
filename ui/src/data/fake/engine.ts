@@ -306,13 +306,31 @@ export class FakeWorkspace {
       .map((label) => ({ id: label.id, name: label.name, hue: label.hue }));
   }
 
-  private card(task: FakeTask): Card {
+  /** Whether a task that blocks it is still open. */
+  private blocked(task: FakeTask): boolean {
+    return this.state.relations.some(
+      (relation) =>
+        relation.kind === "blocks" &&
+        relation.to === task.id &&
+        this.state.tasks.some((blocker) => blocker.id === relation.from && blocker.closedAt === null),
+    );
+  }
+
+  private subtaskCount(task: FakeTask): { done: number; total: number } {
     const subtasks = this.state.tasks.filter((candidate) => candidate.parentId === task.id);
+    return { done: subtasks.filter((sub) => sub.closedAt !== null).length, total: subtasks.length };
+  }
+
+  private card(task: FakeTask): Card {
     const parent = this.state.tasks.find((candidate) => candidate.id === task.parentId);
     return {
       id: task.id,
       key: this.keyOf(task),
       project: this.projectOf(task).key,
+      blocked: this.blocked(task),
+      comment_count: task.comments,
+      file_count: task.files,
+      spent_minutes: task.spentMin,
       title: task.title,
       type: this.typeRef(task),
       priority: task.priority,
@@ -322,7 +340,7 @@ export class FakeWorkspace {
       ...some("due_date", task.dueDate),
       ...some("estimate_minutes", task.estimateMin),
       checklist: this.checklist(task),
-      subtasks: { done: subtasks.filter((sub) => sub.closedAt !== null).length, total: subtasks.length },
+      subtasks: this.subtaskCount(task),
       rank: String(task.rank),
       status_entered_at: task.statusEnteredAt,
       updated_at: task.updatedAt,
@@ -351,6 +369,10 @@ export class FakeWorkspace {
       ...some("estimate_minutes", task.estimateMin),
       spent_minutes: task.spentMin,
       checklist: this.checklist(task),
+      blocked: this.blocked(task),
+      comment_count: task.comments,
+      file_count: task.files,
+      subtask_count: this.subtaskCount(task),
       rank: String(task.rank),
       created_at: task.createdAt,
       created_by: { kind: "user", name: "You" },
