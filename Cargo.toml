@@ -76,6 +76,9 @@ comrak = { version = "~0.59.0", default-features = false }
 ammonia = "4.2.5"
 # Regular expressions in tests only (the allowlist checker of `gk-markdown`).
 regex = "1.13.2"
+# Spelling in the Markdown editor: a Rust port of Hunspell that reads the
+# system's Hunspell dictionaries (MPL-2.0).
+spellbook = "=0.4.2"
 # Error types.
 thiserror = "2.0.21"
 # Structured logs (slow write transactions, checkpoints).

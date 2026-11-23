@@ -21,9 +21,13 @@ import { type StartData } from "./start";
 
 // Loaded on first use, so that it costs the app's start nothing.
 const Gallery = lazy(() => import("./dev/Gallery"));
+const EditorPlayground = lazy(() => import("./editor/dev/EditorPlayground"));
 
 /** The path that opens the gallery directly, for the browser tests. */
 export const GALLERY_PATH = "/dev/themes";
+
+/** The path of the Markdown editor's development page, for the browser tests. */
+export const EDITOR_PLAYGROUND_PATH = "/dev/editor";
 
 export interface RouterContext {
   start: StartData;
@@ -42,6 +46,12 @@ const galleryRoute = createRoute({
   component: GalleryScreen,
 });
 
+const editorPlaygroundRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: EDITOR_PLAYGROUND_PATH,
+  component: EditorPlaygroundScreen,
+});
+
 const shellRoute = createRoute({ getParentRoute: () => rootRoute, id: "shell", component: ShellScreen });
 
 const todayRoute = createRoute({ getParentRoute: () => shellRoute, path: "/", component: TodayScreen });
@@ -57,11 +67,16 @@ export const boardRoute = createRoute({
   component: BoardScreen,
 });
 
-const routeTree = rootRoute.addChildren([galleryRoute, shellRoute.addChildren([todayRoute, allTasksRoute, boardRoute])]);
+const routeTree = rootRoute.addChildren([galleryRoute, editorPlaygroundRoute, shellRoute.addChildren([todayRoute, allTasksRoute, boardRoute])]);
 
-/** The first screen: the gallery from its path (browser tests), else Today. */
+/** The first screen: a development page from its path (browser tests), else Today. */
 export function initialPath(pathname: string): string {
-  return pathname.startsWith(GALLERY_PATH) ? GALLERY_PATH : "/";
+  for (const path of [GALLERY_PATH, EDITOR_PLAYGROUND_PATH]) {
+    if (pathname.startsWith(path)) {
+      return path;
+    }
+  }
+  return "/";
 }
 
 export function createAppRouter(path: string, context: RouterContext) {
@@ -102,6 +117,15 @@ function GalleryScreen() {
   return (
     <Suspense>
       <Gallery onLeave={() => void navigate({ to: "/" })} />
+    </Suspense>
+  );
+}
+
+function EditorPlaygroundScreen() {
+  const navigate = useNavigate();
+  return (
+    <Suspense>
+      <EditorPlayground onLeave={() => void navigate({ to: "/" })} />
     </Suspense>
   );
 }
