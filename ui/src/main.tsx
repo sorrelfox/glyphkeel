@@ -10,13 +10,14 @@ import "./styles/states.css";
 import "./styles/base.css";
 
 import { App } from "./App";
-import { apply, DEFAULT_APPEARANCE, readDesktop, resolve } from "./appearance/appearance";
+import { apply, readDesktop, resolve } from "./appearance/appearance";
 import { suppressBrowserBehaviour } from "./native";
+import { loadAppearance } from "./prefs/store";
 import { readStart } from "./start";
 
 // The window is still hidden. The theme goes onto <html> before the first
 // render, so the first frame the user sees is already in it.
-apply(resolve(DEFAULT_APPEARANCE, readDesktop(window)), document.documentElement);
+apply(resolve(loadAppearance(), readDesktop(window)), document.documentElement);
 suppressBrowserBehaviour(window);
 
 const root = document.getElementById("root");

@@ -1,0 +1,277 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Glyphkeel contributors
+
+import { ArrowDownWideNarrow, Bot, CalendarDays, ChevronDown, EyeOff, Filter, Flag, History, Network, SlidersHorizontal, Tag } from "lucide-react";
+import { type ReactNode } from "react";
+import { Button, Menu, MenuItem, MenuTrigger, Popover, type Selection } from "react-aria-components";
+
+import { classes } from "../../classes";
+import { MenuEntries, type MenuEntry } from "../../components/ContextMenu";
+import { CARD_FIELDS, PRIORITIES, SORT_MODES, type Board, type BoardLayout, type Project } from "../../data/catalog";
+import { useT } from "../../i18n/I18n";
+import { DUE_FILTERS, type BoardView, type Filters } from "./model";
+import styles from "./Board.module.css";
+
+interface ToolbarProps {
+  project: Project;
+  board: Board;
+  layout: BoardLayout;
+  view: BoardView;
+  filters: Filters;
+  onFilters: (filters: Filters) => void;
+  onLayout: (change: Partial<BoardLayout> | "reset") => void;
+}
+
+/** Choices for "hide closed cards after": days, 0 = never. */
+const HIDE_DONE_DAYS = [7, 14, 30, 0] as const;
+
+interface PickerProps<T extends string> {
+  label: string;
+  icon: ReactNode;
+  options: readonly { id: T; label: string; icon?: ReactNode }[];
+  value: readonly T[];
+  onChange: (value: T[]) => void;
+}
+
+/** A quick filter: a menu of choices, several at once; drawn toggled while any is chosen. */
+function Picker<T extends string>({ label, icon, options, value, onChange }: PickerProps<T>) {
+  const t = useT();
+  const on = value.length > 0;
+  return (
+    <MenuTrigger>
+      <Button className={classes("btn", on ? "on" : "flat")} aria-label={on ? t("filter-active", { name: label, count: value.length }) : label}>
+        {icon}
+        <span>{label}</span>
+        {on && <span className="count">{value.length}</span>}
+        <ChevronDown className="ic s muted" />
+      </Button>
+      <Popover className="pop menuPopover" placement="bottom start" offset={4}>
+        <Menu
+          className="menu"
+          aria-label={label}
+          selectionMode="multiple"
+          selectedKeys={new Set(value)}
+          onSelectionChange={(keys: Selection) => {
+            onChange(options.filter((option) => keys === "all" || keys.has(option.id)).map((option) => option.id));
+          }}
+        >
+          {options.map((option) => (
+            <MenuItem key={option.id} id={option.id} className="item" textValue={option.label}>
+              {({ isSelected }) => (
+                <>
+                  <input type="checkbox" className="check" checked={isSelected} readOnly tabIndex={-1} aria-hidden="true" />
+                  {option.icon}
+                  <span className="grow truncate">{option.label}</span>
+                </>
+              )}
+            </MenuItem>
+          ))}
+        </Menu>
+      </Popover>
+    </MenuTrigger>
+  );
+}
+
+function MenuButton({ label, children, entries, on = false, icon }: { label: string; children: ReactNode; entries: readonly MenuEntry[]; on?: boolean; icon?: boolean }) {
+  return (
+    <MenuTrigger>
+      <Button className={classes("btn", on ? "on" : "flat", icon && "icon")} aria-label={label}>
+        {children}
+      </Button>
+      <Popover className="pop menuPopover" placement="bottom end" offset={4}>
+        <Menu className="menu" aria-label={label}>
+          <MenuEntries entries={entries} />
+        </Menu>
+      </Popover>
+    </MenuTrigger>
+  );
+}
+
+/**
+ * The board's toolbar. Left: the filter field and the quick filters. Right:
+ * Include sub-projects, the hidden-columns chip, the sort mode and the board
+ * options. Filters are for this window; the layout is kept per project.
+ */
+export function Toolbar({ project, board, layout, view, filters, onFilters, onLayout }: ToolbarProps) {
+  const t = useT();
+  const labelNames = [...new Set(board.cards.flatMap((card) => card.labels.map((label) => label.name)))].sort();
+  const allLabels = new Map(board.cards.flatMap((card) => card.labels.map((label) => [label.name, label] as const)));
+  const hiddenTasks = view.hidden.reduce((sum, hidden) => sum + hidden.count, 0);
+  const sorted = layout.sort_mode !== "manual";
+
+  return (
+    <div className={classes("toolbar", styles.toolbar)} role="toolbar" aria-label={t("board-toolbar")}>
+      <label className={classes("field", styles.filterField)}>
+        <Filter className="ic" />
+        <input
+          type="text"
+          aria-label={t("filter-label")}
+          placeholder={t("filter-placeholder")}
+          value={filters.text}
+          onChange={(event) => {
+            onFilters({ ...filters, text: event.target.value });
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Escape" && filters.text !== "") {
+              event.stopPropagation();
+              onFilters({ ...filters, text: "" });
+            }
+          }}
+        />
+      </label>
+      <Picker
+        label={t("filter-labels")}
+        icon={<Tag className="ic" />}
+        options={labelNames.map((name) => ({ id: name, label: name, icon: <span className={`dot hue-${allLabels.get(name)?.hue ?? "grey"}`} /> }))}
+        value={filters.labels}
+        onChange={(labels) => {
+          onFilters({ ...filters, labels });
+        }}
+      />
+      <Picker
+        label={t("filter-priority")}
+        icon={<Flag className="ic" />}
+        options={[...PRIORITIES].reverse().map((priority) => ({ id: priority, label: t(`priority-${priority}`) }))}
+        value={filters.priorities}
+        onChange={(priorities) => {
+          onFilters({ ...filters, priorities });
+        }}
+      />
+      <Picker
+        label={t("filter-due")}
+        icon={<CalendarDays className="ic" />}
+        options={DUE_FILTERS.map((due) => ({ id: due, label: t(`filter-due-${due}`) }))}
+        value={filters.due}
+        onChange={(due) => {
+          onFilters({ ...filters, due });
+        }}
+      />
+      <button
+        type="button"
+        className={classes("btn", filters.changedByAgents ? "on" : "flat")}
+        aria-pressed={filters.changedByAgents}
+        aria-label={t("filter-agents")}
+        onClick={() => {
+          onFilters({ ...filters, changedByAgents: !filters.changedByAgents });
+        }}
+      >
+        <Bot className="ic" />
+        <span className="hide-narrow">{t("filter-agents-short")}</span>
+      </button>
+      <button
+        type="button"
+        className={classes("btn", filters.recentlyUpdated ? "on" : "flat")}
+        aria-pressed={filters.recentlyUpdated}
+        aria-label={t("filter-recent")}
+        onClick={() => {
+          onFilters({ ...filters, recentlyUpdated: !filters.recentlyUpdated });
+        }}
+      >
+        <History className="ic" />
+        <span className="hide-narrow">{t("filter-recent-short")}</span>
+      </button>
+      <div className="grow" />
+      {project.children.length > 0 && (
+        <button
+          type="button"
+          className={classes("btn", layout.include_subprojects ? "on" : "flat")}
+          role="switch"
+          aria-checked={layout.include_subprojects}
+          onClick={() => {
+            onLayout({ include_subprojects: !layout.include_subprojects });
+          }}
+        >
+          <Network className="ic" />
+          <span>{t("board-include-subprojects")}</span>
+        </button>
+      )}
+      {view.hidden.length > 0 && (
+        <MenuButton
+          label={t("board-hidden-label", { columns: view.hidden.length, tasks: hiddenTasks })}
+          on
+          entries={[
+            ...view.hidden.map(
+              (hidden): MenuEntry => ({
+                id: `show-${hidden.column.id}`,
+                label: t("board-show-column", { name: hidden.column.name, count: hidden.count }),
+                run: () => {
+                  onLayout({ hidden: layout.hidden.filter((id) => id !== hidden.column.id) });
+                },
+              }),
+            ),
+            "separator",
+            { id: "reset", label: t("board-reset-layout"), run: () => { onLayout("reset"); } },
+          ]}
+        >
+          <EyeOff className="ic" />
+          <span>{t("board-hidden", { columns: view.hidden.length, tasks: hiddenTasks })}</span>
+          <ChevronDown className="ic s" />
+        </MenuButton>
+      )}
+      <MenuButton
+        label={t("board-sort-label", { mode: t(`sort-${layout.sort_mode}`) })}
+        on={sorted}
+        entries={SORT_MODES.map((mode) => ({
+          id: mode,
+          label: t(`sort-${mode}`),
+          checked: layout.sort_mode === mode,
+          run: () => {
+            onLayout({ sort_mode: mode, column_sort: {} });
+          },
+        }))}
+      >
+        <ArrowDownWideNarrow className="ic" />
+        <span className="hide-narrow">{t(`sort-${layout.sort_mode}`)}</span>
+        <ChevronDown className="ic s muted" />
+      </MenuButton>
+      <MenuButton
+        label={t("board-options")}
+        icon
+        entries={[
+          {
+            id: "fields",
+            section: t("board-card-fields"),
+            items: CARD_FIELDS.map((field) => ({
+              id: `field-${field}`,
+              label: t(`card-field-${field}`),
+              checked: layout.card_fields.includes(field),
+              run: () => {
+                onLayout({
+                  card_fields: layout.card_fields.includes(field) ? layout.card_fields.filter((other) => other !== field) : [...layout.card_fields, field],
+                });
+              },
+            })),
+          },
+          {
+            id: "size",
+            section: t("board-card-size"),
+            items: (["regular", "compact"] as const).map((size) => ({
+              id: `size-${size}`,
+              label: t(`card-size-${size}`),
+              checked: layout.card_size === size,
+              run: () => {
+                onLayout({ card_size: size });
+              },
+            })),
+          },
+          {
+            id: "done",
+            section: t("board-hide-done"),
+            items: HIDE_DONE_DAYS.map((days) => ({
+              id: `done-${String(days)}`,
+              label: days === 0 ? t("board-hide-done-never") : t("board-hide-done-days", { days }),
+              checked: layout.hide_done_after_days === days,
+              run: () => {
+                onLayout({ hide_done_after_days: days });
+              },
+            })),
+          },
+          "separator",
+          { id: "reset", label: t("board-reset-layout"), run: () => { onLayout("reset"); } },
+        ]}
+      >
+        <SlidersHorizontal className="ic" />
+      </MenuButton>
+    </div>
+  );
+}

@@ -4,14 +4,15 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { App, initialRoute } from "./App";
+import { App } from "./App";
+import { initialPath } from "./router";
 
 afterEach(cleanup);
 
 describe("App", () => {
-  it("shows the shell with the app's header bar and its window buttons", () => {
+  it("shows the shell with the app's header bar and its window buttons", async () => {
     render(<App start={{ titleBar: "app", locale: "en-US" }} />);
-    expect(screen.getByRole("banner").textContent).toContain("Today");
+    expect((await screen.findByRole("banner")).textContent).toContain("Today");
     for (const name of ["Minimize", "Maximize", "Close"]) {
       expect(screen.getByRole("button", { name })).toBeDefined();
     }
@@ -19,22 +20,24 @@ describe("App", () => {
     expect(screen.getByRole("contentinfo").textContent).toContain("No tasks");
   });
 
-  it("leaves the window buttons to the system title bar", () => {
+  it("leaves the window buttons to the system title bar", async () => {
     render(<App start={{ titleBar: "system", locale: "en-US" }} />);
+    await screen.findByRole("banner");
     expect(screen.queryByRole("button", { name: "Minimize" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
   });
 
-  it("names the window after what it shows", () => {
+  it("names the window after what it shows", async () => {
     render(<App start={{ titleBar: "app", locale: "en-US" }} />);
+    await screen.findByRole("banner");
     expect(document.title.replace(/[⁨⁩]/g, "")).toBe("Glyphkeel: Today");
   });
 });
 
-describe("initialRoute", () => {
-  it("opens the gallery from its path and the app otherwise", () => {
-    expect(initialRoute("/dev/themes")).toBe("gallery");
-    expect(initialRoute("/")).toBe("app");
-    expect(initialRoute("/index.html")).toBe("app");
+describe("initialPath", () => {
+  it("opens the gallery from its path and Today otherwise", () => {
+    expect(initialPath("/dev/themes")).toBe("/dev/themes");
+    expect(initialPath("/")).toBe("/");
+    expect(initialPath("/index.html")).toBe("/");
   });
 });

@@ -119,6 +119,24 @@
   white-space: nowrap;
 }
 
+.projectButton {
+  min-width: 0;
+  font-weight: 600;
+}
+
+.projectName {
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--fs);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.statusNote {
+  flex: 0 1 auto;
+}
+
 .windowControls {
   display: flex;
   gap: 8px;

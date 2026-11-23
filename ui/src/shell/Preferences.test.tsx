@@ -4,6 +4,8 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { type Appearance } from "../appearance/appearance";
+import { AppearanceProvider } from "../appearance/AppearanceProvider";
 import { ToastProvider } from "../components/Toasts";
 import { DataProvider } from "../data/DataProvider";
 import { settings, workspaceInfo } from "../data/fixtures";
@@ -15,7 +17,8 @@ import { StatusBar } from "./StatusBar";
 
 afterEach(cleanup);
 
-function setUp(options: { failUpdate?: boolean } = {}) {
+function setUp(options: { failUpdate?: boolean; onAppearance?: (appearance: Appearance) => void } = {}) {
+  const onAppearance = options.onAppearance ?? (() => undefined);
   let current: Settings = settings();
   const engine = fakeEngine({
     "workspace.get": () => workspaceInfo({ settings: current }),
@@ -30,14 +33,16 @@ function setUp(options: { failUpdate?: boolean } = {}) {
     "history.undo": () => ({ group: "g-2", op: "settings.update", target: "g-1" }),
   });
   render(
-    <I18n locale="en-US">
-      <ToastProvider>
-        <DataProvider client={engine.client}>
-          <StatusBar count={0} />
-          <Preferences isOpen onOpenChange={() => undefined} />
-        </DataProvider>
-      </ToastProvider>
-    </I18n>,
+    <AppearanceProvider onChange={onAppearance}>
+      <I18n locale="en-US">
+        <ToastProvider>
+          <DataProvider client={engine.client}>
+            <StatusBar info={null} />
+            <Preferences isOpen onOpenChange={() => undefined} />
+          </DataProvider>
+        </ToastProvider>
+      </I18n>
+    </AppearanceProvider>,
   );
   return {
     engine,
@@ -106,5 +111,23 @@ describe("the workspace in the window", () => {
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("Another program is writing.");
     expect(alert.textContent).toContain("Try again in a moment.");
+  });
+});
+
+describe("the appearance", () => {
+  it("changes theme and density at once on <html> and hands them over to be kept", async () => {
+    const kept: Appearance[] = [];
+    setUp({ onAppearance: (appearance) => kept.push(appearance) });
+    const theme = await screen.findByRole("radiogroup", { name: "Theme" }).catch(() => screen.getByRole("group", { name: "Theme" }));
+    fireEvent.click(within(theme).getByRole("radio", { name: "Slate" }));
+    await waitFor(() => {
+      expect(document.documentElement.dataset.theme).toBe("slate");
+    });
+    const density = screen.getByRole("radiogroup", { name: "Density" });
+    fireEvent.click(within(density).getByRole("radio", { name: "Compact" }));
+    await waitFor(() => {
+      expect(document.documentElement.dataset.density).toBe("compact");
+    });
+    expect(kept.at(-1)).toMatchObject({ theme: "slate", density: "compact" });
   });
 });

@@ -1,0 +1,194 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+   Copyright (C) 2026 Glyphkeel contributors */
+
+/* ---------- project tree ---------- */
+.tree {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  outline: none;
+}
+
+.treeItem {
+  outline: none;
+  border-radius: var(--r-m);
+}
+
+.treeItem[data-focus-visible] {
+  outline: var(--focus-w) solid var(--focus);
+  outline-offset: -2px;
+}
+
+.treeRow {
+  gap: 6px;
+  padding-left: 4px;
+}
+
+/* 16 px indent per level, as the design's tree rows. */
+.treeItem[aria-level="2"] .treeRow {
+  padding-left: 24px;
+}
+
+.treeItem[aria-level="3"] .treeRow {
+  padding-left: 40px;
+}
+
+.chevron {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  aspect-ratio: 1;
+  border-radius: var(--r-s);
+  transition: transform var(--dur-fast) var(--ease);
+}
+
+.closed {
+  transform: rotate(-90deg);
+}
+
+.treeEmpty {
+  margin: 4px 8px;
+  font-size: var(--fs-small);
+}
+
+.archived {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 12px;
+  padding-left: 8px;
+}
+
+.archivedRow {
+  color: var(--fg-muted);
+}
+
+/* ---------- dialogs: new project, project settings ---------- */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(520px, 80vw);
+}
+
+.formRow {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.formLabel {
+  color: var(--fg-muted);
+}
+
+.error {
+  margin: 0;
+  color: var(--danger);
+}
+
+.hues {
+  display: flex;
+  gap: 6px;
+}
+
+.swatch {
+  width: 20px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--h);
+  outline: none;
+}
+
+.swatchFocus {
+  outline: var(--focus-w) solid var(--focus);
+  outline-offset: 2px;
+}
+
+.swatchOn {
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--h);
+}
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: min(760px, 86vw);
+}
+
+.panel {
+  padding-top: 16px;
+  outline: none;
+}
+
+.modules {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.listHead {
+  font-size: var(--fs-small);
+  font-weight: 600;
+  color: var(--fg-muted);
+}
+
+.statusRow {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) 140px 130px 72px auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.simpleRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.growField {
+  flex: 1;
+}
+
+.select select {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+}
+
+.narrow {
+  width: 72px;
+}
+
+.rowButtons {
+  display: flex;
+  gap: 2px;
+}
+
+.confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: var(--r-m);
+  background: var(--sunken);
+}
+
+.addRow {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}

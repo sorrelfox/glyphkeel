@@ -3,7 +3,8 @@
 
 import { type QueryClient } from "@tanstack/react-query";
 
-import { type Changed, type OpId } from "../generated/ops";
+import { type Changed } from "../generated/ops";
+import { type AppOpId } from "./catalog";
 import { OP_ROOT, opPrefix } from "./queries";
 
 /**
@@ -11,21 +12,28 @@ import { OP_ROOT, opPrefix } from "./queries";
  * carry no content: the UI re-reads what is on screen, so the engine stays
  * the one source of truth.
  */
-export const ENTITY_QUERIES: Readonly<Record<string, readonly OpId[]>> = {
+export const ENTITY_QUERIES: Readonly<Record<string, readonly AppOpId[]>> = {
   // `workspace.get` carries the settings too.
   settings: ["settings.get", "workspace.get"],
+  task: ["task.get", "board.get", "workspace.counts", "project.list"],
+  // Statuses, types and labels show on every card and in the task panel.
+  project: ["project.list", "project.get", "board.get", "task.get", "workspace.counts"],
+  status: ["project.get", "board.get", "task.get"],
+  type: ["project.get", "board.get", "task.get"],
+  label: ["project.get", "board.get", "task.get"],
+  layout: ["layout.get"],
 };
 
 /** Every committed change shows in the activity log. */
-const ALWAYS: readonly OpId[] = ["history.feed", "agent.sessions"];
+const ALWAYS: readonly AppOpId[] = ["history.feed", "agent.sessions"];
 
 /**
  * The query prefixes to invalidate for one event. A kind of item without an
  * entry invalidates everything: refetching too much is slow, too little is
  * wrong.
  */
-export function invalidationsFor(event: Changed): readonly OpId[] | "all" {
-  const ops = new Set<OpId>(ALWAYS);
+export function invalidationsFor(event: Changed): readonly AppOpId[] | "all" {
+  const ops = new Set<AppOpId>(ALWAYS);
   for (const change of event.changes) {
     const affected = ENTITY_QUERIES[change.entity];
     if (!affected) {

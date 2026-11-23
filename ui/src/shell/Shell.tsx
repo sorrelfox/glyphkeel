@@ -1,16 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { useEffect, useState } from "react";
+import { Outlet, useNavigate, useParams, useRouterState } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import { useLocale } from "react-aria-components";
 
 import { ActionsProvider } from "../actions/ActionsProvider";
 import { useAppearance } from "../appearance/AppearanceProvider";
+import { useProject } from "../data/board";
 import { useUndo } from "../data/hooks";
 import { useT } from "../i18n/I18n";
 import { appWindow } from "../ipc/window";
+import { NewProjectDialog, type NewProjectRequest } from "../screens/project/NewProjectDialog";
+import { ProjectSettings } from "../screens/project/ProjectSettings";
 import { type TitleBar } from "../start";
-import { EmptyState } from "./EmptyState";
+import { ShellContext, type ShellHooks, type StatusInfo } from "./context";
 import { HeaderBar } from "./HeaderBar";
 import { Preferences } from "./Preferences";
 import { ShortcutSheet } from "./ShortcutSheet";
@@ -29,15 +33,26 @@ interface ShellProps {
   openGallery?: (() => void) | undefined;
 }
 
+/** Which view a path shows. */
+export function viewOf(pathname: string): View {
+  if (pathname.startsWith("/projects/")) {
+    return "project";
+  }
+  return pathname.startsWith("/all") ? "all-tasks" : "today";
+}
+
 /**
- * The window: sidebar, header bar, the view, status bar. The views are empty
- * states until tasks exist; the status bar and Preferences show the open
- * workspace.
+ * The window: sidebar with the project tree, header bar, the screen of the
+ * current route, status bar.
  */
 export function Shell({ titleBar, openGallery }: ShellProps) {
   const t = useT();
   const { locale } = useLocale();
-  const [view, setView] = useState<View>("today");
+  const navigate = useNavigate();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const view = viewOf(pathname);
+  const { key: projectKey } = useParams({ strict: false });
+  const project = useProject(view === "project" ? projectKey : undefined);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   // Until the user drags the splitter, the width follows the density.
   const { density } = useAppearance().resolved;
@@ -45,19 +60,43 @@ export function Shell({ titleBar, openGallery }: ShellProps) {
   const sidebarWidth = chosenWidth ?? SIDEBAR_WIDTH[density];
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
+  const [newProject, setNewProject] = useState<NewProjectRequest | null>(null);
+  const [settingsOf, setSettingsOf] = useState<string | null>(null);
+  const [status, setStatus] = useState<StatusInfo | null>(null);
+  const [newTask, setNewTask] = useState<(() => void) | null>(null);
   const { undo, redo } = useUndo();
 
+  const hooks = useMemo<ShellHooks>(
+    () => ({
+      setStatus,
+      setNewTask: (run) => {
+        setNewTask(() => run);
+      },
+    }),
+    [],
+  );
+
   const actions = shellActions({
-    setView,
-    toggleSidebar: () => { setSidebarOpen((open) => !open); },
-    showShortcuts: () => { setShortcutsOpen(true); },
-    openPreferences: () => { setPreferencesOpen(true); },
+    setView: (next) => {
+      void navigate({ to: next === "all-tasks" ? "/all" : "/" });
+    },
+    toggleSidebar: () => {
+      setSidebarOpen((open) => !open);
+    },
+    showShortcuts: () => {
+      setShortcutsOpen(true);
+    },
+    openPreferences: () => {
+      setPreferencesOpen(true);
+    },
+    newTask,
     undo,
     redo,
     openGallery,
   });
 
-  const title = t(view === "today" ? "view-today" : "view-all-tasks");
+  const title =
+    view === "project" ? (project.data?.name ?? projectKey ?? "") : t(view === "today" ? "view-today" : "view-all-tasks");
   const subtitle =
     view === "today" ? new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long" }).format(new Date()) : undefined;
 
@@ -66,27 +105,61 @@ export function Shell({ titleBar, openGallery }: ShellProps) {
     void appWindow.setTitle(t("window-title", { context: title }).replace(/[⁨⁩]/g, ""));
   }, [t, title]);
 
-  const newTask = actions.find((action) => action.id === "task.new");
-
   return (
-    <ActionsProvider actions={actions}>
-      <div className={styles.shell}>
-        {sidebarOpen && (
-          <>
-            <Sidebar view={view} width={sidebarWidth} />
-            <Splitter label={t("sidebar-resize")} value={sidebarWidth} min={SIDEBAR_WIDTH.min} max={SIDEBAR_WIDTH.max} onChange={setChosenWidth} />
-          </>
-        )}
-        <div className={styles.main}>
-          <HeaderBar titleBar={titleBar} title={title} subtitle={subtitle} />
-          <main className={styles.content} aria-label={t("content-label")} data-region="content" tabIndex={-1}>
-            {newTask && <EmptyState text={t(view === "today" ? "empty-today" : "empty-all-tasks")} action={newTask} />}
-          </main>
-          <StatusBar count={0} />
+    <ShellContext value={hooks}>
+      <ActionsProvider actions={actions}>
+        <div className={styles.shell}>
+          {sidebarOpen && (
+            <>
+              <Sidebar
+                view={view}
+                project={view === "project" ? projectKey : undefined}
+                width={sidebarWidth}
+                onNewProject={setNewProject}
+                onProjectSettings={setSettingsOf}
+              />
+              <Splitter label={t("sidebar-resize")} value={sidebarWidth} min={SIDEBAR_WIDTH.min} max={SIDEBAR_WIDTH.max} onChange={setChosenWidth} />
+            </>
+          )}
+          <div className={styles.main}>
+            <HeaderBar
+              titleBar={titleBar}
+              title={title}
+              subtitle={subtitle}
+              project={view === "project" ? project.data : undefined}
+              onProjectSettings={setSettingsOf}
+              onNewSubproject={(parent) => {
+                setNewProject({ parent });
+              }}
+            />
+            <main className={styles.content} aria-label={t("content-label")} data-region="content" tabIndex={-1}>
+              <Outlet />
+            </main>
+            <StatusBar info={status} />
+          </div>
         </div>
-      </div>
-      <ShortcutSheet isOpen={shortcutsOpen} onOpenChange={setShortcutsOpen} />
-      <Preferences isOpen={preferencesOpen} onOpenChange={setPreferencesOpen} />
-    </ActionsProvider>
+        <ShortcutSheet isOpen={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+        <Preferences isOpen={preferencesOpen} onOpenChange={setPreferencesOpen} />
+        {newProject && (
+          <NewProjectDialog
+            request={newProject}
+            onClose={(created) => {
+              setNewProject(null);
+              if (created) {
+                void navigate({ to: "/projects/$key", params: { key: created } });
+              }
+            }}
+          />
+        )}
+        {settingsOf !== null && (
+          <ProjectSettings
+            projectKey={settingsOf}
+            onClose={() => {
+              setSettingsOf(null);
+            }}
+          />
+        )}
+      </ActionsProvider>
+    </ShellContext>
   );
 }

@@ -11,10 +11,16 @@ export const NO_ENGINE = "this page runs outside the app, without an engine";
 
 /**
  * The transport of this page: the app's IPC inside the app; in a
- * development build for the bridge, the bridge named in the URL; otherwise
- * none. The bridge's code exists only in that build.
+ * development build for the bridge, the bridge named in the URL; in a build
+ * with sample data, the in-memory workspace; otherwise none. The bridge's and
+ * the sample workspace's code exist only in their own builds.
  */
 export function connect(): Transport {
+  if (__FAKE__) {
+    // Sample data in memory, for work on the screens without the engine;
+    // also inside the app, when it loads a page built this way.
+    return deferredTransport(import("./fake/transport").then(({ fakeTransport }) => fakeTransport()));
+  }
   if (isTauri()) {
     return tauriTransport();
   }

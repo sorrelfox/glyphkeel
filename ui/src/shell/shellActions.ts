@@ -5,13 +5,15 @@ import { keysOf, type Action, type ActionGroup } from "../actions/actions";
 import { appWindow } from "../ipc/window";
 import { focusRegion } from "./regions";
 
-export type View = "today" | "all-tasks";
+export type View = "today" | "all-tasks" | "project";
 
 export interface ShellCommands {
-  setView: (view: View) => void;
+  setView: (view: "today" | "all-tasks") => void;
   toggleSidebar: () => void;
   showShortcuts: () => void;
   openPreferences: () => void;
+  /** New task on the current screen; null where there is nowhere to put one. */
+  newTask: (() => void) | null;
   undo: () => void;
   redo: () => void;
   /** Opens the development gallery; absent in release builds. */
@@ -35,7 +37,7 @@ export function shellActions(commands: ShellCommands): Action[] {
     action("sidebar.toggle", "action-toggle-sidebar", "window", commands.toggleSidebar),
     action("focus.nextRegion", "action-next-region", "window", () => { focusRegion(1); }),
     action("focus.previousRegion", "action-previous-region", "window", () => { focusRegion(-1); }),
-    action("task.new", "action-new-task", "tasks", nothing, UNAVAILABLE),
+    action("task.new", "action-new-task", "tasks", commands.newTask ?? nothing, commands.newTask ? {} : UNAVAILABLE),
     // Inside a text field, the field's own undo comes first.
     action("app.undo", "action-undo", "app", commands.undo, { inText: false }),
     action("app.redo", "action-redo", "app", commands.redo, { inText: false }),

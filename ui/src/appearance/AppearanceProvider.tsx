@@ -16,15 +16,16 @@ const AppearanceContext = createContext<AppearanceState | null>(null);
 interface AppearanceProviderProps {
   children: ReactNode;
   initial?: Appearance;
+  /** Called with every change, to keep it for the next start. */
+  onChange?: (appearance: Appearance) => void;
 }
 
 /**
  * Holds the appearance settings, resolves them against the desktop, and keeps
  * the attributes on `<html>` up to date, also when the desktop switches
- * between light and dark while the app runs. The settings live only in memory
- * until Preferences store them.
+ * between light and dark while the app runs. `onChange` stores them.
  */
-export function AppearanceProvider({ children, initial = DEFAULT_APPEARANCE }: AppearanceProviderProps) {
+export function AppearanceProvider({ children, initial = DEFAULT_APPEARANCE, onChange }: AppearanceProviderProps) {
   const [appearance, setAppearance] = useState<Appearance>(initial);
   const [desktop, setDesktop] = useState<Desktop>(() => readDesktop(window));
   const resolved = resolve(appearance, desktop);
@@ -35,7 +36,11 @@ export function AppearanceProvider({ children, initial = DEFAULT_APPEARANCE }: A
     apply(resolved, document.documentElement);
   }, [resolved]);
 
-  const update = (change: Partial<Appearance>) => { setAppearance((current) => ({ ...current, ...change })); };
+  const update = (change: Partial<Appearance>) => {
+    const next = { ...appearance, ...change };
+    setAppearance(next);
+    onChange?.(next);
+  };
 
   return <AppearanceContext value={{ appearance, resolved, update }}>{children}</AppearanceContext>;
 }

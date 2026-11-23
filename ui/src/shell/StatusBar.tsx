@@ -6,20 +6,25 @@ import { HardDrive } from "lucide-react";
 import { classes } from "../classes";
 import { useOp } from "../data/hooks";
 import { useT } from "../i18n/I18n";
+import { type StatusInfo } from "./context";
 import styles from "./Shell.module.css";
 
 interface StatusBarProps {
-  /** How many tasks the view shows. */
-  count: number;
+  /** What the screen reports; nothing means no tasks are shown. */
+  info: StatusInfo | null;
 }
 
-/** Text only: counts on the left; the workspace on the right. */
-export function StatusBar({ count }: StatusBarProps) {
+/** Text only: counts, selection and the last action's result on the left; the workspace on the right. */
+export function StatusBar({ info }: StatusBarProps) {
   const t = useT();
   const workspace = useOp("workspace.get", {});
   return (
     <footer className={classes("statusbar", styles.statusbar)} aria-label={t("status-label")} data-region="status" tabIndex={-1}>
-      <span className="num">{t("status-tasks", { count })}</span>
+      <span className="num">{info ? info.summary : t("status-tasks", { count: 0 })}</span>
+      {info?.selection && <span className="num hide-narrow">{info.selection}</span>}
+      <span className={classes("truncate", styles.statusNote)} role="status" data-testid="status-note">
+        {info?.note}
+      </span>
       <div className="grow" />
       <span className="meta" data-testid="status-workspace" title={workspace.error ? workspace.error.error.message : undefined}>
         <HardDrive className="ic" />
