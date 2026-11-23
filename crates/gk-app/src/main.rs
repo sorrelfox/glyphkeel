@@ -11,6 +11,7 @@ mod files;
 #[cfg(target_os = "linux")]
 mod instance;
 mod ipc;
+mod links;
 mod main_window;
 mod navigation;
 mod spell;
@@ -75,6 +76,7 @@ fn main() -> ExitCode {
             files::attach_drop,
             files::open_file,
             files::save_file,
+            links::open_link,
             task_window::open_task_window
         ])
         // Attached images, by attachment ID, for the page's <img> elements.

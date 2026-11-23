@@ -10,11 +10,15 @@ import { MenuEntries } from "../../components/ContextMenu";
 import { useToasts } from "../../components/Toasts";
 import { type Project } from "../../data/catalog";
 import { errorToast, useCall, useCommand } from "../../data/hooks";
+import { readDraft, writeDraft } from "../../data/drafts";
+import { toggleChecklist, useRendered } from "../../data/markdown";
 import { revertible, useComments, useTaskHistory } from "../../data/task";
-import { type ActivityEntry, type Actor, type Comment, type Task, type Via } from "../../generated/ops";
+import { type ActivityEntry, type Actor, type Comment, type Rendered, type Task, type Via } from "../../generated/ops";
 import { useT, type Translate } from "../../i18n/I18n";
+import { MarkdownReader } from "../../markdown/Reader";
 import { formatMinutes } from "../board/model";
 import { FileRow, useAttach } from "./Files";
+import { MarkdownField } from "./MarkdownField";
 import styles from "./TaskPanel.module.css";
 
 /** A moment as the panel shows it: "Nov 19, 2026, 16:20". */
@@ -38,49 +42,9 @@ function Author({ actor, via }: { actor: Actor; via: Via }) {
   );
 }
 
-/** A text field for a comment: Ctrl+Enter sends, Escape gives up. */
-function CommentField({
-  label,
-  value,
-  onChange,
-  onSubmit,
-  onCancel,
-  rows,
-}: {
-  label: string;
-  value: string;
-  onChange: (text: string) => void;
-  onSubmit: () => void;
-  onCancel?: () => void;
-  rows: number;
-}) {
+function CommentView({ comment, rendered, readOnly, onOpenTask }: { comment: Comment; rendered: Rendered | undefined; readOnly: boolean; onOpenTask: (key: string) => void }) {
   const t = useT();
-  return (
-    <textarea
-      className={styles.commentField}
-      aria-label={label}
-      placeholder={t("composer-placeholder")}
-      rows={rows}
-      value={value}
-      onChange={(event) => {
-        onChange(event.target.value);
-      }}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
-          event.preventDefault();
-          onSubmit();
-        } else if (event.key === "Escape" && onCancel) {
-          event.preventDefault();
-          event.stopPropagation();
-          onCancel();
-        }
-      }}
-    />
-  );
-}
-
-function CommentView({ comment, readOnly }: { comment: Comment; readOnly: boolean }) {
-  const t = useT();
+  const call = useCall();
   const moment = useMomentFormat();
   const [editing, setEditing] = useState<string | null>(null);
   const [earlier, setEarlier] = useState(false);
@@ -128,10 +92,20 @@ function CommentView({ comment, readOnly }: { comment: Comment; readOnly: boolea
         </MenuTrigger>
       </div>
       {editing === null ? (
-        <div className={classes("md selectable", styles.commentBody)}>{comment.body}</div>
+        rendered === undefined ? (
+          <div className={classes("selectable", styles.commentBody, styles.plainBody)}>{comment.body}</div>
+        ) : (
+          <MarkdownReader
+            compact
+            html={rendered.html}
+            label={t("comment-body")}
+            onOpenTask={onOpenTask}
+            onToggle={readOnly ? undefined : (click) => toggleChecklist(call, { comment: comment.id }, rendered.checklist, click)}
+          />
+        )
       ) : (
         <div className={styles.commentEdit}>
-          <CommentField label={t("comment-edit-field")} value={editing} rows={4} onChange={setEditing} onSubmit={save} onCancel={() => { setEditing(null); }} />
+          <MarkdownField label={t("comment-edit-field")} value={editing} autoFocus onChange={setEditing} onSubmit={save} onCancel={() => { setEditing(null); }} />
           <div className={styles.sectionHead}>
             <div className="grow" />
             <Button className="btn flat sm" onPress={() => { setEditing(null); }}>
@@ -144,23 +118,40 @@ function CommentView({ comment, readOnly }: { comment: Comment; readOnly: boolea
         </div>
       )}
       {comment.files?.map((file) => <FileRow key={file.id} file={file} readOnly={readOnly} />)}
-      {earlier && (
-        <ol className={styles.revisions} aria-label={t("comment-earlier")}>
-          {(comment.revisions ?? []).map((revision) => (
-            <li key={revision.replaced_at} className={styles.revision}>
-              <span className={classes("faint", styles.small)}>{t("comment-replaced", { time: moment(revision.replaced_at), actor: revision.replaced_by.kind === "user" ? t("comment-me") : revision.replaced_by.name })}</span>
-              <div className={classes("md selectable", styles.commentBody)}>{revision.body}</div>
-            </li>
-          ))}
-        </ol>
-      )}
+      {earlier && <EarlierVersions comment={comment} onOpenTask={onOpenTask} />}
     </article>
   );
 }
 
-function CommentsList({ taskKey, readOnly }: { taskKey: string; readOnly: boolean }) {
+/** A comment's earlier texts, newest first, rendered like the comment. */
+function EarlierVersions({ comment, onOpenTask }: { comment: Comment; onOpenTask: (key: string) => void }) {
+  const t = useT();
+  const moment = useMomentFormat();
+  const revisions = comment.revisions ?? [];
+  const rendered = useRendered(revisions.map((revision, index) => ({ source: revision.body, document_id: `${comment.id}-v${String(revisions.length - index)}` })));
+  return (
+    <ol className={styles.revisions} aria-label={t("comment-earlier")}>
+      {revisions.map((revision, index) => {
+        const html = rendered.items[index]?.html;
+        return (
+          <li key={revision.replaced_at} className={styles.revision}>
+            <span className={classes("faint", styles.small)}>{t("comment-replaced", { time: moment(revision.replaced_at), actor: revision.replaced_by.kind === "user" ? t("comment-me") : revision.replaced_by.name })}</span>
+            {html === undefined ? (
+              <div className={classes("selectable", styles.commentBody, styles.plainBody)}>{revision.body}</div>
+            ) : (
+              <MarkdownReader compact html={html} onOpenTask={onOpenTask} />
+            )}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function CommentsList({ taskKey, readOnly, onOpenTask }: { taskKey: string; readOnly: boolean; onOpenTask: (key: string) => void }) {
   const t = useT();
   const comments = useComments(taskKey);
+  const rendered = useRendered((comments.data?.items ?? []).map((comment) => ({ comment: comment.id })));
   if (!comments.data) {
     return null;
   }
@@ -169,9 +160,12 @@ function CommentsList({ taskKey, readOnly }: { taskKey: string; readOnly: boolea
   }
   return (
     <>
-      {comments.data.items.map((comment) => (
-        <CommentView key={comment.id} comment={comment} readOnly={readOnly} />
-      ))}
+      {comments.data.items.map((comment, index) => {
+        const html = rendered.items[index];
+        // A rendering of an older text of this comment isn't shown.
+        const current = html !== undefined && (html.version === undefined || html.version === comment.version) ? html : undefined;
+        return <CommentView key={comment.id} comment={comment} rendered={current} readOnly={readOnly} onOpenTask={onOpenTask} />;
+      })}
     </>
   );
 }
@@ -216,6 +210,15 @@ function shown(t: Translate, names: Names, field: string, value: unknown): strin
     default:
       return plainText(value);
   }
+}
+
+/** The description revisions an entry moved between, when it changed the description. */
+export function descriptionRevisions(entry: ActivityEntry): [string, string] | null {
+  const change = entry.fields.description;
+  const revision = (value: unknown) => (typeof value === "object" && value !== null && "revision" in value && typeof value.revision === "string" ? value.revision : null);
+  const before = revision(change?.before);
+  const after = revision(change?.after);
+  return before !== null && after !== null ? [before, after] : null;
 }
 
 /** The lines one history entry reads as: "Status: To do → In progress". */
@@ -276,7 +279,17 @@ export function describeEntry(t: Translate, names: Names, entry: ActivityEntry):
   return lines;
 }
 
-function HistoryList({ task, project, readOnly }: { task: Task; project: Project; readOnly: boolean }) {
+function HistoryList({
+  task,
+  project,
+  readOnly,
+  onShowDescriptionDiff,
+}: {
+  task: Task;
+  project: Project;
+  readOnly: boolean;
+  onShowDescriptionDiff: (older: string, newer: string) => void;
+}) {
   const t = useT();
   const call = useCall();
   const toasts = useToasts();
@@ -316,12 +329,25 @@ function HistoryList({ task, project, readOnly }: { task: Task; project: Project
       {history.data.map((entry) => {
         const first = !seen.has(entry.group);
         seen.add(entry.group);
+        const revisions = entry.entity === "task" ? descriptionRevisions(entry) : null;
         return (
           <li key={`${String(entry.seq)}-${entry.id}`} className={classes(styles.historyEntry, entry.reverted_by !== undefined && styles.reverted)} data-history={entry.op}>
             <div className={styles.historyText}>
-              {describeEntry(t, { task, project, keys }, entry).map((line) => (
-                <span key={line}>{line}</span>
-              ))}
+              {describeEntry(t, { task, project, keys }, entry).map((line) =>
+                revisions !== null && line === t("history-description") ? (
+                  <Button
+                    key={line}
+                    className={classes("linkbtn", styles.diffLink)}
+                    onPress={() => {
+                      onShowDescriptionDiff(revisions[0], revisions[1]);
+                    }}
+                  >
+                    {t("history-description-diff")}
+                  </Button>
+                ) : (
+                  <span key={line}>{line}</span>
+                ),
+              )}
               <span className={classes("faint", styles.small)}>
                 {t("history-by", { actor: entry.actor.kind === "user" ? t("comment-me") : entry.actor.name, via: t(`via-${entry.via}`), time: moment(entry.at) })}
                 {entry.reverted_by !== undefined && ` · ${t("history-was-reverted")}`}
@@ -340,7 +366,19 @@ function HistoryList({ task, project, readOnly }: { task: Task; project: Project
 }
 
 /** The tabs under the task's sections: its comments and its history. */
-export function ActivityTabs({ task, project, readOnly }: { task: Task; project: Project; readOnly: boolean }) {
+export function ActivityTabs({
+  task,
+  project,
+  readOnly,
+  onOpenTask,
+  onShowDescriptionDiff,
+}: {
+  task: Task;
+  project: Project;
+  readOnly: boolean;
+  onOpenTask: (key: string) => void;
+  onShowDescriptionDiff: (older: string, newer: string) => void;
+}) {
   const t = useT();
   return (
     <Tabs className={classes(styles.tabs)} defaultSelectedKey="comments">
@@ -355,19 +393,24 @@ export function ActivityTabs({ task, project, readOnly }: { task: Task; project:
         </Tab>
       </TabList>
       <TabPanel id="comments" className={classes(styles.tabPanel)}>
-        <CommentsList taskKey={task.key} readOnly={readOnly} />
+        <CommentsList taskKey={task.key} readOnly={readOnly} onOpenTask={onOpenTask} />
       </TabPanel>
       <TabPanel id="history" className={classes(styles.tabPanel)}>
-        <HistoryList task={task} project={project} readOnly={readOnly} />
+        <HistoryList task={task} project={project} readOnly={readOnly} onShowDescriptionDiff={onShowDescriptionDiff} />
       </TabPanel>
     </Tabs>
   );
 }
 
-/** The comment composer, pinned under the panel: Ctrl+Enter sends. */
+/** The comment composer, pinned under the panel, with the Markdown editor: Ctrl+Enter sends. */
 export function Composer({ taskKey, readOnly }: { taskKey: string; readOnly: boolean }) {
   const t = useT();
-  const [text, setText] = useState("");
+  const draft = `composer:${taskKey}`;
+  const [text, setTextState] = useState(() => readDraft(draft)?.text ?? "");
+  const setText = (next: string) => {
+    setTextState(next);
+    writeDraft(draft, next === "" ? null : { text: next });
+  };
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const add = useCommand("comment.add");
   const { attach, field, busy } = useAttach(taskKey);
@@ -387,7 +430,7 @@ export function Composer({ taskKey, readOnly }: { taskKey: string; readOnly: boo
   };
   return (
     <div className={styles.composer}>
-      <CommentField label={t("composer-label")} value={text} rows={text.includes("\n") ? 4 : 1} onChange={setText} onSubmit={send} />
+      <MarkdownField compact label={t("composer-label")} value={text} readOnly={readOnly} onChange={setText} onSubmit={send} />
       <Button className="btn flat icon" isDisabled={readOnly || busy} aria-label={t("files-attach")} onPress={attach}>
         <Paperclip className="ic" />
       </Button>

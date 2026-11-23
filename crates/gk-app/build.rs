@@ -15,6 +15,7 @@ fn main() {
         "attach_drop",
         "open_file",
         "save_file",
+        "open_link",
         "open_task_window",
     ]);
     if let Err(err) = tauri_build::try_build(tauri_build::Attributes::new().app_manifest(manifest))

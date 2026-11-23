@@ -5,12 +5,14 @@ import babel from "@rolldown/plugin-babel";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
+import { frozenPrototype } from "./scripts/frozen-prototype";
+
 // The development server listens on loopback only. The desktop app loads it
 // in development; release builds embed the files from `dist/`.
 const DEV_PORT = 5310;
 
 export default defineConfig(({ mode }) => ({
-  plugins: [react(), babel({ presets: [reactCompilerPreset()] })],
+  plugins: [frozenPrototype(), react(), babel({ presets: [reactCompilerPreset()] })],
   // `vite --mode bridge` builds a page for an ordinary browser that talks to
   // the development bridge on loopback. In every other build this is false,
   // and the bridge's code is dropped as dead code.
@@ -38,6 +40,6 @@ export default defineConfig(({ mode }) => ({
   },
   test: {
     environment: "jsdom",
-    include: ["src/**/*.test.{ts,tsx}"],
+    include: ["src/**/*.test.{ts,tsx}", "scripts/*.test.ts"],
   },
 }));

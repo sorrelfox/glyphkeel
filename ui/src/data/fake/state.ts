@@ -14,6 +14,7 @@ import {
   type Hue,
   type Modules,
   type Priority,
+  type RevisionKind,
   type Settings,
   type Via,
 } from "../../generated/ops";
@@ -128,6 +129,20 @@ export interface FakeFile {
   deletedAt: string | null;
 }
 
+/** One saved text of a task's description. */
+export interface FakeRevision {
+  id: string;
+  taskId: string;
+  body: string;
+  kind: RevisionKind;
+  /** The revision it was edited from. */
+  base: string | null;
+  author: Actor;
+  createdAt: string;
+  /** For a conflict copy: when it was resolved. */
+  resolvedAt: string | null;
+}
+
 /** An agent's claim on a task. */
 export interface FakeClaim {
   taskId: string;
@@ -143,6 +158,8 @@ export interface FakeState {
   comments: FakeComment[];
   files: FakeFile[];
   claims: FakeClaim[];
+  /** Description revisions, oldest first; a task's current one is its latest that isn't a conflict copy. */
+  revisions: FakeRevision[];
   /** The activity log, oldest first. */
   activity: ActivityEntry[];
   /** Board layouts by project ID. */
