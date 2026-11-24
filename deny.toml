@@ -90,7 +90,8 @@ highlight = "all"
 workspace-default-features = "allow"
 external-default-features = "allow"
 allow = []
-# The app never goes online: no HTTP client or TLS stack in what ships.
+# The app never goes online: no HTTP client or TLS stack in what ships. It
+# never touches the keyring either.
 # `cargo xtask check-deps` checks the same per program.
 deny = [
     { crate = "reqwest", reason = "the app has no network access" },
@@ -102,6 +103,15 @@ deny = [
     { crate = "native-tls", reason = "the app has no network access" },
     { crate = "openssl", reason = "the app has no network access" },
     { crate = "rustls", reason = "the app has no network access" },
+    # The app never touches the system keyring or secret store.
+    { crate = "keyring", reason = "the app never touches the keyring" },
+    { crate = "secret-service", reason = "the app never touches the keyring" },
+    { crate = "dbus-secret-service", reason = "the app never touches the keyring" },
+    { crate = "oo7", reason = "the app never touches the keyring" },
+    { crate = "libsecret", reason = "the app never touches the keyring" },
+    { crate = "libsecret-sys", reason = "the app never touches the keyring" },
+    { crate = "security-framework", reason = "the app never touches the keyring" },
+    { crate = "windows-credentials", reason = "the app never touches the keyring" },
 ]
 skip = []
 skip-tree = []

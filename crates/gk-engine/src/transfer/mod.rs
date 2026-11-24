@@ -273,6 +273,18 @@ impl Engine {
                 self.store().layout().exports_dir().join(name)
             }
         };
+        if ctx.project_scope.is_some() {
+            // Every project named must be within the caller's limit.
+            self.store()
+                .read(|tx| {
+                    let _scope = crate::scope::enter(tx, ctx)?;
+                    for p in &input.projects {
+                        crate::ops::lookup::project(tx, "projects", p)?;
+                    }
+                    Ok::<_, crate::failure::Failure>(())
+                })
+                .map_err(OpError::from)?;
+        }
         export::export(self, input, &target, format, progress)
     }
 

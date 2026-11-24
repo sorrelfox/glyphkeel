@@ -381,6 +381,59 @@ fn create(w: &mut WriteCtx<'_>, input: ViewCreateInput) -> Result<ViewChange, Fa
     })
 }
 
+/// Rewrites the query of every saved view of `project` (every view of the
+/// workspace for `None`) that `rewrite` changes, in the running command,
+/// so each change shows in the view's history and undoes with the rest.
+/// Returns how many views changed.
+pub(crate) fn rewrite_queries(
+    w: &mut WriteCtx<'_>,
+    project: Option<Id>,
+    rewrite: impl Fn(&str) -> Option<String>,
+) -> Result<usize, Failure> {
+    let views: Vec<(Id, Record)> = match project {
+        Some(p) => {
+            let mut stmt = w.tx().prepare_cached(&format!(
+                "SELECT {COLUMNS} FROM saved_views WHERE project_id = ?1 ORDER BY rank, id"
+            ))?;
+            stmt.query_map([b(p)], read_row)?
+                .collect::<Result<Vec<_>, _>>()?
+        }
+        None => {
+            let mut stmt = w.tx().prepare_cached(&format!(
+                "SELECT {COLUMNS} FROM saved_views ORDER BY rank, id"
+            ))?;
+            stmt.query_map([], read_row)?
+                .collect::<Result<Vec<_>, _>>()?
+        }
+    };
+    let mut changed = 0;
+    for (id, mut record) in views {
+        if let Some(query) = rewrite(&record.query) {
+            record.query = query;
+            record.updated_at = w.now();
+            set(w, id, Some(&record))?;
+            changed += 1;
+        }
+    }
+    Ok(changed)
+}
+
+/// The names of the saved views `ids` that still exist, in that order.
+pub(crate) fn names(tx: &Transaction<'_>, ids: &[Id]) -> Result<Vec<String>, Failure> {
+    let mut seen = Vec::new();
+    let mut out = Vec::new();
+    for id in ids {
+        if seen.contains(id) {
+            continue;
+        }
+        seen.push(*id);
+        if let Some(r) = load(tx, *id)? {
+            out.push(r.name);
+        }
+    }
+    Ok(out)
+}
+
 /// The view `text` names: its ID, or its name among the views of
 /// `project` (the workspace's own without one).
 fn find(
@@ -390,6 +443,7 @@ fn find(
 ) -> Result<(Id, Record), Failure> {
     if let Ok(id) = text.trim().parse::<Id>()
         && let Some(r) = load(tx, id)?
+        && r.project_id().is_none_or(crate::scope::sees)
     {
         return Ok((id, r));
     }

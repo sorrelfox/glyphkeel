@@ -235,10 +235,13 @@ impl Server {
         if tool.safety() >= Safety::Write {
             self.inner.writes.check(Instant::now())?;
         }
-        let ctx = self
+        let mut ctx = self
             .inner
             .session
             .context(&self.inner.engine, self.client().as_ref())?;
+        if let Some(project) = &self.inner.project {
+            ctx = ctx.within_project(project.clone());
+        }
         let input = arguments.map_or(Value::Null, Value::Object);
         let output = self.inner.engine.call(&ctx, tool.main, input)?;
         Ok((render::markdown(tool.name, &output), output))

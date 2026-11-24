@@ -261,6 +261,7 @@ fn active(w: &WriteCtx<'_>, text: &str) -> Result<ProjectRow, Failure> {
 fn changed(w: &WriteCtx<'_>, id: Id) -> Result<ProjectChange, Failure> {
     Ok(ProjectChange {
         project: load(w.tx(), id)?,
+        views_rewritten: super::view::names(w.tx(), &w.changed_of(super::view::ENTITY))?,
         group: w.group_if_changed(),
     })
 }
@@ -545,6 +546,7 @@ fn list(q: &QueryCtx<'_>, input: ProjectListInput) -> Result<ProjectList, Failur
     }
     let mut items = Vec::new();
     walk(&rows, None, 0, "", None, input.include_archived, &mut items);
+    items.retain(|p| p.id.parse::<Id>().is_ok_and(crate::scope::sees));
     Ok(ProjectList {
         total: items.len() as u64,
         items,
@@ -1071,6 +1073,10 @@ fn change_key(w: &mut WriteCtx<'_>, p: &ProjectRow, new: &str) -> Result<(), Fai
     }
     rekey(w, p.id, &p.key, key.as_str())?;
     fields::set(w, PROJECT, p.id, Some(p.id), "key", text(key.as_str()))?;
+    // A project key can appear in any saved query.
+    super::view::rewrite_queries(w, None, |q| {
+        gk_query::rename::rename(q, gk_query::NameKind::Project, &p.key, key.as_str())
+    })?;
     Ok(())
 }
 
@@ -1328,7 +1334,11 @@ fn apply_status(w: &mut WriteCtx<'_>, p: &ProjectRow, c: &StatusChange) -> Resul
     if let Some(name) = &c.name {
         let name = clean_name("name", "name", name, ITEM_NAME_MAX)?;
         unique_name(w.tx(), List::Statuses, p, &name, Some(status.id))?;
-        fields::set(w, STATUS, status.id, pid, "name", text(name))?;
+        if fields::set(w, STATUS, status.id, pid, "name", text(name.as_str()))? {
+            super::view::rewrite_queries(w, Some(p.id), |q| {
+                gk_query::rename::rename(q, gk_query::NameKind::Status, &status.name, &name)
+            })?;
+        }
     }
     if let Some(category) = c.category {
         let before: StatusCategory = status.kind.parse().unwrap_or(StatusCategory::Todo);
@@ -1554,7 +1564,11 @@ fn apply_type(w: &mut WriteCtx<'_>, p: &ProjectRow, c: &TypeChange) -> Result<()
     if let Some(name) = &c.name {
         let name = clean_name("name", "name", name, ITEM_NAME_MAX)?;
         unique_name(w.tx(), List::Types, p, &name, Some(item.id))?;
-        fields::set(w, TYPE, item.id, pid, "name", text(name))?;
+        if fields::set(w, TYPE, item.id, pid, "name", text(name.as_str()))? {
+            super::view::rewrite_queries(w, Some(p.id), |q| {
+                gk_query::rename::rename(q, gk_query::NameKind::Type, &item.name, &name)
+            })?;
+        }
     }
     if let Some(glyph) = c.glyph {
         fields::set(w, TYPE, item.id, pid, "glyph", text(enum_text(glyph)))?;
@@ -1704,12 +1718,19 @@ fn apply_label(w: &mut WriteCtx<'_>, p: &ProjectRow, c: &LabelChange) -> Result<
         record_removal(w, LABEL, &item, p.id)?;
         w.tx()
             .execute("DELETE FROM labels WHERE id = ?1", [b(item.id)])?;
+        super::view::rewrite_queries(w, Some(p.id), |q| {
+            gk_query::rename::remove_label(q, &item.name)
+        })?;
         return Ok(());
     }
     if let Some(name) = &c.name {
         let name = clean_name("name", "name", name, ITEM_NAME_MAX)?;
         unique_name(w.tx(), List::Labels, p, &name, Some(item.id))?;
-        fields::set(w, LABEL, item.id, pid, "name", text(name))?;
+        if fields::set(w, LABEL, item.id, pid, "name", text(name.as_str()))? {
+            super::view::rewrite_queries(w, Some(p.id), |q| {
+                gk_query::rename::rename(q, gk_query::NameKind::Label, &item.name, &name)
+            })?;
+        }
     }
     if let Some(hue) = c.hue {
         fields::set(w, LABEL, item.id, pid, "hue", text(enum_text(hue)))?;

@@ -18,6 +18,7 @@ pub mod error;
 pub mod fields;
 pub mod parse;
 pub mod print;
+pub mod rename;
 pub mod sql;
 pub mod syntax;
 

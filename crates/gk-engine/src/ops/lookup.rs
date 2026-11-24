@@ -57,7 +57,12 @@ fn project_row(r: &Row<'_>) -> gk_store::rusqlite::Result<ProjectRow> {
 }
 
 /// The live project with ID `id`.
+/// A caller limited to a project finds only that project and the ones
+/// below it.
 pub(crate) fn project_by_id(tx: &Transaction<'_>, id: Id) -> Result<Option<ProjectRow>, Failure> {
+    if !crate::scope::allows(tx, id)? {
+        return Ok(None);
+    }
     Ok(tx
         .query_row(
             &format!("SELECT {PROJECT_COLUMNS} FROM projects WHERE id = ?1 AND deleted_at IS NULL"),
@@ -90,7 +95,9 @@ pub(crate) fn project(
                 project_row,
             )
             .optional()?;
-        if let Some(p) = found {
+        if let Some(p) = found
+            && crate::scope::allows(tx, p.id)?
+        {
             return Ok(p);
         }
         let alias: Option<Vec<u8>> = tx
@@ -107,11 +114,15 @@ pub(crate) fn project(
         }
     }
     let mut stmt = tx.prepare_cached(
-        "SELECT key FROM projects WHERE deleted_at IS NULL ORDER BY key LIMIT 50",
+        "SELECT id, key FROM projects WHERE deleted_at IS NULL ORDER BY key LIMIT 50",
     )?;
     let keys = stmt
-        .query_map([], |r| r.get::<_, String>(0))?
-        .collect::<Result<Vec<_>, _>>()?;
+        .query_map([], |r| Ok((id_at(r, 0)?, r.get::<_, String>(1)?)))?
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .filter(|(id, _)| crate::scope::sees(*id))
+        .map(|(_, key)| key)
+        .collect::<Vec<_>>();
     let args = [("project", text.to_owned())];
     let error = messages::with("lookup-project-not-found", &args, |m| {
         OpError::not_found(m, &keys.iter().map(String::as_str).collect::<Vec<_>>())
@@ -262,9 +273,10 @@ fn task_row(r: &Row<'_>) -> gk_store::rusqlite::Result<TaskRow> {
     })
 }
 
-/// The live task with ID `id`, in a live project.
+/// The live task with ID `id`, in a live project (within the caller's
+/// project, for a caller limited to one).
 pub(crate) fn task_by_id(tx: &Transaction<'_>, id: Id) -> Result<Option<TaskRow>, Failure> {
-    Ok(tx
+    let found = tx
         .query_row(
             &format!(
                 "SELECT {TASK_COLUMNS} FROM tasks WHERE id = ?1 AND deleted_at IS NULL
@@ -273,7 +285,11 @@ pub(crate) fn task_by_id(tx: &Transaction<'_>, id: Id) -> Result<Option<TaskRow>
             [b(id)],
             task_row,
         )
-        .optional()?)
+        .optional()?;
+    match found {
+        Some(t) if !crate::scope::allows(tx, t.project)? => Ok(None),
+        other => Ok(other),
+    }
 }
 
 /// The live task `text` names: its key (current or old, any case) or its

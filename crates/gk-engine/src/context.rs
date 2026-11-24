@@ -27,6 +27,10 @@ pub struct Context {
     pub request_id: Option<String>,
     /// How a `permanent` operation is confirmed by the person.
     pub confirm: Confirmation,
+    /// The project (key or ID) the caller is limited to, with its
+    /// sub-projects: other projects don't appear in lists or searches and
+    /// can't be named or changed. `None`: the whole workspace.
+    pub project_scope: Option<String>,
 }
 
 impl Context {
@@ -44,6 +48,7 @@ impl Context {
             profile: None,
             request_id: None,
             confirm: Confirmation::Refuse,
+            project_scope: None,
         }
     }
 
@@ -60,6 +65,7 @@ impl Context {
             profile: Some(profile),
             request_id: None,
             confirm: Confirmation::Refuse,
+            project_scope: None,
         }
     }
 
@@ -67,6 +73,14 @@ impl Context {
     #[must_use]
     pub fn with_confirmation(mut self, confirm: Confirmation) -> Self {
         self.confirm = confirm;
+        self
+    }
+
+    /// The same caller limited to `project` (a key or ID) and its
+    /// sub-projects.
+    #[must_use]
+    pub fn within_project(mut self, project: impl Into<String>) -> Self {
+        self.project_scope = Some(project.into());
         self
     }
 

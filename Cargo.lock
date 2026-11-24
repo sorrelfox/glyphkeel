@@ -1734,6 +1734,7 @@ dependencies = [
  "gk-api",
  "gk-engine",
  "gk-mcp",
+ "gk-seed",
  "gk-store",
  "insta",
  "serde_json",

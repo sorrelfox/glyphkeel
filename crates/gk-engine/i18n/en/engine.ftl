@@ -426,6 +426,14 @@ storage-json = Data could not be read or written as JSON: { $error }
 
 engine-app-open = Another Glyphkeel app already has this workspace open.
 engine-app-open-hint = Switch to the open window.
+scope-project-not-found = The project "{ $project }" that this caller is limited to doesn't exist.
+scope-project-not-found-hint = Start the agent server with the key of an existing project, or without a project.
+scope-outside = The change reaches outside the project { $project }, which this caller is limited to.
+scope-outside-hint = Only { $project } and its sub-projects can be changed; ask the person to make this change.
+engine-upgrade-failed-restored = Upgrading the workspace failed, so it was put back as it was before, from the backup "{ $name }": { $error }
+engine-upgrade-failed-restored-hint = Your data is unchanged. Keep using the older Glyphkeel version and report the problem.
+engine-upgrade-failed-not-restored = Upgrading the workspace failed, and it could not be put back from the backup "{ $name }": { $error }
+engine-upgrade-failed-not-restored-hint = Don't open the workspace again; restore the backup "{ $name }" from the backups folder.
 engine-no-operation = There is no operation "{ $op }".
 engine-input-unencodable = The input could not be encoded: { $error }.
 engine-result-unreadable = The result of { $op } could not be read: { $error }.

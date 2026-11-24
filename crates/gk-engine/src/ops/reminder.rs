@@ -455,7 +455,16 @@ fn due(
             &[("max", MAX_LIMIT.to_string())],
         ));
     }
-    let all = candidates(tx, zone, until)?;
+    let mut all = candidates(tx, zone, until)?;
+    if crate::scope::active() {
+        let mut kept = Vec::with_capacity(all.len());
+        for c in all {
+            if super::lookup::task_by_id(tx, c.task)?.is_some() {
+                kept.push(c);
+            }
+        }
+        all = kept;
+    }
     let next_at = all.iter().map(|c| c.at).filter(|at| *at > until).min();
     let mut due: Vec<Candidate> = all.into_iter().filter(|c| c.at <= until).collect();
     due.sort_by(|a, b| a.at.cmp(&b.at).then_with(|| a.id.cmp(&b.id)));

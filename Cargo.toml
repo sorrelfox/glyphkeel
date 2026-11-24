@@ -7,6 +7,8 @@ members = ["crates/*", "tools/*", "xtask"]
 # `cargo build` and `cargo test` without `-p` skip the task runner and the
 # development tools in `tools/`.
 default-members = ["crates/*"]
+# The fuzz targets build on nightly with cargo-fuzz, apart from the rest.
+exclude = ["fuzz"]
 
 [workspace.package]
 version = "0.0.8"

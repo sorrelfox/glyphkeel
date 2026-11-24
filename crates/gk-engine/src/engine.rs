@@ -202,6 +202,7 @@ impl Engine {
                 .unwrap_or_else(|| default_folder(layout)),
         );
         let mut store_config = config.store.clone();
+        let mut before_upgrade = None;
         if config.role == Role::App
             && let SchemaState::Older(found) = Store::probe(layout).map_err(|e| store_error(&e))?
         {
@@ -225,8 +226,23 @@ impl Engine {
             )?;
             tracing::info!(name = %made.name, found, "workspace backed up before the schema upgrade");
             store_config.allow_upgrade = true;
+            before_upgrade = Some((folder, made));
         }
-        let store = Store::open(layout, store_config).map_err(|e| store_error(&e))?;
+        let store = match Store::open(layout, store_config) {
+            Ok(store) => store,
+            Err(e) => {
+                return Err(match before_upgrade {
+                    Some((folder, made)) => put_back_after_failed_upgrade(
+                        layout,
+                        &folder,
+                        &made.name,
+                        &e,
+                        (config.clock)(),
+                    ),
+                    None => store_error(&e),
+                });
+            }
+        };
         let jobs_lock = if config.role == Role::Cli {
             None
         } else {
@@ -364,6 +380,7 @@ impl Engine {
             ));
         }
         let input = if input.is_null() { json!({}) } else { input };
+        let input = crate::scope::narrow_input(ctx, entry.desc.id, input);
         (entry.validate)(&input)?;
         let parts: Vec<&'static OpDescriptor> = entry
             .parts
@@ -496,6 +513,7 @@ impl Engine {
         input: Value,
     ) -> Result<Value, OpError> {
         let output = self.store.read(|tx| {
+            let _scope = crate::scope::enter(tx, ctx)?;
             f(
                 &QueryCtx {
                     tx,
@@ -669,6 +687,7 @@ impl Engine {
                 })?;
                 return Ok((answer, crate::write::Finished::nothing()));
             }
+            let _scope = crate::scope::enter(tx, &in_tx.ctx)?;
             let mut w = WriteCtx::new(tx, &in_tx);
             let output = f(&mut w, input.clone())?;
             let finished = w.finish()?;
@@ -943,3 +962,73 @@ fn request_key(desc: &OpDescriptor, ctx: &Context, input: &Value) -> Option<(Str
     );
     Some((caller, id.to_owned()))
 }
+
+/// Puts the workspace back from the backup `name` made just before a schema
+/// upgrade that failed with `failure`, and explains what happened. The
+/// workspace is then exactly as the older program left it.
+fn put_back_after_failed_upgrade(
+    layout: &WorkspaceLayout,
+    folder: &BackupFolder,
+    name: &str,
+    failure: &gk_store::StoreError,
+    now: i64,
+) -> OpError {
+    tracing::error!(error = %failure, backup = name, "the schema upgrade failed");
+    let failed = store_error(failure);
+    let args = [("name", name.to_owned()), ("error", failed.message.clone())];
+    let put_back = (|| -> Result<(), OpError> {
+        let (path, _) = folder.database_of(name)?;
+        let _migrate = LockFile::acquire(&layout.migrate_lock()).map_err(|e| store_error(&e))?;
+        let copy = layout.root().join(format!(".upgrade-undo-{now}.db"));
+        let result = (|| {
+            std::fs::copy(&path, &copy).map_err(|e| {
+                messages::error(
+                    ErrorCode::Storage,
+                    "backup-copy-failed",
+                    &[
+                        ("path", path.display().to_string()),
+                        ("error", e.to_string()),
+                    ],
+                )
+            })?;
+            gk_store::put_back_before_upgrade(layout, &copy, UPGRADE_UNDO_BUSY_BUDGET)
+                .map_err(|e| store_error(&e))
+        })();
+        let _ = std::fs::remove_file(&copy);
+        let _ = std::fs::remove_file(copy.with_extension("db-journal"));
+        result
+    })();
+    match put_back {
+        Ok(()) => {
+            tracing::info!(
+                backup = name,
+                "the workspace was put back as it was before the upgrade"
+            );
+            messages::hint(
+                messages::error(ErrorCode::Storage, "engine-upgrade-failed-restored", &args),
+                "engine-upgrade-failed-restored-hint",
+                &[],
+            )
+            .with_detail("backup", name.to_owned())
+            .with_detail("restored", true)
+        }
+        Err(e) => {
+            tracing::error!(error = %e.message, backup = name, "the workspace could not be put back");
+            messages::hint(
+                messages::error(
+                    ErrorCode::Storage,
+                    "engine-upgrade-failed-not-restored",
+                    &args,
+                ),
+                "engine-upgrade-failed-not-restored-hint",
+                &args,
+            )
+            .with_detail("backup", name.to_owned())
+            .with_detail("restored", false)
+        }
+    }
+}
+
+/// How long putting the workspace back after a failed upgrade waits for
+/// other programs' locks.
+const UPGRADE_UNDO_BUSY_BUDGET: Duration = Duration::from_secs(10);

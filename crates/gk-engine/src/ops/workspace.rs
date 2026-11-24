@@ -34,7 +34,8 @@ pub(super) fn register(r: &mut crate::registry::Registry) {
             },
             settings: settings::load(q.tx).map_err(Failure::from)?,
             agent_limits: AgentLimits::CURRENT,
-            timer: super::time::current(q.tx, q.now, super::task::units(q.tx)?)?,
+            timer: super::time::current(q.tx, q.now, super::task::units(q.tx)?)?
+                .filter(|t| super::lookup::task(q.tx, "task", &t.task.id).is_ok()),
             guide: GUIDE.to_owned(),
         })
     });

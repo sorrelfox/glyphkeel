@@ -2707,6 +2707,13 @@
           "project": {
             "$ref": "#/$defs/Project",
             "description": "The project after the change."
+          },
+          "views_rewritten": {
+            "description": "The saved views whose queries were rewritten because a status, type,\nlabel or the project key they name was renamed, or a label they name\nwas deleted, by name; left out when none was.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -3764,6 +3771,13 @@
           "project": {
             "$ref": "#/$defs/Project",
             "description": "The project after the change."
+          },
+          "views_rewritten": {
+            "description": "The saved views whose queries were rewritten because a status, type,\nlabel or the project key they name was renamed, or a label they name\nwas deleted, by name; left out when none was.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -4301,6 +4315,13 @@
           "project": {
             "$ref": "#/$defs/Project",
             "description": "The project after the change."
+          },
+          "views_rewritten": {
+            "description": "The saved views whose queries were rewritten because a status, type,\nlabel or the project key they name was renamed, or a label they name\nwas deleted, by name; left out when none was.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -4789,6 +4810,13 @@
           "project": {
             "$ref": "#/$defs/Project",
             "description": "The project after the change."
+          },
+          "views_rewritten": {
+            "description": "The saved views whose queries were rewritten because a status, type,\nlabel or the project key they name was renamed, or a label they name\nwas deleted, by name; left out when none was.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -5272,6 +5300,13 @@
           "project": {
             "$ref": "#/$defs/Project",
             "description": "The project after the change."
+          },
+          "views_rewritten": {
+            "description": "The saved views whose queries were rewritten because a status, type,\nlabel or the project key they name was renamed, or a label they name\nwas deleted, by name; left out when none was.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -5755,6 +5790,13 @@
           "project": {
             "$ref": "#/$defs/Project",
             "description": "The project after the change."
+          },
+          "views_rewritten": {
+            "description": "The saved views whose queries were rewritten because a status, type,\nlabel or the project key they name was renamed, or a label they name\nwas deleted, by name; left out when none was.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -6556,6 +6598,13 @@
           "project": {
             "$ref": "#/$defs/Project",
             "description": "The project after the change."
+          },
+          "views_rewritten": {
+            "description": "The saved views whose queries were rewritten because a status, type,\nlabel or the project key they name was renamed, or a label they name\nwas deleted, by name; left out when none was.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -7176,6 +7225,13 @@
           "project": {
             "$ref": "#/$defs/Project",
             "description": "The project after the change."
+          },
+          "views_rewritten": {
+            "description": "The saved views whose queries were rewritten because a status, type,\nlabel or the project key they name was renamed, or a label they name\nwas deleted, by name; left out when none was.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -7706,6 +7762,13 @@
           "project": {
             "$ref": "#/$defs/Project",
             "description": "The project after the change."
+          },
+          "views_rewritten": {
+            "description": "The saved views whose queries were rewritten because a status, type,\nlabel or the project key they name was renamed, or a label they name\nwas deleted, by name; left out when none was.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -8201,6 +8264,13 @@
           "project": {
             "$ref": "#/$defs/Project",
             "description": "The project after the change."
+          },
+          "views_rewritten": {
+            "description": "The saved views whose queries were rewritten because a status, type,\nlabel or the project key they name was renamed, or a label they name\nwas deleted, by name; left out when none was.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -8793,6 +8863,13 @@
           "project": {
             "$ref": "#/$defs/Project",
             "description": "The project after the change."
+          },
+          "views_rewritten": {
+            "description": "The saved views whose queries were rewritten because a status, type,\nlabel or the project key they name was renamed, or a label they name\nwas deleted, by name; left out when none was.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -9432,6 +9509,13 @@
           "project": {
             "$ref": "#/$defs/Project",
             "description": "The project after the change."
+          },
+          "views_rewritten": {
+            "description": "The saved views whose queries were rewritten because a status, type,\nlabel or the project key they name was renamed, or a label they name\nwas deleted, by name; left out when none was.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -9927,6 +10011,13 @@
           "project": {
             "$ref": "#/$defs/Project",
             "description": "The project after the change."
+          },
+          "views_rewritten": {
+            "description": "The saved views whose queries were rewritten because a status, type,\nlabel or the project key they name was renamed, or a label they name\nwas deleted, by name; left out when none was.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -10478,6 +10569,13 @@
           "project": {
             "$ref": "#/$defs/Project",
             "description": "The project after the change."
+          },
+          "views_rewritten": {
+            "description": "The saved views whose queries were rewritten because a status, type,\nlabel or the project key they name was renamed, or a label they name\nwas deleted, by name; left out when none was.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -11036,6 +11134,13 @@
           "project": {
             "$ref": "#/$defs/Project",
             "description": "The project after the change."
+          },
+          "views_rewritten": {
+            "description": "The saved views whose queries were rewritten because a status, type,\nlabel or the project key they name was renamed, or a label they name\nwas deleted, by name; left out when none was.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -11524,6 +11629,13 @@
           "project": {
             "$ref": "#/$defs/Project",
             "description": "The project after the change."
+          },
+          "views_rewritten": {
+            "description": "The saved views whose queries were rewritten because a status, type,\nlabel or the project key they name was renamed, or a label they name\nwas deleted, by name; left out when none was.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -37524,6 +37636,10 @@
               },
               "before": {
                 "description": "The value before."
+              },
+              "truncated": {
+                "description": "Whether a long text value was cut to its first 500 characters, as\nin every list; the item itself holds the whole text.",
+                "type": "boolean"
               }
             },
             "type": "object"

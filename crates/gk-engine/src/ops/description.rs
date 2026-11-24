@@ -836,6 +836,9 @@ fn revision_detail(
     let id: Id = input.revision.trim().parse().map_err(|_| missing())?;
     let row = revision(q.tx, id)?.ok_or_else(missing)?;
     let owner = row.owner();
+    if !owner_in_scope(q.tx, owner)? {
+        return Err(missing());
+    }
     let current = stored(q.tx, owner)?.rev;
     let diff = match &input.diff_from {
         Some(other) => {
@@ -854,6 +857,30 @@ fn revision_detail(
         owner: owner_key(q.tx, owner)?,
         body: row.body,
         diff,
+    })
+}
+
+/// Whether the owner of a text is within the caller's project, for a
+/// caller limited to one.
+fn owner_in_scope(tx: &Transaction<'_>, owner: Owner) -> Result<bool, Failure> {
+    if !crate::scope::active() {
+        return Ok(true);
+    }
+    Ok(match owner {
+        Owner::Project(id) => lookup::project_by_id(tx, id)?.is_some(),
+        Owner::Task(id) => lookup::task_by_id(tx, id)?.is_some(),
+        Owner::Wiki(id) => {
+            let project: Option<Vec<u8>> = tx
+                .query_row(
+                    "SELECT project_id FROM wiki_pages WHERE id = ?1",
+                    [lookup::b(id)],
+                    |r| r.get(0),
+                )
+                .optional()?;
+            project
+                .and_then(|p| Id::from_slice(&p).ok())
+                .is_some_and(crate::scope::sees)
+        }
     })
 }
 

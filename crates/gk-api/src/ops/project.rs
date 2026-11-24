@@ -234,6 +234,11 @@ pub struct Project {
 pub struct ProjectChange {
     /// The project after the change.
     pub project: Project,
+    /// The saved views whose queries were rewritten because a status, type,
+    /// label or the project key they name was renamed, or a label they name
+    /// was deleted, by name; left out when none was.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub views_rewritten: Vec<String>,
     /// The history group, for revert and Undo; left out when nothing
     /// changed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
