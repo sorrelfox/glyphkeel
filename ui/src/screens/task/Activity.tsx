@@ -7,6 +7,7 @@ import { Button, Menu, MenuTrigger, Popover, Tab, TabList, TabPanel, Tabs, useLo
 
 import { classes } from "../../classes";
 import { MenuEntries } from "../../components/ContextMenu";
+import { Segmented } from "../../components/Segmented";
 import { skippedReason } from "../../data/safety";
 import { useToasts } from "../../components/Toasts";
 import { type Project } from "../../data/catalog";
@@ -14,7 +15,7 @@ import { errorToast, useCall, useCommand } from "../../data/hooks";
 import { readDraft, writeDraft } from "../../data/drafts";
 import { toggleChecklist, useRendered } from "../../data/markdown";
 import { revertible, useComments, useTaskHistory } from "../../data/task";
-import { type ActivityEntry, type Actor, type Comment, type Rendered, type Task, type Via } from "../../generated/ops";
+import { type ActivityEntry, type Actor, type ActorKind, type Comment, type Rendered, type Task, type Via } from "../../generated/ops";
 import { useT, type Translate } from "../../i18n/I18n";
 import { MarkdownReader } from "../../markdown/Reader";
 import { formatDuration, type DurationUnits } from "../../data/duration";
@@ -328,7 +329,9 @@ function HistoryList({
   const call = useCall();
   const toasts = useToasts();
   const moment = useMomentFormat();
-  const history = useTaskHistory(task.id, true);
+  // Who made the changes: everyone, people only or agents only.
+  const [actor, setActor] = useState<ActorKind | "all">("all");
+  const history = useTaskHistory(task.id, true, actor === "all" ? undefined : actor);
   const units = useDurationUnits();
   const keys = new Map<string, string>([[task.id, task.key]]);
   for (const link of task.links ?? []) {
@@ -348,19 +351,39 @@ function HistoryList({
       },
     );
   };
+  const who = (
+    <div className={styles.historyFilter}>
+      <Segmented<ActorKind | "all">
+        label={t("activity-filter-actor")}
+        value={actor}
+        onChange={setActor}
+        segments={[
+          { id: "all", label: t("activity-actor-all") },
+          { id: "user", label: t("activity-actor-user") },
+          { id: "agent", label: t("activity-actor-agent") },
+        ]}
+      />
+    </div>
+  );
   if (history.isError) {
     return <p className="faint">{history.error.error.message}</p>;
   }
   if (!history.data) {
-    return null;
+    return actor === "all" ? null : who;
   }
   const entries = history.data.pages.flatMap((page) => page.items);
   if (entries.length === 0) {
-    return <p className={classes("faint", styles.small)}>{t("history-none")}</p>;
+    return (
+      <>
+        {actor !== "all" && who}
+        <p className={classes("faint", styles.small)}>{t("history-none")}</p>
+      </>
+    );
   }
   const seen = new Set<string>();
   return (
     <>
+    {who}
     <ol className={styles.history} aria-label={t("history-title")}>
       {entries.map((entry) => {
         const lines = describeEntry(t, { task, project, keys, units }, entry);

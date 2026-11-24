@@ -14,7 +14,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::catalog::{Exposure, Meta, OpDescriptor, OpKind, Safety};
-use crate::ops::common::{Actor, Priority};
+use crate::ops::common::{Actor, Hue, Priority};
 use crate::ops::task::{Checklist, Claim, LabelRef, StatusRef, TypeRef};
 
 /// A query to read for the query field.
@@ -185,6 +185,48 @@ pub struct TaskSearchInput {
     /// The `next_cursor` of the page before.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
+    /// Groups the rows: they come group by group (each group sorted by the
+    /// query's order), and the result names the groups with their counts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group_by: Option<ListGrouping>,
+}
+
+/// What a list's rows are grouped by.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ListGrouping {
+    /// The status, in board order.
+    Status,
+    /// The priority, highest first.
+    Priority,
+    /// The first label in alphabetical order; tasks without one last.
+    Label,
+    /// The parent task; tasks without one last.
+    Parent,
+    /// The week of the due date, earliest first; tasks without one last.
+    DueWeek,
+    /// The project.
+    Project,
+}
+
+/// One group of a grouped list.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ListGroup {
+    /// What its tasks share: the status, label or project name, the
+    /// priority (`urgent` … `none`), the parent's key, or the first day of
+    /// the due week (`YYYY-MM-DD`); left out for the tasks without one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
+    /// The parent's title or the project's name, for grouping by parent or
+    /// by project.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// The status's or label's colour.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hue: Option<Hue>,
+    /// Its tasks.
+    pub count: u64,
 }
 
 /// A task as lists show it.
@@ -289,6 +331,9 @@ pub struct TaskSearchResult {
     pub sort: Vec<String>,
     /// Totals over every matching task.
     pub totals: ListTotals,
+    /// With `group_by`: the groups, in the order the rows come.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub groups: Vec<ListGroup>,
 }
 
 op!(

@@ -60,6 +60,7 @@ export function useViewCommands({ project, views, active, setup, onChoose, onSav
   const choose = (view: SavedView): MenuEntry => ({
     id: `view-${view.id}`,
     label: view.is_default ? t("list-view-default-name", { name: view.name }) : view.name,
+    ...(view.description === undefined || view.description === "" ? {} : { detail: view.description }),
     checked: active?.id === view.id,
     run: () => {
       onChoose(view);
@@ -98,7 +99,9 @@ export function useViewCommands({ project, views, active, setup, onChoose, onSav
           view: active.id,
           query: setup.query,
           columns: [...setup.columns],
-          ...(setup.sort === "" ? { clear: ["sort"] } : { sort: setup.sort }),
+          ...(setup.sort === "" ? {} : { sort: setup.sort }),
+          ...(setup.groupBy === "" ? {} : { group_by: setup.groupBy }),
+          ...(setup.sort === "" || setup.groupBy === "" ? { clear: [...(setup.sort === "" ? (["sort"] as const) : []), ...(setup.groupBy === "" ? (["group_by"] as const) : [])] } : {}),
         }),
       t("list-view-saved", { name: active.name }),
     );
@@ -158,6 +161,7 @@ export function useViewCommands({ project, views, active, setup, onChoose, onSav
                   is_default: isDefault,
                   ...(forProject && project !== undefined ? { project } : {}),
                   ...(setup.sort === "" ? {} : { sort: setup.sort }),
+                  ...(setup.groupBy === "" ? {} : { group_by: setup.groupBy }),
                 }),
               t("list-view-created", { name }),
             )

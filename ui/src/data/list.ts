@@ -13,6 +13,9 @@ import {
   type Call,
   type Hue,
   type ListedTask,
+  type ListGroup,
+  type ListGrouping,
+  type ListLayoutChange,
   type ListTotals,
   type OpMap,
   type ParsedQuery,
@@ -40,6 +43,8 @@ export interface ListScope {
   query: string;
   /** The order when the query has no `sort:` (`due,-priority`). */
   sort?: string | undefined;
+  /** What the rows are grouped by; none for one plain list. */
+  groupBy?: ListGrouping | undefined;
 }
 
 /** The engine's input for one page of a list. */
@@ -50,6 +55,7 @@ export function searchInput(scope: ListScope, page: number, limit = LIST_PAGE): 
     ...(page > 0 ? { cursor: String(page * limit) } : {}),
     ...(scope.project !== undefined ? { project: scope.project, include_subprojects: scope.includeSubprojects } : {}),
     ...(scope.sort !== undefined && scope.sort !== "" ? { sort: scope.sort } : {}),
+    ...(scope.groupBy !== undefined ? { group_by: scope.groupBy } : {}),
   };
 }
 
@@ -73,6 +79,8 @@ export interface ListRows {
   totals: ListTotals | undefined;
   /** The order the engine used, as sort keys. */
   sort: string[];
+  /** With a grouping: the groups, in the order the rows come. */
+  groups: ListGroup[] | undefined;
   /** The task at a row, once its page is loaded. */
   rowAt: (index: number) => ListedTask | undefined;
   /** The rows loaded so far, in order: for selections by range and Select all. */
@@ -89,7 +97,11 @@ export interface ListRows {
  * The first page keeps showing the last answer while a new query runs, so
  * the list doesn't flash empty between keystrokes.
  */
-export function useListRows(scope: ListScope, visible: { first: number; last: number }, enabled = true): ListRows {
+export function useListRows(
+  scope: ListScope,
+  inView: { first: number; last: number } | ((groups: readonly ListGroup[] | undefined, total: number) => { first: number; last: number }),
+  enabled = true,
+): ListRows {
   const call = useCall();
   const first = useQuery<TaskSearchResult, OpFailure>({
     queryKey: opKey("task.search", searchInput(scope, 0)),
@@ -98,6 +110,8 @@ export function useListRows(scope: ListScope, visible: { first: number; last: nu
     enabled,
   });
   const total = first.data?.total;
+  // Grouped lists know which rows are in view once they know the groups.
+  const visible = typeof inView === "function" ? inView(scope.groupBy === undefined ? undefined : first.data?.groups, total ?? 0) : inView;
   const more = pagesFor(visible.first, visible.last, total ?? 0).filter((page) => page > 0);
   const pages: UseQueryResult<TaskSearchResult, OpFailure>[] = useQueries({
     queries: more.map((page) => ({
@@ -121,6 +135,7 @@ export function useListRows(scope: ListScope, visible: { first: number; last: nu
     total,
     totals: first.data?.totals,
     sort: first.data?.sort ?? [],
+    groups: scope.groupBy === undefined ? undefined : first.data?.groups,
     rowAt: (index) => byPage.get(Math.floor(index / LIST_PAGE))?.[index % LIST_PAGE],
     loaded: () => [...byPage.entries()].sort(([a], [b]) => a - b).flatMap(([, items]) => items),
     error: first.error,
@@ -163,6 +178,12 @@ export function useSavedViews(project: string | undefined): { views: SavedView[]
     return { views: undefined, error: null };
   }
   return { views: [...(own.data?.items ?? []), ...shared.data.items], error: null };
+}
+
+/** The person's layout of a list (column order and widths), per project and once for the whole workspace. */
+export function useListLayout(project: string | undefined): { layout: ListLayoutChange | undefined; error: OpFailure | null } {
+  const result = useOp("list.layout.get", project === undefined ? {} : { project });
+  return { layout: result.data, error: result.error };
 }
 
 /** The view a list opens with: the project's default, else the workspace's, else none. */

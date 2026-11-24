@@ -3,7 +3,7 @@
 
 import { useLocalization } from "@fluent/react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Columns3, Download, Filter } from "lucide-react";
+import { ChevronDown, Columns3, Download, Filter } from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Button, Menu, MenuItem, MenuTrigger, Popover } from "react-aria-components";
 
@@ -16,9 +16,9 @@ import { useToasts } from "../../components/Toasts";
 import { Switch } from "../../components/Switch";
 import { keysOf } from "../../actions/actions";
 import { errorToast, useCall, useCommand } from "../../data/hooks";
-import { allRows, defaultView, LIST_PAGE, toCsv, toJson, useListNames, useListRows, useParsedQuery, useQueryFields, useSavedViews, useUnfilteredCount, type ListScope } from "../../data/list";
+import { allRows, defaultView, LIST_PAGE, toCsv, toJson, useListLayout, useListNames, useListRows, useParsedQuery, useQueryFields, useSavedViews, useUnfilteredCount, type ListScope } from "../../data/list";
 import { useDurationUnits } from "../../data/time";
-import { type ListedTask, type QueryProblem, type SavedView } from "../../generated/ops";
+import { type ListedTask, type ListGroup, type ListGrouping, type ListLayout, type QueryProblem, type SavedView } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { saveExport } from "../../ipc/exportFile";
 import { useStatus, useTimerTask } from "../../shell/context";
@@ -28,7 +28,7 @@ import { CellContext, type CellActions } from "./cells";
 import { Chips } from "./Chips";
 import { SaveControls, useViewCommands, ViewPicker } from "./ViewMenu";
 import { ListTable } from "./ListTable";
-import { changedFrom, clickRow, COLUMNS, exportName, FIXED_COLUMNS, nextSort, NO_SELECTION, removeRanges, viewColumns, withSort, type ColumnId, type Selection } from "./model";
+import { changedFrom, clickRow, COLUMNS, exportName, FIXED_COLUMNS, GROUPINGS, isGrouping, listLines, moveColumn, nextSort, NO_SELECTION, removeRanges, viewColumns, withSort, type ColumnId, type Selection } from "./model";
 import styles from "./List.module.css";
 
 /** How long typing pauses before the query runs. */
@@ -48,16 +48,21 @@ interface ListViewProps {
 /**
  * The list: saved views and the query field on top, its conditions as
  * chips, the matching tasks in a virtualized table with totals, and the bulk
- * bar over a selection. The list shows nothing until its saved views are
- * read, so the default view is the first thing drawn.
+ * bar over a selection. The list shows nothing until its saved views and
+ * the person's layout of it are read, so the default view, in the person's
+ * columns, is the first thing drawn.
  */
 export function ListView({ project, openTask, onOpen }: ListViewProps) {
   const saved = useSavedViews(project);
-  if (!saved.views) {
+  const own = useListLayout(project);
+  if (!saved.views || (!own.layout && !own.error)) {
     return <div className={styles.screen} aria-busy="true" />;
   }
-  return <LoadedList key={project ?? ""} project={project} views={saved.views} openTask={openTask} onOpen={onOpen} />;
+  return <LoadedList key={project ?? ""} project={project} views={saved.views} layout={own.layout?.layout ?? { columns: [], widths: {} }} openTask={openTask} onOpen={onOpen} />;
 }
+
+/** A group's key among the collapsed ones: its value, or one mark for the tasks without one. */
+const groupKey = (group: ListGroup) => group.value ?? "\u0000";
 
 /** The engine's message for a query mistake, in the person's language. */
 function useProblemText(): (problem: QueryProblem) => string {
@@ -65,7 +70,16 @@ function useProblemText(): (problem: QueryProblem) => string {
   return (problem) => (l10n.getBundle(problem.message_id) ? l10n.getString(problem.message_id, problem.args ?? null) : problem.message);
 }
 
-function LoadedList({ project, views, openTask, onOpen }: { project: string | undefined; views: SavedView[]; openTask: string | undefined; onOpen: (key: string) => void }) {
+interface LoadedListProps {
+  project: string | undefined;
+  views: SavedView[];
+  /** The person's own layout of this list, as read when it opened. */
+  layout: ListLayout;
+  openTask: string | undefined;
+  onOpen: (key: string) => void;
+}
+
+function LoadedList({ project, views, layout, openTask, onOpen }: LoadedListProps) {
   const t = useT();
   const call = useCall();
   const toasts = useToasts();
@@ -79,7 +93,12 @@ function LoadedList({ project, views, openTask, onOpen }: { project: string | un
   const active = views.find((view) => view.id === activeId);
   const [text, setText] = useState(initial?.query ?? "");
   const [sort, setSort] = useState(initial?.sort ?? "");
-  const [columns, setColumns] = useState<ColumnId[]>(() => viewColumns(initial, workspaceWide));
+  // The person's own columns and widths for this list, kept by the engine.
+  const [ownColumns, setOwnColumns] = useState<readonly string[]>(layout.columns);
+  const [widths, setWidths] = useState<Readonly<Record<string, number>>>(layout.widths);
+  const [columns, setColumns] = useState<ColumnId[]>(() => viewColumns(initial, workspaceWide, layout.columns));
+  const [groupBy, setGroupBy] = useState<ListGrouping | undefined>(isGrouping(initial?.group_by) ? initial.group_by : undefined);
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const [includeSubprojects, setIncludeSubprojects] = useState(false);
   const [selection, setSelection] = useState<Selection>(NO_SELECTION);
   const [focused, setFocused] = useState(0);
@@ -104,21 +123,29 @@ function LoadedList({ project, views, openTask, onOpen }: { project: string | un
   }, [text, valid]);
   const problem = reading?.error;
 
-  const scope: ListScope = { project, includeSubprojects, query: running, sort };
+  const scope: ListScope = { project, includeSubprojects, query: running, sort, groupBy };
   const scrollRef = useRef<HTMLDivElement>(null);
   const { density } = useAppearance().resolved;
   const rowHeight = ROW_HEIGHT[density];
-  const [total, setTotal] = useState(0);
+  // Lines: the rows and, when grouped, a header per group.
+  const [lineCount, setLineCount] = useState(0);
   const virtualizer = useVirtualizer({
-    count: total,
+    count: lineCount,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => rowHeight,
     overscan: 6,
   });
   const items = virtualizer.getVirtualItems();
-  const rows = useListRows(scope, { first: items[0]?.index ?? 0, last: items.at(-1)?.index ?? LIST_PAGE - 1 });
-  if (rows.total !== undefined && rows.total !== total) {
-    setTotal(rows.total);
+  const isCollapsed = (group: ListGroup) => collapsed.has(groupKey(group));
+  const linesOf = (groups: readonly ListGroup[] | undefined, total: number) =>
+    listLines(total, groups, (index) => {
+      const group = groups?.[index];
+      return group !== undefined && isCollapsed(group);
+    });
+  const rows = useListRows(scope, (groups, total) => linesOf(groups, total).rowsIn(items[0]?.index ?? 0, items.at(-1)?.index ?? LIST_PAGE - 1));
+  const lines = linesOf(rows.groups, rows.total ?? 0);
+  if (rows.total !== undefined && lines.count !== lineCount) {
+    setLineCount(lines.count);
   }
   useEffect(() => {
     virtualizer.measure();
@@ -132,6 +159,7 @@ function LoadedList({ project, views, openTask, onOpen }: { project: string | un
 
   // Commands of the cells.
   const update = useCommand("task.update");
+  const keepLayout = useCommand("list.layout.update");
   const move = useCommand("task.move");
   const cellActions: CellActions = {
     today: isoDay(new Date()),
@@ -153,9 +181,10 @@ function LoadedList({ project, views, openTask, onOpen }: { project: string | un
   };
 
   // The header shows an order someone chose, not the default one.
-  const shownSort = sort !== "" || /(^|[\s(])sort:/.test(running) ? rows.sort : [];
-  const setup = { query: text, sort, columns };
-  const changed = changedFrom(active, setup, workspaceWide);
+  // The query's own `sort:` wins over the one chosen in the headers; that one shows at once.
+  const shownSort = /(^|[\s(])sort:/.test(running) ? rows.sort : sort === "" ? [] : sort.split(",");
+  const setup = { query: text, sort, columns, groupBy: groupBy ?? "" };
+  const changed = changedFrom(active, setup, viewColumns(active, workspaceWide, ownColumns));
   const selectedKeys = [...selection.keys];
   const allSelected = (rows.total ?? 0) > 0 && selection.keys.size === rows.total;
 
@@ -164,8 +193,33 @@ function LoadedList({ project, views, openTask, onOpen }: { project: string | un
     setText(view?.query ?? "");
     setRunning(view?.query ?? "");
     setSort(view?.sort ?? "");
-    setColumns(viewColumns(view, workspaceWide));
+    setColumns(viewColumns(view, workspaceWide, ownColumns));
+    setGroupBy(isGrouping(view?.group_by) ? view.group_by : undefined);
+    setCollapsed(new Set());
     setSelection(NO_SELECTION);
+  };
+
+  /**
+   * Shows other columns, or the same in another order. The person's own
+   * layout keeps them unless the view names its columns: then Save keeps
+   * them in the view.
+   */
+  const changeColumns = (next: ColumnId[]) => {
+    setColumns(next);
+    if ((active?.columns ?? []).length === 0) {
+      setOwnColumns(next);
+      keepLayout.mutate({ ...(project === undefined ? {} : { project }), columns: next });
+    }
+  };
+
+  const resize = (column: ColumnId, width: number) => {
+    setWidths({ ...widths, [column]: width });
+    keepLayout.mutate({ ...(project === undefined ? {} : { project }), widths: { [column]: width } });
+  };
+
+  const group = (next: ListGrouping | undefined) => {
+    setGroupBy(next);
+    setCollapsed(new Set());
   };
 
   const viewCommands = useViewCommands({
@@ -182,8 +236,8 @@ function LoadedList({ project, views, openTask, onOpen }: { project: string | un
     },
   });
 
-  const sortBy = (column: ColumnId) => {
-    const next = nextSort(shownSort, column);
+  const sortBy = (column: ColumnId, add: boolean) => {
+    const next = nextSort(shownSort, column, add);
     if (reading && reading.tokens.some((token) => token.kind === "sort")) {
       setText(withSort(text, reading.tokens, next));
     } else {
@@ -222,14 +276,36 @@ function LoadedList({ project, views, openTask, onOpen }: { project: string | un
       });
   };
 
+  /** The row `step` shown rows away from row `index` (or from line `start`), past group headers and collapsed groups. */
+  const rowAway = (index: number, step: number, start = lines.lineOf(index) ?? -1): number => {
+    let line = start;
+    let found = index;
+    for (let left = Math.abs(step); left > 0; ) {
+      line += Math.sign(step);
+      const at = lines.at(line);
+      if (!at) {
+        break;
+      }
+      if (at.kind === "row") {
+        found = at.row;
+        left -= 1;
+      }
+    }
+    return found;
+  };
+
   const focusRow = (index: number) => {
     const count = rows.total ?? 0;
     if (count === 0) {
       return;
     }
     const next = Math.max(0, Math.min(count - 1, index));
+    const line = lines.lineOf(next);
     setFocused(next);
-    virtualizer.scrollToIndex(next, { align: "auto" });
+    if (line === undefined) {
+      return;
+    }
+    virtualizer.scrollToIndex(line, { align: "auto" });
     requestAnimationFrame(() => {
       scrollRef.current?.querySelector<HTMLElement>(`[data-index="${String(next)}"]`)?.focus();
     });
@@ -242,7 +318,7 @@ function LoadedList({ project, views, openTask, onOpen }: { project: string | un
     const step = moves[event.key];
     if (step !== undefined) {
       event.preventDefault();
-      const next = Math.max(0, Math.min((rows.total ?? 1) - 1, index + step));
+      const next = rowAway(index, step);
       const key = rows.rowAt(next)?.key;
       if (key !== undefined) {
         setSelection(clickRow(selection, next, key, { toggle: false, range: event.shiftKey }, (at) => rows.rowAt(at)?.key));
@@ -250,7 +326,8 @@ function LoadedList({ project, views, openTask, onOpen }: { project: string | un
       focusRow(next);
     } else if (event.key === "Home" || event.key === "End") {
       event.preventDefault();
-      focusRow(event.key === "Home" ? 0 : (rows.total ?? 1) - 1);
+      // The first or last row shown: from outside the list, one step in.
+      focusRow(event.key === "Home" ? rowAway(index, 1, -1) : rowAway(index, -1, lines.count));
     } else if (event.key === "Enter" && task) {
       event.preventDefault();
       event.stopPropagation();
@@ -338,7 +415,8 @@ function LoadedList({ project, views, openTask, onOpen }: { project: string | un
               </Switch>
             </div>
           )}
-          <ColumnMenu columns={columns} onChange={setColumns} />
+          <GroupMenu value={groupBy} withProject={workspaceWide || includeSubprojects} onChange={group} />
+          <ColumnMenu columns={columns} onChange={changeColumns} />
           <MenuTrigger>
             <Button className="btn flat">
               <Download className="ic" aria-hidden="true" />
@@ -412,6 +490,21 @@ function LoadedList({ project, views, openTask, onOpen }: { project: string | un
           <ListTable
             rows={rows}
             columns={columns}
+            widths={widths}
+            onResize={resize}
+            onMove={(column, to) => {
+              changeColumns(moveColumn(columns, column, to));
+            }}
+            lines={lines}
+            grouping={groupBy}
+            isCollapsed={isCollapsed}
+            onToggleGroup={(toggled) => {
+              const next = new Set(collapsed);
+              if (!next.delete(groupKey(toggled))) {
+                next.add(groupKey(toggled));
+              }
+              setCollapsed(next);
+            }}
             sort={shownSort}
             onSort={sortBy}
             selection={selection}
@@ -433,6 +526,40 @@ function LoadedList({ project, views, openTask, onOpen }: { project: string | un
         {viewCommands.dialog}
       </div>
     </CellContext>
+  );
+}
+
+/** "Group: Status": how the rows are grouped, or not at all. */
+function GroupMenu({ value, withProject, onChange }: { value: ListGrouping | undefined; withProject: boolean; onChange: (grouping: ListGrouping | undefined) => void }) {
+  const t = useT();
+  const choices = GROUPINGS.filter((grouping) => grouping !== "project" || withProject);
+  const name = (grouping: ListGrouping | undefined) => t(grouping === undefined ? "list-group-by-none" : `list-group-by-${grouping}`);
+  return (
+    <MenuTrigger>
+      <Button className="btn flat" aria-label={t("list-group-button", { grouping: name(value) })}>
+        <span className="muted hide-narrow">{t("list-group")}</span>
+        <span>{name(value)}</span>
+        <ChevronDown className="ic s muted" aria-hidden="true" />
+      </Button>
+      <Popover className="pop menuPopover" placement="bottom end" offset={4}>
+        <Menu
+          className="menu"
+          aria-label={t("list-group")}
+          selectionMode="single"
+          selectedKeys={[value ?? "none"]}
+          onAction={(id) => {
+            const chosen = String(id);
+            onChange(isGrouping(chosen) ? chosen : undefined);
+          }}
+        >
+          {[...choices, "none" as const].map((grouping) => (
+            <MenuItem key={grouping} id={grouping} className="item">
+              {name(grouping === "none" ? undefined : grouping)}
+            </MenuItem>
+          ))}
+        </Menu>
+      </Popover>
+    </MenuTrigger>
   );
 }
 

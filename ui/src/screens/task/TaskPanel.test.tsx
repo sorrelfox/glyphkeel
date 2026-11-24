@@ -236,6 +236,32 @@ describe("comments and history", () => {
     });
   });
 
+  it("filters the History tab by who made the change: everyone, people or agents", async () => {
+    const { panel, task, transport } = await renderPanel();
+    transport.workspace.call("task.update", { key: task.key, priority: "urgent" }, { actor: { kind: "agent", name: "Build agent" }, via: "mcp" });
+    fireEvent.click(within(panel).getByRole("tab", { name: /History/ }));
+    const history = await within(panel).findByRole("list", { name: "History" });
+    await within(history).findByText((text) => plain(text) === "Priority: No priority → Urgent");
+    expect(within(history).getByText((text) => /^Created PER-\d+$/.test(plain(text)))).toBeDefined();
+    const who = within(panel).getByRole("radiogroup", { name: "Who" });
+
+    const list = () => within(panel).getByRole("list", { name: "History" });
+    fireEvent.click(within(who).getByRole("radio", { name: "Agents" }));
+    await waitFor(() => {
+      expect(within(list()).queryByText((text) => /^Created PER-\d+$/.test(plain(text)))).toBeNull();
+    });
+    expect(within(list()).getByText((text) => plain(text) === "Priority: No priority → Urgent")).toBeDefined();
+    expect(within(list()).getByText((text) => plain(text).startsWith("Build agent · MCP"))).toBeDefined();
+
+    fireEvent.click(within(who).getByRole("radio", { name: "People" }));
+    const people = await within(panel).findByRole("list", { name: "History" });
+    await within(people).findByText((text) => /^Created PER-\d+$/.test(plain(text)));
+    expect(within(people).queryByText((text) => plain(text) === "Priority: No priority → Urgent")).toBeNull();
+
+    fireEvent.click(within(who).getByRole("radio", { name: "Everyone" }));
+    await within(panel).findByText((text) => plain(text) === "Priority: No priority → Urgent");
+  });
+
   it("reads history entries as people say them", () => {
     const t = (id: string, vars?: Record<string, unknown>) => `${id}${vars ? JSON.stringify(vars) : ""}`;
     const project = { statuses: [{ id: "s-1", name: "To do" }, { id: "s-2", name: "Done" }], types: [], labels: [] };

@@ -2,11 +2,11 @@
 // Copyright (C) 2026 Glyphkeel contributors
 
 import { useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
-import { Header, Menu, MenuItem, MenuSection, Popover, Separator, SubmenuTrigger } from "react-aria-components";
+import { Header, Menu, MenuItem, MenuSection, Popover, Separator, SubmenuTrigger, Text } from "react-aria-components";
 
 /** One entry of a context menu. */
 export type MenuEntry =
-  | { id: string; label: string; run: () => void; disabled?: boolean; checked?: boolean; icon?: ReactNode }
+  | { id: string; label: string; run: () => void; disabled?: boolean; checked?: boolean; icon?: ReactNode; /** A line under the label, read as the item's description. */ detail?: string }
   | { id: string; label: string; submenu: MenuEntry[] }
   | { id: string; section: string; items: MenuEntry[] }
   | "separator";
@@ -63,7 +63,18 @@ export function MenuEntries({ entries, onClose }: { entries: readonly MenuEntry[
               </span>
             )}
             {entry.icon}
-            <span className="grow truncate">{entry.label}</span>
+            {entry.detail === undefined || entry.detail === "" ? (
+              <span className="grow truncate">{entry.label}</span>
+            ) : (
+              <span className="grow menuText">
+                <Text slot="label" className="truncate">
+                  {entry.label}
+                </Text>
+                <Text slot="description" className="menuDetail">
+                  {entry.detail}
+                </Text>
+              </span>
+            )}
           </MenuItem>
         );
       })}

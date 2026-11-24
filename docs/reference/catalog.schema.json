@@ -11724,6 +11724,43 @@
       "exposure": "data",
       "id": "task.search",
       "input": {
+        "$defs": {
+          "ListGrouping": {
+            "description": "What a list's rows are grouped by.",
+            "oneOf": [
+              {
+                "const": "status",
+                "description": "The status, in board order.",
+                "type": "string"
+              },
+              {
+                "const": "priority",
+                "description": "The priority, highest first.",
+                "type": "string"
+              },
+              {
+                "const": "label",
+                "description": "The first label in alphabetical order; tasks without one last.",
+                "type": "string"
+              },
+              {
+                "const": "parent",
+                "description": "The parent task; tasks without one last.",
+                "type": "string"
+              },
+              {
+                "const": "due_week",
+                "description": "The week of the due date, earliest first; tasks without one last.",
+                "type": "string"
+              },
+              {
+                "const": "project",
+                "description": "The project.",
+                "type": "string"
+              }
+            ]
+          }
+        },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "description": "Which tasks to list.",
@@ -11734,6 +11771,17 @@
               "string",
               "null"
             ]
+          },
+          "group_by": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ListGrouping"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Groups the rows: they come group by group (each group sorted by the\nquery's order), and the result names the groups with their counts."
           },
           "include_subprojects": {
             "default": false,
@@ -11979,6 +12027,34 @@
               "id",
               "name",
               "hue"
+            ],
+            "type": "object"
+          },
+          "ListGroup": {
+            "additionalProperties": false,
+            "description": "One group of a grouped list.",
+            "properties": {
+              "count": {
+                "description": "Its tasks.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "The status's or label's colour."
+              },
+              "title": {
+                "description": "The parent's title or the project's name, for grouping by parent or\nby project.",
+                "type": "string"
+              },
+              "value": {
+                "description": "What its tasks share: the status, label or project name, the\npriority (`urgent` … `none`), the parent's key, or the first day of\nthe due week (`YYYY-MM-DD`); left out for the tasks without one.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "count"
             ],
             "type": "object"
           },
@@ -12257,6 +12333,13 @@
         "additionalProperties": false,
         "description": "One page of matching tasks.",
         "properties": {
+          "groups": {
+            "description": "With `group_by`: the groups, in the order the rows come.",
+            "items": {
+              "$ref": "#/$defs/ListGroup"
+            },
+            "type": "array"
+          },
           "items": {
             "description": "The tasks of this page, in order.",
             "items": {
@@ -34154,6 +34237,191 @@
       "output_name": "ViewChange",
       "safety": "write",
       "summary": "Delete a saved view; it can be brought back with revert."
+    },
+    {
+      "app_reason": "It holds how the person's own list screen looks (the order and widths of its columns), not the workspace's data; agents and scripts choose columns in saved views.",
+      "exposure": "app",
+      "id": "list.layout.get",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Which list layout to read.",
+        "properties": {
+          "project": {
+            "description": "The project (key or ID); left out: the list of the whole workspace.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "ListLayoutGetInput",
+        "type": "object"
+      },
+      "input_name": "ListLayoutGetInput",
+      "kind": "query",
+      "output": {
+        "$defs": {
+          "ListLayout": {
+            "additionalProperties": false,
+            "description": "The person's own layout of a list: the order of its columns and their\nwidths, kept per project (and once for the whole workspace's list).\nUnlike saved views it belongs to the person, not to the workspace.",
+            "properties": {
+              "columns": {
+                "default": [],
+                "description": "The columns shown, in order; empty: the list's own choice.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "widths": {
+                "additionalProperties": {
+                  "format": "uint32",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "default": {},
+                "description": "Column widths in pixels, by column; the columns left out keep their\ndefault width.",
+                "type": "object"
+              }
+            },
+            "required": [
+              "columns",
+              "widths"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A list layout, after a change or as read.",
+        "properties": {
+          "group": {
+            "description": "The history group; left out when nothing changed.",
+            "type": "string"
+          },
+          "layout": {
+            "$ref": "#/$defs/ListLayout",
+            "description": "The layout."
+          },
+          "project": {
+            "description": "The project's key; left out for the list of the whole workspace.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "layout"
+        ],
+        "title": "ListLayoutChange",
+        "type": "object"
+      },
+      "output_name": "ListLayoutChange",
+      "safety": "read",
+      "summary": "The person's layout of a project's list, or of the whole workspace's: column order and widths."
+    },
+    {
+      "app_reason": "It changes how the person's own list screen looks (the order and widths of its columns), not the workspace's data; agents and scripts choose columns in saved views.",
+      "exposure": "app",
+      "id": "list.layout.update",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Changes to a list layout; fields left out keep their value.",
+        "properties": {
+          "columns": {
+            "description": "The columns shown, in order (machine names such as `due`); empty:\nthe list's own choice.",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "project": {
+            "description": "The project (key or ID); left out: the list of the whole workspace.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reset": {
+            "description": "Go back to the default layout first.",
+            "type": "boolean"
+          },
+          "widths": {
+            "additionalProperties": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "description": "Widths to set, in pixels (40 to 1200), by column; the others keep\ntheirs.",
+            "type": "object"
+          }
+        },
+        "title": "ListLayoutUpdateInput",
+        "type": "object"
+      },
+      "input_name": "ListLayoutUpdateInput",
+      "kind": "command",
+      "output": {
+        "$defs": {
+          "ListLayout": {
+            "additionalProperties": false,
+            "description": "The person's own layout of a list: the order of its columns and their\nwidths, kept per project (and once for the whole workspace's list).\nUnlike saved views it belongs to the person, not to the workspace.",
+            "properties": {
+              "columns": {
+                "default": [],
+                "description": "The columns shown, in order; empty: the list's own choice.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "widths": {
+                "additionalProperties": {
+                  "format": "uint32",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "default": {},
+                "description": "Column widths in pixels, by column; the columns left out keep their\ndefault width.",
+                "type": "object"
+              }
+            },
+            "required": [
+              "columns",
+              "widths"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A list layout, after a change or as read.",
+        "properties": {
+          "group": {
+            "description": "The history group; left out when nothing changed.",
+            "type": "string"
+          },
+          "layout": {
+            "$ref": "#/$defs/ListLayout",
+            "description": "The layout."
+          },
+          "project": {
+            "description": "The project's key; left out for the list of the whole workspace.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "layout"
+        ],
+        "title": "ListLayoutChange",
+        "type": "object"
+      },
+      "output_name": "ListLayoutChange",
+      "safety": "write",
+      "summary": "Reorder the columns of a list or change their widths, or go back to the default layout."
     },
     {
       "app_reason": "It serves the app's query field as the person types; agents and scripts run queries with task.search, which reports the same mistakes.",

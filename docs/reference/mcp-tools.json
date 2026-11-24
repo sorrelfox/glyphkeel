@@ -4221,6 +4221,41 @@
             "description": "The `next_cursor` of the page before.",
             "type": "string"
           },
+          "group_by": {
+            "description": "Groups the rows: they come group by group (each group sorted by the\nquery's order), and the result names the groups with their counts.",
+            "oneOf": [
+              {
+                "const": "status",
+                "description": "The status, in board order.",
+                "type": "string"
+              },
+              {
+                "const": "priority",
+                "description": "The priority, highest first.",
+                "type": "string"
+              },
+              {
+                "const": "label",
+                "description": "The first label in alphabetical order; tasks without one last.",
+                "type": "string"
+              },
+              {
+                "const": "parent",
+                "description": "The parent task; tasks without one last.",
+                "type": "string"
+              },
+              {
+                "const": "due_week",
+                "description": "The week of the due date, earliest first; tasks without one last.",
+                "type": "string"
+              },
+              {
+                "const": "project",
+                "description": "The project.",
+                "type": "string"
+              }
+            ]
+          },
           "include_subprojects": {
             "default": false,
             "description": "With `project`: its sub-projects' tasks too.",
@@ -4253,6 +4288,83 @@
         "additionalProperties": false,
         "description": "One page of matching tasks.",
         "properties": {
+          "groups": {
+            "description": "With `group_by`: the groups, in the order the rows come.",
+            "items": {
+              "additionalProperties": false,
+              "description": "One group of a grouped list.",
+              "properties": {
+                "count": {
+                  "description": "Its tasks.",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "hue": {
+                  "description": "The status's or label's colour.",
+                  "oneOf": [
+                    {
+                      "const": "red",
+                      "description": "Red.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "orange",
+                      "description": "Orange.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "yellow",
+                      "description": "Yellow.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "green",
+                      "description": "Green.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "teal",
+                      "description": "Teal.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "blue",
+                      "description": "Blue.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "purple",
+                      "description": "Purple.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "pink",
+                      "description": "Pink.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "grey",
+                      "description": "Grey.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "title": {
+                  "description": "The parent's title or the project's name, for grouping by parent or\nby project.",
+                  "type": "string"
+                },
+                "value": {
+                  "description": "What its tasks share: the status, label or project name, the\npriority (`urgent` … `none`), the parent's key, or the first day of\nthe due week (`YYYY-MM-DD`); left out for the tasks without one.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "count"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
           "items": {
             "description": "The tasks of this page, in order.",
             "items": {

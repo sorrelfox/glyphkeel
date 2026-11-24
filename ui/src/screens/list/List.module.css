@@ -218,6 +218,111 @@
   flex-direction: row-reverse;
 }
 
+/* Headers: dragged to another place, resized at their end edge. */
+.th {
+  position: relative;
+  min-width: 0;
+  align-self: stretch;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.headLabel:focus-visible,
+.sortButton:focus-visible {
+  outline: var(--focus-w) solid var(--focus);
+  outline-offset: 1px;
+  border-radius: var(--r-s);
+}
+
+.dragging {
+  opacity: 0.5;
+  cursor: grabbing;
+}
+
+.dropBefore {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.dropAfter {
+  box-shadow: inset -2px 0 0 var(--accent);
+}
+
+/* The edge to drag: wider than it looks, half in the column gap. */
+.resizer {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: -8px;
+  z-index: 1;
+  inline-size: 10px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.resizer::after {
+  content: "";
+  position: absolute;
+  inset-block: 6px;
+  inset-inline-start: 4px;
+  inline-size: 2px;
+  background: transparent;
+}
+
+.resizer:focus-visible {
+  outline: none;
+}
+
+.resizer:focus-visible::after {
+  background: var(--focus);
+}
+
+.th:hover .resizer:not(:focus-visible)::after {
+  background: var(--border-strong);
+}
+
+/* The place of a sort key when there are several. */
+.sortPosition {
+  font-size: var(--fs-small);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A group's header row: chevron, colour, name and count; it collapses its rows. */
+.groupRow {
+  display: flex;
+  align-items: center;
+}
+
+.groupRow:hover {
+  background: var(--bg);
+}
+
+.groupCell {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.groupButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-inline-size: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.groupButton:focus-visible {
+  outline: var(--focus-w) solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--r-s);
+}
+
 .title {
   display: flex;
   align-items: center;

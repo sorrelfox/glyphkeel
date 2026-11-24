@@ -6,7 +6,7 @@
 
 import { useInfiniteQuery, type InfiniteData } from "@tanstack/react-query";
 
-import { type ActivityEntry, type ActivityPage, type TaskPart } from "../generated/ops";
+import { type ActivityEntry, type ActivityPage, type ActorKind, type TaskPart } from "../generated/ops";
 import { useCall, useOp } from "./hooks";
 import { opPrefix } from "./queries";
 import { type OpFailure } from "./transport";
@@ -30,13 +30,15 @@ export const HISTORY_PAGE = 100;
 /**
  * A task's history, newest first: the activity log filtered by the engine to
  * the task (its fields and description, its comments, files and links), a
- * page at a time. Refreshed with the activity log.
+ * page at a time, of everyone's changes or of people's or agents' only.
+ * Refreshed with the activity log.
  */
-export function useTaskHistory(task: string, enabled: boolean) {
+export function useTaskHistory(task: string, enabled: boolean, actor?: ActorKind) {
   const call = useCall();
+  const who = actor === undefined ? {} : { actor_kind: actor };
   return useInfiniteQuery<ActivityPage, OpFailure, InfiniteData<ActivityPage>, readonly unknown[], string | undefined>({
-    queryKey: [...opPrefix("history.feed"), { task, pages: HISTORY_PAGE }],
-    queryFn: ({ pageParam }) => call("history.feed", { task, limit: HISTORY_PAGE, ...(pageParam === undefined ? {} : { cursor: pageParam }) }),
+    queryKey: [...opPrefix("history.feed"), { task, pages: HISTORY_PAGE, ...who }],
+    queryFn: ({ pageParam }) => call("history.feed", { task, limit: HISTORY_PAGE, ...who, ...(pageParam === undefined ? {} : { cursor: pageParam }) }),
     initialPageParam: undefined,
     getNextPageParam: (page) => page.next_cursor,
     enabled,

@@ -74,6 +74,21 @@
   background: transparent;
 }
 
+/* An item with a description under its label. */
+.menuText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding-block: 4px;
+}
+
+.menuDetail {
+  max-inline-size: 40ch;
+  color: var(--fg-muted);
+  font-size: var(--fs-small);
+  white-space: normal;
+}
+
 .menuSeparator {
   margin: 4px 8px;
   border: 0;

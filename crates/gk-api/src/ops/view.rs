@@ -8,6 +8,8 @@
 //!
 //! Views belong to the workspace and everyone using it sees them.
 
+use std::collections::BTreeMap;
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -221,6 +223,64 @@ pub struct ViewChange {
     pub group: Option<String>,
 }
 
+/// The person's own layout of a list: the order of its columns and their
+/// widths, kept per project (and once for the whole workspace's list).
+/// Unlike saved views it belongs to the person, not to the workspace.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ListLayout {
+    /// The columns shown, in order; empty: the list's own choice.
+    #[serde(default)]
+    pub columns: Vec<String>,
+    /// Column widths in pixels, by column; the columns left out keep their
+    /// default width.
+    #[serde(default)]
+    pub widths: BTreeMap<String, u32>,
+}
+
+/// Which list layout to read.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ListLayoutGetInput {
+    /// The project (key or ID); left out: the list of the whole workspace.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
+}
+
+/// Changes to a list layout; fields left out keep their value.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ListLayoutUpdateInput {
+    /// The project (key or ID); left out: the list of the whole workspace.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
+    /// Go back to the default layout first.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub reset: bool,
+    /// The columns shown, in order (machine names such as `due`); empty:
+    /// the list's own choice.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub columns: Option<Vec<String>>,
+    /// Widths to set, in pixels (40 to 1200), by column; the others keep
+    /// theirs.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub widths: BTreeMap<String, u32>,
+}
+
+/// A list layout, after a change or as read.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ListLayoutChange {
+    /// The project's key; left out for the list of the whole workspace.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
+    /// The layout.
+    pub layout: ListLayout,
+    /// The history group; left out when nothing changed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
+}
+
 op!(
     /// Saved views.
     ViewListOp,
@@ -249,6 +309,45 @@ op!(
     ViewDeleteInput,
     ViewChange
 );
+
+op!(
+    /// The person's layout of a list.
+    ListLayoutGet,
+    "list.layout.get",
+    ListLayoutGetInput,
+    ListLayoutChange
+);
+op!(
+    /// Changes the person's layout of a list.
+    ListLayoutUpdate,
+    "list.layout.update",
+    ListLayoutUpdateInput,
+    ListLayoutChange
+);
+
+pub(crate) const LIST_LAYOUT_GET: OpDescriptor = OpDescriptor::of::<ListLayoutGet>(Meta {
+    summary: "The person's layout of a project's list, or of the whole workspace's: column order and widths.",
+    kind: OpKind::Query,
+    safety: Safety::Read,
+    exposure: Exposure::App {
+        reason: "It holds how the person's own list screen looks (the order and widths of its columns), not the workspace's data; agents and scripts choose columns in saved views.",
+    },
+    cli: None,
+    input_name: "ListLayoutGetInput",
+    output_name: "ListLayoutChange",
+});
+
+pub(crate) const LIST_LAYOUT_UPDATE: OpDescriptor = OpDescriptor::of::<ListLayoutUpdate>(Meta {
+    summary: "Reorder the columns of a list or change their widths, or go back to the default layout.",
+    kind: OpKind::Command,
+    safety: Safety::Write,
+    exposure: Exposure::App {
+        reason: "It changes how the person's own list screen looks (the order and widths of its columns), not the workspace's data; agents and scripts choose columns in saved views.",
+    },
+    cli: None,
+    input_name: "ListLayoutUpdateInput",
+    output_name: "ListLayoutChange",
+});
 
 pub(crate) const VIEW_LIST: OpDescriptor = OpDescriptor::of::<ViewListOp>(Meta {
     summary: "The saved views of a project or of the whole workspace: name, query, columns, order, grouping, totals and which is the default.",
