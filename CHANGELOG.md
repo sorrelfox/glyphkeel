@@ -5,6 +5,43 @@ Conventional Commits, and versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.0.8] - 2026-11-24
+
+Ready for others: translation, preferences, packages and lower memory use.
+
+### Features
+
+- **Translation:** every message from the app, the engine, the command line
+  and the agent server comes from translation files, with plurals and
+  placeholders. Layout follows the writing direction.
+- **Preferences:** Language, Notifications, a searchable Keyboard shortcuts
+  page, and Agents & CLI, which shows whether the command is installed,
+  offers to link it, gives set-up snippets for common MCP clients, lists
+  agent sessions with a way to revert one, and shows the agent limits.
+  The backup folder can be moved. Raising the agent limit asks first.
+- **First run:** a short introduction, usable from the keyboard and
+  skippable, appears after a workspace is created.
+- **Activity:** filters by project, by people or agents, and by date run in
+  the engine.
+- **Command line:** `glyphkeel workspace` replaces `glyphkeel status`, which
+  keeps working for one version.
+- **Packages:** the deb and rpm carry the app and the command, shell
+  completions, the man page, a desktop file, AppStream metadata and an icon.
+  A Flatpak manifest is added.
+
+### Fixes and changes
+
+- Agents may create at most 500 tasks a day per session. An agent change
+  touching more than 50 items takes a backup first and is refused if the
+  backup fails. Wiki pages can't be changed while the wiki is switched off.
+- Search pages no longer skip or repeat results when items change between
+  pages.
+- Deeply nested Markdown no longer crashes an import.
+- Lower memory use: the board fetches closed cards only after "Show older",
+  and the app returns freed memory to the system.
+- The window no longer stays blank when the system locale is C or POSIX.
+- Esc after choosing from a list inside a dialog now closes the dialog.
+
 ## [0.0.7] - 2026-11-24
 
 History and safety: a trash, backups, archives and a feed of every change.
