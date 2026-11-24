@@ -71,6 +71,11 @@
   </supports>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.1.0" date="2026-11-24">
+      <description>
+        <p>First public release: tasks on a board and in a list, a query language and saved views, search, wiki, time tracking, trash, backups, export and import, an activity feed, and a command line and agent server.</p>
+      </description>
+    </release>
     <release version="0.0.7" date="2026-11-24">
       <description>
         <p>Early development build: activity feed, trash, backups, and export and import.</p>

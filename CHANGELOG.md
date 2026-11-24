@@ -5,6 +5,40 @@ Conventional Commits, and versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-24
+
+First public release.
+
+### Features
+
+- **List:** group by status, priority, label, parent, due week or project,
+  with an add-task row per group and folded groups remembered; several
+  sort keys with Shift-click; columns can be moved and resized and are
+  kept per project.
+- **Views:** saved views show their descriptions, and renaming a status,
+  type, label or project key updates the saved queries that use it.
+- **Drafts:** unsent descriptions and comments are kept and offered back
+  after a crash or restart.
+- **Comments:** link to a comment as `TM-41#c-…` and quote a comment in a
+  reply.
+- **History:** a task's history can show everyone, only people or only
+  agents.
+- **Agents:** the limits on each agent session are settings, with no
+  daily task limit by default. An agent server started with `--project`
+  sees and changes only that project and its sub-projects.
+- **Desktop:** start when you log in, and a safe rendering switch for
+  graphics drivers that misbehave.
+- **Packages:** a Flatpak bundle is built with each release.
+
+### Fixes and changes
+
+- A failed workspace upgrade puts back the backup taken just before it.
+- Keyboard: Ctrl+1 and Ctrl+2 switch views, focus stays in the list after
+  a query, and cards in long board lanes can be moved with the keyboard.
+- Long values in the activity log are cut at 500 characters.
+- Memory settings for the allocator and the web view are applied at
+  start, without unsafe code.
+
 ## [0.0.8] - 2026-11-24
 
 Ready for others: translation, preferences, packages and lower memory use.
