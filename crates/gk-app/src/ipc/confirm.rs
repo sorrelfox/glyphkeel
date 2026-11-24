@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-//! The native confirmation of `permanent` operations.
+//! The native confirmation of `permanent` operations, and of raising the
+//! most an agent may do.
 //!
 //! The engine asks inside the call, before the transaction, and the call
 //! waits for the answer. The dialog is GTK's own, shown by Rust over the
@@ -53,6 +54,16 @@ pub(crate) fn wording(op: &str, summary: &str, input: &Value) -> Wording {
             text("confirm-backup-delete", &[("name", name())]),
             "confirm-delete",
         ),
+        "agent.policy.update" => {
+            let profile = input
+                .get("max_profile")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            (
+                text(&format!("confirm-agent-raise-{profile}"), &[]),
+                "confirm-agent-raise",
+            )
+        }
         "backup.restore" => (
             text("confirm-backup-restore", &[("name", name())]),
             "confirm-restore",
@@ -62,8 +73,13 @@ pub(crate) fn wording(op: &str, summary: &str, input: &Value) -> Wording {
             "confirm-continue",
         ),
     };
+    let title = if op == "agent.policy.update" {
+        "confirm-agent-raise-title"
+    } else {
+        "confirm-title"
+    };
     Wording {
-        title: text("confirm-title", &[]),
+        title: text(title, &[]),
         body,
         accept: text(accept, &[]),
         cancel: text("confirm-cancel", &[]),
@@ -165,5 +181,19 @@ mod tests {
         assert_eq!(other.body, "Delete a label.");
         assert_eq!(other.title, "This can't be undone");
         assert_eq!(other.cancel, "_Cancel");
+    }
+
+    #[test]
+    fn raising_what_agents_may_do_says_what_they_could_then_do() {
+        let full = wording("agent.policy.update", "", &json!({ "max_profile": "full" }));
+        assert!(full.body.contains("deleting for good"), "{full:?}");
+        assert_eq!(full.title, "Let agents do more?");
+        assert_eq!(full.accept, "_Allow");
+        let standard = wording(
+            "agent.policy.update",
+            "",
+            &json!({ "max_profile": "standard" }),
+        );
+        assert!(standard.body.contains("change tasks"), "{standard:?}");
     }
 }

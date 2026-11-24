@@ -13,16 +13,22 @@
    narrow window, and the list of pages must stay. */
 .pages {
   display: flex;
-  flex: 0 0 224px;
+  flex: 0 1 auto;
+  min-inline-size: 180px;
+  max-inline-size: 34%;
   flex-direction: column;
   gap: 1px;
   padding: 8px;
-  border-right: 1px solid var(--border);
+  border-inline-end: 1px solid var(--border);
   background: var(--sidebar);
 }
 
+/* A long page name wraps rather than widening the list past a third. */
 .pages > * {
-  white-space: nowrap;
+  block-size: auto;
+  min-block-size: var(--h-row);
+  padding-block: 6px;
+  overflow-wrap: anywhere;
 }
 
 .page {
@@ -92,7 +98,7 @@
   gap: 8px;
   min-width: 0;
   max-width: 100%;
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 
 /* A segmented control wider than the row breaks onto a second line. */
@@ -171,7 +177,7 @@
 }
 
 .number input {
-  text-align: right;
+  text-align: end;
 }
 
 .time {
@@ -248,7 +254,7 @@
 
 .previewSide {
   flex: 0 0 28%;
-  border-right: 1px solid var(--border);
+  border-inline-end: 1px solid var(--border);
   background: var(--sidebar);
 }
 
@@ -364,4 +370,89 @@
   font-family: var(--font-mono);
   color: var(--fg);
   background: var(--hover);
+}
+
+/* ---------- Agents & CLI ---------- */
+
+/* A set-up snippet: where it goes, then the text with its Copy button. */
+.snippetBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-block: 4px 12px;
+  padding-inline: 14px;
+}
+
+.snippetWhere {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-small);
+  overflow-wrap: anywhere;
+}
+
+.snippet {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--gap);
+}
+
+.snippetText {
+  flex: 1 1 0;
+  min-inline-size: 0;
+  margin: 0;
+  padding-block: 8px;
+  padding-inline: 10px;
+  overflow-x: auto;
+  border-radius: var(--r-m);
+  background: var(--sunken);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  white-space: pre;
+}
+
+.session {
+  display: flex;
+  flex-direction: column;
+}
+
+.sessionConfirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  margin-block: 0 10px;
+  margin-inline: 14px;
+  padding: 8px;
+  border-radius: var(--r-m);
+  background: var(--sunken);
+}
+
+.sessionConfirm p {
+  margin: 0;
+}
+
+.sessionButtons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--gap);
+}
+
+/* ---------- Shortcuts ---------- */
+
+.shortcutSearch {
+  inline-size: 280px;
+  max-inline-size: 100%;
+}
+
+.shortcutKeys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.empty {
+  margin: 0;
+  padding-block: 8px;
+  padding-inline: 14px;
+  color: var(--fg-muted);
 }

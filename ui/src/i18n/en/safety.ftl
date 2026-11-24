@@ -125,6 +125,11 @@ activity-entity-other = Item
 backups-title = Backups
 backups-about = A backup is a checked copy of the database and the stored files. The app makes one every day and keeps the recent ones.
 backups-folder = Backup folder
+backups-folder-about = Where backups are made from now on. Backups made before stay where they are.
+backups-folder-change = Change…
+backups-folder-default = Use default
+backups-folder-changed = Backups go to the new folder from now on.
+backups-folder-old-stay = Backups made before stay in the old folder.
 backups-last = Last backup
 backups-never = None yet
 backups-now-about = Make a backup of the workspace now.
@@ -243,3 +248,5 @@ project-deleted = { $subprojects ->
        *[other] { $tasks } tasks
     }
 }
+project-delete-title = Delete { $name }
+project-export = Export…

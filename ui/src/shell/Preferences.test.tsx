@@ -167,7 +167,7 @@ describe("time zone", () => {
 
 describe("reminders and background", () => {
   it("keeps the app's own switches, outside the app in the page's storage", async () => {
-    setUp({ page: "reminders" });
+    setUp({ page: "notifications" });
     const background = await screen.findByRole("switch", { name: "Keep running in the background" });
     await waitFor(() => {
       expect((background as HTMLInputElement).disabled).toBe(false);
@@ -185,7 +185,7 @@ describe("reminders and background", () => {
   });
 
   it("changes the time of due-date reminders", async () => {
-    const { engine } = setUp({ page: "reminders" });
+    const { engine } = setUp({ page: "notifications" });
     const time = await screen.findByLabelText("Reminders for due dates at");
     fireEvent.change(time, { target: { value: "08:30" } });
     fireEvent.blur(time);

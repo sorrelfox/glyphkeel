@@ -13,9 +13,9 @@ import { Segmented } from "../../components/Segmented";
 import { Select } from "../../components/Select";
 import { useToasts } from "../../components/Toasts";
 import { useCall, useOp } from "../../data/hooks";
-import { useActivityFeed, useFailureToast } from "../../data/safety";
+import { useActivityFeed, useFailureToast, type FeedRequest, skippedReason } from "../../data/safety";
 import { revertible } from "../../data/task";
-import { dayIn, useTimeZone } from "../../data/zone";
+import { dayIn, momentFrom, useTimeZone } from "../../data/zone";
 import { type ActivityEntry, type ActorKind, type ProjectSummary } from "../../generated/ops";
 import { useT, type Translate } from "../../i18n/I18n";
 import { useMomentFormat } from "../task/Activity";
@@ -29,6 +29,51 @@ export interface FeedFilter {
   /** First and last day, `YYYY-MM-DD`, in the workspace's zone. */
   from?: string | undefined;
   to?: string | undefined;
+}
+
+/**
+ * Whether the engine's activity read takes the screen's filters. The
+ * generated client of this build doesn't have them yet, so the page
+ * filters; switching over is this one constant.
+ */
+const ENGINE_FILTERS = false;
+
+/** The filters as the engine's activity read takes them: an actor kind, a project (with its sub-projects) and a range of moments. */
+export interface EngineFeedFilters {
+  actor_kind?: ActorKind;
+  project?: string;
+  /** The first moment, RFC 3339. */
+  from?: string;
+  /** The moment the range ends (the start of the day after the last), RFC 3339. */
+  to?: string;
+}
+
+/** The screen's filter as the engine's read takes it; days become moments in the person's zone. */
+export function engineFilters(filter: FeedFilter, zone: string | undefined): EngineFeedFilters {
+  const startOf = (day: string) => new Date(momentFrom(`${day}T00:00`, zone)).toISOString();
+  const dayAfter = (day: string) => {
+    const next = new Date(`${day}T12:00:00Z`);
+    next.setUTCDate(next.getUTCDate() + 1);
+    return next.toISOString().slice(0, 10);
+  };
+  return {
+    ...(filter.actor === undefined ? {} : { actor_kind: filter.actor }),
+    ...(filter.project === undefined ? {} : { project: filter.project }),
+    ...(filter.from === undefined ? {} : { from: startOf(filter.from) }),
+    ...(filter.to === undefined ? {} : { to: startOf(dayAfter(filter.to)) }),
+  };
+}
+
+/**
+ * Splits the filter into what the engine's activity read applies and what
+ * the page still applies to the entries it reads.
+ */
+export function feedRequest(filter: FeedFilter, zone: string | undefined, engine: boolean = ENGINE_FILTERS): { request: FeedRequest; inPage: FeedFilter } {
+  if (engine) {
+    // The page's project filter is exact; the engine's includes sub-projects, as the screen means.
+    return { request: engineFilters(filter, zone) as FeedRequest, inPage: {} };
+  }
+  return { request: {}, inPage: filter };
 }
 
 /** Whether an entry passes the filter; `day` is its day in the workspace's zone. */
@@ -91,7 +136,6 @@ export function ActivityScreen() {
   const t = useT();
   const zone = useTimeZone();
   const projects = useOp("project.list", { include_archived: true });
-  const feed = useActivityFeed();
   const [project, setProject] = useState<string>(ALL);
   const [actor, setActor] = useState<ActorChoice>(ALL);
   const [from, setFrom] = useState("");
@@ -102,11 +146,13 @@ export function ActivityScreen() {
     from: from === "" ? undefined : from,
     to: to === "" ? undefined : to,
   };
+  const { request, inPage } = feedRequest(filter, zone);
+  const feed = useActivityFeed(request);
   const loaded = feed.data?.pages.flatMap((page) => page.items) ?? [];
-  const rows = loaded.filter((entry) => passes(entry, dayIn(new Date(entry.at), zone), filter));
+  const rows = loaded.filter((entry) => passes(entry, dayIn(new Date(entry.at), zone), inPage));
   const oldest = loaded.at(-1);
   // Newest first: once the log reaches back before the first day, older pages can't match.
-  const pastRange = filter.from !== undefined && oldest !== undefined && dayIn(new Date(oldest.at), zone) < filter.from;
+  const pastRange = inPage.from !== undefined && oldest !== undefined && dayIn(new Date(oldest.at), zone) < inPage.from;
   const canLoad = feed.hasNextPage && !feed.isFetchingNextPage && !pastRange;
   const byId = new Map((projects.data?.items ?? []).map((each) => [each.id, each]));
 
@@ -247,7 +293,7 @@ function FeedRow({
   const revert = () => {
     call("history.revert", { groups: [entry.group] }).then((result) => {
       const skipped = result.skipped[0];
-      toasts.show(skipped ? { tone: "error", text: t("history-not-reverted"), detail: skipped.reason } : { tone: "info", text: t("history-reverted-toast") });
+      toasts.show(skipped ? { tone: "error", text: t("history-not-reverted"), detail: skippedReason(t, skipped) } : { tone: "info", text: t("history-reverted-toast") });
     }, fail);
   };
   return (

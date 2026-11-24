@@ -58,3 +58,26 @@ export function importArchive(call: Call, source: ImportSource, dryRun: boolean,
   }
   return call("transfer.import", { path: source.path, dry_run: dryRun, keys: [...keys] });
 }
+
+/**
+ * The engine's operation that sets the folder backups go to. It came after
+ * this copy of the generated client, so it is named here; once the client
+ * has it, these two functions call it by its type.
+ */
+const BACKUP_FOLDER_OP = "backup.folder.update";
+
+/** Lets the person choose the backup folder in the native chooser; false when they cancelled. Only in the app. */
+export async function chooseBackupFolder(): Promise<boolean> {
+  return (await command<unknown>("choose_backup_folder", {})) !== null;
+}
+
+/** Sends backups to the default folder again. */
+export async function resetBackupFolder(call: Call): Promise<void> {
+  await (call as unknown as (op: string, input: Record<string, never>) => Promise<unknown>)(BACKUP_FOLDER_OP, {});
+}
+
+/** The chosen backup folder in the workspace's settings; absent while the default is used. */
+export function chosenBackupFolder(settings: object | undefined): string | undefined {
+  const folder = (settings as { backup_folder?: unknown } | undefined)?.backup_folder;
+  return typeof folder === "string" && folder !== "" ? folder : undefined;
+}

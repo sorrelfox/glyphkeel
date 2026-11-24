@@ -23,6 +23,7 @@ import { TrashScreen } from "./screens/safety/TrashScreen";
 import { QuickAdd } from "./screens/quick-add/QuickAdd";
 import { SearchScreen, searchParams } from "./screens/search/SearchScreen";
 import { TodayScreen } from "./screens/today/TodayScreen";
+import { offersFirstRun } from "./shell/FirstRun";
 import { Shell } from "./shell/Shell";
 import { StartupFailure } from "./shell/StartupFailure";
 import { type StartData } from "./start";
@@ -176,7 +177,8 @@ function ShellScreen() {
   const navigate = useNavigate();
   // Links handed to the running app open their task here, in the main window.
   useEffect(() => onOpenLink((key) => void navigate({ to: "/open/$key", params: { key } })), [navigate]);
-  return <Shell titleBar={start.titleBar} openGallery={import.meta.env.DEV ? () => void navigate({ to: GALLERY_PATH }) : undefined} />;
+  const [firstRun] = useState(() => offersFirstRun(start));
+  return <Shell titleBar={start.titleBar} firstRun={firstRun} openGallery={import.meta.env.DEV ? () => void navigate({ to: GALLERY_PATH }) : undefined} />;
 }
 
 function GalleryScreen() {

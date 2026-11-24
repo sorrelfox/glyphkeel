@@ -8,8 +8,8 @@ import { useInfiniteQuery, useQueryClient, type InfiniteData } from "@tanstack/r
 import { useLocale } from "react-aria-components";
 
 import { useToasts } from "../components/Toasts";
-import { type ActivityPage, type TrashKind, type TrashList } from "../generated/ops";
-import { useT } from "../i18n/I18n";
+import { type ActivityPage, type ActivityQuery, type TrashKind, type TrashList } from "../generated/ops";
+import { useT, type Translate } from "../i18n/I18n";
 import { errorToast, useCall } from "./hooks";
 import { opPrefix } from "./queries";
 import { OpFailure } from "./transport";
@@ -20,12 +20,29 @@ export const FEED_PAGE = 200;
 /** How many entries of the trash are read at a time. */
 export const TRASH_PAGE = 100;
 
-/** The workspace's activity log, newest first, a page at a time. */
-export function useActivityFeed() {
+/**
+ * Why a revert left a change alone, in the person's language: the engine
+ * names its message (`reason_id`, with `reason_args`); a message the page
+ * doesn't know, or an older engine, falls back to the English `reason`.
+ */
+export function skippedReason(t: Translate, skipped: { reason: string; reason_id?: string; reason_args?: Record<string, unknown> }): string {
+  const id = skipped.reason_id;
+  if (id === undefined || t.has?.(id) !== true) {
+    return skipped.reason;
+  }
+  const args = Object.fromEntries(Object.entries(skipped.reason_args ?? {}).map(([key, value]) => [key, typeof value === "number" ? value : String(value)]));
+  return t(id, args);
+}
+
+/** The feed's request without paging: the filters the engine applies. */
+export type FeedRequest = Omit<ActivityQuery, "cursor" | "limit">;
+
+/** The workspace's activity log, newest first, a page at a time, filtered as `request` asks. */
+export function useActivityFeed(request: FeedRequest = {}) {
   const call = useCall();
   return useInfiniteQuery<ActivityPage, OpFailure, InfiniteData<ActivityPage>, readonly unknown[], string | undefined>({
-    queryKey: [...opPrefix("history.feed"), { feed: FEED_PAGE }],
-    queryFn: ({ pageParam }) => call("history.feed", { limit: FEED_PAGE, ...(pageParam === undefined ? {} : { cursor: pageParam }) }),
+    queryKey: [...opPrefix("history.feed"), { feed: FEED_PAGE, ...request }],
+    queryFn: ({ pageParam }) => call("history.feed", { ...request, limit: FEED_PAGE, ...(pageParam === undefined ? {} : { cursor: pageParam }) }),
     initialPageParam: undefined,
     getNextPageParam: (page) => page.next_cursor,
   });
@@ -124,7 +141,7 @@ export function useTrashTasks(): (keys: readonly string[], onDone?: () => void) 
                     call("history.revert", { groups: [group] }).then((result) => {
                       const skipped = result.skipped[0];
                       if (skipped) {
-                        toasts.show({ tone: "error", text: t("history-not-reverted"), detail: skipped.reason });
+                        toasts.show({ tone: "error", text: t("history-not-reverted"), detail: skippedReason(t, skipped) });
                       }
                     }, fail);
                   },

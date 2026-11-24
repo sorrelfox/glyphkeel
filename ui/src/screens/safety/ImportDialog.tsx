@@ -9,7 +9,7 @@ import { classes } from "../../classes";
 import { Dialog } from "../../components/Dialog";
 import { useToasts } from "../../components/Toasts";
 import { useCall } from "../../data/hooks";
-import { useFailureToast } from "../../data/safety";
+import { useFailureToast, skippedReason } from "../../data/safety";
 import { type ImportResult, type KeyChange } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { chooseImport, choosesFiles, importArchive, type ImportSource } from "../../ipc/transfer";
@@ -90,7 +90,7 @@ export function ImportDialog({ isOpen, onOpenChange }: { isOpen: boolean; onOpen
                     call("history.revert", { groups: [group] }).then((reverted) => {
                       const skipped = reverted.skipped[0];
                       if (skipped) {
-                        toasts.show({ tone: "error", text: t("history-not-reverted"), detail: skipped.reason });
+                        toasts.show({ tone: "error", text: t("history-not-reverted"), detail: skippedReason(t, skipped) });
                       }
                     }, fail);
                   },

@@ -7,6 +7,7 @@ import { Button, Menu, MenuTrigger, Popover, Tab, TabList, TabPanel, Tabs, useLo
 
 import { classes } from "../../classes";
 import { MenuEntries } from "../../components/ContextMenu";
+import { skippedReason } from "../../data/safety";
 import { useToasts } from "../../components/Toasts";
 import { type Project } from "../../data/catalog";
 import { errorToast, useCall, useCommand } from "../../data/hooks";
@@ -340,7 +341,7 @@ function HistoryList({
     call("history.revert", { groups: [group] }).then(
       (result) => {
         const skipped = result.skipped[0];
-        toasts.show(skipped ? { tone: "error", text: t("history-not-reverted"), detail: skipped.reason } : { tone: "info", text: t("history-reverted-toast") });
+        toasts.show(skipped ? { tone: "error", text: t("history-not-reverted"), detail: skippedReason(t, skipped) } : { tone: "info", text: t("history-reverted-toast") });
       },
       (error: unknown) => {
         toasts.show(errorToast(t, error));
@@ -388,8 +389,7 @@ function HistoryList({
                 ),
               )}
               <span className={classes("faint", styles.small)}>
-                {t("history-by", { actor: entry.actor.kind === "user" ? t("comment-me") : entry.actor.name, via: t(`via-${entry.via}`), time: moment(entry.at) })}
-                {entry.reverted_by !== undefined && ` · ${t("history-was-reverted")}`}
+                {t(entry.reverted_by === undefined ? "history-by" : "history-by-reverted", { actor: entry.actor.kind === "user" ? t("comment-me") : entry.actor.name, via: t(`via-${entry.via}`), time: moment(entry.at) })}
               </span>
             </div>
             {first && revertible(entry) && !readOnly && (

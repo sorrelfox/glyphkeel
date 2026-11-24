@@ -23,6 +23,8 @@ interface SidebarProps {
   width: number;
   onNewProject: (request: NewProjectRequest) => void;
   onProjectSettings: (key: string) => void;
+  onExportProject: (key: string) => void;
+  onDeleteProject: (key: string) => void;
 }
 
 /**
@@ -32,7 +34,7 @@ interface SidebarProps {
  * tasks with their counts, the time report, the activity, the project tree, the
  * timer chip while a timer runs, then Trash and Preferences.
  */
-export function Sidebar({ view, project, width, onNewProject, onProjectSettings }: SidebarProps) {
+export function Sidebar({ view, project, width, onNewProject, onProjectSettings, onExportProject, onDeleteProject }: SidebarProps) {
   const t = useT();
   const today = useAction("nav.today");
   const allTasks = useAction("nav.allTasks");
@@ -94,7 +96,7 @@ export function Sidebar({ view, project, width, onNewProject, onProjectSettings 
         </button>
       </div>
       <div className={styles.projectTree}>
-        <ProjectTree current={project} onNewProject={onNewProject} onSettings={onProjectSettings} />
+        <ProjectTree current={project} onNewProject={onNewProject} onSettings={onProjectSettings} onExport={onExportProject} onDelete={onDeleteProject} />
       </div>
 
       <TimerChip />

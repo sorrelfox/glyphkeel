@@ -45,6 +45,9 @@ pub(crate) fn open(
             .try_state::<crate::app_settings::AppSettings>()
             .map(|settings| settings.ui()),
         quick_add: false,
+        first_run: app
+            .try_state::<std::sync::Arc<crate::ipc::Workspace>>()
+            .is_some_and(|workspace| workspace.created()),
     };
 
     let window = page::window(app, LABEL, &start)

@@ -69,6 +69,7 @@ fn create(app: &AppHandle) -> tauri::Result<WebviewWindow> {
         open: None,
         prefs: app.try_state::<AppSettings>().map(|settings| settings.ui()),
         quick_add: true,
+        first_run: false,
     };
     if let Some(state) = app.try_state::<QuickAdd>() {
         state.ready.store(false, Ordering::SeqCst);
