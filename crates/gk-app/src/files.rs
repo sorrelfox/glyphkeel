@@ -291,7 +291,7 @@ pub(crate) async fn attach_files(
     blocking(move || Ok(attach_paths(&workspace, &task, &paths))).await
 }
 
-async fn blocking<T: Send + 'static>(
+pub(crate) async fn blocking<T: Send + 'static>(
     work: impl FnOnce() -> Result<T, OpError> + Send + 'static,
 ) -> Result<T, OpError> {
     tauri::async_runtime::spawn_blocking(work)
@@ -459,7 +459,7 @@ pub(crate) fn on_drag_drop<R: Runtime>(window: &Window<R>, event: &DragDropEvent
 // ---------- opening and saving ----------
 
 /// The last part of a stored file name, safe as a file name of its own.
-fn safe_name(name: &str) -> String {
+pub(crate) fn safe_name(name: &str) -> String {
     let base = Path::new(name)
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
@@ -572,7 +572,7 @@ pub(crate) async fn save_export(
 // ---------- the platform's dialogs and launcher ----------
 
 #[cfg(target_os = "linux")]
-mod dialog {
+pub(crate) mod dialog {
     use std::cell::RefCell;
     use std::path::PathBuf;
 
@@ -581,19 +581,18 @@ mod dialog {
     use gtk::{FileChooserAction, FileChooserNative, ResponseType};
     use tauri::WebviewWindow;
 
-    // The dialogs' text is English until the Rust side reads the message
-    // files the page uses.
-    const ATTACH_TITLE: &str = "Attach files";
-    const ATTACH: &str = "_Attach";
-    const SAVE_TITLE: &str = "Save a copy";
-    const SAVE: &str = "_Save";
-    const CANCEL: &str = "_Cancel";
+    use crate::messages::text;
 
     pub(crate) enum Mode {
         /// Choose files to read.
         Open,
         /// Choose where to write, starting with this name.
         Save(String),
+        /// Choose where to write an export archive (a `.zip` file, or a new
+        /// folder when `folder`), starting with this name.
+        Export { name: String, folder: bool },
+        /// Choose an archive to import: a `.zip` file, or a folder.
+        Import { folder: bool },
     }
 
     /// Shows GTK's native file chooser (the desktop portal's, where there is
@@ -612,24 +611,69 @@ mod dialog {
 
     fn show(window: &WebviewWindow, mode: Mode, answer: std::sync::mpsc::Sender<Vec<PathBuf>>) {
         let parent = window.gtk_window().ok();
-        let (title, accept, action) = match mode {
-            Mode::Open => (ATTACH_TITLE, ATTACH, FileChooserAction::Open),
-            Mode::Save(_) => (SAVE_TITLE, SAVE, FileChooserAction::Save),
+        let (title, accept, action) = match &mode {
+            Mode::Open => (
+                "chooser-attach-title",
+                "chooser-attach",
+                FileChooserAction::Open,
+            ),
+            Mode::Save(_) => (
+                "chooser-save-title",
+                "chooser-save",
+                FileChooserAction::Save,
+            ),
+            Mode::Export { folder: false, .. } => (
+                "chooser-export-title",
+                "chooser-export",
+                FileChooserAction::Save,
+            ),
+            // A new folder is named like a file; the export creates it.
+            Mode::Export { folder: true, .. } => (
+                "chooser-export-folder-title",
+                "chooser-export",
+                FileChooserAction::Save,
+            ),
+            Mode::Import { folder: false } => (
+                "chooser-import-title",
+                "chooser-import",
+                FileChooserAction::Open,
+            ),
+            Mode::Import { folder: true } => (
+                "chooser-import-folder-title",
+                "chooser-import",
+                FileChooserAction::SelectFolder,
+            ),
         };
         let dialog = FileChooserNative::new(
-            Some(title),
+            Some(&text(title, &[])),
             parent.as_ref(),
             action,
-            Some(accept),
-            Some(CANCEL),
+            Some(&text(accept, &[])),
+            Some(&text("chooser-cancel", &[])),
         );
         dialog.set_modal(true);
+        let zip_filter = || {
+            let filter = gtk::FileFilter::new();
+            filter.set_name(Some(&text("chooser-zip-filter", &[])));
+            filter.add_pattern("*.zip");
+            filter.add_mime_type("application/zip");
+            filter
+        };
         match mode {
             Mode::Open => dialog.set_select_multiple(true),
             Mode::Save(name) => {
                 dialog.set_current_name(&name);
                 dialog.set_do_overwrite_confirmation(true);
             }
+            Mode::Export { name, folder } => {
+                dialog.set_current_name(&name);
+                if !folder {
+                    dialog.add_filter(zip_filter());
+                }
+                dialog.set_do_overwrite_confirmation(true);
+            }
+            Mode::Import { folder: false } => dialog.add_filter(zip_filter()),
+            Mode::Import { folder: true } => {}
         }
         // The dialog lives until it answers; then the answer is sent once.
         let keep = RefCell::new(Some((dialog.clone(), answer)));
@@ -648,7 +692,7 @@ mod dialog {
 }
 
 #[cfg(not(target_os = "linux"))]
-mod dialog {
+pub(crate) mod dialog {
     use std::path::PathBuf;
 
     use gk_api::OpError;
@@ -657,6 +701,8 @@ mod dialog {
     pub(crate) enum Mode {
         Open,
         Save(String),
+        Export { name: String, folder: bool },
+        Import { folder: bool },
     }
 
     pub(crate) async fn choose(

@@ -3226,7 +3226,7 @@ export interface OpMap {
   "backup.list": { input: BackupListInput; output: BackupList; safety: "read"; kind: "query" };
   "backup.verify": { input: BackupRef; output: BackupCheck; safety: "read"; kind: "query" };
   "backup.restore": { input: BackupRef; output: BackupRestored; safety: "app"; kind: "command" };
-  "backup.delete": { input: BackupRef; output: BackupDeleted; safety: "app"; kind: "command" };
+  "backup.delete": { input: BackupRef; output: BackupDeleted; safety: "permanent"; kind: "command" };
   "transfer.export": { input: ExportInput; output: ExportResult; safety: "write"; kind: "command" };
   "transfer.import": { input: ImportInput; output: ImportResult; safety: "write"; kind: "command" };
 }
@@ -3328,7 +3328,7 @@ export const OP_SAFETY = {
   "backup.list": "read",
   "backup.verify": "read",
   "backup.restore": "app",
-  "backup.delete": "app",
+  "backup.delete": "permanent",
   "transfer.export": "write",
   "transfer.import": "write",
 } as const satisfies { [K in OpId]: OpMap[K]["safety"] };
@@ -3354,7 +3354,7 @@ export function makeOps(call: Call) {
       verify: (input: OpMap["backup.verify"]["input"]) => call("backup.verify", input),
       /** Replace the workspace with a backup, after backing up the current state. Other programs with the workspace open must restart. (app) */
       restore: (input: OpMap["backup.restore"]["input"]) => call("backup.restore", input),
-      /** Delete a backup and the stored files only it used. (app) */
+      /** Delete a backup and the stored files only it used. (permanent) */
       delete: (input: OpMap["backup.delete"]["input"]) => call("backup.delete", input),
     },
     board: {

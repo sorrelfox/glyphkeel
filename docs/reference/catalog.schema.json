@@ -38995,7 +38995,7 @@
         "type": "object"
       },
       "output_name": "BackupDeleted",
-      "safety": "app",
+      "safety": "permanent",
       "summary": "Delete a backup and the stored files only it used."
     },
     {

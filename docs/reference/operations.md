@@ -107,7 +107,7 @@ The safety class decides who may run an operation:
 | `backup.list` | read | app, command line, MCP | `list_backups` | `glyphkeel backup list` |
 | `backup.verify` | read | app, command line, MCP | `verify_backup` | `glyphkeel backup verify <name>` |
 | `backup.restore` | app | app, command line | — | `glyphkeel backup restore <name>` |
-| `backup.delete` | app | app, command line | — | `glyphkeel backup delete <name>` |
+| `backup.delete` | permanent | app, command line | — | `glyphkeel backup delete <name>` |
 | `transfer.export` | write | app, command line, MCP | `export_data` | `glyphkeel export` |
 | `transfer.import` | write | app, command line, MCP | `import_data` | `glyphkeel import <path>` |
 

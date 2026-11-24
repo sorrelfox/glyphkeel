@@ -15,6 +15,7 @@ mod instance;
 mod ipc;
 mod links;
 mod main_window;
+mod messages;
 mod navigation;
 #[cfg(target_os = "linux")]
 mod notifications;
@@ -27,6 +28,7 @@ mod spell;
 mod start;
 mod task_window;
 mod title_bar;
+mod transfer;
 #[cfg(target_os = "linux")]
 mod webkit;
 mod window_state;
@@ -81,6 +83,7 @@ fn main() -> ExitCode {
         .manage(app_settings)
         .manage(MainTitleBar(title_bar))
         .manage(quick_add::QuickAdd::default())
+        .manage(Arc::new(transfer::ImportChoices::default()))
         .invoke_handler(tauri::generate_handler![
             start::window_ready,
             ipc::op,
@@ -93,6 +96,9 @@ fn main() -> ExitCode {
             files::open_file,
             files::save_file,
             files::save_export,
+            transfer::export_archive,
+            transfer::choose_import,
+            transfer::import_archive,
             links::open_link,
             open_links::watch_open_links,
             task_window::open_task_window,

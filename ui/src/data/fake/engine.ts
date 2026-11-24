@@ -8,6 +8,7 @@
 
 import {
   type ActivityEntry,
+  type Backup,
   type BulkItem,
   type BulkResult,
   type BulkUpdateInput,
@@ -25,6 +26,7 @@ import {
   type DescriptionSave,
   type Edge,
   type EntityChange,
+  type TrashEntry,
   type FileChange,
   type Hue,
   type Link,
@@ -300,6 +302,20 @@ export class FakeWorkspace {
 
   private keyOf(task: FakeTask): string {
     return `${this.projectOf(task).key}-${String(task.number)}`;
+  }
+
+  private backup(name: string): Backup {
+    const backup = this.state.backups?.find((candidate) => candidate.name === name);
+    if (!backup) {
+      fail("not_found", `There is no backup "${name}".`);
+    }
+    return backup;
+  }
+
+  /** Every subtask under `id`, at any depth. */
+  private subtasksDeep(id: string): FakeTask[] {
+    const children = this.state.tasks.filter((task) => task.parentId === id);
+    return children.flatMap((child) => [child, ...this.subtasksDeep(child.id)]);
   }
 
   private task(key: string): FakeTask {
@@ -1952,6 +1968,102 @@ export class FakeWorkspace {
       comment.editedAt = now;
       comment.version += 1;
       return this.commentChange(comment, ["body"]);
+    },
+    "task.delete": ({ keys }) => {
+      if (keys.length === 0 || keys.length > 500) {
+        fail("invalid", "Name 1 to 500 tasks.");
+      }
+      const at = this.today().toISOString();
+      const purgeAt = new Date(this.today().getTime() + this.state.settings.trash_days * 86_400_000).toISOString();
+      const items: TrashEntry[] = [];
+      const changes: EntityChange[] = [];
+      for (const key of keys) {
+        const task = this.task(key);
+        this.writable(this.projectOf(task).key);
+        const gone = [task, ...this.subtasksDeep(task.id)];
+        const project = this.projectOf(task);
+        const entry: TrashEntry = {
+          contains: gone.length - 1,
+          deleted_at: at,
+          deleted_by: { kind: "user", name: "You" },
+          group: "",
+          id: task.id,
+          key: this.keyOf(task),
+          kind: "task",
+          project: project.key,
+          purge_at: purgeAt,
+          title: task.title,
+        };
+        (this.state.trash ??= []).push({ entry, tasks: gone });
+        this.state.tasks = this.state.tasks.filter((candidate) => !gone.includes(candidate));
+        items.push(entry);
+        changes.push(...gone.map((each) => ({ entity: "task", id: each.id, fields: ["trashed"], project: project.key })));
+      }
+      return { output: { items, total: changes.length }, changes };
+    },
+    "trash.list": ({ kinds, project, limit, cursor }) => {
+      const all = [...(this.state.trash ?? [])]
+        .reverse()
+        .map((deletion) => deletion.entry)
+        .filter((entry) => (kinds === undefined || kinds.length === 0 || kinds.includes(entry.kind)) && (project === null || project === undefined || entry.project === project.toUpperCase()));
+      const start = cursor ? Number(cursor) : 0;
+      const end = start + (limit ?? 50);
+      return { items: all.slice(start, end), total: all.length, trash_days: this.state.settings.trash_days, ...(end < all.length ? { next_cursor: String(end) } : {}) };
+    },
+    "trash.restore": ({ items: ids }) => {
+      const items: TrashEntry[] = [];
+      const changes: EntityChange[] = [];
+      for (const id of ids) {
+        const deletion = this.state.trash?.find((candidate) => candidate.entry.id === id);
+        if (!deletion) {
+          fail("not_found", `There is nothing in the trash with the ID ${id}.`);
+        }
+        const parent = deletion.tasks[0]?.parentId;
+        if (parent !== null && parent !== undefined && !this.state.tasks.some((task) => task.id === parent)) {
+          fail("conflict", "This can't come back on its own: its task is in the trash too.", { hint: "Restore what holds it first; that brings it back too." });
+        }
+        this.state.tasks.push(...deletion.tasks);
+        this.state.trash = (this.state.trash ?? []).filter((candidate) => candidate !== deletion);
+        items.push(deletion.entry);
+        changes.push(...deletion.tasks.map((task) => ({ entity: "task", id: task.id, fields: ["trashed"], project: deletion.entry.project ?? "" })));
+      }
+      return { output: { items, total: changes.length }, changes };
+    },
+    "trash.purge": ({ items: ids, all }) => {
+      const chosen = (this.state.trash ?? []).filter((deletion) => all === true || (ids ?? []).includes(deletion.entry.id));
+      this.state.trash = (this.state.trash ?? []).filter((deletion) => !chosen.includes(deletion));
+      const changes = chosen.flatMap((deletion) => deletion.tasks.map((task) => ({ entity: "task", id: task.id, fields: ["purged"], project: deletion.entry.project ?? "" })));
+      return { output: { items: chosen.map((deletion) => deletion.entry), total: changes.length }, changes };
+    },
+    "backup.list": () => {
+      const items = this.state.backups ?? [];
+      return { folder: "/sample/backups", items, ...some("last_backup_at", items[0]?.created_at) };
+    },
+    "backup.create": () => {
+      const at = this.today();
+      const backup: Backup = {
+        app_version: "0.0.0",
+        created_at: at.toISOString(),
+        files: this.state.files.length,
+        files_size: this.state.files.reduce((sum, file) => sum + file.size, 0),
+        kind: "manual",
+        name: `manual-${at.toISOString().replace(/[:.]/g, "-")}-${String((this.state.backups ?? []).length + 1)}`,
+        schema_version: 1,
+        size: 4096 * (1 + this.state.tasks.length),
+      };
+      this.state.backups = [backup, ...(this.state.backups ?? [])];
+      return backup;
+    },
+    "backup.verify": ({ name }) => ({ backup: this.backup(name), files_checked: this.backup(name).files, ok: true, problems: [] }),
+    "backup.delete": ({ name }) => {
+      this.backup(name);
+      this.state.backups = (this.state.backups ?? []).filter((backup) => backup.name !== name);
+      return { name, files_removed: 0 };
+    },
+    "backup.restore": ({ name }) => {
+      const restored = this.backup(name);
+      const previous = this.handlers["backup.create"]?.({}) as Backup;
+      return { restored, previous };
     },
     "comment.delete": ({ comment: id }) => {
       const comment = this.liveComment(id);

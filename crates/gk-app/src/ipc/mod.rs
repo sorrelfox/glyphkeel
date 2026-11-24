@@ -35,14 +35,14 @@ pub(crate) async fn op(
     input: Option<Value>,
     request_id: Option<String>,
 ) -> Result<Value, OpError> {
+    let input = input.unwrap_or(Value::Null);
+    crate::transfer::page_may_run(&op, &input)?;
     let workspace = Arc::clone(&workspace);
     // The engine blocks (transactions, and the confirmation dialog), so it
     // runs on a blocking thread, never on the main thread.
-    tauri::async_runtime::spawn_blocking(move || {
-        workspace.call(&op, input.unwrap_or(Value::Null), request_id)
-    })
-    .await
-    .map_err(|e| OpError::storage(format!("The operation stopped unexpectedly: {e}.")))?
+    tauri::async_runtime::spawn_blocking(move || workspace.call(&op, input, request_id))
+        .await
+        .map_err(|e| OpError::storage(format!("The operation stopped unexpectedly: {e}.")))?
 }
 
 /// Hands over the channel for this window's change events. A reload of the

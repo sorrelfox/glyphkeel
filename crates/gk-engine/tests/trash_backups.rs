@@ -560,7 +560,10 @@ fn backups_are_made_rotated_checked_and_deleted() {
     let check = ws.call("backup.verify", json!({ "name": made["name"] }));
     assert_eq!(check["problems"][0]["kind"], "missing_file", "{check}");
 
-    let deleted = ws.call("backup.delete", json!({ "name": made["name"] }));
+    // Deleting a backup can't be undone, so the person confirms it.
+    let err = ws.fails(&me(), "backup.delete", json!({ "name": made["name"] }));
+    assert_eq!(err.code, ErrorCode::Forbidden);
+    let deleted = ws.as_(&sure(), "backup.delete", json!({ "name": made["name"] }));
     assert_eq!(deleted["name"], made["name"]);
     let err = ws.fails(&me(), "backup.verify", json!({ "name": made["name"] }));
     assert_eq!(err.code, ErrorCode::NotFound);

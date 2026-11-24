@@ -3,15 +3,16 @@
 
 //! The open workspace: the engine, the change events it forwards to the
 //! windows, the watcher for other programs' commits and the background
-//! jobs.
+//! jobs. After a restore from a backup the engine that ran it must not go
+//! on, so the workspace closes it and opens the restored data afresh.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use gk_api::ops::common::Via;
-use gk_api::{Changed, ErrorCode, OpError};
+use gk_api::ops::common::{Actor, ActorKind, Via};
+use gk_api::{Changed, EntityChange, ErrorCode, OpError, Origin};
 use gk_engine::{Confirmation, Context, Engine, EngineConfig, system_clock};
 use gk_store::{WatcherHandle, WorkspaceLayout};
 use serde_json::Value;
@@ -24,6 +25,10 @@ use crate::reminders::{self, Notifier};
 const WATCH_INTERVAL: Duration = Duration::from_millis(250);
 /// How often the background jobs get a turn.
 const JOBS_INTERVAL: Duration = Duration::from_secs(5);
+/// How long a reopen waits for calls still running on the old engine.
+const REOPEN_WAIT: Duration = Duration::from_secs(10);
+/// The operation after which the engine must be replaced.
+const RESTORE_OP: &str = "backup.restore";
 
 /// The workspace the app has open, or why it couldn't open it. Every call
 /// of the page goes through [`Workspace::call`].
@@ -37,6 +42,26 @@ pub(crate) struct Workspace {
     windows: Arc<Windows>,
     confirm: Confirmation,
     background: Mutex<Option<Background>>,
+    /// What opening the workspace again needs.
+    reopen: Mutex<Reopen>,
+    /// Why the workspace stayed closed after a restore, if it did.
+    lost: Mutex<Option<OpError>>,
+}
+
+/// How the workspace was opened, to open it the same way again.
+#[derive(Default)]
+struct Reopen {
+    config: Option<EngineConfig>,
+    notifier: Option<Arc<dyn reminders::Notifier>>,
+}
+
+impl std::fmt::Debug for Reopen {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Reopen")
+            .field("config", &self.config.is_some())
+            .field("notifier", &self.notifier.is_some())
+            .finish()
+    }
 }
 
 #[derive(Debug)]
@@ -56,35 +81,23 @@ impl Workspace {
         config: EngineConfig,
         confirm: Confirmation,
     ) -> Self {
-        let engine = match Engine::open(layout, config) {
-            Ok(engine) => Arc::new(engine),
+        let windows = Arc::new(Windows::default());
+        let (engine, background) = match start(layout, config.clone(), &windows) {
+            Ok(started) => started,
             Err(err) => return Self::failed(err),
         };
-        let windows = Arc::new(Windows::default());
-        windows.forward(engine.subscribe());
-        let watcher = engine
-            .watch_other_processes(WATCH_INTERVAL)
-            .inspect_err(|err| {
-                eprintln!(
-                    "glyphkeel-app: other programs' changes won't show until a restart: {}",
-                    err.message
-                );
-            })
-            .ok();
-        let stop = Arc::new(AtomicBool::new(false));
-        let jobs = run_jobs(Arc::downgrade(&engine), Arc::clone(&stop));
         Self {
             engine: Mutex::new(Some(engine)),
             layout: Some(layout.clone()),
             failure: None,
             windows,
             confirm,
-            background: Mutex::new(Some(Background {
-                _watcher: watcher,
-                stop,
-                jobs,
-                reminders: None,
-            })),
+            background: Mutex::new(Some(background)),
+            reopen: Mutex::new(Reopen {
+                config: Some(config),
+                notifier: None,
+            }),
+            lost: Mutex::new(None),
         }
     }
 
@@ -97,12 +110,51 @@ impl Workspace {
             windows: Arc::new(Windows::default()),
             confirm: Confirmation::Refuse,
             background: Mutex::new(None),
+            reopen: Mutex::new(Reopen::default()),
+            lost: Mutex::new(None),
+        }
+    }
+
+    /// Closes the engine and opens the workspace again, the way it was
+    /// opened, in the time zone the person chose since; the reminders start
+    /// again too. Every window then hears that everything changed. Calls
+    /// still running on the old engine get a moment to end first.
+    pub(crate) fn reopen(&self) -> Result<(), OpError> {
+        let Some(layout) = self.layout.clone() else {
+            return Ok(());
+        };
+        let (config, notifier) = {
+            let reopen = lock(&self.reopen);
+            (reopen.config.clone(), reopen.notifier.clone())
+        };
+        let Some(mut config) = config else {
+            return Ok(());
+        };
+        if let Some(zone) = self.time_zone() {
+            config.time_zone = Some(zone);
+        }
+        self.close_within(REOPEN_WAIT);
+        match start(&layout, config, &self.windows) {
+            Ok((engine, background)) => {
+                *lock(&self.engine) = Some(engine);
+                *lock(&self.background) = Some(background);
+                *lock(&self.lost) = None;
+                if let Some(notifier) = notifier {
+                    self.start_reminders(notifier);
+                }
+                self.windows.send(&reopened());
+                Ok(())
+            }
+            Err(err) => {
+                *lock(&self.lost) = Some(err.clone());
+                Err(err)
+            }
         }
     }
 
     /// Why the workspace isn't open, if it isn't.
-    pub(crate) fn failure(&self) -> Option<&OpError> {
-        self.failure.as_ref()
+    pub(crate) fn failure(&self) -> Option<OpError> {
+        self.failure.clone().or_else(|| lock(&self.lost).clone())
     }
 
     /// The workspace folder, while it is open.
@@ -118,10 +170,24 @@ impl Workspace {
         input: Value,
         request_id: Option<String>,
     ) -> Result<Value, OpError> {
-        let engine = self.engine()?;
-        let mut ctx = Context::user(Via::App).with_confirmation(self.confirm.clone());
-        ctx.request_id = request_id;
-        engine.call(&ctx, op, input)
+        let result = {
+            let engine = self.engine()?;
+            let mut ctx = Context::user(Via::App).with_confirmation(self.confirm.clone());
+            ctx.request_id = request_id;
+            engine.call(&ctx, op, input)
+        };
+        // The engine that restored a backup refuses every later call: the
+        // workspace opens again, on the restored data.
+        if op == RESTORE_OP
+            && result.is_ok()
+            && let Err(err) = self.reopen()
+        {
+            eprintln!(
+                "glyphkeel-app: the restored workspace could not be opened again: {}",
+                err.message
+            );
+        }
+        result
     }
 
     /// The time zone the engine counts "today" and local times in, by its
@@ -170,6 +236,7 @@ impl Workspace {
     /// Starts showing reminders through `notifier`, until the workspace
     /// closes. Runs whether or not a window is open.
     pub(crate) fn start_reminders(&self, notifier: Arc<dyn Notifier>) {
+        lock(&self.reopen).notifier = Some(Arc::clone(&notifier));
         let Ok(engine) = self.engine() else {
             return;
         };
@@ -193,6 +260,13 @@ impl Workspace {
     /// log. Calls still running keep the engine alive; then it closes when
     /// the last one ends, without the checkpoint.
     pub(crate) fn close(&self) {
+        self.close_within(Duration::ZERO);
+    }
+
+    /// Closes as [`Workspace::close`] does, waiting up to `wait` for calls
+    /// still running to end, so that the engine closes cleanly and lets go
+    /// of the workspace.
+    fn close_within(&self, wait: Duration) {
         if let Some(mut background) = lock(&self.background).take() {
             if let Some(reminders) = background.reminders.take() {
                 reminders.stop();
@@ -203,14 +277,24 @@ impl Workspace {
                 let _ = jobs.join();
             }
         }
-        let Some(engine) = lock(&self.engine).take() else {
+        let Some(mut engine) = lock(&self.engine).take() else {
             return;
         };
-        match Arc::try_unwrap(engine) {
-            Ok(engine) => engine.close(),
-            Err(_) => eprintln!(
-                "glyphkeel-app: calls were still running; the workspace closes without a checkpoint"
-            ),
+        let deadline = std::time::Instant::now() + wait;
+        loop {
+            match Arc::try_unwrap(engine) {
+                Ok(engine) => return engine.close(),
+                Err(shared) if std::time::Instant::now() < deadline => {
+                    engine = shared;
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+                Err(_) => {
+                    eprintln!(
+                        "glyphkeel-app: calls were still running; the workspace closes without a checkpoint"
+                    );
+                    return;
+                }
+            }
         }
     }
 
@@ -218,10 +302,65 @@ impl Workspace {
         if let Some(engine) = lock(&self.engine).as_ref() {
             return Ok(Arc::clone(engine));
         }
-        Err(self.failure.clone().unwrap_or_else(|| {
+        Err(self.failure().unwrap_or_else(|| {
             OpError::new(ErrorCode::Storage, "The workspace is closed.")
                 .with_hint("The app is quitting.")
         }))
+    }
+}
+
+/// Opens the engine at `layout` and starts its background work: the
+/// events forwarded to `windows`, the watcher for other programs' commits
+/// and the jobs.
+fn start(
+    layout: &WorkspaceLayout,
+    config: EngineConfig,
+    windows: &Arc<Windows>,
+) -> Result<(Arc<Engine>, Background), OpError> {
+    let engine = Arc::new(Engine::open(layout, config)?);
+    windows.forward(engine.subscribe());
+    let watcher = engine
+        .watch_other_processes(WATCH_INTERVAL)
+        .inspect_err(|err| {
+            eprintln!(
+                "glyphkeel-app: other programs' changes won't show until a restart: {}",
+                err.message
+            );
+        })
+        .ok();
+    let stop = Arc::new(AtomicBool::new(false));
+    let jobs = run_jobs(Arc::downgrade(&engine), Arc::clone(&stop));
+    Ok((
+        engine,
+        Background {
+            _watcher: watcher,
+            stop,
+            jobs,
+            reminders: None,
+        },
+    ))
+}
+
+/// The event that tells every window the whole workspace changed: it was
+/// restored from a backup and opened again.
+fn reopened() -> Changed {
+    Changed {
+        seq: 0,
+        group: String::new(),
+        origin: Origin {
+            via: Via::App,
+            actor: Actor {
+                kind: ActorKind::User,
+                name: String::new(),
+            },
+            session: None,
+        },
+        changes: vec![EntityChange {
+            entity: "workspace".to_owned(),
+            id: "restored".to_owned(),
+            project: None,
+            fields: vec!["*".to_owned()],
+        }],
     }
 }
 

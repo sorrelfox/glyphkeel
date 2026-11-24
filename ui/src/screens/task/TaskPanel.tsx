@@ -27,6 +27,7 @@ import { useToasts } from "../../components/Toasts";
 import { useProject, useUpdateTask } from "../../data/board";
 import { HUES, PRIORITIES, type Hue, type Project, type Task, type TaskField, type TaskUpdateInput } from "../../data/catalog";
 import { errorToast, useCall, useCommand } from "../../data/hooks";
+import { useTrashTasks } from "../../data/safety";
 import { useTaskDetails } from "../../data/task";
 import { useT } from "../../i18n/I18n";
 import { openTaskWindow } from "../../ipc/taskWindow";
@@ -124,6 +125,7 @@ function Loaded({
   const moment = useMomentFormat();
   const duplicate = useCommand("task.duplicate", { undoable: t("panel-duplicated") });
   const release = useCommand("task.release");
+  const trash = useTrashTasks();
   const readOnly = project.state === "archived";
   const [descriptionView, setDescriptionView] = useState<DescriptionView>({ kind: "read" });
   const blockers = (task.links ?? []).filter((link) => link.kind === "blocked_by" && !link.task.closed).map((link) => link.task.key);
@@ -208,6 +210,8 @@ function Loaded({
                   ...(task.claim
                     ? [{ id: "release", label: t("panel-release"), disabled: readOnly, run: () => { release.mutate({ key: task.key, override_claim: true }); } }]
                     : []),
+                  "separator",
+                  { id: "trash", label: t("trash-move", { count: 1 }), disabled: readOnly, run: () => { trash([task.key], onClose); } },
                 ]}
               />
             </Menu>

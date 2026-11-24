@@ -22,6 +22,7 @@ import { useState, type KeyboardEvent } from "react";
 import { keysOf, type Action } from "../../actions/actions";
 import { ActionsProvider } from "../../actions/ActionsProvider";
 import { isMenuKey, useContextMenu, type MenuEntry } from "../../components/ContextMenu";
+import { useTrashTasks } from "../../data/safety";
 import { useToasts } from "../../components/Toasts";
 import { cardsOf, columnsOf, useBoard, useCreateTask, useLayout, useMoveTask, useProject, useUpdateLayout, useUpdateTask, type Move } from "../../data/board";
 import { PRIORITIES, SORT_MODES, type Board as BoardData, type BoardLayout, type Card, type CardSize, type Place, type Project } from "../../data/catalog";
@@ -87,6 +88,7 @@ function LoadedBoard({ project, layout, board, openTask, now }: LoadedBoardProps
   const create = useCreateTask();
   const update = useUpdateTask();
   const menu = useContextMenu(t("card-menu"));
+  const trash = useTrashTasks();
   const today = useToday(now);
   const readOnly = project.state === "archived";
 
@@ -279,7 +281,18 @@ function LoadedBoard({ project, layout, board, openTask, now }: LoadedBoardProps
         label: t("card-copy-key"),
         run: () => void navigator.clipboard.writeText(key).catch(() => undefined),
       },
+      "separator",
+      { id: "trash", label: t("trash-move", { count: 1 }), disabled: readOnly, run: () => { trashCard(key); } },
     ];
+  };
+
+  /** Moves a card's task to the trash; the panel closes when it showed it. */
+  const trashCard = (key: string) => {
+    trash([key], () => {
+      if (openTask === key) {
+        void navigate({ to: "/projects/$key", params: { key: project.key }, search: {} });
+      }
+    });
   };
 
   const openPanel = (key: string) => {
@@ -305,6 +318,11 @@ function LoadedBoard({ project, layout, board, openTask, now }: LoadedBoardProps
     if (isMenuKey(event)) {
       event.preventDefault();
       menu.openAt(event.currentTarget, cardEntries(key));
+      return true;
+    }
+    if (plain && event.key === "Delete" && !readOnly) {
+      event.preventDefault();
+      trashCard(key);
       return true;
     }
     return false;

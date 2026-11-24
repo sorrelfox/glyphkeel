@@ -7,6 +7,7 @@ import { Columns3, Download, Filter } from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Button, Menu, MenuItem, MenuTrigger, Popover } from "react-aria-components";
 
+import { useTrashTasks } from "../../data/safety";
 import { useAppearance } from "../../appearance/AppearanceProvider";
 import { classes } from "../../classes";
 import { Kbd } from "../../components/Kbd";
@@ -125,6 +126,7 @@ function LoadedList({ project, views, openTask, onOpen }: { project: string | un
 
   const unfiltered = useUnfilteredCount({ project, includeSubprojects });
   const names = useListNames(project);
+  const trash = useTrashTasks();
   const fields = useQueryFields();
   const field = useRef<QueryFieldHandle>(null);
 
@@ -257,6 +259,12 @@ function LoadedList({ project, views, openTask, onOpen }: { project: string | un
       event.preventDefault();
       event.stopPropagation();
       setSelection(clickRow(selection, index, task.key, { toggle: true, range: false }, (at) => rows.rowAt(at)?.key));
+    } else if (event.key === "Delete" && !event.altKey && !event.ctrlKey && !event.metaKey && (selection.keys.size > 0 || task)) {
+      event.preventDefault();
+      event.stopPropagation();
+      trash(selection.keys.size > 0 ? [...selection.keys] : task ? [task.key] : [], () => {
+        setSelection(NO_SELECTION);
+      });
     } else if (event.key === "F2" && task) {
       event.preventDefault();
       setEditing({ key: task.key, column: "title" });

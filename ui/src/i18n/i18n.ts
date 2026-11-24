@@ -9,6 +9,7 @@ import enEditor from "./en/editor.ftl?raw";
 import enList from "./en/list.ftl?raw";
 import enPalette from "./en/palette.ftl?raw";
 import enReader from "./en/reader.ftl?raw";
+import enSafety from "./en/safety.ftl?raw";
 import enSearch from "./en/search.ftl?raw";
 import enToday from "./en/today.ftl?raw";
 // The engine's messages about queries, kept with the query language in Rust.
@@ -18,7 +19,7 @@ import enEngine from "../../../crates/gk-engine/i18n/en/engine.ftl?raw";
 
 /** The languages the app has text for, with their message files. */
 export const MESSAGES: Readonly<Record<string, readonly string[]>> = {
-  en: [enApp, enDev, enEditor, enEngine, enList, enPalette, enQuery, enReader, enSearch, enToday],
+  en: [enApp, enDev, enEditor, enEngine, enList, enPalette, enQuery, enReader, enSafety, enSearch, enToday],
 };
 
 /** The language the app falls back to. */

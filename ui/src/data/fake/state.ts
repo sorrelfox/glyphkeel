@@ -16,8 +16,10 @@ import {
   type Modules,
   type Priority,
   type RevisionKind,
+  type Backup,
   type SavedView,
   type Settings,
+  type TrashEntry,
   type Via,
 } from "../../generated/ops";
 
@@ -206,6 +208,12 @@ export interface FakeWikiPage {
   updatedAt: string;
 }
 
+/** Tasks in the trash: one deletion, with the subtasks that went with it. */
+export interface FakeTrashed {
+  entry: TrashEntry;
+  tasks: FakeTask[];
+}
+
 export interface FakeState {
   projects: FakeProject[];
   tasks: FakeTask[];
@@ -227,6 +235,10 @@ export interface FakeState {
   views?: SavedView[];
   /** Wiki pages; none until one is made. */
   wiki?: FakeWikiPage[];
+  /** Deleted tasks, newest deletion last; none until one is deleted. */
+  trash?: FakeTrashed[];
+  /** Backups, newest first; none until one is made. */
+  backups?: Backup[];
   workspaceName: string;
   seq: number;
 }
