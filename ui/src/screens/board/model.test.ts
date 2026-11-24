@@ -159,6 +159,11 @@ describe("boardView", () => {
     const older = boardView(board, LAYOUT, NO_FILTERS, NOW, new Set(["done"]));
     expect(older.lanes[2]?.cards.map((c) => c.key)).toEqual(["TM-4", "TM-5"]);
   });
+  it("counts the older cards the engine kept back until the column shows them", () => {
+    const kept = { ...board, columns: board.columns.map((each) => (each.id === "done" ? { ...each, cards: each.cards.slice(0, 1), older: 7 } : each)) };
+    expect(boardView(kept, LAYOUT, NO_FILTERS, NOW, new Set()).lanes[2]?.older).toBe(7);
+    expect(boardView(kept, LAYOUT, NO_FILTERS, NOW, new Set(["done"])).lanes[2]?.older).toBe(0);
+  });
   it("sorts a column by its own mode and counts what the filters let through", () => {
     const view = boardView(board, { ...LAYOUT, column_sort: { doing: "priority" } }, { ...NO_FILTERS, text: "TM-" }, NOW, new Set());
     expect(view.lanes[1]?.cards.map((c) => c.key)).toEqual(["TM-3", "TM-2"]);

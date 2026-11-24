@@ -4,7 +4,7 @@
 // The hooks the project screens use: projects, the board and its layout,
 // tasks. Screens call these; these call the transport through the client.
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useToasts } from "../components/Toasts";
 import { type LayoutChange, type LayoutUpdateInput, type ProjectList, type TaskCreateInput, type TaskUpdateInput } from "../generated/ops";
@@ -50,15 +50,24 @@ export function useProject(key: string | undefined) {
 }
 
 /**
- * The board's input. Older closed cards always come along: the board hides
- * them itself, column by column, behind "Show older".
+ * The board's input. Closed cards older than the layout's limit stay in the
+ * engine until "Show older" asks for them: a long-lived project holds far more
+ * of them than open cards, and the board would carry them all in memory.
  */
-export function boardInput(project: string, includeSubprojects: boolean) {
-  return { project, include_subprojects: includeSubprojects, show_older: true };
+export function boardInput(project: string, includeSubprojects: boolean, showOlder = false) {
+  return { project, include_subprojects: includeSubprojects, show_older: showOlder };
 }
 
-export function useBoard(project: string, includeSubprojects: boolean, enabled = true) {
-  return useOp("board.get", boardInput(project, includeSubprojects), { enabled });
+/** The board; while the older cards are on their way, the board without them stays. */
+export function useBoard(project: string, includeSubprojects: boolean, enabled = true, showOlder = false) {
+  const call = useCall();
+  const input = boardInput(project, includeSubprojects, showOlder);
+  return useQuery<Board, OpFailure>({
+    queryKey: opKey("board.get", input),
+    queryFn: () => call("board.get", input),
+    enabled,
+    placeholderData: (previous) => (previous?.project === project ? previous : undefined),
+  });
 }
 
 export function useLayout(project: string) {
@@ -199,12 +208,12 @@ export function moveOnBoard(board: Board, move: Move): Board {
  * drop, so the card never jumps back), the engine records it, and a failure
  * puts the card back with a toast.
  */
-export function useMoveTask(board: { project: string; layout: { include_subprojects: boolean } }): { mutate: (move: Move) => void } {
+export function useMoveTask(board: { project: string; layout: { include_subprojects: boolean } }, showOlder = false): { mutate: (move: Move) => void } {
   const call = useCall();
   const queryClient = useQueryClient();
   const toasts = useToasts();
   const t = useT();
-  const key = opKey("board.get", boardInput(board.project, board.layout.include_subprojects));
+  const key = opKey("board.get", boardInput(board.project, board.layout.include_subprojects, showOlder));
   const mutation = useMutation({
     mutationFn: ({ move }: { move: Move; before: Board | undefined }) => call("task.move", { key: move.key, status: move.status, ...move.place }),
     onError: (error: OpFailure, { before }) => {

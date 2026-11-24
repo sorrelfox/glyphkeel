@@ -218,9 +218,11 @@
   outline-offset: 1px;
 }
 
-/* Popovers and tooltips fade and scale in. */
-.menuPopover[data-entering],
-.tooltip[data-entering] {
+/* Popovers and tooltips fade and scale in. Never while closing: an overlay
+   closed during its entry would wait for the animation to end, stay on top of
+   the dialog under it and take that dialog's Escape. */
+.menuPopover[data-entering]:not([data-exiting]),
+.tooltip[data-entering]:not([data-exiting]) {
   animation: pop-in var(--dur) var(--ease);
 }
 

@@ -13,7 +13,7 @@ import { useToasts } from "../../components/Toasts";
 import { useCall, useCommand, useOp } from "../../data/hooks";
 import { opPrefix } from "../../data/queries";
 import { skippedReason, useFailureToast } from "../../data/safety";
-import { type AgentSession, type Profile } from "../../generated/ops";
+import { type AgentSession, type Profile, type WorkspaceInfo } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { useCliStatus, useInstallCli, type CliStatus } from "../../ipc/cli";
 import { useMomentFormat } from "../../screens/task/Activity";
@@ -175,10 +175,37 @@ function ClientsGroup({ command }: { command: readonly string[] }) {
 
 // ---------- what agents may do ----------
 
+/** The engine's limits on every agent session, as the workspace read reports them. */
+interface AgentLimits {
+  writes_per_minute: number;
+  new_tasks_per_day: number;
+  trash_items_per_call: number;
+  trash_items_per_hour: number;
+}
+
+/** The limits the engine has always had, for an engine that doesn't report them. */
+const DEFAULT_LIMITS: AgentLimits = { writes_per_minute: 120, new_tasks_per_day: 500, trash_items_per_call: 20, trash_items_per_hour: 50 };
+
+/** The limits in the workspace read, each one that is missing or not a number replaced by its default. */
+export function agentLimits(info: WorkspaceInfo | undefined): AgentLimits {
+  const given = (info as { agent_limits?: Partial<Record<keyof AgentLimits, unknown>> } | undefined)?.agent_limits;
+  const pick = (name: keyof AgentLimits) => {
+    const value = given?.[name];
+    return typeof value === "number" && Number.isFinite(value) ? value : DEFAULT_LIMITS[name];
+  };
+  return {
+    writes_per_minute: pick("writes_per_minute"),
+    new_tasks_per_day: pick("new_tasks_per_day"),
+    trash_items_per_call: pick("trash_items_per_call"),
+    trash_items_per_hour: pick("trash_items_per_hour"),
+  };
+}
+
 function PolicyGroup() {
   const t = useT();
   const queryClient = useQueryClient();
   const settings = useOp("settings.get", {});
+  const limits = agentLimits(useOp("workspace.get", {}).data);
   const update = useCommand("agent.policy.update");
   if (settings.isError) {
     return <p className={styles.error}>{settings.error.error.message}</p>;
@@ -206,7 +233,12 @@ function PolicyGroup() {
           }}
         />
       </Row>
-      <Row label={t("agents-limits")} about={t("agents-limits-about", { perMinute: 120, perCall: 20, perHour: 50 })} />
+      <Row label={t("agents-limits")} about={t("agents-limits-about", {
+          perMinute: limits.writes_per_minute,
+          perDay: limits.new_tasks_per_day,
+          perCall: limits.trash_items_per_call,
+          perHour: limits.trash_items_per_hour,
+        })} />
       <Row label={t("agents-raise")} about={t("agents-raise-about")} />
     </Group>
   );

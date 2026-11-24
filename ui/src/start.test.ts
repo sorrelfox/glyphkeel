@@ -19,6 +19,17 @@ describe("readStart", () => {
     expect(readStart(windowWith({ titleBar: "fancy", locale: "not a locale!" }))).toEqual({ titleBar: "app", locale: "fr-FR" });
   });
 
+  it("falls back to English when neither the app nor the browser gives a usable locale", () => {
+    for (const language of ["c", "C", "C.UTF-8", "POSIX", "", undefined]) {
+      const win = { __GLYPHKEEL_START__: undefined, navigator: { language } } as unknown as Window;
+      const { locale } = readStart(win);
+      expect(locale).toBe("en");
+      expect(() => new Intl.DateTimeFormat(locale)).not.toThrow();
+    }
+    const win = { __GLYPHKEEL_START__: { locale: "C.UTF-8" }, navigator: { language: "c" } } as unknown as Window;
+    expect(readStart(win).locale).toBe("en");
+  });
+
   it("takes a task window's task and the task to open first, when they are task keys", () => {
     expect(readStart(windowWith({ titleBar: "system", locale: "de-DE", task: "TM-41", open: "CLI-2" }))).toEqual({
       titleBar: "system",

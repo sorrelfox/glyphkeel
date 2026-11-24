@@ -1447,15 +1447,20 @@ export class FakeWorkspace {
   // ---------- the operations ----------
 
   private readonly handlers: { [K in OpId]?: Handler<K> } = {
-    "workspace.get": () => ({
-      caller: { actor: { kind: "user", name: "You" }, via: "app" },
-      guide: "",
-      id: "w-1",
-      name: this.state.workspaceName,
-      program_version: __VERSION__,
-      schema_version: 2,
-      settings: { ...this.state.settings },
-    }),
+    "workspace.get": () => {
+      const info = {
+        caller: { actor: { kind: "user" as const, name: "You" }, via: "app" as const },
+        guide: "",
+        id: "w-1",
+        name: this.state.workspaceName,
+        program_version: __VERSION__,
+        schema_version: 2,
+        settings: { ...this.state.settings },
+        // The engine's limits on agent sessions, as the engine reports them.
+        agent_limits: { writes_per_minute: 120, new_tasks_per_day: 500, trash_items_per_call: 20, trash_items_per_hour: 50 },
+      };
+      return info;
+    },
     "settings.get": () => ({ ...this.state.settings }),
     "settings.update": (patch: SettingsPatch) => {
       const changed: string[] = [];

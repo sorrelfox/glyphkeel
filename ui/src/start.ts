@@ -34,7 +34,7 @@ declare global {
 export function readStart(win: Window = window): StartData {
   const given = win.__GLYPHKEEL_START__ ?? {};
   const titleBar: TitleBar = given.titleBar === "system" ? "system" : "app";
-  const locale = typeof given.locale === "string" && isLocale(given.locale) ? given.locale : win.navigator.language;
+  const locale = firstLocale(given.locale, (win.navigator as Navigator | undefined)?.language);
   const start: StartData = { titleBar, locale };
   if (isTaskKey(given.task)) {
     start.task = given.task;
@@ -60,6 +60,20 @@ export function isTaskKey(value: unknown): value is string {
 /** The project key of a task key: `TM` of `TM-41`. */
 export function projectOfKey(key: string): string {
   return key.slice(0, key.lastIndexOf("-"));
+}
+
+/**
+ * The first of the given tags that Intl accepts, or `en`. Under `LANG=C` the
+ * web view reports a language such as `c`, which every Intl formatter rejects;
+ * `POSIX` passes Intl but names no language.
+ */
+function firstLocale(...tags: unknown[]): string {
+  for (const tag of tags) {
+    if (typeof tag === "string" && !/^(c|posix)([._@-]|$)/i.test(tag) && isLocale(tag)) {
+      return tag;
+    }
+  }
+  return "en";
 }
 
 function isLocale(tag: string): boolean {

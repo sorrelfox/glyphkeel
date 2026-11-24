@@ -191,7 +191,8 @@ export function boardView(board: Board, layout: BoardLayout, filters: Filters, n
       sort,
       cards: sortCards(recent, sort),
       total: column.count,
-      older: matching.length - recent.length,
+      // Older cards the engine kept back, and older cards here that the column doesn't show yet.
+      older: (showOlder.has(column.id) ? 0 : column.older) + matching.length - recent.length,
     });
     shown += recent.length;
   }
