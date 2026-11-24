@@ -62,6 +62,15 @@ impl<'a> WriteCtx<'a> {
         }
     }
 
+    /// The items of `entity` this command has changed so far, in order.
+    pub(crate) fn changed_of(&self, entity: &str) -> Vec<Id> {
+        self.changes
+            .iter()
+            .filter(|c| c.entity == entity)
+            .map(|c| c.id)
+            .collect()
+    }
+
     /// How many items of `entity` this command has created so far.
     pub(crate) fn created_so_far(&self, entity: &str) -> usize {
         self.changes
@@ -173,6 +182,7 @@ impl<'a> WriteCtx<'a> {
                 FieldChange {
                     before: first_before,
                     after,
+                    truncated: false,
                 },
             );
         }
@@ -205,6 +215,15 @@ impl<'a> WriteCtx<'a> {
     pub(crate) fn finish(self) -> Result<Finished, Failure> {
         let meta = self.meta;
         let ctx = &meta.ctx;
+        if crate::scope::active() {
+            for change in &self.changes {
+                if let Some(project) = change.project
+                    && !crate::scope::allows(self.tx, project)?
+                {
+                    return Err(crate::scope::outside());
+                }
+            }
+        }
         if ctx.is_agent() {
             let trashed = self
                 .changes

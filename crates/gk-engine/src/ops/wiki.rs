@@ -108,7 +108,8 @@ fn by_id(tx: &Transaction<'_>, id: Id) -> Result<Option<PageRow>, Failure> {
             [b(id)],
             page_row,
         )
-        .optional()?)
+        .optional()?
+        .filter(|p| crate::scope::sees(p.project)))
 }
 
 /// The live page of `project` that `text` names: its title (any case),

@@ -866,6 +866,8 @@ export type FieldChange = {
   after?: unknown;
   /** The value before. */
   before?: unknown;
+  /** Whether a long text value was cut to its first 500 characters, as in every list; the item itself holds the whole text. */
+  truncated?: boolean;
 };
 
 /** A file to attach: from a local path, or as Base64 data with a name. */
@@ -1295,6 +1297,8 @@ export type ProjectChange = {
   group?: string;
   /** The project after the change. */
   project: Project;
+  /** The saved views whose queries were rewritten because a status, type, label or the project key they name was renamed, or a label they name was deleted, by name; left out when none was. */
+  views_rewritten?: string[];
 };
 
 /** A new project or sub-project. */

@@ -1,0 +1,109 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Glyphkeel contributors
+#
+# The query corpus: task queries over data set S (gk-seed, seed 1), one per
+# line. Lines starting with # are comments. The expected results of every
+# query, in each time zone, are the snapshots `query_corpus__*.snap`; the
+# command line and the agent server must give the same results as the app.
+
+# Projects
+project:TM
+project:TM/*
+project:GARDEN
+project:TMAPP,TMDOC
+-project:TM/*
+# Statuses and categories
+status:Review
+status:"In progress"
+status:Backlog,"to do"
+status!=Done
+category:done
+category:cancelled
+category:in_progress
+is:open
+is:closed
+# Types and priorities
+type:Bug
+type:Milestone
+type:Feature -is:closed
+priority:urgent
+priority>=high
+prio<normal
+priority:none
+# Labels
+label:frontend
+label:backend,security
+label:frontend label:ux
+-label:docs project:TM
+label:"good first task"
+label:Отчёты
+has:labels
+-has:labels
+# Structure and links
+parent:none
+is:subtask
+is:parent
+has:links
+blocks:any
+is:blocked
+relates:any
+# Days
+due:none
+has:due
+due<2026-02-01
+due:2026-03-01..2026-03-31
+start>=2026-04-01
+due:today
+due<today is:open
+is:overdue
+due:this-week
+due<+14d is:open
+start:last-month
+is:unscheduled
+# Moments, compared by the local day
+created:today
+created:yesterday
+created>=-7d
+created:this-week
+created:last-month
+updated:today
+updated>-3d
+closed:today
+closed:yesterday
+closed:this-week
+edited:last-month
+# Durations and progress
+has:estimate
+estimate>=1d
+estimate:1h..8h
+spent>0m
+remaining<0m
+is:over-estimate
+progress:100
+progress>=50
+# People and agents
+author:me
+author:agent
+is:claimed
+# Counts and parts
+comments>3
+subtasks>=1
+has:description
+has:comments
+has:time
+# Text
+date
+"quick-add field"
+title:checklist
+-title:the is:open
+# Combinations
+(label:frontend OR type:Bug) is:open
+NOT (status:Done OR status:Dropped)
+-(-is:open)
+is:open -is:blocked priority>=normal
+# Sorting
+priority>=high sort:due
+is:open project:GARDEN sort:-priority,key
+# Keys
+TM-1
+TM-1 OR GARDEN-2

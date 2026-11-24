@@ -14,6 +14,8 @@
 //!   contents, never a mix. It raises the database's *generation*, and every
 //!   process's writer refuses to write once the generation it opened with
 //!   has changed ([`StoreError::WorkspaceReplaced`]).
+//! - [`put_back_before_upgrade`] does the same with the copy made just
+//!   before a schema upgrade that then failed.
 
 use std::fs;
 use std::io;
@@ -140,6 +142,30 @@ pub fn replace_database(
             "the copy to restore has schema version {found}, not {SCHEMA_VERSION}"
         )));
     }
+    copy_into_live(layout, source, busy_budget)
+}
+
+/// Puts the database file `source` (a copy made just before a schema
+/// upgrade, at that older version) back into the workspace at `layout`
+/// after the upgrade failed, so the workspace is exactly as it was before.
+/// Works like [`replace_database`] but keeps the copy's own schema version.
+/// The caller holds the migrate lock. `source` is changed: it gets the new
+/// generation first.
+pub fn put_back_before_upgrade(
+    layout: &WorkspaceLayout,
+    source: &Path,
+    busy_budget: Duration,
+) -> Result<()> {
+    let found = schema_version_of(source)?;
+    if found == 0 || found > SCHEMA_VERSION {
+        return Err(StoreError::Corrupt(format!(
+            "the copy to put back has schema version {found}"
+        )));
+    }
+    copy_into_live(layout, source, busy_budget)
+}
+
+fn copy_into_live(layout: &WorkspaceLayout, source: &Path, busy_budget: Duration) -> Result<()> {
     let mut live = connection::open(&layout.database(), Purpose::Write, busy_budget)?;
     let next = generation(&live)?.max(generation_of(source)?) + 1;
     {

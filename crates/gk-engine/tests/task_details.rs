@@ -847,6 +847,43 @@ fn a_tasks_history_has_its_fields_description_links_comments_and_files() {
 }
 
 #[test]
+fn long_text_in_the_activity_log_is_cut_at_500_characters() {
+    let dir = TempDir::new().unwrap();
+    let ws = open(&dir);
+    ws.call("project.create", json!({ "name": "Top", "key": "TOP" }));
+    let key = ws.new_task("TOP", "Talkative");
+    // 600 characters, some of them outside ASCII, so the cut counts
+    // characters, not bytes.
+    let long = "é".repeat(100) + &"x".repeat(500);
+    let short = "A short remark.";
+    ws.call("comment.add", json!({ "key": key, "body": long }));
+    ws.call("comment.add", json!({ "key": key, "body": short }));
+    let page = ws.call("history.feed", json!({ "task": key }));
+    let bodies: Vec<&Value> = page["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|e| e["fields"].get("body"))
+        .collect();
+    assert_eq!(bodies.len(), 2, "{page}");
+    let cut = bodies
+        .iter()
+        .find(|b| b["truncated"] == true)
+        .expect("the long comment is cut");
+    let text = cut["after"].as_str().unwrap();
+    assert_eq!(text.chars().count(), 500);
+    assert!(long.starts_with(text));
+    let whole = bodies
+        .iter()
+        .find(|b| b.get("truncated").is_none())
+        .expect("the short comment is whole");
+    assert_eq!(whole["after"], short);
+    // The comment itself keeps its whole text.
+    let comments = ws.call("comment.list", json!({ "key": key }));
+    assert_eq!(comments["items"][0]["body"], long.as_str());
+}
+
+#[test]
 fn the_activity_log_filters_by_project_actor_kind_and_days() {
     let dir = TempDir::new().unwrap();
     let ws = open(&dir);

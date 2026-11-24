@@ -7,6 +7,8 @@
 //!   command line (which also serves MCP) and every library stay lean, so they
 //!   build and run without a display.
 //! - Neither shipped program links an HTTP client: the app never goes online.
+//! - Neither shipped program links a keyring or secret-store client: the app
+//!   never touches the keyring.
 
 use std::collections::{BTreeSet, HashMap};
 use std::path::Path;
@@ -38,6 +40,18 @@ const NETWORK: &[&str] = &[
     "rustls",
     "native-tls",
     "openssl",
+];
+
+/// Keyring and secret-store clients, banned from both shipped programs.
+const KEYRING: &[&str] = &[
+    "keyring",
+    "secret-service",
+    "dbus-secret-service",
+    "oo7",
+    "libsecret",
+    "libsecret-sys",
+    "security-framework",
+    "windows-credentials",
 ];
 
 /// The targets the programs ship for. Dependencies that exist only on other
@@ -72,6 +86,11 @@ pub(crate) fn run(root: &Path) -> Result<bool> {
             program,
             "an HTTP client",
             &graph.banned_in(program, NETWORK)?,
+        );
+        ok &= report(
+            program,
+            "a keyring client",
+            &graph.banned_in(program, KEYRING)?,
         );
     }
     if ok {
@@ -194,7 +213,9 @@ fn is_normal(dep: &Value) -> bool {
 mod tests {
     use serde_json::json;
 
-    use super::Graph;
+    use std::path::Path;
+
+    use super::{Graph, KEYRING};
 
     fn graph() -> Graph {
         let normal = json!([{ "kind": null }]);
@@ -227,6 +248,22 @@ mod tests {
         let graph = graph();
         let found = graph.banned_in("gk-app", &["hyper", "tauri"]).unwrap();
         assert_eq!(found.into_iter().collect::<Vec<_>>(), ["hyper", "tauri"]);
+    }
+
+    #[test]
+    fn the_keyring_clients_are_banned() {
+        for name in ["keyring", "secret-service", "oo7", "libsecret"] {
+            assert!(KEYRING.contains(&name), "{name} is not banned");
+        }
+        let deny =
+            std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../deny.toml"))
+                .unwrap();
+        for name in KEYRING {
+            assert!(
+                deny.contains(&format!("crate = \"{name}\"")),
+                "deny.toml does not ban {name}"
+            );
+        }
     }
 
     #[test]

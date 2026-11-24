@@ -191,6 +191,35 @@ fn words_match_beginnings_and_code_matches_on_fragments() {
 }
 
 #[test]
+fn english_words_match_their_other_forms() {
+    let ws = open();
+    ws.call(
+        "project.create",
+        json!({ "name": "Task Manager", "key": "TM" }),
+    );
+    let run = ws.task("TM", "Run the nightly job", "It should not stop.");
+    let backups = ws.task("TM", "Check disks", "The backups were running late.");
+    ws.task("TM", "Unrelated chores", "Nothing to see.");
+    let found = |text: &str| -> Vec<String> {
+        let mut keys: Vec<String> = ws.search(json!({ "text": text, "kinds": ["task"] }))["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|h| h["task"].as_str().unwrap().to_owned())
+            .collect();
+        keys.sort();
+        keys
+    };
+    // "running" finds "run", and "run" finds "running".
+    assert_eq!(found("running"), [run.clone(), backups.clone()]);
+    assert_eq!(found("runs"), [run.clone(), backups.clone()]);
+    assert_eq!(found("run"), [run, backups.clone()]);
+    // "backup" finds "backups"; "stopping" finds "stop".
+    assert_eq!(found("backup"), [backups]);
+    assert_eq!(found("stopping").len(), 1);
+}
+
+#[test]
 fn keys_jump_to_their_task_or_project() {
     let ws = corpus();
     let out = ws.search(json!({ "text": "tm-2" }));

@@ -1,5 +1,10 @@
 # Rust build output
 /target
+# Fuzzing output: builds, the growing corpus and crash inputs
+/fuzz/target/
+/fuzz/corpus/
+/fuzz/artifacts/
+/fuzz/coverage/
 **/*.rs.bk
 rustc-ice-*.txt
 

@@ -288,7 +288,16 @@ pub(crate) fn matching_ids(tx: &Transaction<'_>, compiled: &Compiled) -> Result<
     let ids = stmt
         .query_map(params_from_iter(sql_params(&sql.params)), |r| id_at(r, 0))?
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(ids)
+    if !crate::scope::active() {
+        return Ok(ids);
+    }
+    let mut kept = Vec::with_capacity(ids.len());
+    for id in ids {
+        if lookup::task_by_id(tx, id)?.is_some() {
+            kept.push(id);
+        }
+    }
+    Ok(kept)
 }
 
 fn token_kind(k: TokenKind) -> QueryTokenKind {

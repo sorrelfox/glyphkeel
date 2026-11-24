@@ -184,6 +184,7 @@ pub(crate) fn find(tx: &Transaction<'_>, text: &str) -> Result<CommentRow, Failu
         },
     )
     .optional()?
+    .filter(|c: &CommentRow| crate::scope::sees(c.project))
     .ok_or_else(missing)
 }
 

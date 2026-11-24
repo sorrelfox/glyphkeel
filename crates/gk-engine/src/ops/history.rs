@@ -260,11 +260,14 @@ fn id_at(r: &Row<'_>, i: usize) -> gk_store::rusqlite::Result<Option<String>> {
 
 fn entry(r: &Row<'_>) -> gk_store::rusqlite::Result<ActivityEntry> {
     let changes: String = r.get(11)?;
-    let fields = serde_json::from_str::<Value>(&changes)
+    let mut fields = serde_json::from_str::<Value>(&changes)
         .ok()
         .and_then(|v| v.get("fields").cloned())
         .and_then(|f| serde_json::from_value::<BTreeMap<String, FieldChange>>(f).ok())
         .unwrap_or_default();
+    for change in fields.values_mut() {
+        change.cut_long_text();
+    }
     let kind: String = r.get(4)?;
     let via: String = r.get(6)?;
     Ok(ActivityEntry {

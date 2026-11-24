@@ -169,6 +169,7 @@ fn find(tx: &Transaction<'_>, text: &str) -> Result<EntryRow, Failure> {
         },
     )
     .optional()?
+    .filter(|e: &EntryRow| crate::scope::sees(e.project))
     .ok_or_else(missing)
 }
 

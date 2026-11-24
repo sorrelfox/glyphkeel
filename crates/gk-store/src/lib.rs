@@ -85,8 +85,8 @@ pub use layout::{
 pub use requests::{REQUEST_WINDOW_MS, RequestKey, purge_requests, remember, remembered};
 pub use schema::{SCHEMA_VERSION, SchemaState};
 pub use snapshot::{
-    BlobCopy, check_integrity, copy_blob, generation_of, replace_database, schema_version_of,
-    upgrade_copy, vacuum_into,
+    BlobCopy, check_integrity, copy_blob, generation_of, put_back_before_upgrade, replace_database,
+    schema_version_of, upgrade_copy, vacuum_into,
 };
 pub use store::{Store, StoreConfig, open_raw};
 pub use user_settings::{

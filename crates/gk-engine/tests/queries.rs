@@ -11,7 +11,7 @@ use std::time::Instant;
 
 use gk_api::ops::common::Via;
 use gk_api::{ErrorCode, OpError, Profile};
-use gk_engine::{Context, Engine, EngineConfig, Failure, Role, SessionStart};
+use gk_engine::{Confirmation, Context, Engine, EngineConfig, Failure, Role, SessionStart};
 use gk_store::WorkspaceLayout;
 use gk_store::rusqlite::params;
 use serde_json::{Value, json};
@@ -505,6 +505,196 @@ fn saved_views_are_kept_checked_and_undone() {
     assert_eq!(list["items"][1]["query"], "type:Bug");
     let group = deleted["group"].as_str().unwrap();
     assert!(!group.is_empty());
+}
+
+#[test]
+fn saved_views_survive_reopening_the_workspace() {
+    let dir = TempDir::new().unwrap();
+    let e = open(&dir, Role::App);
+    data_set(&e);
+    call(
+        &e,
+        "view.create",
+        json!({ "name": "Due soon", "project": "TM", "query": "is:open due<+7d",
+                "sort": "due,-priority", "columns": ["key", "title", "due"],
+                "group_by": "status", "totals": ["estimate"], "is_default": true }),
+    );
+    call(
+        &e,
+        "view.create",
+        json!({ "name": "Web", "project": "SITE", "query": "label:bug",
+                "columns": ["key", "title"] }),
+    );
+    let before = call(&e, "view.list", json!({ "all": true }));
+    e.close();
+    let e = open(&dir, Role::App);
+    assert_eq!(call(&e, "view.list", json!({ "all": true })), before);
+    // Still one list per project.
+    assert_eq!(
+        call(&e, "view.list", json!({ "project": "TM" }))["total"],
+        1
+    );
+    assert_eq!(
+        call(&e, "view.list", json!({ "project": "SITE" }))["items"][0]["columns"],
+        json!(["key", "title"])
+    );
+}
+
+#[test]
+fn a_saved_view_evaluates_its_relative_dates_when_it_runs() {
+    use std::sync::atomic::{AtomicI64, Ordering};
+    const DAY: i64 = 24 * 60 * 60 * 1000;
+    let dir = TempDir::new().unwrap();
+    let clock = Arc::new(AtomicI64::new(NOW));
+    let mut config = config(Role::App);
+    let reading = Arc::clone(&clock);
+    config.clock = Arc::new(move || reading.load(Ordering::SeqCst));
+    let e = Engine::open(&layout(&dir), config).unwrap();
+    call(&e, "project.create", json!({ "name": "Team", "key": "TM" }));
+    task(
+        &e,
+        json!({ "project": "TM", "title": "Soon", "due_date": "2026-11-25" }),
+    );
+    task(
+        &e,
+        json!({ "project": "TM", "title": "Later", "due_date": "2026-12-05" }),
+    );
+    task(
+        &e,
+        json!({ "project": "TM", "title": "Last week", "due_date": "2026-11-17" }),
+    );
+    call(
+        &e,
+        "view.create",
+        json!({ "name": "Next week", "project": "TM", "query": "due:today..+7d" }),
+    );
+    let run_view = || {
+        let view = call(&e, "view.list", json!({ "project": "TM" }))["items"][0].clone();
+        assert_eq!(view["query"], "due:today..+7d", "the view keeps its text");
+        find(&e, view["query"].as_str().unwrap())
+    };
+    // Monday 23 November: the week ahead holds the 25th.
+    assert_eq!(run_view(), v(&["TM-1"]));
+    // Ten days on, the same view holds the 5th of December instead.
+    clock.store(NOW + 10 * DAY, Ordering::SeqCst);
+    assert_eq!(run_view(), v(&["TM-2"]));
+    // Six days earlier, on the 17th, the week ahead ends on the 24th.
+    clock.store(NOW - 6 * DAY, Ordering::SeqCst);
+    assert_eq!(run_view(), v(&["TM-3"]));
+}
+
+#[test]
+fn renaming_a_name_rewrites_the_saved_queries_that_use_it() {
+    let (_dir, e) = workspace();
+    let view = |name: &str, project: Option<&str>, query: &str| {
+        let mut input = json!({ "name": name, "query": query });
+        if let Some(p) = project {
+            input["project"] = json!(p);
+        }
+        call(&e, "view.create", input);
+    };
+    view(
+        "Triage",
+        Some("TM"),
+        "status:\"To do\" type:Bug label:bug,crash -label:ui sort:due",
+    );
+    view("Keys", None, "project:TM/* OR TM-2 OR parent:TM-1");
+    view("Web bugs", Some("SITE"), "label:bug");
+    let query_of = |name: &str| -> String {
+        let all = call(&e, "view.list", json!({ "all": true }));
+        all["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|v| v["name"] == name)
+            .unwrap_or_else(|| panic!("{name} in {all}"))["query"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    };
+    let before = find(&e, &query_of("Triage"));
+
+    // Each rename rewrites the queries of the project's views, in the same
+    // change, and says which views it rewrote.
+    let renamed = call(
+        &e,
+        "status.update",
+        json!({ "project": "TM", "status": "to do", "name": "Ready" }),
+    );
+    assert_eq!(renamed["views_rewritten"], json!(["Triage"]));
+    call(
+        &e,
+        "type.update",
+        json!({ "project": "TM", "type": "Bug", "name": "Defect" }),
+    );
+    call(
+        &e,
+        "label.update",
+        json!({ "project": "TM", "label": "crash", "name": "Crash report" }),
+    );
+    assert_eq!(
+        query_of("Triage"),
+        "status:\"Ready\" type:Defect label:bug,\"Crash report\" -label:ui sort:due"
+    );
+    // The view still finds the same tasks.
+    assert_eq!(find(&e, &query_of("Triage")), before);
+    // The label of the same name in the sub-project is another label.
+    assert_eq!(query_of("Web bugs"), "label:bug");
+
+    // A new project key reaches every view, task keys included.
+    let rekeyed = call(
+        &e,
+        "project.change_key",
+        json!({ "project": "TM", "key": "TEAM" }),
+    );
+    assert_eq!(rekeyed["views_rewritten"], json!(["Keys"]));
+    assert_eq!(
+        query_of("Keys"),
+        "project:TEAM/* OR TEAM-2 OR parent:TEAM-1"
+    );
+    // Undo takes the rewrite back with the key; Redo makes it again.
+    call(&e, "history.undo", json!({}));
+    assert_eq!(query_of("Keys"), "project:TM/* OR TM-2 OR parent:TM-1");
+    call(&e, "history.redo", json!({}));
+    assert_eq!(
+        query_of("Keys"),
+        "project:TEAM/* OR TEAM-2 OR parent:TEAM-1"
+    );
+
+    // Deleting a label takes it out of the queries and says so.
+    let deleted = e
+        .call(
+            &app().with_confirmation(Confirmation::Given),
+            "label.delete",
+            json!({ "project": "TEAM", "label": "ui" }),
+        )
+        .unwrap();
+    assert_eq!(deleted["views_rewritten"], json!(["Triage"]));
+    assert_eq!(
+        query_of("Triage"),
+        "status:\"Ready\" type:Defect label:bug,\"Crash report\" sort:due"
+    );
+
+    // The view's history notes every rewrite.
+    let id = call(&e, "view.list", json!({ "project": "TEAM" }))["items"][0]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let feed = call(&e, "history.feed", json!({ "project": "TEAM" }));
+    let rewrites = feed["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|entry| entry["entity"] == "view" && entry["id"] == id.as_str())
+        .count();
+    assert_eq!(rewrites, 5, "{feed}");
+    // A query that doesn't name the label is left alone.
+    let untouched = call(
+        &e,
+        "label.update",
+        json!({ "project": "TEAM", "label": "bug", "name": "bug" }),
+    );
+    assert!(untouched.get("views_rewritten").is_none());
 }
 
 #[test]

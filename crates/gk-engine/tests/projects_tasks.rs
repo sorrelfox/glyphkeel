@@ -866,6 +866,95 @@ fn the_app_backs_up_an_older_workspace_before_upgrading_it() {
 }
 
 #[test]
+fn there_are_no_members_mentions_or_watchers() {
+    // A local, single-person workspace: no operation, tool or table deals
+    // with members, mentions or watchers.
+    let banned = ["member", "mention", "watch", "invite", "assign"];
+    for op in gk_api::CATALOG {
+        assert!(
+            !banned.iter().any(|b| op.id.contains(b)),
+            "operation {}",
+            op.id
+        );
+    }
+    for tool in gk_api::TOOLS {
+        assert!(
+            !banned.iter().any(|b| tool.name.contains(b)),
+            "tool {}",
+            tool.name
+        );
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let e = open(&dir);
+    let tables: Vec<String> = e
+        .store()
+        .read(|tx| {
+            let mut stmt = tx.prepare("SELECT name FROM sqlite_schema WHERE type = 'table'")?;
+            let rows = stmt
+                .query_map([], |r| r.get::<_, String>(0))?
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok::<_, gk_store::StoreError>(rows)
+        })
+        .unwrap();
+    assert!(tables.iter().any(|t| t == "tasks"));
+    for table in &tables {
+        assert!(!banned.iter().any(|b| table.contains(b)), "table {table}");
+    }
+    // A task names no person to assign it to.
+    project(&e, "TM", None);
+    let t = task(&e, "TM", "Mine");
+    for field in ["assignee", "members", "watchers", "mentions"] {
+        assert!(t.get(field).is_none(), "{field} in {t}");
+    }
+}
+
+#[test]
+fn a_failing_upgrade_puts_the_workspace_back_as_it_was() {
+    let dir = tempfile::tempdir().unwrap();
+    let layout = WorkspaceLayout::new(dir.path().join("Personal"));
+    let e = open(&dir);
+    project(&e, "TM", None);
+    task(&e, "TM", "Kept as it was");
+    e.close();
+    {
+        // An older workspace (schema version 4) with a project icon that the
+        // next upgrade would clear, and a column the last upgrade adds
+        // already present, so the last upgrade fails after the one before
+        // it has run.
+        let conn = gk_store::open_raw(&layout.database()).unwrap();
+        conn.execute_batch("UPDATE projects SET icon = 'unicorn'; PRAGMA user_version = 4;")
+            .unwrap();
+    }
+    let err = Engine::open(&layout, EngineConfig::new(Role::App)).unwrap_err();
+    assert_eq!(err.code, ErrorCode::Storage);
+    assert_eq!(err.details["restored"], true, "{err:?}");
+    let backup = err.details["backup"].as_str().unwrap().to_owned();
+    assert!(err.message.contains(&backup), "{}", err.message);
+    assert!(err.message.contains("resolved_at"), "{}", err.message);
+    assert!(err.hint.is_some());
+    // The workspace is the older one again, untouched by the step that
+    // worked.
+    {
+        let conn = gk_store::open_raw(&layout.database()).unwrap();
+        let version: i64 = conn
+            .pragma_query_value(None, "user_version", |r| r.get(0))
+            .unwrap();
+        assert_eq!(version, 4);
+        let icon: String = conn
+            .query_row("SELECT icon FROM projects", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(icon, "unicorn");
+        let title: String = conn
+            .query_row("SELECT title FROM tasks", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(title, "Kept as it was");
+    }
+    // A program that can't upgrade still refuses it as an older workspace.
+    let refused = Engine::open(&layout, EngineConfig::new(Role::Cli)).unwrap_err();
+    assert_eq!(refused.details["found"], 4, "{refused:?}");
+}
+
+#[test]
 fn upgrading_keeps_the_subtasks_in_the_order_they_were_shown() {
     let dir = tempfile::tempdir().unwrap();
     let layout = WorkspaceLayout::new(dir.path().join("Personal"));

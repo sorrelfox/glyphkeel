@@ -29,6 +29,7 @@ gk-store = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
+gk-seed = { workspace = true }
 insta = { workspace = true, features = ["filters", "json", "redactions"] }
 tempfile = { workspace = true }
 

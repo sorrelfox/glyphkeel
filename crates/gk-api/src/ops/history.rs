@@ -116,6 +116,29 @@ pub struct FieldChange {
     /// The value after.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub after: Option<Value>,
+    /// Whether a long text value was cut to its first 500 characters, as
+    /// in every list; the item itself holds the whole text.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub truncated: bool,
+}
+
+/// Long text in lists is cut to this many characters (Unicode scalar
+/// values), and the item says `truncated`.
+pub const LIST_TEXT_LIMIT: usize = 500;
+
+impl FieldChange {
+    /// Cuts each text value longer than [`LIST_TEXT_LIMIT`] characters to
+    /// that length and marks the change `truncated`.
+    pub fn cut_long_text(&mut self) {
+        for side in [&mut self.before, &mut self.after] {
+            if let Some(Value::String(text)) = side
+                && let Some((at, _)) = text.char_indices().nth(LIST_TEXT_LIMIT)
+            {
+                text.truncate(at);
+                self.truncated = true;
+            }
+        }
+    }
 }
 
 /// What to revert: history groups, or everything an agent session changed.

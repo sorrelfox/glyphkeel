@@ -18,6 +18,7 @@ mod jobs;
 mod messages;
 mod ops;
 mod registry;
+mod scope;
 mod thumbs;
 mod time;
 pub mod transfer;
