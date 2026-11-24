@@ -33,7 +33,8 @@ pub struct WorkspaceInfo {
     pub caller: Caller,
     /// The workspace settings.
     pub settings: Settings,
-    /// The fixed limits on agent sessions.
+    /// The limits on agent sessions enforced now, as in the settings; a
+    /// limit left out is lifted.
     pub agent_limits: AgentLimits,
     /// The timer, while one runs or is paused.
     #[serde(default, skip_serializing_if = "Option::is_none")]

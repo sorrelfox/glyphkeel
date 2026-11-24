@@ -5,7 +5,6 @@ expression: "ws.ok(&[\"workspace\"])"
 name: Personal
 id: [id]
 agent_limits:
-  new_tasks_per_day: 500
   trash_items_per_call: 20
   trash_items_per_hour: 50
   writes_per_minute: 120
@@ -16,6 +15,10 @@ guide: Projects have keys (TM); tasks have keys (TM-41), and an old key still fi
 program_version: [version]
 schema_version: 6
 settings:
+  agent_limits:
+    trash_items_per_call: 20
+    trash_items_per_hour: 50
+    writes_per_minute: 120
   agent_max_profile: standard
   days_per_week: 5
   file_max_mb: 100

@@ -166,35 +166,29 @@
         "properties": {
           "agent_limits": {
             "additionalProperties": false,
-            "description": "The fixed limits on agent sessions.",
+            "description": "The limits on agent sessions enforced now, as in the settings; a\nlimit left out is lifted.",
             "properties": {
               "new_tasks_per_day": {
-                "description": "Tasks a session may create in any 24 hours.",
+                "description": "Tasks a session may create in any 24 hours; left out: no limit.",
                 "minimum": 0,
                 "type": "integer"
               },
               "trash_items_per_call": {
-                "description": "Items a standard agent may move to the trash in one call.",
+                "description": "Items a standard agent may move to the trash in one call; left out:\nno limit.",
                 "minimum": 0,
                 "type": "integer"
               },
               "trash_items_per_hour": {
-                "description": "Items a standard agent session may move to the trash in an hour.",
+                "description": "Items a standard agent session may move to the trash in an hour;\nleft out: no limit.",
                 "minimum": 0,
                 "type": "integer"
               },
               "writes_per_minute": {
-                "description": "Calls of changing tools allowed in any minute, per session.",
+                "description": "Calls of changing tools allowed in any minute, per session; left\nout: no limit.",
                 "minimum": 0,
                 "type": "integer"
               }
             },
-            "required": [
-              "writes_per_minute",
-              "new_tasks_per_day",
-              "trash_items_per_call",
-              "trash_items_per_hour"
-            ],
             "type": "object"
           },
           "caller": {
@@ -306,6 +300,33 @@
             "additionalProperties": false,
             "description": "The workspace settings.",
             "properties": {
+              "agent_limits": {
+                "additionalProperties": false,
+                "description": "The limits on every agent session. Only the person sets them, in the\napp.",
+                "properties": {
+                  "new_tasks_per_day": {
+                    "description": "Tasks a session may create in any 24 hours; left out: no limit.",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "trash_items_per_call": {
+                    "description": "Items a standard agent may move to the trash in one call; left out:\nno limit.",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "trash_items_per_hour": {
+                    "description": "Items a standard agent session may move to the trash in an hour;\nleft out: no limit.",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "writes_per_minute": {
+                    "description": "Calls of changing tools allowed in any minute, per session; left\nout: no limit.",
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              },
               "agent_max_profile": {
                 "description": "The most an agent may do, whatever profile it asks for.",
                 "oneOf": [
@@ -388,6 +409,7 @@
               "week_start",
               "file_max_mb",
               "agent_max_profile",
+              "agent_limits",
               "timer_reminder_hours"
             ],
             "type": "object"
@@ -31939,6 +31961,33 @@
             "additionalProperties": false,
             "description": "All settings, after the change.",
             "properties": {
+              "agent_limits": {
+                "additionalProperties": false,
+                "description": "The limits on every agent session. Only the person sets them, in the\napp.",
+                "properties": {
+                  "new_tasks_per_day": {
+                    "description": "Tasks a session may create in any 24 hours; left out: no limit.",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "trash_items_per_call": {
+                    "description": "Items a standard agent may move to the trash in one call; left out:\nno limit.",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "trash_items_per_hour": {
+                    "description": "Items a standard agent session may move to the trash in an hour;\nleft out: no limit.",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "writes_per_minute": {
+                    "description": "Calls of changing tools allowed in any minute, per session; left\nout: no limit.",
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              },
               "agent_max_profile": {
                 "description": "The most an agent may do, whatever profile it asks for.",
                 "oneOf": [
@@ -32021,6 +32070,7 @@
               "week_start",
               "file_max_mb",
               "agent_max_profile",
+              "agent_limits",
               "timer_reminder_hours"
             ],
             "type": "object"

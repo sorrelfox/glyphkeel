@@ -40,22 +40,29 @@ agents-profile-full = Full
 agents-profile-read-only-about = Agents can read, search and report, but change nothing.
 agents-profile-standard-about = Agents can create and change tasks, and move items to the trash, but delete nothing for good.
 agents-profile-full-about = Agents can do everything you can, including emptying the trash and deleting projects.
-agents-limits = Limits
-agents-limits-about = Each agent session makes at most { $perMinute ->
-        [one] one change
-       *[other] { $perMinute } changes
-    } a minute and creates at most { $perDay ->
-        [one] one new task
-       *[other] { $perDay } new tasks
-    } a day. With Standard, it moves at most { $perCall ->
-        [one] one item
-       *[other] { $perCall } items
-    } to the trash at a time and { $perHour ->
-        [one] one
-       *[other] { $perHour }
-    } an hour.
-agents-raise = Raising the limit
-agents-raise-about = Letting agents do more asks you in a window of the desktop, so that an agent can't widen its own rights.
+agents-raise = Letting agents do more
+agents-raise-about = Letting agents do more, or raising their limits, asks you in a window of the desktop, so that an agent can't widen its own rights.
+
+agents-limits = Limits on each agent session
+agents-limits-only-here = Who can change them
+agents-limits-only-here-about = Only you, here in the app. Agents and the command line can't change these limits or undo your changes to them.
+agents-no-limit = No limit
+agents-limit-writes = Changes a minute
+agents-limit-writes-about = Calls that change something, in any minute. Default: { $default }.
+agents-limit-writes-unit = a minute
+agents-limit-writes-none = No limit on changes a minute
+agents-limit-tasks = New tasks a day
+agents-limit-tasks-about = Tasks a session creates in any 24 hours. Default: no limit.
+agents-limit-tasks-unit = a day
+agents-limit-tasks-none = No limit on new tasks a day
+agents-limit-trash-call = Items to the trash at a time
+agents-limit-trash-call-about = With the Standard profile, in one call; subtasks count. Default: { $default }.
+agents-limit-trash-call-unit = per call
+agents-limit-trash-call-none = No limit on items to the trash at a time
+agents-limit-trash-hour = Items to the trash an hour
+agents-limit-trash-hour-about = With the Standard profile, in any hour. Default: { $default }.
+agents-limit-trash-hour-unit = an hour
+agents-limit-trash-hour-none = No limit on items to the trash an hour
 
 agents-sessions = Agent sessions
 agents-sessions-none = No agent has connected yet.

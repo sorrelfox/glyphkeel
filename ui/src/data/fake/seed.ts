@@ -279,6 +279,7 @@ export function seed(today: Date, seedNumber = 7): FakeState {
     timer: null,
     reminders: [],
     settings: {
+      agent_limits: { writes_per_minute: 120, trash_items_per_call: 20, trash_items_per_hour: 50 },
       agent_max_profile: "standard",
       days_per_week: 5,
       file_max_mb: 100,

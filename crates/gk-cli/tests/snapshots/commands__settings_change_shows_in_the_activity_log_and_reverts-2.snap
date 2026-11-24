@@ -5,6 +5,10 @@ expression: "ws.ok(&[\"settings\", \"set\", \"--hours-per-day\", \"6\", \"--week
 changed: hours_per_day, week_start
 group: [id]
 settings:
+  agent_limits:
+    trash_items_per_call: 20
+    trash_items_per_hour: 50
+    writes_per_minute: 120
   agent_max_profile: standard
   days_per_week: 5
   file_max_mb: 100

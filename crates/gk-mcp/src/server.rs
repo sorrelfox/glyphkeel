@@ -11,6 +11,7 @@ use std::borrow::Cow;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Instant;
 
+use gk_api::ops::agent::AgentLimits;
 use gk_api::{OpError, Profile, Safety, Toolset};
 use gk_engine::Engine;
 use rmcp::model::{
@@ -142,18 +143,26 @@ impl Server {
             .clone()
     }
 
-    /// The agent's profile after the workspace's cap, read now: the person
-    /// can change the cap while the server runs.
-    fn effective_profile(&self) -> Result<Profile, OpError> {
-        let requested = self.inner.session.requested_profile();
+    /// The workspace settings, read now: the person can change what agents
+    /// may do while the server runs.
+    fn settings(&self) -> Result<Value, OpError> {
         let ctx = self.inner.session.housekeeping_context();
-        let settings = self.inner.engine.call(&ctx, "settings.get", Value::Null)?;
+        self.inner.engine.call(&ctx, "settings.get", Value::Null)
+    }
+
+    /// The agent's profile after the workspace's cap in `settings`.
+    fn profile_in(&self, settings: &Value) -> Profile {
         let cap = settings
             .get("agent_max_profile")
             .and_then(Value::as_str)
             .and_then(|p| p.parse::<Profile>().ok())
             .unwrap_or(Profile::Standard);
-        Ok(requested.capped_by(cap))
+        self.inner.session.requested_profile().capped_by(cap)
+    }
+
+    /// The agent's profile after the workspace's cap, read now.
+    fn effective_profile(&self) -> Result<Profile, OpError> {
+        Ok(self.profile_in(&self.settings()?))
     }
 
     /// Whether the tool list changed since it was last served, because the
@@ -202,7 +211,8 @@ impl Server {
         name: &str,
         arguments: Option<serde_json::Map<String, Value>>,
     ) -> Result<(String, Value), OpError> {
-        let profile = self.effective_profile()?;
+        let settings = self.settings()?;
+        let profile = self.profile_in(&settings);
         let listed: Vec<&str> = tools::listed(profile, &self.inner.toolsets)
             .map(|(t, _)| t.name)
             .collect();
@@ -233,7 +243,9 @@ impl Server {
             ));
         }
         if tool.safety() >= Safety::Write {
-            self.inner.writes.check(Instant::now())?;
+            self.inner
+                .writes
+                .check(Instant::now(), writes_per_minute(&settings))?;
         }
         let ctx = self
             .inner
@@ -243,6 +255,18 @@ impl Server {
         let output = self.inner.engine.call(&ctx, tool.main, input)?;
         Ok((render::markdown(tool.name, &output), output))
     }
+}
+
+/// The workspace's limit on changing calls a minute in `settings`; `None`
+/// when the person lifted it. Settings that don't say keep the default.
+fn writes_per_minute(settings: &Value) -> Option<usize> {
+    let limits = settings
+        .get("agent_limits")
+        .and_then(|l| serde_json::from_value::<AgentLimits>(l.clone()).ok())
+        .unwrap_or_default();
+    limits
+        .writes_per_minute
+        .map(|n| usize::try_from(n).unwrap_or(usize::MAX))
 }
 
 impl ServerHandler for Server {

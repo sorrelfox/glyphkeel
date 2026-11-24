@@ -279,39 +279,33 @@
           },
           "AgentLimits": {
             "additionalProperties": false,
-            "description": "The fixed limits on agent sessions, so a runaway loop can't flood the\nworkspace.",
+            "description": "The limits on every agent session, so a runaway loop can't flood the\nworkspace. A limit that is left out is lifted: there is no limit. Only\nthe person changes them, in the app.",
             "properties": {
               "new_tasks_per_day": {
-                "description": "Tasks a session may create in any 24 hours.",
+                "description": "Tasks a session may create in any 24 hours; left out: no limit.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
               },
               "trash_items_per_call": {
-                "description": "Items a standard agent may move to the trash in one call.",
+                "description": "Items a standard agent may move to the trash in one call; left out:\nno limit.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
               },
               "trash_items_per_hour": {
-                "description": "Items a standard agent session may move to the trash in an hour.",
+                "description": "Items a standard agent session may move to the trash in an hour;\nleft out: no limit.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
               },
               "writes_per_minute": {
-                "description": "Calls of changing tools allowed in any minute, per session.",
+                "description": "Calls of changing tools allowed in any minute, per session; left\nout: no limit.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
               }
             },
-            "required": [
-              "writes_per_minute",
-              "new_tasks_per_day",
-              "trash_items_per_call",
-              "trash_items_per_hour"
-            ],
             "type": "object"
           },
           "Caller": {
@@ -390,6 +384,10 @@
             "additionalProperties": false,
             "description": "The workspace's settings, with defaults filled in.",
             "properties": {
+              "agent_limits": {
+                "$ref": "#/$defs/AgentLimits",
+                "description": "The limits on every agent session. Only the person sets them, in the\napp."
+              },
               "agent_max_profile": {
                 "$ref": "#/$defs/Profile",
                 "description": "The most an agent may do, whatever profile it asks for."
@@ -445,6 +443,7 @@
               "week_start",
               "file_max_mb",
               "agent_max_profile",
+              "agent_limits",
               "timer_reminder_hours"
             ],
             "type": "object"
@@ -621,7 +620,7 @@
         "properties": {
           "agent_limits": {
             "$ref": "#/$defs/AgentLimits",
-            "description": "The fixed limits on agent sessions."
+            "description": "The limits on agent sessions enforced now, as in the settings; a\nlimit left out is lifted."
           },
           "caller": {
             "$ref": "#/$defs/Caller",
@@ -690,6 +689,37 @@
       "mcp_tool": "get_workspace",
       "output": {
         "$defs": {
+          "AgentLimits": {
+            "additionalProperties": false,
+            "description": "The limits on every agent session, so a runaway loop can't flood the\nworkspace. A limit that is left out is lifted: there is no limit. Only\nthe person changes them, in the app.",
+            "properties": {
+              "new_tasks_per_day": {
+                "description": "Tasks a session may create in any 24 hours; left out: no limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "trash_items_per_call": {
+                "description": "Items a standard agent may move to the trash in one call; left out:\nno limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "trash_items_per_hour": {
+                "description": "Items a standard agent session may move to the trash in an hour;\nleft out: no limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "writes_per_minute": {
+                "description": "Calls of changing tools allowed in any minute, per session; left\nout: no limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
           "Profile": {
             "description": "What an agent may do. The workspace setting \"most an agent may do\" caps\nthe profile an agent asks for.",
             "oneOf": [
@@ -735,6 +765,10 @@
         "additionalProperties": false,
         "description": "The workspace's settings, with defaults filled in.",
         "properties": {
+          "agent_limits": {
+            "$ref": "#/$defs/AgentLimits",
+            "description": "The limits on every agent session. Only the person sets them, in the\napp."
+          },
           "agent_max_profile": {
             "$ref": "#/$defs/Profile",
             "description": "The most an agent may do, whatever profile it asks for."
@@ -790,6 +824,7 @@
           "week_start",
           "file_max_mb",
           "agent_max_profile",
+          "agent_limits",
           "timer_reminder_hours"
         ],
         "title": "Settings",
@@ -949,6 +984,37 @@
       "mcp_tool": "update_settings",
       "output": {
         "$defs": {
+          "AgentLimits": {
+            "additionalProperties": false,
+            "description": "The limits on every agent session, so a runaway loop can't flood the\nworkspace. A limit that is left out is lifted: there is no limit. Only\nthe person changes them, in the app.",
+            "properties": {
+              "new_tasks_per_day": {
+                "description": "Tasks a session may create in any 24 hours; left out: no limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "trash_items_per_call": {
+                "description": "Items a standard agent may move to the trash in one call; left out:\nno limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "trash_items_per_hour": {
+                "description": "Items a standard agent session may move to the trash in an hour;\nleft out: no limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "writes_per_minute": {
+                "description": "Calls of changing tools allowed in any minute, per session; left\nout: no limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
           "Profile": {
             "description": "What an agent may do. The workspace setting \"most an agent may do\" caps\nthe profile an agent asks for.",
             "oneOf": [
@@ -973,6 +1039,10 @@
             "additionalProperties": false,
             "description": "The workspace's settings, with defaults filled in.",
             "properties": {
+              "agent_limits": {
+                "$ref": "#/$defs/AgentLimits",
+                "description": "The limits on every agent session. Only the person sets them, in the\napp."
+              },
               "agent_max_profile": {
                 "$ref": "#/$defs/Profile",
                 "description": "The most an agent may do, whatever profile it asks for."
@@ -1028,6 +1098,7 @@
               "week_start",
               "file_max_mb",
               "agent_max_profile",
+              "agent_limits",
               "timer_reminder_hours"
             ],
             "type": "object"
@@ -37100,6 +37171,37 @@
       "kind": "command",
       "output": {
         "$defs": {
+          "AgentLimits": {
+            "additionalProperties": false,
+            "description": "The limits on every agent session, so a runaway loop can't flood the\nworkspace. A limit that is left out is lifted: there is no limit. Only\nthe person changes them, in the app.",
+            "properties": {
+              "new_tasks_per_day": {
+                "description": "Tasks a session may create in any 24 hours; left out: no limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "trash_items_per_call": {
+                "description": "Items a standard agent may move to the trash in one call; left out:\nno limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "trash_items_per_hour": {
+                "description": "Items a standard agent session may move to the trash in an hour;\nleft out: no limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "writes_per_minute": {
+                "description": "Calls of changing tools allowed in any minute, per session; left\nout: no limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
           "Profile": {
             "description": "What an agent may do. The workspace setting \"most an agent may do\" caps\nthe profile an agent asks for.",
             "oneOf": [
@@ -37124,6 +37226,10 @@
             "additionalProperties": false,
             "description": "The workspace's settings, with defaults filled in.",
             "properties": {
+              "agent_limits": {
+                "$ref": "#/$defs/AgentLimits",
+                "description": "The limits on every agent session. Only the person sets them, in the\napp."
+              },
               "agent_max_profile": {
                 "$ref": "#/$defs/Profile",
                 "description": "The most an agent may do, whatever profile it asks for."
@@ -37179,6 +37285,7 @@
               "week_start",
               "file_max_mb",
               "agent_max_profile",
+              "agent_limits",
               "timer_reminder_hours"
             ],
             "type": "object"
@@ -37234,6 +37341,271 @@
       "output_name": "SettingsChange",
       "safety": "app",
       "summary": "Set the most an agent may do, whatever profile it asks for."
+    },
+    {
+      "app_reason": "It sets how much agents may do; an agent that could call it would raise its own limits beyond what the person allowed.",
+      "exposure": "app",
+      "id": "agent.limits.update",
+      "input": {
+        "$defs": {
+          "AgentLimit": {
+            "description": "One of the limits on agent sessions.",
+            "oneOf": [
+              {
+                "const": "writes_per_minute",
+                "description": "Calls of changing tools in any minute (default 120).",
+                "type": "string"
+              },
+              {
+                "const": "new_tasks_per_day",
+                "description": "Tasks created in any 24 hours (default: no limit).",
+                "type": "string"
+              },
+              {
+                "const": "trash_items_per_call",
+                "description": "Items a standard agent moves to the trash in one call (default 20).",
+                "type": "string"
+              },
+              {
+                "const": "trash_items_per_hour",
+                "description": "Items a standard agent session moves to the trash in an hour\n(default 50).",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The limits on agent sessions to change; limits left out keep their\nvalue.",
+        "properties": {
+          "new_tasks_per_day": {
+            "description": "Tasks a session may create in any 24 hours, 1 to 1000000.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "no_limit": {
+            "description": "Limits to lift: agents then have no limit there.",
+            "items": {
+              "$ref": "#/$defs/AgentLimit"
+            },
+            "type": "array"
+          },
+          "reset": {
+            "description": "Limits to set back to their default.",
+            "items": {
+              "$ref": "#/$defs/AgentLimit"
+            },
+            "type": "array"
+          },
+          "trash_items_per_call": {
+            "description": "Items a standard agent may move to the trash in one call, 1 to\n1000000.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "trash_items_per_hour": {
+            "description": "Items a standard agent session may move to the trash in an hour, 1\nto 1000000.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "writes_per_minute": {
+            "description": "Calls of changing tools allowed in any minute, per session, 1 to\n1000000.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "title": "AgentLimitsPatch",
+        "type": "object"
+      },
+      "input_name": "AgentLimitsPatch",
+      "kind": "command",
+      "output": {
+        "$defs": {
+          "AgentLimits": {
+            "additionalProperties": false,
+            "description": "The limits on every agent session, so a runaway loop can't flood the\nworkspace. A limit that is left out is lifted: there is no limit. Only\nthe person changes them, in the app.",
+            "properties": {
+              "new_tasks_per_day": {
+                "description": "Tasks a session may create in any 24 hours; left out: no limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "trash_items_per_call": {
+                "description": "Items a standard agent may move to the trash in one call; left out:\nno limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "trash_items_per_hour": {
+                "description": "Items a standard agent session may move to the trash in an hour;\nleft out: no limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "writes_per_minute": {
+                "description": "Calls of changing tools allowed in any minute, per session; left\nout: no limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
+          "Profile": {
+            "description": "What an agent may do. The workspace setting \"most an agent may do\" caps\nthe profile an agent asks for.",
+            "oneOf": [
+              {
+                "const": "read-only",
+                "description": "Reads only.",
+                "type": "string"
+              },
+              {
+                "const": "standard",
+                "description": "Reads, changes and moves to the trash; nothing permanent.",
+                "type": "string"
+              },
+              {
+                "const": "full",
+                "description": "Everything except operations on the application itself.",
+                "type": "string"
+              }
+            ]
+          },
+          "Settings": {
+            "additionalProperties": false,
+            "description": "The workspace's settings, with defaults filled in.",
+            "properties": {
+              "agent_limits": {
+                "$ref": "#/$defs/AgentLimits",
+                "description": "The limits on every agent session. Only the person sets them, in the\napp."
+              },
+              "agent_max_profile": {
+                "$ref": "#/$defs/Profile",
+                "description": "The most an agent may do, whatever profile it asks for."
+              },
+              "backup_folder": {
+                "description": "The folder that holds this workspace's backups, as an absolute path;\nleft out: the default folder. Only the person sets it, in the app.",
+                "type": "string"
+              },
+              "days_per_week": {
+                "description": "Working days in a week, for durations written in weeks (`1w`).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "file_max_mb": {
+                "description": "The largest file that can be attached, in megabytes.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "hours_per_day": {
+                "description": "Working hours in a day, for durations written in days (`2d`).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "reminder_time": {
+                "description": "When reminders for a due date fire, as `HH:MM`.",
+                "type": "string"
+              },
+              "timer_reminder_hours": {
+                "description": "Hours a timer runs before it reminds that it is still running; 0\nnever.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "trash_days": {
+                "description": "Days an item stays in the trash before it is purged.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "week_start": {
+                "$ref": "#/$defs/WeekStart",
+                "description": "The first day of the week in calendars and in `this-week`."
+              }
+            },
+            "required": [
+              "trash_days",
+              "reminder_time",
+              "hours_per_day",
+              "days_per_week",
+              "week_start",
+              "file_max_mb",
+              "agent_max_profile",
+              "agent_limits",
+              "timer_reminder_hours"
+            ],
+            "type": "object"
+          },
+          "WeekStart": {
+            "description": "The first day of the week.",
+            "oneOf": [
+              {
+                "const": "monday",
+                "description": "Monday.",
+                "type": "string"
+              },
+              {
+                "const": "saturday",
+                "description": "Saturday.",
+                "type": "string"
+              },
+              {
+                "const": "sunday",
+                "description": "Sunday.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The settings after a change.",
+        "properties": {
+          "changed": {
+            "description": "The settings whose value changed.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "group": {
+            "description": "The history group of the change, for revert and Undo; left out when\nnothing changed.",
+            "type": "string"
+          },
+          "settings": {
+            "$ref": "#/$defs/Settings",
+            "description": "All settings, after the change."
+          }
+        },
+        "required": [
+          "settings",
+          "changed"
+        ],
+        "title": "SettingsChange",
+        "type": "object"
+      },
+      "output_name": "SettingsChange",
+      "safety": "app",
+      "summary": "Change the limits on agent sessions: changes a minute, new tasks a day, and items moved to the trash per call and per hour. Each is a number or no limit."
     },
     {
       "cli": "activity",
@@ -39141,6 +39513,37 @@
       "kind": "command",
       "output": {
         "$defs": {
+          "AgentLimits": {
+            "additionalProperties": false,
+            "description": "The limits on every agent session, so a runaway loop can't flood the\nworkspace. A limit that is left out is lifted: there is no limit. Only\nthe person changes them, in the app.",
+            "properties": {
+              "new_tasks_per_day": {
+                "description": "Tasks a session may create in any 24 hours; left out: no limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "trash_items_per_call": {
+                "description": "Items a standard agent may move to the trash in one call; left out:\nno limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "trash_items_per_hour": {
+                "description": "Items a standard agent session may move to the trash in an hour;\nleft out: no limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "writes_per_minute": {
+                "description": "Calls of changing tools allowed in any minute, per session; left\nout: no limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
           "Profile": {
             "description": "What an agent may do. The workspace setting \"most an agent may do\" caps\nthe profile an agent asks for.",
             "oneOf": [
@@ -39165,6 +39568,10 @@
             "additionalProperties": false,
             "description": "The workspace's settings, with defaults filled in.",
             "properties": {
+              "agent_limits": {
+                "$ref": "#/$defs/AgentLimits",
+                "description": "The limits on every agent session. Only the person sets them, in the\napp."
+              },
               "agent_max_profile": {
                 "$ref": "#/$defs/Profile",
                 "description": "The most an agent may do, whatever profile it asks for."
@@ -39220,6 +39627,7 @@
               "week_start",
               "file_max_mb",
               "agent_max_profile",
+              "agent_limits",
               "timer_reminder_hours"
             ],
             "type": "object"

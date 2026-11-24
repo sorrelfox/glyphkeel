@@ -25,6 +25,8 @@ confirm-agent-raise = _Allow
 confirm-agent-raise-standard = Let agents change tasks and move items to the trash? Every agent connected through MCP may then do this, unless it asks for less.
 confirm-agent-raise-full = Let agents do everything, including deleting for good? Every agent connected through MCP may then empty the trash and delete projects, unless it asks for less.
 confirm-agent-raise-refused = Agents may do no more than before: the change was not confirmed.
+confirm-agent-limits-raise = Raise the limits on agents? Every agent connected through MCP may then make more changes, create more tasks or move more items to the trash than before.
+confirm-agent-limits-refused = The limits on agents stay as they were: the change was not confirmed.
 
 ## The command-line tool
 

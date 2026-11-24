@@ -3,7 +3,7 @@
 
 import { join } from "node:path";
 
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 const token = process.env.GK_BRIDGE_TOKEN ?? "";
 const PAGE = `/?bridge=${process.env.GK_PREFS_BRIDGE_PORT ?? "5328"}&token=${token}`;
@@ -93,6 +93,76 @@ test("Agents & CLI: client set-up to copy, the most an agent may do, sessions", 
 
   await expect(dialog).toContainText("No agent has connected yet.");
   await shot(page, "prefs-agents.png");
+});
+
+test("Agents & CLI: the person sets each limit on agent sessions to a number or to no limit", async ({ page }) => {
+  await page.goto(PAGE);
+  const open = async () => {
+    const dialog = await openPreferences(page, "Agents & CLI");
+    const limits = dialog.getByRole("region", { name: "Limits on each agent session" });
+    await limits.scrollIntoViewIfNeeded();
+    return {
+      limits,
+      writes: limits.getByRole("spinbutton", { name: "Changes a minute" }),
+      tasks: limits.getByRole("spinbutton", { name: "New tasks a day" }),
+      perCall: limits.getByRole("spinbutton", { name: "Items to the trash at a time" }),
+      perHour: limits.getByRole("spinbutton", { name: "Items to the trash an hour" }),
+      noWriteLimit: limits.getByRole("switch", { name: "No limit on changes a minute" }),
+      noTaskLimit: limits.getByRole("switch", { name: "No limit on new tasks a day" }),
+    };
+  };
+  // A switch is turned from the keyboard: its input is drawn by the switch beside it.
+  const toggle = async (control: Locator) => {
+    await control.focus();
+    await page.keyboard.press("Space");
+  };
+  let row = await open();
+
+  // The defaults: 120 changes a minute, 20 and 50 items to the trash, no limit on new tasks.
+  await expect(row.writes).toHaveValue("120");
+  await expect(row.perCall).toHaveValue("20");
+  await expect(row.perHour).toHaveValue("50");
+  await expect(row.noTaskLimit).toBeChecked();
+  await expect(row.tasks).toBeDisabled();
+  await expect(row.limits).toContainText("Only you, here in the app.");
+
+  // A number is saved on Enter.
+  await row.writes.fill("60");
+  await row.writes.press("Enter");
+  // Setting a limit on new tasks offers 500, and it can be changed.
+  await toggle(row.noTaskLimit);
+  await expect(row.noTaskLimit).not.toBeChecked();
+  await expect(row.tasks).toBeEnabled();
+  await expect(row.tasks).toHaveValue("500");
+  await row.tasks.fill("250");
+  await row.tasks.press("Tab");
+  // Anything that isn't a whole number from 1 goes back to the stored value.
+  await row.perCall.fill("0");
+  await row.perCall.press("Enter");
+  await expect(row.perCall).toHaveValue("20");
+  // Lifting a limit empties its field.
+  await toggle(row.noWriteLimit);
+  await expect(row.noWriteLimit).toBeChecked();
+  await expect(row.writes).toBeDisabled();
+  await expect(row.writes).toHaveValue("");
+  await shot(page, "prefs-agent-limits.png");
+
+  // The engine kept them.
+  await page.reload();
+  row = await open();
+  await expect(row.noWriteLimit).toBeChecked();
+  await expect(row.tasks).toHaveValue("250");
+  await expect(row.perCall).toHaveValue("20");
+
+  // Back to the defaults for the flows after this one.
+  await toggle(row.noWriteLimit);
+  await expect(row.writes).toHaveValue("120");
+  await toggle(row.noTaskLimit);
+  await expect(row.noTaskLimit).toBeChecked();
+  await page.reload();
+  row = await open();
+  await expect(row.writes).toHaveValue("120");
+  await expect(row.noTaskLimit).toBeChecked();
 });
 
 test("Preferences: shortcuts can be searched, and the language applies at once", async ({ page }) => {

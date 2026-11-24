@@ -8,6 +8,8 @@
 
 import {
   type ActivityEntry,
+  type AgentLimit,
+  type AgentLimits,
   type Backup,
   type BulkItem,
   type BulkResult,
@@ -85,6 +87,9 @@ function fail(code: OpError["code"], message: string, extra: { hint?: string; de
 const fold = (text: string) => text.normalize("NFKC").toLowerCase().trim();
 const isClosed = (category: string) => category === "done" || category === "cancelled";
 const MAX_TITLE = 500;
+/** The limits on agent sessions, and the engine's defaults: no limit on new tasks. */
+const AGENT_LIMITS: readonly AgentLimit[] = ["writes_per_minute", "new_tasks_per_day", "trash_items_per_call", "trash_items_per_hour"];
+const DEFAULT_AGENT_LIMITS: Readonly<AgentLimits> = { writes_per_minute: 120, trash_items_per_call: 20, trash_items_per_hour: 50 };
 const MAX_DEPTH = 3;
 const PROJECT_ICON_NAMES: ReadonlySet<string> = new Set(PROJECT_ICONS);
 const KEY_PATTERN = /^[A-Z][A-Z0-9]{1,9}$/;
@@ -220,6 +225,13 @@ export class FakeWorkspace {
   }
 
   /** Adds one command's changes to the activity log. */
+  /** The settings as the engine answers them, with the default limits for a state saved without them. */
+  private settingsNow(): Settings {
+    const settings = this.state.settings;
+    const saved = (settings as Partial<Settings>).agent_limits;
+    return { ...settings, agent_limits: { ...(saved ?? DEFAULT_AGENT_LIMITS) } };
+  }
+
   private record(before: FakeState, op: string, group: string, changes: readonly EntityChange[]): void {
     const at = this.today().toISOString();
     for (const change of changes) {
@@ -1455,13 +1467,13 @@ export class FakeWorkspace {
         name: this.state.workspaceName,
         program_version: __VERSION__,
         schema_version: 2,
-        settings: { ...this.state.settings },
-        // The engine's limits on agent sessions, as the engine reports them.
-        agent_limits: { writes_per_minute: 120, new_tasks_per_day: 500, trash_items_per_call: 20, trash_items_per_hour: 50 },
+        settings: this.settingsNow(),
+        // The limits on agent sessions enforced now; a lifted limit is left out.
+        agent_limits: this.settingsNow().agent_limits,
       };
       return info;
     },
-    "settings.get": () => ({ ...this.state.settings }),
+    "settings.get": () => this.settingsNow(),
     "settings.update": (patch: SettingsPatch) => {
       const changed: string[] = [];
       for (const [name, value] of Object.entries(patch)) {
@@ -1470,7 +1482,7 @@ export class FakeWorkspace {
           changed.push(name);
         }
       }
-      const settings: Settings = { ...this.state.settings };
+      const settings: Settings = this.settingsNow();
       return { output: { changed, settings }, changes: changed.length ? [{ entity: "settings", id: "w-1", fields: changed }] : [] };
     },
     "history.feed": ({ limit, cursor, task: ref, actor_kind, project: projectRef, from: fromText, to: toText }) => {
@@ -2063,6 +2075,40 @@ export class FakeWorkspace {
       this.state.trash = (this.state.trash ?? []).filter((deletion) => !chosen.includes(deletion));
       const changes = chosen.flatMap((deletion) => deletion.tasks.map((task) => ({ entity: "task", id: task.id, fields: ["purged"], project: deletion.entry.project ?? "" })));
       return { output: { items: chosen.map((deletion) => deletion.entry), total: changes.length }, changes };
+    },
+    "agent.limits.update": (patch) => {
+      // Like the engine: only the app reaches it; numbers from 1 to 1000000,
+      // lifted limits left out, and a reset brings back the default.
+      const before = this.settingsNow().agent_limits;
+      const values = new Map<AgentLimit, number | undefined>(AGENT_LIMITS.map((name) => [name, before[name]]));
+      for (const name of AGENT_LIMITS) {
+        const value = patch[name];
+        if (value === null || value === undefined) {
+          continue;
+        }
+        if (!Number.isInteger(value) || value < 1 || value > 1_000_000) {
+          fail("invalid", `${name} must be from 1 to 1000000; got ${String(value)}.`, { details: { path: name } });
+        }
+        values.set(name, value);
+      }
+      for (const name of patch.no_limit ?? []) {
+        values.set(name, undefined);
+      }
+      for (const name of patch.reset ?? []) {
+        values.set(name, DEFAULT_AGENT_LIMITS[name]);
+      }
+      const limits: AgentLimits = {};
+      for (const [name, value] of values) {
+        if (value !== undefined) {
+          limits[name] = value;
+        }
+      }
+      const same = AGENT_LIMITS.every((name) => limits[name] === before[name]);
+      if (!same) {
+        this.state.settings.agent_limits = limits;
+      }
+      const changed = same ? [] : ["agent_limits"];
+      return { output: { changed, settings: this.settingsNow() }, changes: changed.length ? [{ entity: "settings", id: "w-1", fields: changed }] : [] };
     },
     "backup.folder.update": ({ folder }) => {
       const settings = this.state.settings;

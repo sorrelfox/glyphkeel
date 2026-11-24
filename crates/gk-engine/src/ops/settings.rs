@@ -116,7 +116,7 @@ pub(crate) fn set_all(
     })
 }
 
-fn in_range(field: &str, value: u32, min: u32, max: u32) -> Result<(), Failure> {
+pub(crate) fn in_range(field: &str, value: u32, min: u32, max: u32) -> Result<(), Failure> {
     if (min..=max).contains(&value) {
         Ok(())
     } else {
@@ -145,7 +145,7 @@ fn is_clock_time(s: &str) -> bool {
         && (b[3] - b'0') * 10 + (b[4] - b'0') < 60
 }
 
-fn to_value<T: serde::Serialize>(v: T) -> Result<Value, Failure> {
+pub(crate) fn to_value<T: serde::Serialize>(v: T) -> Result<Value, Failure> {
     serde_json::to_value(v).map_err(|e| {
         Failure::Op(messages::storage(
             "storage-json",

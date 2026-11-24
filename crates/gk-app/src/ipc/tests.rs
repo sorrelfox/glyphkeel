@@ -373,6 +373,57 @@ fn deleting_a_backup_asks_first() {
 }
 
 #[test]
+fn raising_the_limits_on_agents_asks_natively_and_lowering_does_not() {
+    let dir = TempDir::new().unwrap();
+    let asked = Arc::new(AtomicUsize::new(0));
+    let answer = Arc::new(Mutex::new(false));
+    let workspace = {
+        let asked = Arc::clone(&asked);
+        let answer = Arc::clone(&answer);
+        open(
+            &dir,
+            Confirmation::Ask(Arc::new(move |request| {
+                assert_eq!(request.op.id, "agent.limits.update");
+                asked.fetch_add(1, Ordering::SeqCst);
+                *answer.lock().unwrap()
+            })),
+        )
+    };
+    let limits = |workspace: &Workspace| {
+        workspace.call("settings.get", Value::Null, None).unwrap()["agent_limits"].clone()
+    };
+    let set =
+        |workspace: &Workspace, input: Value| workspace.call("agent.limits.update", input, None);
+
+    // Lowering a limit, setting a limit where there was none, or the same
+    // again, go through without a question.
+    set(&workspace, json!({ "writes_per_minute": 60 })).unwrap();
+    set(&workspace, json!({ "new_tasks_per_day": 100 })).unwrap();
+    set(&workspace, json!({ "writes_per_minute": 60 })).unwrap();
+    assert_eq!(asked.load(Ordering::SeqCst), 0);
+    assert_eq!(limits(&workspace)["writes_per_minute"], 60);
+
+    // A higher number, or no limit, asks; a refusal changes nothing.
+    for input in [
+        json!({ "writes_per_minute": 61 }),
+        json!({ "no_limit": ["new_tasks_per_day"] }),
+        json!({ "reset": ["writes_per_minute"] }),
+    ] {
+        let refused = set(&workspace, input.clone()).unwrap_err();
+        assert_eq!(refused.code, ErrorCode::Forbidden, "{input}");
+    }
+    assert_eq!(asked.load(Ordering::SeqCst), 3);
+    assert_eq!(limits(&workspace)["writes_per_minute"], 60);
+    assert_eq!(limits(&workspace)["new_tasks_per_day"], 100);
+
+    *answer.lock().unwrap() = true;
+    set(&workspace, json!({ "no_limit": ["new_tasks_per_day"] })).unwrap();
+    assert!(limits(&workspace).get("new_tasks_per_day").is_none());
+    assert_eq!(asked.load(Ordering::SeqCst), 4);
+    workspace.close();
+}
+
+#[test]
 fn raising_what_agents_may_do_asks_natively_and_lowering_does_not() {
     let dir = TempDir::new().unwrap();
     let asked = Arc::new(AtomicUsize::new(0));

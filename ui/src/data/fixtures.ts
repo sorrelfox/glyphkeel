@@ -7,6 +7,8 @@ import { type Settings, type WorkspaceInfo } from "../generated/ops";
 
 export function settings(overrides: Partial<Settings> = {}): Settings {
   return {
+    // The engine's defaults: no limit on new tasks a day.
+    agent_limits: { writes_per_minute: 120, trash_items_per_call: 20, trash_items_per_hour: 50 },
     agent_max_profile: "standard",
     days_per_week: 5,
     file_max_mb: 100,
@@ -21,7 +23,7 @@ export function settings(overrides: Partial<Settings> = {}): Settings {
 
 export function workspaceInfo(overrides: Partial<WorkspaceInfo> = {}): WorkspaceInfo {
   return {
-    agent_limits: { writes_per_minute: 120, new_tasks_per_day: 500, trash_items_per_call: 20, trash_items_per_hour: 50 },
+    agent_limits: settings().agent_limits,
     caller: { actor: { kind: "user", name: "You" }, via: "app" },
     guide: "",
     id: "w-1",

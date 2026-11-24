@@ -180,6 +180,16 @@
   text-align: end;
 }
 
+/* Room for a limit on agents, up to seven digits. */
+.numberWide {
+  inline-size: 104px;
+}
+
+.number[data-disabled] {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .time {
   width: 112px;
 }
