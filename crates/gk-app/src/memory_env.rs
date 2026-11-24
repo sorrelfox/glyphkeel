@@ -1,0 +1,154 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Glyphkeel contributors
+
+//! Starts the app with the memory settings it needs in its environment.
+//!
+//! The app's process and the web view's processes read these memory settings
+//! from the environment once, when they start:
+//!
+//! - The web view's script engine lets its heap grow in proportion to the
+//!   machine's memory before it collects, so on a large machine one scroll
+//!   through a long list leaves hundreds of megabytes of garbage behind.
+//!   `JSC_forceRAMSize` makes it size its heap as if the machine had 256 MB.
+//!   The engine runs in the web view's own process, which inherits the app's
+//!   environment.
+//! - glibc's allocator keeps freed memory in one arena per busy thread. With
+//!   `MALLOC_ARENA_MAX` the engine's blocking threads share two arenas, so
+//!   the memory one answer freed is reused by the next instead of staying
+//!   with an idle thread.
+//! - glibc serves small and middle-sized blocks from its heap and keeps
+//!   them there once they are freed, scattered between blocks still in use,
+//!   so the memory of a large answer (a board of thousands of cards, a long
+//!   list) stays with the process after it has been sent. With
+//!   `MALLOC_MMAP_THRESHOLD_` every block of 8 KiB or more (the buffers
+//!   that answers are built in) is mapped on its own and goes back to the
+//!   system as soon as it is freed. A fixed threshold also stops glibc from
+//!   raising it, and its trim threshold with it, after a large block is
+//!   freed.
+//!
+//! A running program can't safely change its own environment, so the app
+//! replaces itself once, at the very start, with a fresh start of the
+//! same program that has the missing settings added. Settings the user has
+//! set already are kept as they are. The names it added are noted in
+//! [`ADDED`], which also stops it from starting itself again; programs the
+//! app opens for the user (a browser, a file's app) get the environment
+//! without them.
+
+/// Notes which settings this module added, separated by spaces.
+const ADDED: &str = "GLYPHKEEL_ADDED_ENV";
+
+/// The settings, with the values the app starts with.
+const SETTINGS: [(&str, &str); 3] = [
+    // 256 MB, in bytes.
+    ("JSC_forceRAMSize", "268435456"),
+    ("MALLOC_ARENA_MAX", "2"),
+    // 8 KiB, in bytes.
+    ("MALLOC_MMAP_THRESHOLD_", "8192"),
+];
+
+/// The settings to add: those of [`SETTINGS`] that `is_set` doesn't find,
+/// none if this start already is the one with the settings added.
+fn missing(is_set: impl Fn(&str) -> bool) -> Vec<(&'static str, &'static str)> {
+    if is_set(ADDED) {
+        return Vec::new();
+    }
+    SETTINGS
+        .iter()
+        .copied()
+        .filter(|(name, _)| !is_set(name))
+        .collect()
+}
+
+/// Starts the app again in this process with the missing settings added.
+/// Called first thing in `main`, before any thread or connection exists;
+/// returns only if nothing is missing or the new start failed, and the app
+/// then runs without them.
+pub(crate) fn restart_with_settings() {
+    use std::os::unix::process::CommandExt;
+
+    let missing = missing(|name| std::env::var_os(name).is_some());
+    if missing.is_empty() {
+        return;
+    }
+    let exe = match std::env::current_exe() {
+        Ok(exe) => exe,
+        Err(err) => {
+            eprintln!("glyphkeel-app: starts without its memory settings: {err}");
+            return;
+        }
+    };
+    let mut args = std::env::args_os();
+    let mut command = std::process::Command::new(exe);
+    if let Some(name) = args.next() {
+        command.arg0(name);
+    }
+    let added: Vec<&str> = missing.iter().map(|(name, _)| *name).collect();
+    let err = command
+        .args(args)
+        .envs(missing)
+        .env(ADDED, added.join(" "))
+        .exec();
+    eprintln!("glyphkeel-app: starts without its memory settings: {err}");
+}
+
+/// The names to leave out of the environment of programs the app opens: the
+/// settings this module added, and its note.
+fn added_names(note: Option<&str>) -> Vec<&str> {
+    match note {
+        Some(note) => note
+            .split(' ')
+            .filter(|name| SETTINGS.iter().any(|(setting, _)| setting == name))
+            .chain([ADDED])
+            .collect(),
+        None => Vec::new(),
+    }
+}
+
+/// A launch context for programs the app opens for the user: their
+/// environment is the user's, without the settings the app added for itself.
+pub(crate) fn launch_context() -> gtk::gio::AppLaunchContext {
+    use gtk::prelude::AppLaunchContextExt;
+
+    let context = gtk::gio::AppLaunchContext::new();
+    let note = std::env::var(ADDED).ok();
+    for name in added_names(note.as_deref()) {
+        context.unsetenv(name);
+    }
+    context
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_settings_are_added_and_the_users_are_kept() {
+        assert_eq!(missing(|_| false), SETTINGS.to_vec());
+        assert_eq!(
+            missing(|name| name == "JSC_forceRAMSize"),
+            vec![
+                ("MALLOC_ARENA_MAX", "2"),
+                ("MALLOC_MMAP_THRESHOLD_", "8192")
+            ]
+        );
+        assert!(missing(|name| name != ADDED).is_empty());
+    }
+
+    #[test]
+    fn the_second_start_adds_nothing() {
+        assert!(missing(|name| name == ADDED).is_empty());
+    }
+
+    #[test]
+    fn opened_programs_lose_only_what_the_app_added() {
+        assert!(added_names(None).is_empty());
+        assert_eq!(
+            added_names(Some("MALLOC_ARENA_MAX")),
+            vec!["MALLOC_ARENA_MAX", ADDED]
+        );
+        assert_eq!(
+            added_names(Some("JSC_forceRAMSize MALLOC_ARENA_MAX PATH")),
+            vec!["JSC_forceRAMSize", "MALLOC_ARENA_MAX", ADDED]
+        );
+    }
+}
