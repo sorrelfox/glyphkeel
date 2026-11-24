@@ -1015,6 +1015,7 @@ fn update(w: &mut WriteCtx<'_>, input: ProjectUpdateInput) -> Result<ProjectChan
             None,
             "normal",
         )?;
+        super::draft::clear(w, gk_api::ops::draft::DraftKind::Project, p.id)?;
     }
     if clears(ProjectField::Description) {
         super::description::save(

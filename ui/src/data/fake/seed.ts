@@ -32,6 +32,12 @@ export function nextId(prefix: string): string {
   return `${prefix}-${ids.toString(36).padStart(5, "0")}`;
 }
 
+/** A new ID in the form of a UUID, for items whose IDs the UI shortens (comments). */
+export function nextUuid(): string {
+  ids += 1;
+  return `00000000-0000-4000-8000-${ids.toString(16).padStart(12, "0")}`;
+}
+
 /** A new attachment ID: a lower-case UUID, the one form attachment links take. */
 export function nextFileId(): string {
   ids += 1;

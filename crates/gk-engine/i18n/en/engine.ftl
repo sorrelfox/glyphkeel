@@ -617,3 +617,7 @@ thumb-unsupported = no thumbnails are made for { $mime }
 thumb-too-large = the image is too large ({ $width } × { $height } pixels)
 thumb-not-cached = the thumbnail can't be cached: { $error }
 thumb-unreadable = the stored file can't be read: { $error }
+
+## Drafts
+
+draft-title-long = A draft's title is at most { $max } characters.

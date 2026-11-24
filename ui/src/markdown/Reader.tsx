@@ -6,6 +6,7 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type Keyb
 import { classes } from "../classes";
 import { useAppearance } from "../appearance/AppearanceProvider";
 import { useToasts } from "../components/Toasts";
+import { requestComment } from "../data/commentLinks";
 import { useImageSource, type CheckboxClick } from "../data/markdown";
 import { splitTarget } from "../data/wiki";
 import { errorToast, useOp } from "../data/hooks";
@@ -35,7 +36,7 @@ interface MarkdownReaderProps {
  * Markdown as the reader shows it: the engine's HTML, inserted through the
  * one sanitizing function, with formulas, diagrams and code drawn on top.
  * Checkboxes tick through the engine, task keys open the task (and show a
- * card on hover), wiki links open their page read only, other links open in the
+ * card on hover; a link to a comment scrolls to it), wiki links open their page read only, other links open in the
  * browser, and external images wait as buttons.
  */
 export function MarkdownReader({ html, onToggle, onOpenTask, compact = false, className, label }: MarkdownReaderProps) {
@@ -101,6 +102,10 @@ export function MarkdownReader({ html, onToggle, onOpenTask, compact = false, cl
       const ref = link.dataset.ref;
       const href = link.getAttribute("href") ?? "";
       if (ref !== undefined) {
+        // A link to a comment opens its task at the comment.
+        if (link.dataset.comment !== undefined) {
+          requestComment(ref, link.dataset.comment);
+        }
         onOpenTask(ref);
       } else if (link.dataset.wiki !== undefined) {
         setWiki(link.dataset.wiki);

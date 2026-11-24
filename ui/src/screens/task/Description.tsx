@@ -8,7 +8,7 @@ import { Button } from "react-aria-components";
 import { classes } from "../../classes";
 import { useToasts } from "../../components/Toasts";
 import { useUpdateTask } from "../../data/board";
-import { readDraft, writeDraft, type Draft } from "../../data/drafts";
+import { useDraft, useTaskDrafts, type Draft } from "../../data/drafts";
 import { useCall, useCommand, useOp } from "../../data/hooks";
 import { toggleChecklist, useRenderedDescription } from "../../data/markdown";
 import { type ConflictAction, type RevisionInfo, type Task } from "../../generated/ops";
@@ -25,8 +25,6 @@ export type DescriptionView =
   | { kind: "edit" }
   | { kind: "history"; compare?: readonly [string, string] | undefined }
   | { kind: "resolve" };
-
-const draftId = (key: string) => `description:${key}`;
 
 interface DescriptionProps {
   task: Task;
@@ -45,7 +43,8 @@ interface DescriptionProps {
  */
 export function DescriptionSection({ task, readOnly, view, onView, onOpenTask }: DescriptionProps) {
   const t = useT();
-  const [draft, setDraft] = useState<Draft | undefined>(() => readDraft(draftId(task.key)));
+  // Unsaved text kept from earlier, in this window or, after a restart, by the engine.
+  const [draft, setDraft] = useDraft({ kind: "task", id: task.id }, useTaskDrafts(task.key));
   const editing = view.kind === "edit" && !readOnly;
 
   const startEditing = () => {
@@ -83,8 +82,7 @@ export function DescriptionSection({ task, readOnly, view, onView, onOpenTask }:
           <Button
             className="btn flat sm"
             onPress={() => {
-              writeDraft(draftId(task.key), null);
-              setDraft(undefined);
+              setDraft(null);
             }}
           >
             {t("description-draft-discard")}
@@ -103,10 +101,7 @@ export function DescriptionSection({ task, readOnly, view, onView, onOpenTask }:
         <DescriptionEditor
           task={task}
           kept={draft}
-          onDraft={(next) => {
-            writeDraft(draftId(task.key), next);
-            setDraft(next ?? undefined);
-          }}
+          onDraft={setDraft}
           onDone={() => {
             onView({ kind: "read" });
           }}
@@ -117,9 +112,7 @@ export function DescriptionSection({ task, readOnly, view, onView, onOpenTask }:
         <ConflictResolver
           task={task}
           onEdit={(copy, text) => {
-            const next = { text, base: task.description_revision, resolving: copy };
-            writeDraft(draftId(task.key), next);
-            setDraft(next);
+            setDraft({ text, base: task.description_revision, resolving: copy });
             onView({ kind: "edit" });
           }}
           onClose={() => { onView({ kind: "read" }); }}

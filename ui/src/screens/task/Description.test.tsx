@@ -6,6 +6,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, describe, expect, it } from "vitest";
 
 import { App } from "../../App";
+import { flushDrafts, forgetDraftsInMemory } from "../../data/drafts";
 import { fakeTransport } from "../../data/fake/transport";
 import { createClient } from "../../data/transport";
 import { type CommentChange, type CommentList, type TaskChange, type TaskList } from "../../generated/ops";
@@ -18,6 +19,7 @@ Range.prototype.getBoundingClientRect = () => new DOMRect();
 
 afterEach(() => {
   cleanup();
+  forgetDraftsInMemory();
   localStorage.clear();
 });
 
@@ -25,10 +27,10 @@ const plain = (text: string | null | undefined) => (text ?? "").replace(/[⁨⁩
 
 const TEXT = "Before the trip:\n\n- [ ] Book the train\n- [x] Pack the bags\n\nSee the *list*.\n";
 
-async function renderDescription(description = TEXT) {
-  const transport = fakeTransport();
-  const task = ((await transport.call("task.create", { project: "PER", title: "Plan the trip", description })) as TaskChange).task;
-  const other = ((await transport.call("task.create", { project: "PER", title: "Book the hotel" })) as TaskChange).task;
+async function renderDescription(description = TEXT, workspace?: { transport: ReturnType<typeof fakeTransport>; task: TaskChange["task"] }) {
+  const transport = workspace?.transport ?? fakeTransport();
+  const task = workspace?.task ?? ((await transport.call("task.create", { project: "PER", title: "Plan the trip", description })) as TaskChange).task;
+  const other = workspace ? task : ((await transport.call("task.create", { project: "PER", title: "Book the hotel" })) as TaskChange).task;
   render(<App start={{ titleBar: "app", locale: "en-US" }} client={createClient(transport)} path={`/projects/PER?task=${task.key}`} />);
   const panel = await screen.findByRole("complementary", { name: (name) => plain(name).startsWith(`Task ${task.key}`) });
   const section = await within(panel).findByRole("region", { name: "Description" });
@@ -216,16 +218,43 @@ describe("the description", () => {
   });
 
   it("keeps an unsaved draft when the editor closes with the panel", async () => {
-    const { task, section } = await renderDescription();
+    const { transport, task, section } = await renderDescription();
     fireEvent.click(within(section).getByRole("button", { name: "Edit" }));
     typeInto(await within(section).findByRole("textbox", { name: "Description" }), "A draft");
     cleanup();
-    const again = await renderDescription();
-    // A new workspace has its own task with the same key: the draft is offered for it.
-    expect(again.task.key).toBe(task.key);
+    const again = await renderDescription(TEXT, { transport, task });
     expect(await within(again.section).findByText("Unsaved changes to this description are kept from earlier.")).toBeDefined();
     fireEvent.click(within(again.section).getByRole("button", { name: "Discard them" }));
     expect(within(again.section).queryByRole("status")).toBeNull();
+    await waitFor(async () => {
+      expect(await transport.call("draft.get", { kind: "task", target: task.key })).toEqual({});
+    });
+  });
+
+  it("offers the draft again after a restart, from the engine, and saves it against its revision", async () => {
+    const { transport, task, section } = await renderDescription();
+    fireEvent.click(within(section).getByRole("button", { name: "Edit" }));
+    typeInto(await within(section).findByRole("textbox", { name: "Description" }), "Before the trip: pack.");
+    flushDrafts();
+    await waitFor(async () => {
+      const kept = (await transport.call("draft.get", { kind: "task", target: task.key })) as { draft?: { body: string; base_revision?: string } };
+      expect(kept.draft?.body).toBe("Before the trip: pack.");
+      expect(kept.draft?.base_revision).toBe(task.description_revision);
+    });
+    // Meanwhile an agent changes the description.
+    transport.workspace.call("task.update", { key: task.key, description: `${TEXT}Bring snacks.\n` }, { actor: { kind: "agent", name: "Helper" }, via: "mcp" });
+    cleanup();
+    forgetDraftsInMemory();
+
+    const again = await renderDescription(TEXT, { transport, task });
+    expect(await within(again.section).findByText("Unsaved changes to this description are kept from earlier.")).toBeDefined();
+    fireEvent.click(within(again.section).getByRole("button", { name: "Continue editing" }));
+    const editor = await within(again.section).findByRole("textbox", { name: "Description" });
+    expect(EditorView.findFromDOM(editor)?.state.doc.toString()).toBe("Before the trip: pack.");
+    fireEvent.keyDown(editor, { key: "Enter", ctrlKey: true });
+    await waitFor(async () => {
+      expect(await transport.call("draft.get", { kind: "task", target: task.key })).toEqual({});
+    });
   });
 });
 

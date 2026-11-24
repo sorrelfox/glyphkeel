@@ -27,6 +27,12 @@ describe("the sample engine's Markdown", () => {
     expect(html).toContain('<a data-ref="TM-1">TM-1</a> and XX-9 &lt;b&gt;');
   });
 
+  it("links a key with a comment anchor to the comment, as the engine does", () => {
+    const html = renderFake("TM-1#c-0000abcd, TM-1#c-0000ABCD and TM-1#c-0000abcdx", (key) => key === "TM-1");
+    expect(html).toContain('<a data-ref="TM-1" data-comment="0000abcd">TM-1#c-0000abcd</a>, ');
+    expect(html).toContain('<a data-ref="TM-1">TM-1</a>#c-0000ABCD and <a data-ref="TM-1">TM-1</a>#c-0000abcdx');
+  });
+
   it("merges edits of different lines and refuses edits of the same line", () => {
     const base = "one\ntwo\nthree\n";
     expect(merge3(base, "ONE\ntwo\nthree\n", "one\ntwo\nTHREE\n")).toBe("ONE\ntwo\nTHREE\n");

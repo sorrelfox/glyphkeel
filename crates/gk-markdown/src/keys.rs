@@ -9,6 +9,10 @@
 //! after it, so `xTM-7`, `TM-8x`, `A-TM-10` and `TM-9-b` are not keys.
 //! Lower-case `tm-41` is not a key in text either, which keeps words like
 //! `utf-8` out.
+//!
+//! A key may be followed by a comment anchor, `#c-` and the last eight
+//! hexadecimal digits of a comment's ID in lower case (`TM-41#c-1a2b3c4d`):
+//! a link to that comment of the task. The anchor must stand on its own too.
 
 /// The byte ranges of the task keys in `text`, in order.
 pub(crate) fn find(text: &str) -> Vec<std::ops::Range<usize>> {
@@ -29,6 +33,23 @@ pub(crate) fn find(text: &str) -> Vec<std::ops::Range<usize>> {
     }
     found
 }
+
+/// The length of the comment anchor (`#c-1a2b3c4d`) at the start of
+/// `rest`, the text right after a key, if there is one.
+pub(crate) fn comment_anchor(rest: &str) -> Option<usize> {
+    let digits = rest.strip_prefix(COMMENT_ANCHOR)?;
+    let short = digits.get(..COMMENT_DIGITS)?;
+    let len = COMMENT_ANCHOR.len() + COMMENT_DIGITS;
+    let hex = short
+        .bytes()
+        .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b));
+    (hex && !joined(rest[len..].chars().next())).then_some(len)
+}
+
+/// What comes between a task key and a comment's short ID.
+pub(crate) const COMMENT_ANCHOR: &str = "#c-";
+/// How many hexadecimal digits of a comment's ID a link names.
+const COMMENT_DIGITS: usize = 8;
 
 /// Whether `ch` would join a key to the text around it.
 fn joined(ch: Option<char>) -> bool {
@@ -95,6 +116,25 @@ mod tests {
             "TM-",
         ] {
             assert!(keys(text).is_empty(), "{text}");
+        }
+    }
+
+    #[test]
+    fn comment_anchors_follow_a_key() {
+        assert_eq!(comment_anchor("#c-1a2b3c4d"), Some(11));
+        assert_eq!(comment_anchor("#c-1a2b3c4d, then"), Some(11));
+        for rest in [
+            "#c-1a2b3c4",
+            "#c-1a2b3c4d5",
+            "#c-1A2B3C4D",
+            "#c-1a2b3c4g",
+            "#c-1a2b3c4d-x",
+            "#C-1a2b3c4d",
+            "#1a2b3c4d",
+            " #c-1a2b3c4d",
+            "#c-日本語",
+        ] {
+            assert_eq!(comment_anchor(rest), None, "{rest}");
         }
     }
 

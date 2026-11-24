@@ -28999,6 +28999,550 @@
       "summary": "Move a comment to the trash."
     },
     {
+      "app_reason": "A draft is the person's own unsaved text in an editor of the app, not the workspace's data; agents and scripts save text through the operations that change it.",
+      "exposure": "app",
+      "id": "draft.get",
+      "input": {
+        "$defs": {
+          "DraftKind": {
+            "description": "Which editor a draft belongs to.",
+            "oneOf": [
+              {
+                "const": "task",
+                "description": "A task's description; the target is the task.",
+                "type": "string"
+              },
+              {
+                "const": "comment",
+                "description": "An edit of a comment; the target is the comment.",
+                "type": "string"
+              },
+              {
+                "const": "new_comment",
+                "description": "A new comment on a task; the target is the task.",
+                "type": "string"
+              },
+              {
+                "const": "project",
+                "description": "A project's description; the target is the project.",
+                "type": "string"
+              },
+              {
+                "const": "wiki_page",
+                "description": "An edit of a wiki page; the target is the page.",
+                "type": "string"
+              },
+              {
+                "const": "new_wiki_page",
+                "description": "A new wiki page; the target is the project it goes in.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The editor a draft belongs to.",
+        "properties": {
+          "kind": {
+            "$ref": "#/$defs/DraftKind",
+            "description": "The kind of editor."
+          },
+          "target": {
+            "description": "What it edits: a task's key or ID for `task` and `new_comment`, a\ncomment's ID, a project's key or ID for `project` and\n`new_wiki_page`, or a wiki page's ID.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "target"
+        ],
+        "title": "DraftRef",
+        "type": "object"
+      },
+      "input_name": "DraftRef",
+      "kind": "query",
+      "output": {
+        "$defs": {
+          "Draft": {
+            "additionalProperties": false,
+            "description": "One kept draft.",
+            "properties": {
+              "base_revision": {
+                "description": "The revision the text was edited from.",
+                "type": "string"
+              },
+              "body": {
+                "description": "The unsaved text.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/DraftKind",
+                "description": "The kind of editor."
+              },
+              "target": {
+                "description": "The ID of what it edits: the task, comment, project or page.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task's key, for drafts about a task or one of its comments.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The unsaved title, for a wiki page.",
+                "type": "string"
+              },
+              "updated_at": {
+                "description": "When it was last saved (RFC 3339, UTC).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "target",
+              "body",
+              "updated_at"
+            ],
+            "type": "object"
+          },
+          "DraftKind": {
+            "description": "Which editor a draft belongs to.",
+            "oneOf": [
+              {
+                "const": "task",
+                "description": "A task's description; the target is the task.",
+                "type": "string"
+              },
+              {
+                "const": "comment",
+                "description": "An edit of a comment; the target is the comment.",
+                "type": "string"
+              },
+              {
+                "const": "new_comment",
+                "description": "A new comment on a task; the target is the task.",
+                "type": "string"
+              },
+              {
+                "const": "project",
+                "description": "A project's description; the target is the project.",
+                "type": "string"
+              },
+              {
+                "const": "wiki_page",
+                "description": "An edit of a wiki page; the target is the page.",
+                "type": "string"
+              },
+              {
+                "const": "new_wiki_page",
+                "description": "A new wiki page; the target is the project it goes in.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A draft, or none.",
+        "properties": {
+          "draft": {
+            "$ref": "#/$defs/Draft",
+            "description": "The kept draft; left out when there is none."
+          }
+        },
+        "title": "DraftOutput",
+        "type": "object"
+      },
+      "output_name": "DraftOutput",
+      "safety": "read",
+      "summary": "The person's unsaved text of one editor (a description, a comment, a new comment or a wiki page), kept from earlier."
+    },
+    {
+      "app_reason": "A draft is the person's own unsaved text in an editor of the app, not the workspace's data; agents and scripts save text through the operations that change it.",
+      "exposure": "app",
+      "id": "draft.list",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The drafts to list.",
+        "properties": {
+          "task": {
+            "description": "Only the drafts about this task (its key or ID): its description,\na new comment on it and edits of its comments.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "DraftListInput",
+        "type": "object"
+      },
+      "input_name": "DraftListInput",
+      "kind": "query",
+      "output": {
+        "$defs": {
+          "Draft": {
+            "additionalProperties": false,
+            "description": "One kept draft.",
+            "properties": {
+              "base_revision": {
+                "description": "The revision the text was edited from.",
+                "type": "string"
+              },
+              "body": {
+                "description": "The unsaved text.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/DraftKind",
+                "description": "The kind of editor."
+              },
+              "target": {
+                "description": "The ID of what it edits: the task, comment, project or page.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task's key, for drafts about a task or one of its comments.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The unsaved title, for a wiki page.",
+                "type": "string"
+              },
+              "updated_at": {
+                "description": "When it was last saved (RFC 3339, UTC).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "target",
+              "body",
+              "updated_at"
+            ],
+            "type": "object"
+          },
+          "DraftKind": {
+            "description": "Which editor a draft belongs to.",
+            "oneOf": [
+              {
+                "const": "task",
+                "description": "A task's description; the target is the task.",
+                "type": "string"
+              },
+              {
+                "const": "comment",
+                "description": "An edit of a comment; the target is the comment.",
+                "type": "string"
+              },
+              {
+                "const": "new_comment",
+                "description": "A new comment on a task; the target is the task.",
+                "type": "string"
+              },
+              {
+                "const": "project",
+                "description": "A project's description; the target is the project.",
+                "type": "string"
+              },
+              {
+                "const": "wiki_page",
+                "description": "An edit of a wiki page; the target is the page.",
+                "type": "string"
+              },
+              {
+                "const": "new_wiki_page",
+                "description": "A new wiki page; the target is the project it goes in.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The person's drafts, most recently saved first.",
+        "properties": {
+          "items": {
+            "description": "The drafts.",
+            "items": {
+              "$ref": "#/$defs/Draft"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "DraftList",
+        "type": "object"
+      },
+      "output_name": "DraftList",
+      "safety": "read",
+      "summary": "The person's kept drafts, most recently saved first; or only those about one task."
+    },
+    {
+      "app_reason": "A draft is the person's own unsaved text in an editor of the app, not the workspace's data; agents and scripts save text through the operations that change it.",
+      "exposure": "app",
+      "id": "draft.save",
+      "input": {
+        "$defs": {
+          "DraftKind": {
+            "description": "Which editor a draft belongs to.",
+            "oneOf": [
+              {
+                "const": "task",
+                "description": "A task's description; the target is the task.",
+                "type": "string"
+              },
+              {
+                "const": "comment",
+                "description": "An edit of a comment; the target is the comment.",
+                "type": "string"
+              },
+              {
+                "const": "new_comment",
+                "description": "A new comment on a task; the target is the task.",
+                "type": "string"
+              },
+              {
+                "const": "project",
+                "description": "A project's description; the target is the project.",
+                "type": "string"
+              },
+              {
+                "const": "wiki_page",
+                "description": "An edit of a wiki page; the target is the page.",
+                "type": "string"
+              },
+              {
+                "const": "new_wiki_page",
+                "description": "A new wiki page; the target is the project it goes in.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A draft to keep.",
+        "properties": {
+          "base_revision": {
+            "description": "The revision the text was edited from, for texts with revisions;\nsaving the text later names it, so changes made meanwhile are merged.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "body": {
+            "description": "The unsaved text, Markdown.",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/$defs/DraftKind",
+            "description": "The kind of editor."
+          },
+          "target": {
+            "description": "What it edits, as in [`DraftRef::target`].",
+            "type": "string"
+          },
+          "title": {
+            "description": "The unsaved title, for a wiki page.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "target",
+          "body"
+        ],
+        "title": "DraftSaveInput",
+        "type": "object"
+      },
+      "input_name": "DraftSaveInput",
+      "kind": "command",
+      "output": {
+        "$defs": {
+          "Draft": {
+            "additionalProperties": false,
+            "description": "One kept draft.",
+            "properties": {
+              "base_revision": {
+                "description": "The revision the text was edited from.",
+                "type": "string"
+              },
+              "body": {
+                "description": "The unsaved text.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/DraftKind",
+                "description": "The kind of editor."
+              },
+              "target": {
+                "description": "The ID of what it edits: the task, comment, project or page.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task's key, for drafts about a task or one of its comments.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The unsaved title, for a wiki page.",
+                "type": "string"
+              },
+              "updated_at": {
+                "description": "When it was last saved (RFC 3339, UTC).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "target",
+              "body",
+              "updated_at"
+            ],
+            "type": "object"
+          },
+          "DraftKind": {
+            "description": "Which editor a draft belongs to.",
+            "oneOf": [
+              {
+                "const": "task",
+                "description": "A task's description; the target is the task.",
+                "type": "string"
+              },
+              {
+                "const": "comment",
+                "description": "An edit of a comment; the target is the comment.",
+                "type": "string"
+              },
+              {
+                "const": "new_comment",
+                "description": "A new comment on a task; the target is the task.",
+                "type": "string"
+              },
+              {
+                "const": "project",
+                "description": "A project's description; the target is the project.",
+                "type": "string"
+              },
+              {
+                "const": "wiki_page",
+                "description": "An edit of a wiki page; the target is the page.",
+                "type": "string"
+              },
+              {
+                "const": "new_wiki_page",
+                "description": "A new wiki page; the target is the project it goes in.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A draft, or none.",
+        "properties": {
+          "draft": {
+            "$ref": "#/$defs/Draft",
+            "description": "The kept draft; left out when there is none."
+          }
+        },
+        "title": "DraftOutput",
+        "type": "object"
+      },
+      "output_name": "DraftOutput",
+      "safety": "app",
+      "summary": "Keep the unsaved text of an editor, replacing the person's earlier draft of it. Drafts are not history and expire after 30 days."
+    },
+    {
+      "app_reason": "A draft is the person's own unsaved text in an editor of the app, not the workspace's data; agents and scripts save text through the operations that change it.",
+      "exposure": "app",
+      "id": "draft.discard",
+      "input": {
+        "$defs": {
+          "DraftKind": {
+            "description": "Which editor a draft belongs to.",
+            "oneOf": [
+              {
+                "const": "task",
+                "description": "A task's description; the target is the task.",
+                "type": "string"
+              },
+              {
+                "const": "comment",
+                "description": "An edit of a comment; the target is the comment.",
+                "type": "string"
+              },
+              {
+                "const": "new_comment",
+                "description": "A new comment on a task; the target is the task.",
+                "type": "string"
+              },
+              {
+                "const": "project",
+                "description": "A project's description; the target is the project.",
+                "type": "string"
+              },
+              {
+                "const": "wiki_page",
+                "description": "An edit of a wiki page; the target is the page.",
+                "type": "string"
+              },
+              {
+                "const": "new_wiki_page",
+                "description": "A new wiki page; the target is the project it goes in.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The editor a draft belongs to.",
+        "properties": {
+          "kind": {
+            "$ref": "#/$defs/DraftKind",
+            "description": "The kind of editor."
+          },
+          "target": {
+            "description": "What it edits: a task's key or ID for `task` and `new_comment`, a\ncomment's ID, a project's key or ID for `project` and\n`new_wiki_page`, or a wiki page's ID.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "target"
+        ],
+        "title": "DraftRef",
+        "type": "object"
+      },
+      "input_name": "DraftRef",
+      "kind": "command",
+      "output": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "What a discard did.",
+        "properties": {
+          "discarded": {
+            "description": "Whether there was a draft to discard.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "discarded"
+        ],
+        "title": "DraftDiscarded",
+        "type": "object"
+      },
+      "output_name": "DraftDiscarded",
+      "safety": "app",
+      "summary": "Forget the person's unsaved text of an editor."
+    },
+    {
       "cli": "time log <key>",
       "exposure": "data",
       "id": "time.log",

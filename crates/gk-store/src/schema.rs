@@ -19,7 +19,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 use crate::error::{Result, StoreError};
 
 /// The schema version this program is built for.
-pub const SCHEMA_VERSION: i64 = 6;
+pub const SCHEMA_VERSION: i64 = 7;
 
 /// One migration: the SQL that takes the schema from `version - 1` to
 /// `version`.
@@ -54,6 +54,10 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 6,
         sql: include_str!("../migrations/0006_wiki_conflicts.sql"),
+    },
+    Migration {
+        version: 7,
+        sql: include_str!("../migrations/0007_personal_drafts.sql"),
     },
 ];
 
@@ -417,7 +421,7 @@ mod tests {
                      'Text', 'conflict', 'user', 'Me', 0);",
         )
         .unwrap();
-        migrate(&mut conn, MIGRATIONS, |_| Ok(())).unwrap();
+        migrate(&mut conn, &MIGRATIONS[..6], |_| Ok(())).unwrap();
         assert_eq!(user_version(&conn).unwrap(), 6);
         let row: (String, Option<i64>) = conn
             .query_row("SELECT body, resolved_at FROM wiki_revisions", [], |r| {
@@ -425,6 +429,65 @@ mod tests {
             })
             .unwrap();
         assert_eq!(row, ("Text".to_owned(), None));
+    }
+
+    #[test]
+    fn version_7_gives_drafts_to_the_person_and_keeps_one_per_person_and_editor() {
+        let mut conn = memory();
+        migrate(&mut conn, &MIGRATIONS[..6], |_| Ok(())).unwrap();
+        conn.execute_batch(
+            "INSERT INTO drafts (owner_kind, owner_id, title, body, base_rev, updated_at)
+             VALUES ('task', x'01010101010101010101010101010101', NULL, 'Unsaved', NULL, 5),
+                    ('new_comment', x'01010101010101010101010101010101', NULL, 'Hi', NULL, 6);",
+        )
+        .unwrap();
+        migrate(&mut conn, MIGRATIONS, |_| Ok(())).unwrap();
+        assert_eq!(user_version(&conn).unwrap(), 7);
+        let kept: Vec<(String, String, String, String, i64)> = conn
+            .prepare(
+                "SELECT actor_kind, actor_name, owner_kind, body, updated_at FROM drafts
+                  ORDER BY updated_at",
+            )
+            .unwrap()
+            .query_map([], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
+            })
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        let you = |kind: &str, body: &str, at: i64| {
+            (
+                "user".to_owned(),
+                "You".to_owned(),
+                kind.to_owned(),
+                body.to_owned(),
+                at,
+            )
+        };
+        assert_eq!(
+            kept,
+            [you("task", "Unsaved", 5), you("new_comment", "Hi", 6)]
+        );
+
+        // Another person keeps a draft of the same editor beside it.
+        conn.execute(
+            "INSERT INTO drafts (actor_kind, actor_name, owner_kind, owner_id, body, updated_at)
+             VALUES ('user', 'Robin', 'task', x'01010101010101010101010101010101', 'Mine', 7)",
+            [],
+        )
+        .unwrap();
+        let again = conn.execute(
+            "INSERT INTO drafts (actor_kind, actor_name, owner_kind, owner_id, body, updated_at)
+             VALUES ('user', 'You', 'task', x'01010101010101010101010101010101', 'Twice', 8)",
+            [],
+        );
+        assert!(again.is_err(), "one draft per person and editor");
+        let short = conn.execute(
+            "INSERT INTO drafts (actor_kind, actor_name, owner_kind, owner_id, body, updated_at)
+             VALUES ('user', 'You', 'project', x'01', 'Short', 8)",
+            [],
+        );
+        assert!(short.is_err(), "the owner is an ID");
     }
 
     #[test]

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { History as HistoryIcon, MoreHorizontal, Paperclip, Pencil, Trash2, Undo2 } from "lucide-react";
-import { useState } from "react";
-import { Button, Menu, MenuTrigger, Popover, Tab, TabList, TabPanel, Tabs, useLocale } from "react-aria-components";
+import { History as HistoryIcon, MoreHorizontal, Paperclip, Pencil, Quote, Trash2, Undo2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Button, Menu, MenuTrigger, Popover, Tab, TabList, TabPanel, Tabs, useLocale, type Key } from "react-aria-components";
 
 import { classes } from "../../classes";
 import { MenuEntries } from "../../components/ContextMenu";
@@ -12,10 +12,12 @@ import { skippedReason } from "../../data/safety";
 import { useToasts } from "../../components/Toasts";
 import { type Project } from "../../data/catalog";
 import { errorToast, useCall, useCommand } from "../../data/hooks";
-import { readDraft, writeDraft } from "../../data/drafts";
+import { appendQuote, commentLink, commentShown, isComment, linkedComments, quoteMarkdown, useCommentRequests, useRequestedComment } from "../../data/commentLinks";
+import { readDraft, useDraft, useTaskDrafts, writeDraft, type DraftTarget } from "../../data/drafts";
 import { toggleChecklist, useRendered } from "../../data/markdown";
 import { revertible, useComments, useTaskHistory } from "../../data/task";
-import { type ActivityEntry, type Actor, type ActorKind, type Comment, type Rendered, type Task, type Via } from "../../generated/ops";
+import { type ActivityEntry, type Actor, type ActorKind, type Comment, type Draft as KeptDraft, type Rendered, type Task, type Via } from "../../generated/ops";
+import { type MarkdownEditorHandle } from "../../editor";
 import { useT, type Translate } from "../../i18n/I18n";
 import { MarkdownReader } from "../../markdown/Reader";
 import { formatDuration, type DurationUnits } from "../../data/duration";
@@ -48,7 +50,33 @@ function Author({ actor, via }: { actor: Actor; via: Via }) {
   );
 }
 
-function CommentView({ comment, rendered, readOnly, onOpenTask }: { comment: Comment; rendered: Rendered | undefined; readOnly: boolean; onOpenTask: (key: string) => void }) {
+/** How long the comment a link was opened at stays marked. */
+const SHOWN_FOR_MS = 2000;
+
+/** The comment composers of the open panels, by task key, for quotes. */
+const composers = new Map<string, MarkdownEditorHandle>();
+
+/** The selected text inside `element`, if the selection lies there. */
+function selectionIn(element: HTMLElement | null): string {
+  const selection = window.getSelection();
+  if (!element || !selection || selection.isCollapsed || selection.rangeCount === 0) {
+    return "";
+  }
+  return element.contains(selection.getRangeAt(0).commonAncestorContainer) ? selection.toString() : "";
+}
+
+interface CommentViewProps {
+  comment: Comment;
+  rendered: Rendered | undefined;
+  readOnly: boolean;
+  /** The person's drafts about the task, from the engine. */
+  kept: readonly KeptDraft[] | undefined;
+  onOpenTask: (key: string) => void;
+  /** Puts a quote of this comment in the reply being written. */
+  onQuote: (markdown: string) => void;
+}
+
+function CommentView({ comment, rendered, readOnly, kept, onOpenTask, onQuote }: CommentViewProps) {
   const t = useT();
   const call = useCall();
   const moment = useMomentFormat();
@@ -56,21 +84,48 @@ function CommentView({ comment, rendered, readOnly, onOpenTask }: { comment: Com
   // that version, so a change made meanwhile elsewhere refuses it instead of
   // being overwritten.
   const [editing, setEditingState] = useState<{ text: string; version: number } | null>(null);
-  const setEditing = (text: string | null) => {
-    setEditingState((was) => (text === null ? null : { text, version: was?.version ?? comment.version }));
+  // Unsaved edits are kept as a draft, here and in the engine.
+  const [draft, setDraft] = useDraft({ kind: "comment", id: comment.id }, kept);
+  const startEditing = (text: string) => {
+    setEditingState({ text, version: comment.version });
+  };
+  const edit = (text: string) => {
+    setEditingState((was) => ({ text, version: was?.version ?? comment.version }));
+    setDraft(text === comment.body ? null : { text });
+  };
+  const stopEditing = () => {
+    setEditingState(null);
+    setDraft(null);
   };
   const [earlier, setEarlier] = useState(false);
   const update = useCommand("comment.update");
   const remove = useCommand("comment.delete", { undoable: t("comment-trashed") });
+  const body = useRef<HTMLDivElement>(null);
+  // The text selected in the comment when a quote was asked for: pressing the button may clear it.
+  const picked = useRef("");
   const save = () => {
     if (editing === null || editing.text.trim() === "" || editing.text === comment.body) {
-      setEditing(null);
+      stopEditing();
       return;
     }
-    update.mutate({ comment: comment.id, body: editing.text, expected_version: editing.version }, { onSuccess: () => { setEditing(null); } });
+    update.mutate({ comment: comment.id, body: editing.text, expected_version: editing.version }, { onSuccess: stopEditing });
+  };
+  const pick = () => {
+    picked.current = selectionIn(body.current);
+  };
+  const quote = () => {
+    const chosen = selectionIn(body.current) || picked.current;
+    picked.current = "";
+    const source = t("comment-quote-source", { link: commentLink(comment.task, comment.id) });
+    onQuote(quoteMarkdown(chosen.trim() === "" ? comment.body : chosen, source));
   };
   return (
-    <article className={styles.comment} data-comment={comment.id} aria-label={t("comment-label", { author: comment.author.kind === "user" ? t("comment-me") : comment.author.name, time: moment(comment.created_at) })}>
+    <article
+      className={styles.comment}
+      data-comment={comment.id}
+      tabIndex={-1}
+      aria-label={t("comment-label", { author: comment.author.kind === "user" ? t("comment-me") : comment.author.name, time: moment(comment.created_at) })}
+    >
       <div className={styles.commentHead}>
         <Author actor={comment.author} via={comment.via} />
         <span className="faint">{moment(comment.created_at)}</span>
@@ -87,15 +142,19 @@ function CommentView({ comment, rendered, readOnly, onOpenTask }: { comment: Com
           </Button>
         )}
         <div className="grow" />
+        <Button className="btn flat icon sm" isDisabled={readOnly} aria-label={t("comment-quote")} onPressStart={pick} onPress={quote}>
+          <Quote className="ic s" />
+        </Button>
         <MenuTrigger>
-          <Button className="btn flat icon sm" isDisabled={readOnly} aria-label={t("comment-menu")}>
+          <Button className="btn flat icon sm" isDisabled={readOnly} aria-label={t("comment-menu")} onPressStart={pick}>
             <MoreHorizontal className="ic s" />
           </Button>
           <Popover className="pop menuPopover" placement="bottom end" offset={4}>
             <Menu className="menu" aria-label={t("comment-menu")}>
               <MenuEntries
                 entries={[
-                  { id: "edit", label: t("comment-edit"), icon: <Pencil className="ic s" />, run: () => { setEditing(comment.body); } },
+                  { id: "quote", label: t("comment-quote"), icon: <Quote className="ic s" />, run: quote },
+                  { id: "edit", label: t("comment-edit"), icon: <Pencil className="ic s" />, run: () => { startEditing(draft?.text ?? comment.body); } },
                   { id: "delete", label: t("comment-delete"), icon: <Trash2 className="ic s" />, run: () => { remove.mutate({ comment: comment.id }); } },
                 ]}
               />
@@ -103,24 +162,37 @@ function CommentView({ comment, rendered, readOnly, onOpenTask }: { comment: Com
           </Popover>
         </MenuTrigger>
       </div>
+      {editing === null && draft !== undefined && draft.text !== comment.body && (
+        <div className={classes("banner", styles.banner)} role="status">
+          <span className="grow">{t("comment-draft-kept")}</span>
+          <Button className="btn sm" isDisabled={readOnly} onPress={() => { startEditing(draft.text); }}>
+            {t("comment-draft-continue")}
+          </Button>
+          <Button className="btn flat sm" onPress={() => { setDraft(null); }}>
+            {t("comment-draft-discard")}
+          </Button>
+        </div>
+      )}
       {editing === null ? (
-        rendered === undefined ? (
-          <div className={classes("selectable", styles.commentBody, styles.plainBody)}>{comment.body}</div>
-        ) : (
-          <MarkdownReader
-            compact
-            html={rendered.html}
-            label={t("comment-body")}
-            onOpenTask={onOpenTask}
-            onToggle={readOnly ? undefined : (click) => toggleChecklist(call, { comment: comment.id }, rendered.checklist, click)}
-          />
-        )
+        <div ref={body}>
+          {rendered === undefined ? (
+            <div className={classes("selectable", styles.commentBody, styles.plainBody)}>{comment.body}</div>
+          ) : (
+            <MarkdownReader
+              compact
+              html={rendered.html}
+              label={t("comment-body")}
+              onOpenTask={onOpenTask}
+              onToggle={readOnly ? undefined : (click) => toggleChecklist(call, { comment: comment.id }, rendered.checklist, click)}
+            />
+          )}
+        </div>
       ) : (
         <div className={styles.commentEdit}>
-          <MarkdownField label={t("comment-edit-field")} value={editing.text} autoFocus attachTo={comment.task} onChange={setEditing} onSubmit={save} onCancel={() => { setEditing(null); }} />
+          <MarkdownField label={t("comment-edit-field")} value={editing.text} autoFocus attachTo={comment.task} onChange={edit} onSubmit={save} onCancel={stopEditing} />
           <div className={styles.sectionHead}>
             <div className="grow" />
-            <Button className="btn flat sm" onPress={() => { setEditing(null); }}>
+            <Button className="btn flat sm" onPress={stopEditing}>
               {t("dialog-cancel")}
             </Button>
             <Button className="btn primary sm" onPress={save}>
@@ -160,10 +232,59 @@ function EarlierVersions({ comment, onOpenTask }: { comment: Comment; onOpenTask
   );
 }
 
-function CommentsList({ taskKey, readOnly, onOpenTask }: { taskKey: string; readOnly: boolean; onOpenTask: (key: string) => void }) {
+/**
+ * Puts a quote in the reply being written to the task: at the end of the
+ * composer's text, which takes the focus; before the composer has loaded,
+ * at the end of its draft.
+ */
+function useQuoteInReply(task: Pick<Task, "id" | "key">, kept: readonly KeptDraft[] | undefined): (markdown: string) => void {
+  const call = useCall();
+  return (markdown) => {
+    const composer = composers.get(task.key);
+    if (composer) {
+      const before = composer.text();
+      composer.insert(appendQuote(before, markdown).slice(before.length), before.length);
+      composer.focus();
+      return;
+    }
+    const target: DraftTarget = { kind: "new_comment", id: task.id };
+    writeDraft(call, target, { text: appendQuote(readDraft(target, kept)?.text ?? "", markdown) });
+  };
+}
+
+function CommentsList({ task, readOnly, onOpenTask }: { task: Task; readOnly: boolean; onOpenTask: (key: string) => void }) {
   const t = useT();
+  const toasts = useToasts();
+  const taskKey = task.key;
   const comments = useComments(taskKey);
+  const kept = useTaskDrafts(taskKey);
+  const quote = useQuoteInReply(task, kept);
   const rendered = useRendered((comments.data?.items ?? []).map((comment) => ({ comment: comment.id })));
+  // A link to one of these comments was opened: show it.
+  const requested = useRequestedComment(taskKey);
+  const loaded = comments.data;
+  useEffect(() => {
+    if (requested === null || !loaded) {
+      return;
+    }
+    commentShown();
+    const found = loaded.items.find((comment) => isComment(comment.id, requested));
+    const element = found ? document.querySelector<HTMLElement>(`[data-comment="${CSS.escape(found.id)}"]`) : null;
+    if (!element) {
+      toasts.show({ tone: "error", text: t("comment-link-gone", { key: taskKey }) });
+      return;
+    }
+    element.scrollIntoView({ block: "center" });
+    element.focus({ preventScroll: true });
+    element.dataset.shown = "";
+    const shown = setTimeout(() => {
+      delete element.dataset.shown;
+    }, SHOWN_FOR_MS);
+    return () => {
+      clearTimeout(shown);
+      delete element.dataset.shown;
+    };
+  }, [requested, loaded, taskKey, t, toasts]);
   if (!comments.data) {
     return null;
   }
@@ -176,7 +297,7 @@ function CommentsList({ taskKey, readOnly, onOpenTask }: { taskKey: string; read
         const html = rendered.items[index];
         // A rendering of an older text of this comment isn't shown.
         const current = html !== undefined && (html.version === undefined || html.version === comment.version) ? html : undefined;
-        return <CommentView key={comment.id} comment={comment} rendered={current} readOnly={readOnly} onOpenTask={onOpenTask} />;
+        return <CommentView key={comment.id} comment={comment} rendered={current} readOnly={readOnly} kept={kept} onOpenTask={onOpenTask} onQuote={quote} />;
       })}
     </>
   );
@@ -462,8 +583,17 @@ export function ActivityTabs({
   onShowDescriptionDiff: (older: string, newer: string) => void;
 }) {
   const t = useT();
+  // A link to a comment opened since the tab was last chosen brings the comments back into view.
+  const requests = useCommentRequests();
+  const [chosen, setChosen] = useState<{ tab: Key; requests: number }>({ tab: "comments", requests });
   return (
-    <Tabs className={classes(styles.tabs)} defaultSelectedKey="comments">
+    <Tabs
+      className={classes(styles.tabs)}
+      selectedKey={requests > chosen.requests ? "comments" : chosen.tab}
+      onSelectionChange={(tab) => {
+        setChosen({ tab, requests });
+      }}
+    >
       <TabList className="tabs" aria-label={t("activity-tabs")}>
         <Tab id="comments" className={({ isSelected }) => classes("tab", isSelected && "on")}>
           {t("comments-title")}
@@ -479,7 +609,7 @@ export function ActivityTabs({
         </Tab>
       </TabList>
       <TabPanel id="comments" className={classes(styles.tabPanel)}>
-        <CommentsList taskKey={task.key} readOnly={readOnly} onOpenTask={onOpenTask} />
+        <CommentsList task={task} readOnly={readOnly} onOpenTask={onOpenTask} />
       </TabPanel>
       <TabPanel id="time" className={classes(styles.tabPanel)}>
         <TimeEntries task={task} readOnly={readOnly} />
@@ -491,15 +621,20 @@ export function ActivityTabs({
   );
 }
 
-/** The comment composer, pinned under the panel, with the Markdown editor: Ctrl+Enter sends. */
-export function Composer({ taskKey, readOnly }: { taskKey: string; readOnly: boolean }) {
+/**
+ * The comment composer, pinned under the panel, with the Markdown editor:
+ * Ctrl+Enter sends. The unsent text is kept as a draft, also across a
+ * restart. A comment that quotes another of the task's comments answers it.
+ */
+export function Composer({ task, readOnly }: { task: Pick<Task, "id" | "key">; readOnly: boolean }) {
   const t = useT();
-  const draft = `composer:${taskKey}`;
-  const [text, setTextState] = useState(() => readDraft(draft)?.text ?? "");
+  const taskKey = task.key;
+  const [draft, setDraft] = useDraft({ kind: "new_comment", id: task.id }, useTaskDrafts(taskKey));
+  const text = draft?.text ?? "";
   const setText = (next: string) => {
-    setTextState(next);
-    writeDraft(draft, next === "" ? null : { text: next });
+    setDraft(next === "" ? null : { text: next });
   };
+  const comments = useComments(taskKey);
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const add = useCommand("comment.add");
   const { attach, field, busy } = useAttach(taskKey);
@@ -507,8 +642,11 @@ export function Composer({ taskKey, readOnly }: { taskKey: string; readOnly: boo
     if (text.trim() === "" || add.isPending) {
       return;
     }
+    const answers = linkedComments(text, taskKey)
+      .map((short) => comments.data?.items.find((comment) => isComment(comment.id, short)))
+      .find((comment) => comment !== undefined);
     add.mutate(
-      { key: taskKey, body: text, client_request_id: requestId },
+      { key: taskKey, body: text, client_request_id: requestId, ...(answers ? { reply_to: answers.id } : {}) },
       {
         onSuccess: () => {
           setText("");
@@ -519,7 +657,22 @@ export function Composer({ taskKey, readOnly }: { taskKey: string; readOnly: boo
   };
   return (
     <div className={styles.composer}>
-      <MarkdownField compact label={t("composer-label")} value={text} readOnly={readOnly} attachTo={taskKey} onChange={setText} onSubmit={send} />
+      <MarkdownField
+        compact
+        label={t("composer-label")}
+        value={text}
+        readOnly={readOnly}
+        attachTo={taskKey}
+        onChange={setText}
+        onSubmit={send}
+        ref={(handle: MarkdownEditorHandle | null) => {
+          if (handle) {
+            composers.set(taskKey, handle);
+          } else if (composers.get(taskKey) !== undefined) {
+            composers.delete(taskKey);
+          }
+        }}
+      />
       <Button className="btn flat icon" isDisabled={readOnly || busy} aria-label={t("files-attach")} onPress={attach}>
         <Paperclip className="ic" />
       </Button>

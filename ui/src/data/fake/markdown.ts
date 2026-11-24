@@ -92,7 +92,8 @@ export function setChecked(text: string, item: FakeChecklistItem, checked: boole
 
 const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
 
-const TASK_KEY = /(^|[^A-Za-z0-9_-])([A-Z][A-Z0-9]{1,9}-\d+)(?![A-Za-z0-9_-])/g;
+// A key may name one of the task's comments: `TM-41#c-1a2b3c4d`.
+const TASK_KEY = /(^|[^A-Za-z0-9_-])([A-Z][A-Z0-9]{1,9}-\d+)(?:#c-([0-9a-f]{8}))?(?![A-Za-z0-9_-])/g;
 
 function inline(text: string, knownKey: (key: string) => boolean): string {
   const held: string[] = [];
@@ -119,7 +120,12 @@ function inline(text: string, knownKey: (key: string) => boolean): string {
       hold(/^(https?:|mailto:)/.test(url) || /^gk-file:\/\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(url) ? `<a href="${escapeHtml(url)}" rel="noopener noreferrer">${escapeHtml(label)}</a>` : `<a rel="noopener noreferrer">${escapeHtml(label)}</a>`),
     );
   out = escapeHtml(out)
-    .replace(TASK_KEY, (all, before: string, key: string) => (knownKey(key) ? `${before}<a data-ref="${key}">${key}</a>` : all))
+    .replace(TASK_KEY, (all, before: string, key: string, comment: string | undefined) => {
+      if (!knownKey(key)) {
+        return all;
+      }
+      return comment === undefined ? `${before}<a data-ref="${key}">${key}</a>` : `${before}<a data-ref="${key}" data-comment="${comment}">${key}#c-${comment}</a>`;
+    })
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/~~([^~]+)~~/g, "<del>$1</del>")
     .replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>");

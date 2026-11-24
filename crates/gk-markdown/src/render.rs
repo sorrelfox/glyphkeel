@@ -61,7 +61,9 @@ impl fmt::Debug for RenderOptions<'_> {
 ///
 /// - checkboxes: `<input type="checkbox" data-item="3">`, numbered as in
 ///   [`checklist`](crate::checklist), in `<li class="task-item">`;
-/// - task keys: `<a data-ref="TM-41">`; wiki links: `<a data-wiki="Page#Heading">`;
+/// - task keys: `<a data-ref="TM-41">`; a link to a comment
+///   (`TM-41#c-1a2b3c4d`) adds `data-comment="1a2b3c4d"`; wiki links:
+///   `<a data-wiki="Page#Heading">`;
 /// - math: `<span data-math="inline">` or `"display"` with the formula as
 ///   text, also for a ```` ```math ```` block;
 /// - code blocks: `<pre data-lang="rust"><code>`, with the first word of the
@@ -132,15 +134,18 @@ fn link_task_keys<'a>(
             if !exists(key) {
                 continue;
             }
+            let end = range.end + keys::comment_anchor(&text[range.end..]).unwrap_or(0);
+            let range = range.start..end;
+            let target = &text[range.clone()];
             if range.start > done {
                 let before = NodeValue::Text(text[done..range.start].to_owned().into());
                 node.insert_before(arena.alloc(AstNode::from(before)));
             }
             let link = arena.alloc(AstNode::from(NodeValue::Link(Box::new(NodeLink {
-                url: key.to_owned(),
+                url: target.to_owned(),
                 title: String::new(),
             }))));
-            link.append(arena.alloc(AstNode::from(NodeValue::Text(key.to_owned().into()))));
+            link.append(arena.alloc(AstNode::from(NodeValue::Text(target.to_owned().into()))));
             node.insert_before(link);
             links.insert(node_address(link));
             done = range.end;
@@ -307,8 +312,17 @@ mod formatter {
                 return format_node_default(context, node, entering);
             }
             if entering {
-                let attribute = marked(&context.user.mark, &link.url);
-                write!(context, "<a data-ref={attribute}>")?;
+                let (key, comment) = match link.url.split_once(crate::keys::COMMENT_ANCHOR) {
+                    Some((key, comment)) => (key, Some(comment)),
+                    None => (link.url.as_str(), None),
+                };
+                let attribute = marked(&context.user.mark, key);
+                write!(context, "<a data-ref={attribute}")?;
+                if let Some(comment) = comment {
+                    let attribute = marked(&context.user.mark, comment);
+                    write!(context, " data-comment={attribute}")?;
+                }
+                context.write_str(">")?;
             } else {
                 context.write_str("</a>")?;
             }
