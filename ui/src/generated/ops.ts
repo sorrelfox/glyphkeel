@@ -30,6 +30,8 @@ export type ActivityEntry = {
   seq: number;
   /** The agent session, for changes through MCP. */
   session?: string;
+  /** The task the change belongs to, as it is now: the changed task itself, or the task of a changed comment, time entry or file. Left out for other items and for tasks deleted for good. */
+  task?: ActivityTask;
   /** Through which program. */
   via: Via;
 };
@@ -70,6 +72,16 @@ export type ActivityQuery = {
   task?: string | null;
   /** Only changes on or before this day (included), in the same forms as `from`. */
   to?: string | null;
+};
+
+/** A task as the activity log names it. */
+export type ActivityTask = {
+  /** The task's ID. */
+  id: string;
+  /** Its key (`TM-41`). */
+  key: string;
+  /** Its title. */
+  title: string;
 };
 
 /** Who did something. */

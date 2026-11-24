@@ -10,7 +10,7 @@ import { type StatusInfo } from "./context";
 import styles from "./Shell.module.css";
 
 interface StatusBarProps {
-  /** What the screen reports; nothing means no tasks are shown. */
+  /** What the screen reports; nothing for screens without a count of their own. */
   info: StatusInfo | null;
 }
 
@@ -20,7 +20,7 @@ export function StatusBar({ info }: StatusBarProps) {
   const workspace = useOp("workspace.get", {});
   return (
     <footer className={classes("statusbar", styles.statusbar)} aria-label={t("status-label")} data-region="status" tabIndex={-1}>
-      <span className="num">{info ? info.summary : t("status-tasks", { count: 0 })}</span>
+      {info && <span className="num">{info.summary}</span>}
       {info?.selection && <span className="num hide-narrow">{info.selection}</span>}
       <span className={classes("truncate", styles.statusNote)} role="status" data-testid="status-note">
         {info?.note}

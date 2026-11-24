@@ -7,7 +7,7 @@ preferences-page-agents = Agents & CLI
 
 agents-cli = Command-line tool
 agents-cli-tool = glyphkeel
-agents-cli-outside-app = Where the tool is shows in the desktop app. The set-up below uses the bare command name.
+agents-cli-outside-app = The desktop app shows where the tool is. The set-up below uses the bare command name.
 agents-cli-flatpak = Glyphkeel runs as a Flatpak, so agents start the tool through Flatpak with this command.
 agents-cli-on-path = The shell finds it at { $path }.
 agents-cli-on-path-chip = On the PATH

@@ -8,6 +8,7 @@
 
 import {
   type ActivityEntry,
+  type ActivityTask,
   type Actor,
   type AgentLimit,
   type AgentLimits,
@@ -699,6 +700,26 @@ export class FakeWorkspace {
   /** Subtasks in their own order, which statuses don't change. */
   private subtasksOf(task: FakeTask): FakeTask[] {
     return this.state.tasks.filter((candidate) => candidate.parentId === task.id).sort((a, b) => (a.subtaskRank ?? 0) - (b.subtaskRank ?? 0));
+  }
+
+  /** The task an activity entry belongs to, as it is now: the task itself, or the task of a comment, time entry or file. */
+  private taskOfEntry(entry: ActivityEntry): ActivityTask | undefined {
+    const owner = (() => {
+      switch (entry.entity) {
+        case "task":
+          return entry.id;
+        case "comment":
+          return this.state.comments.find((comment) => comment.id === entry.id)?.taskId;
+        case "attachment":
+          return this.state.files.find((file) => file.id === entry.id)?.taskId;
+        case "time_entry":
+          return this.state.timeEntries.find((each) => each.id === entry.id)?.taskId;
+        default:
+          return undefined;
+      }
+    })();
+    const task = this.state.tasks.find((candidate) => candidate.id === owner);
+    return task === undefined ? undefined : { id: task.id, key: this.keyOf(task), title: task.title };
   }
 
   /** Whether an activity entry is about the task `taskId`: its own fields, its comments, its files (also on its comments) and its links. */
@@ -1565,7 +1586,7 @@ export class FakeWorkspace {
       });
       const start = cursor ? Number(cursor) : 0;
       const end = start + (limit ?? 50);
-      const items = all.slice(start, end);
+      const items = all.slice(start, end).map((entry) => ({ ...entry, ...some("task", this.taskOfEntry(entry)) }));
       return { items, total: all.length, ...(end < all.length ? { next_cursor: String(end) } : {}) };
     },
     "agent.sessions": () => ({ items: [], total: 0 }),

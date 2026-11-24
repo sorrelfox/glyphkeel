@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { App } from "./App";
@@ -17,7 +17,10 @@ describe("App", () => {
       expect(screen.getByRole("button", { name })).toBeDefined();
     }
     expect(screen.getByRole("navigation", { name: "Workspace" })).toBeDefined();
-    expect(screen.getByRole("contentinfo").textContent).toContain("No tasks");
+    // Today has no count of its own: the status bar shows only the workspace.
+    const status = screen.getByRole("contentinfo");
+    expect(within(status).getByTestId("status-workspace")).toBeDefined();
+    expect(status.textContent).not.toContain("tasks");
   });
 
   it("leaves the window buttons to the system title bar", async () => {

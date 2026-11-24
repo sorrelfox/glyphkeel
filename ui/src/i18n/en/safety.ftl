@@ -97,7 +97,8 @@ activity-column-who = Who
 activity-column-what = What
 activity-column-project = Project
 activity-column-revert = Revert
-activity-open-task = Open the task
+# A task the change belongs to, as it is now: "TM-41: Fix the login".
+activity-task = { $key }: { $title }
 activity-created = { $entity } created
 activity-changed = { $entity } changed
 activity-trashed = { $entity } moved to the trash

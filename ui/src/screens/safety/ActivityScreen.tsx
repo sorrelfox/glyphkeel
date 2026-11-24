@@ -17,7 +17,7 @@ import { useActivityFeed, useFailureToast, type FeedRequest, skippedReason } fro
 import { revertible } from "../../data/task";
 import { type ActivityEntry, type ActorKind, type ProjectSummary } from "../../generated/ops";
 import { useT, type Translate } from "../../i18n/I18n";
-import { cutShort, useMomentFormat } from "../task/Activity";
+import { cutShort, fieldLabel, useMomentFormat } from "../task/Activity";
 import styles from "./Safety.module.css";
 
 /** The feed's filters: one project, people or agents, and a range of days. */
@@ -40,23 +40,27 @@ export function feedRequest(filter: FeedFilter): FeedRequest {
   };
 }
 
-/** Fields that tell nothing on their own in the feed. */
-const QUIET_FIELDS = new Set(["created", "trashed", "purged", "rank", "subtask_rank", "version"]);
-/** Fields with a name of their own in the messages. */
-const NAMED_FIELDS = new Set(["title", "description", "status", "type", "priority", "labels", "parent", "start_date", "due_date", "estimate", "progress", "rank", "project"]);
+/** Fields that tell nothing on their own in the feed; fields without a name in the messages aren't listed either. */
+const QUIET_FIELDS = new Set(["rank"]);
 
 function text(value: unknown): string | undefined {
   return typeof value === "string" && value !== "" ? value : undefined;
 }
 
-/** What an entry changed, in words: the operation, the item and the fields. */
+/**
+ * What an entry changed, in words: the operation, the item and the fields.
+ * A task's change, or a change to its comments, time or files, names the
+ * task as it is now instead (`task`); a task deleted for good keeps the
+ * key or title the change recorded.
+ */
 export function describeChange(t: Translate, entry: ActivityEntry, locale: string): { what: string; item: string | undefined; fields: string | undefined } {
   const f = entry.fields;
   const named = text(f.key?.after) ?? text(f.key?.before) ?? text(f.title?.after) ?? text(f.title?.before) ?? text(f.name?.after) ?? text(f.name?.before);
-  const item = named === undefined ? undefined : cutShort(t, named, f.key ?? f.title ?? f.name);
+  const item = named === undefined || (entry.task !== undefined && entry.entity === "task") ? undefined : cutShort(t, named, f.key ?? f.title ?? f.name);
   const names = Object.keys(f)
     .filter((field) => !QUIET_FIELDS.has(field))
-    .map((field) => (NAMED_FIELDS.has(field) ? t(`history-field-${field}`) : field));
+    .map((field) => fieldLabel(t, field))
+    .filter((name) => name !== undefined);
   const fields = names.length === 0 || f.created !== undefined ? undefined : new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(names);
   let what: string;
   if (f.purged !== undefined) {
@@ -239,7 +243,9 @@ function FeedRow({
   const navigate = useNavigate();
   const moment = useMomentFormat();
   const { what, item, fields } = describeChange(t, entry, locale);
-  const openable = entry.entity === "task" && entry.fields.trashed?.after !== true && entry.fields.purged === undefined;
+  const task = entry.task;
+  // A task's own trashing or purge offers no way to it.
+  const openable = task !== undefined && !(entry.entity === "task" && (entry.fields.trashed?.after === true || entry.fields.purged !== undefined));
   const revert = () => {
     call("history.revert", { groups: [entry.group] }).then((result) => {
       const skipped = result.skipped[0];
@@ -262,19 +268,15 @@ function FeedRow({
       </span>
       <span role="cell" className={styles.cell}>
         <span>{what}</span>
-        {item !== undefined &&
+        {item !== undefined && <span className={styles.title}>{item}</span>}
+        {task !== undefined &&
           (openable ? (
-            <Button className="linkbtn" onPress={() => void navigate({ to: "/open/$key", params: { key: entry.id } })}>
-              {item}
+            <Button className={classes("linkbtn", styles.title)} onPress={() => void navigate({ to: "/open/$key", params: { key: task.id } })}>
+              {t("activity-task", { key: task.key, title: task.title })}
             </Button>
           ) : (
-            <span className={styles.title}>{item}</span>
+            <span className={styles.title}>{t("activity-task", { key: task.key, title: task.title })}</span>
           ))}
-        {item === undefined && openable && (
-          <Button className="linkbtn" onPress={() => void navigate({ to: "/open/$key", params: { key: entry.id } })}>
-            {t("activity-open-task")}
-          </Button>
-        )}
         {fields !== undefined && <span className={classes("faint", styles.small)}>{fields}</span>}
         {entry.reverted_by !== undefined && <span className={classes("faint", styles.small)}>{t("history-was-reverted")}</span>}
       </span>

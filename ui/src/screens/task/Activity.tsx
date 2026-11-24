@@ -305,7 +305,22 @@ function CommentsList({ task, readOnly, onOpenTask }: { task: Task; readOnly: bo
 
 // ---------- history ----------
 
-const NAMED_FIELDS = ["title", "description", "status", "type", "priority", "labels", "parent", "start_date", "due_date", "estimate", "progress", "rank", "project"];
+/**
+ * Recorded fields with a name of their own in the messages
+ * (`history-field-…`). The rest are bookkeeping, or told already by another
+ * field or by the entry itself: closing a task shows as its status, its
+ * number moves with its project, a saved view or the timer is one field.
+ */
+const LABELLED_FIELDS = new Set([
+  "title", "description", "status", "type", "priority", "labels", "parent", "start_date", "due_date", "estimate", "progress", "rank", "project",
+  "claim", "reminder", "name", "hue", "icon", "modules", "key", "state", "category", "wip_limit", "glyph", "is_default", "slug", "body",
+  "date", "minutes", "note",
+]);
+
+/** A recorded field's name as people read it; nothing for a field that isn't shown. */
+export function fieldLabel(t: Translate, field: string): string | undefined {
+  return LABELLED_FIELDS.has(field) ? t(`history-field-${field}`) : undefined;
+}
 
 interface Names {
   task: Task;
@@ -435,7 +450,10 @@ export function describeEntry(t: Translate, names: Names, entry: ActivityEntry):
         lines.push(t("history-subtask-moved"));
       }
     } else {
-      const name = NAMED_FIELDS.includes(field) ? t(`history-field-${field}`) : field;
+      const name = fieldLabel(t, field);
+      if (name === undefined) {
+        continue;
+      }
       lines.push(
         change.after === undefined
           ? t("history-cleared", { field: name })
