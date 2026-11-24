@@ -72,13 +72,15 @@ export function OpenTaskScreen() {
   const navigate = useNavigate();
   const task = useOp("task.get", { keys: [key] });
   const project = task.data?.items[0]?.project;
+  // The link may name the task by its ID; the panel shows it by its key.
+  const taskKey = task.data?.items[0]?.key ?? key;
   const failed = task.isError;
   useEffect(() => {
     if (project !== undefined) {
-      void navigate({ to: "/projects/$key", params: { key: project }, search: { task: key }, replace: true });
+      void navigate({ to: "/projects/$key", params: { key: project }, search: { task: taskKey }, replace: true });
     } else if (failed) {
       void navigate({ to: "/", replace: true });
     }
-  }, [project, failed, key, navigate]);
+  }, [project, failed, taskKey, navigate]);
   return null;
 }

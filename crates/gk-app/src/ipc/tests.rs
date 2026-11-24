@@ -298,3 +298,76 @@ fn the_op_command_takes_an_operation_and_its_input() {
 
     app.state::<Arc<Workspace>>().close();
 }
+
+#[test]
+fn a_restore_opens_the_workspace_again_on_the_restored_data() {
+    let dir = TempDir::new().unwrap();
+    let mut config = EngineConfig::new(Role::App);
+    config.backups = Some(dir.path().join("backups"));
+    let workspace = Workspace::open(&layout(&dir), config, Confirmation::Given);
+    let (main, got) = channel();
+    workspace.subscribe("main", main);
+    workspace
+        .call(
+            "project.create",
+            json!({ "name": "Home", "key": "HOME" }),
+            None,
+        )
+        .unwrap();
+    let create = |title: &str| {
+        workspace
+            .call(
+                "task.create",
+                json!({ "project": "HOME", "title": title }),
+                None,
+            )
+            .unwrap()
+    };
+    create("Before the backup");
+    let backup = workspace.call("backup.create", json!({}), None).unwrap();
+    create("After the backup");
+    let before = wait_for(&got, 3).len();
+
+    let restored = workspace
+        .call("backup.restore", json!({ "name": backup["name"] }), None)
+        .unwrap();
+    assert_eq!(restored["restored"]["name"], backup["name"]);
+
+    // The next call reaches a fresh engine, which sees the backup's data.
+    let tasks = workspace
+        .call("task.search", json!({ "project": "HOME" }), None)
+        .unwrap();
+    let titles: Vec<&str> = tasks["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|task| task["title"].as_str())
+        .collect();
+    assert!(titles.contains(&"Before the backup"), "{titles:?}");
+    assert!(!titles.contains(&"After the backup"), "{titles:?}");
+    // Every window hears that everything changed.
+    let events = wait_for(&got, before + 1);
+    assert!(
+        events
+            .iter()
+            .any(|event| event.changes.iter().any(|c| c.entity == "workspace")),
+        "{events:?}"
+    );
+    // And the reopened workspace keeps working.
+    create("After the restore");
+    workspace.close();
+}
+
+#[test]
+fn deleting_a_backup_asks_first() {
+    let dir = TempDir::new().unwrap();
+    let mut config = EngineConfig::new(Role::App);
+    config.backups = Some(dir.path().join("backups"));
+    let workspace = Workspace::open(&layout(&dir), config, Confirmation::Refuse);
+    let backup = workspace.call("backup.create", json!({}), None).unwrap();
+    let err = workspace
+        .call("backup.delete", json!({ "name": backup["name"] }), None)
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::Forbidden);
+    workspace.close();
+}

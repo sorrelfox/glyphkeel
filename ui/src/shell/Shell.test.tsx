@@ -96,7 +96,8 @@ describe("Shell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Main menu" }));
     const menu = await screen.findByRole("menu");
     expect(within(menu).getByText("Keyboard shortcuts")).toBeDefined();
-    expect(within(menu).getByRole("menuitem", { name: /Back up now/ }).getAttribute("aria-disabled")).toBe("true");
+    expect(within(menu).getByRole("menuitem", { name: /About Glyphkeel/ }).getAttribute("aria-disabled")).toBe("true");
+    expect(within(menu).getByRole("menuitem", { name: /Back up now/ }).getAttribute("aria-disabled")).toBeNull();
     expect(within(menu).getByRole("menuitem", { name: /Undo/ }).getAttribute("aria-disabled")).toBeNull();
   });
 });

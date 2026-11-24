@@ -128,6 +128,13 @@ export function recordedFields(before: FakeState, after: FakeState, change: Enti
     case "task": {
       const old = before.tasks.find((task) => task.id === change.id);
       const now = after.tasks.find((task) => task.id === change.id);
+      const trashed = (state: FakeState) => state.trash?.some((deletion) => deletion.tasks.some((task) => task.id === change.id)) === true;
+      if (!old && now && trashed(before)) {
+        return { trashed: { before: true }, key: { after: keyOf(now) }, title: { after: now.title } };
+      }
+      if (old && !now) {
+        return trashed(after) ? { trashed: { after: true }, key: { before: keyOf(old) }, title: { before: old.title } } : { purged: { before: true } };
+      }
       if (!old && now) {
         return { created: { after: true }, key: { after: keyOf(now) }, title: { after: now.title }, status: { after: now.statusId } };
       }

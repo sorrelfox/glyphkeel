@@ -5,13 +5,13 @@ import { keysOf, type Action, type ActionGroup } from "../actions/actions";
 import { appWindow } from "../ipc/window";
 import { focusRegion } from "./regions";
 
-export type View = "today" | "all-tasks" | "time" | "search" | "project";
+export type View = "today" | "all-tasks" | "time" | "search" | "project" | "trash" | "activity";
 
 export interface ShellCommands {
   openPalette: () => void;
   /** Shows the quick-add window; null where there is none (a plain browser). */
   quickAdd: (() => void) | null;
-  setView: (view: "today" | "all-tasks" | "time") => void;
+  setView: (view: "today" | "all-tasks" | "time" | "trash" | "activity") => void;
   toggleSidebar: () => void;
   showShortcuts: () => void;
   openPreferences: () => void;
@@ -21,6 +21,12 @@ export interface ShellCommands {
   toggleTimer: (() => void) | null;
   undo: () => void;
   redo: () => void;
+  /** Makes a backup now. */
+  backUp: () => void;
+  /** Opens the export dialog. */
+  exportData: () => void;
+  /** Opens the import dialog. */
+  importData: () => void;
   /** Opens the development gallery; absent in release builds. */
   openGallery?: (() => void) | undefined;
 }
@@ -40,6 +46,8 @@ export function shellActions(commands: ShellCommands): Action[] {
     action("nav.today", "action-today", "navigation", () => { commands.setView("today"); }),
     action("nav.allTasks", "action-all-tasks", "navigation", () => { commands.setView("all-tasks"); }),
     action("nav.timeReport", "action-time-report", "navigation", () => { commands.setView("time"); }),
+    action("nav.activity", "action-activity", "navigation", () => { commands.setView("activity"); }),
+    action("nav.trash", "action-trash", "navigation", () => { commands.setView("trash"); }),
     action("sidebar.toggle", "action-toggle-sidebar", "window", commands.toggleSidebar),
     action("focus.nextRegion", "action-next-region", "window", () => { focusRegion(1); }),
     action("focus.previousRegion", "action-previous-region", "window", () => { focusRegion(-1); }),
@@ -49,9 +57,9 @@ export function shellActions(commands: ShellCommands): Action[] {
     // Inside a text field, the field's own undo comes first.
     action("app.undo", "action-undo", "app", commands.undo, { inText: false }),
     action("app.redo", "action-redo", "app", commands.redo, { inText: false }),
-    action("app.backup", "action-backup", "app", nothing, UNAVAILABLE),
-    action("app.import", "action-import", "app", nothing, UNAVAILABLE),
-    action("app.export", "action-export", "app", nothing, UNAVAILABLE),
+    action("app.backup", "action-backup", "app", commands.backUp),
+    action("app.import", "action-import", "app", commands.importData),
+    action("app.export", "action-export", "app", commands.exportData),
     action("help.shortcuts", "action-shortcuts", "app", commands.showShortcuts),
     action("app.preferences", "action-preferences", "app", commands.openPreferences),
     action("app.about", "action-about", "app", nothing, UNAVAILABLE),

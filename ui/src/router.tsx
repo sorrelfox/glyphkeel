@@ -18,6 +18,8 @@ import { BoardScreen } from "./screens/board/BoardScreen";
 import { OpenTaskScreen, TaskWindowScreen } from "./screens/task/TaskWindow";
 import { AllTasksListScreen, ProjectListScreen } from "./screens/list/ListScreen";
 import { TimeReportScreen } from "./screens/time/TimeReport";
+import { ActivityScreen } from "./screens/safety/ActivityScreen";
+import { TrashScreen } from "./screens/safety/TrashScreen";
 import { QuickAdd } from "./screens/quick-add/QuickAdd";
 import { SearchScreen, searchParams } from "./screens/search/SearchScreen";
 import { TodayScreen } from "./screens/today/TodayScreen";
@@ -79,6 +81,12 @@ const allTasksRoute = createRoute({ getParentRoute: () => shellRoute, path: "/al
 /** The time report: logged time over a range of days. */
 const timeReportRoute = createRoute({ getParentRoute: () => shellRoute, path: "/time", component: TimeReportScreen });
 
+/** The trash: deleted items, to restore or delete for good. */
+const trashRoute = createRoute({ getParentRoute: () => shellRoute, path: "/trash", component: TrashScreen });
+
+/** The workspace's activity: every change, newest first. */
+const activityRoute = createRoute({ getParentRoute: () => shellRoute, path: "/activity", component: ActivityScreen });
+
 /** A project's board; `task` is the task open in the panel beside it. */
 export const boardRoute = createRoute({
   getParentRoute: () => shellRoute,
@@ -110,7 +118,7 @@ const routeTree = rootRoute.addChildren([
   editorPlaygroundRoute,
   quickAddRoute,
   taskWindowRoute,
-  shellRoute.addChildren([todayRoute, searchRoute, allTasksRoute, timeReportRoute, boardRoute, projectListRoute, openTaskRoute]),
+  shellRoute.addChildren([todayRoute, searchRoute, allTasksRoute, timeReportRoute, trashRoute, activityRoute, boardRoute, projectListRoute, openTaskRoute]),
 ]);
 
 /**

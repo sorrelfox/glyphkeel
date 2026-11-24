@@ -17,6 +17,9 @@ import { appWindow } from "../ipc/window";
 import { CommandPalette } from "../screens/palette/CommandPalette";
 import { NewProjectDialog, type NewProjectRequest } from "../screens/project/NewProjectDialog";
 import { ProjectSettings } from "../screens/project/ProjectSettings";
+import { useBackUpNow } from "../screens/safety/DataPage";
+import { ExportDialog } from "../screens/safety/ExportDialog";
+import { ImportDialog } from "../screens/safety/ImportDialog";
 import { type TitleBar } from "../start";
 import { ShellContext, type ShellHooks, type StatusInfo } from "./context";
 import { HeaderBar } from "./HeaderBar";
@@ -48,8 +51,24 @@ export function viewOf(pathname: string): View {
   if (pathname.startsWith("/search")) {
     return "search";
   }
+  if (pathname.startsWith("/trash")) {
+    return "trash";
+  }
+  if (pathname.startsWith("/activity")) {
+    return "activity";
+  }
   return pathname.startsWith("/all") ? "all-tasks" : "today";
 }
+
+/** The header's title of each view but a project's. */
+const VIEW_TITLES: Record<Exclude<View, "project">, string> = {
+  today: "view-today",
+  "all-tasks": "view-all-tasks",
+  time: "view-time-report",
+  search: "view-search",
+  trash: "view-trash",
+  activity: "view-activity",
+};
 
 /**
  * The window: sidebar with the project tree, header bar, the screen of the
@@ -72,6 +91,10 @@ export function Shell({ titleBar, openGallery }: ShellProps) {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
+  // The projects an export starts with; null while the dialog is closed.
+  const [exporting, setExporting] = useState<readonly string[] | null>(null);
+  const [importing, setImporting] = useState(false);
+  const backUp = useBackUpNow();
   const [newProject, setNewProject] = useState<NewProjectRequest | null>(null);
   const [settingsOf, setSettingsOf] = useState<string | null>(null);
   const [status, setStatus] = useState<StatusInfo | null>(null);
@@ -101,7 +124,7 @@ export function Shell({ titleBar, openGallery }: ShellProps) {
         }
       : null,
     setView: (next) => {
-      void navigate({ to: next === "all-tasks" ? "/all" : next === "time" ? "/time" : "/" });
+      void navigate({ to: next === "all-tasks" ? "/all" : next === "time" ? "/time" : next === "trash" ? "/trash" : next === "activity" ? "/activity" : "/" });
     },
     toggleSidebar: () => {
       setSidebarOpen((open) => !open);
@@ -121,13 +144,20 @@ export function Shell({ titleBar, openGallery }: ShellProps) {
           },
     undo,
     redo,
+    backUp: backUp.run,
+    exportData: () => {
+      setExporting([]);
+    },
+    importData: () => {
+      setImporting(true);
+    },
     openGallery,
   });
 
   const title =
     view === "project"
       ? (project.data?.name ?? projectKey ?? "")
-      : t(view === "today" ? "view-today" : view === "time" ? "view-time-report" : view === "search" ? "view-search" : "view-all-tasks");
+      : t(VIEW_TITLES[view]);
   const subtitle =
     view === "today" ? new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long", ...(zone === undefined ? {} : { timeZone: zone }) }).format(new Date()) : undefined;
 
@@ -172,6 +202,18 @@ export function Shell({ titleBar, openGallery }: ShellProps) {
         <CommandPalette isOpen={paletteOpen} onOpenChange={setPaletteOpen} />
         <ShortcutSheet isOpen={shortcutsOpen} onOpenChange={setShortcutsOpen} />
         <Preferences isOpen={preferencesOpen} onOpenChange={setPreferencesOpen} />
+        {exporting !== null && (
+          <ExportDialog
+            isOpen
+            projects={exporting}
+            onOpenChange={(open) => {
+              if (!open) {
+                setExporting(null);
+              }
+            }}
+          />
+        )}
+        {importing && <ImportDialog isOpen onOpenChange={setImporting} />}
         {newProject && (
           <NewProjectDialog
             request={newProject}

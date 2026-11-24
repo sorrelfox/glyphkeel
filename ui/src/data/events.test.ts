@@ -38,7 +38,12 @@ describe("change events", () => {
 
   it("refresh the timer chip on a timer change, and the task, cards and report on a time entry", () => {
     expect(invalidationsFor(changed(1, "timer", ["timer"]))).toEqual(["history.feed", "agent.sessions", "timer.get", "workspace.get", "today.get"]);
-    expect(invalidationsFor(changed(2, "time_entry", ["created"]))).toEqual(["history.feed", "agent.sessions", "task.get", "board.get", "time.report", "task.search"]);
+    expect(invalidationsFor(changed(2, "time_entry", ["created"]))).toEqual(["history.feed", "agent.sessions", "trash.list", "task.get", "board.get", "time.report", "task.search"]);
+  });
+
+  it("refresh the trash when tasks are deleted, restored or purged", () => {
+    expect(invalidationsFor(changed(1, "task", ["trashed"]))).toContain("trash.list");
+    expect(invalidationsFor(changed(2, "wiki_page", ["purged"]))).toContain("trash.list");
   });
 
   it("invalidate a query whatever its input", async () => {

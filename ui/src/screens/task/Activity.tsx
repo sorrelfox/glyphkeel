@@ -279,6 +279,9 @@ export function describeEntry(t: Translate, names: Names, entry: ActivityEntry):
   if (has("created")) {
     return [t("history-created", { key: shown(t, names, "key", fields.key?.after ?? names.task.key) })];
   }
+  if (has("trashed")) {
+    return [t(fields.trashed?.after === true ? "history-task-trashed" : "history-task-restored")];
+  }
   const lines: string[] = [];
   for (const [field, change] of Object.entries(fields)) {
     if (field === "claim") {

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Glyphkeel contributors
 
 import { Monitor } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { RadioButton, RadioField, RadioGroup, Tab, TabList, TabPanel, Tabs } from "react-aria-components";
 
 import { ACCENTS, DENSITIES, THEMES, type Accent, type Theme } from "../appearance/appearance";
@@ -19,13 +19,15 @@ import { useQuickAddShortcut, useSetQuickAddShortcut, type QuickAddShortcut } fr
 import { parseChord } from "../actions/keymap";
 import { chordLabel } from "../components/Kbd";
 import { Select } from "../components/Select";
+import { DataPage } from "../screens/safety/DataPage";
+import { Group, Row } from "./PreferenceRows";
 import styles from "./Preferences.module.css";
 import { TimeZonePicker } from "./TimeZonePicker";
 
 const WEEK_STARTS: readonly WeekStart[] = ["monday", "saturday", "sunday"];
 
 /** The pages, in the order of the list on the left. */
-export const PREFERENCE_PAGES = ["appearance", "time", "reminders", "quick-add", "workspace"] as const;
+export const PREFERENCE_PAGES = ["appearance", "time", "reminders", "quick-add", "workspace", "data"] as const;
 export type PreferencePage = (typeof PREFERENCE_PAGES)[number];
 
 interface PreferencesProps {
@@ -68,36 +70,11 @@ export function Preferences({ isOpen, onOpenChange, page = "appearance" }: Prefe
         <TabPanel id="workspace" className={classes(styles.page)}>
           <WorkspacePage />
         </TabPanel>
+        <TabPanel id="data" className={classes(styles.page)}>
+          <DataPage />
+        </TabPanel>
       </Tabs>
     </Dialog>
-  );
-}
-
-/** A titled group of rows in a box, with optional content above the box. */
-function Group({ title, lead, children }: { title: string; lead?: ReactNode; children: ReactNode }) {
-  return (
-    <section className={styles.group} aria-label={title}>
-      <h2 className={styles.groupTitle}>{title}</h2>
-      {lead}
-      <div className={styles.boxed}>{children}</div>
-    </section>
-  );
-}
-
-/**
- * One setting: its name, an optional line about it, and its control on the
- * right. When the row is too narrow for both, the control moves below the
- * text instead of running out of the box.
- */
-function Row({ label, about, children }: { label: string; about?: string | undefined; children: ReactNode }) {
-  return (
-    <div className={styles.row}>
-      <span className={styles.text}>
-        <span>{label}</span>
-        {about !== undefined && <small>{about}</small>}
-      </span>
-      <span className={styles.control}>{children}</span>
-    </div>
   );
 }
 

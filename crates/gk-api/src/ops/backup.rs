@@ -238,7 +238,7 @@ pub(crate) const BACKUP_RESTORE: OpDescriptor = OpDescriptor::of::<BackupRestore
 pub(crate) const BACKUP_DELETE: OpDescriptor = OpDescriptor::of::<BackupDelete>(Meta {
     summary: "Delete a backup and the stored files only it used.",
     kind: OpKind::Command,
-    safety: Safety::App,
+    safety: Safety::Permanent,
     exposure: Exposure::App {
         reason: "backups are the person's safety net outside the workspace, so agents never remove them",
     },

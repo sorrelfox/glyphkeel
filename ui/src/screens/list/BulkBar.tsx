@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { X } from "lucide-react";
+import { Trash2, X } from "lucide-react";
 import { useState } from "react";
 import { Button } from "react-aria-components";
 
@@ -12,6 +12,7 @@ import { useToasts } from "../../components/Toasts";
 import { PRIORITIES } from "../../data/catalog";
 import { errorToast, useCall, useUndo } from "../../data/hooks";
 import { applyBulk, previewBulk, type ListNames } from "../../data/list";
+import { useTrashTasks } from "../../data/safety";
 import { type BulkChanges, type BulkResult } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import styles from "./List.module.css";
@@ -43,6 +44,7 @@ export function BulkBar({ keys, names, onClear }: BulkBarProps) {
   const toasts = useToasts();
   const { undo } = useUndo();
   const priorityName = usePriorityName();
+  const trash = useTrashTasks();
   const [pending, setPending] = useState<Pending | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -170,6 +172,10 @@ export function BulkBar({ keys, names, onClear }: BulkBarProps) {
             }}
           />
           <div className="grow" />
+          <Button className="btn flat sm danger" isDisabled={busy} onPress={() => { trash(keys, onClear); }}>
+            <Trash2 className="ic s" />
+            {t("trash-move", { count: keys.length })}
+          </Button>
         </>
       )}
       <Button className="btn flat icon sm" aria-label={t("list-bulk-clear")} onPress={onClear}>

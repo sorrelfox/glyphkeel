@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { Clock, List, Plus, SlidersHorizontal, Sun, Trash2 } from "lucide-react";
+import { Clock, History, List, Plus, SlidersHorizontal, Sun, Trash2 } from "lucide-react";
 
 import { useAction } from "../actions/ActionsProvider";
 import { Kbd } from "../components/Kbd";
@@ -29,7 +29,7 @@ interface SidebarProps {
  * The sidebar, top to bottom: the search field (typing suggests tasks,
  * projects and actions; Enter opens the search page with its text; the
  * command palette keeps its own key), Today and All
- * tasks with their counts, the time report, the project tree, the
+ * tasks with their counts, the time report, the activity, the project tree, the
  * timer chip while a timer runs, then Trash and Preferences.
  */
 export function Sidebar({ view, project, width, onNewProject, onProjectSettings }: SidebarProps) {
@@ -37,6 +37,8 @@ export function Sidebar({ view, project, width, onNewProject, onProjectSettings 
   const today = useAction("nav.today");
   const allTasks = useAction("nav.allTasks");
   const timeReport = useAction("nav.timeReport");
+  const activity = useAction("nav.activity");
+  const trash = useAction("nav.trash");
   const preferences = useAction("app.preferences");
   const counts = useCounts();
   const sidebarCounts = useSidebarCounts();
@@ -72,6 +74,10 @@ export function Sidebar({ view, project, width, onNewProject, onProjectSettings 
           <Clock className="ic" />
           <span>{t("view-time-report")}</span>
         </button>
+        <button type="button" className={classes("nav", view === "activity" && "on")} aria-current={view === "activity" ? "page" : undefined} onClick={activity.run}>
+          <History className="ic" />
+          <span>{t("view-activity")}</span>
+        </button>
       </div>
 
       <div className={styles.projectsHeader}>
@@ -93,7 +99,7 @@ export function Sidebar({ view, project, width, onNewProject, onProjectSettings 
 
       <TimerChip />
       <div className={styles.navGroup}>
-        <button type="button" className="nav" disabled>
+        <button type="button" className={classes("nav", view === "trash" && "on")} aria-current={view === "trash" ? "page" : undefined} onClick={trash.run}>
           <Trash2 className="ic" />
           <span>{t("sidebar-trash")}</span>
         </button>

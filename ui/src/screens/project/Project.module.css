@@ -280,3 +280,19 @@
 .addHue {
   inline-size: 140px;
 }
+
+/* The question before a project goes to the trash. */
+.deleteConfirm {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.deleteConfirm p {
+  margin: 0;
+}
+
+.confirmButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+}

@@ -1,0 +1,200 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+   Copyright (C) 2026 Glyphkeel contributors */
+
+/* The trash and the activity feed: a toolbar over a table that fills the
+   screen. Backups, export and import reuse the rows and the meter. */
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap);
+  padding-block: 6px;
+  padding-inline: 16px;
+  border-block-end: 1px solid var(--border);
+}
+
+.select {
+  inline-size: 12rem;
+  max-inline-size: 100%;
+}
+
+.dayField {
+  flex: 0 0 auto;
+  inline-size: 10rem;
+}
+
+.note {
+  margin: 0;
+  padding-block: 12px;
+  padding-inline: 16px;
+}
+
+.scroll {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* A grid row per item, so that the header lines up with virtual rows. */
+.trashRow {
+  grid-template-columns: 24px minmax(12rem, 3fr) minmax(6rem, 1fr) minmax(5rem, 1fr) minmax(10rem, 2fr) minmax(6rem, 1fr);
+}
+
+.feedRow {
+  grid-template-columns: minmax(9rem, 1.2fr) minmax(8rem, 1.2fr) minmax(14rem, 4fr) minmax(6rem, 1fr) 32px;
+}
+
+.cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  min-inline-size: 0;
+  padding-block: 4px;
+}
+
+.title {
+  overflow-wrap: anywhere;
+}
+
+.small {
+  font-size: var(--fs-small);
+}
+
+.soon {
+  color: var(--warning);
+}
+
+.reverted {
+  opacity: .6;
+}
+
+.virtual {
+  position: relative;
+  inline-size: 100%;
+}
+
+.virtualRow {
+  position: absolute;
+  inset-inline-start: 0;
+  inline-size: 100%;
+}
+
+.more {
+  display: flex;
+  justify-content: center;
+  padding: 12px;
+}
+
+/* ---------- backups, export and import ---------- */
+
+.table {
+  inline-size: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  padding-block: 6px;
+  padding-inline: 8px;
+  border-block-end: 1px solid var(--border);
+  color: var(--fg-muted);
+  font-size: var(--fs-small);
+  font-weight: 600;
+  text-align: start;
+}
+
+.table td {
+  padding-block: 6px;
+  padding-inline: 8px;
+  border-block-end: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.number {
+  text-align: end;
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.ok {
+  color: var(--success);
+}
+
+.bad {
+  color: var(--danger);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  inline-size: 34rem;
+  max-inline-size: 100%;
+}
+
+.choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap);
+}
+
+.projects {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-block-size: 14rem;
+  overflow: auto;
+  padding-inline-start: 4px;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.counts {
+  display: grid;
+  grid-template-columns: auto auto;
+  justify-content: start;
+  gap: 2px 16px;
+  margin: 0;
+}
+
+.counts dt {
+  color: var(--fg-muted);
+}
+
+.counts dd {
+  margin: 0;
+}
+
+.keyRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap);
+}
+
+.keyField {
+  inline-size: 8rem;
+}
+
+.path {
+  overflow-wrap: anywhere;
+}
