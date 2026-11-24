@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-//! The quick-add shortcut through the desktop's GlobalShortcuts portal.
+//! The quick-add shortcut through the desktop's GlobalShortcuts portal, and
+//! starting with the system through the Background portal inside Flatpak.
 //!
 //! Every portal call of the app is in this file, because of one rule: the
 //! portal ties a bus connection to an app ID at its first call. A program
@@ -32,9 +33,11 @@ const APP_ID: &str = if cfg!(debug_assertions) {
     "io.github.sorrelfox.Glyphkeel"
 };
 
-// English until the Rust side reads the message files the page uses. The
-// desktop shows it in its dialog and its shortcut settings.
-const DESCRIPTION: &str = "Quick add a task";
+/// The shortcut's description, which the desktop shows in its dialog and
+/// its shortcut settings.
+fn description() -> String {
+    crate::messages::text("shortcut-description", &[])
+}
 
 /// The portal connection's state: whether the app's ID is registered yet.
 #[derive(Debug, Default)]
@@ -88,8 +91,9 @@ impl Portal {
             .await
             .map_err(unavailable)?;
         let trigger = keys.portal_trigger();
-        let shortcut =
-            NewShortcut::new(SHORTCUT_ID, DESCRIPTION).preferred_trigger(Some(trigger.as_str()));
+        let description = description();
+        let shortcut = NewShortcut::new(SHORTCUT_ID, description.as_str())
+            .preferred_trigger(Some(trigger.as_str()));
         let request = portal
             .bind_shortcuts(&session, &[shortcut], None, BindShortcutsOptions::default())
             .await
@@ -168,4 +172,25 @@ async fn forget() {
             eprintln!("glyphkeel-app: cannot remove the shortcut from KDE: {err}");
         }
     }
+}
+
+/// Asks the Background portal to start the app with the system, or not;
+/// answers whether it will. Only inside Flatpak, where the app can't write
+/// its own autostart entry. A sandboxed app is known to the portal by its
+/// sandbox, so this needs no registration first, and a program outside the
+/// sandbox never calls it.
+pub(crate) async fn request_autostart(on: bool, argument: &str) -> Result<bool, String> {
+    use ashpd::desktop::background::Background;
+
+    let reason = crate::messages::text("autostart-reason", &[]);
+    Background::request()
+        .reason(reason.as_str())
+        .auto_start(on)
+        .command(["glyphkeel-app", argument])
+        .dbus_activatable(false)
+        .send()
+        .await
+        .and_then(|request| request.response())
+        .map(|answer| answer.auto_start())
+        .map_err(|err| err.to_string())
 }

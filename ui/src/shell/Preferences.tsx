@@ -14,7 +14,7 @@ import { Switch } from "../components/Switch";
 import { useCommand, useOp } from "../data/hooks";
 import { type SettingsPatch, type WeekStart } from "../generated/ops";
 import { useT } from "../i18n/I18n";
-import { SYSTEM_ZONE, useAppSettings, useTimeZones, useUpdateAppSettings } from "../ipc/appSettings";
+import { canRestart, restartApp, SYSTEM_ZONE, useAppSettings, useSetAutostart, useTimeZones, useUpdateAppSettings } from "../ipc/appSettings";
 import { useQuickAddShortcut, useSetQuickAddShortcut, type QuickAddShortcut } from "../ipc/quickAdd";
 import { parseChord } from "../actions/keymap";
 import { chordLabel } from "../components/Kbd";
@@ -45,7 +45,8 @@ interface PreferencesProps {
  * change applies at once; there is no OK or Apply. The appearance and the
  * language are this person's; time, reminders, trash and what agents may
  * do are the workspace's settings, kept by the engine; background mode,
- * notifications and the time zone are the app's own.
+ * starting with the system, notifications, safe rendering and the time
+ * zone are the app's own.
  */
 export function Preferences({ isOpen, onOpenChange, page = "appearance" }: PreferencesProps) {
   const t = useT();
@@ -272,7 +273,41 @@ function AppearancePage() {
           />
         </Row>
       </Group>
+      <RenderingGroup />
     </>
+  );
+}
+
+/** Safe rendering: drawing without the GPU, for drivers that leave the window blank. */
+function RenderingGroup() {
+  const t = useT();
+  const app = useAppSettings();
+  const updateApp = useUpdateAppSettings();
+  const data = app.data;
+  const pending = data !== undefined && data.safe_rendering !== data.safe_rendering_in_use;
+  return (
+    <Group title={t("preferences-rendering")}>
+      <Row label={t("preferences-safe-rendering")} about={t("preferences-safe-rendering-about")}>
+        <Switch
+          aria-label={t("preferences-safe-rendering")}
+          isDisabled={!data}
+          isSelected={data?.safe_rendering ?? false}
+          onChange={(safe_rendering) => {
+            updateApp({ safe_rendering });
+          }}
+        />
+      </Row>
+      {pending && (
+        <div className={styles.restartNote} role="status" data-testid="safe-rendering-pending">
+          <p>{t(data.safe_rendering ? "preferences-safe-rendering-on-next-start" : "preferences-safe-rendering-off-next-start")}</p>
+          {canRestart() && (
+            <button type="button" className="btn sm" onClick={() => void restartApp()}>
+              {t("preferences-restart-now")}
+            </button>
+          )}
+        </div>
+      )}
+    </Group>
   );
 }
 
@@ -447,6 +482,7 @@ function NotificationsPage() {
   const { settings, change } = useSettings();
   const app = useAppSettings();
   const updateApp = useUpdateAppSettings();
+  const setAutostart = useSetAutostart();
   return (
     <>
       <Group title={t("preferences-notifications-group")}>
@@ -484,6 +520,14 @@ function NotificationsPage() {
             onChange={(background) => {
               updateApp({ background });
             }}
+          />
+        </Row>
+        <Row label={t("preferences-autostart")} about={t("preferences-autostart-about")}>
+          <Switch
+            aria-label={t("preferences-autostart")}
+            isDisabled={!app.data}
+            isSelected={app.data?.autostart ?? false}
+            onChange={setAutostart}
           />
         </Row>
       </Group>

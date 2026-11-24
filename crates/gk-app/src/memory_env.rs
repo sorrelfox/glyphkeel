@@ -33,6 +33,9 @@
 //! [`ADDED`], which also stops it from starting itself again; programs the
 //! app opens for the user (a browser, a file's app) get the environment
 //! without them.
+//!
+//! The web view's rendering settings (see [`crate::graphics`]) are added
+//! the same way, in the same new start.
 
 /// Notes which settings this module added, separated by spaces.
 const ADDED: &str = "GLYPHKEEL_ADDED_ENV";
@@ -46,27 +49,32 @@ const SETTINGS: [(&str, &str); 3] = [
     ("MALLOC_MMAP_THRESHOLD_", "8192"),
 ];
 
-/// The settings to add: those of [`SETTINGS`] that `is_set` doesn't find,
-/// none if this start already is the one with the settings added.
-fn missing(is_set: impl Fn(&str) -> bool) -> Vec<(&'static str, &'static str)> {
+/// The settings to add: those of [`SETTINGS`] and `extra` that `is_set`
+/// doesn't find, none if this start already is the one with the settings
+/// added.
+fn missing(
+    is_set: impl Fn(&str) -> bool,
+    extra: &[(&'static str, &'static str)],
+) -> Vec<(&'static str, &'static str)> {
     if is_set(ADDED) {
         return Vec::new();
     }
     SETTINGS
         .iter()
+        .chain(extra)
         .copied()
         .filter(|(name, _)| !is_set(name))
         .collect()
 }
 
-/// Starts the app again in this process with the missing settings added.
-/// Called first thing in `main`, before any thread or connection exists;
-/// returns only if nothing is missing or the new start failed, and the app
-/// then runs without them.
-pub(crate) fn restart_with_settings() {
+/// Starts the app again in this process with the missing settings added,
+/// the memory settings and `extra`. Called first thing in `main`, before
+/// any thread or connection exists; returns only if nothing is missing or
+/// the new start failed, and the app then runs without them.
+pub(crate) fn restart_with_settings(extra: &[(&'static str, &'static str)]) {
     use std::os::unix::process::CommandExt;
 
-    let missing = missing(|name| std::env::var_os(name).is_some());
+    let missing = missing(|name| std::env::var_os(name).is_some(), extra);
     if missing.is_empty() {
         return;
     }
@@ -91,13 +99,41 @@ pub(crate) fn restart_with_settings() {
     eprintln!("glyphkeel-app: starts without its memory settings: {err}");
 }
 
+/// Replaces this process with a new start of the app, without the
+/// settings this module added, so that the new start chooses them again
+/// (after safe rendering was switched on or off). Called as the app ends,
+/// after the workspace has closed; the new start opens the main window.
+/// Returns only if the new start failed.
+pub(crate) fn start_again() -> std::io::Error {
+    use std::os::unix::process::CommandExt;
+
+    let exe = match std::env::current_exe() {
+        Ok(exe) => exe,
+        Err(err) => return err,
+    };
+    let mut command = std::process::Command::new(exe);
+    if let Some(name) = std::env::args_os().next() {
+        command.arg0(name);
+    }
+    let note = std::env::var(ADDED).ok();
+    for name in added_names(note.as_deref()) {
+        command.env_remove(name);
+    }
+    command.exec()
+}
+
+/// Whether `name` is one of the settings this module may add.
+fn is_known(name: &str) -> bool {
+    SETTINGS.iter().any(|(setting, _)| *setting == name) || crate::graphics::NAMES.contains(&name)
+}
+
 /// The names to leave out of the environment of programs the app opens: the
 /// settings this module added, and its note.
 fn added_names(note: Option<&str>) -> Vec<&str> {
     match note {
         Some(note) => note
             .split(' ')
-            .filter(|name| SETTINGS.iter().any(|(setting, _)| setting == name))
+            .filter(|name| is_known(name))
             .chain([ADDED])
             .collect(),
         None => Vec::new(),
@@ -123,20 +159,40 @@ mod tests {
 
     #[test]
     fn missing_settings_are_added_and_the_users_are_kept() {
-        assert_eq!(missing(|_| false), SETTINGS.to_vec());
+        assert_eq!(missing(|_| false, &[]), SETTINGS.to_vec());
         assert_eq!(
-            missing(|name| name == "JSC_forceRAMSize"),
+            missing(|name| name == "JSC_forceRAMSize", &[]),
             vec![
                 ("MALLOC_ARENA_MAX", "2"),
                 ("MALLOC_MMAP_THRESHOLD_", "8192")
             ]
         );
-        assert!(missing(|name| name != ADDED).is_empty());
+        assert!(missing(|name| name != ADDED, &[]).is_empty());
+    }
+
+    #[test]
+    fn rendering_settings_are_added_unless_the_user_set_them() {
+        let extra = [
+            ("WEBKIT_DISABLE_COMPOSITING_MODE", "1"),
+            ("WEBKIT_DISABLE_DMABUF_RENDERER", "1"),
+        ];
+        let added = missing(|name| name == "WEBKIT_DISABLE_DMABUF_RENDERER", &extra);
+        assert_eq!(added.len(), SETTINGS.len() + 1);
+        assert_eq!(
+            added.last(),
+            Some(&("WEBKIT_DISABLE_COMPOSITING_MODE", "1"))
+        );
     }
 
     #[test]
     fn the_second_start_adds_nothing() {
-        assert!(missing(|name| name == ADDED).is_empty());
+        assert!(
+            missing(
+                |name| name == ADDED,
+                &[("WEBKIT_DISABLE_COMPOSITING_MODE", "1")]
+            )
+            .is_empty()
+        );
     }
 
     #[test]
@@ -149,6 +205,10 @@ mod tests {
         assert_eq!(
             added_names(Some("JSC_forceRAMSize MALLOC_ARENA_MAX PATH")),
             vec!["JSC_forceRAMSize", "MALLOC_ARENA_MAX", ADDED]
+        );
+        assert_eq!(
+            added_names(Some("MALLOC_ARENA_MAX __NV_DISABLE_EXPLICIT_SYNC HOME")),
+            vec!["MALLOC_ARENA_MAX", "__NV_DISABLE_EXPLICIT_SYNC", ADDED]
         );
     }
 }

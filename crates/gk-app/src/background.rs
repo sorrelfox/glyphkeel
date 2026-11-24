@@ -22,6 +22,7 @@ use tauri::tray::{TrayIcon, TrayIconBuilder};
 use tauri::{AppHandle, Manager};
 
 use crate::main_window;
+use crate::messages;
 use crate::open_links::OpenLinks;
 use crate::start::Shown;
 use crate::title_bar::TitleBar;
@@ -103,23 +104,26 @@ const TRAY_ID: &str = "main";
 const OPEN_ID: &str = "open";
 const QUICK_ADD_ID: &str = "quick-add";
 const QUIT_ID: &str = "quit";
-// English until the Rust side reads the message files the page uses.
-const OPEN_LABEL: &str = "Open Glyphkeel";
-const QUICK_ADD_LABEL: &str = "Quick Add…";
-const QUIT_LABEL: &str = "Quit";
-const TOOLTIP: &str = "Glyphkeel";
 
 /// Puts the app's icon in the tray, with Open, Quick add and Quit.
 fn build_tray(app: &AppHandle) -> tauri::Result<TrayIcon> {
-    let open = MenuItem::with_id(app, OPEN_ID, OPEN_LABEL, true, None::<&str>)?;
-    let quick_add = MenuItem::with_id(app, QUICK_ADD_ID, QUICK_ADD_LABEL, true, None::<&str>)?;
+    let label = |id: &str| messages::text(id, &[]);
+    let tooltip = label("tray-tooltip");
+    let open = MenuItem::with_id(app, OPEN_ID, label("tray-open"), true, None::<&str>)?;
+    let quick_add = MenuItem::with_id(
+        app,
+        QUICK_ADD_ID,
+        label("tray-quick-add"),
+        true,
+        None::<&str>,
+    )?;
     let separator = PredefinedMenuItem::separator(app)?;
-    let quit = MenuItem::with_id(app, QUIT_ID, QUIT_LABEL, true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, QUIT_ID, label("tray-quit"), true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open, &quick_add, &separator, &quit])?;
     let mut builder = TrayIconBuilder::with_id(TRAY_ID)
         .menu(&menu)
-        .tooltip(TOOLTIP)
-        .title(TOOLTIP)
+        .tooltip(&tooltip)
+        .title(&tooltip)
         .show_menu_on_left_click(true)
         .on_menu_event(|app, event| match event.id().as_ref() {
             OPEN_ID => show_main(app, None, None),

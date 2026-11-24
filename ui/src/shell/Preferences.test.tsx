@@ -180,8 +180,28 @@ describe("reminders and background", () => {
     const notifications = screen.getByRole("switch", { name: "Show reminders as desktop notifications" });
     fireEvent.click(notifications);
     await waitFor(() => {
-      expect(JSON.parse(window.localStorage.getItem("glyphkeel.app") ?? "{}")).toEqual({ background: false, notifications: false, time_zone: "system" });
+      expect(JSON.parse(window.localStorage.getItem("glyphkeel.app") ?? "{}")).toEqual({
+        background: false,
+        notifications: false,
+        autostart: false,
+        safe_rendering: false,
+        time_zone: "system",
+      });
     });
+  });
+
+  it("switches starting with the system on and off", async () => {
+    setUp({ page: "notifications" });
+    const autostart = await screen.findByRole("switch", { name: "Start when you log in" });
+    await waitFor(() => {
+      expect((autostart as HTMLInputElement).disabled).toBe(false);
+    });
+    expect((autostart as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(autostart);
+    await waitFor(() => {
+      expect((autostart as HTMLInputElement).checked).toBe(true);
+    });
+    expect(JSON.parse(window.localStorage.getItem("glyphkeel.app") ?? "{}")).toMatchObject({ autostart: true, background: true });
   });
 
   it("changes the time of due-date reminders", async () => {
@@ -191,6 +211,28 @@ describe("reminders and background", () => {
     fireEvent.blur(time);
     await waitFor(() => {
       expect(engine.calls.at(-1)).toEqual({ op: "settings.update", input: { reminder_time: "08:30" } });
+    });
+  });
+});
+
+describe("safe rendering", () => {
+  it("is kept, and says it applies from the next start", async () => {
+    setUp({ page: "appearance" });
+    const safe = await screen.findByRole("switch", { name: "Safe rendering" });
+    await waitFor(() => {
+      expect((safe as HTMLInputElement).disabled).toBe(false);
+    });
+    expect((safe as HTMLInputElement).checked).toBe(false);
+    expect(screen.queryByTestId("safe-rendering-pending")).toBeNull();
+    fireEvent.click(safe);
+    const note = await screen.findByTestId("safe-rendering-pending");
+    expect(note.textContent).toContain("next time Glyphkeel starts");
+    // Outside the app there is nothing to restart.
+    expect(within(note).queryByRole("button")).toBeNull();
+    expect(JSON.parse(window.localStorage.getItem("glyphkeel.app") ?? "{}")).toMatchObject({ safe_rendering: true });
+    fireEvent.click(safe);
+    await waitFor(() => {
+      expect(screen.queryByTestId("safe-rendering-pending")).toBeNull();
     });
   });
 });

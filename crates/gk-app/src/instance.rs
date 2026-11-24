@@ -44,6 +44,17 @@ pub(crate) struct Activation {
     pub(crate) token: Option<String>,
     /// Show the quick-add window instead of the main one (`--quick-add`).
     pub(crate) quick_add: bool,
+    /// Started with the system (`--background`): a running app has nothing
+    /// to do for it. Never sent to the running app.
+    pub(crate) background: bool,
+}
+
+impl Activation {
+    /// Whether this start asks a running app for nothing: started with the
+    /// system, without links or quick add.
+    fn asks_nothing(&self) -> bool {
+        self.background && self.links.is_empty() && !self.quick_add
+    }
 }
 
 /// The argument that asks for the quick-add window, and its action name on
@@ -80,6 +91,9 @@ pub(crate) fn claim(activation: &Activation) -> Claim {
         .and_then(Builder::build);
     match built {
         Ok(bus) => Claim::Primary { bus, activations },
+        // Started with the system while the app runs already (it was
+        // started by hand first): leave the running app as it is.
+        Err(zbus::Error::NameTaken) if activation.asks_nothing() => Claim::Forwarded,
         Err(zbus::Error::NameTaken) => match forward(activation) {
             Ok(()) => Claim::Forwarded,
             Err(err) => Claim::Unavailable(err),
@@ -134,6 +148,9 @@ pub(crate) fn this_start() -> Activation {
         links: links_in(&args),
         token,
         quick_add: args.iter().any(|arg| arg == QUICK_ADD),
+        background: args
+            .iter()
+            .any(|arg| arg == crate::autostart::BACKGROUND_ARG),
     }
 }
 
@@ -170,6 +187,7 @@ impl Application {
             links: links_in(&links),
             token,
             quick_add,
+            background: false,
         });
     }
 }
@@ -198,7 +216,21 @@ impl Application {
 
 #[cfg(test)]
 mod tests {
-    use super::links_in;
+    use super::{Activation, links_in};
+
+    #[test]
+    fn a_start_with_the_system_asks_a_running_app_for_nothing() {
+        let start = |links: &[&str], quick_add, background| Activation {
+            links: links.iter().map(|l| (*l).to_owned()).collect(),
+            token: None,
+            quick_add,
+            background,
+        };
+        assert!(start(&[], false, true).asks_nothing());
+        assert!(!start(&[], false, false).asks_nothing());
+        assert!(!start(&["glyphkeel://open/TM-1"], false, true).asks_nothing());
+        assert!(!start(&[], true, true).asks_nothing());
+    }
 
     #[test]
     fn only_the_apps_own_links_are_taken_from_the_arguments() {

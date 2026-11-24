@@ -13,6 +13,12 @@
 //! is not a workspace operation: it isn't workspace data, has no place in
 //! the workspace's history, and an agent must not change it.
 //!
+//! Whether the app starts with the system is kept in the desktop's own
+//! autostart folder (see [`crate::autostart`]), not here, except inside
+//! Flatpak, where the portal's answer is remembered here. Safe rendering
+//! is kept here and applies from the next start, because the web view reads
+//! it when its processes start (see [`crate::graphics`]).
+//!
 //! The same file keeps the page's own preferences (the appearance, the
 //! sidebar's closed projects, the board's card size…): the web view runs
 //! without storage of its own, so they come back through the start script,
@@ -52,6 +58,13 @@ pub(crate) struct Stored {
     /// The desktop-wide key that opens the quick-add window. Unset, it is off.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) quick_add_shortcut: Option<ShortcutSetting>,
+    /// Whether the web view draws without the GPU, from the next start.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) safe_rendering: bool,
+    /// Inside Flatpak only: whether the Background portal last agreed to
+    /// start the app with the system.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) autostart: Option<bool>,
 }
 
 impl Default for Stored {
@@ -61,6 +74,8 @@ impl Default for Stored {
             notifications: true,
             ui: Map::new(),
             quick_add_shortcut: None,
+            safe_rendering: false,
+            autostart: None,
         }
     }
 }
@@ -228,7 +243,15 @@ impl AppSettings {
             if let Some(notifications) = patch.notifications {
                 stored.notifications = notifications;
             }
+            if let Some(safe) = patch.safe_rendering {
+                stored.safe_rendering = safe;
+            }
         })
+    }
+
+    /// Remembers the portal's answer on starting with the system.
+    fn set_autostart(&self, on: bool) -> Stored {
+        self.change(|stored| stored.autostart = Some(on))
     }
 
     /// The quick-add shortcut as chosen in Preferences; off by default.
@@ -298,6 +321,12 @@ impl Notifier for Switched {
 pub(crate) struct View {
     pub(crate) background: bool,
     pub(crate) notifications: bool,
+    /// Whether the app starts with the system.
+    pub(crate) autostart: bool,
+    /// Safe rendering as chosen; it applies from the next start.
+    pub(crate) safe_rendering: bool,
+    /// Whether this run draws with safe rendering.
+    pub(crate) safe_rendering_in_use: bool,
     /// The personal time zone as chosen: `"system"` or an IANA name.
     pub(crate) time_zone: String,
     /// The zone times are shown in now, by its IANA name: the chosen one,
@@ -317,6 +346,8 @@ pub(crate) struct Patch {
     pub(crate) background: Option<bool>,
     #[serde(default)]
     pub(crate) notifications: Option<bool>,
+    #[serde(default)]
+    pub(crate) safe_rendering: Option<bool>,
     /// `"system"` or an IANA name such as `"Europe/Berlin"`.
     #[serde(default)]
     pub(crate) time_zone: Option<String>,
@@ -331,6 +362,9 @@ fn view(
     View {
         background: mode.enabled(),
         notifications: stored.notifications,
+        autostart: crate::autostart::enabled(stored.autostart),
+        safe_rendering: stored.safe_rendering,
+        safe_rendering_in_use: crate::graphics::safe_in_use(),
         time_zone: settings.time_zone(),
         zone_in_use: workspace.time_zone(),
         workspace_path: workspace
@@ -375,6 +409,36 @@ pub(crate) fn update_app_settings(
     Ok(view(&settings, &stored, &mode, &workspace))
 }
 
+/// Switches starting with the system on or off. Inside Flatpak the desktop
+/// may ask the person first, so this waits off the main thread.
+#[tauri::command]
+pub(crate) async fn set_autostart(
+    settings: State<'_, AppSettings>,
+    mode: State<'_, BackgroundMode>,
+    workspace: State<'_, Arc<Workspace>>,
+    on: bool,
+) -> Result<View, OpError> {
+    let now = crate::autostart::set(on).await?;
+    let stored = if crate::autostart::in_flatpak() {
+        settings.set_autostart(now)
+    } else {
+        settings.stored()
+    };
+    Ok(view(&settings, &stored, &mode, &workspace))
+}
+
+/// Ends the app and starts it again, so that a changed rendering setting
+/// applies. The new start opens the main window.
+#[tauri::command]
+pub(crate) fn restart_app(app: AppHandle, restart: State<'_, Restart>) {
+    restart.0.store(true, Ordering::SeqCst);
+    app.exit(0);
+}
+
+/// Set when the app is to start again once it has ended.
+#[derive(Debug, Default)]
+pub(crate) struct Restart(pub(crate) AtomicBool);
+
 /// Every time zone a person can choose, with its offset from UTC now, for
 /// the picker in Preferences.
 #[tauri::command]
@@ -414,6 +478,8 @@ mod tests {
                 enabled: true,
                 keys: "Ctrl+Alt+N".into(),
             }),
+            safe_rendering: true,
+            autostart: Some(true),
         };
         save(&path, &stored).unwrap();
         assert_eq!(load(&path), stored);
@@ -448,6 +514,29 @@ mod tests {
         assert!(!settings.notifications.load(Ordering::SeqCst));
         assert_eq!(load(&path), stored);
         assert!(serde_json::from_str::<Patch>(r#"{"theme": "dark"}"#).is_err());
+    }
+
+    #[test]
+    fn safe_rendering_is_kept_for_the_next_start() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("app.json");
+        let running = AppSettings::new(Some(path.clone()), load(&path));
+        assert!(!running.stored().safe_rendering);
+        // Off, it isn't even written.
+        running.apply(&Patch::default());
+        assert!(
+            !std::fs::read_to_string(&path)
+                .unwrap()
+                .contains("safe_rendering")
+        );
+        let patch: Patch = serde_json::from_str(r#"{"safe_rendering": true}"#).unwrap();
+        running.apply(&patch);
+        drop(running);
+        assert!(load(&path).safe_rendering);
+        let running = AppSettings::new(Some(path.clone()), load(&path));
+        running.set_autostart(true);
+        assert_eq!(load(&path).autostart, Some(true));
+        assert!(load(&path).safe_rendering);
     }
 
     #[test]
