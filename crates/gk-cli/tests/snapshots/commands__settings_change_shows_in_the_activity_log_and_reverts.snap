@@ -2,6 +2,10 @@
 source: crates/gk-cli/tests/commands.rs
 expression: "ws.ok(&[\"settings\", \"get\"])"
 ---
+agent_limits:
+  trash_items_per_call: 20
+  trash_items_per_hour: 50
+  writes_per_minute: 120
 agent_max_profile: standard
 days_per_week: 5
 file_max_mb: 100

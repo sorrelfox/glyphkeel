@@ -476,3 +476,69 @@ async fn an_agent_deletes_within_its_limits_and_the_person_restores() {
         .unwrap();
     assert_eq!(back["total"], 2);
 }
+
+#[tokio::test]
+async fn the_person_sets_the_limit_on_changes_a_minute_while_the_agent_works() {
+    let (_dir, options) = workspace();
+    let (_, mode, version, _) = lifecycles().remove(0);
+    let (engine, person) = open_as_person(&options);
+    let c = connect(&options, mode, version, "Busy").await;
+    output(
+        &c.call("create_project", json!({ "name": "Agents", "key": "AG" }))
+            .await,
+    );
+
+    // A limit set now counts the change already made in this minute.
+    engine
+        .call(
+            &person,
+            "agent.limits.update",
+            json!({ "writes_per_minute": 3 }),
+        )
+        .unwrap();
+    for i in 0..2 {
+        output(
+            &c.call(
+                "create_task",
+                json!({ "project": "AG", "title": format!("T{i}") }),
+            )
+            .await,
+        );
+    }
+    let refused = c
+        .call(
+            "create_task",
+            json!({ "project": "AG", "title": "Too fast" }),
+        )
+        .await;
+    assert_eq!(refused.is_error, Some(true), "{refused:?}");
+    let err = common::text(&refused);
+    assert!(err.starts_with("Error (limit)"), "{err}");
+    assert!(err.contains("Most allowed: 3"), "{err}");
+    // Reading goes on.
+    output(&c.call("get_workspace", json!({})).await);
+
+    // Without a limit, the agent goes on at once.
+    engine
+        .call(
+            &person,
+            "agent.limits.update",
+            json!({ "no_limit": ["writes_per_minute"] }),
+        )
+        .unwrap();
+    let workspace = output(&c.call("get_workspace", json!({})).await);
+    assert!(
+        workspace["agent_limits"].get("writes_per_minute").is_none(),
+        "{workspace}"
+    );
+    for i in 0..5 {
+        output(
+            &c.call(
+                "create_task",
+                json!({ "project": "AG", "title": format!("U{i}") }),
+            )
+            .await,
+        );
+    }
+    c.close().await;
+}

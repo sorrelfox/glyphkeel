@@ -96,6 +96,7 @@ The safety class decides who may run an operation:
 | `file.delete` | trash | app, command line, MCP | `delete_attachment` | `glyphkeel file delete <attachment>` |
 | `agent.sessions` | read | app, command line, MCP | `get_activity` | `glyphkeel agents sessions` |
 | `agent.policy.update` | app | app, command line | — | `glyphkeel agents policy` |
+| `agent.limits.update` | app | app | — | — |
 | `history.feed` | read | app, command line, MCP | `get_activity` | `glyphkeel activity` |
 | `history.revert` | write | app, command line, MCP | `revert_changes` | `glyphkeel revert` |
 | `history.undo` | app | app | — | — |
@@ -605,6 +606,14 @@ Set the most an agent may do, whatever profile it asks for.
 Input: `AgentPolicyPatch`. Output: `SettingsChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 Not available to agents: It sets the rights of agents; an agent that could call it would raise its own rights beyond what the person allowed.
+
+## `agent.limits.update`
+
+Change the limits on agent sessions: changes a minute, new tasks a day, and items moved to the trash per call and per hour. Each is a number or no limit.
+
+Input: `AgentLimitsPatch`. Output: `SettingsChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+Not available to agents: It sets how much agents may do; an agent that could call it would raise its own limits beyond what the person allowed.
 
 ## `history.feed`
 

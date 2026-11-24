@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-//! `agent.sessions` and `agent.policy.update`.
+//! `agent.sessions`, `agent.policy.update` and `agent.limits.update`.
 
 use gk_api::Profile;
 use gk_api::ops::agent::{
+    AGENT_LIMIT_MAX, AgentLimit, AgentLimits, AgentLimitsPatch, AgentLimitsUpdate,
     AgentPolicyUpdate, AgentSession, AgentSessionList, AgentSessions, AgentSessionsInput,
 };
 use gk_api::ops::common::{DEFAULT_LIMIT, MAX_LIMIT};
+use gk_api::ops::settings::SettingsChange;
 use gk_core::Id;
 use gk_store::StoreError;
 use gk_store::rusqlite::{Row, Transaction, params};
@@ -15,8 +17,14 @@ use serde_json::Value;
 
 use super::{desc, settings};
 use crate::failure::Failure;
+use crate::messages;
 use crate::registry::Registry;
 use crate::time::rfc3339;
+use crate::write::WriteCtx;
+
+/// The setting that holds the limits on agent sessions. A workspace without
+/// it has the default limits.
+pub(crate) const LIMITS_SETTING: &str = "agent_limits";
 
 pub(super) fn register(r: &mut Registry) {
     r.query::<AgentSessions, _>(desc::<AgentSessions>(), |q, input| {
@@ -26,6 +34,49 @@ pub(super) fn register(r: &mut Registry) {
         let value = Value::String(input.max_profile.as_str().to_owned());
         settings::set_all(w, &[("agent_max_profile", value)])
     });
+    // Only the app reaches it: it is an app operation without a command, so
+    // the pipeline refuses agents and the command line.
+    r.command::<AgentLimitsUpdate, _>(desc::<AgentLimitsUpdate>(), update_limits);
+}
+
+/// Applies `patch` to the limits on agent sessions. Limits equal to the
+/// defaults leave no setting behind, so a later program's defaults apply.
+fn update_limits(w: &mut WriteCtx<'_>, patch: AgentLimitsPatch) -> Result<SettingsChange, Failure> {
+    for limit in AgentLimit::ALL {
+        let lifted = patch.no_limit.contains(&limit);
+        let reset = patch.reset.contains(&limit);
+        let (field, twice) = match (patch.given(limit).is_some(), lifted, reset) {
+            (true, true, _) | (false, true, true) => ("no_limit", true),
+            (true, false, true) => ("reset", true),
+            _ => ("", false),
+        };
+        if twice {
+            return Err(messages::invalid(
+                field,
+                "settings-given-and-cleared",
+                &[("name", limit.as_str().to_owned())],
+            ));
+        }
+    }
+    for limit in AgentLimit::ALL {
+        if let Some(value) = patch.given(limit) {
+            settings::in_range(limit.as_str(), value, 1, AGENT_LIMIT_MAX)?;
+        }
+    }
+    let before = settings::load(w.tx())?.agent_limits;
+    let limits = patch.apply(before);
+    if limits == before {
+        return settings::set_all(w, &[]);
+    }
+    let stored = if limits == AgentLimits::DEFAULT {
+        None
+    } else {
+        Some(settings::to_value(limits)?)
+    };
+    settings::write_raw(w, LIMITS_SETTING, stored)?;
+    let mut change = settings::set_all(w, &[])?;
+    change.changed.push(LIMITS_SETTING.to_owned());
+    Ok(change)
 }
 
 /// Agent sessions, newest first.

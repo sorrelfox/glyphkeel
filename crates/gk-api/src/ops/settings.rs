@@ -7,6 +7,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::catalog::{Exposure, Meta, OpDescriptor, OpKind, Safety};
+use crate::ops::agent::AgentLimits;
 use crate::profile::Profile;
 
 /// The workspace's settings, with defaults filled in.
@@ -27,6 +28,9 @@ pub struct Settings {
     pub file_max_mb: u32,
     /// The most an agent may do, whatever profile it asks for.
     pub agent_max_profile: Profile,
+    /// The limits on every agent session. Only the person sets them, in the
+    /// app.
+    pub agent_limits: AgentLimits,
     /// Hours a timer runs before it reminds that it is still running; 0
     /// never.
     pub timer_reminder_hours: u32,
@@ -46,6 +50,7 @@ impl Default for Settings {
             week_start: WeekStart::Monday,
             file_max_mb: 100,
             agent_max_profile: Profile::Standard,
+            agent_limits: AgentLimits::DEFAULT,
             timer_reminder_hours: 8,
             backup_folder: None,
         }

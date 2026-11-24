@@ -12,6 +12,7 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use gk_api::Profile;
+use gk_api::ops::agent::{AgentLimits, AgentLimitsPatch};
 use gk_api::ops::common::{Actor, ActorKind, Via};
 use gk_api::{Changed, EntityChange, ErrorCode, OpError, Origin};
 use gk_engine::{ConfirmRequest, Confirmation, Context, Engine, EngineConfig, system_clock};
@@ -33,6 +34,8 @@ const REOPEN_WAIT: Duration = Duration::from_secs(10);
 const RESTORE_OP: &str = "backup.restore";
 /// The operation that sets the most an agent may do.
 const POLICY_OP: &str = "agent.policy.update";
+/// The operation that sets the limits on agent sessions.
+const LIMITS_OP: &str = "agent.limits.update";
 
 /// Whether going from `current` to `wanted` lets agents do more.
 fn raises(current: Profile, wanted: Profile) -> bool {
@@ -194,6 +197,9 @@ impl Workspace {
             if op == POLICY_OP {
                 self.confirm_raise(&engine, &input)?;
             }
+            if op == LIMITS_OP {
+                self.confirm_limits(&engine, &input)?;
+            }
             let mut ctx = Context::user(Via::App).with_confirmation(self.confirm.clone());
             ctx.request_id = request_id;
             engine.call(&ctx, op, input)
@@ -237,7 +243,35 @@ impl Workspace {
         if !raises(current, wanted) {
             return Ok(());
         }
-        let confirmed = match (&self.confirm, gk_api::descriptor(POLICY_OP)) {
+        self.ask(POLICY_OP, input, "confirm-agent-raise-refused")
+    }
+
+    /// Raising a limit on agents, or lifting one, needs the person's native
+    /// confirmation too, for the same reason. Lowering doesn't ask.
+    fn confirm_limits(&self, engine: &Engine, input: &Value) -> Result<(), OpError> {
+        let Ok(patch) = serde_json::from_value::<AgentLimitsPatch>(input.clone()) else {
+            // The engine refuses the input with its own message.
+            return Ok(());
+        };
+        let settings = engine.call(
+            &Context::user(Via::App),
+            "settings.get",
+            Value::Object(serde_json::Map::new()),
+        )?;
+        let current = settings
+            .get("agent_limits")
+            .and_then(|limits| serde_json::from_value::<AgentLimits>(limits.clone()).ok())
+            .unwrap_or_default();
+        if !patch.apply(current).allow_more_than(&current) {
+            return Ok(());
+        }
+        self.ask(LIMITS_OP, input, "confirm-agent-limits-refused")
+    }
+
+    /// Asks the person natively about `op`; `refused` is the message when
+    /// they don't confirm.
+    fn ask(&self, op: &str, input: &Value, refused: &str) -> Result<(), OpError> {
+        let confirmed = match (&self.confirm, gk_api::descriptor(op)) {
             (Confirmation::Given, _) => true,
             (Confirmation::Ask(ask), Some(op)) => ask(&ConfirmRequest {
                 op,
@@ -248,7 +282,7 @@ impl Workspace {
         if confirmed {
             Ok(())
         } else {
-            Err(OpError::forbidden(text("confirm-agent-raise-refused", &[])))
+            Err(OpError::forbidden(text(refused, &[])))
         }
     }
 

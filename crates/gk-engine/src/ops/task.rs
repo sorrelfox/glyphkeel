@@ -16,7 +16,6 @@
 //! `task.reorder_subtask` moves one within the list.
 
 use gk_api::ErrorCode;
-use gk_api::ops::agent::AGENT_NEW_TASKS_PER_DAY;
 use gk_api::ops::common::{Actor, ActorKind, Category, Glyph, Hue, Priority};
 use gk_api::ops::task::{
     Checklist, Claim, LabelRef, StatusRef, SubtaskReorderInput, Task, TaskChange, TaskCreate,
@@ -964,14 +963,22 @@ pub(crate) struct NewTask {
     pub(crate) target: Target,
 }
 
-/// Refuses a new task to an agent session that created
-/// [`AGENT_NEW_TASKS_PER_DAY`] in the last 24 hours, this command's included.
+/// Refuses a new task to an agent session that created as many as the
+/// workspace's limit on new tasks a day allows in the last 24 hours, this
+/// command's included. Without a limit, every new task is allowed.
 fn check_new_task_cap(w: &WriteCtx<'_>) -> Result<(), Failure> {
     const DAY_MS: i64 = 86_400_000;
     let caller = w.caller();
     let (true, Some(session)) = (caller.is_agent(), caller.session) else {
         return Ok(());
     };
+    let Some(max) = super::settings::load(w.tx())?
+        .agent_limits
+        .new_tasks_per_day
+    else {
+        return Ok(());
+    };
+    let max = u64::from(max);
     let (earlier, oldest): (i64, Option<i64>) = w.tx().query_row(
         "SELECT count(*), min(at) FROM activity
           WHERE session_id = ?1 AND at > ?2 AND entity_kind = 'task'
@@ -980,7 +987,6 @@ fn check_new_task_cap(w: &WriteCtx<'_>) -> Result<(), Failure> {
         |r| Ok((r.get(0)?, r.get(1)?)),
     )?;
     let made = u64::try_from(earlier).unwrap_or(0) + w.created_so_far(TASK) as u64;
-    let max = u64::from(AGENT_NEW_TASKS_PER_DAY);
     if made < max {
         return Ok(());
     }

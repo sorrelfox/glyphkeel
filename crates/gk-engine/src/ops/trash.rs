@@ -21,8 +21,8 @@
 //!   them, removes their text from earlier history rows and records only
 //!   that something was purged. Stored files no attachment uses any more
 //!   are removed after the commit.
-//! - Agents with the standard profile move at most [`AGENT_ITEMS_PER_CALL`]
-//!   items per call and [`AGENT_ITEMS_PER_HOUR`] per hour to the trash, and
+//! - Agents with the standard profile move at most the workspace's limits
+//!   of items per call and per hour to the trash (when they are set), and
 //!   need the full profile to delete a project or purge anything.
 
 use std::collections::HashSet;
@@ -57,10 +57,6 @@ use crate::write::WriteCtx;
 pub(crate) const TRASHED: &str = "trashed";
 /// History's field for a purged item; it can't be reverted.
 pub(crate) const PURGED: &str = "purged";
-/// Items a standard agent may move to the trash in one call.
-pub(crate) const AGENT_ITEMS_PER_CALL: u64 = gk_api::ops::agent::AGENT_TRASH_ITEMS_PER_CALL as u64;
-/// Items a standard agent session may move to the trash in an hour.
-pub(crate) const AGENT_ITEMS_PER_HOUR: u64 = gk_api::ops::agent::AGENT_TRASH_ITEMS_PER_HOUR as u64;
 /// Most tasks one deletion names.
 const MAX_TASKS: usize = 500;
 /// Most entries one restore or purge names.
@@ -133,17 +129,14 @@ pub(crate) fn check_agent_caps(
     if profile >= Profile::Full {
         return Ok(());
     }
-    if count > AGENT_ITEMS_PER_CALL {
-        let args = [
-            ("count", count.to_string()),
-            ("max", AGENT_ITEMS_PER_CALL.to_string()),
-        ];
+    let limits = settings::load(tx)?.agent_limits;
+    if let Some(per_call) = limits.trash_items_per_call.map(u64::from)
+        && count > per_call
+    {
+        let args = [("count", count.to_string()), ("max", per_call.to_string())];
         return Err(Failure::Op(messages::hint(
             messages::tag(
-                OpError::limit(
-                    messages::text("trash-call-limit", &args),
-                    AGENT_ITEMS_PER_CALL,
-                ),
+                OpError::limit(messages::text("trash-call-limit", &args), per_call),
                 "trash-call-limit",
                 &args,
             ),
@@ -151,9 +144,10 @@ pub(crate) fn check_agent_caps(
             &[],
         )));
     }
-    let Some(session) = ctx.session else {
+    let (Some(session), Some(per_hour)) = (ctx.session, limits.trash_items_per_hour) else {
         return Ok(());
     };
+    let per_hour = u64::from(per_hour);
     let (earlier, oldest): (i64, Option<i64>) = tx.query_row(
         "SELECT count(*), min(at) FROM activity
           WHERE session_id = ?1 AND at > ?2
@@ -162,20 +156,17 @@ pub(crate) fn check_agent_caps(
         |r| Ok((r.get(0)?, r.get(1)?)),
     )?;
     let total = u64::try_from(earlier).unwrap_or(0) + count;
-    if total > AGENT_ITEMS_PER_HOUR {
+    if total > per_hour {
         let wait_ms = oldest.map_or(HOUR_MS, |t| t + HOUR_MS - now).max(1000);
         let retry_after = (wait_ms + 999) / 1000;
         let args = [
             ("count", earlier.to_string()),
-            ("max", AGENT_ITEMS_PER_HOUR.to_string()),
+            ("max", per_hour.to_string()),
         ];
         return Err(Failure::Op(
             messages::hint(
                 messages::tag(
-                    OpError::limit(
-                        messages::text("trash-hour-limit", &args),
-                        AGENT_ITEMS_PER_HOUR,
-                    ),
+                    OpError::limit(messages::text("trash-hour-limit", &args), per_hour),
                     "trash-hour-limit",
                     &args,
                 ),

@@ -448,14 +448,14 @@ fn a_comment_changes_updated_but_not_edited() {
 }
 
 #[test]
-fn agents_create_a_limited_number_of_tasks_a_day() {
+fn agents_create_as_many_tasks_as_the_person_allows() {
     let dir = TempDir::new().unwrap();
     let ws = setup(&dir);
+    let app = Context::user(Via::App);
     let agent = ws.agent("Helper", Profile::Full);
-    let max = ws.as_(&agent, "workspace.get", json!({}))["agent_limits"]["new_tasks_per_day"]
-        .as_u64()
-        .unwrap();
-    assert_eq!(max, 500);
+    // No limit by default: the workspace read leaves it out.
+    let limits = ws.as_(&agent, "workspace.get", json!({}))["agent_limits"].clone();
+    assert!(limits.get("new_tasks_per_day").is_none(), "{limits}");
     let create = |ctx: &Context, title: String| {
         ws.engine.call(
             ctx,
@@ -463,16 +463,28 @@ fn agents_create_a_limited_number_of_tasks_a_day() {
             json!({ "project": "TM", "title": title }),
         )
     };
-    for i in 0..max {
+    for i in 0..30 {
+        create(&agent, format!("Free {i}")).unwrap();
+    }
+
+    // The person sets a limit; the tasks of the day so far count.
+    ws.as_(
+        &app,
+        "agent.limits.update",
+        json!({ "new_tasks_per_day": 35 }),
+    );
+    let max = ws.as_(&agent, "workspace.get", json!({}))["agent_limits"]["new_tasks_per_day"]
+        .as_u64()
+        .unwrap();
+    assert_eq!(max, 35);
+    ws.advance(HOUR);
+    for i in 0..5 {
         create(&agent, format!("T{i}")).unwrap();
-        if i == 0 {
-            ws.advance(HOUR);
-        }
     }
     let err = create(&agent, "One too many".into()).unwrap_err();
     assert_eq!(err.code, ErrorCode::Limit, "{err:?}");
     assert_eq!(err.details["message_id"], "task-day-limit");
-    assert_eq!(err.details["max"], 500);
+    assert_eq!(err.details["max"], 35);
     let wait = err.details["retry_after"].as_i64().unwrap();
     assert!((23 * 3600 - 60..=23 * 3600).contains(&wait), "{wait}");
     // A duplicate is a new task too.
@@ -482,9 +494,137 @@ fn agents_create_a_limited_number_of_tasks_a_day() {
     ws.new_task("TM", "By the person");
     let other = ws.agent("Other", Profile::Standard);
     create(&other, "From another session".into()).unwrap();
-    // A day after the first one, it no longer counts.
+    // A day after the first ones, they no longer count.
     ws.advance(23 * HOUR);
     create(&agent, "Next day".into()).unwrap();
+    // Lifting the limit again lets the session go on at once.
+    ws.as_(
+        &app,
+        "agent.limits.update",
+        json!({ "new_tasks_per_day": 1 }),
+    );
+    assert!(create(&agent, "Refused".into()).is_err());
+    ws.as_(
+        &app,
+        "agent.limits.update",
+        json!({ "no_limit": ["new_tasks_per_day"] }),
+    );
+    create(&agent, "Allowed again".into()).unwrap();
+}
+
+#[test]
+fn only_the_person_changes_the_limits_on_agents_in_the_app() {
+    let dir = TempDir::new().unwrap();
+    let ws = setup(&dir);
+    let app = Context::user(Via::App);
+    let defaults = json!({
+        "writes_per_minute": 120,
+        "trash_items_per_call": 20,
+        "trash_items_per_hour": 50,
+    });
+    assert_eq!(ws.call("settings.get", json!({}))["agent_limits"], defaults);
+
+    let changed = ws.as_(
+        &app,
+        "agent.limits.update",
+        json!({ "writes_per_minute": 30, "no_limit": ["trash_items_per_hour"] }),
+    );
+    assert_eq!(changed["changed"], json!(["agent_limits"]), "{changed}");
+    let limits = json!({ "writes_per_minute": 30, "trash_items_per_call": 20 });
+    assert_eq!(changed["settings"]["agent_limits"], limits, "{changed}");
+    assert_eq!(ws.call("workspace.get", json!({}))["agent_limits"], limits);
+    let same = ws.as_(
+        &app,
+        "agent.limits.update",
+        json!({ "writes_per_minute": 30 }),
+    );
+    assert_eq!(same["changed"], json!([]), "{same}");
+    assert!(same.get("group").is_none(), "{same}");
+
+    // Numbers out of range, or a limit both given and lifted, are refused.
+    for input in [
+        json!({ "writes_per_minute": 0 }),
+        json!({ "trash_items_per_call": 1_000_001 }),
+        json!({ "writes_per_minute": 10, "no_limit": ["writes_per_minute"] }),
+        json!({ "no_limit": ["trash_items_per_call"], "reset": ["trash_items_per_call"] }),
+    ] {
+        let err = ws.fails(&app, "agent.limits.update", input.clone());
+        assert_eq!(err.code, ErrorCode::Invalid, "{input}: {err:?}");
+    }
+
+    // Neither agents nor the command line change them, nor revert a change.
+    let agent = ws.agent("Agent", Profile::Full);
+    let raise = json!({ "no_limit": ["writes_per_minute"] });
+    let err = ws.fails(&agent, "agent.limits.update", raise.clone());
+    assert_eq!(err.code, ErrorCode::Forbidden);
+    let err = ws.fails(&me(), "agent.limits.update", raise);
+    assert_eq!(err.code, ErrorCode::Forbidden);
+    assert_eq!(err.details["message_id"], "op-app-only");
+    let err = ws.fails(
+        &me(),
+        "settings.update",
+        json!({ "agent_limits": { "writes_per_minute": 1000 } }),
+    );
+    assert_eq!(err.code, ErrorCode::Invalid);
+    for ctx in [&me(), &agent] {
+        let revert = ws.as_(
+            ctx,
+            "history.revert",
+            json!({ "groups": [changed["group"]] }),
+        );
+        assert_eq!(
+            revert["skipped"][0]["reason_id"], "revert-app-only-setting",
+            "{revert}"
+        );
+    }
+    assert_eq!(ws.call("settings.get", json!({}))["agent_limits"], limits);
+
+    // The person reverts in the app; the defaults leave no setting behind.
+    let revert = ws.as_(
+        &app,
+        "history.revert",
+        json!({ "groups": [changed["group"]] }),
+    );
+    assert_eq!(revert["reverted"].as_array().unwrap().len(), 1, "{revert}");
+    assert_eq!(ws.call("settings.get", json!({}))["agent_limits"], defaults);
+    assert_eq!(
+        ws.count("SELECT count(*) FROM settings WHERE key = 'agent_limits'"),
+        0
+    );
+    ws.as_(
+        &app,
+        "agent.limits.update",
+        json!({ "trash_items_per_call": 5 }),
+    );
+    let back = ws.as_(
+        &app,
+        "agent.limits.update",
+        json!({ "reset": ["trash_items_per_call"] }),
+    );
+    assert_eq!(back["settings"]["agent_limits"], defaults, "{back}");
+    assert_eq!(
+        ws.count("SELECT count(*) FROM settings WHERE key = 'agent_limits'"),
+        0
+    );
+}
+
+#[test]
+fn agents_move_any_number_of_items_to_the_trash_without_limits() {
+    let dir = TempDir::new().unwrap();
+    let ws = setup(&dir);
+    let keys: Vec<String> = (0..60)
+        .map(|i| ws.new_task("TM", &format!("T{i}")))
+        .collect();
+    let app = Context::user(Via::App);
+    ws.as_(
+        &app,
+        "agent.limits.update",
+        json!({ "no_limit": ["trash_items_per_call", "trash_items_per_hour"] }),
+    );
+    let agent = ws.agent("Helper", Profile::Standard);
+    ws.as_(&agent, "task.delete", json!({ "keys": keys[..30] }));
+    ws.as_(&agent, "task.delete", json!({ "keys": keys[30..] }));
+    assert_eq!(ws.trash()["total"], 60);
 }
 
 #[test]

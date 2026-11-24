@@ -643,7 +643,11 @@ fn group_rows(tx: &Transaction<'_>, group: Id) -> Result<Vec<GroupRow>, StoreErr
 
 /// Settings only the person changes, in the app; a revert from anywhere
 /// else leaves them alone.
-const APP_ONLY_SETTINGS: &[&str] = &["agent_max_profile", crate::backup::SETTING];
+const APP_ONLY_SETTINGS: &[&str] = &[
+    "agent_max_profile",
+    super::agent::LIMITS_SETTING,
+    crate::backup::SETTING,
+];
 
 /// Why a group can't be reverted: a message ID and its arguments.
 type Reason = (&'static str, Vec<(&'static str, String)>);

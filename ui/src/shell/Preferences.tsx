@@ -20,7 +20,7 @@ import { parseChord } from "../actions/keymap";
 import { chordLabel } from "../components/Kbd";
 import { Select } from "../components/Select";
 import { DataPage } from "../screens/safety/DataPage";
-import { Group, Row } from "./PreferenceRows";
+import { Group, NumberSetting, Row } from "./PreferenceRows";
 import { AgentsPage } from "./preferences/AgentsPage";
 import { LanguagePage } from "./preferences/LanguagePage";
 import { ShortcutsPage } from "./preferences/ShortcutsPage";
@@ -289,55 +289,6 @@ function useSettings() {
       update.mutate(patch);
     },
   };
-}
-
-/**
- * A whole number from `min` to `max`, saved when the field loses the focus
- * or on Enter. Anything else goes back to the stored value.
- */
-function NumberSetting({ label, value, min, max, unit, onSave }: { label: string; value: number; min: number; max: number; unit: string; onSave: (value: number) => void }) {
-  const [text, setText] = useState(String(value));
-  const [seen, setSeen] = useState(value);
-  if (value !== seen) {
-    // The stored value changed, here or elsewhere: show it.
-    setSeen(value);
-    setText(String(value));
-  }
-  const save = () => {
-    const number = Number(text);
-    if (text.trim() !== "" && Number.isInteger(number) && number >= min && number <= max) {
-      if (number !== value) {
-        onSave(number);
-      }
-    } else {
-      setText(String(value));
-    }
-  };
-  return (
-    <>
-      <span className={classes("field", styles.number)}>
-        <input
-          type="number"
-          className="num"
-          aria-label={label}
-          min={min}
-          max={max}
-          step={1}
-          value={text}
-          onChange={(event) => {
-            setText(event.target.value);
-          }}
-          onBlur={save}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              save();
-            }
-          }}
-        />
-      </span>
-      <span className={classes("muted", styles.unit)}>{unit}</span>
-    </>
-  );
 }
 
 /** A time of day, `HH:MM`, saved when the field loses the focus or on Enter. */

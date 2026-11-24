@@ -95,16 +95,35 @@ export type AgentBrief = {
   title?: string;
 };
 
-/** The fixed limits on agent sessions, so a runaway loop can't flood the workspace. */
+/** One of the limits on agent sessions. */
+export type AgentLimit = "writes_per_minute" | "new_tasks_per_day" | "trash_items_per_call" | "trash_items_per_hour";
+
+/** The limits on every agent session, so a runaway loop can't flood the workspace. A limit that is left out is lifted: there is no limit. Only the person changes them, in the app. */
 export type AgentLimits = {
-  /** Tasks a session may create in any 24 hours. */
-  new_tasks_per_day: number;
-  /** Items a standard agent may move to the trash in one call. */
-  trash_items_per_call: number;
-  /** Items a standard agent session may move to the trash in an hour. */
-  trash_items_per_hour: number;
-  /** Calls of changing tools allowed in any minute, per session. */
-  writes_per_minute: number;
+  /** Tasks a session may create in any 24 hours; left out: no limit. */
+  new_tasks_per_day?: number;
+  /** Items a standard agent may move to the trash in one call; left out: no limit. */
+  trash_items_per_call?: number;
+  /** Items a standard agent session may move to the trash in an hour; left out: no limit. */
+  trash_items_per_hour?: number;
+  /** Calls of changing tools allowed in any minute, per session; left out: no limit. */
+  writes_per_minute?: number;
+};
+
+/** The limits on agent sessions to change; limits left out keep their value. */
+export type AgentLimitsPatch = {
+  /** Tasks a session may create in any 24 hours, 1 to 1000000. */
+  new_tasks_per_day?: number | null;
+  /** Limits to lift: agents then have no limit there. */
+  no_limit?: AgentLimit[];
+  /** Limits to set back to their default. */
+  reset?: AgentLimit[];
+  /** Items a standard agent may move to the trash in one call, 1 to 1000000. */
+  trash_items_per_call?: number | null;
+  /** Items a standard agent session may move to the trash in an hour, 1 to 1000000. */
+  trash_items_per_hour?: number | null;
+  /** Calls of changing tools allowed in any minute, per session, 1 to 1000000. */
+  writes_per_minute?: number | null;
 };
 
 /** The agent policy to set. */
@@ -1808,6 +1827,8 @@ export type SettingKey = "trash_days" | "reminder_time" | "hours_per_day" | "day
 
 /** The workspace's settings, with defaults filled in. */
 export type Settings = {
+  /** The limits on every agent session. Only the person sets them, in the app. */
+  agent_limits: AgentLimits;
   /** The most an agent may do, whatever profile it asks for. */
   agent_max_profile: Profile;
   /** The folder that holds this workspace's backups, as an absolute path; left out: the default folder. Only the person sets it, in the app. */
@@ -3137,7 +3158,7 @@ export type WorkspaceGetInput = Record<string, never>;
 
 /** The open workspace and who is asking. */
 export type WorkspaceInfo = {
-  /** The fixed limits on agent sessions. */
+  /** The limits on agent sessions enforced now, as in the settings; a limit left out is lifted. */
   agent_limits: AgentLimits;
   /** Who is asking, through which program, with which rights. */
   caller: Caller;
@@ -3249,6 +3270,7 @@ export interface OpMap {
   "file.delete": { input: FileRef; output: FileChange; safety: "trash"; kind: "command" };
   "agent.sessions": { input: AgentSessionsInput; output: AgentSessionList; safety: "read"; kind: "query" };
   "agent.policy.update": { input: AgentPolicyPatch; output: SettingsChange; safety: "app"; kind: "command" };
+  "agent.limits.update": { input: AgentLimitsPatch; output: SettingsChange; safety: "app"; kind: "command" };
   "history.feed": { input: ActivityQuery; output: ActivityPage; safety: "read"; kind: "query" };
   "history.revert": { input: RevertInput; output: RevertResult; safety: "write"; kind: "command" };
   "history.undo": { input: UndoInput; output: UndoResult; safety: "app"; kind: "command" };
@@ -3352,6 +3374,7 @@ export const OP_SAFETY = {
   "file.delete": "trash",
   "agent.sessions": "read",
   "agent.policy.update": "app",
+  "agent.limits.update": "app",
   "history.feed": "read",
   "history.revert": "write",
   "history.undo": "app",
@@ -3380,6 +3403,8 @@ export function makeOps(call: Call) {
       sessions: (input: OpMap["agent.sessions"]["input"] = {}) => call("agent.sessions", input),
       /** Set the most an agent may do, whatever profile it asks for. (app) */
       policyUpdate: (input: OpMap["agent.policy.update"]["input"]) => call("agent.policy.update", input),
+      /** Change the limits on agent sessions: changes a minute, new tasks a day, and items moved to the trash per call and per hour. Each is a number or no limit. (app) */
+      limitsUpdate: (input: OpMap["agent.limits.update"]["input"] = {}) => call("agent.limits.update", input),
     },
     backup: {
       /** Make a backup of the workspace now: a checked copy of the database and its stored files. (write) */

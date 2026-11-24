@@ -13,11 +13,12 @@ import { useToasts } from "../../components/Toasts";
 import { useCall, useCommand, useOp } from "../../data/hooks";
 import { opPrefix } from "../../data/queries";
 import { skippedReason, useFailureToast } from "../../data/safety";
-import { type AgentSession, type Profile, type WorkspaceInfo } from "../../generated/ops";
+import { Switch } from "../../components/Switch";
+import { type AgentLimit, type AgentLimitsPatch, type AgentSession, type Profile } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { useCliStatus, useInstallCli, type CliStatus } from "../../ipc/cli";
 import { useMomentFormat } from "../../screens/task/Activity";
-import { Group, Row } from "../PreferenceRows";
+import { Group, NumberSetting, Row } from "../PreferenceRows";
 import styles from "../Preferences.module.css";
 import { MCP_CLIENTS, projectSnippet } from "./clients";
 
@@ -28,7 +29,8 @@ const BARE_COMMAND: readonly string[] = ["glyphkeel"];
 
 /**
  * Agents & CLI: where the command-line tool is (and a link to install it),
- * the set-up to copy into common MCP clients, the most an agent may do, and
+ * the set-up to copy into common MCP clients, the most an agent may do, the
+ * limits on each agent session (only the person changes them, here), and
  * the agent sessions, each of which can be reverted.
  */
 export function AgentsPage() {
@@ -39,6 +41,7 @@ export function AgentsPage() {
       <CliGroup status={cli.data} isPending={cli.isPending} />
       <ClientsGroup command={command} />
       <PolicyGroup />
+      <LimitsGroup />
       <SessionsGroup />
     </>
   );
@@ -175,37 +178,36 @@ function ClientsGroup({ command }: { command: readonly string[] }) {
 
 // ---------- what agents may do ----------
 
-/** The engine's limits on every agent session, as the workspace read reports them. */
-interface AgentLimits {
-  writes_per_minute: number;
-  new_tasks_per_day: number;
-  trash_items_per_call: number;
-  trash_items_per_hour: number;
+/** One limit on agent sessions, as the page shows it. */
+interface LimitRow {
+  limit: AgentLimit;
+  /** The start of its message IDs. */
+  message: string;
+  /** The engine's default; undefined: no limit. */
+  byDefault: number | undefined;
+  /** The number offered when a lifted limit is set again. */
+  offered: number;
 }
 
-/** The limits the engine has always had, for an engine that doesn't report them. */
-const DEFAULT_LIMITS: AgentLimits = { writes_per_minute: 120, new_tasks_per_day: 500, trash_items_per_call: 20, trash_items_per_hour: 50 };
+export const LIMIT_ROWS: readonly LimitRow[] = [
+  { limit: "writes_per_minute", message: "agents-limit-writes", byDefault: 120, offered: 120 },
+  { limit: "new_tasks_per_day", message: "agents-limit-tasks", byDefault: undefined, offered: 500 },
+  { limit: "trash_items_per_call", message: "agents-limit-trash-call", byDefault: 20, offered: 20 },
+  { limit: "trash_items_per_hour", message: "agents-limit-trash-hour", byDefault: 50, offered: 50 },
+];
 
-/** The limits in the workspace read, each one that is missing or not a number replaced by its default. */
-export function agentLimits(info: WorkspaceInfo | undefined): AgentLimits {
-  const given = (info as { agent_limits?: Partial<Record<keyof AgentLimits, unknown>> } | undefined)?.agent_limits;
-  const pick = (name: keyof AgentLimits) => {
-    const value = given?.[name];
-    return typeof value === "number" && Number.isFinite(value) ? value : DEFAULT_LIMITS[name];
-  };
-  return {
-    writes_per_minute: pick("writes_per_minute"),
-    new_tasks_per_day: pick("new_tasks_per_day"),
-    trash_items_per_call: pick("trash_items_per_call"),
-    trash_items_per_hour: pick("trash_items_per_hour"),
-  };
+/** The largest number a limit can be set to, as the engine accepts it. */
+export const LIMIT_MAX = 1_000_000;
+
+/** The change that sets `limit` to `value`, or lifts it when `value` is null. */
+export function limitPatch(limit: AgentLimit, value: number | null): AgentLimitsPatch {
+  return value === null ? { no_limit: [limit] } : { [limit]: value };
 }
 
 function PolicyGroup() {
   const t = useT();
   const queryClient = useQueryClient();
   const settings = useOp("settings.get", {});
-  const limits = agentLimits(useOp("workspace.get", {}).data);
   const update = useCommand("agent.policy.update");
   if (settings.isError) {
     return <p className={styles.error}>{settings.error.error.message}</p>;
@@ -233,13 +235,64 @@ function PolicyGroup() {
           }}
         />
       </Row>
-      <Row label={t("agents-limits")} about={t("agents-limits-about", {
-          perMinute: limits.writes_per_minute,
-          perDay: limits.new_tasks_per_day,
-          perCall: limits.trash_items_per_call,
-          perHour: limits.trash_items_per_hour,
-        })} />
       <Row label={t("agents-raise")} about={t("agents-raise-about")} />
+    </Group>
+  );
+}
+
+// ---------- limits on each agent session ----------
+
+function LimitsGroup() {
+  const t = useT();
+  const queryClient = useQueryClient();
+  const settings = useOp("settings.get", {});
+  const update = useCommand("agent.limits.update");
+  if (!settings.data) {
+    // The policy above shows why the settings can't be read.
+    return null;
+  }
+  const limits = settings.data.agent_limits;
+  const change = (limit: AgentLimit, value: number | null) => {
+    update.mutate(limitPatch(limit, value), {
+      onSettled: () => {
+        void queryClient.invalidateQueries({ queryKey: opPrefix("settings.get") });
+        void queryClient.invalidateQueries({ queryKey: opPrefix("workspace.get") });
+      },
+    });
+  };
+  return (
+    <Group title={t("agents-limits")}>
+      {LIMIT_ROWS.map((row) => {
+        const value = limits[row.limit];
+        const lifted = value === undefined;
+        const label = t(row.message);
+        return (
+          <Row key={row.limit} label={label} about={t(`${row.message}-about`, row.byDefault === undefined ? {} : { default: row.byDefault })}>
+            <NumberSetting
+              label={label}
+              value={value ?? row.offered}
+              min={1}
+              max={LIMIT_MAX}
+              unit={t(`${row.message}-unit`, { count: value ?? row.offered })}
+              isDisabled={lifted}
+              wide
+              onSave={(number) => {
+                change(row.limit, number);
+              }}
+            />
+            <Switch
+              aria-label={t(`${row.message}-none`)}
+              isSelected={lifted}
+              onChange={(none) => {
+                change(row.limit, none ? null : row.offered);
+              }}
+            >
+              {t("agents-no-limit")}
+            </Switch>
+          </Row>
+        );
+      })}
+      <Row label={t("agents-limits-only-here")} about={t("agents-limits-only-here-about")} />
     </Group>
   );
 }

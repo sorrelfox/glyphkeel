@@ -234,6 +234,7 @@ pub static CATALOG: &[OpDescriptor] = &[
     file::FILE_DELETE,
     agent::AGENT_SESSIONS,
     agent::AGENT_POLICY_UPDATE,
+    agent::AGENT_LIMITS_UPDATE,
     history::HISTORY_FEED,
     history::HISTORY_REVERT,
     history::HISTORY_UNDO,

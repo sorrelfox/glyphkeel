@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Glyphkeel contributors
 
 //! The native confirmation of `permanent` operations, and of raising the
-//! most an agent may do.
+//! most an agent may do or the limits on agents.
 //!
 //! The engine asks inside the call, before the transaction, and the call
 //! waits for the answer. The dialog is GTK's own, shown by Rust over the
@@ -64,6 +64,10 @@ pub(crate) fn wording(op: &str, summary: &str, input: &Value) -> Wording {
                 "confirm-agent-raise",
             )
         }
+        "agent.limits.update" => (
+            text("confirm-agent-limits-raise", &[]),
+            "confirm-agent-raise",
+        ),
         "backup.restore" => (
             text("confirm-backup-restore", &[("name", name())]),
             "confirm-restore",
@@ -73,7 +77,7 @@ pub(crate) fn wording(op: &str, summary: &str, input: &Value) -> Wording {
             "confirm-continue",
         ),
     };
-    let title = if op == "agent.policy.update" {
+    let title = if matches!(op, "agent.policy.update" | "agent.limits.update") {
         "confirm-agent-raise-title"
     } else {
         "confirm-title"
@@ -195,5 +199,13 @@ mod tests {
             &json!({ "max_profile": "standard" }),
         );
         assert!(standard.body.contains("change tasks"), "{standard:?}");
+        let limits = wording(
+            "agent.limits.update",
+            "",
+            &json!({ "no_limit": ["writes_per_minute"] }),
+        );
+        assert_eq!(limits.title, "Let agents do more?");
+        assert_eq!(limits.accept, "_Allow");
+        assert!(limits.body.contains("limits on agents"), "{limits:?}");
     }
 }
