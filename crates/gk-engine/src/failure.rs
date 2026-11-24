@@ -62,6 +62,9 @@ pub fn store_error(e: &StoreError) -> OpError {
                 .with_detail("found", *found)
                 .with_detail("expected", *expected)
         }
+        StoreError::WorkspaceReplaced => OpError::new(ErrorCode::WorkspaceUpgraded, e.to_string())
+            .with_hint("Restart the program; the workspace was restored from a backup.")
+            .with_detail("restored", true),
         StoreError::TooNew { found, supported } => {
             OpError::new(ErrorCode::WorkspaceTooNew, e.to_string())
                 .with_hint(

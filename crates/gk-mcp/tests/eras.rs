@@ -150,7 +150,21 @@ async fn changes_record_the_agent_and_can_be_reverted() {
             .into_iter()
             .filter(|n| workspace_tools.contains(n))
             .collect();
-        names.push("update_settings".to_owned());
+        // The admin tools a standard agent may use; purging the trash and
+        // deleting or restoring backups are not among them.
+        names.extend(
+            [
+                "list_trash",
+                "restore_from_trash",
+                "create_backup",
+                "list_backups",
+                "verify_backup",
+                "export_data",
+                "import_data",
+                "update_settings",
+            ]
+            .map(str::to_owned),
+        );
         assert_eq!(conn.tool_names().await, names, "{label}");
 
         let r = conn

@@ -19,6 +19,15 @@ pub(crate) fn markdown(tool: &str, output: &Value) -> String {
         "get_activity" => activity(output),
         "revert_changes" => revert(output),
         "update_settings" => settings_change(output),
+        "delete_tasks" | "delete_wiki_page" => trash_change("Moved to the trash", output),
+        "restore_from_trash" => trash_change("Restored", output),
+        "purge_trash" => trash_change("Purged for good", output),
+        "list_trash" => trash_list(output),
+        "create_backup" => backup(output),
+        "list_backups" => backups(output),
+        "verify_backup" => backup_check(output),
+        "export_data" => export(output),
+        "import_data" => import(output),
         _ => fallback(output),
     }
 }
@@ -158,6 +167,161 @@ fn settings_change(v: &Value) -> String {
     }
 }
 
+/// One trash entry: its kind, key, title (as data) and ID.
+fn trash_entry(e: &Value) -> String {
+    let mut line = format!("- {}", s(e, "kind"));
+    if let Some(key) = e.get("key").and_then(Value::as_str) {
+        let _ = write!(line, " {key}");
+    } else if let Some(task) = e.get("task").and_then(Value::as_str) {
+        let _ = write!(line, " on {task}");
+    }
+    let _ = write!(line, " {}", e["title"]);
+    if let Some(n) = e["contains"].as_u64().filter(|n| *n > 0) {
+        let _ = write!(line, " (with {n} more)");
+    }
+    let _ = write!(line, " · id {}", s(e, "id"));
+    line
+}
+
+fn trash_change(what: &str, v: &Value) -> String {
+    let items = v["items"].as_array().map_or(&[][..], Vec::as_slice);
+    let mut out = match v.get("group").and_then(Value::as_str) {
+        Some(group) => format!("{what}: {} items · group {}\n", v["total"], short(group)),
+        None if v.get("group").is_some() || !items.is_empty() => {
+            format!("{what}: {} items\n", v["total"])
+        }
+        None => "Nothing changed.\n".to_owned(),
+    };
+    for e in items {
+        out.push_str(&trash_entry(e));
+        out.push('\n');
+    }
+    out
+}
+
+fn trash_list(v: &Value) -> String {
+    let items = v["items"].as_array().map_or(&[][..], Vec::as_slice);
+    let mut out = format!(
+        "{} of {} trash entries, newest first\n",
+        items.len(),
+        v["total"]
+    );
+    for e in items {
+        let _ = writeln!(
+            out,
+            "{} · deleted {} · purged {}",
+            trash_entry(e),
+            s(e, "deleted_at"),
+            s(e, "purge_at")
+        );
+    }
+    out
+}
+
+fn backup_line(b: &Value) -> String {
+    format!(
+        "{} ({}) · {} · {} bytes · {} stored files",
+        s(b, "name"),
+        s(b, "kind"),
+        s(b, "created_at"),
+        b["size"],
+        b["files"]
+    )
+}
+
+fn backup(v: &Value) -> String {
+    format!("Backup made: {}\n", backup_line(v))
+}
+
+fn backups(v: &Value) -> String {
+    let items = v["items"].as_array().map_or(&[][..], Vec::as_slice);
+    let mut out = format!(
+        "{} backups in {}, newest first\n",
+        items.len(),
+        s(v, "folder")
+    );
+    for b in items {
+        let _ = writeln!(out, "- {}", backup_line(b));
+    }
+    out
+}
+
+fn backup_check(v: &Value) -> String {
+    let name = s(&v["backup"], "name");
+    let checked = &v["files_checked"];
+    if v["ok"] == Value::Bool(true) {
+        return format!("Backup {name} is intact ({checked} stored files checked).\n");
+    }
+    let mut out = format!("Backup {name} has problems ({checked} stored files checked):\n");
+    for p in v["problems"].as_array().map_or(&[][..], Vec::as_slice) {
+        let _ = writeln!(out, "- {}: {}", s(p, "kind"), s(p, "detail"));
+    }
+    out
+}
+
+fn counts(c: &Value) -> String {
+    let parts: Vec<String> = c
+        .as_object()
+        .map(|m| {
+            m.iter()
+                .filter(|(_, n)| n.as_u64().is_some_and(|n| n > 0))
+                .map(|(k, n)| format!("{k} {n}"))
+                .collect()
+        })
+        .unwrap_or_default();
+    if parts.is_empty() {
+        "nothing".to_owned()
+    } else {
+        parts.join(", ")
+    }
+}
+
+fn export(v: &Value) -> String {
+    let projects: Vec<String> = v["projects"]
+        .as_array()
+        .map(|p| p.iter().map(plain).collect())
+        .unwrap_or_default();
+    format!(
+        "Exported {} ({}) to {} · {} bytes\nProjects: {}\n",
+        counts(&v["counts"]),
+        s(v, "format"),
+        s(v, "path"),
+        v["size"],
+        projects.join(", ")
+    )
+}
+
+fn import(v: &Value) -> String {
+    let dry = v["dry_run"] == Value::Bool(true);
+    let mut out = if dry {
+        format!("Dry run: the archive holds {}.\n", counts(&v["counts"]))
+    } else {
+        let group = v.get("group").and_then(Value::as_str).map_or("", short);
+        format!("Imported {} · group {group}\n", counts(&v["counts"]))
+    };
+    for p in v["projects"].as_array().map_or(&[][..], Vec::as_slice) {
+        let _ = writeln!(
+            out,
+            "- {} (from {}) {}",
+            s(p, "key"),
+            s(p, "from_key"),
+            p["name"]
+        );
+    }
+    let taken: Vec<String> = v["taken_keys"]
+        .as_array()
+        .map(|k| k.iter().map(plain).collect())
+        .unwrap_or_default();
+    if !taken.is_empty() {
+        let _ = writeln!(
+            out,
+            "Keys taken here, which need new ones: {}",
+            taken.join(", ")
+        );
+    }
+    out
+}
+
 fn fallback(v: &Value) -> String {
     format!(
         "```json\n{}\n```\n",
@@ -229,6 +393,69 @@ mod tests {
             text,
             "1 of 1 changes, newest first\n- #3 · 2026-11-23T08:00:00Z · Claude Code via mcp · \
              settings.update · settings workspace: hours_per_day (none) → 7 · group 0193a1b2-c3d4\n"
+        );
+    }
+
+    #[test]
+    fn trash_changes_and_lists_show_entries_as_data() {
+        let entry = json!({
+            "id": "0193a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b", "kind": "task", "key": "TM-1",
+            "title": "Say \"hi\"", "contains": 2, "deleted_at": "2026-11-23T08:00:00Z",
+            "purge_at": "2026-12-23T08:00:00Z", "group": "g"
+        });
+        let text = markdown(
+            "delete_tasks",
+            &json!({ "items": [entry], "total": 3, "group": "bbbbbbbb-c3d4-7e5f-8a9b-0c1d2e3f4a5b" }),
+        );
+        assert_eq!(
+            text,
+            "Moved to the trash: 3 items · group bbbbbbbb\n- task TM-1 \"Say \\\"hi\\\"\" (with 2 more) \
+             · id 0193a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b\n"
+        );
+        let text = markdown("list_trash", &json!({ "items": [entry], "total": 1 }));
+        assert!(text.starts_with("1 of 1 trash entries"), "{text}");
+        assert!(text.contains("purged 2026-12-23T08:00:00Z"), "{text}");
+        assert_eq!(
+            markdown("restore_from_trash", &json!({ "items": [], "total": 0 })),
+            "Nothing changed.\n"
+        );
+    }
+
+    #[test]
+    fn backups_exports_and_imports_in_short() {
+        let b = json!({ "name": "2026-11-23T080000Z", "kind": "manual", "created_at": "2026-11-23T08:00:00Z",
+                        "size": 4096, "files": 2, "files_size": 10, "schema_version": 1, "app_version": "0.0.7" });
+        assert_eq!(
+            markdown("create_backup", &b),
+            "Backup made: 2026-11-23T080000Z (manual) · 2026-11-23T08:00:00Z · 4096 bytes · 2 stored files\n"
+        );
+        let check = markdown(
+            "verify_backup",
+            &json!({ "backup": b, "ok": false, "files_checked": 2,
+                     "problems": [{ "kind": "missing_file", "detail": "ab12" }] }),
+        );
+        assert_eq!(
+            check,
+            "Backup 2026-11-23T080000Z has problems (2 stored files checked):\n- missing_file: ab12\n"
+        );
+        let import = markdown(
+            "import_data",
+            &json!({ "dry_run": true, "projects": [{ "key": "TM", "from_key": "TM", "name": "Tasks", "id": "x" }],
+                     "counts": { "projects": 1, "tasks": 4, "comments": 0 }, "taken_keys": ["TM"],
+                     "new_ids": 0, "format_version": 1, "app_version": "0.0.7" }),
+        );
+        assert_eq!(
+            import,
+            "Dry run: the archive holds projects 1, tasks 4.\n- TM (from TM) \"Tasks\"\n\
+             Keys taken here, which need new ones: TM\n"
+        );
+        let export = markdown(
+            "export_data",
+            &json!({ "path": "/x/e.zip", "format": "zip", "projects": ["TM"], "counts": { "tasks": 4 }, "size": 99 }),
+        );
+        assert_eq!(
+            export,
+            "Exported tasks 4 (zip) to /x/e.zip · 99 bytes\nProjects: TM\n"
         );
     }
 

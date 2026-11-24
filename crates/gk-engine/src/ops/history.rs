@@ -30,7 +30,7 @@ use serde_json::{Map, Value};
 use super::description::{self, Owner};
 use super::{
     agent, board, claim, comment, desc, fields, file, lookup, project, relation, reminder,
-    settings, task, time, view, wiki,
+    settings, task, time, trash, view, wiki,
 };
 use crate::failure::Failure;
 use crate::registry::{QueryCtx, Registry};
@@ -318,7 +318,11 @@ fn current(
         (settings::ENTITY, _) => settings::raw(tx, field)?,
         (board::ENTITY, "settings") => board::raw(tx, id)?,
         (view::ENTITY, view::RECORD) => view::raw(tx, id)?,
-        (_, "deleted") => return Ok(None),
+        (_, "deleted" | trash::PURGED) => return Ok(None),
+        (fields::PROJECT | fields::TASK | fields::WIKI, trash::TRASHED) => {
+            trash::raw_trashed(tx, entity, id)?
+        }
+        (fields::PROJECT, "imported") => trash::raw_imported(tx, id)?,
         (relation::ENTITY, "link") => relation::raw(tx, id)?,
         (comment::ENTITY, "created" | "trashed") => comment::raw_life(tx, id, field)?,
         (comment::ENTITY, "body") => comment::raw_body(tx, id)?,
@@ -399,6 +403,12 @@ fn apply(
             view::write_raw(w, id, value.as_ref())?;
             w.record_field(entity, id, project, field, before, value);
             Ok(())
+        }
+        (fields::PROJECT | fields::TASK | fields::WIKI, trash::TRASHED) => {
+            trash::set_row(w, entity, id, project, field, value.is_some()).map(drop)
+        }
+        (fields::PROJECT, "imported") => {
+            trash::set_row(w, entity, id, project, field, value.is_none()).map(drop)
         }
         (relation::ENTITY, "link") => relation::apply(w, id, project, value),
         (comment::ENTITY, "created" | "trashed") => comment::set_live(w, id, project, field, value),
@@ -544,6 +554,9 @@ struct GroupRow {
     fields: Map<String, Value>,
     inverse: Map<String, Value>,
     reverted: bool,
+    /// The row came from an imported archive; its values may name items of
+    /// another workspace, so it is never reverted.
+    imported: bool,
 }
 
 fn group_rows(tx: &Transaction<'_>, group: Id) -> Result<Vec<GroupRow>, StoreError> {
@@ -564,6 +577,10 @@ fn group_rows(tx: &Transaction<'_>, group: Id) -> Result<Vec<GroupRow>, StoreErr
     let mut out = Vec::new();
     for row in rows {
         let (entity, id, changes, inverse, reverted, project) = row?;
+        let imported = serde_json::from_str::<Value>(&changes)
+            .ok()
+            .and_then(|v| v.get("imported").and_then(Value::as_bool))
+            .unwrap_or(false);
         let object = |text: &str, key: &str| {
             serde_json::from_str::<Value>(text)
                 .ok()
@@ -577,6 +594,7 @@ fn group_rows(tx: &Transaction<'_>, group: Id) -> Result<Vec<GroupRow>, StoreErr
             fields: object(&changes, "fields"),
             inverse: inverse.map(|i| object(&i, "set")).unwrap_or_default(),
             reverted,
+            imported,
         });
     }
     Ok(out)
@@ -589,6 +607,9 @@ fn blocker(tx: &Transaction<'_>, rows: &[GroupRow]) -> Result<Option<String>, St
     }
     if rows.iter().any(|r| r.reverted) {
         return Ok(Some("it was already reverted".into()));
+    }
+    if rows.iter().any(|r| r.imported) {
+        return Ok(Some("it came from an imported archive".into()));
     }
     for row in rows {
         if row.fields.is_empty() {

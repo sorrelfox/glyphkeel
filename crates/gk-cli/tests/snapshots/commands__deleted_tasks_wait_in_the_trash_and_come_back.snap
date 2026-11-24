@@ -1,0 +1,8 @@
+---
+source: crates/gk-cli/tests/commands.rs
+expression: "ws.ok(&[\"trash\", \"list\"])"
+---
+KEY   TITLE   ID                                    CONTAINS  DELETED_AT                DELETED_BY  GROUP                                 KIND  PROJECT  PURGE_AT
+GK-1  Parent  [id]  1         [time]  You         [id]  task  GK       [time]
+
+trash_days: 30

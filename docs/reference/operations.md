@@ -27,7 +27,7 @@ The safety class decides who may run an operation:
 | `project.change_key` | write | app, command line, MCP | `update_project` | `glyphkeel project rekey <project>` |
 | `project.archive` | write | app, command line, MCP | `update_project` | `glyphkeel project archive <project>` |
 | `project.unarchive` | write | app, command line, MCP | `update_project` | `glyphkeel project unarchive <project>` |
-| `project.delete` | permanent | app, command line, MCP | `delete_project` | `glyphkeel project delete <project>` |
+| `project.delete` | trash | app, command line, MCP | `delete_project` | `glyphkeel project delete <project>` |
 | `project.brief` | read | app, command line, MCP | `get_agent_brief` | `glyphkeel project brief <project>` |
 | `status.create` | write | app, command line, MCP | `update_project` | `glyphkeel status add` |
 | `status.update` | write | app, command line, MCP | `update_project` | `glyphkeel status edit` |
@@ -44,6 +44,7 @@ The safety class decides who may run an operation:
 | `task.create` | write | app, command line, MCP | `create_task` | `glyphkeel task create` |
 | `task.update` | write | app, command line, MCP | `update_task` | `glyphkeel task edit <key>` |
 | `task.move` | write | app, command line, MCP | `move_task` | `glyphkeel task move <key>` |
+| `task.delete` | trash | app, command line, MCP | `delete_tasks` | `glyphkeel task delete <keys>` |
 | `task.bulk_update` | write | app, command line, MCP | `bulk_update_tasks` | `glyphkeel task bulk` |
 | `task.reorder_subtask` | write | app, command line, MCP | `reorder_subtask` | `glyphkeel task reorder-subtask <key>` |
 | `task.resolve_conflict` | write | app, command line, MCP | `update_task` | `glyphkeel task resolve <key>` |
@@ -86,6 +87,7 @@ The safety class decides who may run an operation:
 | `wiki.get` | read | app, command line, MCP | `get_wiki_page` | `glyphkeel wiki get <page>` |
 | `wiki.create` | write | app, command line, MCP | `create_wiki_page` | `glyphkeel wiki new` |
 | `wiki.update` | write | app, command line, MCP | `update_wiki_page` | `glyphkeel wiki put <page>` |
+| `wiki.delete` | trash | app, command line, MCP | `delete_wiki_page` | `glyphkeel wiki delete <page>` |
 | `wiki.history` | read | app, command line, MCP | `get_wiki_history` | `glyphkeel wiki history <page>` |
 | `file.get` | read | app, command line, MCP | `read_attachment` | `glyphkeel file show <attachment>` |
 | `file.read` | read | app, command line, MCP | `read_attachment` | `glyphkeel file cat <attachment>` |
@@ -98,6 +100,16 @@ The safety class decides who may run an operation:
 | `history.revert` | write | app, command line, MCP | `revert_changes` | `glyphkeel revert` |
 | `history.undo` | app | app | — | — |
 | `history.redo` | app | app | — | — |
+| `trash.list` | read | app, command line, MCP | `list_trash` | `glyphkeel trash list` |
+| `trash.restore` | write | app, command line, MCP | `restore_from_trash` | `glyphkeel trash restore <items>` |
+| `trash.purge` | permanent | app, command line, MCP | `purge_trash` | `glyphkeel trash purge <items>` |
+| `backup.create` | write | app, command line, MCP | `create_backup` | `glyphkeel backup create` |
+| `backup.list` | read | app, command line, MCP | `list_backups` | `glyphkeel backup list` |
+| `backup.verify` | read | app, command line, MCP | `verify_backup` | `glyphkeel backup verify <name>` |
+| `backup.restore` | app | app, command line | — | `glyphkeel backup restore <name>` |
+| `backup.delete` | app | app, command line | — | `glyphkeel backup delete <name>` |
+| `transfer.export` | write | app, command line, MCP | `export_data` | `glyphkeel export` |
+| `transfer.import` | write | app, command line, MCP | `import_data` | `glyphkeel import <path>` |
 
 ## `workspace.get`
 
@@ -173,7 +185,7 @@ Input: `ProjectRef`. Output: `ProjectChange`. Schemas: [catalog.schema.json](cat
 
 ## `project.delete`
 
-Delete a project and its sub-projects with every task, comment and file in them. Can't be undone.
+Move a project and its sub-projects, with everything in them, to the trash. Agents need the full profile.
 
 Input: `ProjectDeleteInput`. Output: `ProjectDeleted`. Schemas: [catalog.schema.json](catalog.schema.json).
 
@@ -272,6 +284,12 @@ Input: `TaskUpdateInput`. Output: `TaskChange`. Schemas: [catalog.schema.json](c
 Move a task to another status or place in its column, or to another project (new key; the old one forwards).
 
 Input: `TaskMoveInput`. Output: `TaskChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `task.delete`
+
+Move tasks to the trash, each with its subtasks; they can be restored from there.
+
+Input: `TaskDeleteInput`. Output: `TrashChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `task.bulk_update`
 
@@ -529,6 +547,12 @@ Change a wiki page: its text (whole, with a base revision, or by targeted edits)
 
 Input: `WikiUpdateInput`. Output: `WikiChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
+## `wiki.delete`
+
+Move a wiki page, with the pages inside it, to the trash; links to it stop resolving until it is restored.
+
+Input: `WikiDeleteInput`. Output: `TrashChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
 ## `wiki.history`
 
 List the revisions of a wiki page, newest first, conflict copies included; read one with wiki.get and its revision.
@@ -608,3 +632,67 @@ Redo the change the last Undo took back.
 Input: `UndoInput`. Output: `UndoResult`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 Not available to agents: Redo walks the app's own stack of changes made in this run; agents and the command line revert named groups instead.
+
+## `trash.list`
+
+The trash: deleted items with what went with them, who deleted them and when they will be purged, newest first.
+
+Input: `TrashListInput`. Output: `TrashList`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `trash.restore`
+
+Bring items back out of the trash, with everything that was deleted with them.
+
+Input: `TrashRestoreInput`. Output: `TrashChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `trash.purge`
+
+Delete items in the trash for good, and their text from the history. Can't be undone.
+
+Input: `TrashPurgeInput`. Output: `TrashChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `backup.create`
+
+Make a backup of the workspace now: a checked copy of the database and its stored files.
+
+Input: `BackupCreateInput`. Output: `Backup`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `backup.list`
+
+The workspace's backups, newest first, with their kind and size.
+
+Input: `BackupListInput`. Output: `BackupList`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `backup.verify`
+
+Check a backup: the database copy's integrity and every stored file it needs.
+
+Input: `BackupRef`. Output: `BackupCheck`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `backup.restore`
+
+Replace the workspace with a backup, after backing up the current state. Other programs with the workspace open must restart.
+
+Input: `BackupRef`. Output: `BackupRestored`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+Not available to agents: it replaces the whole workspace, including every agent's own work, so only the person may do it
+
+## `backup.delete`
+
+Delete a backup and the stored files only it used.
+
+Input: `BackupRef`. Output: `BackupDeleted`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+Not available to agents: backups are the person's safety net outside the workspace, so agents never remove them
+
+## `transfer.export`
+
+Export projects, or the whole workspace, to an archive of JSON and Markdown files with the attachments.
+
+Input: `ExportInput`. Output: `ExportResult`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `transfer.import`
+
+Import an archive as new projects; checks it completely first and never changes existing data.
+
+Input: `ImportInput`. Output: `ImportResult`. Schemas: [catalog.schema.json](catalog.schema.json).

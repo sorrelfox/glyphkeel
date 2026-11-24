@@ -835,6 +835,37 @@ fn log_timer(
     Ok((Some(id), Vec::new()))
 }
 
+/// Stops the timer before its task goes to the trash, when `going` says
+/// the timer's task is among those going: its time is logged on the task
+/// (and goes to the trash with it) and the timer is removed, in the
+/// deleting command, so undoing the deletion brings the timer back. A timer
+/// whose time can't be logged (it ran for more than a day) is paused
+/// instead, for the person to stop it.
+pub(crate) fn stop_before_trash(
+    w: &mut WriteCtx<'_>,
+    going: impl Fn(&Transaction<'_>, Id) -> Result<bool, Failure>,
+) -> Result<(), Failure> {
+    let Some(row) = timer_row(w.tx())? else {
+        return Ok(());
+    };
+    if !going(w.tx(), row.task)? {
+        return Ok(());
+    }
+    match log_timer(w, &row, None, None) {
+        Ok(_) => write_timer(w, None),
+        Err(Failure::Op(_)) if row.running_since.is_some() => {
+            let paused = TimerRow {
+                elapsed_ms: row.elapsed_at(w.now()),
+                running_since: None,
+                ..row
+            };
+            write_timer(w, Some(&paused))
+        }
+        Err(Failure::Op(_)) => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
 fn timer_change(
     w: &WriteCtx<'_>,
     entry: Option<Id>,

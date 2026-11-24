@@ -8,8 +8,8 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::ops::{
-    agent, board, bulk, comment, description, file, history, project, query, search, settings,
-    task, time, today, view, wiki, workspace,
+    agent, backup, board, bulk, comment, description, file, history, project, query, search,
+    settings, task, time, today, transfer, trash, view, wiki, workspace,
 };
 use crate::schema;
 
@@ -182,6 +182,7 @@ pub static CATALOG: &[OpDescriptor] = &[
     task::TASK_CREATE,
     task::TASK_UPDATE,
     task::TASK_MOVE,
+    task::TASK_DELETE,
     bulk::TASK_BULK_UPDATE,
     task::TASK_REORDER_SUBTASK,
     description::TASK_RESOLVE_CONFLICT,
@@ -224,6 +225,7 @@ pub static CATALOG: &[OpDescriptor] = &[
     wiki::WIKI_GET,
     wiki::WIKI_CREATE,
     wiki::WIKI_UPDATE,
+    wiki::WIKI_DELETE,
     wiki::WIKI_HISTORY,
     file::FILE_GET,
     file::FILE_READ,
@@ -236,6 +238,16 @@ pub static CATALOG: &[OpDescriptor] = &[
     history::HISTORY_REVERT,
     history::HISTORY_UNDO,
     history::HISTORY_REDO,
+    trash::TRASH_LIST,
+    trash::TRASH_RESTORE,
+    trash::TRASH_PURGE,
+    backup::BACKUP_CREATE,
+    backup::BACKUP_LIST,
+    backup::BACKUP_VERIFY,
+    backup::BACKUP_RESTORE,
+    backup::BACKUP_DELETE,
+    transfer::TRANSFER_EXPORT,
+    transfer::TRANSFER_IMPORT,
 ];
 
 /// The descriptor of the operation named `id`.

@@ -362,7 +362,7 @@ fn visible(
 }
 
 /// Whether the item behind a document is live: its task (and the comment
-/// or file), or its page.
+/// or file), or its page; a file only while what it is attached to is.
 fn live(tx: &Transaction<'_>, f: &Found) -> Result<bool, Failure> {
     let sql = match f.kind.as_str() {
         "task" => "SELECT deleted_at IS NULL FROM tasks WHERE id = ?1",
@@ -371,7 +371,21 @@ fn live(tx: &Transaction<'_>, f: &Found) -> Result<bool, Failure> {
                JOIN tasks t ON t.id = c.task_id WHERE c.id = ?1"
         }
         "wiki" => "SELECT deleted_at IS NULL FROM wiki_pages WHERE id = ?1",
-        "file" => "SELECT deleted_at IS NULL FROM attachments WHERE id = ?1",
+        "file" => {
+            "SELECT a.deleted_at IS NULL AND CASE a.owner_kind
+                 WHEN 'task' THEN EXISTS (SELECT 1 FROM tasks t
+                                           WHERE t.id = a.owner_id AND t.deleted_at IS NULL)
+                 WHEN 'comment' THEN EXISTS (SELECT 1 FROM comments c
+                                              JOIN tasks t ON t.id = c.task_id
+                                             WHERE c.id = a.owner_id AND c.deleted_at IS NULL
+                                               AND t.deleted_at IS NULL)
+                 WHEN 'wiki_page' THEN EXISTS (SELECT 1 FROM wiki_pages w
+                                                WHERE w.id = a.owner_id AND w.deleted_at IS NULL)
+                 WHEN 'project' THEN EXISTS (SELECT 1 FROM projects p
+                                              WHERE p.id = a.owner_id AND p.deleted_at IS NULL)
+                 ELSE 0 END
+               FROM attachments a WHERE a.id = ?1"
+        }
         _ => return Ok(false),
     };
     Ok(tx

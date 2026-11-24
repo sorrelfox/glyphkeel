@@ -23,6 +23,7 @@ use gk_store::{
 };
 use serde_json::{Value, json};
 
+use crate::backup::{BackupFolder, default_folder};
 use crate::context::{ConfirmRequest, Confirmation, Context};
 use crate::events::{self, Bus};
 use crate::failure::{Failure, store_error};
@@ -63,6 +64,9 @@ pub struct EngineConfig {
     /// entries, by its IANA name; `None`: the computer's. Programs pass the
     /// person's choice in ([`crate::personal_time_zone`]).
     pub time_zone: Option<String>,
+    /// The folder of this workspace's backups; `None`: the default
+    /// ([`crate::backup::default_folder`]).
+    pub backups: Option<std::path::PathBuf>,
 }
 
 impl EngineConfig {
@@ -77,6 +81,7 @@ impl EngineConfig {
             registry: Registry::standard(),
             checkpoints: CheckpointPolicy::default(),
             time_zone: None,
+            backups: None,
         }
     }
 }
@@ -120,19 +125,22 @@ pub struct SessionStart {
 /// 5. after the commit, publish one change event and, for the app, push
 ///    the group onto the Undo stack.
 pub struct Engine {
-    store: Store,
-    env: Env,
-    role: Role,
-    clock: Clock,
+    pub(crate) store: Store,
+    pub(crate) env: Env,
+    pub(crate) role: Role,
+    pub(crate) clock: Clock,
     registry: Registry,
     bus: Arc<Bus>,
     /// Held across a command's commit and its event, so events leave in
     /// commit order.
     commit: Mutex<()>,
-    upgraded: AtomicBool,
+    pub(crate) upgraded: AtomicBool,
     undo: Mutex<UndoStacks>,
     pending_reads: Mutex<HashMap<Id, i64>>,
     jobs: Mutex<Jobs>,
+    pub(crate) backups: BackupFolder,
+    /// When this process last ran the daily jobs (engine clock, ms).
+    pub(crate) last_daily: Mutex<Option<i64>>,
     _app_lock: Option<LockFile>,
 }
 
@@ -174,11 +182,23 @@ impl Engine {
         } else {
             None
         };
+        let backups = BackupFolder::new(
+            config
+                .backups
+                .clone()
+                .unwrap_or_else(|| default_folder(layout)),
+        );
         let mut store_config = config.store.clone();
         if config.role == Role::App
             && let SchemaState::Older(found) = Store::probe(layout).map_err(|e| store_error(&e))?
         {
-            copy_before_upgrade(layout, found, (config.clock)())?;
+            let made = backups.create(
+                layout,
+                gk_api::ops::backup::BackupKind::PreMigration,
+                (config.clock)(),
+                &config.program_version,
+            )?;
+            tracing::info!(name = %made.name, found, "workspace backed up before the schema upgrade");
             store_config.allow_upgrade = true;
         }
         let store = Store::open(layout, store_config).map_err(|e| store_error(&e))?;
@@ -215,6 +235,8 @@ impl Engine {
                 checkpoints: None,
                 policy: config.checkpoints,
             }),
+            backups,
+            last_daily: Mutex::new(None),
             _app_lock: app_lock,
         })
     }
@@ -390,6 +412,19 @@ impl Engine {
         if ctx.is_agent() {
             return Ok(());
         }
+        self.ask_confirmation(ctx, desc, permanent, input)
+    }
+
+    /// Asks the person to confirm `desc` (for its part `what`) as the
+    /// context says: refused, given, or by asking.
+    pub(crate) fn ask_confirmation(
+        &self,
+        ctx: &Context,
+        desc: &'static OpDescriptor,
+        what: &'static OpDescriptor,
+        input: &Value,
+    ) -> Result<(), OpError> {
+        let permanent = what;
         let confirmed = match &ctx.confirm {
             Confirmation::Refuse => false,
             Confirmation::Given => true,
@@ -692,7 +727,8 @@ impl Engine {
     /// One round of background work, called every few seconds by
     /// long-running programs: takes the jobs lock when it is free (another
     /// holder may have ended) and, while holding it, checkpoints the
-    /// write-ahead log when it is due.
+    /// write-ahead log when it is due and runs the daily jobs (backup,
+    /// trash purge, unused files) when they are due.
     pub fn jobs_tick(&self) -> Result<Option<CheckpointOutcome>, OpError> {
         if self.role == Role::Cli {
             return Ok(None);
@@ -717,9 +753,16 @@ impl Engine {
         let Some((checkpointer, schedule)) = jobs.checkpoints.as_mut() else {
             return Ok(None);
         };
-        schedule
+        let outcome = schedule
             .tick(Instant::now(), idle_for, checkpointer)
-            .map_err(|e| store_error(&e))
+            .map_err(|e| store_error(&e));
+        drop(jobs);
+        if self.daily_jobs_due()
+            && let Err(e) = self.run_daily_jobs()
+        {
+            tracing::warn!(error = %e, "the daily jobs failed");
+        }
+        outcome
     }
 
     /// Closes the workspace: counts the open sessions' reads, checkpoints
@@ -780,25 +823,4 @@ fn request_key(desc: &OpDescriptor, ctx: &Context, input: &Value) -> Option<(Str
         |s| s.to_string(),
     );
     Some((caller, id.to_owned()))
-}
-
-/// Copies the database into the workspace's `backups/` folder before an
-/// older schema is upgraded, so the upgrade can be undone by hand.
-fn copy_before_upgrade(layout: &WorkspaceLayout, found: i64, now: i64) -> Result<(), OpError> {
-    let dir = layout.backups_dir();
-    std::fs::create_dir_all(&dir)
-        .map_err(|e| OpError::storage(format!("Can't create {}: {e}.", dir.display())))?;
-    let target = dir.join(format!(
-        "before-schema-{}-v{found}-{now}.db",
-        SCHEMA_VERSION
-    ));
-    let conn = gk_store::open_raw(&layout.database()).map_err(|e| store_error(&e))?;
-    conn.execute("VACUUM INTO ?1", [target.to_string_lossy().as_ref()])
-        .map_err(|e| {
-            OpError::storage(format!(
-                "Can't copy the workspace before upgrading it: {e}."
-            ))
-        })?;
-    tracing::info!(path = %target.display(), "workspace copied before the schema upgrade");
-    Ok(())
 }

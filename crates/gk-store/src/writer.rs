@@ -61,6 +61,9 @@ pub struct SlowWrite {
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct WriteSettings {
     pub(crate) schema_version: i64,
+    /// The database's generation when it was opened; a restore from a
+    /// backup raises it.
+    pub(crate) generation: i64,
     pub(crate) busy_retries: u32,
     pub(crate) slow_write: Duration,
 }
@@ -202,6 +205,9 @@ where
             found,
             expected: settings.schema_version,
         }));
+    }
+    if crate::snapshot::generation(&tx)? != settings.generation {
+        return Err(E::from(StoreError::WorkspaceReplaced));
     }
     // Dropping `tx` on an error rolls it back.
     let value = f(&tx)?;

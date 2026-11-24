@@ -9,20 +9,24 @@
 //! and runs operations through [`Engine::call`] with a [`Context`] saying
 //! who is calling. Nothing else writes to the workspace.
 
+pub mod backup;
 mod context;
 mod engine;
 mod events;
 mod failure;
+mod jobs;
 mod messages;
 mod ops;
 mod registry;
 mod thumbs;
 mod time;
+pub mod transfer;
 mod write;
 
 pub use context::{ConfirmRequest, Confirmation, Context};
 pub use engine::{Engine, EngineConfig, Role, SessionStart};
 pub use failure::{Failure, store_error};
+pub use jobs::JobsReport;
 pub use messages::MESSAGES_FTL;
 pub use registry::{Env, QueryCtx, Registry};
 pub use time::{

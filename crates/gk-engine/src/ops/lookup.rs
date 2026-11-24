@@ -252,11 +252,14 @@ fn task_row(r: &Row<'_>) -> gk_store::rusqlite::Result<TaskRow> {
     })
 }
 
-/// The live task with ID `id`.
+/// The live task with ID `id`, in a live project.
 pub(crate) fn task_by_id(tx: &Transaction<'_>, id: Id) -> Result<Option<TaskRow>, Failure> {
     Ok(tx
         .query_row(
-            &format!("SELECT {TASK_COLUMNS} FROM tasks WHERE id = ?1 AND deleted_at IS NULL"),
+            &format!(
+                "SELECT {TASK_COLUMNS} FROM tasks WHERE id = ?1 AND deleted_at IS NULL
+                   AND project_id IN (SELECT id FROM projects WHERE deleted_at IS NULL)"
+            ),
             [b(id)],
             task_row,
         )

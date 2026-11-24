@@ -8,6 +8,7 @@ use gk_api::{OpDescriptor, Operation, descriptor};
 use crate::registry::Registry;
 
 pub(crate) mod agent;
+pub(crate) mod backup;
 pub(crate) mod board;
 pub(crate) mod bulk;
 pub(crate) mod claim;
@@ -29,6 +30,8 @@ pub(crate) mod settings;
 pub(crate) mod task;
 pub(crate) mod time;
 pub(crate) mod today;
+pub(crate) mod transfer;
+pub(crate) mod trash;
 pub(crate) mod view;
 pub(crate) mod wiki;
 pub(crate) mod workspace;
@@ -61,4 +64,7 @@ pub(crate) fn register(r: &mut Registry) {
     search::register(r);
     today::register(r);
     wiki::register(r);
+    trash::register(r);
+    backup::register(r);
+    transfer::register(r);
 }

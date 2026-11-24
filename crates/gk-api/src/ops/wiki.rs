@@ -464,6 +464,35 @@ pub(crate) const WIKI_UPDATE: OpDescriptor = OpDescriptor::of::<WikiUpdate>(writ
     "wiki put <page>",
     "WikiUpdateInput",
 ));
+/// Names one page to move to the trash.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WikiDeleteInput {
+    /// The page: its title (any case), slug or ID.
+    pub page: String,
+    /// The project (key or ID); needed unless `page` is an ID.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
+}
+
+op!(
+    /// A page to the trash.
+    WikiDelete,
+    "wiki.delete",
+    WikiDeleteInput,
+    crate::ops::trash::TrashChange
+);
+
+pub(crate) const WIKI_DELETE: OpDescriptor = OpDescriptor::of::<WikiDelete>(Meta {
+    summary: "Move a wiki page, with the pages inside it, to the trash; links to it stop resolving until it is restored.",
+    kind: OpKind::Command,
+    safety: Safety::Trash,
+    exposure: Exposure::Data,
+    cli: Some("wiki delete <page>"),
+    input_name: "WikiDeleteInput",
+    output_name: "TrashChange",
+});
+
 pub(crate) const WIKI_HISTORY: OpDescriptor = OpDescriptor::of::<WikiHistory>(read(
     "List the revisions of a wiki page, newest first, conflict copies included; read one with wiki.get and its revision.",
     "wiki history <page>",

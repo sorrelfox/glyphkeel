@@ -112,12 +112,14 @@ impl Store {
             }
         }
         let workspace_id = read_workspace_id(&conn)?;
+        let generation = crate::snapshot::generation(&conn)?;
 
         let readers = (0..config.readers.max(1))
             .map(|_| connection::open(&database, Purpose::Read, config.busy_budget))
             .collect::<Result<Vec<_>>>()?;
         let settings = WriteSettings {
             schema_version: SCHEMA_VERSION,
+            generation,
             busy_retries: config.busy_retries,
             slow_write: config.slow_write,
         };

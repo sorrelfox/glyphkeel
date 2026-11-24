@@ -159,6 +159,12 @@ fn call(
     let engine = Engine::open(&layout, config)?;
     let ctx = Context::user(Via::Cli).with_confirmation(confirm);
     let result = engine.call(&ctx, cmd.op.id, input);
+    // Someone who only uses the command line and agents still gets a daily
+    // backup. It never fails the command: the app and the next command try
+    // again.
+    if !engine.must_exit() {
+        let _ = engine.backup_if_overdue();
+    }
     engine.close();
     result
 }

@@ -792,3 +792,137 @@ fn wiki_pages_search_and_today_from_the_command_line() {
     assert_eq!(today["due_today"][0]["key"], "GK-1");
     assert_eq!(today["counts"]["today"], 1);
 }
+
+#[test]
+fn deleted_tasks_wait_in_the_trash_and_come_back() {
+    let ws = Workspace::new();
+    ws.ok(&["project", "create", "--name", "Glyphkeel", "--key", "GK"]);
+    ws.ok(&["task", "create", "--project", "GK", "--title", "Parent"]);
+    ws.ok(&[
+        "task",
+        "create",
+        "--project",
+        "GK",
+        "--title",
+        "Child",
+        "--parent",
+        "GK-1",
+    ]);
+    let deleted = ws.json(&["task", "delete", "GK-1"]);
+    assert_eq!(deleted["total"], 2, "{deleted}");
+    let out = ws.run(&["task", "show", "GK-2"]);
+    assert_ne!(code(&out), 0);
+    snapshot!(ws.ok(&["trash", "list"]));
+    let listed = ws.json(&["trash", "list"]);
+    let id = listed["items"][0]["id"].as_str().unwrap().to_owned();
+    assert_eq!(listed["items"][0]["contains"], 1);
+    // Purging can't be undone: it needs --yes without a terminal.
+    let out = ws.run(&["--json", "trash", "purge", &id]);
+    assert_ne!(code(&out), 0);
+    let restored = ws.json(&["trash", "restore", &id]);
+    assert_eq!(restored["total"], 2, "{restored}");
+    assert_eq!(ws.json(&["task", "show", "GK-2"])["total"], 1);
+    ws.ok(&["task", "delete", "GK-2"]);
+    let id = ws.json(&["trash", "list"])["items"][0]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let purged = ws.json(&["trash", "purge", &id, "--yes"]);
+    assert_eq!(purged["total"], 1, "{purged}");
+    assert_eq!(ws.json(&["trash", "list"])["total"], 0);
+}
+
+#[test]
+fn a_command_makes_the_daily_backup_and_backups_restore() {
+    let ws = Workspace::new();
+    ws.ok(&["project", "create", "--name", "Glyphkeel", "--key", "GK"]);
+    // The first command made the day's backup.
+    let list = ws.json(&["backup", "list"]);
+    let items = list["items"].as_array().unwrap();
+    assert_eq!(items.len(), 1, "{list}");
+    assert_eq!(items[0]["kind"], "daily");
+    assert!(ws.path().join("backups/backups.json").is_file());
+    // Not again within the day.
+    ws.ok(&["status"]);
+    assert_eq!(
+        ws.json(&["backup", "list"])["items"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+
+    let made = ws.json(&["backup", "create"]);
+    let name = made["name"].as_str().unwrap().to_owned();
+    assert_eq!(made["kind"], "manual");
+    let check = ws.json(&["backup", "verify", &name]);
+    assert_eq!(check["ok"], true, "{check}");
+    ws.ok(&[
+        "task",
+        "create",
+        "--project",
+        "GK",
+        "--title",
+        "After the backup",
+    ]);
+
+    // Refused while the app has the workspace open.
+    let layout = WorkspaceLayout::new(ws.path());
+    let lock = gk_store::LockFile::try_acquire(&layout.app_lock())
+        .unwrap()
+        .unwrap();
+    let out = ws.run(&["--json", "backup", "restore", &name, "--yes"]);
+    assert_ne!(code(&out), 0);
+    let error: Value = serde_json::from_slice(&out.stderr)
+        .unwrap_or_else(|e| panic!("{e}: {} / {}", stderr(&out), stdout(&out)));
+    assert_eq!(
+        error["details"]["message_id"], "backup-restore-app-open",
+        "{error}"
+    );
+    drop(lock);
+    assert_eq!(ws.json(&["task", "list", "--project", "GK"])["total"], 1);
+
+    let restored = ws.json(&["backup", "restore", &name, "--yes"]);
+    assert_eq!(restored["restored"]["name"], name.as_str(), "{restored}");
+    assert_eq!(restored["previous"]["kind"], "pre_restore");
+    assert_eq!(ws.json(&["task", "list", "--project", "GK"])["total"], 0);
+    let out = ws.run(&["--json", "backup", "verify", "nothing-by-this-name"]);
+    assert_ne!(code(&out), 0);
+    let error: Value = serde_json::from_slice(&out.stderr).unwrap();
+    assert_eq!(
+        error["details"]["hint_id"], "backup-not-found-hint",
+        "{error}"
+    );
+}
+
+#[test]
+fn projects_export_and_import_from_the_command_line() {
+    let ws = Workspace::new();
+    ws.ok(&["project", "create", "--name", "Glyphkeel", "--key", "GK"]);
+    ws.ok(&[
+        "task",
+        "create",
+        "--project",
+        "GK",
+        "--title",
+        "Carried over",
+    ]);
+    let zip = ws.dir.path().join("gk.zip");
+    let zip_path = zip.to_string_lossy().into_owned();
+    let out = ws.json(&["export", "--path", &zip_path]);
+    assert_eq!(out["counts"]["tasks"], 1, "{out}");
+    let other = Workspace::new();
+    let check = other.json(&["import", &zip_path, "--dry-run"]);
+    assert_eq!(check["dry_run"], true, "{check}");
+    other.ok(&["import", &zip_path]);
+    let tasks = other.json(&["task", "list", "--project", "GK"]);
+    assert_eq!(tasks["items"][0]["title"], "Carried over");
+    // Again: the key is taken now.
+    let out = other.run(&["--json", "import", &zip_path]);
+    assert_ne!(code(&out), 0);
+    let error: Value = serde_json::from_slice(&out.stderr).unwrap();
+    assert_eq!(
+        error["details"]["message_id"], "transfer-keys-taken",
+        "{error}"
+    );
+}

@@ -95,6 +95,145 @@ pub fn store_file(layout: &WorkspaceLayout, bytes: &[u8]) -> io::Result<StoredFi
     Ok(StoredFile { sha256, size })
 }
 
+/// The SHA-256 and size of the file at `path`, read in pieces.
+pub fn sha256_file(path: &Path) -> io::Result<StoredFile> {
+    sha256_reader(&mut File::open(path)?)
+}
+
+/// The SHA-256 and size of everything `reader` gives, read in pieces.
+pub fn sha256_reader(file: &mut dyn io::Read) -> io::Result<StoredFile> {
+    let mut hasher = Sha256::new();
+    let mut buf = vec![0u8; 64 * 1024];
+    let mut size = 0u64;
+    loop {
+        let n = file.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+        size += n as u64;
+    }
+    Ok(StoredFile {
+        sha256: gk_core::hex(&hasher.finalize()),
+        size,
+    })
+}
+
+/// Stores what `reader` gives, at most `limit` bytes, in the workspace's
+/// file store, hashing it on the way; more than `limit` bytes is an error
+/// and stores nothing.
+pub fn store_reader(
+    layout: &WorkspaceLayout,
+    reader: &mut dyn io::Read,
+    limit: u64,
+) -> io::Result<StoredFile> {
+    store_from(layout, reader, limit, true)
+}
+
+/// As [`store_reader`], without flushing the file to disk: for storing many
+/// files at once, followed by one [`sync_files`] for all of them before
+/// anything that refers to them is committed.
+pub fn store_reader_unsynced(
+    layout: &WorkspaceLayout,
+    reader: &mut dyn io::Read,
+    limit: u64,
+) -> io::Result<StoredFile> {
+    store_from(layout, reader, limit, false)
+}
+
+/// Flushes the stored files `sha256s` and their folders to disk, several at
+/// a time.
+pub fn sync_files(layout: &WorkspaceLayout, sha256s: &[String]) -> io::Result<()> {
+    let paths: Vec<PathBuf> = sha256s.iter().filter_map(|s| layout.blob_path(s)).collect();
+    let threads = std::thread::available_parallelism().map_or(4, |n| n.get().clamp(2, 16));
+    let chunk = paths.len().div_ceil(threads).max(1);
+    std::thread::scope(|scope| {
+        let jobs: Vec<_> = paths
+            .chunks(chunk)
+            .map(|part| {
+                scope.spawn(move || -> io::Result<()> {
+                    for p in part {
+                        File::open(p)?.sync_all()?;
+                    }
+                    Ok(())
+                })
+            })
+            .collect();
+        for job in jobs {
+            job.join()
+                .map_err(|_| io::Error::other("a file sync thread failed"))??;
+        }
+        Ok::<_, io::Error>(())
+    })?;
+    let mut folders: Vec<&Path> = paths.iter().filter_map(|p| p.parent()).collect();
+    folders.sort();
+    folders.dedup();
+    for folder in folders {
+        sync_dir(folder)?;
+    }
+    Ok(())
+}
+
+fn store_from(
+    layout: &WorkspaceLayout,
+    reader: &mut dyn io::Read,
+    limit: u64,
+    sync: bool,
+) -> io::Result<StoredFile> {
+    use std::io::Read as _;
+    let tmp_dir = layout.files_dir().join("tmp");
+    fs::create_dir_all(&tmp_dir)?;
+    let tmp = tmp_dir.join(temp_name());
+    let written = (|| {
+        let mut file = File::create(&tmp)?;
+        let mut hasher = Sha256::new();
+        let mut buf = vec![0u8; 64 * 1024];
+        let mut size = 0u64;
+        let mut limited = reader.take(limit.saturating_add(1));
+        loop {
+            let n = limited.read(&mut buf)?;
+            if n == 0 {
+                break;
+            }
+            size += n as u64;
+            if size > limit {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "the file is larger than allowed",
+                ));
+            }
+            hasher.update(&buf[..n]);
+            file.write_all(&buf[..n])?;
+        }
+        if sync {
+            file.sync_all()?;
+        }
+        drop(file);
+        let sha256 = gk_core::hex(&hasher.finalize());
+        let target = layout
+            .blob_path(&sha256)
+            .ok_or_else(|| io::Error::other("a computed hash is not a hash"))?;
+        let folder = target
+            .parent()
+            .ok_or_else(|| io::Error::other("a stored file has no folder"))?
+            .to_path_buf();
+        fs::create_dir_all(&folder)?;
+        if fs::metadata(&target).is_ok_and(|m| m.len() == size) {
+            let _ = fs::remove_file(&tmp);
+        } else {
+            fs::rename(&tmp, &target)?;
+            if sync {
+                sync_dir(&folder)?;
+            }
+        }
+        Ok(StoredFile { sha256, size })
+    })();
+    if written.is_err() {
+        let _ = fs::remove_file(&tmp);
+    }
+    written
+}
+
 /// Whether the stored file `sha256` is there with `size` bytes.
 #[must_use]
 pub fn has_file(layout: &WorkspaceLayout, sha256: &str, size: u64) -> bool {

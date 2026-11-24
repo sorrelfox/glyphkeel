@@ -25,6 +25,10 @@ pub enum StoreError {
         /// The version this program was built for.
         expected: i64,
     },
+    /// The database was replaced by a backup while this program was
+    /// running.
+    #[error("the workspace was restored from a backup while this program was running; restart it")]
+    WorkspaceReplaced,
     /// The workspace was made by a newer program.
     #[error(
         "the workspace has schema version {found}, but this program supports only up to {supported}; install a newer Glyphkeel"

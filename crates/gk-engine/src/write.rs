@@ -197,6 +197,18 @@ impl<'a> WriteCtx<'a> {
     pub(crate) fn finish(self) -> Result<Finished, Failure> {
         let meta = self.meta;
         let ctx = &meta.ctx;
+        if ctx.is_agent() {
+            let trashed = self
+                .changes
+                .iter()
+                .filter(|c| {
+                    c.fields
+                        .get(crate::ops::trash::TRASHED)
+                        .is_some_and(|f| f.after == Some(Value::Bool(true)))
+                })
+                .count() as u64;
+            crate::ops::trash::check_agent_caps(self.tx, ctx, meta.at, trashed)?;
+        }
         let mut seq = None;
         let mut out = Vec::with_capacity(self.changes.len());
         {
