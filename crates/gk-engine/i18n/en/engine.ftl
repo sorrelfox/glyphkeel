@@ -50,6 +50,14 @@ trash-project-count = { $count ->
        *[other] { $project } and its sub-projects hold { $count } tasks, not { $expected }; nothing was deleted.
     }
 trash-project-count-hint = Check the project again and repeat with the right count.
+task-day-limit = { $count ->
+        [one] This session created one task in the last 24 hours; an agent may create { $max } a day.
+       *[other] This session created { $count } tasks in the last 24 hours; an agent may create { $max } a day.
+    }
+task-day-limit-hint = { $hours ->
+        [one] Wait an hour before creating more, or ask the person to create them.
+       *[other] Wait { $hours } hours before creating more, or ask the person to create them.
+    }
 trash-call-limit = { $count ->
         [one] This would move one item to the trash; your profile allows { $max } per call.
        *[other] This would move { $count } items to the trash; your profile allows { $max } per call.
@@ -78,6 +86,15 @@ trash-restore-first-hint = Restore what holds it first; that brings it back too.
 
 backup-storage = The backup could not be made or read: { $error }
 backup-check-failed = The new backup failed SQLite's integrity check, so it was not kept.
+backup-safety-failed = { $count ->
+        [one] This change touches one item, and the safety backup made before large changes by agents failed, so nothing was changed: { $error }
+       *[other] This change touches { $count } items, and the safety backup made before large changes by agents failed, so nothing was changed: { $error }
+    }
+backup-safety-failed-hint = Check that the backup folder has room and can be written to, then try again.
+backup-safety-pending = { $count ->
+        [one] A safety backup is needed before this change to one item.
+       *[other] A safety backup is needed before this change to { $count } items.
+    }
 backup-not-found = There is no backup "{ $name }".
 backup-not-found-hint = List the backups with `glyphkeel backup list`.
 backup-restore-app-only = { $op } is available in the app only.
@@ -254,6 +271,8 @@ lookup-type-not-found = Project { $project } has no task type "{ $name }".
 lookup-label-not-found = Project { $project } has no label "{ $name }".
 project-archived = Project { $project } is archived, so it can't be changed.
 project-archived-hint = Unarchive it first.
+project-wiki-off = The wiki is switched off in project { $project }, so its pages can't be changed.
+project-wiki-off-hint = Switch the wiki on in the project's settings first.
 task-not-found = There is no task "{ $task }".
 task-not-found-hint = Task keys look like TM-41.
 task-version-changed = { $task } changed since you read it: it is at version { $version }, not { $expected }.

@@ -95,6 +95,18 @@ export type AgentBrief = {
   title?: string;
 };
 
+/** The fixed limits on agent sessions, so a runaway loop can't flood the workspace. */
+export type AgentLimits = {
+  /** Tasks a session may create in any 24 hours. */
+  new_tasks_per_day: number;
+  /** Items a standard agent may move to the trash in one call. */
+  trash_items_per_call: number;
+  /** Items a standard agent session may move to the trash in an hour. */
+  trash_items_per_hour: number;
+  /** Calls of changing tools allowed in any minute, per session. */
+  writes_per_minute: number;
+};
+
 /** The agent policy to set. */
 export type AgentPolicyPatch = {
   /** The most an agent may do, whatever profile it asks for. */
@@ -3125,6 +3137,8 @@ export type WorkspaceGetInput = Record<string, never>;
 
 /** The open workspace and who is asking. */
 export type WorkspaceInfo = {
+  /** The fixed limits on agent sessions. */
+  agent_limits: AgentLimits;
   /** Who is asking, through which program, with which rights. */
   caller: Caller;
   /** A short guide to keys, references and the query language. */
@@ -3606,7 +3620,7 @@ export function makeOps(call: Call) {
       history: (input: OpMap["wiki.history"]["input"]) => call("wiki.history", input),
     },
     workspace: {
-      /** The open workspace: its name and ID, the schema and program versions, who is asking with which rights, the settings and a short guide. (read) */
+      /** The open workspace: its name and ID, the schema and program versions, who is asking with which rights, the settings, the limits on agents and a short guide. (read) */
       get: (input: OpMap["workspace.get"]["input"] = {}) => call("workspace.get", input),
     },
   };

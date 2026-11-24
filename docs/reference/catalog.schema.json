@@ -277,6 +277,43 @@
               }
             ]
           },
+          "AgentLimits": {
+            "additionalProperties": false,
+            "description": "The fixed limits on agent sessions, so a runaway loop can't flood the\nworkspace.",
+            "properties": {
+              "new_tasks_per_day": {
+                "description": "Tasks a session may create in any 24 hours.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "trash_items_per_call": {
+                "description": "Items a standard agent may move to the trash in one call.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "trash_items_per_hour": {
+                "description": "Items a standard agent session may move to the trash in an hour.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "writes_per_minute": {
+                "description": "Calls of changing tools allowed in any minute, per session.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "writes_per_minute",
+              "new_tasks_per_day",
+              "trash_items_per_call",
+              "trash_items_per_hour"
+            ],
+            "type": "object"
+          },
           "Caller": {
             "additionalProperties": false,
             "description": "The caller of an operation as the engine sees it.",
@@ -582,6 +619,10 @@
         "additionalProperties": false,
         "description": "The open workspace and who is asking.",
         "properties": {
+          "agent_limits": {
+            "$ref": "#/$defs/AgentLimits",
+            "description": "The fixed limits on agent sessions."
+          },
           "caller": {
             "$ref": "#/$defs/Caller",
             "description": "Who is asking, through which program, with which rights."
@@ -623,6 +664,7 @@
           "program_version",
           "caller",
           "settings",
+          "agent_limits",
           "guide"
         ],
         "title": "WorkspaceInfo",
@@ -630,7 +672,7 @@
       },
       "output_name": "WorkspaceInfo",
       "safety": "read",
-      "summary": "The open workspace: its name and ID, the schema and program versions, who is asking with which rights, the settings and a short guide."
+      "summary": "The open workspace: its name and ID, the schema and program versions, who is asking with which rights, the settings, the limits on agents and a short guide."
     },
     {
       "cli": "settings get",

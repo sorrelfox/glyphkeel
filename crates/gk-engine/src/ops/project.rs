@@ -273,7 +273,7 @@ fn clean_name(field: &str, what: &'static str, name: &str, max: usize) -> Result
 // ---------------------------------------------------------------------
 // Reading
 
-fn modules_of(text: &str) -> Modules {
+pub(crate) fn modules_of(text: &str) -> Modules {
     let v: Value = serde_json::from_str(text).unwrap_or(Value::Null);
     let on = |k: &str| match v.get(k) {
         Some(Value::Bool(b)) => *b,

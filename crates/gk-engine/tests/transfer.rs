@@ -220,6 +220,43 @@ fn data_set_s_imports_and_round_trips_through_an_export() {
     assert!(folder.join("manifest.json").is_file());
 }
 
+/// The hostile set nests quotes and lists thousands deep; the import works
+/// out its plain text on worker threads with the default stack, which an
+/// unoptimised build used to overflow.
+#[test]
+fn hostile_data_set_imports_and_renders() {
+    let dir = TempDir::new().unwrap();
+    let archive = seed(dir.path(), gk_seed::DataSet::Hostile);
+    let layout = WorkspaceLayout::new(dir.path().join("W"));
+    let e = Engine::open(&layout, EngineConfig::new(Role::App)).unwrap();
+    let app = Context::user(Via::App);
+    let call = |op: &str, input: Value| {
+        e.call(&app, op, input)
+            .unwrap_or_else(|err| panic!("{op}: {err:?}"))
+    };
+    let done = call(
+        "transfer.import",
+        json!({ "path": archive.to_string_lossy() }),
+    );
+    let tasks = done["counts"]["tasks"].as_u64().unwrap();
+    assert!(tasks > 0, "{done}");
+    assert_eq!(
+        count(&e, "SELECT count(*) FROM tasks"),
+        i64::try_from(tasks).unwrap()
+    );
+
+    let documents: Vec<Value> = (1..=tasks)
+        .map(|n| json!({ "task": format!("HOST-{n}") }))
+        .collect();
+    let rendered = call("markdown.render", json!({ "documents": documents }));
+    assert_eq!(
+        rendered["items"].as_array().unwrap().len(),
+        usize::try_from(tasks).unwrap()
+    );
+    let found = call("search.query", json!({ "text": "deep quote" }));
+    assert!(!found["items"].as_array().unwrap().is_empty(), "{found}");
+}
+
 #[test]
 fn taken_keys_need_new_ones_and_existing_ids_are_replaced() {
     let dir = TempDir::new().unwrap();

@@ -58,9 +58,9 @@ pub(crate) const TRASHED: &str = "trashed";
 /// History's field for a purged item; it can't be reverted.
 pub(crate) const PURGED: &str = "purged";
 /// Items a standard agent may move to the trash in one call.
-pub(crate) const AGENT_ITEMS_PER_CALL: u64 = 20;
+pub(crate) const AGENT_ITEMS_PER_CALL: u64 = gk_api::ops::agent::AGENT_TRASH_ITEMS_PER_CALL as u64;
 /// Items a standard agent session may move to the trash in an hour.
-pub(crate) const AGENT_ITEMS_PER_HOUR: u64 = 50;
+pub(crate) const AGENT_ITEMS_PER_HOUR: u64 = gk_api::ops::agent::AGENT_TRASH_ITEMS_PER_HOUR as u64;
 /// Most tasks one deletion names.
 const MAX_TASKS: usize = 500;
 /// Most entries one restore or purge names.
@@ -432,6 +432,7 @@ fn delete_page(w: &mut WriteCtx<'_>, input: WikiDeleteInput) -> Result<TrashChan
     let page = wiki::find_page(w.tx(), input.project.as_deref(), "page", &input.page)?;
     if let Some(p) = lookup::project_by_id(w.tx(), page.project)? {
         lookup::ensure_active(&p)?;
+        lookup::ensure_wiki_on(w.tx(), &p)?;
     }
     let mut total = 0;
     if set_row(w, WIKI, page.id, Some(page.project), TRASHED, true)? {

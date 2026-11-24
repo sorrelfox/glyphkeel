@@ -930,6 +930,7 @@ fn place(
 fn create(w: &mut WriteCtx<'_>, input: WikiCreateInput) -> Result<WikiChange, Failure> {
     let project = lookup::project(w.tx(), "project", &input.project)?;
     lookup::ensure_active(&project)?;
+    lookup::ensure_wiki_on(w.tx(), &project)?;
     let title = gk_core::check_page_title(&input.title).map_err(title_error)?;
     ensure_free(w.tx(), &project, &title, None)?;
     let parent = input
@@ -1011,6 +1012,7 @@ fn update(w: &mut WriteCtx<'_>, input: WikiUpdateInput) -> Result<WikiChange, Fa
     let page = find(w.tx(), input.project.as_deref(), "page", &input.page)?;
     let project = project_of(w.tx(), &page)?;
     lookup::ensure_active(&project)?;
+    lookup::ensure_wiki_on(w.tx(), &project)?;
     let owner = Owner::Wiki(page.id);
     if input.body.is_some() && !input.edits.is_empty() {
         return Err(messages::invalid("edits", "wiki-body-and-edits", &[]));

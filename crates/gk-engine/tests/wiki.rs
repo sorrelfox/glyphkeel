@@ -514,3 +514,37 @@ fn an_edit_from_another_process_is_merged() {
     let found = ws.call("search.query", json!({ "text": "other process" }));
     assert_eq!(found["items"][0]["kind"], "wiki");
 }
+
+#[test]
+fn pages_change_only_while_the_wiki_is_switched_on() {
+    let ws = open();
+    ws.page("Kept", "Text.\n");
+    ws.call(
+        "project.update",
+        json!({ "project": "TM", "modules": { "wiki": false } }),
+    );
+    for (op, input) in [
+        ("wiki.create", json!({ "project": "TM", "title": "New" })),
+        (
+            "wiki.update",
+            json!({ "project": "TM", "page": "Kept", "title": "Renamed" }),
+        ),
+        ("wiki.delete", json!({ "project": "TM", "page": "Kept" })),
+    ] {
+        let err = ws.fails(op, input);
+        assert_eq!(err.code, ErrorCode::Forbidden, "{op}: {err:?}");
+        assert_eq!(err.details["message_id"], "project-wiki-off", "{op}");
+        assert_eq!(err.details["hint_id"], "project-wiki-off-hint", "{op}");
+    }
+    // The pages stay readable, and come back to life with the module.
+    assert_eq!(ws.get("Kept")["title"], "Kept");
+    ws.call(
+        "project.update",
+        json!({ "project": "TM", "modules": { "wiki": true } }),
+    );
+    ws.call(
+        "wiki.update",
+        json!({ "project": "TM", "page": "Kept", "title": "Renamed" }),
+    );
+    assert_eq!(ws.titles(), ["Renamed"]);
+}
