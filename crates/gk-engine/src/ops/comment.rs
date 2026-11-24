@@ -291,6 +291,7 @@ pub(crate) fn add_comment(
     )?;
     reindex(w, id)?;
     bump(w, task.id)?;
+    super::draft::clear(w, gk_api::ops::draft::DraftKind::NewComment, task.id)?;
     let key = lookup::task_key(w.tx(), task.project, task.number)?;
     let pid = Some(task.project);
     w.record_field(ENTITY, id, pid, "created", None, Some(Value::Bool(true)));
@@ -389,6 +390,7 @@ fn update(w: &mut WriteCtx<'_>, input: CommentUpdateInput) -> Result<CommentChan
     }
     gk_core::check_comment(&input.body).map_err(|e| invalid("body", e))?;
     set_body(w, c.id, Some(c.project), &input.body)?;
+    super::draft::clear(w, gk_api::ops::draft::DraftKind::Comment, c.id)?;
     changed(w, c.id)
 }
 

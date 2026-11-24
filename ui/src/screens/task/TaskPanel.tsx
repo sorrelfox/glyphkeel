@@ -375,7 +375,7 @@ function Loaded({
           }}
         />
       </div>
-      <Composer taskKey={task.key} readOnly={readOnly} />
+      <Composer task={task} readOnly={readOnly} />
     </>
   );
 }

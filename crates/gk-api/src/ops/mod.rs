@@ -28,6 +28,7 @@ pub mod bulk;
 pub mod comment;
 pub mod common;
 pub mod description;
+pub mod draft;
 pub mod file;
 pub mod history;
 pub mod project;

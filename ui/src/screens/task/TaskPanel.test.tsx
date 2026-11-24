@@ -6,17 +6,20 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, describe, expect, it } from "vitest";
 
 import { App } from "../../App";
+import { flushDrafts, forgetDraftsInMemory } from "../../data/drafts";
 import { fakeTransport } from "../../data/fake/transport";
 import { createClient } from "../../data/transport";
-import { type TaskChange } from "../../generated/ops";
+import { type CommentChange, type CommentList, type DraftList, type TaskChange } from "../../generated/ops";
 import { describeEntry } from "./Activity";
 
 // jsdom lays nothing out; the editor measures text ranges.
 Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
 Range.prototype.getBoundingClientRect = () => new DOMRect();
+Element.prototype.scrollIntoView = () => undefined;
 
 afterEach(() => {
   cleanup();
+  forgetDraftsInMemory();
   localStorage.clear();
 });
 
@@ -205,6 +208,81 @@ describe("comments and history", () => {
     fireEvent.click(await screen.findByRole("menuitem", { name: "Move to the trash" }));
     await within(panel).findByText("No comments yet.");
     expect(await screen.findByText("Comment moved to the trash")).toBeDefined();
+  });
+
+  it("quotes a comment in the reply, which answers it and links back to it", async () => {
+    const { panel, task, transport } = await renderPanel();
+    const first = ((await transport.call("comment.add", { key: task.key, body: "Trains are **cheaper** in May.\n\nBook early." })) as CommentChange).comment;
+    const article = await within(panel).findByRole("article", { name: named(/^Comment by Me/) });
+    await within(article).findByText("cheaper");
+    fireEvent.click(within(article).getByRole("button", { name: "Quote in reply" }));
+    const composer = await within(panel).findByRole("textbox", { name: "Write a comment" });
+    const link = `${task.key}#c-${first.id.replace(/-/g, "").slice(-8)}`;
+    await waitFor(() => {
+      expect(editorText(composer)).toBe(`> Trains are **cheaper** in May.\n>\n> Book early.\n>\n> — ${link}\n\n`);
+    });
+    typeInto(composer, `${editorText(composer) ?? ""}Let's book now.`);
+    fireEvent.keyDown(composer, { key: "Enter", ctrlKey: true });
+    await waitFor(async () => {
+      const listed = (await transport.call("comment.list", { key: task.key })) as CommentList;
+      expect(listed.items.map((comment) => comment.reply_to ?? null)).toEqual([null, first.id]);
+    });
+
+    // The answer's link opens the quoted comment.
+    const answer = await waitFor(() => {
+      const found = within(panel).getAllByRole("article", { name: named(/^Comment by Me/) })[1];
+      expect(found).toBeDefined();
+      return found as HTMLElement;
+    });
+    const back = await within(answer).findByRole("link", { name: link });
+    expect(back.getAttribute("data-comment")).toBe(link.slice(-8));
+    fireEvent.click(back);
+    await waitFor(() => {
+      expect(within(panel).getAllByRole("article", { name: named(/^Comment by Me/) })[0]?.hasAttribute("data-shown")).toBe(true);
+    });
+  });
+
+  it("keeps an unsent comment and an unsaved edit as drafts that come back after a restart", async () => {
+    const { panel, task, transport } = await renderPanel();
+    const posted = ((await transport.call("comment.add", { key: task.key, body: "First thoughts" })) as CommentChange).comment;
+    const article = await within(panel).findByRole("article", { name: named(/^Comment by Me/) });
+    fireEvent.click(await within(article).findByRole("button", { name: "Comment" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Edit" }));
+    typeInto(await within(article).findByRole("textbox", { name: "Comment text" }), "Second thoughts");
+    typeInto(await within(panel).findByRole("textbox", { name: "Write a comment" }), "Not sent yet");
+    flushDrafts();
+    await waitFor(async () => {
+      const kept = (await transport.call("draft.list", { task: task.key })) as DraftList;
+      expect(kept.items.map((draft) => [draft.kind, draft.body]).sort()).toEqual([
+        ["comment", "Second thoughts"],
+        ["new_comment", "Not sent yet"],
+      ]);
+    });
+
+    // A restart: the window's memory is gone, the engine's drafts stay.
+    cleanup();
+    forgetDraftsInMemory();
+    render(<App start={{ titleBar: "app", locale: "en-US" }} client={createClient(transport)} path={`/projects/PER?task=${task.key}`} />);
+    const again = await screen.findByRole("complementary", { name: named(new RegExp(`Task ${task.key}`)) });
+    const composer = await within(again).findByRole("textbox", { name: "Write a comment" });
+    await waitFor(() => {
+      expect(editorText(composer)).toBe("Not sent yet");
+    });
+    const comment = await within(again).findByRole("article", { name: named(/^Comment by Me/) });
+    expect(await within(comment).findByText("Unsaved changes to this comment are kept from earlier.")).toBeDefined();
+    fireEvent.click(within(comment).getByRole("button", { name: "Continue editing" }));
+    const edit = await within(comment).findByRole("textbox", { name: "Comment text" });
+    expect(editorText(edit)).toBe("Second thoughts");
+    fireEvent.keyDown(edit, { key: "Enter", ctrlKey: true });
+    fireEvent.keyDown(composer, { key: "Enter", ctrlKey: true });
+    // Saved and sent: no drafts are left.
+    await waitFor(async () => {
+      const listed = (await transport.call("comment.list", { key: task.key })) as CommentList;
+      expect(listed.items.map((item) => item.body)).toEqual(["Second thoughts", "Not sent yet"]);
+      expect(listed.items[0]?.id).toBe(posted.id);
+      const kept = (await transport.call("draft.list", { task: task.key })) as DraftList;
+      expect(kept.items).toEqual([]);
+    });
   });
 
   it("attaches a file pasted into the composer and links it in the text", async () => {

@@ -788,6 +788,73 @@ export type DescriptionSave = {
   revision?: string;
 };
 
+/** One kept draft. */
+export type Draft = {
+  /** The revision the text was edited from. */
+  base_revision?: string;
+  /** The unsaved text. */
+  body: string;
+  /** The kind of editor. */
+  kind: DraftKind;
+  /** The ID of what it edits: the task, comment, project or page. */
+  target: string;
+  /** The task's key, for drafts about a task or one of its comments. */
+  task?: string;
+  /** The unsaved title, for a wiki page. */
+  title?: string;
+  /** When it was last saved (RFC 3339, UTC). */
+  updated_at: string;
+};
+
+/** What a discard did. */
+export type DraftDiscarded = {
+  /** Whether there was a draft to discard. */
+  discarded: boolean;
+};
+
+/** Which editor a draft belongs to. */
+export type DraftKind = "task" | "comment" | "new_comment" | "project" | "wiki_page" | "new_wiki_page";
+
+/** The person's drafts, most recently saved first. */
+export type DraftList = {
+  /** The drafts. */
+  items: Draft[];
+};
+
+/** The drafts to list. */
+export type DraftListInput = {
+  /** Only the drafts about this task (its key or ID): its description, a new comment on it and edits of its comments. */
+  task?: string | null;
+};
+
+/** A draft, or none. */
+export type DraftOutput = {
+  /** The kept draft; left out when there is none. */
+  draft?: Draft;
+};
+
+/** The editor a draft belongs to. */
+export type DraftRef = {
+  /** The kind of editor. */
+  kind: DraftKind;
+  /** What it edits: a task's key or ID for `task` and `new_comment`, a comment's ID, a project's key or ID for `project` and `new_wiki_page`, or a wiki page's ID. */
+  target: string;
+};
+
+/** A draft to keep. */
+export type DraftSaveInput = {
+  /** The revision the text was edited from, for texts with revisions; saving the text later names it, so changes made meanwhile are merged. */
+  base_revision?: string | null;
+  /** The unsaved text, Markdown. */
+  body: string;
+  /** The kind of editor. */
+  kind: DraftKind;
+  /** What it edits, as in [`DraftRef::target`]. */
+  target: string;
+  /** The unsaved title, for a wiki page. */
+  title?: string | null;
+};
+
 /** One reminder that is due. */
 export type DueReminder = {
   /** When it came due (RFC 3339, UTC). */
@@ -3298,6 +3365,10 @@ export interface OpMap {
   "comment.add": { input: CommentAddInput; output: CommentChange; safety: "write"; kind: "command" };
   "comment.update": { input: CommentUpdateInput; output: CommentChange; safety: "write"; kind: "command" };
   "comment.delete": { input: CommentRef; output: CommentChange; safety: "trash"; kind: "command" };
+  "draft.get": { input: DraftRef; output: DraftOutput; safety: "read"; kind: "query" };
+  "draft.list": { input: DraftListInput; output: DraftList; safety: "read"; kind: "query" };
+  "draft.save": { input: DraftSaveInput; output: DraftOutput; safety: "app"; kind: "command" };
+  "draft.discard": { input: DraftRef; output: DraftDiscarded; safety: "app"; kind: "command" };
   "time.log": { input: TimeLogInput; output: TimeEntryChange; safety: "write"; kind: "command" };
   "time.update": { input: TimeUpdateInput; output: TimeEntryChange; safety: "write"; kind: "command" };
   "time.delete": { input: TimeEntryRef; output: TimeEntryChange; safety: "trash"; kind: "command" };
@@ -3404,6 +3475,10 @@ export const OP_SAFETY = {
   "comment.add": "write",
   "comment.update": "write",
   "comment.delete": "trash",
+  "draft.get": "read",
+  "draft.list": "read",
+  "draft.save": "app",
+  "draft.discard": "app",
   "time.log": "write",
   "time.update": "write",
   "time.delete": "trash",
@@ -3510,6 +3585,16 @@ export function makeOps(call: Call) {
       history: (input: OpMap["description.history"]["input"] = {}) => call("description.history", input),
       /** One description revision with its text, and the differences from another revision on request. (read) */
       revision: (input: OpMap["description.revision"]["input"]) => call("description.revision", input),
+    },
+    draft: {
+      /** The person's unsaved text of one editor (a description, a comment, a new comment or a wiki page), kept from earlier. (read) */
+      get: (input: OpMap["draft.get"]["input"]) => call("draft.get", input),
+      /** The person's kept drafts, most recently saved first; or only those about one task. (read) */
+      list: (input: OpMap["draft.list"]["input"] = {}) => call("draft.list", input),
+      /** Keep the unsaved text of an editor, replacing the person's earlier draft of it. Drafts are not history and expire after 30 days. (app) */
+      save: (input: OpMap["draft.save"]["input"]) => call("draft.save", input),
+      /** Forget the person's unsaved text of an editor. (app) */
+      discard: (input: OpMap["draft.discard"]["input"]) => call("draft.discard", input),
     },
     file: {
       /** An attached file's name, type, size and owner. (read) */

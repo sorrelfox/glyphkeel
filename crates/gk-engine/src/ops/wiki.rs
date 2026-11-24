@@ -1007,6 +1007,7 @@ fn create(w: &mut WriteCtx<'_>, input: WikiCreateInput) -> Result<WikiChange, Fa
         None,
         Some(Value::Bool(true)),
     );
+    super::draft::clear(w, gk_api::ops::draft::DraftKind::NewWikiPage, project.id)?;
     reindex(w, id)?;
     changed(w, id, None)
 }
@@ -1094,6 +1095,7 @@ fn update(w: &mut WriteCtx<'_>, input: WikiUpdateInput) -> Result<WikiChange, Fa
             input.base_revision.as_deref(),
             "normal",
         )?);
+        super::draft::clear(w, gk_api::ops::draft::DraftKind::WikiPage, page.id)?;
     } else if !input.edits.is_empty() {
         save = Some(description::save_edits(
             w,

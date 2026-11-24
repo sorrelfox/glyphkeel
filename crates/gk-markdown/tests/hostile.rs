@@ -41,6 +41,7 @@ fn renderer_attributes_cannot_be_forged() {
         let out = html(payload);
         for needle in [
             "data-ref",
+            "data-comment",
             "data-wiki",
             "data-item",
             "data-math",
@@ -134,6 +135,7 @@ fn the_allowlists_are_the_documented_ones() {
             "class",
             "data-item",
             "data-ref",
+            "data-comment",
             "data-wiki",
             "data-math",
             "data-lang",

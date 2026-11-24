@@ -28,6 +28,8 @@ import {
   type DueReminders,
   type ConflictAction,
   type DescriptionSave,
+  type Draft,
+  type DraftKind,
   type Edge,
   type EntityChange,
   type TrashEntry,
@@ -67,7 +69,7 @@ import { PROJECT_ICONS, suggestHue } from "../catalog";
 import { formatDuration, parseDuration } from "../duration";
 import { decodeBase64, materialize, recordedFields, sniff } from "./details";
 import { checklistOf, merge3, publicChecklist, renderFake, setChecked, unifiedDiff } from "./markdown";
-import { newProject, nextFileId, nextId, SAMPLE_AGENT } from "./seed";
+import { newProject, nextFileId, nextId, nextUuid, SAMPLE_AGENT } from "./seed";
 import { type FakeComment, type FakeFile, type FakeProject, type FakeRelation, type FakeReminder, type FakeRevision, type FakeState, type FakeTask, type FakeTimeEntry, type FakeWikiPage } from "./state";
 import { naturalDay, nextDay, searchAll, searchWiki, slugOf, headingsOf } from "./overview";
 import { createView, deleteView, listViews, matchingKeys, parseQuery, queryError, searchTasks, updateView, type GroupInfo, type QueryNames } from "./query";
@@ -159,11 +161,19 @@ export class FakeWorkspace {
   private readonly today: () => Date;
   private undoStack: { state: FakeState; op: string; group: string }[] = [];
   private redoStack: { state: FakeState; op: string; group: string }[] = [];
+  /**
+   * The person's drafts by kind and target ID. They are kept apart from the
+   * workspace's data, as the engine keeps them: Undo doesn't touch them and
+   * they are no history.
+   */
+  private readonly drafts = new Map<string, Draft>();
+  /** Whether the running call is an agent's, whose saves leave the person's drafts alone. */
+  private byAgent = false;
 
   constructor(state: FakeState, today: () => Date = () => new Date()) {
     this.state = state;
     this.today = today;
-    materialize(state, SAMPLE_AGENT, nextId);
+    materialize(state, SAMPLE_AGENT, (prefix) => (prefix === "c" ? nextUuid() : nextId(prefix)));
     // Every description starts with a revision of its own, as the engine's do.
     for (const task of state.tasks) {
       if (task.description !== "" && !state.revisions.some((revision) => revision.taskId === task.id)) {
@@ -208,8 +218,10 @@ export class FakeWorkspace {
     if (!handler) {
       fail("not_found", `There is no operation "${op}".`);
     }
-    // Reading changes nothing, so it needs no Undo step (copying a large workspace takes long).
-    if ((OP_SAFETY as Record<string, string>)[op] === "read") {
+    this.byAgent = by?.actor.kind === "agent";
+    // Reading changes nothing, so it needs no Undo step (copying a large workspace takes long);
+    // drafts are not the workspace's data and have none either.
+    if ((OP_SAFETY as Record<string, string>)[op] === "read" || op.startsWith("draft.")) {
       return { output: handler(input ?? {}) };
     }
     const before = structuredClone(this.state);
@@ -801,6 +813,41 @@ export class FakeWorkspace {
       }
     }
     return full;
+  }
+
+  /** What a draft is about: the ID of the task, comment, project or page, and the task's key. */
+  private draftOwner(kind: DraftKind, target: string): { id: string; task?: string } {
+    switch (kind) {
+      case "task":
+      case "new_comment": {
+        const task = this.task(target);
+        return { id: task.id, task: this.keyOf(task) };
+      }
+      case "comment": {
+        const comment = this.liveComment(target);
+        const task = this.state.tasks.find((candidate) => candidate.id === comment.taskId);
+        return { id: comment.id, ...some("task", task && this.keyOf(task)) };
+      }
+      case "project":
+      case "new_wiki_page":
+        return { id: this.project(target).id };
+      case "wiki_page":
+        return { id: this.wikiPage(target, null).id };
+    }
+  }
+
+  /** The kept draft of `kind` for `id`, unless it is older than 30 days. */
+  private keptDraft(kind: DraftKind, id: string): Draft | undefined {
+    const draft = this.drafts.get(`${kind}:${id}`);
+    return draft !== undefined && this.today().getTime() - Date.parse(draft.updated_at) <= 30 * 86_400_000 ? draft : undefined;
+  }
+
+  /** Saving a text forgets its draft, as the engine does. */
+  private draftSaved(kind: DraftKind, id: string): void {
+    if (this.byAgent) {
+      return;
+    }
+    this.drafts.delete(`${kind}:${id}`);
   }
 
   private liveComment(id: string): FakeComment {
@@ -1980,7 +2027,7 @@ export class FakeWorkspace {
         fail("invalid", "A reply belongs to the same task.", { details: { path: "reply_to" } });
       }
       const comment: FakeComment = {
-        id: nextId("c"),
+        id: nextUuid(),
         taskId: task.id,
         body,
         author: { kind: "user", name: "You" },
@@ -1993,6 +2040,7 @@ export class FakeWorkspace {
         deletedAt: null,
       };
       this.state.comments.push(comment);
+      this.draftSaved("new_comment", task.id);
       this.touch(task, false);
       return this.commentChange(comment, ["created"]);
     },
@@ -2004,6 +2052,7 @@ export class FakeWorkspace {
       if (body.trim() === "") {
         fail("invalid", "A comment can't be empty.", { details: { path: "body" } });
       }
+      this.draftSaved("comment", comment.id);
       if (body === comment.body) {
         return { output: { comment: this.comment(comment, false), deleted: false }, changes: [] };
       }
@@ -2369,6 +2418,34 @@ export class FakeWorkspace {
       };
       return this.runQuery(() => searchTasks(tasks, input, this.queryNames(), { archived: this.archivedKeys(), scoped: scope !== null, statusOrder: order, cache: results, groupInfo }));
     },
+    "draft.get": ({ kind, target }) => {
+      const owner = this.draftOwner(kind, target);
+      return { ...some("draft", this.keptDraft(kind, owner.id)) };
+    },
+    "draft.list": ({ task: ref }) => {
+      const task = ref === null || ref === undefined ? null : this.task(ref);
+      const items = [...this.drafts.values()]
+        .filter((draft) => this.keptDraft(draft.kind, draft.target) !== undefined)
+        .filter((draft) => task === null || draft.task === this.keyOf(task))
+        .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+      return { items };
+    },
+    "draft.save": ({ kind, target, body, title, base_revision }) => {
+      const owner = this.draftOwner(kind, target);
+      const id = `${kind}:${owner.id}`;
+      if (body === "" && (title ?? "") === "") {
+        this.drafts.delete(id);
+        return {};
+      }
+      const draft: Draft = { kind, target: owner.id, ...some("task", owner.task), body, ...some("title", title), ...some("base_revision", base_revision), updated_at: this.today().toISOString() };
+      this.drafts.delete(id);
+      this.drafts.set(id, draft);
+      return { draft };
+    },
+    "draft.discard": ({ kind, target }) => {
+      const owner = this.draftOwner(kind, target);
+      return { discarded: this.drafts.delete(`${kind}:${owner.id}`) };
+    },
     "list.layout.get": ({ project: ref }) => {
       const project = ref === null || ref === undefined ? undefined : this.project(ref);
       return { ...some("project", project?.key), layout: structuredClone(this.state.listLayouts?.[project?.id ?? "all"] ?? { columns: [], widths: {} }) };
@@ -2529,6 +2606,7 @@ export class FakeWorkspace {
       const text = clear.includes("description") ? "" : input.description;
       if (text !== null && text !== undefined) {
         save = this.saveDescription(task, text, input.base_revision ?? null);
+        this.draftSaved("task", task.id);
         if (save.outcome === "conflict") {
           fields.push("conflict_copy");
         } else if (save.outcome !== "unchanged") {
@@ -2595,6 +2673,7 @@ export class FakeWorkspace {
         fail("conflict", "The description changed since you read it.", { hint: "Read it again and resolve the copy once more." });
       }
       this.resolveConflict(task, copy, action, text ?? null);
+      this.draftSaved("task", task.id);
       this.touch(task);
       return this.taskChange(task, ["description"]);
     },

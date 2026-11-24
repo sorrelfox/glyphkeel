@@ -742,6 +742,7 @@ fn resolve_command(w: &mut WriteCtx<'_>, input: TaskResolveInput) -> Result<Task
         input.text.as_deref(),
         input.base_revision.as_deref(),
     )?;
+    super::draft::clear(w, gk_api::ops::draft::DraftKind::Task, task.id)?;
     let mut change = super::task::changed(w, task.id, Vec::new())?;
     change.description_save = Some(saved);
     Ok(change)

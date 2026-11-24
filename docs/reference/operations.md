@@ -61,6 +61,10 @@ The safety class decides who may run an operation:
 | `comment.add` | write | app, command line, MCP | `add_comment` | `glyphkeel comment add <key>` |
 | `comment.update` | write | app, command line, MCP | `update_comment` | `glyphkeel comment edit <comment>` |
 | `comment.delete` | trash | app, command line, MCP | `delete_comment` | `glyphkeel comment delete <comment>` |
+| `draft.get` | read | app | — | — |
+| `draft.list` | read | app | — | — |
+| `draft.save` | app | app | — | — |
+| `draft.discard` | app | app | — | — |
 | `time.log` | write | app, command line, MCP | `log_time` | `glyphkeel time log <key>` |
 | `time.update` | write | app, command line, MCP | `update_time_entry` | `glyphkeel time edit <entry>` |
 | `time.delete` | trash | app, command line, MCP | `delete_time_entry` | `glyphkeel time delete <entry>` |
@@ -392,6 +396,38 @@ Input: `CommentUpdateInput`. Output: `CommentChange`. Schemas: [catalog.schema.j
 Move a comment to the trash.
 
 Input: `CommentRef`. Output: `CommentChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `draft.get`
+
+The person's unsaved text of one editor (a description, a comment, a new comment or a wiki page), kept from earlier.
+
+Input: `DraftRef`. Output: `DraftOutput`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+Not available to agents: A draft is the person's own unsaved text in an editor of the app, not the workspace's data; agents and scripts save text through the operations that change it.
+
+## `draft.list`
+
+The person's kept drafts, most recently saved first; or only those about one task.
+
+Input: `DraftListInput`. Output: `DraftList`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+Not available to agents: A draft is the person's own unsaved text in an editor of the app, not the workspace's data; agents and scripts save text through the operations that change it.
+
+## `draft.save`
+
+Keep the unsaved text of an editor, replacing the person's earlier draft of it. Drafts are not history and expire after 30 days.
+
+Input: `DraftSaveInput`. Output: `DraftOutput`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+Not available to agents: A draft is the person's own unsaved text in an editor of the app, not the workspace's data; agents and scripts save text through the operations that change it.
+
+## `draft.discard`
+
+Forget the person's unsaved text of an editor.
+
+Input: `DraftRef`. Output: `DraftDiscarded`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+Not available to agents: A draft is the person's own unsaved text in an editor of the app, not the workspace's data; agents and scripts save text through the operations that change it.
 
 ## `time.log`
 

@@ -39,6 +39,37 @@ fn task_keys_link_only_when_known_and_not_in_code_or_links() {
 }
 
 #[test]
+fn a_key_with_a_comment_anchor_links_to_the_comment() {
+    let out = html(
+        "> Quoted\n>\n> — TM-41#c-1a2b3c4d\n\nSee TM-41#c-1a2b3c4d, HIDDEN-3#c-1a2b3c4d and \
+         TM-7#c-1A2B3C4D or TM-8#c-1a2b. `TM-9#c-1a2b3c4d`",
+    );
+    let link = "<a data-ref=\"TM-41\" data-comment=\"1a2b3c4d\" rel=\"noopener noreferrer\">\
+                TM-41#c-1a2b3c4d</a>";
+    assert_eq!(out.matches(link).count(), 2, "{out}");
+    assert!(
+        out.contains("HIDDEN-3#c-1a2b3c4d"),
+        "unknown keys stay text: {out}"
+    );
+    // A malformed anchor leaves the key linked on its own.
+    assert!(
+        out.contains("<a data-ref=\"TM-7\" rel=\"noopener noreferrer\">TM-7</a>#c-1A2B3C4D"),
+        "{out}"
+    );
+    assert!(
+        out.contains("<a data-ref=\"TM-8\" rel=\"noopener noreferrer\">TM-8</a>#c-1a2b."),
+        "{out}"
+    );
+    assert!(!out.contains("data-ref=\"TM-9\""), "not in code: {out}");
+    let refs = references("See TM-41#c-1a2b3c4d.");
+    assert_eq!(
+        refs.task_keys,
+        ["TM-41"],
+        "a comment link refers to its task"
+    );
+}
+
+#[test]
 fn without_a_resolver_no_key_is_linked() {
     let out = render("TM-41", &RenderOptions::new("d"));
     assert_eq!(out, "<p>TM-41</p>\n");

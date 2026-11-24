@@ -14,6 +14,7 @@ pub(crate) mod bulk;
 pub(crate) mod claim;
 pub(crate) mod comment;
 pub(crate) mod description;
+pub(crate) mod draft;
 pub(crate) mod duplicate;
 pub(crate) mod fields;
 pub(crate) mod file;
@@ -55,6 +56,7 @@ pub(crate) fn register(r: &mut Registry) {
     relation::register(r);
     comment::register(r);
     description::register(r);
+    draft::register(r);
     board::register(r);
     file::register(r);
     time::register(r);

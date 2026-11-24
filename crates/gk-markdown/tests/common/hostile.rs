@@ -133,6 +133,8 @@ pub(crate) const FORGERIES: &[&str] = &[
     "<a data-ref=\"TM-1\">x</a>",
     "<a data-ref=\"gk0000000000000000:TM-1\">x</a>",
     "<a data-wiki=\"Secret page\">x</a>",
+    "<a data-comment=\"1a2b3c4d\">x</a>",
+    "[TM-1#c-1a2b3c4d](https://ok.example)",
     "<input type=\"checkbox\" data-item=\"1\" checked>",
     "<span data-math=\"inline\">x</span>",
     "<pre data-lang=\"mermaid\"><code>graph TD; A-->B</code></pre>",

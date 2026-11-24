@@ -1161,6 +1161,7 @@ pub(crate) fn update(w: &mut WriteCtx<'_>, input: TaskUpdateInput) -> Result<Tas
             ));
         }
         description_save = Some(saved);
+        super::draft::clear(w, gk_api::ops::draft::DraftKind::Task, id)?;
     }
     if !input.description_edits.is_empty() {
         description_save = Some(description::save_edits(
@@ -1190,6 +1191,7 @@ pub(crate) fn update(w: &mut WriteCtx<'_>, input: TaskUpdateInput) -> Result<Tas
             r.text.as_deref(),
             None,
         )?);
+        super::draft::clear(w, gk_api::ops::draft::DraftKind::Task, id)?;
     }
     if let Some(t) = &input.task_type {
         let t = lookup::named(w.tx(), List::Types, &project, "type", t)?;

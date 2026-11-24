@@ -612,6 +612,13 @@ comment-edited =
     }
 comment-earlier = Earlier versions
 comment-replaced = Replaced { $time } by { $actor }
+comment-quote = Quote in reply
+# The last line of a quote in a reply: where the quoted text comes from. { $link } is the comment's link, such as TM-41#c-1a2b3c4d.
+comment-quote-source = — { $link }
+comment-link-gone = The linked comment is no longer on { $key }.
+comment-draft-kept = Unsaved changes to this comment are kept from earlier.
+comment-draft-continue = Continue editing
+comment-draft-discard = Discard them
 composer-label = Write a comment
 composer-placeholder = Write a comment. Ctrl+Enter sends.
 composer-send = Comment

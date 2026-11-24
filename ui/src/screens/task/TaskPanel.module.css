@@ -419,6 +419,17 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  border-radius: var(--r-m);
+}
+
+.comment:focus {
+  outline: none;
+}
+
+/* The comment a link was opened at, for a moment. */
+.comment[data-shown] {
+  outline: var(--focus-w) solid var(--focus);
+  outline-offset: 4px;
 }
 
 .commentHead {
