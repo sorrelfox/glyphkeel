@@ -112,8 +112,9 @@ gtk = "=0.18.2"
 # token to the running one (Linux only).
 zbus = "5.19.0"
 # The quick-add shortcut through the desktop's GlobalShortcuts portal, on
-# Wayland and wherever the desktop offers it (Linux only).
-ashpd = { version = "=0.13.13", default-features = false, features = ["async-io", "global_shortcuts"] }
+# Wayland and wherever the desktop offers it, and the Background portal for
+# starting with the system inside Flatpak (Linux only).
+ashpd = { version = "=0.13.13", default-features = false, features = ["async-io", "background", "global_shortcuts"] }
 # The quick-add shortcut on X11, and on KWin's Wayland session through
 # XWayland, where the portal is not used.
 tauri-plugin-global-shortcut = "=2.4.1"

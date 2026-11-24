@@ -3,9 +3,11 @@
 
 // The app's own settings, which belong to this computer rather than to the
 // workspace: whether the app keeps running in the background when its last
-// window closes, and whether reminders show as desktop notifications. The
-// app keeps them in its settings file; a plain browser (the development
-// bridge, the sample data, tests) keeps them in the page's storage.
+// window closes, whether it starts with the system, whether reminders show
+// as desktop notifications, and whether the web view draws without the GPU
+// (safe rendering). The app keeps them in its settings file and the
+// desktop's autostart folder; a plain browser (the development bridge, the
+// sample data, tests) keeps them in the page's storage.
 //
 // The person's time zone comes with them: the app keeps it in the personal
 // settings that the command line and the MCP server read too. In a plain
@@ -27,6 +29,12 @@ export interface AppSettings {
   background: boolean;
   /** Reminders show as desktop notifications. */
   notifications: boolean;
+  /** The app starts with the system (in the background when background mode is on). */
+  autostart: boolean;
+  /** Safe rendering as chosen; it applies from the next start. */
+  safe_rendering: boolean;
+  /** Whether this run draws with safe rendering. */
+  safe_rendering_in_use: boolean;
   /** The time zone as chosen: `"system"` or an IANA name such as `"Europe/Berlin"`. */
   time_zone: string;
   /** The zone times are shown in now, by its IANA name; absent when the system's zone has no name. */
@@ -35,7 +43,7 @@ export interface AppSettings {
   workspace_path?: string;
 }
 
-export type AppSettingsPatch = Partial<Pick<AppSettings, "background" | "notifications" | "time_zone">>;
+export type AppSettingsPatch = Partial<Pick<AppSettings, "background" | "notifications" | "safe_rendering" | "time_zone">>;
 
 /** A time zone to choose from, with its offset from UTC now. */
 export interface ZoneChoice {
@@ -45,7 +53,7 @@ export interface ZoneChoice {
 
 export const SYSTEM_ZONE = "system";
 
-const DEFAULTS = { background: true, notifications: true, time_zone: SYSTEM_ZONE };
+const DEFAULTS = { background: true, notifications: true, autostart: false, safe_rendering: false, time_zone: SYSTEM_ZONE };
 const PREF = "app";
 
 /** The settings kept in the page's storage, outside the app. */
@@ -57,6 +65,10 @@ function stored(): AppSettings {
   return {
     background: typeof record.background === "boolean" ? record.background : DEFAULTS.background,
     notifications: typeof record.notifications === "boolean" ? record.notifications : DEFAULTS.notifications,
+    autostart: typeof record.autostart === "boolean" ? record.autostart : DEFAULTS.autostart,
+    safe_rendering: typeof record.safe_rendering === "boolean" ? record.safe_rendering : DEFAULTS.safe_rendering,
+    // A page outside the app draws as the browser does.
+    safe_rendering_in_use: false,
     time_zone: zone,
     ...(inUse === undefined ? {} : { zone_in_use: inUse }),
   };
@@ -117,9 +129,31 @@ export function updateAppSettings(patch: AppSettingsPatch): Promise<AppSettings>
   if (patch.time_zone !== undefined && !knownZone(patch.time_zone)) {
     return Promise.reject(new OpFailure("update_app_settings", { code: "invalid", message: `Unknown time zone "${patch.time_zone}".` }));
   }
-  const { background, notifications, time_zone } = { ...stored(), ...patch };
-  writePref(PREF, { background, notifications, time_zone });
+  const { background, notifications, autostart, safe_rendering, time_zone } = { ...stored(), ...patch };
+  writePref(PREF, { background, notifications, autostart, safe_rendering, time_zone });
   return Promise.resolve(stored());
+}
+
+/** Switches starting with the system on or off. In Flatpak the desktop may ask first. */
+export function setAutostart(on: boolean): Promise<AppSettings> {
+  if (inApp()) {
+    return command("set_autostart", { on });
+  }
+  const { background, notifications, safe_rendering, time_zone } = stored();
+  writePref(PREF, { background, notifications, autostart: on, safe_rendering, time_zone });
+  return Promise.resolve(stored());
+}
+
+/** Ends the app and starts it again, so that a rendering change applies. Only in the app. */
+export async function restartApp(): Promise<void> {
+  if (inApp()) {
+    await invoke("restart_app");
+  }
+}
+
+/** Whether the page can restart the app it runs in. */
+export function canRestart(): boolean {
+  return inApp();
 }
 
 /** Every time zone a person can choose, by name, with its offset from UTC now. */
@@ -146,6 +180,25 @@ const KEY = ["app-settings"] as const;
 /** The app's settings, read once and kept current by changes made here. */
 export function useAppSettings(): UseQueryResult<AppSettings, OpFailure> {
   return useQuery({ queryKey: KEY, queryFn: loadAppSettings, staleTime: Infinity });
+}
+
+/** Switches starting with the system; errors become a toast. */
+export function useSetAutostart(): (on: boolean) => void {
+  const queryClient = useQueryClient();
+  const toasts = useToasts();
+  const t = useT();
+  const mutation = useMutation({
+    mutationFn: setAutostart,
+    onSuccess: (settings) => {
+      queryClient.setQueryData(KEY, settings);
+    },
+    onError: (error) => {
+      toasts.show(errorToast(t, error));
+    },
+  });
+  return (on) => {
+    mutation.mutate(on);
+  };
 }
 
 /** Changes the app's settings; they apply at once. Errors become a toast. */

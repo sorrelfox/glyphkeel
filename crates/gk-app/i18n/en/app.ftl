@@ -2,8 +2,9 @@
 # Copyright (C) 2026 Glyphkeel contributors
 #
 # The desktop app's own text, shown by Rust: the native confirmation
-# dialogs and the file choosers, in English. One message per line; a plural
-# continues on indented lines; placeables are { $name }.
+# dialogs, the file choosers, the tray menu and the autostart entry, in
+# English. One message per line; a plural continues on indented lines;
+# placeables are { $name }.
 
 ## Confirmations of operations that can't be undone
 
@@ -50,3 +51,22 @@ chooser-import = _Choose
 chooser-zip-filter = Archives (.zip)
 chooser-backup-folder-title = Choose a folder for backups
 chooser-backup-folder = _Choose
+
+## The tray icon of background mode
+
+tray-tooltip = Glyphkeel
+tray-open = Open Glyphkeel
+tray-quick-add = Quick Add…
+tray-quit = Quit
+
+## The quick-add shortcut, as the desktop's shortcut settings name it
+
+shortcut-description = Quick add a task
+
+## Starting with the system
+
+autostart-comment = Keeps Glyphkeel running in the background for reminders.
+autostart-reason = Start Glyphkeel when you log in, so that reminders come on time.
+autostart-no-home = There is no home folder to keep the autostart entry in.
+autostart-failed = The autostart entry { $path } could not be changed: { $reason }
+autostart-portal-failed = The desktop did not let Glyphkeel start with the system: { $reason }

@@ -8,9 +8,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app_settings;
+mod autostart;
 mod background;
 mod cli_tool;
 mod files;
+mod graphics;
 #[cfg(target_os = "linux")]
 mod instance;
 mod ipc;
@@ -50,8 +52,16 @@ use crate::start::Shown;
 use crate::title_bar::TitleBar;
 
 fn main() -> ExitCode {
+    // Safe rendering, as kept in the settings or asked for on the command
+    // line, and the graphics driver's workarounds, before any web view.
     #[cfg(target_os = "linux")]
-    memory_env::restart_with_settings();
+    {
+        let safe = graphics::asked_on_command_line()
+            || app_settings::file().is_some_and(|file| app_settings::load(&file).safe_rendering);
+        memory_env::restart_with_settings(&graphics::settings(graphics::Session::detect(), safe));
+    }
+    // Started with the system: in background mode only the tray shows.
+    let background_start = std::env::args().any(|arg| arg == autostart::BACKGROUND_ARG);
     #[cfg(target_os = "linux")]
     let (activations, _bus, first_links, first_quick_add) = {
         let this_start = instance::this_start();
@@ -88,6 +98,7 @@ fn main() -> ExitCode {
         .manage(app_settings)
         .manage(MainTitleBar(title_bar))
         .manage(quick_add::QuickAdd::default())
+        .manage(app_settings::Restart::default())
         .manage(Arc::new(transfer::ImportChoices::default()))
         .invoke_handler(tauri::generate_handler![
             start::window_ready,
@@ -112,6 +123,8 @@ fn main() -> ExitCode {
             app_settings::update_app_settings,
             app_settings::set_ui_pref,
             app_settings::time_zones,
+            app_settings::set_autostart,
+            app_settings::restart_app,
             quick_add::show_quick_add,
             quick_add::hide_quick_add,
             quick_add::watch_quick_add,
@@ -159,6 +172,12 @@ fn main() -> ExitCode {
             // Started for quick add, the app shows only that window.
             if first_quick_add && first_task.is_none() {
                 quick_add::show(app.handle(), None);
+            } else if background_start
+                && first_task.is_none()
+                && app.state::<BackgroundMode>().enabled()
+            {
+                // Started with the system: the tray and the reminders only,
+                // until the person opens the window.
             } else {
                 main_window::open(app.handle(), title_bar, first_task)?;
             }
@@ -207,6 +226,15 @@ fn main() -> ExitCode {
                 RunEvent::Exit => {
                     if let Some(workspace) = app.try_state::<Arc<Workspace>>() {
                         workspace.close();
+                    }
+                    #[cfg(target_os = "linux")]
+                    if app
+                        .state::<app_settings::Restart>()
+                        .0
+                        .load(Ordering::SeqCst)
+                    {
+                        let err = memory_env::start_again();
+                        eprintln!("glyphkeel-app: cannot start again: {err}");
                     }
                 }
                 _ => {}

@@ -27,6 +27,8 @@ fn main() {
         "update_app_settings",
         "set_ui_pref",
         "time_zones",
+        "set_autostart",
+        "restart_app",
         "show_quick_add",
         "hide_quick_add",
         "watch_quick_add",

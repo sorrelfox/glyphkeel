@@ -210,3 +210,30 @@ test("the project tree's menu exports a project and moves it to the trash", asyn
   await expect(page.getByRole("status").filter({ hasText: "moved to the trash" })).toBeVisible();
   await expect(page.getByRole("row", { name: "Home chores" })).toHaveCount(0);
 });
+
+test("Preferences: start with the system and safe rendering are kept", async ({ page }) => {
+  await page.goto(PAGE);
+  let dialog = await openPreferences(page, "Notifications");
+  const autostart = dialog.getByRole("switch", { name: "Start when you log in" });
+  await expect(autostart).not.toBeChecked();
+  // From the keyboard: the switch takes Space.
+  await autostart.focus();
+  await page.keyboard.press("Space");
+  await expect(autostart).toBeChecked();
+
+  await dialog.getByRole("tab", { name: "Appearance" }).click();
+  const safe = dialog.getByRole("switch", { name: "Safe rendering" });
+  await expect(safe).not.toBeChecked();
+  await safe.focus();
+  await page.keyboard.press("Space");
+  await expect(safe).toBeChecked();
+  await expect(dialog.getByTestId("safe-rendering-pending")).toContainText("next time Glyphkeel starts");
+  await shot(page, "safe-rendering.png");
+
+  // Both are still set after the page loads again.
+  await page.reload();
+  dialog = await openPreferences(page, "Appearance");
+  await expect(dialog.getByRole("switch", { name: "Safe rendering" })).toBeChecked();
+  await dialog.getByRole("tab", { name: "Notifications" }).click();
+  await expect(dialog.getByRole("switch", { name: "Start when you log in" })).toBeChecked();
+});
