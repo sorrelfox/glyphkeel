@@ -114,7 +114,7 @@ The safety class decides who may run an operation:
 
 ## `workspace.get`
 
-The open workspace: its name and ID, the schema and program versions, who is asking with which rights, the settings and a short guide.
+The open workspace: its name and ID, the schema and program versions, who is asking with which rights, the settings, the limits on agents and a short guide.
 
 Input: `WorkspaceGetInput`. Output: `WorkspaceInfo`. Schemas: [catalog.schema.json](catalog.schema.json).
 

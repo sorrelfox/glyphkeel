@@ -62,6 +62,14 @@ impl<'a> WriteCtx<'a> {
         }
     }
 
+    /// How many items of `entity` this command has created so far.
+    pub(crate) fn created_so_far(&self, entity: &str) -> usize {
+        self.changes
+            .iter()
+            .filter(|c| c.entity == entity && c.fields.contains_key("created"))
+            .count()
+    }
+
     /// The write transaction.
     #[must_use]
     pub fn tx(&self) -> &Transaction<'a> {
@@ -262,6 +270,15 @@ impl<'a> WriteCtx<'a> {
 }
 
 impl Finished {
+    /// How many distinct items the change touched.
+    pub(crate) fn items(&self) -> usize {
+        self.changes
+            .iter()
+            .map(|c| (c.entity.as_str(), c.id.as_str()))
+            .collect::<std::collections::HashSet<_>>()
+            .len()
+    }
+
     /// A command that changed nothing.
     pub(crate) fn nothing() -> Self {
         Self {

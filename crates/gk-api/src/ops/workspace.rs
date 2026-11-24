@@ -7,6 +7,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::catalog::{Exposure, Meta, OpDescriptor, OpKind, Safety};
+use crate::ops::agent::AgentLimits;
 use crate::ops::common::{Actor, Via};
 use crate::ops::settings::Settings;
 use crate::profile::Profile;
@@ -32,6 +33,8 @@ pub struct WorkspaceInfo {
     pub caller: Caller,
     /// The workspace settings.
     pub settings: Settings,
+    /// The fixed limits on agent sessions.
+    pub agent_limits: AgentLimits,
     /// The timer, while one runs or is paused.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timer: Option<crate::ops::time::Timer>,
@@ -65,7 +68,7 @@ op!(
 );
 
 pub(crate) const WORKSPACE_GET: OpDescriptor = OpDescriptor::of::<WorkspaceGet>(Meta {
-    summary: "The open workspace: its name and ID, the schema and program versions, who is asking with which rights, the settings and a short guide.",
+    summary: "The open workspace: its name and ID, the schema and program versions, who is asking with which rights, the settings, the limits on agents and a short guide.",
     kind: OpKind::Query,
     safety: Safety::Read,
     exposure: Exposure::Data,

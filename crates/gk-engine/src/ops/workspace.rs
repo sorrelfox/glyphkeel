@@ -3,6 +3,7 @@
 
 //! `workspace.get`.
 
+use gk_api::ops::agent::AgentLimits;
 use gk_api::ops::workspace::{Caller, WorkspaceGet, WorkspaceInfo};
 
 use super::{desc, settings};
@@ -32,6 +33,7 @@ pub(super) fn register(r: &mut crate::registry::Registry) {
                 session: q.caller.session.map(|s| s.to_string()),
             },
             settings: settings::load(q.tx).map_err(Failure::from)?,
+            agent_limits: AgentLimits::CURRENT,
             timer: super::time::current(q.tx, q.now, super::task::units(q.tx)?)?,
             guide: GUIDE.to_owned(),
         })

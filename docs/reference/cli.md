@@ -98,7 +98,7 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel wiki new` | `wiki.create` | Create a wiki page with a title unique in its project, optionally inside another page and with its text. |
 | `glyphkeel wiki put <page>` | `wiki.update` | Change a wiki page: its text (whole, with a base revision, or by targeted edits), title, parent or place; or resolve a conflict copy. |
 | `glyphkeel wiki search <text>` | `wiki.search` | Find wiki pages by title, heading or text, for example to link one; `Page#Heading` lists a page's headings. |
-| `glyphkeel workspace` | `workspace.get` | The open workspace: its name and ID, the schema and program versions, who is asking with which rights, the settings and a short guide. |
+| `glyphkeel workspace` | `workspace.get` | The open workspace: its name and ID, the schema and program versions, who is asking with which rights, the settings, the limits on agents and a short guide. |
 
 ## Exit codes
 

@@ -164,6 +164,39 @@
         "additionalProperties": false,
         "description": "The open workspace and who is asking.",
         "properties": {
+          "agent_limits": {
+            "additionalProperties": false,
+            "description": "The fixed limits on agent sessions.",
+            "properties": {
+              "new_tasks_per_day": {
+                "description": "Tasks a session may create in any 24 hours.",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "trash_items_per_call": {
+                "description": "Items a standard agent may move to the trash in one call.",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "trash_items_per_hour": {
+                "description": "Items a standard agent session may move to the trash in an hour.",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "writes_per_minute": {
+                "description": "Calls of changing tools allowed in any minute, per session.",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "writes_per_minute",
+              "new_tasks_per_day",
+              "trash_items_per_call",
+              "trash_items_per_hour"
+            ],
+            "type": "object"
+          },
           "caller": {
             "additionalProperties": false,
             "description": "Who is asking, through which program, with which rights.",
@@ -526,6 +559,7 @@
           "program_version",
           "caller",
           "settings",
+          "agent_limits",
           "guide"
         ],
         "title": "WorkspaceInfo",

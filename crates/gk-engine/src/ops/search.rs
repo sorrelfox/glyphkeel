@@ -403,9 +403,58 @@ fn kind_of(kind: &str) -> SearchKind {
     }
 }
 
+/// Where the next page starts: after the cursor's last result, wherever it
+/// is now, so results that appear or go above it between pages don't
+/// repeat or skip one. A cursor is `<position>.<last result's ID>`; when
+/// that result is gone, the position counts.
+struct Cursor {
+    position: usize,
+    after: Option<Id>,
+}
+
+impl Cursor {
+    fn parse(text: Option<&str>) -> Result<Self, Failure> {
+        let bad = || messages::invalid("cursor", "list-cursor", &[]);
+        let Some(text) = text else {
+            return Ok(Self {
+                position: 0,
+                after: None,
+            });
+        };
+        let (position, after) = match text.split_once('.') {
+            Some((position, id)) => (position, Some(id.parse::<Id>().map_err(|_| bad())?)),
+            None => (text, None),
+        };
+        Ok(Self {
+            position: position.parse().map_err(|_| bad())?,
+            after,
+        })
+    }
+
+    fn start(&self, entries: &[Entry]) -> usize {
+        self.after
+            .and_then(|id| entries.iter().position(|e| e.id() == id))
+            .map_or(self.position, |i| i + 1)
+    }
+
+    fn next(end: usize, last: &Entry) -> String {
+        format!("{end}.{}", last.id())
+    }
+}
+
+impl Entry {
+    fn id(&self) -> Id {
+        match self {
+            Self::Project(id) | Self::TaskKey(id) => *id,
+            Self::Doc(found) => found.entity,
+        }
+    }
+}
+
 fn search(q: &QueryCtx<'_>, input: SearchInput) -> Result<SearchResult, Failure> {
     let tx = q.tx;
-    let (limit, offset) = paging(input.limit, input.cursor.as_deref(), DEFAULT_LIMIT)?;
+    let (limit, _) = paging(input.limit, None, DEFAULT_LIMIT)?;
+    let cursor = Cursor::parse(input.cursor.as_deref())?;
     let text = input.text.trim();
     let terms = terms(text);
     let jump_key = text.parse::<TaskKey>().is_ok();
@@ -488,6 +537,7 @@ fn search(q: &QueryCtx<'_>, input: SearchInput) -> Result<SearchResult, Failure>
     }
 
     let total = entries.len();
+    let offset = cursor.start(&entries);
     let page: Vec<&Entry> = entries.iter().skip(offset).take(limit as usize).collect();
     let mut items = Vec::with_capacity(page.len());
     for entry in &page {
@@ -497,7 +547,10 @@ fn search(q: &QueryCtx<'_>, input: SearchInput) -> Result<SearchResult, Failure>
     Ok(SearchResult {
         items,
         total: total as u64,
-        next_cursor: (end < total && !page.is_empty()).then(|| end.to_string()),
+        next_cursor: match page.last() {
+            Some(last) if end < total => Some(Cursor::next(end, last)),
+            _ => None,
+        },
     })
 }
 

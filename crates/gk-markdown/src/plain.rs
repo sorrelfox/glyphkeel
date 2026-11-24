@@ -42,53 +42,83 @@ pub(crate) fn extract<'a>(root: &'a AstNode<'a>) -> String {
     out
 }
 
-fn walk<'a>(node: &'a AstNode<'a>, out: &mut String) {
-    match &node.data().value {
-        NodeValue::Text(text) => out.push_str(text),
-        NodeValue::Code(code) => out.push_str(&code.literal),
-        NodeValue::Math(math) => out.push_str(&math.literal),
-        NodeValue::CodeBlock(block) => {
-            out.push('\n');
-            out.push_str(&block.literal);
-            out.push('\n');
-        }
-        NodeValue::HtmlBlock(block) => {
-            out.push('\n');
-            out.push_str(&decode_entities(&strip_tags(&block.literal)));
-            out.push('\n');
-        }
-        // The text between inline tags is in text nodes of its own.
-        NodeValue::HtmlInline(_) => {}
-        NodeValue::SoftBreak | NodeValue::LineBreak => out.push(' '),
-        NodeValue::Alert(alert) => {
-            out.push('\n');
-            if let Some(title) = &alert.title {
-                out.push_str(title);
-                out.push('\n');
-            }
-            walk_children(node, out);
-            out.push('\n');
-        }
-        NodeValue::TableCell => {
-            walk_children(node, out);
-            out.push(' ');
-        }
-        value => {
-            let block = value.block();
-            if block {
-                out.push('\n');
-            }
-            walk_children(node, out);
-            if block {
-                out.push('\n');
-            }
-        }
-    }
+/// One step of the walk: a node to enter, or text to write once a node's
+/// children are done.
+enum Step<'a> {
+    Enter(&'a AstNode<'a>),
+    Close(&'static str),
 }
 
-fn walk_children<'a>(node: &'a AstNode<'a>, out: &mut String) {
-    for child in node.children() {
-        walk(child, out);
+/// Writes the text of `root` and its descendants in document order.
+///
+/// The walk keeps its own stack instead of recursing, so documents nested
+/// thousands of levels deep (quotes, lists, emphasis) cannot exhaust the
+/// thread's stack.
+fn walk<'a>(root: &'a AstNode<'a>, out: &mut String) {
+    let mut stack = vec![Step::Enter(root)];
+    while let Some(step) = stack.pop() {
+        let node = match step {
+            Step::Close(text) => {
+                out.push_str(text);
+                continue;
+            }
+            Step::Enter(node) => node,
+        };
+        let close = match &node.data().value {
+            NodeValue::Text(text) => {
+                out.push_str(text);
+                continue;
+            }
+            NodeValue::Code(code) => {
+                out.push_str(&code.literal);
+                continue;
+            }
+            NodeValue::Math(math) => {
+                out.push_str(&math.literal);
+                continue;
+            }
+            NodeValue::CodeBlock(block) => {
+                out.push('\n');
+                out.push_str(&block.literal);
+                out.push('\n');
+                continue;
+            }
+            NodeValue::HtmlBlock(block) => {
+                out.push('\n');
+                out.push_str(&decode_entities(&strip_tags(&block.literal)));
+                out.push('\n');
+                continue;
+            }
+            // The text between inline tags is in text nodes of its own.
+            NodeValue::HtmlInline(_) => continue,
+            NodeValue::SoftBreak | NodeValue::LineBreak => {
+                out.push(' ');
+                continue;
+            }
+            NodeValue::Alert(alert) => {
+                out.push('\n');
+                if let Some(title) = &alert.title {
+                    out.push_str(title);
+                    out.push('\n');
+                }
+                "\n"
+            }
+            NodeValue::TableCell => " ",
+            value if value.block() => {
+                out.push('\n');
+                "\n"
+            }
+            _ => "",
+        };
+        if !close.is_empty() {
+            stack.push(Step::Close(close));
+        }
+        // Pushed last to first, so the first child is taken next.
+        let mut child = node.last_child();
+        while let Some(node) = child {
+            stack.push(Step::Enter(node));
+            child = node.previous_sibling();
+        }
     }
 }
 

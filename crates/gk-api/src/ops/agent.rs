@@ -10,6 +10,42 @@ use crate::catalog::{Exposure, Meta, OpDescriptor, OpKind, Safety};
 use crate::ops::settings::SettingsChange;
 use crate::profile::Profile;
 
+/// Calls of changing tools an agent session may make in any minute.
+pub const AGENT_WRITES_PER_MINUTE: u32 = 120;
+/// Tasks an agent session may create in any 24 hours.
+pub const AGENT_NEW_TASKS_PER_DAY: u32 = 500;
+/// Items an agent with the standard profile may move to the trash in one
+/// call (subtasks count).
+pub const AGENT_TRASH_ITEMS_PER_CALL: u32 = 20;
+/// Items an agent session with the standard profile may move to the trash
+/// in an hour.
+pub const AGENT_TRASH_ITEMS_PER_HOUR: u32 = 50;
+
+/// The fixed limits on agent sessions, so a runaway loop can't flood the
+/// workspace.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct AgentLimits {
+    /// Calls of changing tools allowed in any minute, per session.
+    pub writes_per_minute: u32,
+    /// Tasks a session may create in any 24 hours.
+    pub new_tasks_per_day: u32,
+    /// Items a standard agent may move to the trash in one call.
+    pub trash_items_per_call: u32,
+    /// Items a standard agent session may move to the trash in an hour.
+    pub trash_items_per_hour: u32,
+}
+
+impl AgentLimits {
+    /// The limits this program enforces.
+    pub const CURRENT: Self = Self {
+        writes_per_minute: AGENT_WRITES_PER_MINUTE,
+        new_tasks_per_day: AGENT_NEW_TASKS_PER_DAY,
+        trash_items_per_call: AGENT_TRASH_ITEMS_PER_CALL,
+        trash_items_per_hour: AGENT_TRASH_ITEMS_PER_HOUR,
+    };
+}
+
 /// One run of `glyphkeel mcp`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]

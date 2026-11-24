@@ -16,6 +16,7 @@
 //! `task.reorder_subtask` moves one within the list.
 
 use gk_api::ErrorCode;
+use gk_api::ops::agent::AGENT_NEW_TASKS_PER_DAY;
 use gk_api::ops::common::{Actor, ActorKind, Category, Glyph, Hue, Priority};
 use gk_api::ops::task::{
     Checklist, Claim, LabelRef, StatusRef, SubtaskReorderInput, Task, TaskChange, TaskCreate,
@@ -963,9 +964,47 @@ pub(crate) struct NewTask {
     pub(crate) target: Target,
 }
 
+/// Refuses a new task to an agent session that created
+/// [`AGENT_NEW_TASKS_PER_DAY`] in the last 24 hours, this command's included.
+fn check_new_task_cap(w: &WriteCtx<'_>) -> Result<(), Failure> {
+    const DAY_MS: i64 = 86_400_000;
+    let caller = w.caller();
+    let (true, Some(session)) = (caller.is_agent(), caller.session) else {
+        return Ok(());
+    };
+    let (earlier, oldest): (i64, Option<i64>) = w.tx().query_row(
+        "SELECT count(*), min(at) FROM activity
+          WHERE session_id = ?1 AND at > ?2 AND entity_kind = 'task'
+            AND json_extract(changes, '$.fields.created.after') = 1",
+        params![session.as_bytes().as_slice(), w.now() - DAY_MS],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )?;
+    let made = u64::try_from(earlier).unwrap_or(0) + w.created_so_far(TASK) as u64;
+    let max = u64::from(AGENT_NEW_TASKS_PER_DAY);
+    if made < max {
+        return Ok(());
+    }
+    let wait_ms = oldest.map_or(DAY_MS, |t| t + DAY_MS - w.now()).max(1000);
+    let retry_after = (wait_ms + 999) / 1000;
+    let args = [("count", made.to_string()), ("max", max.to_string())];
+    Err(Failure::Op(
+        messages::hint(
+            messages::tag(
+                gk_api::OpError::limit(messages::text("task-day-limit", &args), max),
+                "task-day-limit",
+                &args,
+            ),
+            "task-day-limit-hint",
+            &[("hours", ((wait_ms + 3_599_999) / 3_600_000).to_string())],
+        )
+        .with_detail("retry_after", retry_after),
+    ))
+}
+
 /// Writes a new task with the project's next number, its labels and its
 /// search entry, and records its creation. The fields are checked already.
 pub(crate) fn insert(w: &mut WriteCtx<'_>, t: NewTask) -> Result<Id, Failure> {
+    check_new_task_cap(w)?;
     let id = Id::generate_at(u64::try_from(w.now()).unwrap_or(0));
     let rank = rank_in_column(w, t.project, t.status, id, t.target)?;
     let subtask_rank = t

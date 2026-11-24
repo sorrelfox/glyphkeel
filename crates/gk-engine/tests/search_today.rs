@@ -236,6 +236,28 @@ fn filters_by_kind_project_and_task_query() {
     assert_eq!(kinds(&open), ["task", "task", "comment"]);
 }
 
+/// The next page starts after the last result shown, even when a result
+/// above it went away in between.
+#[test]
+fn the_cursor_survives_a_change_between_pages() {
+    let ws = corpus();
+    let all: Vec<Value> = ws.search(json!({ "text": "timeout" }))["items"]
+        .as_array()
+        .unwrap()
+        .clone();
+    let first = ws.search(json!({ "text": "timeout", "limit": 3 }));
+    let gone = first["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|h| h["kind"] == "task")
+        .expect("a task on the first page");
+    ws.call("task.delete", json!({ "keys": [gone["task"]] }));
+    let second =
+        ws.search(json!({ "text": "timeout", "limit": 3, "cursor": first["next_cursor"] }));
+    assert_eq!(second["items"][0]["id"], all[3]["id"], "{second}");
+}
+
 #[test]
 fn pages_follow_the_cursor() {
     let ws = corpus();

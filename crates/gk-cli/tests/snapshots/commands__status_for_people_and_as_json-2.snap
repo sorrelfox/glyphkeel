@@ -3,6 +3,12 @@ source: crates/gk-cli/tests/commands.rs
 expression: "ws.ok(&[\"workspace\", \"--json\"])"
 ---
 {
+  "agent_limits": {
+    "new_tasks_per_day": 500,
+    "trash_items_per_call": 20,
+    "trash_items_per_hour": 50,
+    "writes_per_minute": 120
+  },
   "caller": {
     "actor": {
       "kind": "user",

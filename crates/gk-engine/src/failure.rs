@@ -17,6 +17,13 @@ pub enum Failure {
     Op(OpError),
     /// Storage failed.
     Store(StoreError),
+    /// An agent's change touches so many items that a safety backup must
+    /// be made first: the transaction is rolled back, the backup made and
+    /// the change run again. It never reaches a caller.
+    SnapshotFirst {
+        /// How many items the change touched.
+        items: usize,
+    },
 }
 
 impl From<OpError> for Failure {
@@ -48,6 +55,9 @@ impl From<Failure> for OpError {
         match f {
             Failure::Op(e) => e,
             Failure::Store(e) => store_error(&e),
+            Failure::SnapshotFirst { items } => {
+                messages::storage("backup-safety-pending", &[("count", items.to_string())])
+            }
         }
     }
 }

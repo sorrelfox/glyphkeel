@@ -10,6 +10,7 @@ use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
+use gk_api::ops::backup::BackupKind;
 use gk_api::ops::common::Via;
 use gk_api::ops::history::RevertResult;
 use gk_api::{
@@ -100,6 +101,10 @@ impl std::fmt::Debug for EngineConfig {
 
 /// How many groups the app's Undo stack keeps.
 const UNDO_DEPTH: usize = 200;
+
+/// An agent's change that touches more items than this is preceded by a
+/// safety backup of the workspace.
+pub(crate) const SAFETY_BACKUP_ABOVE: usize = 50;
 
 /// What an agent session records when it starts.
 #[derive(Debug, Clone)]
@@ -567,38 +572,42 @@ impl Engine {
         // Registered before the commit, so the change watcher never reports
         // this process's own command as another program's.
         self.store.own_groups().insert(group);
-        let in_tx = meta.clone();
-        let result = self.store.write(op, move |tx| {
-            let key = request.as_ref().map(|(caller, id)| RequestKey {
+        // An agent's large change runs twice: the first run counts the
+        // items, rolls back and asks for a safety backup; the second, after
+        // the backup, commits.
+        let mut safety_backup = !ctx.is_agent();
+        let result = loop {
+            let attempt = self.write_command(
                 op,
-                caller,
-                request_id: id,
-            });
-            if let Some(key) = key
-                && let Some(answer) = gk_store::remembered(tx, key, in_tx.at)?
-            {
-                let answer = serde_json::from_str(&answer).map_err(|e| {
-                    Failure::Op(messages::storage(
-                        "storage-json",
-                        &[("error", e.to_string())],
-                    ))
-                })?;
-                return Ok((answer, crate::write::Finished::nothing()));
+                &meta,
+                &f,
+                &input,
+                request.as_ref(),
+                reads,
+                safety_backup,
+            );
+            match attempt {
+                Err(Failure::SnapshotFirst { items }) => {
+                    if let Err(e) = self.create_backup(BackupKind::Safety) {
+                        if let (Some(session), true) = (ctx.session, reads > 0) {
+                            *self.lock_reads().entry(session).or_insert(0) += reads;
+                        }
+                        return Err(messages::hint(
+                            messages::error(
+                                e.code,
+                                "backup-safety-failed",
+                                &[("count", items.to_string()), ("error", e.message)],
+                            ),
+                            "backup-safety-failed-hint",
+                            &[],
+                        ));
+                    }
+                    safety_backup = true;
+                }
+                other => break other,
             }
-            let mut w = WriteCtx::new(tx, &in_tx);
-            let output = f(&mut w, input.clone())?;
-            let finished = w.finish()?;
-            if let Some(key) = key {
-                gk_store::remember(tx, key, &output.to_string(), in_tx.at)?;
-            }
-            if let (Some(session), true) = (in_tx.ctx.session, reads > 0) {
-                tx.execute(
-                    "UPDATE agent_sessions SET reads = reads + ?2, last_seen_at = ?3 WHERE id = ?1",
-                    params![session.as_bytes().as_slice(), reads, in_tx.at],
-                )?;
-            }
-            Ok::<_, Failure>((output, finished))
-        });
+        };
+
         let (output, finished) = match result {
             Ok(done) => done,
             Err(e) => {
@@ -622,6 +631,64 @@ impl Engine {
             stacks.redo.clear();
         }
         Ok((output, Some(group)))
+    }
+
+    /// One run of a command in a write transaction; see
+    /// [`Engine::execute_once`]. Without `safety_backup`, a change touching
+    /// more than [`SAFETY_BACKUP_ABOVE`] items is rolled back with
+    /// [`Failure::SnapshotFirst`].
+    #[allow(clippy::too_many_arguments)]
+    fn write_command(
+        &self,
+        op: &'static str,
+        meta: &CommandMeta,
+        f: &CommandFn,
+        input: &Value,
+        request: Option<&(String, String)>,
+        reads: i64,
+        safety_backup: bool,
+    ) -> Result<(Value, crate::write::Finished), Failure> {
+        let in_tx = meta.clone();
+        let f = Arc::clone(f);
+        let input = input.clone();
+        let request = request.cloned();
+        self.store.write(op, move |tx| {
+            let key = request.as_ref().map(|(caller, id)| RequestKey {
+                op,
+                caller,
+                request_id: id,
+            });
+            if let Some(key) = key
+                && let Some(answer) = gk_store::remembered(tx, key, in_tx.at)?
+            {
+                let answer = serde_json::from_str(&answer).map_err(|e| {
+                    Failure::Op(messages::storage(
+                        "storage-json",
+                        &[("error", e.to_string())],
+                    ))
+                })?;
+                return Ok((answer, crate::write::Finished::nothing()));
+            }
+            let mut w = WriteCtx::new(tx, &in_tx);
+            let output = f(&mut w, input.clone())?;
+            let finished = w.finish()?;
+            if !safety_backup {
+                let items = finished.items();
+                if items > SAFETY_BACKUP_ABOVE {
+                    return Err(Failure::SnapshotFirst { items });
+                }
+            }
+            if let Some(key) = key {
+                gk_store::remember(tx, key, &output.to_string(), in_tx.at)?;
+            }
+            if let (Some(session), true) = (in_tx.ctx.session, reads > 0) {
+                tx.execute(
+                    "UPDATE agent_sessions SET reads = reads + ?2, last_seen_at = ?3 WHERE id = ?1",
+                    params![session.as_bytes().as_slice(), reads, in_tx.at],
+                )?;
+            }
+            Ok::<_, Failure>((output, finished))
+        })
     }
 
     /// Reverts `groups` (newest first) as one command named `op`.

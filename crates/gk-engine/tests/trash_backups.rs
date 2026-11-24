@@ -372,6 +372,13 @@ fn agents_move_a_limited_number_of_items_to_the_trash() {
         .collect();
     let agent = ws.agent("Helper", Profile::Standard);
 
+    // The workspace read states the limits enforced here, for the app and
+    // for agents.
+    let limits = ws.as_(&agent, "workspace.get", json!({}))["agent_limits"].clone();
+    assert_eq!(limits["trash_items_per_call"], 20, "{limits}");
+    assert_eq!(limits["trash_items_per_hour"], 50, "{limits}");
+    assert_eq!(limits["writes_per_minute"], 120, "{limits}");
+
     // At most 20 per call.
     let err = ws.fails(&agent, "task.delete", json!({ "keys": keys[..21] }));
     assert_eq!(err.code, ErrorCode::Limit, "{err:?}");
@@ -413,6 +420,71 @@ fn agents_move_a_limited_number_of_items_to_the_trash() {
         ws.count("SELECT count(*) FROM tasks WHERE deleted_at IS NULL"),
         30
     );
+}
+
+/// A comment changes when a task was updated, not when it was edited.
+#[test]
+fn a_comment_changes_updated_but_not_edited() {
+    let dir = TempDir::new().unwrap();
+    let ws = setup(&dir);
+    let task = ws.new_task("TM", "Commented on later");
+    ws.new_task("TM", "Left alone");
+    ws.advance(3 * DAY);
+    ws.call("comment.add", json!({ "key": task, "body": "Still open." }));
+    let find = |query: &str| -> Vec<String> {
+        ws.call("task.search", json!({ "query": query }))["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t["key"].as_str().unwrap().to_owned())
+            .collect()
+    };
+    assert_eq!(
+        find("project:TM updated:today"),
+        std::slice::from_ref(&task)
+    );
+    assert!(find("project:TM edited:today").is_empty());
+    assert_eq!(find("project:TM edited<-2d").len(), 2);
+}
+
+#[test]
+fn agents_create_a_limited_number_of_tasks_a_day() {
+    let dir = TempDir::new().unwrap();
+    let ws = setup(&dir);
+    let agent = ws.agent("Helper", Profile::Full);
+    let max = ws.as_(&agent, "workspace.get", json!({}))["agent_limits"]["new_tasks_per_day"]
+        .as_u64()
+        .unwrap();
+    assert_eq!(max, 500);
+    let create = |ctx: &Context, title: String| {
+        ws.engine.call(
+            ctx,
+            "task.create",
+            json!({ "project": "TM", "title": title }),
+        )
+    };
+    for i in 0..max {
+        create(&agent, format!("T{i}")).unwrap();
+        if i == 0 {
+            ws.advance(HOUR);
+        }
+    }
+    let err = create(&agent, "One too many".into()).unwrap_err();
+    assert_eq!(err.code, ErrorCode::Limit, "{err:?}");
+    assert_eq!(err.details["message_id"], "task-day-limit");
+    assert_eq!(err.details["max"], 500);
+    let wait = err.details["retry_after"].as_i64().unwrap();
+    assert!((23 * 3600 - 60..=23 * 3600).contains(&wait), "{wait}");
+    // A duplicate is a new task too.
+    let err = ws.fails(&agent, "task.duplicate", json!({ "key": "TM-1" }));
+    assert_eq!(err.details["message_id"], "task-day-limit", "{err:?}");
+    // The person and other sessions have their own allowance.
+    ws.new_task("TM", "By the person");
+    let other = ws.agent("Other", Profile::Standard);
+    create(&other, "From another session".into()).unwrap();
+    // A day after the first one, it no longer counts.
+    ws.advance(23 * HOUR);
+    create(&agent, "Next day".into()).unwrap();
 }
 
 #[test]
@@ -580,6 +652,40 @@ fn backups_are_made_rotated_checked_and_deleted() {
     }
 }
 
+/// A backup made while another thread keeps writing is whole: it passes
+/// the integrity check and holds a consistent number of tasks.
+#[test]
+fn a_backup_made_while_tasks_are_written_is_whole() {
+    let dir = TempDir::new().unwrap();
+    let ws = setup(&dir);
+    let made = std::thread::scope(|scope| {
+        let writer = scope.spawn(|| {
+            for i in 0..200 {
+                ws.new_task("TM", &format!("Written during the backup {i}"));
+            }
+        });
+        let made = ws.call("backup.create", json!({}));
+        writer.join().unwrap();
+        made
+    });
+    let check = ws.call("backup.verify", json!({ "name": made["name"] }));
+    assert_eq!(check["ok"], true, "{check}");
+    let file = ws
+        .layout
+        .backups_dir()
+        .join(format!("{}.db", made["name"].as_str().unwrap()));
+    let copy = gk_store::rusqlite::Connection::open(&file).unwrap();
+    let (tasks, numbered): (i64, i64) = copy
+        .query_row(
+            "SELECT count(*), (SELECT next_number - 1 FROM projects WHERE key = 'TM') FROM tasks",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(tasks, numbered, "every task in the copy is whole");
+    assert_eq!(ws.count("SELECT count(*) FROM tasks"), 200);
+}
+
 #[test]
 fn the_person_moves_the_backup_folder_in_the_app_only() {
     let dir = TempDir::new().unwrap();
@@ -677,6 +783,68 @@ fn walk(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
         }
     }
     out
+}
+
+#[test]
+fn a_large_change_by_an_agent_is_preceded_by_a_safety_backup() {
+    let dir = TempDir::new().unwrap();
+    let ws = setup(&dir);
+    for i in 0..60 {
+        ws.new_task("TM", &format!("T{i}"));
+    }
+    let safety = |ws: &Ws| -> Vec<Value> {
+        ws.call("backup.list", json!({}))["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|b| b["kind"] == "safety")
+            .cloned()
+            .collect()
+    };
+    let bulk = |query: &str, priority: &str, count: u64| {
+        json!({ "query": query, "changes": { "priority": priority },
+                "dry_run": false, "expected_count": count })
+    };
+
+    // The person's large changes and an agent's small ones need none.
+    ws.call("task.bulk_update", bulk("project:TM", "low", 60));
+    let agent = ws.agent("Helper", Profile::Full);
+    ws.as_(
+        &agent,
+        "task.bulk_update",
+        bulk("project:TM title:T1", "normal", 11),
+    );
+    // A preview changes nothing.
+    ws.as_(
+        &agent,
+        "task.bulk_update",
+        json!({ "query": "project:TM", "changes": { "priority": "high" } }),
+    );
+    assert!(safety(&ws).is_empty());
+
+    // More than fifty items: the backup holds the state before the change.
+    let done = ws.as_(&agent, "task.bulk_update", bulk("project:TM", "high", 60));
+    assert_eq!(done["changed"], 60, "{done}");
+    let made = safety(&ws);
+    assert_eq!(made.len(), 1, "{made:?}");
+    let check = ws.call("backup.verify", json!({ "name": made[0]["name"] }));
+    assert_eq!(check["ok"], true, "{check}");
+    let file = ws
+        .layout
+        .backups_dir()
+        .join(format!("{}.db", made[0]["name"].as_str().unwrap()));
+    let before = gk_store::rusqlite::Connection::open(&file).unwrap();
+    let high: i64 = before
+        .query_row("SELECT count(*) FROM tasks WHERE priority = 3", [], |r| {
+            r.get(0)
+        })
+        .unwrap();
+    assert_eq!(high, 0);
+    assert_eq!(
+        ws.count("SELECT count(*) FROM tasks WHERE priority = 3"),
+        60
+    );
+    assert!(done["group"].is_string());
 }
 
 #[test]

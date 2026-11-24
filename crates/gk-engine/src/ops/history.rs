@@ -415,6 +415,7 @@ fn current(
             let ids = task::label_ids(tx, id).map_err(|e| match e {
                 Failure::Store(s) => s,
                 Failure::Op(o) => StoreError::Corrupt(o.message),
+                Failure::SnapshotFirst { .. } => StoreError::Corrupt(String::new()),
             })?;
             task::labels_value(&ids)
         }

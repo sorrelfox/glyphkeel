@@ -130,6 +130,21 @@ pub(crate) fn ensure_active(p: &ProjectRow) -> Result<(), Failure> {
     }
 }
 
+/// Refuses changes to the wiki of a project that has its wiki switched off.
+pub(crate) fn ensure_wiki_on(tx: &Transaction<'_>, p: &ProjectRow) -> Result<(), Failure> {
+    let modules: String = tx.query_row(
+        "SELECT modules FROM projects WHERE id = ?1",
+        [b(p.id)],
+        |r| r.get(0),
+    )?;
+    if super::project::modules_of(&modules).wiki {
+        Ok(())
+    } else {
+        let error = messages::forbidden("project-wiki-off", &[("project", p.key.clone())]);
+        Err(messages::hint(error, "project-wiki-off-hint", &[]).into())
+    }
+}
+
 /// A status, type or label row: the parts lookups need.
 #[derive(Debug, Clone)]
 pub(crate) struct Named {

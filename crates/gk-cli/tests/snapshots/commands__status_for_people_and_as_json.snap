@@ -4,6 +4,11 @@ expression: "ws.ok(&[\"workspace\"])"
 ---
 name: Personal
 id: [id]
+agent_limits:
+  new_tasks_per_day: 500
+  trash_items_per_call: 20
+  trash_items_per_hour: 50
+  writes_per_minute: 120
 caller:
   actor: You
   via: cli

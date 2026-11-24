@@ -16,7 +16,7 @@ use gk_api::OpError;
 use crate::messages;
 
 /// Calls of changing tools allowed in any minute.
-pub const WRITES_PER_MINUTE: usize = 120;
+pub const WRITES_PER_MINUTE: usize = gk_api::ops::agent::AGENT_WRITES_PER_MINUTE as usize;
 
 const WINDOW: Duration = Duration::from_secs(60);
 

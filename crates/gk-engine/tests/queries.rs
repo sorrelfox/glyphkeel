@@ -814,3 +814,29 @@ fn twenty_thousand_tasks_filter_and_sort_within_budget() {
         assert!(ms < budget_ms, "{query}: {ms} ms");
     }
 }
+
+#[test]
+fn a_view_keeps_a_description_of_what_it_is_for() {
+    let (_dir, e) = workspace();
+    let created = call(
+        &e,
+        "view.create",
+        json!({ "name": "Release blockers", "project": "TM", "query": "is:open priority>=high",
+                "description": "What must be fixed before the next release." }),
+    );
+    assert_eq!(
+        created["view"]["description"],
+        "What must be fixed before the next release."
+    );
+    call(
+        &e,
+        "view.update",
+        json!({ "view": "Release blockers", "project": "TM",
+                "description": "Fix these first." }),
+    );
+    let list = call(&e, "view.list", json!({ "project": "TM" }));
+    assert_eq!(
+        list["items"][0]["description"], "Fix these first.",
+        "{list}"
+    );
+}
