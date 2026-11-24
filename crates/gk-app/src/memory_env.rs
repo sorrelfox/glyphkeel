@@ -16,15 +16,22 @@
 //!   `MALLOC_ARENA_MAX` the engine's blocking threads share two arenas, so
 //!   the memory one answer freed is reused by the next instead of staying
 //!   with an idle thread.
-//! - glibc serves small and middle-sized blocks from its heap and keeps
-//!   them there once they are freed, scattered between blocks still in use,
-//!   so the memory of a large answer (a board of thousands of cards, a long
-//!   list) stays with the process after it has been sent. With
-//!   `MALLOC_MMAP_THRESHOLD_` every block of 8 KiB or more (the buffers
-//!   that answers are built in) is mapped on its own and goes back to the
-//!   system as soon as it is freed. A fixed threshold also stops glibc from
-//!   raising it, and its trim threshold with it, after a large block is
-//!   freed.
+//!
+//! glibc's `MALLOC_MMAP_THRESHOLD_` is left alone on purpose. A low value
+//! (8 KiB) would give the memory of large answers back to the system as
+//! soon as they are freed, but then every block above it sits in its own
+//! mapping, which ends right after the block and is gone once it is freed.
+//! The web view's process inherits the setting. On Debian 12 (WebKitGTK
+//! 2.50 with Mesa's software renderer, as in a virtual machine or a
+//! container without a GPU) its compositor thread then died with a
+//! segmentation fault in the renderer two to three seconds after a large
+//! workspace opened, on every start; without the setting it didn't. The
+//! renderer seems to read a little outside the blocks it was given, which
+//! in the heap lands on memory that is still there. The setting can't be
+//! kept for the app's process alone: the web process starts later, from
+//! the app's environment, and the app can't safely take a setting out of
+//! its own environment once it runs. The app's process keeps somewhat more
+//! memory after a large answer instead.
 //!
 //! A running program can't safely change its own environment, so the app
 //! replaces itself once, at the very start, with a fresh start of the
@@ -41,12 +48,10 @@
 const ADDED: &str = "GLYPHKEEL_ADDED_ENV";
 
 /// The settings, with the values the app starts with.
-const SETTINGS: [(&str, &str); 3] = [
+const SETTINGS: [(&str, &str); 2] = [
     // 256 MB, in bytes.
     ("JSC_forceRAMSize", "268435456"),
     ("MALLOC_ARENA_MAX", "2"),
-    // 8 KiB, in bytes.
-    ("MALLOC_MMAP_THRESHOLD_", "8192"),
 ];
 
 /// The settings to add: those of [`SETTINGS`] and `extra` that `is_set`
@@ -162,10 +167,7 @@ mod tests {
         assert_eq!(missing(|_| false, &[]), SETTINGS.to_vec());
         assert_eq!(
             missing(|name| name == "JSC_forceRAMSize", &[]),
-            vec![
-                ("MALLOC_ARENA_MAX", "2"),
-                ("MALLOC_MMAP_THRESHOLD_", "8192")
-            ]
+            vec![("MALLOC_ARENA_MAX", "2")]
         );
         assert!(missing(|name| name != ADDED, &[]).is_empty());
     }

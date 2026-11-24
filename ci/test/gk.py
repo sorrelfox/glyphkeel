@@ -76,6 +76,35 @@ def pss_mb(root):
     return round(total / 1024, 1), parts
 
 
+WEB_PROCESS = "WebKitWebProcess"
+
+
+def web_processes(root):
+    """The PIDs of the web view's processes below `root`."""
+    found = []
+    for pid in descendants(root):
+        try:
+            with open(f"/proc/{pid}/comm", encoding="utf-8") as comm:
+                if comm.read().strip() == WEB_PROCESS[:15]:
+                    found.append(pid)
+        except OSError:
+            pass
+    return found
+
+
+def check_alive(app_pid, web, when):
+    """Raises if the app or the web view's process it started with is gone:
+    a window can stay on the screen with nothing drawn after the web view's
+    process died, so the memory measured then would be meaningless."""
+    if app_pid is None or not os.path.exists(f"/proc/{app_pid}"):
+        raise RuntimeError(f"the app is gone {when}")
+    now = web_processes(app_pid)
+    if not now:
+        raise RuntimeError(f"the web view's process is gone {when}")
+    if web and not set(web) & set(now):
+        raise RuntimeError(f"the web view's process was replaced {when} (it died)")
+
+
 def window_visible():
     return (
         subprocess.run(
@@ -347,7 +376,12 @@ def start_and_idle(link, runs=5, settle=15):
             time.sleep(0.005)
         times.append(time.monotonic() - started)
         if index == runs - 1:
+            time.sleep(2)
+            web = web_processes(app.pid)
+            if app.poll() is not None:
+                raise RuntimeError("the app exited after its start")
             time.sleep(settle)
+            check_alive(app.pid, web, "before the idle memory was measured")
             idle = pss_mb(app.pid)
         app.terminate()
         app.wait(timeout=20)
@@ -370,6 +404,7 @@ def drive(link):
     try:
         first_card = driver.wait_for("return document.querySelector('[data-card]') !== null")
         results["start_first_card_ms"] = ms(first_card - driver.started)
+        web = web_processes(driver.app_pid()) if driver.app_pid() else []
         time.sleep(2)
 
         # Board: scroll the longest column.
@@ -431,8 +466,8 @@ def drive(link):
         results["board_open_ms"] = ms(shown - clicked)
         time.sleep(5)
         pid = driver.app_pid()
-        if pid:
-            results["after_use_pss_mb"], results["after_use_pss_parts"] = pss_mb(pid)
+        check_alive(pid, web, "before the memory after use was measured")
+        results["after_use_pss_mb"], results["after_use_pss_parts"] = pss_mb(pid)
     finally:
         driver.quit()
     return results
@@ -500,7 +535,10 @@ def perf():
     results["import_L_s"] = round(time.monotonic() - t, 1)
     results.update(cli_latency(key, project))
     results.update(mcp_latency(key, project))
-    results.update(start_and_idle(link))
+    try:
+        results.update(start_and_idle(link))
+    except Exception as err:  # noqa: BLE001 - reported in the results
+        results["start_error"] = str(err)
     try:
         results.update(drive(link))
     except Exception as err:  # noqa: BLE001 - reported in the results
@@ -508,16 +546,26 @@ def perf():
     with open(f"{OUT}/perf.json", "w", encoding="utf-8") as out:
         json.dump(results, out, indent=2)
     text, failed = table(results)
+    if "start_error" in results:
+        text += f"\nThe start and idle run failed: {results['start_error']}\n"
     if "drive_error" in results:
         text += f"\nThe automated board and list run failed: {results['drive_error']}\n"
+    missing = [label for key, label, _, _ in BUDGETS if lookup(results, key) is None]
     for part in ("idle_pss_parts", "after_use_pss_parts"):
         if part in results:
             text += f"\n{part.replace('_', ' ')}: {', '.join(results[part])}\n"
     with open(f"{OUT}/perf.md", "w", encoding="utf-8") as out:
         out.write(text)
     print(text)
-    if os.environ.get("PERF_ENFORCE") == "1" and (failed or "drive_error" in results):
-        print(f"perf: FAILED: over budget: {', '.join(failed) or 'none'}")
+    # A run that measured nothing must not pass: the app or its web view
+    # died, or a measure is missing. Results over budget fail only with
+    # PERF_ENFORCE=1; otherwise they are reported.
+    errors = [results[name] for name in ("start_error", "drive_error") if name in results]
+    if errors or missing:
+        print(f"perf: ERROR: {'; '.join(errors) or 'no error'}; not measured: {', '.join(missing) or 'none'}")
+        return 1
+    if os.environ.get("PERF_ENFORCE") == "1" and failed:
+        print(f"perf: FAILED: over budget: {', '.join(failed)}")
         return 1
     print("perf: done")
     return 0

@@ -6,9 +6,7 @@ import { join } from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 // Labels, project icons, the time zone and the formatting toolbar, on the
-// real engine, after the flows of workspace.spec.ts (which want a fresh
-// Undo stack first).
-// Each flow makes its own project. With GK_SCREENSHOT_DIR set,
+// real engine. Each flow makes its own project. With GK_SCREENSHOT_DIR set,
 // each saves a screenshot there.
 
 const token = process.env.GK_BRIDGE_TOKEN ?? "";
