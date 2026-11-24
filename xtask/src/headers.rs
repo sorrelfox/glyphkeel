@@ -90,7 +90,7 @@ fn checked(path: &Path) -> bool {
     }
     matches!(
         path.extension().and_then(|e| e.to_str()),
-        Some("rs" | "toml" | "sh" | "ts" | "tsx" | "js" | "css" | "yaml" | "yml")
+        Some("rs" | "toml" | "sh" | "py" | "ts" | "tsx" | "js" | "css" | "yaml" | "yml")
     )
 }
 

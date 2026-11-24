@@ -3,10 +3,12 @@
 
 //! Repository automation, run as `cargo xtask <command>`.
 
+mod bundle;
 mod ci;
 mod codegen;
 mod deps;
 mod headers;
+mod installed;
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -23,6 +25,8 @@ Commands:
                       `cargo xtask ci --help`.
   check-headers       Check that every source file starts with the licence
                       header.
+  check-bundle [DIR]  Check that the release UI (default: ui/dist) names no
+                      remote address it could load.
   check-deps          Check the dependency rules: the command line and the
                       library crates never link the desktop toolkit or the web
                       view, and the shipped programs link no HTTP client.
@@ -62,6 +66,7 @@ fn run() -> Result<bool> {
             no_args(cmd, rest)?;
             headers::run(&root)
         }
+        "check-bundle" => bundle::run(&root, rest),
         "check-deps" => {
             no_args(cmd, rest)?;
             deps::run(&root)

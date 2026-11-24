@@ -11,6 +11,11 @@
 //! runs `cargo xtask ci --here` inside it. Build caches (the
 //! cargo registry, each distribution's `target/` and the pnpm store) live in
 //! named volumes, so runs after the first are incremental.
+//!
+//! The suites `packages`, `offline`, `perf` and `flatpak` check what ships,
+//! from the host (see `installed.rs`): the deb and rpm are built once in the
+//! Ubuntu 22.04 image, then installed in clean containers of each
+//! distribution and checked there.
 
 use std::fmt;
 use std::fs;
@@ -24,16 +29,20 @@ use anyhow::{Context, Result, bail};
 const HELP: &str = "\
 Usage: cargo xtask ci [--suite S[,S…]] [--distro D[,D…]] [--engine E] [--rebuild]
                       [--cache-dir DIR] [--package-release N] [--ui-flows F[,F…]]
+                      [--pseudo-locale L] [--perf-enforce]
        cargo xtask ci --here [--suite S[,S…]] [--package-release N] [--ui-flows F[,F…]]
+                      [--pseudo-locale L]
        cargo xtask ci --list
 
 Runs check suites in containers, one image per distribution.
 
 Options:
-  --suite S     Suites to run (repeatable or comma-separated). Default: all
-                but `deny` and `package`.
+  --suite S     Suites to run (repeatable or comma-separated). Default:
+                static, rust, ui and app. See `--list`.
   --distro D    Distributions to run on (repeatable or comma-separated).
-                Default: every distribution.
+                Default: every distribution. For `packages`, `offline` and
+                `perf` these are the distributions the packages are installed
+                on; they are always built on ubuntu-22.04.
   --engine E    `podman` or `docker`. Default: podman when it is installed,
                 docker otherwise.
   --rebuild     Rebuild the images from scratch, without the layer cache.
@@ -48,19 +57,40 @@ Options:
   --ui-flows F  Run only these browser flows in the `ui` suite (repeatable or
                 comma-separated; see `--list`). Default: every flow, one
                 after another, each against a fresh workspace.
+  --pseudo-locale L
+                The locale of the `pseudo` screenshots. Default: en-XA.
+  --perf-enforce
+                Fail the `perf` suite when a result is over its budget.
+                Without it the suite only reports.
   --here        Run the suites on this machine, without containers. This is
                 what runs inside each container.
   --list        List the suites and distributions.
 
 CARGO_BUILD_JOBS and CARGO_TERM_COLOR, when set, are passed into the
-containers.
+containers. GLYPHKEEL_CI_PREFIX renames the images, volumes and containers
+this command makes (default: glyphkeel-ci), so that several checkouts can
+run side by side.
 ";
 
-/// The prefix of every image and volume this command creates.
+/// The default prefix of every image, volume and container this command
+/// creates.
 const PREFIX: &str = "glyphkeel-ci";
 
+/// The prefix in use: `GLYPHKEEL_CI_PREFIX`, else [`PREFIX`].
+pub(crate) fn prefix() -> String {
+    std::env::var("GLYPHKEEL_CI_PREFIX")
+        .ok()
+        .filter(|value| {
+            !value.is_empty()
+                && value
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        })
+        .unwrap_or_else(|| PREFIX.to_owned())
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Suite {
+pub(crate) enum Suite {
     /// Formatting, licence headers, dependency rules, generated files,
     /// clippy, ESLint, stylelint and the TypeScript check.
     Static,
@@ -75,22 +105,43 @@ enum Suite {
     /// Licences, advisories, bans and sources of the crates (cargo-deny).
     Deny,
     /// The deb and rpm packages, built by the Tauri bundler with the
-    /// release profile `dist`.
+    /// release profile `dist`, and the check of the UI they embed.
     Package,
+    /// The seed tool's data sets S, L and hostile, for the checks of the
+    /// installed packages.
+    TestData,
+    /// Screenshots of the main screens in a pseudo-locale.
+    Pseudo,
+    /// The packages installed in clean containers: files, programs and a
+    /// command-line session.
+    Packages,
+    /// The never-online check of the installed app, command line and MCP
+    /// server.
+    Offline,
+    /// Performance with data set L on the installed release build.
+    Perf,
+    /// The Flatpak, built with flatpak-builder on the host.
+    Flatpak,
 }
 
 impl Suite {
-    const ALL: [Self; 6] = [
+    const ALL: [Self; 12] = [
         Self::Static,
         Self::Rust,
         Self::Ui,
         Self::App,
         Self::Deny,
         Self::Package,
+        Self::TestData,
+        Self::Pseudo,
+        Self::Packages,
+        Self::Offline,
+        Self::Perf,
+        Self::Flatpak,
     ];
     const DEFAULT: [Self; 4] = [Self::Static, Self::Rust, Self::Ui, Self::App];
 
-    fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Static => "static",
             Self::Rust => "rust",
@@ -98,6 +149,12 @@ impl Suite {
             Self::App => "app",
             Self::Deny => "deny",
             Self::Package => "package",
+            Self::TestData => "testdata",
+            Self::Pseudo => "pseudo",
+            Self::Packages => "packages",
+            Self::Offline => "offline",
+            Self::Perf => "perf",
+            Self::Flatpak => "flatpak",
         }
     }
 
@@ -115,9 +172,34 @@ impl Suite {
             Self::App => "the desktop app with the UI embedded",
             Self::Deny => "cargo-deny: licences, advisories, bans, sources",
             Self::Package => {
-                "deb and rpm packages with the app and the command line (`dist` profile)"
+                "deb and rpm packages with the app and the command line (`dist` profile), \
+                 and the UI they embed checked for remote addresses"
             }
+            Self::TestData => "the seed tool's data sets S, L and hostile into target/ci-data",
+            Self::Pseudo => "screenshots of the main screens in a pseudo-locale (Chromium)",
+            Self::Packages => {
+                "the packages installed in clean containers of each distribution: files, \
+                 programs, a command-line session (from the host)"
+            }
+            Self::Offline => {
+                "the installed app, command line and MCP server with no network, every \
+                 process traced for IPv4 and IPv6 connections (from the host)"
+            }
+            Self::Perf => {
+                "start, memory, board, list, MCP and command-line timings with data set L \
+                 on the installed packages (from the host)"
+            }
+            Self::Flatpak => "the Flatpak, built with flatpak-builder on the host",
         }
+    }
+
+    /// Suites run from the host rather than inside a CI image: they need
+    /// the built packages, or tools of the host.
+    pub(crate) fn on_host(self) -> bool {
+        matches!(
+            self,
+            Self::Packages | Self::Offline | Self::Perf | Self::Flatpak
+        )
     }
 
     fn parse(name: &str) -> Result<Self> {
@@ -128,13 +210,17 @@ impl Suite {
     }
 
     fn needs_node_modules(self) -> bool {
-        matches!(self, Self::Static | Self::Ui | Self::App | Self::Package)
+        matches!(
+            self,
+            Self::Static | Self::Ui | Self::App | Self::Package | Self::Pseudo
+        )
     }
 
     /// The commands of this suite, in order. `package_release` is the rpm's
     /// release number, for the `package` suite; `flows` are the browser
-    /// flows of the `ui` suite.
-    fn steps(self, package_release: Option<u32>, flows: &[Flow]) -> Vec<Step> {
+    /// flows of the `ui` suite; `locale` is the pseudo-locale. Suites run
+    /// from the host have no steps here.
+    fn steps(self, package_release: Option<u32>, flows: &[Flow], locale: &str) -> Vec<Step> {
         match self {
             Self::Static => vec![
                 Step::cargo(&["fmt", "--all", "--check"]),
@@ -207,9 +293,62 @@ impl Suite {
                     .map(str::to_owned)
                     .to_vec(),
                 ),
+                // The UI as it was embedded: no development transport and
+                // no remote address.
+                Step::pnpm(&["--filter", "ui", "check:bundle"]),
+                Step::Bundle,
             ],
+            Self::TestData => DATA_SETS.iter().map(|set| Step::Seed(set)).collect(),
+            Self::Pseudo => vec![Step::Pseudo(locale.to_owned())],
+            Self::Packages | Self::Offline | Self::Perf | Self::Flatpak => Vec::new(),
         }
     }
+}
+
+/// The seed tool's data sets the checks of the installed packages use.
+pub(crate) const DATA_SETS: [&str; 3] = ["S", "L", "hostile"];
+
+/// Where the `testdata` suite writes the data sets, relative to the
+/// repository.
+pub(crate) const DATA_DIR: &str = "target/ci-data";
+
+/// Writes one data set into [`DATA_DIR`], replacing an earlier copy.
+fn write_data_set(root: &Path, set: &str) -> Result<bool> {
+    let out = root.join(DATA_DIR).join(set);
+    if out.exists() {
+        fs::remove_dir_all(&out).with_context(|| format!("cannot remove {}", out.display()))?;
+    }
+    status(
+        Command::new(crate::cargo())
+            .args(["run", "--locked", "--quiet", "--package", "gk-seed", "--"])
+            .args(["--set", set, "--seed", "1", "--out"])
+            .arg(&out)
+            .current_dir(root),
+    )
+}
+
+/// The Playwright configuration of the pseudo-locale screenshots, relative
+/// to ui/. It belongs to the `pseudo` suite, not to the `ui` suite's flows.
+const PSEUDO_CONFIG: &str = "playwright.pseudo.config.ts";
+
+/// The default pseudo-locale.
+const PSEUDO_LOCALE: &str = "en-XA";
+
+/// Takes the pseudo-locale screenshots into target/screenshots/pseudo.
+fn run_pseudo(root: &Path, locale: &str) -> Result<bool> {
+    let shots = root.join("target/screenshots/pseudo").join(locale);
+    let mut cmd = Command::new("pnpm");
+    cmd.args(["--filter", "ui", "exec", "playwright", "test", "--config"])
+        .arg(PSEUDO_CONFIG)
+        .arg("--project=chromium")
+        .arg("--output")
+        .arg(root.join("target/playwright/pseudo"))
+        .env("GK_PSEUDO_LOCALE", locale)
+        .env("GK_SCREENSHOT_DIR", &shots)
+        .current_dir(root);
+    let ok = status(&mut cmd)?;
+    eprintln!("==> [pseudo] screenshots: {}", shots.display());
+    Ok(ok)
 }
 
 /// Where the command line's generated files land, relative to the
@@ -292,7 +431,7 @@ fn write_cli_files(root: &Path) -> Result<bool> {
 /// One Playwright configuration of the UI: its flows, its servers and its
 /// ports.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Flow {
+pub(crate) struct Flow {
     /// The name `--ui-flows` takes, the same as the `test:<name>` script in
     /// ui/package.json.
     name: &'static str,
@@ -419,7 +558,7 @@ fn run_flows(root: &Path, flows: &[Flow]) -> Result<bool> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Distro {
+pub(crate) enum Distro {
     Ubuntu2204,
     Ubuntu2404,
     Debian12,
@@ -434,7 +573,7 @@ impl Distro {
         Self::Fedora,
     ];
 
-    fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Ubuntu2204 => "ubuntu-22.04",
             Self::Ubuntu2404 => "ubuntu-24.04",
@@ -451,18 +590,33 @@ impl Distro {
     }
 
     fn image(self) -> String {
-        format!("{PREFIX}:{}", self.name())
+        format!("{}:{}", prefix(), self.name())
+    }
+
+    /// The distribution's own image, as users have it.
+    pub(crate) fn base_image(self) -> &'static str {
+        match self {
+            Self::Ubuntu2204 => "docker.io/library/ubuntu:22.04",
+            Self::Ubuntu2404 => "docker.io/library/ubuntu:24.04",
+            Self::Debian12 => "docker.io/library/debian:12",
+            Self::Fedora => "registry.fedoraproject.org/fedora:45",
+        }
+    }
+
+    /// Whether the distribution installs the rpm rather than the deb.
+    pub(crate) fn uses_rpm(self) -> bool {
+        self == Self::Fedora
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Engine {
+pub(crate) enum Engine {
     Podman,
     Docker,
 }
 
 impl Engine {
-    fn program(self) -> &'static str {
+    pub(crate) fn program(self) -> &'static str {
         match self {
             Self::Podman => "podman",
             Self::Docker => "docker",
@@ -494,6 +648,12 @@ enum Step {
     GenCheck,
     /// The command line's completions and man page, for the packages.
     CliFiles,
+    /// The built UI checked for remote addresses.
+    Bundle,
+    /// One of the seed tool's data sets.
+    Seed(&'static str),
+    /// The pseudo-locale screenshots, in this locale.
+    Pseudo(String),
 }
 
 impl Step {
@@ -514,6 +674,9 @@ impl Step {
             Self::Deps => crate::deps::run(root),
             Self::GenCheck => crate::codegen::run(root, &["--check".to_owned()]),
             Self::CliFiles => write_cli_files(root),
+            Self::Bundle => crate::bundle::run(root, &[]),
+            Self::Seed(set) => write_data_set(root, set),
+            Self::Pseudo(locale) => run_pseudo(root, locale),
         }
     }
 }
@@ -531,6 +694,9 @@ impl fmt::Display for Step {
             Self::Deps => f.write_str("cargo xtask check-deps"),
             Self::GenCheck => f.write_str("cargo xtask gen --check"),
             Self::CliFiles => write!(f, "glyphkeel completions and man into {CLI_FILES_DIR}"),
+            Self::Bundle => f.write_str("cargo xtask check-bundle"),
+            Self::Seed(set) => write!(f, "gk-seed --set {set} into {DATA_DIR}/{set}"),
+            Self::Pseudo(locale) => write!(f, "playwright {PSEUDO_CONFIG} in {locale}"),
         }
     }
 }
@@ -546,6 +712,10 @@ struct Options {
     package_release: Option<u32>,
     /// The browser flows of the `ui` suite: every one unless some are named.
     ui_flows: Vec<Flow>,
+    /// The locale of the `pseudo` suite.
+    pseudo_locale: String,
+    /// Whether the `perf` suite fails on a result over budget.
+    perf_enforce: bool,
     here: bool,
     list: bool,
     help: bool,
@@ -561,6 +731,8 @@ impl Options {
             cache_dir: None,
             package_release: None,
             ui_flows: Vec::new(),
+            pseudo_locale: PSEUDO_LOCALE.to_owned(),
+            perf_enforce: false,
             here: false,
             list: false,
             help: false,
@@ -614,6 +786,18 @@ impl Options {
                         push_unique(&mut options.ui_flows, Flow::parse(name.trim())?);
                     }
                 }
+                "--pseudo-locale" => {
+                    let locale = value()?;
+                    let valid = !locale.is_empty()
+                        && locale.split('-').all(|part| {
+                            !part.is_empty() && part.chars().all(|c| c.is_ascii_alphanumeric())
+                        });
+                    if !valid {
+                        bail!("`--pseudo-locale` needs a locale such as en-XA, not `{locale}`");
+                    }
+                    options.pseudo_locale = locale;
+                }
+                "--perf-enforce" => options.perf_enforce = true,
                 "--here" => options.here = true,
                 "--list" => options.list = true,
                 "-h" | "--help" => options.help = true,
@@ -634,6 +818,20 @@ impl Options {
         }
         if options.ui_flows.is_empty() {
             options.ui_flows = Flow::ALL.to_vec();
+        }
+        if options.pseudo_locale != PSEUDO_LOCALE && !options.suites.contains(&Suite::Pseudo) {
+            bail!("`--pseudo-locale` applies to the `pseudo` suite only");
+        }
+        if options.perf_enforce && !options.suites.contains(&Suite::Perf) {
+            bail!("`--perf-enforce` applies to the `perf` suite only");
+        }
+        if options.here
+            && let Some(suite) = options.suites.iter().find(|suite| suite.on_host())
+        {
+            bail!(
+                "the `{}` suite runs from the host and needs containers; drop `--here`",
+                suite.name()
+            );
         }
         if options.here
             && (options.engine.is_some() || options.rebuild || options.cache_dir.is_some())
@@ -669,6 +867,7 @@ pub(crate) fn run(root: &Path, args: &[String]) -> Result<bool> {
             &options.suites,
             options.package_release,
             &options.ui_flows,
+            &options.pseudo_locale,
         );
     }
     let engine = match options.engine {
@@ -676,8 +875,10 @@ pub(crate) fn run(root: &Path, args: &[String]) -> Result<bool> {
         None => Engine::detect()?,
     };
     let pins = Pins::read(root)?;
+    let (host, inside): (Vec<Suite>, Vec<Suite>) =
+        options.suites.iter().partition(|suite| suite.on_host());
     let mut failed = Vec::new();
-    for &distro in &options.distros {
+    for &distro in options.distros.iter().filter(|_| !inside.is_empty()) {
         let started = Instant::now();
         eprintln!(
             "==> {}: building the image {}",
@@ -689,32 +890,52 @@ pub(crate) fn run(root: &Path, args: &[String]) -> Result<bool> {
                 root,
                 engine,
                 distro,
-                &options.suites,
-                options.package_release,
-                &options.ui_flows,
-                options.cache_dir.as_deref(),
+                &ContainerRun {
+                    suites: &inside,
+                    package_release: options.package_release,
+                    flows: &options.ui_flows,
+                    pseudo_locale: &options.pseudo_locale,
+                    cache_dir: options.cache_dir.as_deref(),
+                },
             )?;
         let seconds = started.elapsed().as_secs();
         if ok {
             eprintln!("==> {}: passed in {seconds} s", distro.name());
         } else {
             eprintln!("==> {}: FAILED after {seconds} s", distro.name());
-            failed.push(distro.name());
+            failed.push(distro.name().to_owned());
         }
+    }
+    if !host.is_empty() {
+        let run = crate::installed::HostRun {
+            root,
+            engine,
+            pins: &pins,
+            distros: &options.distros,
+            suites: &host,
+            rebuild: options.rebuild,
+            package_release: options.package_release,
+            perf_enforce: options.perf_enforce,
+            cache_dir: options
+                .cache_dir
+                .clone()
+                .unwrap_or_else(|| root.join(crate::installed::DEFAULT_CACHE)),
+        };
+        failed.extend(run.run()?);
     }
     if failed.is_empty() {
         eprintln!("==> ci: every distribution passed");
         Ok(true)
     } else {
-        eprintln!("==> ci: failed on {}", failed.join(", "));
+        eprintln!("==> ci: failed: {}", failed.join(", "));
         Ok(false)
     }
 }
 
 fn list() {
-    eprintln!("Suites (default: all but deny and package):");
+    eprintln!("Suites (default: static, rust, ui, app):");
     for suite in Suite::ALL {
-        eprintln!("  {:<8} {}", suite.name(), suite.about());
+        eprintln!("  {:<9} {}", suite.name(), suite.about());
     }
     eprintln!("Distributions (default: all):");
     for distro in Distro::ALL {
@@ -732,6 +953,7 @@ fn run_here(
     suites: &[Suite],
     package_release: Option<u32>,
     flows: &[Flow],
+    pseudo_locale: &str,
 ) -> Result<bool> {
     if suites.iter().any(|suite| suite.needs_node_modules()) {
         eprintln!("==> pnpm install --frozen-lockfile");
@@ -740,7 +962,7 @@ fn run_here(
         }
     }
     for &suite in suites {
-        for step in suite.steps(package_release, flows) {
+        for step in suite.steps(package_release, flows, pseudo_locale) {
             eprintln!("==> [{}] {step}", suite.name());
             if !step.run(root)? {
                 eprintln!("==> FAILED: [{}] {step}", suite.name());
@@ -755,7 +977,7 @@ fn run_here(
 
 /// The tool versions the images install, read from the repository's pins.
 #[derive(Debug, PartialEq, Eq)]
-struct Pins {
+pub(crate) struct Pins {
     rust: String,
     node: String,
     pnpm: String,
@@ -767,7 +989,7 @@ struct Pins {
 }
 
 impl Pins {
-    fn read(root: &Path) -> Result<Self> {
+    pub(crate) fn read(root: &Path) -> Result<Self> {
         let toolchain = read(root, "rust-toolchain.toml")?;
         let node = read(root, ".node-version")?;
         let package: serde_json::Value = serde_json::from_str(&read(root, "package.json")?)
@@ -827,7 +1049,7 @@ fn read(root: &Path, file: &str) -> Result<String> {
     fs::read_to_string(root.join(file)).with_context(|| format!("cannot read {file}"))
 }
 
-fn build_image(
+pub(crate) fn build_image(
     root: &Path,
     engine: Engine,
     distro: Distro,
@@ -883,22 +1105,35 @@ fn cache_volumes(distro: Distro, cache_dir: Option<&Path>) -> Result<Vec<String>
                     .context("the cache path is not valid UTF-8")?
                     .to_owned()
             }
-            None => format!("{PREFIX}-{name}"),
+            None => format!("{}-{name}", prefix()),
         };
         volumes.push(format!("{source}:{target}"));
     }
     Ok(volumes)
 }
 
-fn run_in_container(
+/// What one container run does: its suites and their options.
+pub(crate) struct ContainerRun<'a> {
+    pub(crate) suites: &'a [Suite],
+    pub(crate) package_release: Option<u32>,
+    pub(crate) flows: &'a [Flow],
+    pub(crate) pseudo_locale: &'a str,
+    pub(crate) cache_dir: Option<&'a Path>,
+}
+
+pub(crate) fn run_in_container(
     root: &Path,
     engine: Engine,
     distro: Distro,
-    suites: &[Suite],
-    package_release: Option<u32>,
-    flows: &[Flow],
-    cache_dir: Option<&Path>,
+    run: &ContainerRun<'_>,
 ) -> Result<bool> {
+    let ContainerRun {
+        suites,
+        package_release,
+        flows,
+        pseudo_locale,
+        cache_dir,
+    } = *run;
     let names: Vec<&str> = suites.iter().map(|suite| suite.name()).collect();
     // Only a choice of flows is passed on; the default is every flow.
     let flows: Vec<&str> = if suites.contains(&Suite::Ui) && flows != Flow::ALL {
@@ -912,7 +1147,9 @@ fn run_in_container(
     // files (build output, generated files) stay out; otherwise the whole
     // tree is copied without the build output.
     let files = crate::headers::git_files(root);
-    let script = copy_script(files.is_some(), &names, package_release, &flows);
+    let locale = (suites.contains(&Suite::Pseudo) && pseudo_locale != PSEUDO_LOCALE)
+        .then_some(pseudo_locale);
+    let script = copy_script(files.is_some(), &names, package_release, &flows, locale);
     let source = root
         .to_str()
         .context("the repository path is not valid UTF-8")?;
@@ -961,6 +1198,7 @@ fn copy_script(
     suites: &[&str],
     package_release: Option<u32>,
     flows: &[&str],
+    pseudo_locale: Option<&str>,
 ) -> String {
     let copy = if from_list {
         "tar -C /src --null --files-from=- -cf - | tar -C /work -xf -"
@@ -976,13 +1214,16 @@ fn copy_script(
     } else {
         format!(" --ui-flows {}", flows.join(","))
     };
+    let locale = pseudo_locale
+        .map(|locale| format!(" --pseudo-locale {locale}"))
+        .unwrap_or_default();
     format!(
-        "set -e; {copy}; exec cargo xtask ci --here --suite {}{release}{flows} </dev/null",
+        "set -e; {copy}; exec cargo xtask ci --here --suite {}{release}{flows}{locale} </dev/null",
         suites.join(",")
     )
 }
 
-fn status(cmd: &mut Command) -> Result<bool> {
+pub(crate) fn status(cmd: &mut Command) -> Result<bool> {
     let shown = format!("{cmd:?}");
     Ok(cmd
         .status()
@@ -1046,9 +1287,11 @@ mod tests {
             .filter(|name| name.starts_with("playwright") && name.ends_with(".config.ts"))
             .collect();
         configs.sort();
+        // The pseudo-locale screenshots have a suite of their own.
         let mut known: Vec<String> = Flow::ALL
             .iter()
             .map(|flow| flow.config.to_owned())
+            .chain([super::PSEUDO_CONFIG.to_owned()])
             .collect();
         known.sort();
         assert_eq!(
@@ -1211,13 +1454,16 @@ mod tests {
         assert_eq!(config["bundle"]["linux"]["rpm"]["release"], "3");
 
         let steps: Vec<String> = Suite::Package
-            .steps(Some(3), &Flow::ALL)
+            .steps(Some(3), &Flow::ALL, "en-XA")
             .iter()
             .map(ToString::to_string)
             .collect();
         assert!(steps[0].starts_with("cargo build --package gk-cli"));
         assert!(steps[0].ends_with("--profile dist"));
-        assert_eq!(Suite::Package.steps(None, &Flow::ALL)[1], Step::CliFiles);
+        assert_eq!(
+            Suite::Package.steps(None, &Flow::ALL, "en-XA")[1],
+            Step::CliFiles
+        );
         assert!(steps[2].starts_with("pnpm tauri build"));
         assert!(steps[2].contains(r#""release":"3""#));
     }
@@ -1254,11 +1500,11 @@ mod tests {
     fn the_suites_check_generated_files_the_bundle_and_every_flow() {
         assert!(
             Suite::Static
-                .steps(None, &Flow::ALL)
+                .steps(None, &Flow::ALL, "en-XA")
                 .contains(&Step::GenCheck)
         );
         let ui: Vec<String> = Suite::Ui
-            .steps(None, &Flow::ALL)
+            .steps(None, &Flow::ALL, "en-XA")
             .iter()
             .map(ToString::to_string)
             .collect();
@@ -1282,14 +1528,14 @@ mod tests {
 
     #[test]
     fn the_container_copies_the_listed_files_or_the_tree() {
-        let script = copy_script(true, &["static", "ui"], None, &[]);
+        let script = copy_script(true, &["static", "ui"], None, &[], None);
         assert!(script.contains("--null --files-from=-"));
         assert!(script.ends_with("exec cargo xtask ci --here --suite static,ui </dev/null"));
-        let script = copy_script(true, &["ui"], None, &["list", "today"]);
+        let script = copy_script(true, &["ui"], None, &["list", "today"], None);
         assert!(script.ends_with("--suite ui --ui-flows list,today </dev/null"));
-        let script = copy_script(true, &["package"], Some(2), &[]);
+        let script = copy_script(true, &["package"], Some(2), &[], None);
         assert!(script.ends_with("--suite package --package-release 2 </dev/null"));
-        let script = copy_script(false, &["rust"], None, &[]);
+        let script = copy_script(false, &["rust"], None, &[], None);
         assert!(script.contains("--exclude=./target"));
         assert!(!script.contains("--files-from"));
     }

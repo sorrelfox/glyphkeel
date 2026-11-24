@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- Copyright (C) 2026 Glyphkeel contributors -->
+<!--
+  The AppStream metadata of the desktop app, for software centres. The deb
+  and rpm install it as /usr/share/metainfo/io.github.sorrelfox.Glyphkeel.metainfo.xml
+  with the launchable Glyphkeel.desktop; the Flatpak build rewrites the
+  launchable to its own desktop file name. Add a <release> for every version.
+-->
+<component type="desktop-application">
+  <id>io.github.sorrelfox.Glyphkeel</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>Glyphkeel</name>
+  <summary>Plan and track tasks on your own computer</summary>
+  <developer id="io.github.sorrelfox">
+    <name>sorrelfox</name>
+  </developer>
+  <description>
+    <p>
+      Glyphkeel is a task manager for one person on one computer. It keeps every
+      task, wiki page and attachment in a folder on your disk, needs no account and
+      never connects to the network.
+    </p>
+    <ul>
+      <li>Projects with sub-projects, each with its own statuses, types and labels</li>
+      <li>Boards, lists with a query language, and a Today view</li>
+      <li>Markdown descriptions with checklists, math and diagrams</li>
+      <li>Comments, attachments, time tracking and reminders</li>
+      <li>A wiki for each project</li>
+      <li>A command line, glyphkeel, and a built-in MCP server for coding agents, with a
+        history of every change that can be undone</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">Glyphkeel.desktop</launchable>
+  <provides>
+    <binary>glyphkeel-app</binary>
+    <binary>glyphkeel</binary>
+  </provides>
+  <url type="homepage">https://sorrelfox.github.io/glyphkeel/</url>
+  <url type="bugtracker">https://github.com/sorrelfox/glyphkeel/issues</url>
+  <url type="vcs-browser">https://github.com/sorrelfox/glyphkeel</url>
+  <categories>
+    <category>Office</category>
+    <category>ProjectManagement</category>
+  </categories>
+  <keywords>
+    <keyword>tasks</keyword>
+    <keyword>todo</keyword>
+    <keyword>kanban</keyword>
+    <keyword>board</keyword>
+    <keyword>project</keyword>
+    <keyword>planning</keyword>
+  </keywords>
+  <screenshots>
+    <screenshot type="default">
+      <caption>A project board with its columns of task cards</caption>
+      <image>https://raw.githubusercontent.com/sorrelfox/glyphkeel/main/docs/screenshots/board.png</image>
+    </screenshot>
+  </screenshots>
+  <branding>
+    <color type="primary" scheme_preference="light">#d9e4dc</color>
+    <color type="primary" scheme_preference="dark">#26332b</color>
+  </branding>
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.0.7" date="2026-11-24">
+      <description>
+        <p>Early development build: activity feed, trash, backups, and export and import.</p>
+      </description>
+    </release>
+  </releases>
+</component>
