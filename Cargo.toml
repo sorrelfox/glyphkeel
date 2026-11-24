@@ -136,7 +136,7 @@ zip = { version = "9.8.1", default-features = false, features = ["deflate-flate2
 uuid = { version = "1.29.3", features = ["v7"] }
 
 [workspace.lints.rust]
-unsafe_code = "deny"
+unsafe_code = "forbid"
 missing_debug_implementations = "warn"
 rust_2018_idioms = { level = "warn", priority = -1 }
 unreachable_pub = "warn"

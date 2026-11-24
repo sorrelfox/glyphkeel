@@ -94,7 +94,8 @@ JSON files can't carry comments and are exempt.
 - `cargo clippy --workspace --all-targets -- -D warnings` passes. Lint levels
   live in the root `Cargo.toml`. If a lint must be silenced, use a narrowly
   scoped `#[expect(...)]` with a comment that says why.
-- No `unsafe`: `unsafe_code` is denied workspace-wide.
+- No `unsafe`: `unsafe_code` is forbidden workspace-wide, so no crate or
+  module can allow it.
 - No `unwrap()` outside tests; return errors or document the invariant with
   `expect("…")`.
 

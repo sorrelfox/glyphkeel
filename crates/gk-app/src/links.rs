@@ -52,8 +52,11 @@ mod system {
         let uri = uri.to_owned();
         let (answer, answered) = std::sync::mpsc::channel();
         app.run_on_main_thread(move || {
-            let result = gio::AppInfo::launch_default_for_uri(&uri, None::<&gio::AppLaunchContext>)
-                .map_err(|e| e.to_string());
+            let result = gio::AppInfo::launch_default_for_uri(
+                &uri,
+                Some(&crate::memory_env::launch_context()),
+            )
+            .map_err(|e| e.to_string());
             let _ = answer.send(result);
         })
         .map_err(|e| OpError::storage(format!("The link can't be opened: {e}.")))?;

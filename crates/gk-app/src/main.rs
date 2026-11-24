@@ -11,12 +11,13 @@ mod app_settings;
 mod background;
 mod cli_tool;
 mod files;
-mod heap;
 #[cfg(target_os = "linux")]
 mod instance;
 mod ipc;
 mod links;
 mod main_window;
+#[cfg(target_os = "linux")]
+mod memory_env;
 mod messages;
 mod navigation;
 #[cfg(target_os = "linux")]
@@ -49,8 +50,8 @@ use crate::start::Shown;
 use crate::title_bar::TitleBar;
 
 fn main() -> ExitCode {
-    heap::limit();
-    heap::start_trimming();
+    #[cfg(target_os = "linux")]
+    memory_env::restart_with_settings();
     #[cfg(target_os = "linux")]
     let (activations, _bus, first_links, first_quick_add) = {
         let this_start = instance::this_start();
