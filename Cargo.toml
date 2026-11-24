@@ -9,7 +9,7 @@ members = ["crates/*", "tools/*", "xtask"]
 default-members = ["crates/*"]
 
 [workspace.package]
-version = "0.0.6"
+version = "0.0.7"
 edition = "2024"
 # Keep equal to the channel in rust-toolchain.toml and `msrv` in clippy.toml.
 rust-version = "1.100"

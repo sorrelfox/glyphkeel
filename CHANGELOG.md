@@ -5,6 +5,40 @@ Conventional Commits, and versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.0.7] - 2026-11-24
+
+History and safety: a trash, backups, archives and a feed of every change.
+
+### Features
+
+- **Trash:** deleted tasks, comments, files, time entries, wiki pages and
+  projects go to the trash, with Undo, and can be restored from the Trash
+  screen. Items are purged after the number of days set for the workspace;
+  emptying the trash is permanent and asks first. Agents may delete only a
+  few items at a time, and only full access may delete projects or purge.
+- **Backups:** a daily backup runs in the background, and the command line
+  takes one when the last is overdue. Daily, weekly and other backups are
+  rotated. In Preferences → Data and backups you can back up now, check a
+  backup, restore it or delete it; restoring and deleting ask first, and the
+  app reopens the workspace after a restore.
+- **Export and import:** export the whole workspace or chosen projects as a
+  zip archive or a folder, and import such an archive. Import checks the
+  whole archive first, shows what it will add and which task keys are taken,
+  lets you choose new keys, and can be undone. Unsafe archives are refused
+  before anything is written.
+- **Activity:** a screen listing every change in the workspace, by people and
+  agents, with filters and revert where possible. The task's History tab
+  shows deletions and restores.
+- **Command line and agents:** `glyphkeel trash`, `glyphkeel backup`,
+  `glyphkeel export` and `glyphkeel import`, and the matching agent tools.
+
+### Fixes
+
+- A description or comment edited in another window or by an agent while you
+  were editing it is no longer overwritten when you save.
+- A running timer stops, and its time is logged, when its task goes to the
+  trash.
+
 ## [0.0.6] - 2026-11-23
 
 Today, search across the whole workspace, a command palette and quick add from
