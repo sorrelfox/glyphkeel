@@ -21,6 +21,7 @@ export function settings(overrides: Partial<Settings> = {}): Settings {
 
 export function workspaceInfo(overrides: Partial<WorkspaceInfo> = {}): WorkspaceInfo {
   return {
+    agent_limits: { writes_per_minute: 120, new_tasks_per_day: 500, trash_items_per_call: 20, trash_items_per_hour: 50 },
     caller: { actor: { kind: "user", name: "You" }, via: "app" },
     guide: "",
     id: "w-1",
