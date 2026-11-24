@@ -34,6 +34,7 @@ use super::fields::text;
 use super::lookup::{self, b, id_at};
 use super::relation::bump;
 use crate::failure::Failure;
+use crate::messages;
 use crate::registry::{CommandFn, Registry};
 use crate::time::rfc3339;
 use crate::write::WriteCtx;
@@ -59,13 +60,15 @@ pub(super) fn register(r: &mut Registry) {
         let id = find(q.tx, &input.attachment)?;
         let file = load(q.tx, id)?;
         let thumb = crate::thumbs::get(&q.env.layout, &file.sha256, &file.mime).map_err(|e| {
-            Failure::Op(
-                OpError::invalid_at(
+            Failure::Op(messages::hint(
+                messages::invalid_at(
                     "attachment",
-                    format!("{} has no thumbnail: {e}.", file.name),
-                )
-                .with_hint("Thumbnails are made for PNG, JPEG, GIF and WebP images."),
-            )
+                    "file-no-thumbnail",
+                    &[("name", file.name.clone()), ("error", e.to_string())],
+                ),
+                "file-no-thumbnail-hint",
+                &[],
+            ))
         })?;
         Ok(Thumbnail {
             attachment: file.id,
@@ -77,17 +80,24 @@ pub(super) fn register(r: &mut Registry) {
     });
     r.engine_op::<FileAttach, _>(desc::<FileAttach>(), |engine, ctx, input| {
         let prepared = Arc::new(prepare(engine, &input)?);
-        let value = serde_json::to_value(&input).map_err(|e| OpError::invalid(e.to_string()))?;
+        let value = serde_json::to_value(&input)
+            .map_err(|e| messages::storage("storage-json", &[("error", e.to_string())]))?;
         let for_command = Arc::clone(&prepared);
         let f: CommandFn = Arc::new(move |w, _| {
             let change = attach(w, &input, &for_command)?;
-            serde_json::to_value(change).map_err(|e| Failure::Op(OpError::storage(e.to_string())))
+            serde_json::to_value(change).map_err(|e| {
+                Failure::Op(messages::storage(
+                    "storage-json",
+                    &[("error", e.to_string())],
+                ))
+            })
         });
         let op = descriptor(FileAttach::ID)
             .ok_or_else(|| OpError::storage("file.attach is not in the catalog"))?;
         let output = engine.execute_command(ctx, op, f, value)?;
         make_thumbnail(engine, &prepared);
-        serde_json::from_value(output).map_err(|e| OpError::storage(e.to_string()))
+        serde_json::from_value(output)
+            .map_err(|e| messages::storage("storage-json", &[("error", e.to_string())]))
     });
     r.command::<FileDelete, _>(desc::<FileDelete>(), |w, input: FileRef| {
         let id = find(w.tx(), &input.attachment)?;
@@ -202,11 +212,12 @@ pub(crate) fn of_comment(tx: &Transaction<'_>, comment: Id) -> Result<Vec<Attach
 /// The live attachment `text` names (its ID), on a live task.
 fn find(tx: &Transaction<'_>, text: &str) -> Result<Id, Failure> {
     let missing = || {
-        Failure::Op(
-            OpError::not_found(format!("There is no attached file \"{text}\"."), &[])
-                .with_detail("field", "attachment")
-                .with_hint("Attachment IDs are listed by get_task with include [\"files\"]."),
-        )
+        Failure::Op(messages::hint(
+            messages::not_found("file-not-found", &[("file", text.to_owned())])
+                .with_detail("field", "attachment"),
+            "file-not-found-hint",
+            &[],
+        ))
     };
     let id: Id = text.trim().parse().map_err(|_| missing())?;
     let live: Option<bool> = tx
@@ -256,7 +267,7 @@ fn task_project(tx: &Transaction<'_>, task: Id) -> Result<Id, Failure> {
 
 fn ensure_active(tx: &Transaction<'_>, task: Id) -> Result<(), Failure> {
     let t = lookup::task_by_id(tx, task)?
-        .ok_or_else(|| Failure::Op(OpError::not_found("The file's task is gone.", &[])))?;
+        .ok_or_else(|| Failure::Op(messages::not_found("file-task-gone", &[])))?;
     if let Some(p) = lookup::project_by_id(tx, t.project)? {
         lookup::ensure_active(&p)?;
     }
@@ -270,9 +281,10 @@ fn read(layout: &gk_store::WorkspaceLayout, file: Attachment) -> Result<FileCont
             "application/json" | "application/xml" | "application/yaml" | "application/toml"
         );
     let io = |e: std::io::Error| {
-        Failure::Op(OpError::storage(format!(
-            "The stored file can't be read: {e}."
-        )))
+        Failure::Op(messages::storage(
+            "file-unreadable",
+            &[("error", e.to_string())],
+        ))
     };
     let mut out = FileContent {
         text: None,
@@ -294,14 +306,13 @@ fn read(layout: &gk_store::WorkspaceLayout, file: Attachment) -> Result<FileCont
             let bytes = gk_store::read_file(layout, &out.file.sha256, IMAGE_LIMIT).map_err(io)?;
             out.data_base64 = Some(gk_core::base64_encode(&bytes));
         } else {
-            out.note = Some(format!(
-                "The image is larger than {} MB, so its content is not returned.",
-                IMAGE_LIMIT / MB
+            out.note = Some(messages::text(
+                "file-image-too-large",
+                &[("max", (IMAGE_LIMIT / MB).to_string())],
             ));
         }
     } else {
-        out.note =
-            Some("This file is neither text nor an image; only its details are returned.".into());
+        out.note = Some(messages::text("file-not-text-or-image", &[]));
     }
     Ok(out)
 }
@@ -316,22 +327,24 @@ struct Prepared {
 }
 
 fn limit_error(size: u64, max_mb: u32) -> OpError {
-    OpError::new(
-        ErrorCode::Limit,
-        format!(
-            "The file is {:.1} MB; files can be at most {max_mb} MB.",
-            size as f64 / MB as f64
+    messages::hint(
+        messages::error(
+            ErrorCode::Limit,
+            "file-too-large",
+            &[
+                ("size", format!("{:.1}", size as f64 / MB as f64)),
+                ("max", max_mb.to_string()),
+            ],
         ),
+        "file-too-large-hint",
+        &[],
     )
     .with_detail("limit_mb", max_mb)
-    .with_hint("The limit is the workspace setting file_max_mb.")
 }
 
 fn prepare(engine: &crate::engine::Engine, input: &FileAttachInput) -> Result<Prepared, OpError> {
     if input.task.is_some() == input.comment.is_some() {
-        return Err(OpError::invalid(
-            "Name either the `task` or the `comment` to attach the file to.",
-        ));
+        return Err(messages::with("file-attach-to-what", &[], OpError::invalid));
     }
     let max_mb = engine
         .store()
@@ -341,19 +354,25 @@ fn prepare(engine: &crate::engine::Engine, input: &FileAttachInput) -> Result<Pr
     let max = u64::from(max_mb) * MB;
     let (bytes, default_name) = match (&input.path, &input.data_base64) {
         (Some(path), None) => {
-            let meta = std::fs::metadata(path)
-                .map_err(|e| OpError::invalid_at("path", format!("Can't read \"{path}\": {e}.")))?;
-            if !meta.is_file() {
-                return Err(OpError::invalid_at(
+            let unreadable = |e: std::io::Error| {
+                messages::invalid_at(
                     "path",
-                    format!("\"{path}\" is not a file."),
+                    "file-path-unreadable",
+                    &[("path", path.clone()), ("error", e.to_string())],
+                )
+            };
+            let meta = std::fs::metadata(path).map_err(unreadable)?;
+            if !meta.is_file() {
+                return Err(messages::invalid_at(
+                    "path",
+                    "file-path-not-a-file",
+                    &[("path", path.clone())],
                 ));
             }
             if meta.len() > max {
                 return Err(limit_error(meta.len(), max_mb));
             }
-            let bytes = std::fs::read(path)
-                .map_err(|e| OpError::invalid_at("path", format!("Can't read \"{path}\": {e}.")))?;
+            let bytes = std::fs::read(path).map_err(unreadable)?;
             (bytes, Some(path.clone()))
         }
         (None, Some(data)) => {
@@ -361,23 +380,23 @@ fn prepare(engine: &crate::engine::Engine, input: &FileAttachInput) -> Result<Pr
                 return Err(limit_error(data.len() as u64 / 4 * 3, max_mb));
             }
             let bytes = gk_core::base64_decode(data)
-                .map_err(|e| OpError::invalid_at("data_base64", format!("{e}.")))?;
+                .map_err(|e| OpError::from(super::task::invalid("data_base64", e)))?;
             (bytes, None)
         }
         _ => {
-            return Err(OpError::invalid(
-                "Give either `path` or `data_base64` (with `name`).",
-            ));
+            return Err(messages::with("file-path-or-data", &[], OpError::invalid));
         }
     };
     if bytes.len() as u64 > max {
         return Err(limit_error(bytes.len() as u64, max_mb));
     }
-    let raw_name = input.name.clone().or(default_name).ok_or_else(|| {
-        OpError::invalid_at("name", "A file given as `data_base64` needs a `name`.")
-    })?;
+    let raw_name = input
+        .name
+        .clone()
+        .or(default_name)
+        .ok_or_else(|| messages::invalid_at("name", "file-data-needs-name", &[]))?;
     let name = gk_core::clean_file_name(&raw_name)
-        .map_err(|e| OpError::invalid_at("name", format!("{e}.")))?;
+        .map_err(|e| OpError::from(super::task::invalid("name", e)))?;
     let mime = gk_core::sniff(&bytes, &name);
     let size = if mime.starts_with("image/") {
         gk_core::image_size(&bytes)
@@ -385,7 +404,7 @@ fn prepare(engine: &crate::engine::Engine, input: &FileAttachInput) -> Result<Pr
         None
     };
     let stored = gk_store::store_file(&engine.env().layout, &bytes)
-        .map_err(|e| OpError::storage(format!("The file can't be stored: {e}.")))?;
+        .map_err(|e| messages::storage("file-not-stored", &[("error", e.to_string())]))?;
     Ok(Prepared {
         bytes,
         name,
@@ -415,7 +434,10 @@ fn make_thumbnail(engine: &crate::engine::Engine, prepared: &Prepared) {
 fn ensure_stored(w: &WriteCtx<'_>, sha256: &str, bytes: &[u8]) -> Result<(), Failure> {
     if !gk_store::has_file(w.layout(), sha256, bytes.len() as u64) {
         gk_store::store_file(w.layout(), bytes).map_err(|e| {
-            Failure::Op(OpError::storage(format!("The file can't be stored: {e}.")))
+            Failure::Op(messages::storage(
+                "file-not-stored",
+                &[("error", e.to_string())],
+            ))
         })?;
     }
     w.tx().execute(
@@ -531,7 +553,9 @@ fn attach(
             let c = super::comment::find(w.tx(), comment)?;
             ("comment", c.id, c.task)
         }
-        (None, None) => return Err(OpError::invalid("Name the task or the comment.").into()),
+        (None, None) => {
+            return Err(messages::with("file-task-or-comment", &[], OpError::invalid).into());
+        }
     };
     ensure_active(w.tx(), task)?;
     let project = task_project(w.tx(), task)?;
@@ -641,10 +665,7 @@ pub(crate) fn set_live(
             |r| Ok((r.get(0)?, r.get(1)?)),
         )?;
         if !gk_store::has_file(w.layout(), &sha256, u64::try_from(size).unwrap_or(0)) {
-            return Err(OpError::conflict(
-                "The file's content is no longer stored, so it can't come back.",
-            )
-            .into());
+            return Err(messages::conflict("file-content-gone", &[]).into());
         }
         w.tx().execute(
             "UPDATE attachments SET deleted_at = NULL, deleted_group = NULL WHERE id = ?1",

@@ -11,7 +11,6 @@
 //!
 //! History records a comment's `created` (its life), `trashed` and `body`.
 
-use gk_api::OpError;
 use gk_api::ops::comment::{
     Comment, CommentAdd, CommentAddInput, CommentChange, CommentDelete, CommentList,
     CommentListInput, CommentListOp, CommentRef, CommentRevision, CommentUpdate,
@@ -28,6 +27,7 @@ use super::fields::text;
 use super::lookup::{self, b, id_at, opt_id_at};
 use super::relation::bump;
 use crate::failure::Failure;
+use crate::messages;
 use crate::registry::Registry;
 use crate::time::rfc3339;
 use crate::write::WriteCtx;
@@ -161,11 +161,12 @@ pub(crate) struct CommentRow {
 /// The live comment `text` names (its ID).
 pub(crate) fn find(tx: &Transaction<'_>, text: &str) -> Result<CommentRow, Failure> {
     let missing = || {
-        Failure::Op(
-            OpError::not_found(format!("There is no comment \"{text}\"."), &[])
-                .with_detail("field", "comment")
-                .with_hint("Comment IDs are listed by get_task with include [\"comments\"]."),
-        )
+        Failure::Op(messages::hint(
+            messages::not_found("comment-not-found", &[("comment", text.to_owned())])
+                .with_detail("field", "comment"),
+            "comment-not-found-hint",
+            &[],
+        ))
     };
     let id: Id = text.trim().parse().map_err(|_| missing())?;
     tx.query_row(
@@ -188,14 +189,14 @@ pub(crate) fn find(tx: &Transaction<'_>, text: &str) -> Result<CommentRow, Failu
 
 fn ensure_active(tx: &Transaction<'_>, task: Id) -> Result<(), Failure> {
     let t = lookup::task_by_id(tx, task)?
-        .ok_or_else(|| Failure::Op(OpError::not_found("The comment's task is gone.", &[])))?;
+        .ok_or_else(|| Failure::Op(messages::not_found("comment-task-gone", &[])))?;
     if let Some(p) = lookup::project_by_id(tx, t.project)? {
         lookup::ensure_active(&p)?;
     }
     Ok(())
 }
 
-fn invalid(field: &str, e: impl std::fmt::Display) -> Failure {
+fn invalid(field: &str, e: impl gk_core::Message) -> Failure {
     super::task::invalid(field, e)
 }
 
@@ -253,17 +254,17 @@ pub(crate) fn add_comment(
     let reply_to = match &input.reply_to {
         Some(text) => {
             let c = find(w.tx(), text).map_err(|_| {
-                Failure::Op(OpError::not_found(
-                    format!("There is no comment \"{text}\" on this task."),
-                    &[],
+                Failure::Op(messages::not_found(
+                    "comment-not-on-task",
+                    &[("comment", text.clone())],
                 ))
             })?;
             if c.task != task.id {
-                return Err(OpError::invalid_at(
+                return Err(messages::invalid(
                     "reply_to",
-                    "An answer must be on the same task as the comment it answers.",
-                )
-                .into());
+                    "comment-reply-other-task",
+                    &[],
+                ));
             }
             Some(c.id)
         }
@@ -330,7 +331,7 @@ pub(crate) fn set_body(
 ) -> Result<bool, Failure> {
     let before = raw_body(w.tx(), id)?;
     let Some(Value::String(old)) = &before else {
-        return Err(OpError::not_found("The comment is gone.", &[]).into());
+        return Err(messages::not_found("comment-gone", &[]).into());
     };
     if old == body {
         return Ok(false);
@@ -371,12 +372,18 @@ fn update(w: &mut WriteCtx<'_>, input: CommentUpdateInput) -> Result<CommentChan
     if let Some(expected) = input.expected_version
         && expected != c.version
     {
-        return Err(OpError::conflict(format!(
-            "The comment changed since you read it: it has version {}, not {expected}.",
-            c.version
-        ))
-        .with_detail("version", c.version)
-        .with_hint("Read the comment again and repeat the change.")
+        return Err(messages::hint(
+            messages::conflict(
+                "comment-version",
+                &[
+                    ("version", c.version.to_string()),
+                    ("expected", expected.to_string()),
+                ],
+            )
+            .with_detail("version", c.version),
+            "comment-version-hint",
+            &[],
+        )
         .into());
     }
     gk_core::check_comment(&input.body).map_err(|e| invalid("body", e))?;

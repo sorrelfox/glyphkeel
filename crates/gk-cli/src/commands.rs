@@ -12,6 +12,7 @@ use clap::{Arg, ArgAction, Command};
 use gk_api::{CATALOG, OpDescriptor};
 
 use crate::input::{self, Field};
+use crate::messages::text;
 
 /// Global options.
 pub(crate) const WORKSPACE: &str = "workspace";
@@ -29,6 +30,10 @@ pub(crate) const COMPLETIONS: &str = "completions";
 pub(crate) const MAN: &str = "man";
 #[cfg(test)]
 pub(crate) const BUILT_IN: &[&str] = &[OPEN, MCP, COMPLETIONS, MAN];
+
+/// Commands renamed in this version: the old words still run the
+/// operation for one more version, without showing in help or completions.
+pub(crate) const RENAMED: &[(&str, &str)] = &[("status", "workspace")];
 
 /// One operation reachable from the command line.
 #[derive(Debug, Clone)]
@@ -67,26 +72,19 @@ pub(crate) fn op_commands() -> Vec<OpCommand> {
 pub(crate) fn build(ops: &[OpCommand]) -> Command {
     let mut root = Command::new("glyphkeel")
         .version(env!("CARGO_PKG_VERSION"))
-        .about("Glyphkeel, a local task manager, from the command line.")
-        .long_about(
-            "Glyphkeel, a local task manager, from the command line.\n\n\
-             Without a command, starts the desktop app (with `--quick-add`, only its \
-             quick-add window). Every other command runs one operation on the workspace, \
-             also while the app is open.",
-        )
-        .after_help(
-            "Exit codes: 0 success, 1 usage error or invalid input, 2 not found, \
-             3 change rejected, 4 workspace or storage problem.",
-        )
+        .about(text("cli-about", &[]))
+        .long_about(format!(
+            "{}\n\n{}",
+            text("cli-about", &[]),
+            text("cli-long-about", &[])
+        ))
+        .after_help(text("cli-exit-codes", &[]))
         .subcommand_required(false)
         .arg(
             Arg::new(QUICK_ADD)
                 .long(QUICK_ADD)
                 .action(ArgAction::SetTrue)
-                .help(
-                    "Open the desktop app's quick-add window to capture a task, starting the app \
-                     if it isn't running (a command for a desktop shortcut)",
-                ),
+                .help(text("cli-quick-add-help", &[])),
         )
         .arg(
             Arg::new(WORKSPACE)
@@ -94,14 +92,14 @@ pub(crate) fn build(ops: &[OpCommand]) -> Command {
                 .short('w')
                 .global(true)
                 .value_name("NAME|PATH")
-                .help("The workspace: a name in the data folder, or a folder path [default: Personal]"),
+                .help(text("cli-workspace-help", &[])),
         )
         .arg(
             Arg::new(JSON)
                 .long(JSON)
                 .global(true)
                 .action(ArgAction::SetTrue)
-                .help("Print the operation's output as JSON"),
+                .help(text("cli-json-help", &[])),
         )
         .arg(
             Arg::new(QUIET)
@@ -109,51 +107,61 @@ pub(crate) fn build(ops: &[OpCommand]) -> Command {
                 .short('q')
                 .global(true)
                 .action(ArgAction::SetTrue)
-                .help("Print nothing on success; errors still go to standard error"),
+                .help(text("cli-quiet-help", &[])),
         )
         .arg(
             Arg::new(NO_COLOR)
                 .long(NO_COLOR)
                 .global(true)
                 .action(ArgAction::SetTrue)
-                .help("No colours in help and messages (also with NO_COLOR set)"),
+                .help(text("cli-no-color-help", &[])),
         )
         .arg(
             Arg::new(TZ)
                 .long(TZ)
                 .global(true)
                 .value_name("ZONE")
-                .help(
-                    "The time zone of \"today\" and local times for this command: \"system\" or \
-                     an IANA name such as Europe/Berlin [default: the personal setting]",
-                ),
+                .help(text("cli-tz-help", &[])),
         );
 
     let mut tree = Node::default();
     for (i, c) in ops.iter().enumerate() {
         tree.insert(&c.path, i);
     }
+    for (old, new) in RENAMED {
+        let Some(i) = ops.iter().position(|c| c.path == [*new]) else {
+            continue;
+        };
+        match tree.children.iter_mut().find(|c| c.name == *old) {
+            Some(node) if node.op.is_none() => {
+                node.op = Some(i);
+                node.renamed = true;
+            }
+            Some(_) => {}
+            None => tree.children.push(Node {
+                name: (*old).to_owned(),
+                op: Some(i),
+                renamed: true,
+                children: Vec::new(),
+            }),
+        }
+    }
     for child in tree.children {
         root = root.subcommand(child.into_command(ops));
     }
 
     root.subcommand(
-        Command::new(OPEN)
-            .about("Start the desktop app, optionally at tasks or other links")
-            .arg(
-                Arg::new("links")
-                    .value_name("LINK")
-                    .num_args(0..)
-                    .help("A task key (`TM-41`) or a `glyphkeel://` link"),
-            ),
+        Command::new(OPEN).about(text("cli-open-about", &[])).arg(
+            Arg::new("links")
+                .value_name("LINK")
+                .num_args(0..)
+                .help(text("cli-open-links-help", &[])),
+        ),
     )
     .subcommand(
         Command::new(MCP)
-            .about("Serve the workspace to an AI agent over MCP (standard input and output)")
-            .long_about(
-                "Serve the workspace to an AI agent over MCP (standard input and output). \
-                 The arguments are those of the MCP server; `glyphkeel mcp --help` lists them.",
-            )
+            .about(text("cli-mcp-about", &[]))
+            .long_about(text("cli-mcp-long-about", &[]))
             .disable_help_flag(true)
             .arg(
                 Arg::new("args")
@@ -165,7 +173,7 @@ pub(crate) fn build(ops: &[OpCommand]) -> Command {
     )
     .subcommand(
         Command::new(COMPLETIONS)
-            .about("Print the shell completion script")
+            .about(text("cli-completions-about", &[]))
             .arg(
                 Arg::new("shell")
                     .required(true)
@@ -175,7 +183,7 @@ pub(crate) fn build(ops: &[OpCommand]) -> Command {
     .subcommand(
         Command::new(MAN)
             .hide(true)
-            .about("Print the man page (roff)"),
+            .about(text("cli-man-about", &[])),
     )
 }
 
@@ -184,6 +192,8 @@ pub(crate) fn build(ops: &[OpCommand]) -> Command {
 struct Node {
     name: String,
     op: Option<usize>,
+    /// The operation is here under its old name only.
+    renamed: bool,
     children: Vec<Node>,
 }
 
@@ -211,14 +221,20 @@ impl Node {
         let has_children = !self.children.is_empty();
         if let Some(i) = self.op {
             let c = &ops[i];
-            cmd = cmd.about(c.op.summary).args(input::args(c.op, &c.fields));
+            cmd = cmd.args(input::args(c.op, &c.fields));
+            if !self.renamed {
+                cmd = cmd.about(c.op.summary);
+            } else if has_children {
+                cmd = cmd.about(group_about(&self.children));
+            } else {
+                cmd = cmd.hide(true);
+            }
             if has_children {
                 cmd = cmd.args_conflicts_with_subcommands(true);
             }
         } else {
-            let words: Vec<&str> = self.children.iter().map(|c| c.name.as_str()).collect();
             cmd = cmd
-                .about(format!("Commands: {}", words.join(", ")))
+                .about(group_about(&self.children))
                 .subcommand_required(true)
                 .arg_required_else_help(true);
         }
@@ -227,6 +243,12 @@ impl Node {
         }
         cmd
     }
+}
+
+/// The help line of a command that only groups others.
+fn group_about(children: &[Node]) -> String {
+    let words: Vec<&str> = children.iter().map(|c| c.name.as_str()).collect();
+    text("cli-group-about", &[("commands", words.join(", "))])
 }
 
 /// The operation the parsed command line names, with the matches of its
@@ -240,6 +262,11 @@ pub(crate) fn find<'a, 'm>(
     while let Some((name, sub)) = m.subcommand() {
         path.push(name.to_owned());
         m = sub;
+    }
+    if let [word] = path.as_slice()
+        && let Some((_, new)) = RENAMED.iter().find(|(old, _)| old == word)
+    {
+        path = vec![(*new).to_owned()];
     }
     ops.iter().find(|c| c.path == path).map(|c| (c, m))
 }

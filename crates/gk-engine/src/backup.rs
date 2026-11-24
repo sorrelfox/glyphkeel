@@ -46,6 +46,72 @@ pub const KEEP_OTHER: usize = 3;
 const MAX_PROBLEMS: usize = 100;
 const DAY_MS: i64 = 86_400_000;
 
+/// The workspace setting that moves the backup folder.
+pub(crate) const SETTING: &str = "backup_folder";
+
+/// Checks a folder the person chose for backups and creates it: an
+/// absolute path, outside the workspace's own folder, where files can be
+/// written. Returns the path as given, without a trailing separator.
+pub(crate) fn check_folder(
+    layout: &WorkspaceLayout,
+    text: &str,
+) -> Result<PathBuf, crate::failure::Failure> {
+    let field = "folder";
+    let path = PathBuf::from(text.trim());
+    if text.trim().is_empty() || !path.is_absolute() {
+        return Err(messages::invalid(
+            field,
+            "backup-folder-not-absolute",
+            &[("path", text.to_owned())],
+        ));
+    }
+    let shown = [("path", path.display().to_string())];
+    if path
+        .components()
+        .any(|c| matches!(c, std::path::Component::ParentDir))
+    {
+        return Err(messages::invalid(
+            field,
+            "backup-folder-not-absolute",
+            &shown,
+        ));
+    }
+    let inside = |folder: &Path| {
+        let workspace = fs::canonicalize(layout.root()).unwrap_or_else(|_| layout.root().into());
+        folder.starts_with(&workspace) || folder.starts_with(layout.root())
+    };
+    if inside(&path) {
+        return Err(messages::invalid(
+            field,
+            "backup-folder-inside-workspace",
+            &shown,
+        ));
+    }
+    let unwritable = |e: std::io::Error| {
+        messages::invalid(
+            field,
+            "backup-folder-unwritable",
+            &[
+                ("path", path.display().to_string()),
+                ("error", e.to_string()),
+            ],
+        )
+    };
+    fs::create_dir_all(&path).map_err(unwritable)?;
+    let real = fs::canonicalize(&path).map_err(unwritable)?;
+    if inside(&real) {
+        return Err(messages::invalid(
+            field,
+            "backup-folder-inside-workspace",
+            &shown,
+        ));
+    }
+    let probe = real.join(format!(".write-check-{}", std::process::id()));
+    fs::write(&probe, b"").map_err(unwritable)?;
+    let _ = fs::remove_file(&probe);
+    Ok(path.components().collect())
+}
+
 /// The backup folder of the workspace at `layout` when nothing else is set:
 /// `<data>/backups/<name>` for a workspace in the data folder
 /// (`<data>/workspaces/<name>`), else the workspace's own `backups` folder.

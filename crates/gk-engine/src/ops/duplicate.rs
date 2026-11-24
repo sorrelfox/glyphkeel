@@ -13,7 +13,6 @@
 
 use std::collections::HashMap;
 
-use gk_api::OpError;
 use gk_api::ops::task::{TaskChange, TaskDuplicate, TaskDuplicateInput, TaskPart};
 use gk_core::{Id, LinkKind};
 use gk_store::rusqlite::params;
@@ -23,6 +22,7 @@ use super::desc;
 use super::lookup::{self, List, Target, b, opt_id_at};
 use super::task::{NewTask, descendants, first_status, invalid, label_ids};
 use crate::failure::Failure;
+use crate::messages;
 use crate::registry::Registry;
 use crate::write::WriteCtx;
 
@@ -68,9 +68,9 @@ fn source(w: &WriteCtx<'_>, id: Id) -> Result<Source, Failure> {
 fn duplicate(w: &mut WriteCtx<'_>, input: TaskDuplicateInput) -> Result<TaskChange, Failure> {
     let original = lookup::task(w.tx(), "key", &input.key)?;
     let project = lookup::project_by_id(w.tx(), original.project)?.ok_or_else(|| {
-        Failure::Op(OpError::not_found(
-            format!("There is no task \"{}\".", input.key),
-            &[],
+        Failure::Op(messages::not_found(
+            "task-not-found",
+            &[("task", input.key.clone())],
         ))
     })?;
     lookup::ensure_active(&project)?;
@@ -127,7 +127,7 @@ fn duplicate(w: &mut WriteCtx<'_>, input: TaskDuplicateInput) -> Result<TaskChan
     let copy = copies
         .get(&original.id)
         .copied()
-        .ok_or_else(|| Failure::Op(OpError::storage("The copy was not made.")))?;
+        .ok_or_else(|| Failure::Op(messages::storage("storage-copy-not-made", &[])))?;
     let (relation, from, to) = LinkKind::Clones.stored(copy, original.id);
     let link = Id::generate_at(u64::try_from(w.now()).unwrap_or(0));
     let caller = w.caller().clone();

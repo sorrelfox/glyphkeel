@@ -452,7 +452,11 @@ fn task_dates_accept_natural_forms_in_the_workspace_zone() {
         json!({ "key": "TM-1", "due_date": "2026-02-30" }),
     );
     assert_eq!(impossible.code, ErrorCode::Invalid);
-    assert!(impossible.details.get("message_id").is_none());
+    // Not the natural forms' message: what is wrong with the date itself.
+    assert_eq!(
+        impossible.details["message_id"],
+        "value-day-not-in-calendar"
+    );
     ws.engine.set_time_zone("Pacific/Kiritimati").unwrap();
     let east = ws.call(
         "task.update",

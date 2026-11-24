@@ -580,6 +580,93 @@ fn backups_are_made_rotated_checked_and_deleted() {
     }
 }
 
+#[test]
+fn the_person_moves_the_backup_folder_in_the_app_only() {
+    let dir = TempDir::new().unwrap();
+    let ws = setup(&dir);
+    let app = Context::user(Via::App);
+    let default = ws.engine.backups().root().to_path_buf();
+    let elsewhere = dir.path().join("Elsewhere").join("Backups");
+
+    let moved = ws.as_(
+        &app,
+        "backup.folder.update",
+        json!({ "folder": elsewhere.to_str().unwrap() }),
+    );
+    assert_eq!(moved["changed"], json!(["backup_folder"]), "{moved}");
+    assert_eq!(
+        moved["settings"]["backup_folder"],
+        elsewhere.to_str().unwrap()
+    );
+    assert!(elsewhere.is_dir());
+    let made = ws.call("backup.create", json!({}));
+    let list = ws.call("backup.list", json!({}));
+    assert_eq!(list["folder"], elsewhere.to_str().unwrap(), "{list}");
+    assert_eq!(list["items"][0]["name"], made["name"]);
+    assert!(elsewhere.join("backups.json").is_file());
+    assert!(!default.join("backups.json").exists());
+    // Another program opening the workspace uses the same folder.
+    let cli = open_as(&dir, Role::Cli, Arc::new(AtomicI64::new(START)));
+    assert_eq!(cli.engine.backups().root(), elsewhere.as_path());
+    drop(cli);
+
+    // Checked: a full path, outside the workspace, writable.
+    for (folder, id) in [
+        ("Backups", "backup-folder-not-absolute"),
+        ("", "backup-folder-not-absolute"),
+        ("/tmp/../etc", "backup-folder-not-absolute"),
+    ] {
+        let err = ws.fails(&app, "backup.folder.update", json!({ "folder": folder }));
+        assert_eq!(err.code, ErrorCode::Invalid, "{folder}");
+        assert_eq!(err.details["message_id"], id, "{folder}");
+        assert_eq!(err.details["path"], "folder");
+    }
+    let inside = ws.layout.root().join("more");
+    let err = ws.fails(
+        &app,
+        "backup.folder.update",
+        json!({ "folder": inside.to_str().unwrap() }),
+    );
+    assert_eq!(err.details["message_id"], "backup-folder-inside-workspace");
+    let file = dir.path().join("a-file");
+    std::fs::write(&file, b"not a folder").unwrap();
+    let err = ws.fails(
+        &app,
+        "backup.folder.update",
+        json!({ "folder": file.to_str().unwrap() }),
+    );
+    assert_eq!(err.details["message_id"], "backup-folder-unwritable");
+
+    // Neither agents nor the command line may move it, nor revert a move.
+    let agent = ws.agent("Agent", Profile::Full);
+    let err = ws.fails(&agent, "backup.folder.update", json!({}));
+    assert_eq!(err.code, ErrorCode::Forbidden);
+    let err = ws.fails(&me(), "backup.folder.update", json!({}));
+    assert_eq!(err.code, ErrorCode::Forbidden);
+    assert_eq!(err.details["message_id"], "op-app-only");
+    let err = ws.fails(&me(), "settings.update", json!({ "backup_folder": "/tmp" }));
+    assert_eq!(err.code, ErrorCode::Invalid);
+    for ctx in [&me(), &agent] {
+        let revert = ws.as_(ctx, "history.revert", json!({ "groups": [moved["group"]] }));
+        assert_eq!(
+            revert["skipped"][0]["reason_id"], "revert-app-only-setting",
+            "{revert}"
+        );
+    }
+    assert_eq!(
+        ws.call("settings.get", json!({}))["backup_folder"],
+        elsewhere.to_str().unwrap()
+    );
+
+    // Leaving the folder out goes back to the default.
+    let back = ws.as_(&app, "backup.folder.update", json!({}));
+    assert_eq!(back["changed"], json!(["backup_folder"]), "{back}");
+    assert!(back["settings"].get("backup_folder").is_none(), "{back}");
+    assert_eq!(ws.engine.backups().root(), default.as_path());
+    let again = ws.as_(&app, "backup.folder.update", json!({}));
+    assert_eq!(again["changed"], json!([]));
+}
+
 fn walk(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
     let mut out = Vec::new();
     for e in std::fs::read_dir(dir).unwrap().flatten() {

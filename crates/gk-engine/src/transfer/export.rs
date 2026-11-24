@@ -653,7 +653,8 @@ fn sessions(
 }
 
 fn line<T: Serialize>(out: &mut Vec<u8>, record: &T) -> Result<(), OpError> {
-    serde_json::to_writer(&mut *out, record).map_err(|e| OpError::storage(e.to_string()))?;
+    serde_json::to_writer(&mut *out, record)
+        .map_err(|e| messages::storage("storage-json", &[("error", e.to_string())]))?;
     out.push(b'\n');
     Ok(())
 }
@@ -778,8 +779,8 @@ fn write_all(
         );
         let key = &p.file.project.key;
         let dir = project_dir(key);
-        let project_json =
-            serde_json::to_vec_pretty(&p.file).map_err(|e| OpError::storage(e.to_string()))?;
+        let project_json = serde_json::to_vec_pretty(&p.file)
+            .map_err(|e| messages::storage("storage-json", &[("error", e.to_string())]))?;
         sink.put(&format!("{dir}/project.json"), &project_json)
             .map_err(io)?;
         sink.put(&format!("{dir}/tasks.jsonl"), &jsonl(&p.tasks)?)
@@ -862,8 +863,8 @@ fn write_all(
         counts: counts.clone(),
         hashes: sink.hashes.clone(),
     };
-    let bytes =
-        serde_json::to_vec_pretty(&manifest).map_err(|e| OpError::storage(e.to_string()))?;
+    let bytes = serde_json::to_vec_pretty(&manifest)
+        .map_err(|e| messages::storage("storage-json", &[("error", e.to_string())]))?;
     sink.put_manifest(&bytes).map_err(io)?;
     Ok(ArchiveCounts {
         projects: counts.projects,

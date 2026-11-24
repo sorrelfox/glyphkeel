@@ -69,7 +69,7 @@ pub(crate) const WORKSPACE_GET: OpDescriptor = OpDescriptor::of::<WorkspaceGet>(
     kind: OpKind::Query,
     safety: Safety::Read,
     exposure: Exposure::Data,
-    cli: Some("status"),
+    cli: Some("workspace"),
     input_name: "WorkspaceGetInput",
     output_name: "WorkspaceInfo",
 });

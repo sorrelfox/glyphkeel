@@ -217,7 +217,8 @@ Example: search {\"text\": \"timeout retry\", \"kinds\": [\"task\", \"comment\"]
         title: "Activity log",
         description: "Lists recent changes, newest first: who changed what, when, and through which \
 program, with each field's value before and after. Filter by `session` (\"current\" for your own \
-changes), `actor` or `group`; page with `cursor`. Set `sessions: true` to also list agent sessions. \
+changes), `actor`, `actor_kind` (\"user\" or \"agent\"), `group`, `task`, `project` (with its \
+sub-projects), and the days `from` and `to`; page with `cursor`. Set `sessions: true` to also list agent sessions. \
 Use it to check what you or another agent changed before reverting. \
 Example: get_activity {\"session\": \"current\", \"limit\": 20}",
         main: "history.feed",

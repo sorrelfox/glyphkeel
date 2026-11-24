@@ -246,6 +246,7 @@ pub static CATALOG: &[OpDescriptor] = &[
     backup::BACKUP_VERIFY,
     backup::BACKUP_RESTORE,
     backup::BACKUP_DELETE,
+    backup::BACKUP_FOLDER_UPDATE,
     transfer::TRANSFER_EXPORT,
     transfer::TRANSFER_IMPORT,
 ];

@@ -19,7 +19,6 @@
 
 use std::collections::HashMap;
 
-use gk_api::OpError;
 use gk_api::ops::description::{RevisionList, SaveOutcome};
 use gk_api::ops::wiki::{
     Backlink, WikiChange, WikiCreate, WikiCreateInput, WikiField, WikiGet, WikiGetInput,
@@ -171,7 +170,8 @@ fn in_project(
             "choices",
             titles.iter().map(String::as_str).collect::<Vec<_>>(),
         )
-        .with_hint("List the pages with list_wiki_pages (`glyphkeel wiki list`).")
+        .with_hint(messages::text("wiki-list-hint", &[]))
+        .with_detail("hint_id", "wiki-list-hint")
         .into())
 }
 
@@ -232,7 +232,7 @@ pub(crate) fn ensure_title_free(tx: &Transaction<'_>, id: Id) -> Result<(), Fail
 
 fn project_of(tx: &Transaction<'_>, page: &PageRow) -> Result<ProjectRow, Failure> {
     lookup::project_by_id(tx, page.project)?
-        .ok_or_else(|| Failure::Op(OpError::not_found("The page's project is gone.", &[])))
+        .ok_or_else(|| Failure::Op(messages::not_found("wiki-project-gone", &[])))
 }
 
 /// How many pages `id` is nested in.
@@ -963,7 +963,7 @@ fn create(w: &mut WriteCtx<'_>, input: WikiCreateInput) -> Result<WikiChange, Fa
         .iter()
         .find(|(p, _)| *p == id)
         .map(|(_, r)| r.as_str().to_owned())
-        .ok_or_else(|| Failure::Op(OpError::storage("No place was found for the page.")))?;
+        .ok_or_else(|| Failure::Op(messages::storage("wiki-no-place", &[])))?;
     w.tx().execute(
         "INSERT INTO wiki_pages (id, project_id, parent_id, rank, title, title_fold, slug,
                                  created_at, updated_at)
@@ -1017,7 +1017,7 @@ fn update(w: &mut WriteCtx<'_>, input: WikiUpdateInput) -> Result<WikiChange, Fa
     }
     let clears_parent = input.clear.contains(&WikiField::Parent);
     if clears_parent && input.parent.is_some() {
-        return Err(OpError::invalid_at("clear", "Give parent or clear it, not both.").into());
+        return Err(messages::invalid("clear", "wiki-parent-and-clear", &[]));
     }
 
     if let Some(title) = &input.title {
@@ -1137,7 +1137,7 @@ fn changed(
     save: Option<gk_api::ops::description::DescriptionSave>,
 ) -> Result<WikiChange, Failure> {
     let page = by_id(w.tx(), id)?
-        .ok_or_else(|| Failure::Op(OpError::not_found("The page is gone.", &[])))?;
+        .ok_or_else(|| Failure::Op(messages::not_found("wiki-page-gone", &[])))?;
     Ok(WikiChange {
         page: page_out(w.tx(), &page, None, false)?,
         group: w.group_if_changed(),
@@ -1178,10 +1178,7 @@ pub(crate) fn set_live(
             |r| r.get(0),
         )?;
         if inside > 0 {
-            return Err(OpError::conflict(
-                "The page now holds other pages, so its creation can't be reverted.",
-            )
-            .into());
+            return Err(messages::conflict("wiki-holds-pages", &[]).into());
         }
         w.tx().execute(
             "UPDATE wiki_pages SET deleted_at = ?2, deleted_group = ?3, is_agent_brief = 0

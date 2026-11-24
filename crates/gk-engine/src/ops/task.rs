@@ -15,7 +15,7 @@
 //! apart from their places on the board: a new subtask comes last, and
 //! `task.reorder_subtask` moves one within the list.
 
-use gk_api::OpError;
+use gk_api::ErrorCode;
 use gk_api::ops::common::{Actor, ActorKind, Category, Glyph, Hue, Priority};
 use gk_api::ops::task::{
     Checklist, Claim, LabelRef, StatusRef, SubtaskReorderInput, Task, TaskChange, TaskCreate,
@@ -32,6 +32,7 @@ use super::fields::{self, TASK, id_value, priority_name, text};
 use super::lookup::{self, List, ProjectRow, Target, TaskRow, b, id_at, opt_id_at};
 use super::project::{enum_text, parse_enum};
 use crate::failure::Failure;
+use crate::messages;
 use crate::registry::Registry;
 use crate::time::rfc3339;
 use crate::write::WriteCtx;
@@ -44,11 +45,11 @@ const MAX_KEYS: usize = 20;
 pub(super) fn register(r: &mut Registry) {
     r.query::<TaskGet, _>(desc::<TaskGet>(), |q, input: TaskGetInput| {
         if input.keys.is_empty() || input.keys.len() > MAX_KEYS {
-            return Err(OpError::invalid_at(
+            return Err(messages::invalid(
                 "keys",
-                format!("Ask for 1 to {MAX_KEYS} tasks at once."),
-            )
-            .into());
+                "task-get-count",
+                &[("max", MAX_KEYS.to_string())],
+            ));
         }
         let units = units(q.tx)?;
         let mut items = Vec::with_capacity(input.keys.len());
@@ -75,13 +76,8 @@ pub(crate) fn units(tx: &Transaction<'_>) -> Result<DurationUnits, Failure> {
     Ok(DurationUnits::new(s.hours_per_day, s.days_per_week).unwrap_or_default())
 }
 
-pub(crate) fn invalid(field: &str, e: impl std::fmt::Display) -> Failure {
-    let text = e.to_string();
-    let mut chars = text.chars();
-    let message = chars.next().map_or_else(String::new, |c| {
-        format!("{}{}.", c.to_uppercase(), chars.as_str())
-    });
-    Failure::Op(OpError::invalid_at(field, message))
+pub(crate) fn invalid(field: &str, e: impl gk_core::Message) -> Failure {
+    crate::messages::invalid(field, e.message_id(), &e.message_args())
 }
 
 // ---------------------------------------------------------------------
@@ -449,6 +445,17 @@ pub(crate) fn changed(
 /// A date input: `YYYY-MM-DD`, or a natural form (`today`, `fri`, `next
 /// mon`, `in 3d`, `+3d`, `dec 1`) read in the workspace's time zone.
 pub(crate) fn date_input(w: &WriteCtx<'_>, field: &str, text: &str) -> Result<Day, Failure> {
+    parse_date(w.tx(), w.zone(), w.now(), field, text)
+}
+
+/// [`date_input`] outside a command: `now` and `zone` give "today".
+pub(crate) fn parse_date(
+    tx: &Transaction<'_>,
+    zone: &crate::time::Zone,
+    now: i64,
+    field: &str,
+    text: &str,
+) -> Result<Day, Failure> {
     let trimmed = text.trim();
     match trimmed.parse::<Day>() {
         Ok(day) => return Ok(day),
@@ -462,7 +469,7 @@ pub(crate) fn date_input(w: &WriteCtx<'_>, field: &str, text: &str) -> Result<Da
         }
         Err(_) => {}
     }
-    let cal = super::query::calendar(w.tx(), w.zone(), w.now())?;
+    let cal = super::query::calendar(tx, zone, now)?;
     gk_query::parse_natural(trimmed, &cal).ok_or_else(|| {
         crate::messages::invalid(field, "date-invalid", &[("text", trimmed.to_owned())])
     })
@@ -494,10 +501,11 @@ pub(crate) fn first_status(tx: &Transaction<'_>, project: &ProjectRow) -> Result
         .or_else(|| statuses.first())
         .map(|s| s.id)
         .ok_or_else(|| {
-            Failure::Op(OpError::invalid(format!(
-                "Project {} has no statuses; add one first.",
-                project.key
-            )))
+            Failure::Op(messages::error(
+                ErrorCode::Invalid,
+                "project-no-statuses",
+                &[("project", project.key.clone())],
+            ))
         })
 }
 
@@ -511,10 +519,11 @@ pub(crate) fn default_type(tx: &Transaction<'_>, project: &ProjectRow) -> Result
         )
         .optional()?;
     found.ok_or_else(|| {
-        Failure::Op(OpError::invalid(format!(
-            "Project {} has no task types; add one first.",
-            project.key
-        )))
+        Failure::Op(messages::error(
+            ErrorCode::Invalid,
+            "project-no-types",
+            &[("project", project.key.clone())],
+        ))
     })
 }
 
@@ -592,29 +601,33 @@ fn height(tx: &Transaction<'_>, id: Id) -> Result<usize, Failure> {
     Ok(most)
 }
 
-/// Checks that `task` (with its subtasks) may go under `parent`.
+/// Checks that `task` (with its subtasks) may go under `parent`. `key` is
+/// the task's key; `None` for a task not made yet.
 pub(crate) fn check_parent(
     tx: &Transaction<'_>,
     task: Option<Id>,
     project: Id,
     parent: &TaskRow,
-    key: &str,
+    key: Option<&str>,
 ) -> Result<(), Failure> {
     if parent.project != project {
-        return Err(OpError::invalid_at(
-            "parent",
-            format!("{key}'s parent must be in the same project."),
-        )
-        .into());
+        return Err(match key {
+            Some(key) => messages::invalid(
+                "parent",
+                "task-parent-other-project",
+                &[("task", key.to_owned())],
+            ),
+            None => messages::invalid("parent", "task-new-parent-other-project", &[]),
+        });
     }
     let below = match task {
         Some(t) => {
             if descendants(tx, t)?.contains(&parent.id) {
-                return Err(OpError::invalid_at(
+                return Err(messages::invalid(
                     "parent",
-                    format!("{key} can't be a subtask of itself or of one of its own subtasks."),
-                )
-                .into());
+                    "task-parent-loop",
+                    &[("task", key.unwrap_or_default().to_owned())],
+                ));
             }
             height(tx, t)?
         }
@@ -622,11 +635,14 @@ pub(crate) fn check_parent(
     };
     let levels = level_of(tx, parent.id)? + 1 + below;
     if levels > MAX_LEVELS {
-        return Err(OpError::invalid_at(
+        return Err(messages::invalid(
             "parent",
-            format!("Subtasks go at most {MAX_LEVELS} levels deep; this would make {levels}."),
-        )
-        .into());
+            "task-too-deep",
+            &[
+                ("max", MAX_LEVELS.to_string()),
+                ("levels", levels.to_string()),
+            ],
+        ));
     }
     Ok(())
 }
@@ -650,9 +666,11 @@ fn column_target(
     let in_column = |field: &str, text: &str| -> Result<Id, Failure> {
         let t = lookup::task(tx, field, text)?;
         if t.status != status {
-            return Err(
-                OpError::invalid_at(field, format!("{text} is not in the target column.")).into(),
-            );
+            return Err(messages::invalid(
+                field,
+                "task-not-in-column",
+                &[("task", text.to_owned())],
+            ));
         }
         Ok(t.id)
     };
@@ -764,33 +782,27 @@ fn reorder_subtask(
 ) -> Result<TaskChange, Failure> {
     let task = lookup::task(w.tx(), "key", &input.key)?;
     let project = lookup::project_by_id(w.tx(), task.project)?.ok_or_else(|| {
-        Failure::Op(OpError::not_found(
-            format!("There is no task \"{}\".", input.key),
-            &[],
+        Failure::Op(messages::not_found(
+            "task-not-found",
+            &[("task", input.key.clone())],
         ))
     })?;
     lookup::ensure_active(&project)?;
     lookup::check_version(&task, input.expected_version, &input.key)?;
     super::claim::guard(w, task.id, &input.key, input.override_claim)?;
     let Some(parent) = task.parent else {
-        return Err(OpError::invalid_at(
-            "key",
-            format!(
-                "{} is not a subtask, so it has no place to change.",
-                input.key
-            ),
-        )
-        .with_hint("Make it a subtask first: update_task with `parent`.")
-        .into());
+        let error =
+            messages::invalid_at("key", "task-not-a-subtask", &[("task", input.key.clone())]);
+        return Err(messages::hint(error, "task-not-a-subtask-hint", &[]).into());
     };
     let sibling = |w: &WriteCtx<'_>, field: &str, text: &str| -> Result<Id, Failure> {
         let other = lookup::task(w.tx(), field, text)?;
         if other.parent != Some(parent) || other.id == task.id {
-            return Err(OpError::invalid_at(
+            return Err(messages::invalid(
                 field,
-                format!("{text} is not another subtask of the same parent."),
-            )
-            .into());
+                "task-not-a-sibling",
+                &[("task", text.to_owned())],
+            ));
         }
         Ok(other.id)
     };
@@ -805,10 +817,11 @@ fn reorder_subtask(
         .map(|t| sibling(w, "after", t))
         .transpose()?;
     let target = Target::from_parts(before, after, input.at)?.ok_or_else(|| {
-        Failure::Op(
-            OpError::invalid("Say where the subtask goes.")
-                .with_hint("Pass `before` or `after` with another subtask's key, or `at`."),
-        )
+        Failure::Op(messages::hint(
+            messages::error(ErrorCode::Invalid, "task-subtask-where", &[]),
+            "task-subtask-where-hint",
+            &[],
+        ))
     })?;
     let siblings = subtask_ranks(w.tx(), parent)?;
     if !already_at(&siblings, task.id, target) {
@@ -879,7 +892,7 @@ fn create(w: &mut WriteCtx<'_>, input: TaskCreateInput) -> Result<TaskChange, Fa
     let parent = match &input.parent {
         Some(p) => {
             let parent = lookup::task(w.tx(), "parent", p)?;
-            check_parent(w.tx(), None, project.id, &parent, "The new task")?;
+            check_parent(w.tx(), None, project.id, &parent, None)?;
             Some(parent.id)
         }
         None => None,
@@ -1025,9 +1038,9 @@ pub(crate) fn priority_index(p: Priority) -> i64 {
 pub(crate) fn update(w: &mut WriteCtx<'_>, input: TaskUpdateInput) -> Result<TaskChange, Failure> {
     let task = lookup::task(w.tx(), "key", &input.key)?;
     let project = lookup::project_by_id(w.tx(), task.project)?.ok_or_else(|| {
-        Failure::Op(OpError::not_found(
-            format!("There is no task \"{}\".", input.key),
-            &[],
+        Failure::Op(messages::not_found(
+            "task-not-found",
+            &[("task", input.key.clone())],
         ))
     })?;
     lookup::ensure_active(&project)?;
@@ -1056,24 +1069,26 @@ pub(crate) fn update(w: &mut WriteCtx<'_>, input: TaskUpdateInput) -> Result<Tas
         ),
     ] {
         if given && clears(field) {
-            return Err(
-                OpError::invalid_at("clear", format!("{name} is both given and cleared.")).into(),
-            );
+            return Err(messages::invalid(
+                "clear",
+                "field-given-and-cleared",
+                &[("field", name.to_owned())],
+            ));
         }
     }
     if input.description.is_some() && !input.description_edits.is_empty() {
-        return Err(OpError::invalid_at(
+        return Err(messages::invalid(
             "description_edits",
-            "Give either a new description or edits to it, not both.",
-        )
-        .into());
+            "task-description-and-edits",
+            &[],
+        ));
     }
     if input.base_revision.is_some() && input.description.is_none() {
-        return Err(OpError::invalid_at(
+        return Err(messages::invalid(
             "base_revision",
-            "base_revision goes with a new description.",
-        )
-        .into());
+            "task-base-revision-alone",
+            &[],
+        ));
     }
     let (id, pid) = (task.id, Some(project.id));
     let mut text_changed = false;
@@ -1095,9 +1110,9 @@ pub(crate) fn update(w: &mut WriteCtx<'_>, input: TaskUpdateInput) -> Result<Tas
             "normal",
         )?;
         if let Some(copy) = &saved.conflict_copy {
-            warnings.push(format!(
-                "Someone changed the same lines of the description since your base revision. \
-                 The description stays as they left it; your text was kept as conflict copy {copy}."
+            warnings.push(messages::text(
+                "task-description-conflict",
+                &[("copy", copy.to_string())],
             ));
         }
         description_save = Some(saved);
@@ -1159,7 +1174,7 @@ pub(crate) fn update(w: &mut WriteCtx<'_>, input: TaskUpdateInput) -> Result<Tas
     }
     if let Some(p) = &input.parent {
         let parent = lookup::task(w.tx(), "parent", p)?;
-        check_parent(w.tx(), Some(id), project.id, &parent, &input.key)?;
+        check_parent(w.tx(), Some(id), project.id, &parent, Some(&input.key))?;
         set_parent(w, id, project.id, Some(parent.id))?;
     }
     if clears(TaskField::Parent) {
@@ -1201,7 +1216,7 @@ pub(crate) fn update(w: &mut WriteCtx<'_>, input: TaskUpdateInput) -> Result<Tas
     }
     if let Some(p) = input.progress {
         if p > 100 {
-            return Err(OpError::invalid_at("progress", "Progress is 0 to 100.").into());
+            return Err(messages::invalid("progress", "task-progress-range", &[]));
         }
         fields::set(w, TASK, id, pid, "progress", Some(Value::from(p)))?;
     }
@@ -1219,9 +1234,9 @@ pub(crate) fn update(w: &mut WriteCtx<'_>, input: TaskUpdateInput) -> Result<Tas
 pub(crate) fn move_task(w: &mut WriteCtx<'_>, input: TaskMoveInput) -> Result<TaskChange, Failure> {
     let task = lookup::task(w.tx(), "key", &input.key)?;
     let from = lookup::project_by_id(w.tx(), task.project)?.ok_or_else(|| {
-        Failure::Op(OpError::not_found(
-            format!("There is no task \"{}\".", input.key),
-            &[],
+        Failure::Op(messages::not_found(
+            "task-not-found",
+            &[("task", input.key.clone())],
         ))
     })?;
     lookup::ensure_active(&from)?;
@@ -1282,14 +1297,20 @@ pub(crate) fn move_task(w: &mut WriteCtx<'_>, input: TaskMoveInput) -> Result<Ta
         if after.is_closed() && !before.is_closed() {
             let open = open_subtasks(w.tx(), task.id)?;
             if open > 0 {
-                warnings.push(format!("{} still has {open} open subtasks.", input.key));
+                warnings.push(messages::text(
+                    "task-open-subtasks",
+                    &[("task", input.key.clone()), ("count", open.to_string())],
+                ));
             }
             let blockers = super::relation::open_blockers(w.tx(), task.id)?;
             if !blockers.is_empty() {
-                warnings.push(format!(
-                    "{} is still blocked by {}.",
-                    input.key,
-                    blockers.join(", ")
+                warnings.push(messages::text(
+                    "task-still-blocked",
+                    &[
+                        ("task", input.key.clone()),
+                        ("blockers", blockers.join(", ")),
+                        ("count", blockers.len().to_string()),
+                    ],
                 ));
             }
         }
@@ -1316,11 +1337,11 @@ pub(crate) fn set_home(
         .as_ref()
         .and_then(Value::as_str)
         .and_then(|s| s.parse().ok())
-        .ok_or_else(|| Failure::Op(OpError::storage("A task needs a project.")))?;
+        .ok_or_else(|| Failure::Op(messages::storage("storage-task-no-project", &[])))?;
     let n = number
         .as_ref()
         .and_then(Value::as_i64)
-        .ok_or_else(|| Failure::Op(OpError::storage("A task needs a number.")))?;
+        .ok_or_else(|| Failure::Op(messages::storage("storage-task-no-number", &[])))?;
     w.tx().execute(
         "UPDATE tasks SET project_id = ?2, number = ?3 WHERE id = ?1",
         params![b(id), b(project_id), n],
@@ -1402,9 +1423,9 @@ fn move_to_project(
                 .find(|l| fold(&l.name) == fold(&label.name))
             {
                 Some(l) => kept.push(l.id),
-                None => warnings.push(format!(
-                    "Label \"{}\" doesn't exist in {} and was left off.",
-                    label.name, to.key
+                None => warnings.push(messages::text(
+                    "task-label-left-off",
+                    &[("label", label.name.clone()), ("project", to.key.clone())],
                 )),
             }
         }

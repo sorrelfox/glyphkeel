@@ -53,10 +53,21 @@ pub struct JobsReport {
 }
 
 impl Engine {
-    /// This workspace's backup folder.
+    /// This workspace's backup folder: the one the configuration fixed,
+    /// else the workspace's `backup_folder` setting, else the default. The
+    /// setting is read each time, so a change by another program applies
+    /// at once.
     #[must_use]
-    pub fn backups(&self) -> &BackupFolder {
-        &self.backups
+    pub fn backups(&self) -> BackupFolder {
+        if self.backups_fixed {
+            return self.backups.clone();
+        }
+        let chosen = self
+            .store
+            .read(|tx| Ok::<_, gk_store::StoreError>(crate::ops::settings::load(tx)?.backup_folder))
+            .ok()
+            .flatten();
+        chosen.map_or_else(|| self.backups.clone(), BackupFolder::new)
     }
 
     fn now(&self) -> i64 {
@@ -73,7 +84,7 @@ impl Engine {
 
     /// Makes a backup of kind `kind` now.
     pub fn create_backup(&self, kind: BackupKind) -> Result<Backup, OpError> {
-        self.backups.create(
+        self.backups().create(
             self.store.layout(),
             kind,
             self.now(),
@@ -102,7 +113,7 @@ impl Engine {
             .unwrap_or_else(PoisonError::into_inner) = Some(now);
         let mut report = JobsReport::default();
         let newest = self
-            .backups
+            .backups()
             .newest(&[BackupKind::Daily, BackupKind::Weekly]);
         if newest.is_none_or(|t| now - t >= BACKUP_AFTER_MS) {
             report.backup = Some(self.create_backup(BackupKind::Daily)?);
@@ -122,7 +133,7 @@ impl Engine {
     /// daily backups.
     pub fn backup_if_overdue(&self) -> Result<Option<Backup>, OpError> {
         let newest = self
-            .backups
+            .backups()
             .newest(&[BackupKind::Daily, BackupKind::Weekly]);
         if newest.is_some_and(|t| self.now() - t < CLI_BACKUP_AFTER_MS) {
             return Ok(None);
@@ -164,12 +175,17 @@ impl Engine {
                 None => trash::purge_expired(w, &mut purged)?,
             };
             *out.lock().unwrap_or_else(PoisonError::into_inner) = purged.unused_files;
-            serde_json::to_value(change).map_err(|e| Failure::Op(OpError::storage(e.to_string())))
+            serde_json::to_value(change).map_err(|e| {
+                Failure::Op(messages::storage(
+                    "storage-json",
+                    &[("error", e.to_string())],
+                ))
+            })
         });
         let desc = descriptor("trash.purge").ok_or_else(|| OpError::storage("no trash.purge"))?;
         let output = self.execute_command(ctx, desc, f, Value::Null)?;
-        let change: TrashChange =
-            serde_json::from_value(output).map_err(|e| OpError::storage(e.to_string()))?;
+        let change: TrashChange = serde_json::from_value(output)
+            .map_err(|e| messages::storage("storage-json", &[("error", e.to_string())]))?;
         let unused = std::mem::take(&mut *unused.lock().unwrap_or_else(PoisonError::into_inner));
         Ok((change, unused))
     }
@@ -243,7 +259,8 @@ impl Engine {
                 &[("op", desc.id.to_owned())],
             ));
         }
-        let (path, restored) = self.backups.database_of(name)?;
+        let folder = self.backups();
+        let (path, restored) = folder.database_of(name)?;
         self.ask_confirmation(ctx, desc, desc, &json!({ "name": name }))?;
         let layout = self.store.layout().clone();
         let _app = if self.role == Role::App {
@@ -278,7 +295,7 @@ impl Engine {
             )
             .with_detail("problems", problems));
         }
-        let missing = self.backups.missing_files(name)?;
+        let missing = folder.missing_files(name)?;
         if !missing.is_empty() {
             let args = [
                 ("name", name.to_owned()),
@@ -292,7 +309,7 @@ impl Engine {
             .with_detail("missing", missing));
         }
         let previous = self.create_backup(BackupKind::PreRestore)?;
-        self.backups.put_files_back(name, &layout)?;
+        folder.put_files_back(name, &layout)?;
         let copy = layout.root().join(format!(".restore-{}.db", self.now()));
         let result = (|| {
             fs::copy(&path, &copy).map_err(|e| {

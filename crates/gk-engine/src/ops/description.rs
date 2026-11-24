@@ -45,6 +45,7 @@ use super::desc;
 use super::fields::{self, PROJECT, TASK, WIKI};
 use super::lookup::{self, b, id_at, opt_id_at};
 use crate::failure::Failure;
+use crate::messages;
 use crate::registry::{QueryCtx, Registry};
 use crate::time::rfc3339;
 use crate::write::WriteCtx;
@@ -163,7 +164,7 @@ fn stored(tx: &Transaction<'_>, owner: Owner) -> Result<Stored, Failure> {
             })
         })
         .optional()?;
-    row.ok_or_else(|| Failure::Op(OpError::not_found("The item is gone.", &[])))
+    row.ok_or_else(|| Failure::Op(messages::not_found("description-item-gone", &[])))
 }
 
 /// One row of `text_revisions`.
@@ -270,18 +271,15 @@ fn revision_of(
     text: &str,
 ) -> Result<RevisionRow, Failure> {
     let missing = || {
-        Failure::Op(
-            OpError::not_found(
-                crate::messages::text("revision-not-found", &[("revision", text.to_owned())]),
-                &[],
-            )
-            .with_detail("field", field)
-            .with_detail("message_id", "revision-not-found")
-            .with_hint(match owner {
-                Owner::Wiki(_) => "Read the page again; its revision is the one to pass.",
-                _ => "Read the task again; its description_revision is the one to pass.",
-            }),
-        )
+        Failure::Op(messages::hint(
+            messages::not_found("revision-not-found", &[("revision", text.to_owned())])
+                .with_detail("field", field),
+            match owner {
+                Owner::Wiki(_) => "revision-not-found-page-hint",
+                _ => "revision-not-found-task-hint",
+            },
+            &[],
+        ))
     };
     let id: Id = text.trim().parse().map_err(|_| missing())?;
     let row = revision(tx, id)?.ok_or_else(missing)?;
@@ -594,23 +592,30 @@ pub(crate) fn save_edits(
         .collect();
     let text = gk_core::apply_edits(&current.text, &list).map_err(|e| {
         let field = format!("{}[{}].old_text", owner.edits_field(), e.index());
-        let what = match owner {
-            Owner::Wiki(_) => "page",
-            _ => "description",
+        let page = matches!(owner, Owner::Wiki(_));
+        let (id, args) = match e {
+            gk_core::EditError::Empty { .. } => ("edit-empty", vec![]),
+            gk_core::EditError::NotFound { .. } if page => ("edit-not-in-page", vec![]),
+            gk_core::EditError::NotFound { .. } => ("edit-not-in-description", vec![]),
+            gk_core::EditError::Ambiguous { count, .. } => (
+                if page {
+                    "edit-ambiguous-page"
+                } else {
+                    "edit-ambiguous-description"
+                },
+                vec![("count", count.to_string())],
+            ),
         };
-        let message = match e {
-            gk_core::EditError::Empty { .. } => "The text to replace is empty.".to_owned(),
-            gk_core::EditError::NotFound { .. } => {
-                format!("This text is not in the {what} (edits apply in order).")
-            }
-            gk_core::EditError::Ambiguous { count, .. } => {
-                format!("This text occurs {count} times in the {what}; include more around it.")
-            }
+        let hint = if page {
+            "edit-page-hint"
+        } else {
+            "edit-task-hint"
         };
-        Failure::Op(OpError::invalid_at(field, message).with_hint(match owner {
-            Owner::Wiki(_) => "Read the page again; nothing was changed.",
-            _ => "Read the task again; nothing was changed.",
-        }))
+        Failure::Op(messages::hint(
+            messages::invalid_at(&field, id, &args),
+            hint,
+            &[],
+        ))
     })?;
     gk_core::check_markdown(owner.field(), &text)
         .map_err(|e| super::task::invalid(owner.field(), e))?;
@@ -634,15 +639,9 @@ pub(crate) fn restore(
                 .get("revision")
                 .and_then(Value::as_str)
                 .and_then(|s| s.parse::<Id>().ok())
-                .ok_or_else(|| {
-                    Failure::Op(OpError::storage("A recorded revision is unreadable."))
-                })?;
+                .ok_or_else(|| Failure::Op(messages::storage("revision-unreadable", &[])))?;
             revision(w.tx(), id)?
-                .ok_or_else(|| {
-                    Failure::Op(OpError::conflict(
-                        "The recorded revision of the description is gone.",
-                    ))
-                })?
+                .ok_or_else(|| Failure::Op(messages::conflict("revision-gone", &[])))?
                 .body
         }
     };
@@ -664,28 +663,32 @@ pub(crate) fn resolve(
 ) -> Result<DescriptionSave, Failure> {
     let copy = revision_of(w.tx(), owner, "copy", copy)?;
     if copy.kind != "conflict" {
-        return Err(OpError::invalid_at("copy", "That revision is not a conflict copy.").into());
+        return Err(messages::invalid("copy", "conflict-not-a-copy", &[]));
     }
     if copy.resolved_at.is_some() {
-        return Err(
-            OpError::conflict("That conflict copy was resolved already.")
-                .with_hint("Read the task again.")
-                .into(),
-        );
+        return Err(messages::hint(
+            messages::conflict("conflict-resolved-already", &[]),
+            "conflict-read-task-hint",
+            &[],
+        )
+        .into());
     }
     let current = with_revision(w, owner)?;
     if let Some(base) = base {
         let base = revision_of(w.tx(), owner, "base_revision", base)?;
         if Some(base.id) != current.rev {
-            return Err(OpError::conflict(match owner {
-                Owner::Wiki(_) => "The page changed again since you read it; nothing was resolved.",
-                _ => "The description changed again since you read it; nothing was resolved.",
-            })
-            .with_detail(
-                "revision",
-                current.rev.map(|r| r.to_string()).unwrap_or_default(),
+            let id = match owner {
+                Owner::Wiki(_) => "conflict-page-changed",
+                _ => "conflict-description-changed",
+            };
+            return Err(messages::hint(
+                messages::conflict(id, &[]).with_detail(
+                    "revision",
+                    current.rev.map(|r| r.to_string()).unwrap_or_default(),
+                ),
+                "conflict-changed-hint",
+                &[],
             )
-            .with_hint("Read the description again and resolve the copy against it.")
             .into());
         }
     }
@@ -697,12 +700,8 @@ pub(crate) fn resolve(
         },
         ConflictAction::UseCopy => save(w, owner, project, &copy.body, None, "resolved")?,
         ConflictAction::UseText => {
-            let text = text.ok_or_else(|| {
-                Failure::Op(OpError::invalid_at(
-                    "text",
-                    "use_text needs the text to save.",
-                ))
-            })?;
+            let text =
+                text.ok_or_else(|| messages::invalid("text", "conflict-use-text-needs-text", &[]))?;
             gk_core::check_markdown(owner.field(), text)
                 .map_err(|e| super::task::invalid("text", e))?;
             save(w, owner, project, text, None, "resolved")?
@@ -731,7 +730,7 @@ pub(crate) fn resolve(
 fn resolve_command(w: &mut WriteCtx<'_>, input: TaskResolveInput) -> Result<TaskChange, Failure> {
     let task = lookup::task(w.tx(), "key", &input.key)?;
     let project = lookup::project_by_id(w.tx(), task.project)?
-        .ok_or_else(|| Failure::Op(OpError::not_found("The task's project is gone.", &[])))?;
+        .ok_or_else(|| Failure::Op(messages::not_found("task-project-gone", &[])))?;
     lookup::ensure_active(&project)?;
     super::claim::guard(w, task.id, &input.key, false)?;
     let saved = resolve(
@@ -786,7 +785,9 @@ fn history(q: &QueryCtx<'_>, input: DescriptionHistoryInput) -> Result<RevisionL
         (Some(t), None) => Owner::Task(lookup::task(q.tx, "task", t)?.id),
         (None, Some(p)) => Owner::Project(lookup::project(q.tx, "project", p)?.id),
         _ => {
-            return Err(OpError::invalid("Name either a task or a project.").into());
+            return Err(
+                messages::with("description-task-or-project", &[], OpError::invalid).into(),
+            );
         }
     };
     let items = revisions(q.tx, owner)?;
@@ -828,7 +829,7 @@ fn revision_detail(
 ) -> Result<RevisionDetail, Failure> {
     let missing = || {
         Failure::Op(
-            OpError::not_found(format!("There is no revision \"{}\".", input.revision), &[])
+            messages::not_found("revision-no-such", &[("revision", input.revision.clone())])
                 .with_detail("field", "revision"),
         )
     };
@@ -894,11 +895,7 @@ fn source_of(tx: &Transaction<'_>, i: usize, s: &RenderSource) -> Result<Source,
     .count();
     let field = format!("documents[{i}]");
     if given != 1 {
-        return Err(OpError::invalid_at(
-            field,
-            "Give exactly one of source, task, comment, project and revision.",
-        )
-        .into());
+        return Err(messages::invalid(&field, "render-one-source", &[]));
     }
     let mut out = if let Some(text) = &s.source {
         Source {
@@ -942,7 +939,7 @@ fn source_of(tx: &Transaction<'_>, i: usize, s: &RenderSource) -> Result<Source,
         let text = s.revision.as_deref().unwrap_or_default();
         let missing = || {
             Failure::Op(
-                OpError::not_found(format!("There is no revision \"{text}\"."), &[])
+                messages::not_found("revision-no-such", &[("revision", text.to_owned())])
                     .with_detail("field", format!("{field}.revision")),
             )
         };
@@ -963,11 +960,11 @@ fn source_of(tx: &Transaction<'_>, i: usize, s: &RenderSource) -> Result<Source,
 
 fn render(q: &QueryCtx<'_>, input: RenderInput) -> Result<RenderOutput, Failure> {
     if input.documents.is_empty() || input.documents.len() > MAX_RENDER {
-        return Err(OpError::invalid_at(
+        return Err(messages::invalid(
             "documents",
-            format!("Render 1 to {MAX_RENDER} texts at once."),
-        )
-        .into());
+            "render-count",
+            &[("max", MAX_RENDER.to_string())],
+        ));
     }
     // Task keys are looked up once per call.
     let known: RefCell<HashMap<String, bool>> = RefCell::new(HashMap::new());
@@ -1018,12 +1015,20 @@ fn stale(
         .and_then(|n| items.get(n))
         .map_or_else(String::new, |i| i.text.clone());
     Failure::Op(
-        OpError::conflict(format!(
-            "The checklist changed; please tick it again. Item {number} reads \"{actual}\", not \"{expected}\"."
-        ))
+        messages::hint(
+            messages::conflict(
+                "checklist-changed",
+                &[
+                    ("number", number.to_string()),
+                    ("actual", actual),
+                    ("expected", expected.to_owned()),
+                ],
+            ),
+            "checklist-changed-hint",
+            &[],
+        )
         .with_detail("field", field)
         .with_detail("number", number)
-        .with_hint("Read the checklist again (get_task with include [\"checklist\"]).")
         .with_detail("items", items.len()),
     )
 }
@@ -1092,7 +1097,11 @@ pub(crate) fn edit_checklist(text: &str, input: &ChecklistUpdateInput) -> Result
         let field = format!("add[{i}]");
         let line = gk_core::clean_line(&a.text);
         if line.is_empty() {
-            return Err(OpError::invalid_at(format!("{field}.text"), "An item needs text.").into());
+            return Err(messages::invalid(
+                &format!("{field}.text"),
+                "checklist-item-needs-text",
+                &[],
+            ));
         }
         let anchor = match a.after {
             Some(n) => Some(
@@ -1101,10 +1110,14 @@ pub(crate) fn edit_checklist(text: &str, input: &ChecklistUpdateInput) -> Result
                     .and_then(|n| n.checked_sub(1))
                     .and_then(|n| items.get(n))
                     .ok_or_else(|| {
-                        Failure::Op(OpError::invalid_at(
-                            format!("{field}.after"),
-                            format!("There is no item {n}; the checklist has {}.", items.len()),
-                        ))
+                        messages::invalid(
+                            &format!("{field}.after"),
+                            "checklist-no-item",
+                            &[
+                                ("number", n.to_string()),
+                                ("count", items.len().to_string()),
+                            ],
+                        )
                     })?,
             ),
             None => items.iter().rev().find(|i| i.depth == 0),
@@ -1148,11 +1161,11 @@ pub(crate) fn edit_checklist(text: &str, input: &ChecklistUpdateInput) -> Result
                 .any(|r| r.start <= item.lines.start && item.lines.end <= r.end)
         });
         if anchor_removed || merged.iter().any(|r| r.start < at && at < r.end) {
-            return Err(OpError::invalid_at(
-                format!("{field}.after"),
-                "An item can't be added inside an item that is removed.",
-            )
-            .into());
+            return Err(messages::invalid(
+                &format!("{field}.after"),
+                "checklist-inside-removed",
+                &[],
+            ));
         }
         inserts.push((at, entry));
     }
@@ -1197,14 +1210,13 @@ fn checklist_update(
     input: ChecklistUpdateInput,
 ) -> Result<ChecklistChange, Failure> {
     if input.toggle.is_empty() && input.add.is_empty() && input.remove.is_empty() {
-        return Err(OpError::invalid("Nothing to change: give toggle, add or remove.").into());
+        return Err(messages::with("checklist-nothing-to-change", &[], OpError::invalid).into());
     }
     match (&input.key, &input.comment) {
         (Some(key), None) => {
             let task = lookup::task(w.tx(), "key", key)?;
-            let project = lookup::project_by_id(w.tx(), task.project)?.ok_or_else(|| {
-                Failure::Op(OpError::not_found("The task's project is gone.", &[]))
-            })?;
+            let project = lookup::project_by_id(w.tx(), task.project)?
+                .ok_or_else(|| Failure::Op(messages::not_found("task-project-gone", &[])))?;
             lookup::ensure_active(&project)?;
             super::claim::guard(w, task.id, key, false)?;
             let owner = Owner::Task(task.id);
@@ -1275,7 +1287,7 @@ fn checklist_update(
                 group: w.group_if_changed(),
             })
         }
-        _ => Err(OpError::invalid("Name either a task (key) or a comment.").into()),
+        _ => Err(messages::with("description-task-or-comment", &[], OpError::invalid).into()),
     }
 }
 

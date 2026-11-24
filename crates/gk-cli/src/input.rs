@@ -13,6 +13,8 @@ use clap::{Arg, ArgAction, ArgMatches};
 use gk_api::{OpDescriptor, OpError};
 use serde_json::{Map, Value};
 
+use crate::messages;
+
 /// The option that takes the whole input as JSON, or `-` for standard input.
 pub(crate) const INPUT_ARG: &str = "input";
 /// The option that confirms a permanent operation in advance.
@@ -197,7 +199,7 @@ pub(crate) fn args(op: &OpDescriptor, fields: &[Field]) -> Vec<Arg> {
         Arg::new(INPUT_ARG)
             .long(INPUT_ARG)
             .value_name("JSON")
-            .help("The whole input as JSON, or `-` to read it from standard input; options given as well take precedence")
+            .help(messages::text("cli-input-help", &[]))
             .action(ArgAction::Set),
     );
     // Restoring a backup replaces the workspace, so it asks too, although
@@ -207,7 +209,7 @@ pub(crate) fn args(op: &OpDescriptor, fields: &[Field]) -> Vec<Arg> {
             Arg::new(YES_ARG)
                 .long(YES_ARG)
                 .short('y')
-                .help("Confirm in advance: this can't be undone")
+                .help(messages::text("cli-yes-help", &[]))
                 .action(ArgAction::SetTrue),
         );
     }
@@ -244,19 +246,27 @@ pub(crate) fn collect(fields: &[Field], m: &ArgMatches) -> Result<Value, OpError
 fn read_input(text: &str) -> Result<Map<String, Value>, OpError> {
     let text = if text == "-" {
         let mut buf = String::new();
-        std::io::stdin()
-            .read_to_string(&mut buf)
-            .map_err(|e| OpError::invalid(format!("Can't read the input: {e}.")))?;
+        std::io::stdin().read_to_string(&mut buf).map_err(|e| {
+            messages::error(
+                "cli-input-unreadable",
+                &[("error", e.to_string())],
+                OpError::invalid,
+            )
+        })?;
         buf
     } else {
         text.to_owned()
     };
     match serde_json::from_str::<Value>(&text) {
         Ok(Value::Object(o)) => Ok(o),
-        Ok(_) => Err(OpError::invalid_at("", "The input must be a JSON object.")),
-        Err(e) => Err(OpError::invalid(format!(
-            "The input is not valid JSON: {e}."
-        ))),
+        Ok(_) => Err(messages::error("cli-input-not-object", &[], |m| {
+            OpError::invalid_at("", m)
+        })),
+        Err(e) => Err(messages::error(
+            "cli-input-not-json",
+            &[("error", e.to_string())],
+            OpError::invalid,
+        )),
     }
 }
 
@@ -264,7 +274,7 @@ fn parse_bool(s: &str) -> Result<Value, String> {
     match s {
         "true" | "yes" => Ok(Value::Bool(true)),
         "false" | "no" => Ok(Value::Bool(false)),
-        _ => Err("expected `true` or `false`".to_owned()),
+        _ => Err(messages::text("cli-expected-bool", &[])),
     }
 }
 
@@ -272,7 +282,7 @@ fn parse_integer(s: &str) -> Result<Value, String> {
     s.trim()
         .parse::<i64>()
         .map(Value::from)
-        .map_err(|_| "expected a whole number".to_owned())
+        .map_err(|_| messages::text("cli-expected-integer", &[]))
 }
 
 fn parse_number(s: &str) -> Result<Value, String> {
@@ -281,7 +291,7 @@ fn parse_number(s: &str) -> Result<Value, String> {
         .ok()
         .and_then(serde_json::Number::from_f64)
         .map(Value::Number)
-        .ok_or_else(|| "expected a number".to_owned())
+        .ok_or_else(|| messages::text("cli-expected-number", &[]))
 }
 
 #[allow(clippy::unnecessary_wraps)] // clap's value parsers return a Result
@@ -290,7 +300,8 @@ fn parse_text(s: &str) -> Result<Value, String> {
 }
 
 fn parse_json(s: &str) -> Result<Value, String> {
-    serde_json::from_str(s).map_err(|e| format!("expected JSON: {e}"))
+    serde_json::from_str(s)
+        .map_err(|e| messages::text("cli-expected-json", &[("error", e.to_string())]))
 }
 
 #[cfg(test)]

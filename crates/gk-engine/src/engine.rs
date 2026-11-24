@@ -27,6 +27,7 @@ use crate::backup::{BackupFolder, default_folder};
 use crate::context::{ConfirmRequest, Confirmation, Context};
 use crate::events::{self, Bus};
 use crate::failure::{Failure, store_error};
+use crate::messages;
 use crate::ops::{history as history_ops, settings};
 use crate::registry::{CommandFn, Entry, Env, Handler, QueryCtx, QueryFn, Registry};
 use crate::time::{Clock, system_clock};
@@ -64,7 +65,8 @@ pub struct EngineConfig {
     /// entries, by its IANA name; `None`: the computer's. Programs pass the
     /// person's choice in ([`crate::personal_time_zone`]).
     pub time_zone: Option<String>,
-    /// The folder of this workspace's backups; `None`: the default
+    /// The folder of this workspace's backups, ahead of the workspace's
+    /// `backup_folder` setting; `None`: that setting, else the default
     /// ([`crate::backup::default_folder`]).
     pub backups: Option<std::path::PathBuf>,
 }
@@ -138,7 +140,12 @@ pub struct Engine {
     undo: Mutex<UndoStacks>,
     pending_reads: Mutex<HashMap<Id, i64>>,
     jobs: Mutex<Jobs>,
+    /// Where backups go when neither the configuration nor the workspace's
+    /// setting names a folder, or the one the configuration fixes.
     pub(crate) backups: BackupFolder,
+    /// Whether the configuration fixed the folder, so the setting is not
+    /// read.
+    pub(crate) backups_fixed: bool,
     /// When this process last ran the daily jobs (engine clock, ms).
     pub(crate) last_daily: Mutex<Option<i64>>,
     _app_lock: Option<LockFile>,
@@ -173,15 +180,16 @@ impl Engine {
         let app_lock = if config.role == Role::App {
             let lock = LockFile::try_acquire(&layout.app_lock()).map_err(|e| store_error(&e))?;
             Some(lock.ok_or_else(|| {
-                OpError::new(
-                    ErrorCode::Busy,
-                    "Another Glyphkeel app already has this workspace open.",
+                messages::hint(
+                    messages::error(ErrorCode::Busy, "engine-app-open", &[]),
+                    "engine-app-open-hint",
+                    &[],
                 )
-                .with_hint("Switch to the open window.")
             })?)
         } else {
             None
         };
+        let backups_fixed = config.backups.is_some();
         let backups = BackupFolder::new(
             config
                 .backups
@@ -192,7 +200,19 @@ impl Engine {
         if config.role == Role::App
             && let SchemaState::Older(found) = Store::probe(layout).map_err(|e| store_error(&e))?
         {
-            let made = backups.create(
+            // The setting is read straight from the old database, which
+            // may not open yet.
+            let chosen = if backups_fixed {
+                None
+            } else {
+                Store::probe_setting(layout, crate::backup::SETTING)
+                    .ok()
+                    .flatten()
+                    .and_then(|text| serde_json::from_str::<Option<String>>(&text).ok())
+                    .flatten()
+            };
+            let folder = chosen.map_or_else(|| backups.clone(), BackupFolder::new);
+            let made = folder.create(
                 layout,
                 gk_api::ops::backup::BackupKind::PreMigration,
                 (config.clock)(),
@@ -236,6 +256,7 @@ impl Engine {
                 policy: config.checkpoints,
             }),
             backups,
+            backups_fixed,
             last_daily: Mutex::new(None),
             _app_lock: app_lock,
         })
@@ -294,7 +315,9 @@ impl Engine {
     pub fn call(&self, ctx: &Context, op: &str, input: Value) -> Result<Value, OpError> {
         let entry = self.registry.get(op).ok_or_else(|| {
             let names = self.registry.names();
-            OpError::not_found(format!("There is no operation \"{op}\"."), &names)
+            messages::with("engine-no-operation", &[("op", op.to_owned())], |m| {
+                OpError::not_found(m, &names)
+            })
         })?;
         let result = self.call_entry(ctx, entry, input);
         if let Err(e) = &result
@@ -307,21 +330,33 @@ impl Engine {
 
     /// Runs operation `O` with typed input and output.
     pub fn run<O: Operation>(&self, ctx: &Context, input: &O::Input) -> Result<O::Output, OpError> {
-        let input = serde_json::to_value(input)
-            .map_err(|e| OpError::invalid(format!("The input could not be encoded: {e}.")))?;
+        let input = serde_json::to_value(input).map_err(|e| {
+            messages::error(
+                ErrorCode::Invalid,
+                "engine-input-unencodable",
+                &[("error", e.to_string())],
+            )
+        })?;
         let output = self.call(ctx, O::ID, input)?;
         serde_json::from_value(output).map_err(|e| {
-            OpError::storage(format!("The result of {} could not be read: {e}.", O::ID))
+            messages::storage(
+                "engine-result-unreadable",
+                &[("op", O::ID.to_owned()), ("error", e.to_string())],
+            )
         })
     }
 
     fn call_entry(&self, ctx: &Context, entry: &Entry, input: Value) -> Result<Value, OpError> {
         if self.must_exit() {
-            return Err(OpError::new(
-                ErrorCode::WorkspaceUpgraded,
-                "A newer Glyphkeel upgraded this workspace while this program was running.",
-            )
-            .with_hint("Restart the program."));
+            return Err(messages::hint(
+                messages::error(
+                    ErrorCode::WorkspaceUpgraded,
+                    "engine-upgraded-meanwhile",
+                    &[],
+                ),
+                "engine-restart-hint",
+                &[],
+            ));
         }
         let input = if input.is_null() { json!({}) } else { input };
         (entry.validate)(&input)?;
@@ -358,10 +393,11 @@ impl Engine {
                 Via::Mcp => false,
             };
             if !reachable {
-                return Err(OpError::forbidden(format!(
-                    "{} is available in the app only.",
-                    desc.id
-                )));
+                return Err(messages::error(
+                    ErrorCode::Forbidden,
+                    "op-app-only",
+                    &[("op", desc.id.to_owned())],
+                ));
             }
         }
         if !ctx.is_agent() {
@@ -378,17 +414,20 @@ impl Engine {
             .chain(parts.iter().copied())
             .find(|d| !profile.allows(d.safety));
         if let Some(refused) = refused {
-            Err(OpError::forbidden(format!(
-                "Your profile ({profile}) doesn't allow {} operations such as {}.",
-                refused.safety.as_str(),
-                refused.id
-            ))
-            .with_hint(if profile < cap {
-                "Ask the person to start the agent server with a higher --profile."
+            let refusal = messages::forbidden(
+                "engine-profile-refused",
+                &[
+                    ("profile", profile.to_string()),
+                    ("safety", refused.safety.as_str().to_owned()),
+                    ("op", refused.id.to_owned()),
+                ],
+            );
+            let hint = if profile < cap {
+                "engine-profile-raise-hint"
             } else {
-                "The workspace setting \"most an agent may do\" doesn't allow it; ask the person."
-            })
-            .with_detail("profile", profile.as_str()))
+                "engine-profile-capped-hint"
+            };
+            Err(messages::hint(refusal, hint, &[]).with_detail("profile", profile.as_str()))
         } else {
             Ok(Some(profile))
         }
@@ -436,11 +475,11 @@ impl Engine {
         if confirmed {
             Ok(())
         } else {
-            Err(OpError::forbidden(format!(
-                "{} can't be undone and was not confirmed.",
-                permanent.id
+            Err(messages::hint(
+                messages::forbidden("engine-not-confirmed", &[("op", permanent.id.to_owned())]),
+                "engine-not-confirmed-hint",
+                &[],
             ))
-            .with_hint("Confirm it in the dialog, or pass --yes on the command line."))
         }
     }
 
@@ -538,8 +577,12 @@ impl Engine {
             if let Some(key) = key
                 && let Some(answer) = gk_store::remembered(tx, key, in_tx.at)?
             {
-                let answer = serde_json::from_str(&answer)
-                    .map_err(|e| Failure::Op(OpError::storage(e.to_string())))?;
+                let answer = serde_json::from_str(&answer).map_err(|e| {
+                    Failure::Op(messages::storage(
+                        "storage-json",
+                        &[("error", e.to_string())],
+                    ))
+                })?;
                 return Ok((answer, crate::write::Finished::nothing()));
             }
             let mut w = WriteCtx::new(tx, &in_tx);
@@ -591,10 +634,16 @@ impl Engine {
     ) -> Result<RevertResult, OpError> {
         let f: CommandFn = Arc::new(move |w, _| {
             let result = history_ops::revert_groups(w, &groups, dry_run)?;
-            serde_json::to_value(result).map_err(|e| Failure::Op(OpError::storage(e.to_string())))
+            serde_json::to_value(result).map_err(|e| {
+                Failure::Op(messages::storage(
+                    "storage-json",
+                    &[("error", e.to_string())],
+                ))
+            })
         });
         let (output, _) = self.execute(ctx, op, f, Value::Null)?;
-        serde_json::from_value(output).map_err(|e| OpError::storage(e.to_string()))
+        serde_json::from_value(output)
+            .map_err(|e| messages::storage("storage-json", &[("error", e.to_string())]))
     }
 
     /// Takes the last group off the Undo stack (or the Redo stack) and
@@ -616,11 +665,11 @@ impl Engine {
             stack.pop()
         }
         .ok_or_else(|| {
-            OpError::not_found(
+            messages::not_found(
                 if redo {
-                    "Nothing to redo."
+                    "history-nothing-to-redo"
                 } else {
-                    "Nothing to undo."
+                    "history-nothing-to-undo"
                 },
                 &[],
             )
@@ -632,18 +681,21 @@ impl Engine {
             .unwrap_or_default();
         let result = self.revert(ctx, op, vec![target], false)?;
         if let Some(skipped) = result.skipped.first() {
-            return Err(OpError::conflict(format!(
-                "Can't {}: {}",
-                if redo { "redo" } else { "undo" },
-                skipped.reason
-            ))
-            .with_detail("group", target.to_string()));
+            let id = if redo {
+                "history-redo-blocked"
+            } else {
+                "history-undo-blocked"
+            };
+            return Err(
+                messages::conflict(id, &[("reason", skipped.reason.clone())])
+                    .with_detail("group", target.to_string()),
+            );
         }
         let group: Id = result
             .group
             .as_deref()
             .and_then(|g| g.parse().ok())
-            .ok_or_else(|| OpError::storage("The revert recorded no history group."))?;
+            .ok_or_else(|| messages::storage("history-revert-no-group", &[]))?;
         let mut stacks = self.lock_undo();
         if redo {
             stacks.undo.push(group);

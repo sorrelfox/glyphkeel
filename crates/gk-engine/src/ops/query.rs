@@ -37,6 +37,7 @@ use super::task::{
     task_labels,
 };
 use crate::failure::Failure;
+use crate::messages;
 use crate::registry::{QueryCtx, Registry};
 use crate::time::{Zone, rfc3339};
 
@@ -435,18 +436,19 @@ pub(crate) fn compile_search(
 fn search(q: &QueryCtx<'_>, input: TaskSearchInput) -> Result<TaskSearchResult, Failure> {
     let limit = input.limit.unwrap_or(DEFAULT_LIMIT);
     if limit == 0 || limit > MAX_LIMIT {
-        return Err(OpError::invalid_at(
+        return Err(messages::invalid(
             "limit",
-            format!("Ask for 1 to {MAX_LIMIT} tasks at once."),
-        )
-        .into());
+            "query-task-limit",
+            &[("max", MAX_LIMIT.to_string())],
+        ));
     }
     let offset: u64 = match &input.cursor {
         Some(c) => c.parse().map_err(|_| {
-            Failure::Op(
-                OpError::invalid_at("cursor", "This is not a cursor from an earlier page.")
-                    .with_hint("Pass the next_cursor of the page before, or leave it out."),
-            )
+            Failure::Op(messages::hint(
+                messages::invalid_at("cursor", "list-cursor", &[]),
+                "list-cursor-hint",
+                &[],
+            ))
         })?,
         None => 0,
     };

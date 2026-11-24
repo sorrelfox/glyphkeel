@@ -15,7 +15,7 @@
 //! session and the agent's name; the lease end changes with every renewal
 //! and is not recorded.
 
-use gk_api::OpError;
+use gk_api::ErrorCode;
 use gk_api::ops::common::Category;
 use gk_api::ops::task::{
     TaskChange, TaskClaim, TaskClaimInput, TaskMoveInput, TaskRelease, TaskReleaseInput,
@@ -30,6 +30,7 @@ use super::desc;
 use super::fields::TASK;
 use super::lookup::{self, List, b, opt_id_at};
 use crate::failure::Failure;
+use crate::messages;
 use crate::registry::Registry;
 use crate::time::rfc3339;
 use crate::write::WriteCtx;
@@ -179,48 +180,47 @@ pub(crate) fn guard(
         if effective_profile(w)? == Profile::Full {
             return Ok(());
         }
-        return Err(OpError::forbidden(format!(
-            "Overriding {}'s claim on {key} needs the full profile.",
-            claim.name
-        ))
+        return Err(messages::forbidden(
+            "claim-override-needs-full",
+            &[("agent", claim.name), ("task", key.to_owned())],
+        )
         .into());
     }
-    Err(OpError::conflict(format!(
-        "{key} is claimed by {} until {}.",
-        claim.name,
-        rfc3339(claim.until)
-    ))
+    let error = messages::conflict(
+        "claim-taken",
+        &[
+            ("task", key.to_owned()),
+            ("agent", claim.name.clone()),
+            ("until", rfc3339(claim.until)),
+        ],
+    )
     .with_detail("claimed_by", claim.name)
-    .with_detail("until", rfc3339(claim.until))
-    .with_hint("Pick another task, wait for the claim to end, or ask the person.")
-    .into())
+    .with_detail("until", rfc3339(claim.until));
+    Err(messages::hint(error, "claim-taken-hint", &[]).into())
 }
 
 fn claim(w: &mut WriteCtx<'_>, input: TaskClaimInput) -> Result<TaskChange, Failure> {
     let task = lookup::task(w.tx(), "key", &input.key)?;
     let project = lookup::project_by_id(w.tx(), task.project)?.ok_or_else(|| {
-        Failure::Op(OpError::not_found(
-            format!("There is no task \"{}\".", input.key),
-            &[],
+        Failure::Op(messages::not_found(
+            "task-not-found",
+            &[("task", input.key.clone())],
         ))
     })?;
     lookup::ensure_active(&project)?;
     let Some(session) = w.caller().session else {
-        return Err(OpError::invalid(
-            "Only agent sessions claim tasks; the person is never blocked by claims.",
-        )
-        .into());
+        return Err(messages::error(ErrorCode::Invalid, "claim-person", &[]).into());
     };
     if input.keep_status && input.status.is_some() {
-        return Err(OpError::invalid("Give either `status` or `keep_status`.").into());
+        return Err(messages::error(ErrorCode::Invalid, "claim-status-or-keep", &[]).into());
     }
     let lease = input.lease_minutes.unwrap_or(60);
     if !(1..=MAX_LEASE_MIN).contains(&lease) {
-        return Err(OpError::invalid_at(
+        return Err(messages::invalid(
             "lease_minutes",
-            format!("A claim lasts 1 to {MAX_LEASE_MIN} minutes."),
-        )
-        .into());
+            "claim-lease-range",
+            &[("max", MAX_LEASE_MIN.to_string())],
+        ));
     }
     guard(w, task.id, &input.key, input.override_claim)?;
     let name = w.caller().actor.name.clone();
@@ -272,9 +272,9 @@ fn claim(w: &mut WriteCtx<'_>, input: TaskClaimInput) -> Result<TaskChange, Fail
 fn release(w: &mut WriteCtx<'_>, input: TaskReleaseInput) -> Result<TaskChange, Failure> {
     let task = lookup::task(w.tx(), "key", &input.key)?;
     let project = lookup::project_by_id(w.tx(), task.project)?.ok_or_else(|| {
-        Failure::Op(OpError::not_found(
-            format!("There is no task \"{}\".", input.key),
-            &[],
+        Failure::Op(messages::not_found(
+            "task-not-found",
+            &[("task", input.key.clone())],
         ))
     })?;
     lookup::ensure_active(&project)?;

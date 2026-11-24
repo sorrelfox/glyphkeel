@@ -15,6 +15,7 @@ use serde_json::Value;
 use crate::context::Context;
 use crate::engine::Engine;
 use crate::failure::Failure;
+use crate::messages;
 use crate::write::WriteCtx;
 
 /// Facts about the open workspace that handlers may need.
@@ -201,14 +202,15 @@ pub(crate) fn decode<T: DeserializeOwned>(input: Value) -> Result<T, Failure> {
         let path = e.path().to_string();
         let reason = e.into_inner().to_string();
         let error = if path == "." {
-            OpError::invalid(format!("Invalid input: {reason}."))
+            messages::with("input-invalid", &[("reason", reason)], OpError::invalid)
         } else {
-            OpError::invalid_at(
-                path.clone(),
-                format!("Invalid input at `{path}`: {reason}."),
+            messages::invalid_at(
+                &path,
+                "input-invalid-at",
+                &[("path", path.clone()), ("reason", reason)],
             )
         };
-        Failure::Op(error.with_hint("See the operation's input schema."))
+        Failure::Op(messages::hint(error, "input-schema-hint", &[]))
     })
 }
 
@@ -218,8 +220,9 @@ fn validate<T: DeserializeOwned>(input: &Value) -> Result<(), OpError> {
 
 fn encode<T: Serialize>(output: &T) -> Result<Value, Failure> {
     serde_json::to_value(output).map_err(|e| {
-        Failure::Op(OpError::storage(format!(
-            "The result could not be written as JSON: {e}."
-        )))
+        Failure::Op(messages::storage(
+            "input-result-unwritable",
+            &[("error", e.to_string())],
+        ))
     })
 }

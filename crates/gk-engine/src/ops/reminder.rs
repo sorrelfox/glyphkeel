@@ -43,6 +43,7 @@ use super::fields;
 use super::lookup::{self, b, id_at};
 use super::task::{invalid, task_ref};
 use crate::failure::Failure;
+use crate::messages;
 use crate::registry::Registry;
 use crate::time::{Zone, clock_minutes, clock_text, rfc3339};
 use crate::write::WriteCtx;
@@ -210,7 +211,7 @@ pub(crate) fn write_value(
     w.tx()
         .execute("DELETE FROM reminders WHERE task_id = ?1", [b(task)])?;
     if let Some(v) = &value {
-        let corrupt = || Failure::Op(OpError::storage("A recorded reminder can't be read."));
+        let corrupt = || Failure::Op(messages::storage("reminder-unreadable", &[]));
         let at = match v.get("at").and_then(Value::as_str) {
             Some(text) => Some(w.zone().parse_moment(text).ok_or_else(corrupt)?),
             None => None,
@@ -265,17 +266,14 @@ fn set(w: &mut WriteCtx<'_>, input: ReminderSetInput) -> Result<ReminderChange, 
     match (&input.at, input.days_before_due) {
         (Some(at), None) => {
             if input.time.is_some() {
-                return Err(OpError::invalid_at(
-                    "time",
-                    "`time` goes with `days_before_due`; put the time into `at`.",
-                )
-                .into());
+                return Err(messages::invalid("time", "reminder-time-with-at", &[]));
             }
             let ms = w.zone().parse_moment(at).ok_or_else(|| {
-                Failure::Op(
-                    OpError::invalid_at("at", format!("\"{at}\" is not a moment."))
-                        .with_hint("Write it as 2026-11-24 09:00 (local time) or in RFC 3339."),
-                )
+                Failure::Op(messages::hint(
+                    messages::invalid_at("at", "reminder-not-a-moment", &[("text", at.clone())]),
+                    "reminder-moment-hint",
+                    &[],
+                ))
             })?;
             value.insert("at".into(), Value::String(rfc3339(ms)));
         }
@@ -286,18 +284,18 @@ fn set(w: &mut WriteCtx<'_>, input: ReminderSetInput) -> Result<ReminderChange, 
             value.insert("days_before_due".into(), days.into());
             if let Some(t) = &input.time {
                 let minutes = clock_minutes(t).ok_or_else(|| {
-                    Failure::Op(OpError::invalid_at(
-                        "time",
-                        format!("\"{t}\" is not a time of day; write it as HH:MM."),
-                    ))
+                    messages::invalid("time", "reminder-not-a-time", &[("time", t.clone())])
                 })?;
                 value.insert("time".into(), Value::String(clock_text(minutes)));
             }
         }
         _ => {
-            return Err(OpError::invalid("Give either `at` or `days_before_due`.")
-                .with_hint("To remove the reminder, use reminder.clear.")
-                .into());
+            return Err(messages::hint(
+                messages::with("reminder-at-or-days", &[], OpError::invalid),
+                "reminder-at-or-days-hint",
+                &[],
+            )
+            .into());
         }
     }
     let note = worklog::reminder_note(input.note.as_deref().unwrap_or_default())
@@ -314,10 +312,11 @@ fn set(w: &mut WriteCtx<'_>, input: ReminderSetInput) -> Result<ReminderChange, 
 
 fn moment_input(zone: &Zone, field: &str, text: &str) -> Result<i64, Failure> {
     zone.parse_moment(text).ok_or_else(|| {
-        Failure::Op(
-            OpError::invalid_at(field, format!("\"{text}\" is not a moment."))
-                .with_hint("Write it in RFC 3339, or as 2026-11-24 09:00 (local time)."),
-        )
+        Failure::Op(messages::hint(
+            messages::invalid_at(field, "reminder-not-a-moment", &[("text", text.to_owned())]),
+            "reminder-moment-hint",
+            &[],
+        ))
     })
 }
 
@@ -450,9 +449,11 @@ fn due(
     };
     let limit = input.limit.unwrap_or(DEFAULT_LIMIT);
     if !(1..=MAX_LIMIT).contains(&limit) {
-        return Err(
-            OpError::invalid_at("limit", format!("limit must be from 1 to {MAX_LIMIT}.")).into(),
-        );
+        return Err(messages::invalid(
+            "limit",
+            "input-limit",
+            &[("max", MAX_LIMIT.to_string())],
+        ));
     }
     let all = candidates(tx, zone, until)?;
     let next_at = all.iter().map(|c| c.at).filter(|at| *at > until).min();
@@ -518,11 +519,11 @@ fn acknowledge(
     input: ReminderAckInput,
 ) -> Result<ReminderAcknowledged, Failure> {
     if input.ids.is_empty() || input.ids.len() > MAX_LIMIT as usize {
-        return Err(OpError::invalid_at(
+        return Err(messages::invalid(
             "ids",
-            format!("Acknowledge 1 to {MAX_LIMIT} reminders at once."),
-        )
-        .into());
+            "reminder-ack-count",
+            &[("max", MAX_LIMIT.to_string())],
+        ));
     }
     let pending = candidates(w.tx(), w.zone(), w.now())?;
     let mut acknowledged = Vec::new();

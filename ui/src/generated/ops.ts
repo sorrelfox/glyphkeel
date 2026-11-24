@@ -50,18 +50,26 @@ export type ActivityPage = {
 export type ActivityQuery = {
   /** Only changes by this actor, by name (case-insensitive). */
   actor?: string | null;
+  /** Only changes by the person (`user`) or only those by agents (`agent`). */
+  actor_kind?: ActorKind | null;
   /** `next_cursor` of the previous page. */
   cursor?: string | null;
+  /** Only changes on or after this day: `YYYY-MM-DD`, or a natural form such as `today`, `yesterday` or `-7d`, in the caller's time zone. */
+  from?: string | null;
   /** Only the changes of this history group. */
   group?: string | null;
   /** At most this many changes (default 50, at most 200). */
   limit?: number | null;
+  /** Only changes in this project and its sub-projects: a key or ID. */
+  project?: string | null;
   /** Only changes of this agent session; `"current"` is the caller's own. */
   session?: string | null;
   /** Also list the agent sessions. */
   sessions?: boolean;
   /** Only changes to this task (key or ID): its own fields and description revisions, its links, its comments and its files, including files attached to its comments. */
   task?: string | null;
+  /** Only changes on or before this day (included), in the same forms as `from`. */
+  to?: string | null;
 };
 
 /** Who did something. */
@@ -241,6 +249,12 @@ export type BackupDeleted = {
   files_removed: number;
   /** The backup's name. */
   name: string;
+};
+
+/** Where the backups go. */
+export type BackupFolderPatch = {
+  /** The new folder: an absolute path outside the workspace's own folder, which is created if it doesn't exist. Leave it out to go back to the default folder. Backups already made stay where they are. */
+  folder?: string | null;
 };
 
 /** Why a backup was made, which decides how long it is kept. */
@@ -1784,6 +1798,8 @@ export type SettingKey = "trash_days" | "reminder_time" | "hours_per_day" | "day
 export type Settings = {
   /** The most an agent may do, whatever profile it asks for. */
   agent_max_profile: Profile;
+  /** The folder that holds this workspace's backups, as an absolute path; left out: the default folder. Only the person sets it, in the app. */
+  backup_folder?: string;
   /** Working days in a week, for durations written in weeks (`1w`). */
   days_per_week: number;
   /** The largest file that can be attached, in megabytes. */
@@ -1839,6 +1855,10 @@ export type SkippedGroup = {
   group: string;
   /** Why: something changed it since, it was already reverted, and so on. */
   reason: string;
+  /** The reason's arguments, by name. */
+  reason_args?: Record<string, string>;
+  /** The reason's message ID, for showing it in another language. */
+  reason_id: string;
 };
 
 /** How a column's cards are ordered. */
@@ -3227,6 +3247,7 @@ export interface OpMap {
   "backup.verify": { input: BackupRef; output: BackupCheck; safety: "read"; kind: "query" };
   "backup.restore": { input: BackupRef; output: BackupRestored; safety: "app"; kind: "command" };
   "backup.delete": { input: BackupRef; output: BackupDeleted; safety: "permanent"; kind: "command" };
+  "backup.folder.update": { input: BackupFolderPatch; output: SettingsChange; safety: "app"; kind: "command" };
   "transfer.export": { input: ExportInput; output: ExportResult; safety: "write"; kind: "command" };
   "transfer.import": { input: ImportInput; output: ImportResult; safety: "write"; kind: "command" };
 }
@@ -3329,6 +3350,7 @@ export const OP_SAFETY = {
   "backup.verify": "read",
   "backup.restore": "app",
   "backup.delete": "permanent",
+  "backup.folder.update": "app",
   "transfer.export": "write",
   "transfer.import": "write",
 } as const satisfies { [K in OpId]: OpMap[K]["safety"] };
@@ -3356,6 +3378,8 @@ export function makeOps(call: Call) {
       restore: (input: OpMap["backup.restore"]["input"]) => call("backup.restore", input),
       /** Delete a backup and the stored files only it used. (permanent) */
       delete: (input: OpMap["backup.delete"]["input"]) => call("backup.delete", input),
+      /** Move the backup folder to another place, or back to the default; backups already made stay where they are. (app) */
+      folderUpdate: (input: OpMap["backup.folder.update"]["input"] = {}) => call("backup.folder.update", input),
     },
     board: {
       /** A project's board as the person sees it: columns in the personal order with hidden ones flagged, WIP state and compact cards. (read) */

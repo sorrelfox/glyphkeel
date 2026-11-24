@@ -959,7 +959,12 @@ pub(crate) fn import(
         let entry = format!("files/{sha}");
         let mut reader = source.open_entry(&entry, limits.max_file)?;
         let stored = gk_store::store_reader_unsynced(&layout, &mut reader, limits.max_file)
-            .map_err(|e| OpError::storage(format!("Can't store {entry}: {e}.")))?;
+            .map_err(|e| {
+                messages::storage(
+                    "transfer-store-entry-failed",
+                    &[("path", entry.clone()), ("error", e.to_string())],
+                )
+            })?;
         if &stored.sha256 != sha {
             let _ = gk_store::remove_file(&layout, &stored.sha256);
             return Err(Rejected::Hash(entry).into());
@@ -971,9 +976,10 @@ pub(crate) fn import(
         for sha in &added {
             let _ = gk_store::remove_file(&layout, sha);
         }
-        return Err(OpError::storage(format!(
-            "Can't store the archive's files: {e}."
-        )));
+        return Err(messages::storage(
+            "transfer-store-files-failed",
+            &[("error", e.to_string())],
+        ));
     }
     report(progress, TransferPhase::Files, total, total);
     let texts = Arc::new(Texts::of(&parsed));
@@ -988,13 +994,19 @@ pub(crate) fn import(
         write(w, &parsed_in, &texts, &plan, &progress_in)?;
         let r = result(&parsed_in, &plan, false, w.group_if_changed());
         *out.lock().unwrap_or_else(PoisonError::into_inner) = Some(r.clone());
-        serde_json::to_value(r).map_err(|e| Failure::Op(OpError::storage(e.to_string())))
+        serde_json::to_value(r).map_err(|e| {
+            Failure::Op(messages::storage(
+                "storage-json",
+                &[("error", e.to_string())],
+            ))
+        })
     });
     let desc = descriptor("transfer.import").ok_or_else(|| OpError::storage("no import"))?;
     match engine.execute_command(ctx, desc, f, Value::Null) {
         Ok(value) => {
             report(progress, TransferPhase::Done, 1, 1);
-            serde_json::from_value(value).map_err(|e| OpError::storage(e.to_string()))
+            serde_json::from_value(value)
+                .map_err(|e| messages::storage("storage-json", &[("error", e.to_string())]))
         }
         Err(e) => {
             // Nothing was written, so the files copied for it are unused.

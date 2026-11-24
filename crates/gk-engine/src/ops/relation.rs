@@ -13,7 +13,6 @@
 //! holding both ends and the kind, so a removed link comes back with the
 //! same ID when its removal is reverted.
 
-use gk_api::OpError;
 use gk_api::ops::task::{
     Link, LinkKind as ApiLinkKind, RelationAdd, RelationInput, RelationKind, RelationRemove,
     TaskChange, TaskPart,
@@ -26,6 +25,7 @@ use serde_json::{Value, json};
 use super::desc;
 use super::lookup::{self, TaskRow, b, id_at};
 use crate::failure::Failure;
+use crate::messages;
 use crate::registry::Registry;
 use crate::write::WriteCtx;
 
@@ -248,14 +248,11 @@ pub(crate) fn apply(
                 end("to"),
                 v["kind"].as_str().and_then(|k| k.parse::<Relation>().ok()),
             ) else {
-                return Err(OpError::storage("A recorded link is broken.").into());
+                return Err(messages::storage("storage-link-broken", &[]).into());
             };
             for task in [from, to] {
                 if lookup::task_by_id(w.tx(), task)?.is_none() {
-                    return Err(OpError::conflict(
-                        "One of the linked tasks is gone, so the link can't come back.",
-                    )
-                    .into());
+                    return Err(messages::conflict("link-task-gone", &[]).into());
                 }
             }
             insert_row(w, id, from, to, kind)?;
@@ -268,9 +265,9 @@ pub(crate) fn apply(
 fn active_task(w: &WriteCtx<'_>, field: &str, text: &str) -> Result<TaskRow, Failure> {
     let t = lookup::task(w.tx(), field, text)?;
     let p = lookup::project_by_id(w.tx(), t.project)?.ok_or_else(|| {
-        Failure::Op(OpError::not_found(
-            format!("There is no task \"{text}\"."),
-            &[],
+        Failure::Op(messages::not_found(
+            "task-not-found",
+            &[("task", text.to_owned())],
         ))
     })?;
     lookup::ensure_active(&p)?;
@@ -285,7 +282,13 @@ fn set_parent(
     parent: Option<&TaskRow>,
 ) -> Result<(), Failure> {
     if let Some(parent) = parent {
-        super::task::check_parent(w.tx(), Some(child.id), child.project, parent, child_key)?;
+        super::task::check_parent(
+            w.tx(),
+            Some(child.id),
+            child.project,
+            parent,
+            Some(child_key),
+        )?;
     }
     super::task::set_parent(w, child.id, child.project, parent.map(|p| p.id))
 }
@@ -294,7 +297,7 @@ fn add(w: &mut WriteCtx<'_>, input: RelationInput) -> Result<TaskChange, Failure
     let task = active_task(w, "key", &input.key)?;
     let other = active_task(w, "other", &input.other)?;
     if task.id == other.id {
-        return Err(OpError::invalid_at("other", "A task can't be linked to itself.").into());
+        return Err(messages::invalid("other", "link-to-itself", &[]));
     }
     let Some(kind) = core_kind(input.kind) else {
         if input.kind == RelationKind::SubtaskOf {
@@ -305,22 +308,15 @@ fn add(w: &mut WriteCtx<'_>, input: RelationInput) -> Result<TaskChange, Failure
         return super::task::changed_with(w, task.id, Vec::new(), &[TaskPart::Subtasks]);
     };
     if is_ancestor(w.tx(), task.id, other.id)? || is_ancestor(w.tx(), other.id, task.id)? {
-        return Err(OpError::invalid_at(
+        return Err(messages::invalid(
             "other",
-            format!(
-                "{} and {} are a task and its own subtask; they can't be linked.",
-                input.key, input.other
-            ),
-        )
-        .into());
+            "link-to-subtask",
+            &[("task", input.key.clone()), ("other", input.other.clone())],
+        ));
     }
     let (relation, from, to) = kind.stored(task.id, other.id);
     if relation == Relation::Blocks && blocks_path(w.tx(), to, from)? {
-        return Err(OpError::invalid_at(
-            "kind",
-            "This link would make a loop of tasks blocking each other.",
-        )
-        .into());
+        return Err(messages::invalid("kind", "link-loop", &[]));
     }
     let exists: Option<i64> = w
         .tx()
@@ -355,11 +351,9 @@ fn remove(w: &mut WriteCtx<'_>, input: RelationInput) -> Result<TaskChange, Fail
             (&other, &input.other, &task)
         };
         if child.parent != Some(parent.id) {
-            return Err(OpError::not_found(
-                format!("{child_key} is not a subtask of the other task."),
-                &[],
-            )
-            .into());
+            return Err(
+                messages::not_found("link-not-a-subtask", &[("task", child_key.clone())]).into(),
+            );
         }
         set_parent(w, child, child_key, None)?;
         return super::task::changed_with(w, task.id, Vec::new(), &[TaskPart::Subtasks]);
@@ -374,15 +368,11 @@ fn remove(w: &mut WriteCtx<'_>, input: RelationInput) -> Result<TaskChange, Fail
         )
         .optional()?;
     let Some(id) = found else {
-        return Err(OpError::not_found(
-            format!(
-                "There is no such link between {} and {}.",
-                input.key, input.other
-            ),
-            &[],
-        )
-        .with_hint("get_task with include [\"links\"] lists a task's links.")
-        .into());
+        let error = messages::not_found(
+            "link-not-found",
+            &[("task", input.key.clone()), ("other", input.other.clone())],
+        );
+        return Err(messages::hint(error, "link-not-found-hint", &[]).into());
     };
     apply(w, id, Some(task.project), None)?;
     super::task::changed_with(w, task.id, Vec::new(), &[TaskPart::Links])

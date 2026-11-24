@@ -5,7 +5,14 @@ expression: stderr(&out)
 {
   "code": "invalid",
   "details": {
+    "args": {
+      "field": "hours_per_day",
+      "max": "24",
+      "min": "1",
+      "value": "99"
+    },
     "max": 24,
+    "message_id": "settings-out-of-range",
     "min": 1,
     "path": "hours_per_day"
   },

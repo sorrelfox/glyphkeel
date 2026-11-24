@@ -159,10 +159,13 @@ pub fn check_time_zone(name: &str) -> Result<Option<String>, OpError> {
     }
     match jiff::tz::TimeZone::get(name) {
         Ok(tz) => Ok(Some(tz.iana_name().unwrap_or(name).to_owned())),
-        Err(_) => Err(
-            OpError::invalid(format!("\"{name}\" is not a known time zone."))
-                .with_hint("Use \"system\" or an IANA name such as \"Europe/Berlin\"."),
-        ),
+        Err(_) => Err(crate::messages::hint(
+            crate::messages::with("time-zone-unknown", &[("name", name.to_owned())], |m| {
+                OpError::invalid(m)
+            }),
+            "time-zone-unknown-hint",
+            &[],
+        )),
     }
 }
 

@@ -557,7 +557,7 @@ fn revert_a_session_skips_what_changed_since() {
         )
         .unwrap();
     assert!(again.reverted.is_empty());
-    assert_eq!(again.skipped[0].reason, "it was already reverted");
+    assert_eq!(again.skipped[0].reason, "It was already reverted.");
 
     let feed = engine
         .run::<HistoryFeed>(

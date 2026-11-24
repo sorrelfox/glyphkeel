@@ -846,6 +846,110 @@ fn a_tasks_history_has_its_fields_description_links_comments_and_files() {
     assert_eq!(err.code, ErrorCode::NotFound);
 }
 
+#[test]
+fn the_activity_log_filters_by_project_actor_kind_and_days() {
+    let dir = TempDir::new().unwrap();
+    let ws = open(&dir);
+    ws.call("project.create", json!({ "name": "Top", "key": "TOP" }));
+    ws.call(
+        "project.create",
+        json!({ "name": "Sub", "key": "SUB", "parent": "TOP" }),
+    );
+    ws.call("project.create", json!({ "name": "Else", "key": "ELS" }));
+    let top = ws.new_task("TOP", "On top");
+    let sub = ws.new_task("SUB", "Below");
+    ws.new_task("ELS", "Elsewhere");
+    ws.advance(3 * 24 * 60 * MINUTE);
+    let bot = ws.agent("Helper", Profile::Standard);
+    ws.as_(
+        &bot,
+        "task.update",
+        json!({ "key": sub, "title": "Below, by the agent" }),
+    );
+    ws.call(
+        "task.update",
+        json!({ "key": top, "title": "On top, today" }),
+    );
+
+    let feed = |input: Value| ws.call("history.feed", input);
+    let projects = |page: &Value| -> Vec<String> {
+        page["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|e| e["project"].as_str().unwrap_or_default().to_owned())
+            .collect()
+    };
+    let id_of = |key: &str| ws.call("project.get", json!({ "project": key }))["id"].clone();
+    let (top_id, sub_id, else_id) = (id_of("TOP"), id_of("SUB"), id_of("ELS"));
+
+    // A project takes in its sub-projects, but not its neighbours.
+    let in_top = feed(json!({ "project": "TOP", "limit": 200 }));
+    let seen = projects(&in_top);
+    assert!(seen.iter().any(|p| *p == top_id), "{in_top}");
+    assert!(seen.iter().any(|p| *p == sub_id), "{in_top}");
+    assert!(
+        seen.iter().all(|p| *p == top_id || *p == sub_id),
+        "{in_top}"
+    );
+    assert_eq!(in_top["total"], seen.len());
+    let in_sub = feed(json!({ "project": "SUB", "limit": 200 }));
+    assert!(projects(&in_sub).iter().all(|p| *p == sub_id));
+    assert!(
+        projects(&feed(json!({ "project": "ELS" })))
+            .iter()
+            .all(|p| *p == else_id)
+    );
+
+    // By kind of actor.
+    let by_agents = feed(json!({ "actor_kind": "agent" }));
+    assert_eq!(by_agents["total"], 1, "{by_agents}");
+    assert_eq!(by_agents["items"][0]["actor"]["name"], "Helper");
+    let by_person = feed(json!({ "actor_kind": "user", "limit": 200 }));
+    assert!(
+        by_person["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|e| e["actor"]["kind"] == "user")
+    );
+
+    // By days, in the caller's time zone; `to` is included.
+    let today = feed(json!({ "from": "today" }));
+    assert_eq!(today["total"], 2, "{today}");
+    let before = feed(json!({ "to": "yesterday", "limit": 200 }));
+    let everything = feed(json!({ "limit": 200 }));
+    assert_eq!(
+        before["total"].as_u64().unwrap() + 2,
+        everything["total"].as_u64().unwrap()
+    );
+    let both = feed(json!({ "from": "-7d", "to": "today" }));
+    assert_eq!(both["total"], everything["total"]);
+    // Filters combine, and paging keeps them.
+    let mine_today = feed(json!({ "from": "today", "actor_kind": "user", "project": "TOP" }));
+    assert_eq!(mine_today["total"], 1, "{mine_today}");
+    let first = feed(json!({ "project": "TOP", "limit": 1 }));
+    let rest = feed(json!({ "project": "TOP", "limit": 200, "cursor": first["next_cursor"] }));
+    assert_eq!(
+        rest["items"].as_array().unwrap().len() + 1,
+        seen.len(),
+        "{rest}"
+    );
+    assert!(projects(&rest).iter().all(|p| *p == top_id || *p == sub_id));
+
+    let err = ws.fails(
+        &me(),
+        "history.feed",
+        json!({ "from": "today", "to": "yesterday" }),
+    );
+    assert_eq!(err.code, ErrorCode::Invalid);
+    assert_eq!(err.details["message_id"], "activity-to-before-from");
+    let err = ws.fails(&me(), "history.feed", json!({ "from": "someday" }));
+    assert_eq!(err.code, ErrorCode::Invalid);
+    let err = ws.fails(&me(), "history.feed", json!({ "project": "NOPE" }));
+    assert_eq!(err.code, ErrorCode::NotFound);
+}
+
 fn subtask_keys(ws: &Ws, parent: &str) -> Vec<String> {
     ws.task_with(parent, &["subtasks"])["subtasks"]
         .as_array()

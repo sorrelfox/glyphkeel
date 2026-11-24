@@ -9,6 +9,8 @@ use clap::Parser;
 use gk_api::{OpError, Profile, Toolset};
 use gk_store::{Location, StoreError, WorkspaceLayout};
 
+use crate::messages;
+
 /// The workspace opened when neither `--workspace` nor
 /// `GLYPHKEEL_WORKSPACE` names one, shared with the app and the command
 /// line.
@@ -114,8 +116,11 @@ pub fn workspace_layout(arg: Option<&str>) -> Result<WorkspaceLayout, OpError> {
     Location::find(arg)
         .layout(gk_store::data_dir().as_deref())
         .map_err(|e| match e {
-            StoreError::NoDataDir => OpError::storage("No data folder found: HOME is not set.")
-                .with_hint("Set HOME or XDG_DATA_HOME, or pass --workspace with a path."),
+            StoreError::NoDataDir => messages::hint(
+                messages::error("mcp-no-data-folder", &[], OpError::storage),
+                "mcp-no-data-folder-hint",
+                &[],
+            ),
             e => OpError::invalid(format!("{e}.")),
         })
 }
@@ -127,14 +132,16 @@ fn parse_profile(s: &str) -> Result<Profile, String> {
 fn parse_toolset(s: &str) -> Result<Toolset, String> {
     Toolset::parse(s.trim()).ok_or_else(|| {
         let names: Vec<&str> = Toolset::ALL.iter().map(|t| t.as_str()).collect();
-        format!("unknown toolset \"{s}\"; use {}", names.join(", "))
+        messages::text(
+            "mcp-unknown-toolset",
+            &[("toolset", s.to_owned()), ("toolsets", names.join(", "))],
+        )
     })
 }
 
 fn parse_level(s: &str) -> Result<tracing::level_filters::LevelFilter, String> {
-    s.parse().map_err(|_| {
-        format!("unknown log level \"{s}\"; use off, error, warn, info, debug or trace")
-    })
+    s.parse()
+        .map_err(|_| messages::text("mcp-unknown-log-level", &[("level", s.to_owned())]))
 }
 
 #[cfg(test)]

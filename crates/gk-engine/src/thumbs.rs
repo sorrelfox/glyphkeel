@@ -19,6 +19,8 @@ use std::path::PathBuf;
 use gk_store::WorkspaceLayout;
 use image::{DynamicImage, ImageDecoder, ImageFormat, ImageReader, Limits};
 
+use crate::messages;
+
 /// The longest side of a thumbnail, in pixels.
 pub(crate) const EDGE: u32 = 256;
 /// The longest side of an image a thumbnail is made of.
@@ -51,6 +53,11 @@ fn format(mime: &str) -> Option<ImageFormat> {
     }
 }
 
+/// Why a file of type `mime` has no thumbnail.
+fn unsupported(mime: &str) -> String {
+    messages::text("thumb-unsupported", &[("mime", mime.to_owned())])
+}
+
 /// Whether thumbnails are made for files of this media type.
 pub(crate) fn supported(mime: &str) -> bool {
     format(mime).is_some()
@@ -59,7 +66,7 @@ pub(crate) fn supported(mime: &str) -> bool {
 /// The thumbnail of `bytes` (of type `mime`) as PNG, with its width and
 /// height. Fails for other types, broken images and images over the limits.
 pub(crate) fn make(bytes: &[u8], mime: &str) -> Result<(Vec<u8>, u32, u32), String> {
-    let format = format(mime).ok_or_else(|| format!("no thumbnails are made for {mime}"))?;
+    let format = format(mime).ok_or_else(|| unsupported(mime))?;
     let mut reader = ImageReader::with_format(Cursor::new(bytes), format);
     let mut limits = Limits::default();
     limits.max_image_width = Some(MAX_SIDE);
@@ -69,7 +76,10 @@ pub(crate) fn make(bytes: &[u8], mime: &str) -> Result<(Vec<u8>, u32, u32), Stri
     let mut decoder = reader.into_decoder().map_err(|e| e.to_string())?;
     let (w, h) = decoder.dimensions();
     if u64::from(w) * u64::from(h) > MAX_PIXELS {
-        return Err(format!("the image is too large ({w} × {h} pixels)"));
+        return Err(messages::text(
+            "thumb-too-large",
+            &[("width", w.to_string()), ("height", h.to_string())],
+        ));
     }
     let orientation = decoder.orientation().map_err(|e| e.to_string())?;
     let mut image = DynamicImage::from_decoder(decoder).map_err(|e| e.to_string())?;
@@ -101,7 +111,7 @@ pub(crate) fn cache(
 ) -> Result<Thumb, String> {
     let (png, width, height) = make(bytes, mime)?;
     let path = gk_store::store_thumb(layout, sha256, &png)
-        .map_err(|e| format!("the thumbnail can't be cached: {e}"))?;
+        .map_err(|e| messages::text("thumb-not-cached", &[("error", e.to_string())]))?;
     Ok(Thumb {
         path,
         width,
@@ -113,7 +123,7 @@ pub(crate) fn cache(
 /// file when the cache doesn't have it.
 pub(crate) fn get(layout: &WorkspaceLayout, sha256: &str, mime: &str) -> Result<Thumb, String> {
     if !supported(mime) {
-        return Err(format!("no thumbnails are made for {mime}"));
+        return Err(unsupported(mime));
     }
     if let Some(path) = gk_store::thumb_path(layout, sha256)
         && let Ok(bytes) = std::fs::read(&path)
@@ -126,7 +136,7 @@ pub(crate) fn get(layout: &WorkspaceLayout, sha256: &str, mime: &str) -> Result<
         });
     }
     let bytes = gk_store::read_file(layout, sha256, u64::MAX)
-        .map_err(|e| format!("the stored file can't be read: {e}"))?;
+        .map_err(|e| messages::text("thumb-unreadable", &[("error", e.to_string())]))?;
     cache(layout, sha256, mime, &bytes)
 }
 

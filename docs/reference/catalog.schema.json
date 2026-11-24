@@ -228,7 +228,7 @@
   },
   "operations": [
     {
-      "cli": "status",
+      "cli": "workspace",
       "exposure": "data",
       "id": "workspace.get",
       "input": {
@@ -356,6 +356,10 @@
               "agent_max_profile": {
                 "$ref": "#/$defs/Profile",
                 "description": "The most an agent may do, whatever profile it asks for."
+              },
+              "backup_folder": {
+                "description": "The folder that holds this workspace's backups, as an absolute path;\nleft out: the default folder. Only the person sets it, in the app.",
+                "type": "string"
               },
               "days_per_week": {
                 "description": "Working days in a week, for durations written in weeks (`1w`).",
@@ -693,6 +697,10 @@
             "$ref": "#/$defs/Profile",
             "description": "The most an agent may do, whatever profile it asks for."
           },
+          "backup_folder": {
+            "description": "The folder that holds this workspace's backups, as an absolute path;\nleft out: the default folder. Only the person sets it, in the app.",
+            "type": "string"
+          },
           "days_per_week": {
             "description": "Working days in a week, for durations written in weeks (`1w`).",
             "format": "uint32",
@@ -926,6 +934,10 @@
               "agent_max_profile": {
                 "$ref": "#/$defs/Profile",
                 "description": "The most an agent may do, whatever profile it asks for."
+              },
+              "backup_folder": {
+                "description": "The folder that holds this workspace's backups, as an absolute path;\nleft out: the default folder. Only the person sets it, in the app.",
+                "type": "string"
               },
               "days_per_week": {
                 "description": "Working days in a week, for durations written in weeks (`1w`).",
@@ -37074,6 +37086,10 @@
                 "$ref": "#/$defs/Profile",
                 "description": "The most an agent may do, whatever profile it asks for."
               },
+              "backup_folder": {
+                "description": "The folder that holds this workspace's backups, as an absolute path;\nleft out: the default folder. Only the person sets it, in the app.",
+                "type": "string"
+              },
               "days_per_week": {
                 "description": "Working days in a week, for durations written in weeks (`1w`).",
                 "format": "uint32",
@@ -37182,6 +37198,23 @@
       "exposure": "data",
       "id": "history.feed",
       "input": {
+        "$defs": {
+          "ActorKind": {
+            "description": "A person or an agent.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              }
+            ]
+          }
+        },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "description": "Which changes to list.",
@@ -37193,8 +37226,26 @@
               "null"
             ]
           },
+          "actor_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ActorKind"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only changes by the person (`user`) or only those by agents\n(`agent`)."
+          },
           "cursor": {
             "description": "`next_cursor` of the previous page.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from": {
+            "description": "Only changes on or after this day: `YYYY-MM-DD`, or a natural form\nsuch as `today`, `yesterday` or `-7d`, in the caller's time zone.",
             "type": [
               "string",
               "null"
@@ -37216,6 +37267,13 @@
               "null"
             ]
           },
+          "project": {
+            "description": "Only changes in this project and its sub-projects: a key or ID.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "session": {
             "description": "Only changes of this agent session; `\"current\"` is the caller's own.",
             "type": [
@@ -37230,6 +37288,13 @@
           },
           "task": {
             "description": "Only changes to this task (key or ID): its own fields and\ndescription revisions, its links, its comments and its files,\nincluding files attached to its comments.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "to": {
+            "description": "Only changes on or before this day (included), in the same forms as\n`from`.",
             "type": [
               "string",
               "null"
@@ -37550,11 +37615,23 @@
               "reason": {
                 "description": "Why: something changed it since, it was already reverted, and so on.",
                 "type": "string"
+              },
+              "reason_args": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "The reason's arguments, by name.",
+                "type": "object"
+              },
+              "reason_id": {
+                "description": "The reason's message ID, for showing it in another language.",
+                "type": "string"
               }
             },
             "required": [
               "group",
-              "reason"
+              "reason",
+              "reason_id"
             ],
             "type": "object"
           }
@@ -38997,6 +39074,165 @@
       "output_name": "BackupDeleted",
       "safety": "permanent",
       "summary": "Delete a backup and the stored files only it used."
+    },
+    {
+      "app_reason": "it decides where copies of all the person's data are written, so only the person may set it, in the app",
+      "exposure": "app",
+      "id": "backup.folder.update",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Where the backups go.",
+        "properties": {
+          "folder": {
+            "description": "The new folder: an absolute path outside the workspace's own folder,\nwhich is created if it doesn't exist. Leave it out to go back to the\ndefault folder. Backups already made stay where they are.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "BackupFolderPatch",
+        "type": "object"
+      },
+      "input_name": "BackupFolderPatch",
+      "kind": "command",
+      "output": {
+        "$defs": {
+          "Profile": {
+            "description": "What an agent may do. The workspace setting \"most an agent may do\" caps\nthe profile an agent asks for.",
+            "oneOf": [
+              {
+                "const": "read-only",
+                "description": "Reads only.",
+                "type": "string"
+              },
+              {
+                "const": "standard",
+                "description": "Reads, changes and moves to the trash; nothing permanent.",
+                "type": "string"
+              },
+              {
+                "const": "full",
+                "description": "Everything except operations on the application itself.",
+                "type": "string"
+              }
+            ]
+          },
+          "Settings": {
+            "additionalProperties": false,
+            "description": "The workspace's settings, with defaults filled in.",
+            "properties": {
+              "agent_max_profile": {
+                "$ref": "#/$defs/Profile",
+                "description": "The most an agent may do, whatever profile it asks for."
+              },
+              "backup_folder": {
+                "description": "The folder that holds this workspace's backups, as an absolute path;\nleft out: the default folder. Only the person sets it, in the app.",
+                "type": "string"
+              },
+              "days_per_week": {
+                "description": "Working days in a week, for durations written in weeks (`1w`).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "file_max_mb": {
+                "description": "The largest file that can be attached, in megabytes.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "hours_per_day": {
+                "description": "Working hours in a day, for durations written in days (`2d`).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "reminder_time": {
+                "description": "When reminders for a due date fire, as `HH:MM`.",
+                "type": "string"
+              },
+              "timer_reminder_hours": {
+                "description": "Hours a timer runs before it reminds that it is still running; 0\nnever.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "trash_days": {
+                "description": "Days an item stays in the trash before it is purged.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "week_start": {
+                "$ref": "#/$defs/WeekStart",
+                "description": "The first day of the week in calendars and in `this-week`."
+              }
+            },
+            "required": [
+              "trash_days",
+              "reminder_time",
+              "hours_per_day",
+              "days_per_week",
+              "week_start",
+              "file_max_mb",
+              "agent_max_profile",
+              "timer_reminder_hours"
+            ],
+            "type": "object"
+          },
+          "WeekStart": {
+            "description": "The first day of the week.",
+            "oneOf": [
+              {
+                "const": "monday",
+                "description": "Monday.",
+                "type": "string"
+              },
+              {
+                "const": "saturday",
+                "description": "Saturday.",
+                "type": "string"
+              },
+              {
+                "const": "sunday",
+                "description": "Sunday.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The settings after a change.",
+        "properties": {
+          "changed": {
+            "description": "The settings whose value changed.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "group": {
+            "description": "The history group of the change, for revert and Undo; left out when\nnothing changed.",
+            "type": "string"
+          },
+          "settings": {
+            "$ref": "#/$defs/Settings",
+            "description": "All settings, after the change."
+          }
+        },
+        "required": [
+          "settings",
+          "changed"
+        ],
+        "title": "SettingsChange",
+        "type": "object"
+      },
+      "output_name": "SettingsChange",
+      "safety": "app",
+      "summary": "Move the backup folder to another place, or back to the default; backups already made stay where they are."
     },
     {
       "cli": "export",
