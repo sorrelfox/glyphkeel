@@ -61,6 +61,7 @@ mod layout;
 mod readers;
 mod requests;
 mod schema;
+mod snapshot;
 mod store;
 mod user_settings;
 mod writer;
@@ -74,7 +75,8 @@ pub use checkpoint::{
 pub use connection::{COLLATION, JOURNAL_SIZE_LIMIT, collate};
 pub use error::{Result, StoreError, WriteError};
 pub use files::{
-    StoredFile, file_path, has_file, read_file, remove_file, sha256_hex, store_file, store_thumb,
+    StoredFile, file_path, has_file, read_file, remove_file, sha256_file, sha256_hex,
+    sha256_reader, store_file, store_reader, store_reader_unsynced, store_thumb, sync_files,
     thumb_path,
 };
 pub use layout::{
@@ -82,6 +84,10 @@ pub use layout::{
 };
 pub use requests::{REQUEST_WINDOW_MS, RequestKey, purge_requests, remember, remembered};
 pub use schema::{SCHEMA_VERSION, SchemaState};
+pub use snapshot::{
+    BlobCopy, check_integrity, copy_blob, generation_of, replace_database, schema_version_of,
+    upgrade_copy, vacuum_into,
+};
 pub use store::{Store, StoreConfig, open_raw};
 pub use user_settings::{
     SYSTEM_TIME_ZONE, USER_SETTINGS_FILE, UserSettings, config_dir, user_settings_file,

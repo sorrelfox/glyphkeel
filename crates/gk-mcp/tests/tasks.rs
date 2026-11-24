@@ -413,3 +413,66 @@ async fn an_agent_keeps_a_wiki_page_and_searches_everything() {
     assert_eq!(today["counts"]["recent"], 1);
     c.close().await;
 }
+
+#[tokio::test]
+async fn an_agent_deletes_within_its_limits_and_the_person_restores() {
+    let (_dir, mut options) = workspace();
+    options.toolsets = Some(gk_api::Toolset::ALL.to_vec());
+    let (_, mode, version, _) = lifecycles().remove(0);
+    let c = connect(&options, mode, version, "Tidy").await;
+    output(
+        &c.call("create_project", json!({ "name": "Tidy", "key": "TD" }))
+            .await,
+    );
+    let mut keys = Vec::new();
+    for i in 0..21 {
+        let t = output(
+            &c.call(
+                "create_task",
+                json!({ "project": "TD", "title": format!("T{i}") }),
+            )
+            .await,
+        );
+        keys.push(t["task"]["key"].as_str().unwrap().to_owned());
+    }
+    let too_many = c.call("delete_tasks", json!({ "keys": keys })).await;
+    assert_eq!(too_many.is_error, Some(true), "{too_many:?}");
+    let deleted = c.call("delete_tasks", json!({ "keys": keys[..2] })).await;
+    let out = output(&deleted);
+    assert_eq!(out["total"], 2);
+    assert!(common::text(&deleted).starts_with("Moved to the trash: 2 items"));
+    let listed = c.call("list_trash", json!({})).await;
+    assert_eq!(output(&listed)["total"], 2);
+    assert!(common::text(&listed).contains("TD-1"));
+    // Emptying the whole trash is the person's.
+    let all = c.call("purge_trash", json!({ "all": true })).await;
+    assert_eq!(all.is_error, Some(true));
+    // Archives stay in the workspace's exports folder.
+    let outside = c.call("export_data", json!({ "path": "../out.zip" })).await;
+    assert_eq!(outside.is_error, Some(true));
+    let exported = output(&c.call("export_data", json!({ "path": "td.zip" })).await);
+    // The archive carries the trash too.
+    assert_eq!(exported["counts"]["tasks"], 21, "{exported}");
+    let check = output(
+        &c.call("import_data", json!({ "path": "td.zip", "dry_run": true }))
+            .await,
+    );
+    assert_eq!(check["taken_keys"], json!(["TD"]));
+    let made = c.call("create_backup", json!({})).await;
+    assert!(common::text(&made).starts_with("Backup made:"), "{made:?}");
+    c.close().await;
+
+    let (engine, person) = open_as_person(&options);
+    let trash = engine.call(&person, "trash.list", json!({})).unwrap();
+    assert_eq!(trash["items"][0]["deleted_by"]["kind"], "agent");
+    let ids: Vec<Value> = trash["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i["id"].clone())
+        .collect();
+    let back = engine
+        .call(&person, "trash.restore", json!({ "items": ids }))
+        .unwrap();
+    assert_eq!(back["total"], 2);
+}

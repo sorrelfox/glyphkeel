@@ -817,7 +817,7 @@ pub struct ProjectDeleteInput {
     pub expected_task_count: Option<u64>,
 }
 
-/// What a project deletion removed.
+/// What a project deletion moved to the trash.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectDeleted {
@@ -825,13 +825,13 @@ pub struct ProjectDeleted {
     pub project: String,
     /// The keys of the deleted projects: it and its sub-projects.
     pub projects: Vec<String>,
-    /// Tasks removed, trashed ones included.
+    /// Tasks in them, trashed ones included.
     pub tasks: u64,
-    /// Comments removed.
+    /// Comments in them.
     pub comments: u64,
-    /// Attached files removed.
+    /// Attached files in them.
     pub files: u64,
-    /// The history group that records the deletion.
+    /// The history group that records the deletion, for revert and Undo.
     pub group: String,
 }
 
@@ -879,9 +879,9 @@ op!(
 );
 
 pub(crate) const PROJECT_DELETE: OpDescriptor = OpDescriptor::of::<ProjectDelete>(Meta {
-    summary: "Delete a project and its sub-projects with every task, comment and file in them. Can't be undone.",
+    summary: "Move a project and its sub-projects, with everything in them, to the trash. Agents need the full profile.",
     kind: OpKind::Command,
-    safety: Safety::Permanent,
+    safety: Safety::Trash,
     exposure: Exposure::Data,
     cli: Some("project delete <project>"),
     input_name: "ProjectDeleteInput",

@@ -662,11 +662,14 @@ pub(crate) fn set_live(
     Ok(())
 }
 
-/// Removes the blob rows and stored files of `sha256s` that no attachment
-/// uses any more. Runs inside the write transaction, so an attachment
-/// added at the same time either commits first (and keeps the file) or
-/// finds the file gone and stores it again.
-pub(crate) fn drop_unused(w: &WriteCtx<'_>, sha256s: &[String]) -> Result<(), Failure> {
+/// Removes the blob rows of `sha256s` that no attachment uses any more and
+/// returns their hashes; the stored files go after the commit
+/// ([`remove_unused_files`]), so a rolled-back transaction keeps them.
+pub(crate) fn drop_unused_rows(
+    w: &WriteCtx<'_>,
+    sha256s: &[String],
+) -> Result<Vec<String>, Failure> {
+    let mut out = Vec::new();
     for sha in sha256s {
         let used: Option<i64> = w
             .tx()
@@ -676,14 +679,38 @@ pub(crate) fn drop_unused(w: &WriteCtx<'_>, sha256s: &[String]) -> Result<(), Fa
                 |r| r.get(0),
             )
             .optional()?;
-        if used.is_some() {
-            continue;
-        }
-        w.tx()
-            .execute("DELETE FROM blobs WHERE sha256 = ?1", [sha])?;
-        if let Err(e) = gk_store::remove_file(w.layout(), sha) {
-            tracing::warn!(error = %e, "a stored file that is no longer used could not be removed");
+        if used.is_none() {
+            w.tx()
+                .execute("DELETE FROM blobs WHERE sha256 = ?1", [sha])?;
+            out.push(sha.clone());
         }
     }
-    Ok(())
+    Ok(out)
+}
+
+/// Removes the stored files of `sha256s` that have no blob row (checked
+/// again now, in case another program attached the same content since).
+pub(crate) fn remove_unused_files(
+    store: &gk_store::Store,
+    sha256s: &[String],
+) -> Result<u64, Failure> {
+    let mut removed = 0;
+    for sha in sha256s {
+        let known: Option<i64> = store.read(|tx| {
+            Ok::<_, Failure>(
+                tx.query_row("SELECT 1 FROM blobs WHERE sha256 = ?1", [sha], |r| r.get(0))
+                    .optional()?,
+            )
+        })?;
+        if known.is_some() {
+            continue;
+        }
+        match gk_store::remove_file(store.layout(), sha) {
+            Ok(()) => removed += 1,
+            Err(e) => {
+                tracing::warn!(error = %e, "a stored file that is no longer used could not be removed");
+            }
+        }
+    }
+    Ok(removed)
 }

@@ -18,6 +18,7 @@ use crate::ops::common::{Actor, Category, Edge, Glyph, Hue, Priority};
 use crate::ops::description::{
     ChecklistItem, ConflictResolution, DescriptionSave, RevisionInfo, TextEdit,
 };
+use crate::ops::trash::TrashChange;
 
 /// A task's status, as tasks carry it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -762,6 +763,32 @@ pub(crate) const TASK_UPDATE: OpDescriptor = OpDescriptor::of::<TaskUpdate>(Meta
     cli: Some("task edit <key>"),
     input_name: "TaskUpdateInput",
     output_name: "TaskChange",
+});
+
+/// Tasks to move to the trash.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TaskDeleteInput {
+    /// The tasks: keys or IDs, 1 to 500. Their subtasks go with them.
+    pub keys: Vec<String>,
+}
+
+op!(
+    /// Tasks to the trash.
+    TaskDelete,
+    "task.delete",
+    TaskDeleteInput,
+    TrashChange
+);
+
+pub(crate) const TASK_DELETE: OpDescriptor = OpDescriptor::of::<TaskDelete>(Meta {
+    summary: "Move tasks to the trash, each with its subtasks; they can be restored from there.",
+    kind: OpKind::Command,
+    safety: Safety::Trash,
+    exposure: Exposure::Data,
+    cli: Some("task delete <keys>"),
+    input_name: "TaskDeleteInput",
+    output_name: "TrashChange",
 });
 
 pub(crate) const TASK_MOVE: OpDescriptor = OpDescriptor::of::<TaskMove>(Meta {

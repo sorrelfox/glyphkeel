@@ -133,6 +133,33 @@ export type AgentSessionsInput = {
   running_only?: boolean;
 };
 
+/** What an archive holds. */
+export type ArchiveCounts = {
+  /** History rows. */
+  activity: number;
+  /** Agent sessions the history refers to. */
+  agent_sessions: number;
+  /** Attachments. */
+  attachments: number;
+  /** Comments. */
+  comments: number;
+  /** Distinct stored files. */
+  files: number;
+  /** Projects, sub-projects included. */
+  projects: number;
+  /** Revisions of descriptions and wiki pages. */
+  revisions: number;
+  /** Tasks, trashed ones included. */
+  tasks: number;
+  /** Time entries. */
+  time_entries: number;
+  /** Wiki pages. */
+  wiki_pages: number;
+};
+
+/** How an archive is stored. */
+export type ArchiveFormat = "zip" | "folder";
+
 /** One attached file. */
 export type Attachment = {
   /** Who attached it. */
@@ -171,6 +198,90 @@ export type Backlink = {
   task?: string;
   /** The title of the task or page. */
   title: string;
+};
+
+/** One backup. */
+export type Backup = {
+  /** The program version that made it. */
+  app_version: string;
+  /** When it was made (RFC 3339, UTC). */
+  created_at: string;
+  /** How many stored files it refers to. */
+  files: number;
+  /** Their size in bytes (shared with other backups). */
+  files_size: number;
+  /** Why it was made. */
+  kind: BackupKind;
+  /** Its name; pass it to verify, restore or delete it. */
+  name: string;
+  /** The schema version of the copy. */
+  schema_version: number;
+  /** The database copy's size in bytes. */
+  size: number;
+};
+
+/** The result of checking a backup. */
+export type BackupCheck = {
+  /** The backup checked. */
+  backup: Backup;
+  /** How many stored files were read and their hashes compared. */
+  files_checked: number;
+  /** Whether it can be restored as it is. */
+  ok: boolean;
+  /** What is wrong, at most 100 problems. */
+  problems: BackupProblem[];
+};
+
+/** No input. */
+export type BackupCreateInput = Record<string, never>;
+
+/** A deleted backup. */
+export type BackupDeleted = {
+  /** Stored files no other backup used, removed with it. */
+  files_removed: number;
+  /** The backup's name. */
+  name: string;
+};
+
+/** Why a backup was made, which decides how long it is kept. */
+export type BackupKind = "daily" | "weekly" | "manual" | "pre_migration" | "safety" | "pre_restore";
+
+/** The workspace's backups, newest first. */
+export type BackupList = {
+  /** The folder that holds them. */
+  folder: string;
+  /** The backups. */
+  items: Backup[];
+  /** When the newest backup was made; left out when there is none. */
+  last_backup_at?: string;
+};
+
+/** No input. */
+export type BackupListInput = Record<string, never>;
+
+/** One problem of a backup. */
+export type BackupProblem = {
+  /** The detail: SQLite's report, or the file's SHA-256. */
+  detail: string;
+  /** What is wrong. */
+  kind: BackupProblemKind;
+};
+
+/** What is wrong with a backup. */
+export type BackupProblemKind = "database" | "missing_file" | "damaged_file";
+
+/** Names one backup. */
+export type BackupRef = {
+  /** The backup's name, from the backup list. */
+  name: string;
+};
+
+/** A restored backup. */
+export type BackupRestored = {
+  /** The backup of the state before, to go back to it. */
+  previous: Backup;
+  /** The backup now in place. */
+  restored: Backup;
 };
 
 /** A project's board as the person sees it. */
@@ -680,6 +791,30 @@ export type EntityChange = {
 /** What kind of failure an operation error is. Adapters decide on the code, never on the message. */
 export type ErrorCode = "invalid" | "not_found" | "conflict" | "forbidden" | "limit" | "busy" | "workspace_upgraded" | "workspace_too_new" | "storage";
 
+/** What to export. */
+export type ExportInput = {
+  /** A `.zip` file (the default) or a folder. */
+  format?: ArchiveFormat | null;
+  /** Where to write it: a new file or folder. Agents give a plain name, which goes into the workspace's `exports` folder. Left out: a name with the date in the `exports` folder. */
+  path?: string | null;
+  /** The projects (keys or IDs), each with its sub-projects; the whole workspace when empty. */
+  projects?: string[];
+};
+
+/** A finished export. */
+export type ExportResult = {
+  /** What it holds. */
+  counts: ArchiveCounts;
+  /** How it is stored. */
+  format: ArchiveFormat;
+  /** The archive written. */
+  path: string;
+  /** The keys of the projects in it. */
+  projects: string[];
+  /** Its size in bytes. */
+  size: number;
+};
+
 /** One field's change. A side is left out when the field had no value. */
 export type FieldChange = {
   /** The value after. */
@@ -742,6 +877,56 @@ export type Glyph = "task" | "bug" | "feature" | "milestone";
 
 /** The design's nine colours, for projects, statuses, types and labels, in palette order: a new label or project without a colour gets the first one its neighbours don't use yet. */
 export type Hue = "red" | "orange" | "yellow" | "green" | "teal" | "blue" | "purple" | "pink" | "grey";
+
+/** What to import. */
+export type ImportInput = {
+  /** Check the archive and report what would be imported, without importing it. */
+  dry_run?: boolean;
+  /** New keys for projects whose key is taken in this workspace. */
+  keys?: KeyChange[];
+  /** The archive: a `.zip` file or a folder. Agents give a name in the workspace's `exports` folder. */
+  path: string;
+};
+
+/** The result of an import, or of checking one. */
+export type ImportResult = {
+  /** The program version that wrote the archive. */
+  app_version: string;
+  /** What the archive holds. */
+  counts: ArchiveCounts;
+  /** Whether this only checked the archive. */
+  dry_run: boolean;
+  /** The archive's format version. */
+  format_version: number;
+  /** The history group, for revert and Undo (which moves the imported projects to the trash); left out for a check. */
+  group?: string;
+  /** How many IDs existed here already and were replaced. */
+  new_ids: number;
+  /** The projects, as they are (or would be) in this workspace. */
+  projects: ImportedProject[];
+  /** Keys in the archive that are taken here and have no new key yet. */
+  taken_keys?: string[];
+};
+
+/** One project of an import. */
+export type ImportedProject = {
+  /** Its key in the archive. */
+  from_key: string;
+  /** Its ID in this workspace. */
+  id: string;
+  /** Its key in this workspace. */
+  key: string;
+  /** Its name. */
+  name: string;
+};
+
+/** A new key for a project whose key is taken. */
+export type KeyChange = {
+  /** The key in the archive. */
+  from: string;
+  /** The key to use instead. */
+  to: string;
+};
 
 /** A label. */
 export type Label = {
@@ -1093,19 +1278,19 @@ export type ProjectDeleteInput = {
   project: string;
 };
 
-/** What a project deletion removed. */
+/** What a project deletion moved to the trash. */
 export type ProjectDeleted = {
-  /** Comments removed. */
+  /** Comments in them. */
   comments: number;
-  /** Attached files removed. */
+  /** Attached files in them. */
   files: number;
-  /** The history group that records the deletion. */
+  /** The history group that records the deletion, for revert and Undo. */
   group: string;
   /** The deleted project's key. */
   project: string;
   /** The keys of the deleted projects: it and its sub-projects. */
   projects: string[];
-  /** Tasks removed, trashed ones included. */
+  /** Tasks in them, trashed ones included. */
   tasks: number;
 };
 
@@ -1942,6 +2127,12 @@ export type TaskCreateInput = {
   type?: string | null;
 };
 
+/** Tasks to move to the trash. */
+export type TaskDeleteInput = {
+  /** The tasks: keys or IDs, 1 to 500. Their subtasks go with them. */
+  keys: string[];
+};
+
 /** A copy of a task. */
 export type TaskDuplicateInput = {
   /** Your own ID for this request; repeating it within 24 hours returns the first answer instead of making a second copy. */
@@ -2410,6 +2601,87 @@ export type Totals = {
   spent_minutes: number;
 };
 
+/** What a deletion, restore or purge touched. */
+export type TrashChange = {
+  /** The history group, for revert and Undo; left out when nothing changed. */
+  group?: string;
+  /** The entries, as the trash lists them (for a purge: as they were). */
+  items: TrashEntry[];
+  /** How many items moved, counting what went with each entry. */
+  total: number;
+};
+
+/** One entry of the trash. */
+export type TrashEntry = {
+  /** How many other items went to the trash with it: subtasks, pages inside a page, sub-projects. */
+  contains: number;
+  /** When it was deleted (RFC 3339, UTC). */
+  deleted_at: string;
+  /** Who deleted it, when history knows. */
+  deleted_by?: Actor;
+  /** The history group of the deletion. */
+  group: string;
+  /** The item's ID; pass it to restore or purge the entry. */
+  id: string;
+  /** A task's or project's key. */
+  key?: string;
+  /** What it is. */
+  kind: TrashKind;
+  /** For a time entry: its minutes. */
+  minutes?: number;
+  /** The key of the project it belongs to. */
+  project?: string;
+  /** When it will be purged (RFC 3339, UTC). */
+  purge_at: string;
+  /** For a file: its size in bytes. */
+  size?: number;
+  /** For a comment, file or time entry: the task's key. */
+  task?: string;
+  /** Its title: a task's or page's title, a project's name, a file's name, the beginning of a comment, a time entry's note. */
+  title: string;
+};
+
+/** What kind of item an entry of the trash is. */
+export type TrashKind = "project" | "task" | "comment" | "file" | "time_entry" | "wiki_page";
+
+/** Entries of the trash, newest deletion first. */
+export type TrashList = {
+  /** The entries. */
+  items: TrashEntry[];
+  /** The cursor of the next page; left out on the last one. */
+  next_cursor?: string;
+  /** How many entries match, on all pages. */
+  total: number;
+  /** Days an item stays in the trash (the `trash_days` setting). */
+  trash_days: number;
+};
+
+/** Which entries of the trash to list. */
+export type TrashListInput = {
+  /** The `next_cursor` of the page before. */
+  cursor?: string | null;
+  /** Only these kinds; all when empty. */
+  kinds?: TrashKind[];
+  /** Entries per page, 1 to 200 (50). */
+  limit?: number | null;
+  /** Only entries of this project (key or ID), trashed projects included. */
+  project?: string | null;
+};
+
+/** Entries of the trash to delete for good. */
+export type TrashPurgeInput = {
+  /** Empty the whole trash instead (not for agents). */
+  all?: boolean;
+  /** The entries' IDs, up to 100. */
+  items?: string[];
+};
+
+/** Entries of the trash to restore. */
+export type TrashRestoreInput = {
+  /** The entries' IDs, 1 to 100. */
+  items: string[];
+};
+
 /** Adds, changes or removes a task type inside [`ProjectUpdateInput`]. */
 export type TypeChange = {
   /** Place it after this type. */
@@ -2631,6 +2903,14 @@ export type WikiCreateInput = {
   project: string;
   /** The title, 1 to 200 characters, unique in the project ignoring case, without `[`, `]`, `#` or `|`. */
   title: string;
+};
+
+/** Names one page to move to the trash. */
+export type WikiDeleteInput = {
+  /** The page: its title (any case), slug or ID. */
+  page: string;
+  /** The project (key or ID); needed unless `page` is an ID. */
+  project?: string | null;
 };
 
 /** A page field that can be cleared. */
@@ -2866,7 +3146,7 @@ export interface OpMap {
   "project.change_key": { input: ProjectRekeyInput; output: ProjectChange; safety: "write"; kind: "command" };
   "project.archive": { input: ProjectRef; output: ProjectChange; safety: "write"; kind: "command" };
   "project.unarchive": { input: ProjectRef; output: ProjectChange; safety: "write"; kind: "command" };
-  "project.delete": { input: ProjectDeleteInput; output: ProjectDeleted; safety: "permanent"; kind: "command" };
+  "project.delete": { input: ProjectDeleteInput; output: ProjectDeleted; safety: "trash"; kind: "command" };
   "project.brief": { input: ProjectRef; output: AgentBrief; safety: "read"; kind: "query" };
   "status.create": { input: StatusCreateInput; output: ProjectChange; safety: "write"; kind: "command" };
   "status.update": { input: StatusUpdateInput; output: ProjectChange; safety: "write"; kind: "command" };
@@ -2883,6 +3163,7 @@ export interface OpMap {
   "task.create": { input: TaskCreateInput; output: TaskChange; safety: "write"; kind: "command" };
   "task.update": { input: TaskUpdateInput; output: TaskChange; safety: "write"; kind: "command" };
   "task.move": { input: TaskMoveInput; output: TaskChange; safety: "write"; kind: "command" };
+  "task.delete": { input: TaskDeleteInput; output: TrashChange; safety: "trash"; kind: "command" };
   "task.bulk_update": { input: BulkUpdateInput; output: BulkResult; safety: "write"; kind: "command" };
   "task.reorder_subtask": { input: SubtaskReorderInput; output: TaskChange; safety: "write"; kind: "command" };
   "task.resolve_conflict": { input: TaskResolveInput; output: TaskChange; safety: "write"; kind: "command" };
@@ -2925,6 +3206,7 @@ export interface OpMap {
   "wiki.get": { input: WikiGetInput; output: WikiPage; safety: "read"; kind: "query" };
   "wiki.create": { input: WikiCreateInput; output: WikiChange; safety: "write"; kind: "command" };
   "wiki.update": { input: WikiUpdateInput; output: WikiChange; safety: "write"; kind: "command" };
+  "wiki.delete": { input: WikiDeleteInput; output: TrashChange; safety: "trash"; kind: "command" };
   "wiki.history": { input: WikiHistoryInput; output: RevisionList; safety: "read"; kind: "query" };
   "file.get": { input: FileRef; output: Attachment; safety: "read"; kind: "query" };
   "file.read": { input: FileRef; output: FileContent; safety: "read"; kind: "query" };
@@ -2937,6 +3219,16 @@ export interface OpMap {
   "history.revert": { input: RevertInput; output: RevertResult; safety: "write"; kind: "command" };
   "history.undo": { input: UndoInput; output: UndoResult; safety: "app"; kind: "command" };
   "history.redo": { input: UndoInput; output: UndoResult; safety: "app"; kind: "command" };
+  "trash.list": { input: TrashListInput; output: TrashList; safety: "read"; kind: "query" };
+  "trash.restore": { input: TrashRestoreInput; output: TrashChange; safety: "write"; kind: "command" };
+  "trash.purge": { input: TrashPurgeInput; output: TrashChange; safety: "permanent"; kind: "command" };
+  "backup.create": { input: BackupCreateInput; output: Backup; safety: "write"; kind: "command" };
+  "backup.list": { input: BackupListInput; output: BackupList; safety: "read"; kind: "query" };
+  "backup.verify": { input: BackupRef; output: BackupCheck; safety: "read"; kind: "query" };
+  "backup.restore": { input: BackupRef; output: BackupRestored; safety: "app"; kind: "command" };
+  "backup.delete": { input: BackupRef; output: BackupDeleted; safety: "app"; kind: "command" };
+  "transfer.export": { input: ExportInput; output: ExportResult; safety: "write"; kind: "command" };
+  "transfer.import": { input: ImportInput; output: ImportResult; safety: "write"; kind: "command" };
 }
 
 /** The name of an operation. */
@@ -2956,7 +3248,7 @@ export const OP_SAFETY = {
   "project.change_key": "write",
   "project.archive": "write",
   "project.unarchive": "write",
-  "project.delete": "permanent",
+  "project.delete": "trash",
   "project.brief": "read",
   "status.create": "write",
   "status.update": "write",
@@ -2973,6 +3265,7 @@ export const OP_SAFETY = {
   "task.create": "write",
   "task.update": "write",
   "task.move": "write",
+  "task.delete": "trash",
   "task.bulk_update": "write",
   "task.reorder_subtask": "write",
   "task.resolve_conflict": "write",
@@ -3015,6 +3308,7 @@ export const OP_SAFETY = {
   "wiki.get": "read",
   "wiki.create": "write",
   "wiki.update": "write",
+  "wiki.delete": "trash",
   "wiki.history": "read",
   "file.get": "read",
   "file.read": "read",
@@ -3027,6 +3321,16 @@ export const OP_SAFETY = {
   "history.revert": "write",
   "history.undo": "app",
   "history.redo": "app",
+  "trash.list": "read",
+  "trash.restore": "write",
+  "trash.purge": "permanent",
+  "backup.create": "write",
+  "backup.list": "read",
+  "backup.verify": "read",
+  "backup.restore": "app",
+  "backup.delete": "app",
+  "transfer.export": "write",
+  "transfer.import": "write",
 } as const satisfies { [K in OpId]: OpMap[K]["safety"] };
 
 /** Sends one call; the transport (Tauri IPC or the development bridge) supplies it. */
@@ -3040,6 +3344,18 @@ export function makeOps(call: Call) {
       sessions: (input: OpMap["agent.sessions"]["input"] = {}) => call("agent.sessions", input),
       /** Set the most an agent may do, whatever profile it asks for. (app) */
       policyUpdate: (input: OpMap["agent.policy.update"]["input"]) => call("agent.policy.update", input),
+    },
+    backup: {
+      /** Make a backup of the workspace now: a checked copy of the database and its stored files. (write) */
+      create: (input: OpMap["backup.create"]["input"] = {}) => call("backup.create", input),
+      /** The workspace's backups, newest first, with their kind and size. (read) */
+      list: (input: OpMap["backup.list"]["input"] = {}) => call("backup.list", input),
+      /** Check a backup: the database copy's integrity and every stored file it needs. (read) */
+      verify: (input: OpMap["backup.verify"]["input"]) => call("backup.verify", input),
+      /** Replace the workspace with a backup, after backing up the current state. Other programs with the workspace open must restart. (app) */
+      restore: (input: OpMap["backup.restore"]["input"]) => call("backup.restore", input),
+      /** Delete a backup and the stored files only it used. (app) */
+      delete: (input: OpMap["backup.delete"]["input"]) => call("backup.delete", input),
     },
     board: {
       /** A project's board as the person sees it: columns in the personal order with hidden ones flagged, WIP state and compact cards. (read) */
@@ -3122,7 +3438,7 @@ export function makeOps(call: Call) {
       archive: (input: OpMap["project.archive"]["input"]) => call("project.archive", input),
       /** Unarchive a project and its sub-projects. (write) */
       unarchive: (input: OpMap["project.unarchive"]["input"]) => call("project.unarchive", input),
-      /** Delete a project and its sub-projects with every task, comment and file in them. Can't be undone. (permanent) */
+      /** Move a project and its sub-projects, with everything in them, to the trash. Agents need the full profile. (trash) */
       delete: (input: OpMap["project.delete"]["input"]) => call("project.delete", input),
       /** The project's instructions for agents: the wiki page marked as the brief, else the project's description. (read) */
       brief: (input: OpMap["project.brief"]["input"]) => call("project.brief", input),
@@ -3178,6 +3494,8 @@ export function makeOps(call: Call) {
       update: (input: OpMap["task.update"]["input"]) => call("task.update", input),
       /** Move a task to another status or place in its column, or to another project (new key; the old one forwards). (write) */
       move: (input: OpMap["task.move"]["input"]) => call("task.move", input),
+      /** Move tasks to the trash, each with its subtasks; they can be restored from there. (trash) */
+      delete: (input: OpMap["task.delete"]["input"]) => call("task.delete", input),
       /** Make the same change to many tasks chosen by key or query (status, type, priority, labels, parent, dates set or shifted, estimate, project), previewed first, as one change for Undo and revert. (write) */
       bulkUpdate: (input: OpMap["task.bulk_update"]["input"]) => call("task.bulk_update", input),
       /** Move a subtask to another place among its parent's subtasks (before or after another one, first or last); returns the parent with its subtasks in the new order. (write) */
@@ -3215,6 +3533,20 @@ export function makeOps(call: Call) {
       /** What needs attention today across projects: overdue tasks, tasks due today, tasks in progress, today's reminders, agents' claims, recent changes and the timer, with counts for the sidebar. (read) */
       get: (input: OpMap["today.get"]["input"] = {}) => call("today.get", input),
     },
+    transfer: {
+      /** Export projects, or the whole workspace, to an archive of JSON and Markdown files with the attachments. (write) */
+      export: (input: OpMap["transfer.export"]["input"] = {}) => call("transfer.export", input),
+      /** Import an archive as new projects; checks it completely first and never changes existing data. (write) */
+      import: (input: OpMap["transfer.import"]["input"]) => call("transfer.import", input),
+    },
+    trash: {
+      /** The trash: deleted items with what went with them, who deleted them and when they will be purged, newest first. (read) */
+      list: (input: OpMap["trash.list"]["input"] = {}) => call("trash.list", input),
+      /** Bring items back out of the trash, with everything that was deleted with them. (write) */
+      restore: (input: OpMap["trash.restore"]["input"]) => call("trash.restore", input),
+      /** Delete items in the trash for good, and their text from the history. Can't be undone. (permanent) */
+      purge: (input: OpMap["trash.purge"]["input"] = {}) => call("trash.purge", input),
+    },
     type: {
       /** Add a task type to a project. (write) */
       create: (input: OpMap["type.create"]["input"]) => call("type.create", input),
@@ -3244,6 +3576,8 @@ export function makeOps(call: Call) {
       create: (input: OpMap["wiki.create"]["input"]) => call("wiki.create", input),
       /** Change a wiki page: its text (whole, with a base revision, or by targeted edits), title, parent or place; or resolve a conflict copy. (write) */
       update: (input: OpMap["wiki.update"]["input"]) => call("wiki.update", input),
+      /** Move a wiki page, with the pages inside it, to the trash; links to it stop resolving until it is restored. (trash) */
+      delete: (input: OpMap["wiki.delete"]["input"]) => call("wiki.delete", input),
       /** List the revisions of a wiki page, newest first, conflict copies included; read one with wiki.get and its revision. (read) */
       history: (input: OpMap["wiki.history"]["input"]) => call("wiki.history", input),
     },

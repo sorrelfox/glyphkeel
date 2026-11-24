@@ -204,6 +204,32 @@ fn find(
     }
 }
 
+/// The live page `text` names, as [`find`], for other modules.
+pub(crate) fn find_page(
+    tx: &Transaction<'_>,
+    project: Option<&str>,
+    field: &str,
+    text: &str,
+) -> Result<PageRow, Failure> {
+    find(tx, project, field, text)
+}
+
+/// Refuses to bring page `id` back while another live page of its project
+/// has its title.
+pub(crate) fn ensure_title_free(tx: &Transaction<'_>, id: Id) -> Result<(), Failure> {
+    let (project, title): (Vec<u8>, String) = tx.query_row(
+        "SELECT project_id, title FROM wiki_pages WHERE id = ?1",
+        [b(id)],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )?;
+    let project = Id::from_slice(&project)
+        .map_err(|e| Failure::Store(gk_store::StoreError::Corrupt(e.to_string())))?;
+    if let Some(p) = lookup::project_by_id(tx, project)? {
+        ensure_free(tx, &p, &title, Some(id))?;
+    }
+    Ok(())
+}
+
 fn project_of(tx: &Transaction<'_>, page: &PageRow) -> Result<ProjectRow, Failure> {
     lookup::project_by_id(tx, page.project)?
         .ok_or_else(|| Failure::Op(OpError::not_found("The page's project is gone.", &[])))

@@ -22,6 +22,7 @@ macro_rules! op {
 }
 
 pub mod agent;
+pub mod backup;
 pub mod board;
 pub mod bulk;
 pub mod comment;
@@ -36,6 +37,8 @@ pub mod settings;
 pub mod task;
 pub mod time;
 pub mod today;
+pub mod transfer;
+pub mod trash;
 pub mod view;
 pub mod wiki;
 pub mod workspace;

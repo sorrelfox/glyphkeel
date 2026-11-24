@@ -1,30 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-//! Deleting a project for good, and the project's brief for agents.
+//! Purging a project for good, and the project's brief for agents.
 //!
-//! Deleting removes the project and its sub-projects with everything in
-//! them: tasks (trashed ones too), their links (also those from other
-//! projects' tasks), comments and their earlier texts, attachments, time
-//! entries, reminders, drafts, description revisions, statuses, types,
-//! labels, layouts, saved views and wiki pages. Stored files no other
-//! attachment uses are removed as well. It is a permanent operation: the
-//! person confirms it and agents need the full profile. History keeps one
-//! row saying what was deleted; earlier rows about those items lose their
-//! values, so the deleted text is gone from history too, and can't be
-//! reverted.
+//! A project is deleted into the trash (see `trash.rs`); purging it removes
+//! it and its sub-projects with everything in them: tasks (trashed ones
+//! too), their links (also those from other projects' tasks), comments and
+//! their earlier texts, attachments, time entries, reminders, drafts,
+//! description revisions, statuses, types, labels, layouts, saved views and
+//! wiki pages. History keeps who and when of earlier rows about those
+//! items, not their values.
 
-use gk_api::OpError;
-use gk_api::ops::project::{
-    AgentBrief, BriefSource, ProjectBrief, ProjectDelete, ProjectDeleteInput, ProjectDeleted,
-    ProjectRef,
-};
+use gk_api::ops::project::{AgentBrief, BriefSource, ProjectBrief, ProjectRef};
 use gk_core::Id;
 use gk_store::rusqlite::{OptionalExtension, Transaction, params};
-use serde_json::json;
 
 use super::desc;
-use super::fields::PROJECT;
 use super::lookup::{self, b, id_at};
 use crate::failure::Failure;
 use crate::registry::Registry;
@@ -35,7 +26,6 @@ pub(super) fn register(r: &mut Registry) {
         let p = lookup::project(q.tx, "project", &input.project)?;
         brief(q.tx, p.id, p.key)
     });
-    r.command::<ProjectDelete, _>(desc::<ProjectDelete>(), delete);
 }
 
 fn brief(tx: &Transaction<'_>, id: Id, key: String) -> Result<AgentBrief, Failure> {
@@ -104,7 +94,11 @@ fn run(w: &WriteCtx<'_>, sql: &str, id: Id) -> Result<usize, Failure> {
 /// row itself (tasks of a project go in one statement, as they refer to
 /// each other). The stored files its attachments used are added to
 /// `files`.
-fn clear_task(w: &WriteCtx<'_>, task: Id, files: &mut Vec<String>) -> Result<(), Failure> {
+pub(crate) fn clear_task(
+    w: &WriteCtx<'_>,
+    task: Id,
+    files: &mut Vec<String>,
+) -> Result<(), Failure> {
     let comments = ids(w.tx(), "SELECT id FROM comments WHERE task_id = ?1", task)?;
     for c in &comments {
         collect_files(w.tx(), "comment", *c, files)?;
@@ -168,67 +162,70 @@ fn count(tx: &Transaction<'_>, sql: &str, projects: &[Id]) -> Result<u64, Failur
     Ok(total)
 }
 
-fn delete(w: &mut WriteCtx<'_>, input: ProjectDeleteInput) -> Result<ProjectDeleted, Failure> {
-    let root = lookup::project(w.tx(), "project", &input.project)?;
-    let projects = whole_subtree(w.tx(), root.id)?;
-    let tasks = count(
-        w.tx(),
-        "SELECT count(*) FROM tasks WHERE project_id = ?1",
-        &projects,
-    )?;
-    if let Some(expected) = input.expected_task_count
-        && expected != tasks
-    {
-        return Err(OpError::conflict(format!(
-            "{} and its sub-projects hold {tasks} tasks, not {expected}; nothing was deleted.",
-            root.key
-        ))
-        .with_detail("tasks", tasks)
-        .with_hint("Check the project again and repeat with the right count.")
-        .into());
-    }
-    let comments = count(
-        w.tx(),
-        "SELECT count(*) FROM comments c JOIN tasks t ON t.id = c.task_id WHERE t.project_id = ?1",
-        &projects,
-    )?;
-    let mut keys = Vec::with_capacity(projects.len());
-    let mut names = Vec::with_capacity(projects.len());
-    for p in &projects {
-        let (key, name): (String, String) = w.tx().query_row(
-            "SELECT key, name FROM projects WHERE id = ?1",
-            [b(*p)],
-            |r| Ok((r.get(0)?, r.get(1)?)),
-        )?;
-        keys.push(key);
-        names.push(name);
-    }
+/// How much projects hold.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct Counts {
+    pub(crate) tasks: u64,
+    pub(crate) comments: u64,
+    pub(crate) files: u64,
+}
 
-    let mut files = Vec::new();
-    let mut file_count = 0u64;
+/// The tasks (trashed ones too), comments and attachments of `projects`.
+pub(crate) fn counts(tx: &Transaction<'_>, projects: &[Id]) -> Result<Counts, Failure> {
+    Ok(Counts {
+        tasks: count(
+            tx,
+            "SELECT count(*) FROM tasks WHERE project_id = ?1",
+            projects,
+        )?,
+        comments: count(
+            tx,
+            "SELECT count(*) FROM comments c JOIN tasks t ON t.id = c.task_id
+              WHERE t.project_id = ?1",
+            projects,
+        )?,
+        files: count(
+            tx,
+            "SELECT count(*) FROM attachments a
+              WHERE (a.owner_kind = 'task'
+                     AND a.owner_id IN (SELECT id FROM tasks WHERE project_id = ?1))
+                 OR (a.owner_kind = 'comment'
+                     AND a.owner_id IN (SELECT c.id FROM comments c JOIN tasks t
+                                          ON t.id = c.task_id WHERE t.project_id = ?1))
+                 OR (a.owner_kind = 'wiki_page'
+                     AND a.owner_id IN (SELECT id FROM wiki_pages WHERE project_id = ?1))
+                 OR (a.owner_kind = 'project' AND a.owner_id = ?1)",
+            projects,
+        )?,
+    })
+}
+
+/// Deletes project `root` and every project below it for good, with
+/// everything in them. The stored files their attachments used are added
+/// to `files`. Returns how many projects and tasks went.
+pub(crate) fn purge_projects(
+    w: &WriteCtx<'_>,
+    root: Id,
+    files: &mut Vec<String>,
+) -> Result<u64, Failure> {
+    let projects = whole_subtree(w.tx(), root)?;
+    let mut gone = 0u64;
     for p in projects.iter().rev() {
         for task in ids(w.tx(), "SELECT id FROM tasks WHERE project_id = ?1", *p)? {
-            file_count += count(
-                w.tx(),
-                "SELECT count(*) FROM attachments WHERE owner_id = ?1
-                    AND owner_kind = 'task'",
-                &[task],
-            )?;
-            file_count += count(
-                w.tx(),
-                "SELECT count(*) FROM attachments a JOIN comments c ON c.id = a.owner_id
-                  WHERE a.owner_kind = 'comment' AND c.task_id = ?1",
-                &[task],
-            )?;
-            clear_task(w, task, &mut files)?;
+            clear_task(w, task, files)?;
+            gone += 1;
         }
+        w.tx().execute(
+            "UPDATE tasks SET parent_id = NULL WHERE project_id = ?1",
+            [b(*p)],
+        )?;
         run(w, "DELETE FROM tasks WHERE project_id = ?1", *p)?;
         for page in ids(
             w.tx(),
             "SELECT id FROM wiki_pages WHERE project_id = ?1",
             *p,
         )? {
-            file_count += collect_files(w.tx(), "wiki_page", page, &mut files)?;
+            collect_files(w.tx(), "wiki_page", page, files)?;
             for sql in [
                 "DELETE FROM attachments WHERE owner_kind = 'wiki_page' AND owner_id = ?1",
                 "DELETE FROM wiki_redirects WHERE page_id = ?1",
@@ -239,7 +236,11 @@ fn delete(w: &mut WriteCtx<'_>, input: ProjectDeleteInput) -> Result<ProjectDele
                 run(w, sql, page)?;
             }
         }
-        file_count += collect_files(w.tx(), "project", *p, &mut files)?;
+        collect_files(w.tx(), "project", *p, files)?;
+        w.tx().execute(
+            "UPDATE wiki_pages SET parent_id = NULL WHERE project_id = ?1",
+            [b(*p)],
+        )?;
         for sql in [
             "DELETE FROM wiki_redirects WHERE project_id = ?1",
             "DELETE FROM wiki_pages WHERE project_id = ?1",
@@ -265,23 +266,12 @@ fn delete(w: &mut WriteCtx<'_>, input: ProjectDeleteInput) -> Result<ProjectDele
               WHERE project_id = ?1",
             [b(*p)],
         )?;
+        w.tx().execute(
+            "UPDATE projects SET parent_id = NULL WHERE parent_id = ?1",
+            [b(*p)],
+        )?;
         run(w, "DELETE FROM projects WHERE id = ?1", *p)?;
+        gone += 1;
     }
-    super::file::drop_unused(w, &files)?;
-    w.record_field(
-        PROJECT,
-        root.id,
-        Some(root.id),
-        "deleted",
-        Some(json!({ "key": keys[0], "name": names[0], "projects": keys, "tasks": tasks })),
-        None,
-    );
-    Ok(ProjectDeleted {
-        project: root.key,
-        projects: keys,
-        tasks,
-        comments,
-        files: file_count,
-        group: w.group().to_string(),
-    })
+    Ok(gone)
 }

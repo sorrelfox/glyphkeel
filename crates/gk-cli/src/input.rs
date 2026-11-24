@@ -200,7 +200,9 @@ pub(crate) fn args(op: &OpDescriptor, fields: &[Field]) -> Vec<Arg> {
             .help("The whole input as JSON, or `-` to read it from standard input; options given as well take precedence")
             .action(ArgAction::Set),
     );
-    if op.safety == gk_api::Safety::Permanent {
+    // Restoring a backup replaces the workspace, so it asks too, although
+    // it is the app's kind of operation rather than a permanent one.
+    if op.safety == gk_api::Safety::Permanent || op.id == "backup.restore" {
         out.push(
             Arg::new(YES_ARG)
                 .long(YES_ARG)

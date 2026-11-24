@@ -595,7 +595,7 @@ fn claims_keep_other_agents_away_but_never_the_person() {
 }
 
 #[test]
-fn deleting_a_project_is_confirmed_and_removes_everything_in_it() {
+fn deleting_a_project_trashes_it_and_purging_removes_everything_in_it() {
     let dir = tempfile::tempdir().unwrap();
     let ws = open(&dir);
     ws.call("project.create", json!({ "name": "Old", "key": "OLD" }));
@@ -632,12 +632,9 @@ fn deleting_a_project_is_confirmed_and_removes_everything_in_it() {
     assert_eq!(stored_files(&ws.layout), 2);
     assert_eq!(ws.task(&keep)["blocked"], true);
 
-    // Not confirmed, a wrong count, an agent without the full profile.
-    let err = ws.fails(&me(), "project.delete", json!({ "project": "OLD" }));
-    assert_eq!(err.code, ErrorCode::Forbidden);
-    let sure = Context::user(Via::Cli).with_confirmation(Confirmation::Given);
+    // A wrong count, an agent without the full profile.
     let err = ws.fails(
-        &sure,
+        &me(),
         "project.delete",
         json!({ "project": "OLD", "expected_task_count": 5 }),
     );
@@ -649,8 +646,7 @@ fn deleting_a_project_is_confirmed_and_removes_everything_in_it() {
         ErrorCode::Forbidden
     );
 
-    let out = ws.as_(
-        &sure,
+    let out = ws.call(
         "project.delete",
         json!({ "project": "OLD", "expected_task_count": 2 }),
     );
@@ -663,6 +659,47 @@ fn deleting_a_project_is_confirmed_and_removes_everything_in_it() {
             .code,
         ErrorCode::NotFound
     );
+    assert_eq!(
+        ws.fails(&me(), "task.get", json!({ "keys": [sub] })).code,
+        ErrorCode::NotFound
+    );
+    // In the trash: one entry for the project with all it holds; the other
+    // project's task no longer counts the trashed one as a blocker.
+    let trash = ws.call("trash.list", json!({}));
+    assert_eq!(trash["total"], 1, "{trash}");
+    assert_eq!(trash["items"][0]["kind"], "project");
+    assert_eq!(trash["items"][0]["key"], "OLD");
+    assert_eq!(trash["items"][0]["contains"], 3);
+    assert_eq!(ws.task(&keep)["blocked"], false);
+    assert_eq!(stored_files(&ws.layout), 2);
+
+    // Undo-style revert and restore both bring it back.
+    let back = ws.call("history.revert", json!({ "groups": [out["group"]] }));
+    assert_eq!(back["reverted"].as_array().unwrap().len(), 1, "{back}");
+    assert_eq!(ws.task(&sub)["title"], "Sub work");
+    assert_eq!(ws.task(&keep)["blocked"], true);
+    let again = ws.call("project.delete", json!({ "project": "OLD" }));
+    let id = ws.call("trash.list", json!({}))["items"][0]["id"].clone();
+    let restored = ws.call("trash.restore", json!({ "items": [id] }));
+    assert_eq!(restored["total"], 2);
+    assert_eq!(ws.task(&old)["title"], "Secret title");
+    assert_eq!(
+        ws.call("history.revert", json!({ "groups": [again["group"]] }))["skipped"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+
+    // Purging needs a confirmation and removes everything.
+    ws.call("project.delete", json!({ "project": "OLD" }));
+    let id = ws.call("trash.list", json!({}))["items"][0]["id"].clone();
+    let err = ws.fails(&me(), "trash.purge", json!({ "items": [id] }));
+    assert_eq!(err.code, ErrorCode::Forbidden);
+    let sure = Context::user(Via::Cli).with_confirmation(Confirmation::Given);
+    let purged = ws.as_(&sure, "trash.purge", json!({ "items": [id] }));
+    assert_eq!(purged["total"], 4, "{purged}");
+    assert_eq!(ws.call("trash.list", json!({}))["total"], 0);
     // The other project's task lost its link and kept its file.
     let kept = ws.task_with(&keep, &["links"]);
     assert_eq!(kept["blocked"], false);
@@ -673,7 +710,7 @@ fn deleting_a_project_is_confirmed_and_removes_everything_in_it() {
     let feed = ws.call("history.feed", json!({ "limit": 200 }));
     let text = feed.to_string();
     assert!(!text.contains("Secret title"));
-    assert_eq!(feed["items"][0]["op"], "project.delete");
+    assert_eq!(feed["items"][0]["op"], "trash.purge");
     let revert = ws.call("history.revert", json!({ "groups": [earlier["group"]] }));
     assert_eq!(revert["reverted"], json!([]));
     assert_eq!(revert["skipped"].as_array().unwrap().len(), 1);

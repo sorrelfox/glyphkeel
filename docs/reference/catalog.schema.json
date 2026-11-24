@@ -5748,22 +5748,22 @@
       "output": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
-        "description": "What a project deletion removed.",
+        "description": "What a project deletion moved to the trash.",
         "properties": {
           "comments": {
-            "description": "Comments removed.",
+            "description": "Comments in them.",
             "format": "uint64",
             "minimum": 0,
             "type": "integer"
           },
           "files": {
-            "description": "Attached files removed.",
+            "description": "Attached files in them.",
             "format": "uint64",
             "minimum": 0,
             "type": "integer"
           },
           "group": {
-            "description": "The history group that records the deletion.",
+            "description": "The history group that records the deletion, for revert and Undo.",
             "type": "string"
           },
           "project": {
@@ -5778,7 +5778,7 @@
             "type": "array"
           },
           "tasks": {
-            "description": "Tasks removed, trashed ones included.",
+            "description": "Tasks in them, trashed ones included.",
             "format": "uint64",
             "minimum": 0,
             "type": "integer"
@@ -5796,8 +5796,8 @@
         "type": "object"
       },
       "output_name": "ProjectDeleted",
-      "safety": "permanent",
-      "summary": "Delete a project and its sub-projects with every task, comment and file in them. Can't be undone."
+      "safety": "trash",
+      "summary": "Move a project and its sub-projects, with everything in them, to the trash. Agents need the full profile."
     },
     {
       "cli": "project brief <project>",
@@ -17383,6 +17383,211 @@
       "output_name": "TaskChange",
       "safety": "write",
       "summary": "Move a task to another status or place in its column, or to another project (new key; the old one forwards)."
+    },
+    {
+      "cli": "task delete <keys>",
+      "exposure": "data",
+      "id": "task.delete",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Tasks to move to the trash.",
+        "properties": {
+          "keys": {
+            "description": "The tasks: keys or IDs, 1 to 500. Their subtasks go with them.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "keys"
+        ],
+        "title": "TaskDeleteInput",
+        "type": "object"
+      },
+      "input_name": "TaskDeleteInput",
+      "kind": "command",
+      "mcp_tool": "delete_tasks",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person or agent."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person or an agent.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              }
+            ]
+          },
+          "TrashEntry": {
+            "additionalProperties": false,
+            "description": "One entry of the trash.",
+            "properties": {
+              "contains": {
+                "description": "How many other items went to the trash with it: subtasks, pages\ninside a page, sub-projects.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "deleted_at": {
+                "description": "When it was deleted (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "deleted_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who deleted it, when history knows."
+              },
+              "group": {
+                "description": "The history group of the deletion.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The item's ID; pass it to restore or purge the entry.",
+                "type": "string"
+              },
+              "key": {
+                "description": "A task's or project's key.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/TrashKind",
+                "description": "What it is."
+              },
+              "minutes": {
+                "description": "For a time entry: its minutes.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "purge_at": {
+                "description": "When it will be purged (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "size": {
+                "description": "For a file: its size in bytes.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "task": {
+                "description": "For a comment, file or time entry: the task's key.",
+                "type": "string"
+              },
+              "title": {
+                "description": "Its title: a task's or page's title, a project's name, a file's\nname, the beginning of a comment, a time entry's note.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "title",
+              "deleted_at",
+              "purge_at",
+              "contains",
+              "group"
+            ],
+            "type": "object"
+          },
+          "TrashKind": {
+            "description": "What kind of item an entry of the trash is.",
+            "oneOf": [
+              {
+                "const": "project",
+                "description": "A project, with its sub-projects and everything in them.",
+                "type": "string"
+              },
+              {
+                "const": "task",
+                "description": "A task, with its subtasks.",
+                "type": "string"
+              },
+              {
+                "const": "comment",
+                "description": "A comment.",
+                "type": "string"
+              },
+              {
+                "const": "file",
+                "description": "An attached file.",
+                "type": "string"
+              },
+              {
+                "const": "time_entry",
+                "description": "A time entry.",
+                "type": "string"
+              },
+              {
+                "const": "wiki_page",
+                "description": "A wiki page, with the pages inside it.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "What a deletion, restore or purge touched.",
+        "properties": {
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "items": {
+            "description": "The entries, as the trash lists them (for a purge: as they were).",
+            "items": {
+              "$ref": "#/$defs/TrashEntry"
+            },
+            "type": "array"
+          },
+          "total": {
+            "description": "How many items moved, counting what went with each entry.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "TrashChange",
+        "type": "object"
+      },
+      "output_name": "TrashChange",
+      "safety": "trash",
+      "summary": "Move tasks to the trash, each with its subtasks; they can be restored from there."
     },
     {
       "cli": "task bulk",
@@ -35436,6 +35641,215 @@
       "summary": "Change a wiki page: its text (whole, with a base revision, or by targeted edits), title, parent or place; or resolve a conflict copy."
     },
     {
+      "cli": "wiki delete <page>",
+      "exposure": "data",
+      "id": "wiki.delete",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Names one page to move to the trash.",
+        "properties": {
+          "page": {
+            "description": "The page: its title (any case), slug or ID.",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project (key or ID); needed unless `page` is an ID.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "page"
+        ],
+        "title": "WikiDeleteInput",
+        "type": "object"
+      },
+      "input_name": "WikiDeleteInput",
+      "kind": "command",
+      "mcp_tool": "delete_wiki_page",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person or agent."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person or an agent.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              }
+            ]
+          },
+          "TrashEntry": {
+            "additionalProperties": false,
+            "description": "One entry of the trash.",
+            "properties": {
+              "contains": {
+                "description": "How many other items went to the trash with it: subtasks, pages\ninside a page, sub-projects.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "deleted_at": {
+                "description": "When it was deleted (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "deleted_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who deleted it, when history knows."
+              },
+              "group": {
+                "description": "The history group of the deletion.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The item's ID; pass it to restore or purge the entry.",
+                "type": "string"
+              },
+              "key": {
+                "description": "A task's or project's key.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/TrashKind",
+                "description": "What it is."
+              },
+              "minutes": {
+                "description": "For a time entry: its minutes.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "purge_at": {
+                "description": "When it will be purged (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "size": {
+                "description": "For a file: its size in bytes.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "task": {
+                "description": "For a comment, file or time entry: the task's key.",
+                "type": "string"
+              },
+              "title": {
+                "description": "Its title: a task's or page's title, a project's name, a file's\nname, the beginning of a comment, a time entry's note.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "title",
+              "deleted_at",
+              "purge_at",
+              "contains",
+              "group"
+            ],
+            "type": "object"
+          },
+          "TrashKind": {
+            "description": "What kind of item an entry of the trash is.",
+            "oneOf": [
+              {
+                "const": "project",
+                "description": "A project, with its sub-projects and everything in them.",
+                "type": "string"
+              },
+              {
+                "const": "task",
+                "description": "A task, with its subtasks.",
+                "type": "string"
+              },
+              {
+                "const": "comment",
+                "description": "A comment.",
+                "type": "string"
+              },
+              {
+                "const": "file",
+                "description": "An attached file.",
+                "type": "string"
+              },
+              {
+                "const": "time_entry",
+                "description": "A time entry.",
+                "type": "string"
+              },
+              {
+                "const": "wiki_page",
+                "description": "A wiki page, with the pages inside it.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "What a deletion, restore or purge touched.",
+        "properties": {
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "items": {
+            "description": "The entries, as the trash lists them (for a purge: as they were).",
+            "items": {
+              "$ref": "#/$defs/TrashEntry"
+            },
+            "type": "array"
+          },
+          "total": {
+            "description": "How many items moved, counting what went with each entry.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "TrashChange",
+        "type": "object"
+      },
+      "output_name": "TrashChange",
+      "safety": "trash",
+      "summary": "Move a wiki page, with the pages inside it, to the trash; links to it stop resolving until it is restored."
+    },
+    {
       "cli": "wiki history <page>",
       "exposure": "data",
       "id": "wiki.history",
@@ -37264,6 +37678,1753 @@
       "output_name": "UndoResult",
       "safety": "app",
       "summary": "Redo the change the last Undo took back."
+    },
+    {
+      "cli": "trash list",
+      "exposure": "data",
+      "id": "trash.list",
+      "input": {
+        "$defs": {
+          "TrashKind": {
+            "description": "What kind of item an entry of the trash is.",
+            "oneOf": [
+              {
+                "const": "project",
+                "description": "A project, with its sub-projects and everything in them.",
+                "type": "string"
+              },
+              {
+                "const": "task",
+                "description": "A task, with its subtasks.",
+                "type": "string"
+              },
+              {
+                "const": "comment",
+                "description": "A comment.",
+                "type": "string"
+              },
+              {
+                "const": "file",
+                "description": "An attached file.",
+                "type": "string"
+              },
+              {
+                "const": "time_entry",
+                "description": "A time entry.",
+                "type": "string"
+              },
+              {
+                "const": "wiki_page",
+                "description": "A wiki page, with the pages inside it.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Which entries of the trash to list.",
+        "properties": {
+          "cursor": {
+            "description": "The `next_cursor` of the page before.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kinds": {
+            "description": "Only these kinds; all when empty.",
+            "items": {
+              "$ref": "#/$defs/TrashKind"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "description": "Entries per page, 1 to 200 (50).",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "project": {
+            "description": "Only entries of this project (key or ID), trashed projects\nincluded.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "TrashListInput",
+        "type": "object"
+      },
+      "input_name": "TrashListInput",
+      "kind": "query",
+      "mcp_tool": "list_trash",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person or agent."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person or an agent.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              }
+            ]
+          },
+          "TrashEntry": {
+            "additionalProperties": false,
+            "description": "One entry of the trash.",
+            "properties": {
+              "contains": {
+                "description": "How many other items went to the trash with it: subtasks, pages\ninside a page, sub-projects.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "deleted_at": {
+                "description": "When it was deleted (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "deleted_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who deleted it, when history knows."
+              },
+              "group": {
+                "description": "The history group of the deletion.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The item's ID; pass it to restore or purge the entry.",
+                "type": "string"
+              },
+              "key": {
+                "description": "A task's or project's key.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/TrashKind",
+                "description": "What it is."
+              },
+              "minutes": {
+                "description": "For a time entry: its minutes.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "purge_at": {
+                "description": "When it will be purged (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "size": {
+                "description": "For a file: its size in bytes.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "task": {
+                "description": "For a comment, file or time entry: the task's key.",
+                "type": "string"
+              },
+              "title": {
+                "description": "Its title: a task's or page's title, a project's name, a file's\nname, the beginning of a comment, a time entry's note.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "title",
+              "deleted_at",
+              "purge_at",
+              "contains",
+              "group"
+            ],
+            "type": "object"
+          },
+          "TrashKind": {
+            "description": "What kind of item an entry of the trash is.",
+            "oneOf": [
+              {
+                "const": "project",
+                "description": "A project, with its sub-projects and everything in them.",
+                "type": "string"
+              },
+              {
+                "const": "task",
+                "description": "A task, with its subtasks.",
+                "type": "string"
+              },
+              {
+                "const": "comment",
+                "description": "A comment.",
+                "type": "string"
+              },
+              {
+                "const": "file",
+                "description": "An attached file.",
+                "type": "string"
+              },
+              {
+                "const": "time_entry",
+                "description": "A time entry.",
+                "type": "string"
+              },
+              {
+                "const": "wiki_page",
+                "description": "A wiki page, with the pages inside it.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Entries of the trash, newest deletion first.",
+        "properties": {
+          "items": {
+            "description": "The entries.",
+            "items": {
+              "$ref": "#/$defs/TrashEntry"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "description": "The cursor of the next page; left out on the last one.",
+            "type": "string"
+          },
+          "total": {
+            "description": "How many entries match, on all pages.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "trash_days": {
+            "description": "Days an item stays in the trash (the `trash_days` setting).",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "trash_days"
+        ],
+        "title": "TrashList",
+        "type": "object"
+      },
+      "output_name": "TrashList",
+      "safety": "read",
+      "summary": "The trash: deleted items with what went with them, who deleted them and when they will be purged, newest first."
+    },
+    {
+      "cli": "trash restore <items>",
+      "exposure": "data",
+      "id": "trash.restore",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Entries of the trash to restore.",
+        "properties": {
+          "items": {
+            "description": "The entries' IDs, 1 to 100.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "TrashRestoreInput",
+        "type": "object"
+      },
+      "input_name": "TrashRestoreInput",
+      "kind": "command",
+      "mcp_tool": "restore_from_trash",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person or agent."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person or an agent.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              }
+            ]
+          },
+          "TrashEntry": {
+            "additionalProperties": false,
+            "description": "One entry of the trash.",
+            "properties": {
+              "contains": {
+                "description": "How many other items went to the trash with it: subtasks, pages\ninside a page, sub-projects.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "deleted_at": {
+                "description": "When it was deleted (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "deleted_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who deleted it, when history knows."
+              },
+              "group": {
+                "description": "The history group of the deletion.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The item's ID; pass it to restore or purge the entry.",
+                "type": "string"
+              },
+              "key": {
+                "description": "A task's or project's key.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/TrashKind",
+                "description": "What it is."
+              },
+              "minutes": {
+                "description": "For a time entry: its minutes.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "purge_at": {
+                "description": "When it will be purged (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "size": {
+                "description": "For a file: its size in bytes.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "task": {
+                "description": "For a comment, file or time entry: the task's key.",
+                "type": "string"
+              },
+              "title": {
+                "description": "Its title: a task's or page's title, a project's name, a file's\nname, the beginning of a comment, a time entry's note.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "title",
+              "deleted_at",
+              "purge_at",
+              "contains",
+              "group"
+            ],
+            "type": "object"
+          },
+          "TrashKind": {
+            "description": "What kind of item an entry of the trash is.",
+            "oneOf": [
+              {
+                "const": "project",
+                "description": "A project, with its sub-projects and everything in them.",
+                "type": "string"
+              },
+              {
+                "const": "task",
+                "description": "A task, with its subtasks.",
+                "type": "string"
+              },
+              {
+                "const": "comment",
+                "description": "A comment.",
+                "type": "string"
+              },
+              {
+                "const": "file",
+                "description": "An attached file.",
+                "type": "string"
+              },
+              {
+                "const": "time_entry",
+                "description": "A time entry.",
+                "type": "string"
+              },
+              {
+                "const": "wiki_page",
+                "description": "A wiki page, with the pages inside it.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "What a deletion, restore or purge touched.",
+        "properties": {
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "items": {
+            "description": "The entries, as the trash lists them (for a purge: as they were).",
+            "items": {
+              "$ref": "#/$defs/TrashEntry"
+            },
+            "type": "array"
+          },
+          "total": {
+            "description": "How many items moved, counting what went with each entry.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "TrashChange",
+        "type": "object"
+      },
+      "output_name": "TrashChange",
+      "safety": "write",
+      "summary": "Bring items back out of the trash, with everything that was deleted with them."
+    },
+    {
+      "cli": "trash purge <items>",
+      "exposure": "data",
+      "id": "trash.purge",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Entries of the trash to delete for good.",
+        "properties": {
+          "all": {
+            "default": false,
+            "description": "Empty the whole trash instead (not for agents).",
+            "type": "boolean"
+          },
+          "items": {
+            "description": "The entries' IDs, up to 100.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "TrashPurgeInput",
+        "type": "object"
+      },
+      "input_name": "TrashPurgeInput",
+      "kind": "command",
+      "mcp_tool": "purge_trash",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person or agent."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person or an agent.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              }
+            ]
+          },
+          "TrashEntry": {
+            "additionalProperties": false,
+            "description": "One entry of the trash.",
+            "properties": {
+              "contains": {
+                "description": "How many other items went to the trash with it: subtasks, pages\ninside a page, sub-projects.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "deleted_at": {
+                "description": "When it was deleted (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "deleted_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who deleted it, when history knows."
+              },
+              "group": {
+                "description": "The history group of the deletion.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The item's ID; pass it to restore or purge the entry.",
+                "type": "string"
+              },
+              "key": {
+                "description": "A task's or project's key.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/TrashKind",
+                "description": "What it is."
+              },
+              "minutes": {
+                "description": "For a time entry: its minutes.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "purge_at": {
+                "description": "When it will be purged (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "size": {
+                "description": "For a file: its size in bytes.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "task": {
+                "description": "For a comment, file or time entry: the task's key.",
+                "type": "string"
+              },
+              "title": {
+                "description": "Its title: a task's or page's title, a project's name, a file's\nname, the beginning of a comment, a time entry's note.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "title",
+              "deleted_at",
+              "purge_at",
+              "contains",
+              "group"
+            ],
+            "type": "object"
+          },
+          "TrashKind": {
+            "description": "What kind of item an entry of the trash is.",
+            "oneOf": [
+              {
+                "const": "project",
+                "description": "A project, with its sub-projects and everything in them.",
+                "type": "string"
+              },
+              {
+                "const": "task",
+                "description": "A task, with its subtasks.",
+                "type": "string"
+              },
+              {
+                "const": "comment",
+                "description": "A comment.",
+                "type": "string"
+              },
+              {
+                "const": "file",
+                "description": "An attached file.",
+                "type": "string"
+              },
+              {
+                "const": "time_entry",
+                "description": "A time entry.",
+                "type": "string"
+              },
+              {
+                "const": "wiki_page",
+                "description": "A wiki page, with the pages inside it.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "What a deletion, restore or purge touched.",
+        "properties": {
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "items": {
+            "description": "The entries, as the trash lists them (for a purge: as they were).",
+            "items": {
+              "$ref": "#/$defs/TrashEntry"
+            },
+            "type": "array"
+          },
+          "total": {
+            "description": "How many items moved, counting what went with each entry.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "TrashChange",
+        "type": "object"
+      },
+      "output_name": "TrashChange",
+      "safety": "permanent",
+      "summary": "Delete items in the trash for good, and their text from the history. Can't be undone."
+    },
+    {
+      "cli": "backup create",
+      "exposure": "data",
+      "id": "backup.create",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "No input.",
+        "title": "BackupCreateInput",
+        "type": "object"
+      },
+      "input_name": "BackupCreateInput",
+      "kind": "command",
+      "mcp_tool": "create_backup",
+      "output": {
+        "$defs": {
+          "BackupKind": {
+            "description": "Why a backup was made, which decides how long it is kept.",
+            "oneOf": [
+              {
+                "const": "daily",
+                "description": "The daily backup; the last 7 are kept.",
+                "type": "string"
+              },
+              {
+                "const": "weekly",
+                "description": "A daily backup kept for its week; the last 4 are kept.",
+                "type": "string"
+              },
+              {
+                "const": "manual",
+                "description": "Made by hand; kept until deleted.",
+                "type": "string"
+              },
+              {
+                "const": "pre_migration",
+                "description": "Made before a schema upgrade; the last 3 are kept.",
+                "type": "string"
+              },
+              {
+                "const": "safety",
+                "description": "Made before a large change by an agent; the last 3 are kept.",
+                "type": "string"
+              },
+              {
+                "const": "pre_restore",
+                "description": "The state before a backup was restored; the last 3 are kept.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "One backup.",
+        "properties": {
+          "app_version": {
+            "description": "The program version that made it.",
+            "type": "string"
+          },
+          "created_at": {
+            "description": "When it was made (RFC 3339, UTC).",
+            "type": "string"
+          },
+          "files": {
+            "description": "How many stored files it refers to.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "files_size": {
+            "description": "Their size in bytes (shared with other backups).",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "kind": {
+            "$ref": "#/$defs/BackupKind",
+            "description": "Why it was made."
+          },
+          "name": {
+            "description": "Its name; pass it to verify, restore or delete it.",
+            "type": "string"
+          },
+          "schema_version": {
+            "description": "The schema version of the copy.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "size": {
+            "description": "The database copy's size in bytes.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "created_at",
+          "size",
+          "files",
+          "files_size",
+          "schema_version",
+          "app_version"
+        ],
+        "title": "Backup",
+        "type": "object"
+      },
+      "output_name": "Backup",
+      "safety": "write",
+      "summary": "Make a backup of the workspace now: a checked copy of the database and its stored files."
+    },
+    {
+      "cli": "backup list",
+      "exposure": "data",
+      "id": "backup.list",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "No input.",
+        "title": "BackupListInput",
+        "type": "object"
+      },
+      "input_name": "BackupListInput",
+      "kind": "query",
+      "mcp_tool": "list_backups",
+      "output": {
+        "$defs": {
+          "Backup": {
+            "additionalProperties": false,
+            "description": "One backup.",
+            "properties": {
+              "app_version": {
+                "description": "The program version that made it.",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was made (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "files": {
+                "description": "How many stored files it refers to.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "files_size": {
+                "description": "Their size in bytes (shared with other backups).",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "kind": {
+                "$ref": "#/$defs/BackupKind",
+                "description": "Why it was made."
+              },
+              "name": {
+                "description": "Its name; pass it to verify, restore or delete it.",
+                "type": "string"
+              },
+              "schema_version": {
+                "description": "The schema version of the copy.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "size": {
+                "description": "The database copy's size in bytes.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "name",
+              "kind",
+              "created_at",
+              "size",
+              "files",
+              "files_size",
+              "schema_version",
+              "app_version"
+            ],
+            "type": "object"
+          },
+          "BackupKind": {
+            "description": "Why a backup was made, which decides how long it is kept.",
+            "oneOf": [
+              {
+                "const": "daily",
+                "description": "The daily backup; the last 7 are kept.",
+                "type": "string"
+              },
+              {
+                "const": "weekly",
+                "description": "A daily backup kept for its week; the last 4 are kept.",
+                "type": "string"
+              },
+              {
+                "const": "manual",
+                "description": "Made by hand; kept until deleted.",
+                "type": "string"
+              },
+              {
+                "const": "pre_migration",
+                "description": "Made before a schema upgrade; the last 3 are kept.",
+                "type": "string"
+              },
+              {
+                "const": "safety",
+                "description": "Made before a large change by an agent; the last 3 are kept.",
+                "type": "string"
+              },
+              {
+                "const": "pre_restore",
+                "description": "The state before a backup was restored; the last 3 are kept.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The workspace's backups, newest first.",
+        "properties": {
+          "folder": {
+            "description": "The folder that holds them.",
+            "type": "string"
+          },
+          "items": {
+            "description": "The backups.",
+            "items": {
+              "$ref": "#/$defs/Backup"
+            },
+            "type": "array"
+          },
+          "last_backup_at": {
+            "description": "When the newest backup was made; left out when there is none.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "folder",
+          "items"
+        ],
+        "title": "BackupList",
+        "type": "object"
+      },
+      "output_name": "BackupList",
+      "safety": "read",
+      "summary": "The workspace's backups, newest first, with their kind and size."
+    },
+    {
+      "cli": "backup verify <name>",
+      "exposure": "data",
+      "id": "backup.verify",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Names one backup.",
+        "properties": {
+          "name": {
+            "description": "The backup's name, from the backup list.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "BackupRef",
+        "type": "object"
+      },
+      "input_name": "BackupRef",
+      "kind": "query",
+      "mcp_tool": "verify_backup",
+      "output": {
+        "$defs": {
+          "Backup": {
+            "additionalProperties": false,
+            "description": "One backup.",
+            "properties": {
+              "app_version": {
+                "description": "The program version that made it.",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was made (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "files": {
+                "description": "How many stored files it refers to.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "files_size": {
+                "description": "Their size in bytes (shared with other backups).",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "kind": {
+                "$ref": "#/$defs/BackupKind",
+                "description": "Why it was made."
+              },
+              "name": {
+                "description": "Its name; pass it to verify, restore or delete it.",
+                "type": "string"
+              },
+              "schema_version": {
+                "description": "The schema version of the copy.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "size": {
+                "description": "The database copy's size in bytes.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "name",
+              "kind",
+              "created_at",
+              "size",
+              "files",
+              "files_size",
+              "schema_version",
+              "app_version"
+            ],
+            "type": "object"
+          },
+          "BackupKind": {
+            "description": "Why a backup was made, which decides how long it is kept.",
+            "oneOf": [
+              {
+                "const": "daily",
+                "description": "The daily backup; the last 7 are kept.",
+                "type": "string"
+              },
+              {
+                "const": "weekly",
+                "description": "A daily backup kept for its week; the last 4 are kept.",
+                "type": "string"
+              },
+              {
+                "const": "manual",
+                "description": "Made by hand; kept until deleted.",
+                "type": "string"
+              },
+              {
+                "const": "pre_migration",
+                "description": "Made before a schema upgrade; the last 3 are kept.",
+                "type": "string"
+              },
+              {
+                "const": "safety",
+                "description": "Made before a large change by an agent; the last 3 are kept.",
+                "type": "string"
+              },
+              {
+                "const": "pre_restore",
+                "description": "The state before a backup was restored; the last 3 are kept.",
+                "type": "string"
+              }
+            ]
+          },
+          "BackupProblem": {
+            "additionalProperties": false,
+            "description": "One problem of a backup.",
+            "properties": {
+              "detail": {
+                "description": "The detail: SQLite's report, or the file's SHA-256.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/BackupProblemKind",
+                "description": "What is wrong."
+              }
+            },
+            "required": [
+              "kind",
+              "detail"
+            ],
+            "type": "object"
+          },
+          "BackupProblemKind": {
+            "description": "What is wrong with a backup.",
+            "oneOf": [
+              {
+                "const": "database",
+                "description": "The database copy fails SQLite's integrity check, or can't be read.",
+                "type": "string"
+              },
+              {
+                "const": "missing_file",
+                "description": "A stored file it refers to is missing.",
+                "type": "string"
+              },
+              {
+                "const": "damaged_file",
+                "description": "A stored file it refers to has other content than its hash says.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The result of checking a backup.",
+        "properties": {
+          "backup": {
+            "$ref": "#/$defs/Backup",
+            "description": "The backup checked."
+          },
+          "files_checked": {
+            "description": "How many stored files were read and their hashes compared.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "ok": {
+            "description": "Whether it can be restored as it is.",
+            "type": "boolean"
+          },
+          "problems": {
+            "description": "What is wrong, at most 100 problems.",
+            "items": {
+              "$ref": "#/$defs/BackupProblem"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "backup",
+          "ok",
+          "problems",
+          "files_checked"
+        ],
+        "title": "BackupCheck",
+        "type": "object"
+      },
+      "output_name": "BackupCheck",
+      "safety": "read",
+      "summary": "Check a backup: the database copy's integrity and every stored file it needs."
+    },
+    {
+      "app_reason": "it replaces the whole workspace, including every agent's own work, so only the person may do it",
+      "cli": "backup restore <name>",
+      "exposure": "app",
+      "id": "backup.restore",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Names one backup.",
+        "properties": {
+          "name": {
+            "description": "The backup's name, from the backup list.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "BackupRef",
+        "type": "object"
+      },
+      "input_name": "BackupRef",
+      "kind": "command",
+      "output": {
+        "$defs": {
+          "Backup": {
+            "additionalProperties": false,
+            "description": "One backup.",
+            "properties": {
+              "app_version": {
+                "description": "The program version that made it.",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was made (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "files": {
+                "description": "How many stored files it refers to.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "files_size": {
+                "description": "Their size in bytes (shared with other backups).",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "kind": {
+                "$ref": "#/$defs/BackupKind",
+                "description": "Why it was made."
+              },
+              "name": {
+                "description": "Its name; pass it to verify, restore or delete it.",
+                "type": "string"
+              },
+              "schema_version": {
+                "description": "The schema version of the copy.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "size": {
+                "description": "The database copy's size in bytes.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "name",
+              "kind",
+              "created_at",
+              "size",
+              "files",
+              "files_size",
+              "schema_version",
+              "app_version"
+            ],
+            "type": "object"
+          },
+          "BackupKind": {
+            "description": "Why a backup was made, which decides how long it is kept.",
+            "oneOf": [
+              {
+                "const": "daily",
+                "description": "The daily backup; the last 7 are kept.",
+                "type": "string"
+              },
+              {
+                "const": "weekly",
+                "description": "A daily backup kept for its week; the last 4 are kept.",
+                "type": "string"
+              },
+              {
+                "const": "manual",
+                "description": "Made by hand; kept until deleted.",
+                "type": "string"
+              },
+              {
+                "const": "pre_migration",
+                "description": "Made before a schema upgrade; the last 3 are kept.",
+                "type": "string"
+              },
+              {
+                "const": "safety",
+                "description": "Made before a large change by an agent; the last 3 are kept.",
+                "type": "string"
+              },
+              {
+                "const": "pre_restore",
+                "description": "The state before a backup was restored; the last 3 are kept.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A restored backup.",
+        "properties": {
+          "previous": {
+            "$ref": "#/$defs/Backup",
+            "description": "The backup of the state before, to go back to it."
+          },
+          "restored": {
+            "$ref": "#/$defs/Backup",
+            "description": "The backup now in place."
+          }
+        },
+        "required": [
+          "restored",
+          "previous"
+        ],
+        "title": "BackupRestored",
+        "type": "object"
+      },
+      "output_name": "BackupRestored",
+      "safety": "app",
+      "summary": "Replace the workspace with a backup, after backing up the current state. Other programs with the workspace open must restart."
+    },
+    {
+      "app_reason": "backups are the person's safety net outside the workspace, so agents never remove them",
+      "cli": "backup delete <name>",
+      "exposure": "app",
+      "id": "backup.delete",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Names one backup.",
+        "properties": {
+          "name": {
+            "description": "The backup's name, from the backup list.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "BackupRef",
+        "type": "object"
+      },
+      "input_name": "BackupRef",
+      "kind": "command",
+      "output": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A deleted backup.",
+        "properties": {
+          "files_removed": {
+            "description": "Stored files no other backup used, removed with it.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "name": {
+            "description": "The backup's name.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "files_removed"
+        ],
+        "title": "BackupDeleted",
+        "type": "object"
+      },
+      "output_name": "BackupDeleted",
+      "safety": "app",
+      "summary": "Delete a backup and the stored files only it used."
+    },
+    {
+      "cli": "export",
+      "exposure": "data",
+      "id": "transfer.export",
+      "input": {
+        "$defs": {
+          "ArchiveFormat": {
+            "description": "How an archive is stored.",
+            "oneOf": [
+              {
+                "const": "zip",
+                "description": "One `.zip` file.",
+                "type": "string"
+              },
+              {
+                "const": "folder",
+                "description": "A folder.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "What to export.",
+        "properties": {
+          "format": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ArchiveFormat"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A `.zip` file (the default) or a folder."
+          },
+          "path": {
+            "description": "Where to write it: a new file or folder. Agents give a plain name,\nwhich goes into the workspace's `exports` folder. Left out: a name\nwith the date in the `exports` folder.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "projects": {
+            "description": "The projects (keys or IDs), each with its sub-projects; the whole\nworkspace when empty.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "ExportInput",
+        "type": "object"
+      },
+      "input_name": "ExportInput",
+      "kind": "command",
+      "mcp_tool": "export_data",
+      "output": {
+        "$defs": {
+          "ArchiveCounts": {
+            "additionalProperties": false,
+            "description": "What an archive holds.",
+            "properties": {
+              "activity": {
+                "description": "History rows.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "agent_sessions": {
+                "description": "Agent sessions the history refers to.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "attachments": {
+                "description": "Attachments.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "comments": {
+                "description": "Comments.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "files": {
+                "description": "Distinct stored files.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "projects": {
+                "description": "Projects, sub-projects included.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "revisions": {
+                "description": "Revisions of descriptions and wiki pages.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "tasks": {
+                "description": "Tasks, trashed ones included.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "time_entries": {
+                "description": "Time entries.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "wiki_pages": {
+                "description": "Wiki pages.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "projects",
+              "tasks",
+              "comments",
+              "time_entries",
+              "revisions",
+              "wiki_pages",
+              "attachments",
+              "files",
+              "activity",
+              "agent_sessions"
+            ],
+            "type": "object"
+          },
+          "ArchiveFormat": {
+            "description": "How an archive is stored.",
+            "oneOf": [
+              {
+                "const": "zip",
+                "description": "One `.zip` file.",
+                "type": "string"
+              },
+              {
+                "const": "folder",
+                "description": "A folder.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A finished export.",
+        "properties": {
+          "counts": {
+            "$ref": "#/$defs/ArchiveCounts",
+            "description": "What it holds."
+          },
+          "format": {
+            "$ref": "#/$defs/ArchiveFormat",
+            "description": "How it is stored."
+          },
+          "path": {
+            "description": "The archive written.",
+            "type": "string"
+          },
+          "projects": {
+            "description": "The keys of the projects in it.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "size": {
+            "description": "Its size in bytes.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "path",
+          "format",
+          "projects",
+          "counts",
+          "size"
+        ],
+        "title": "ExportResult",
+        "type": "object"
+      },
+      "output_name": "ExportResult",
+      "safety": "write",
+      "summary": "Export projects, or the whole workspace, to an archive of JSON and Markdown files with the attachments."
+    },
+    {
+      "cli": "import <path>",
+      "exposure": "data",
+      "id": "transfer.import",
+      "input": {
+        "$defs": {
+          "KeyChange": {
+            "additionalProperties": false,
+            "description": "A new key for a project whose key is taken.",
+            "properties": {
+              "from": {
+                "description": "The key in the archive.",
+                "type": "string"
+              },
+              "to": {
+                "description": "The key to use instead.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "from",
+              "to"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "What to import.",
+        "properties": {
+          "dry_run": {
+            "default": false,
+            "description": "Check the archive and report what would be imported, without\nimporting it.",
+            "type": "boolean"
+          },
+          "keys": {
+            "description": "New keys for projects whose key is taken in this workspace.",
+            "items": {
+              "$ref": "#/$defs/KeyChange"
+            },
+            "type": "array"
+          },
+          "path": {
+            "description": "The archive: a `.zip` file or a folder. Agents give a name in the\nworkspace's `exports` folder.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "ImportInput",
+        "type": "object"
+      },
+      "input_name": "ImportInput",
+      "kind": "command",
+      "mcp_tool": "import_data",
+      "output": {
+        "$defs": {
+          "ArchiveCounts": {
+            "additionalProperties": false,
+            "description": "What an archive holds.",
+            "properties": {
+              "activity": {
+                "description": "History rows.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "agent_sessions": {
+                "description": "Agent sessions the history refers to.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "attachments": {
+                "description": "Attachments.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "comments": {
+                "description": "Comments.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "files": {
+                "description": "Distinct stored files.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "projects": {
+                "description": "Projects, sub-projects included.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "revisions": {
+                "description": "Revisions of descriptions and wiki pages.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "tasks": {
+                "description": "Tasks, trashed ones included.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "time_entries": {
+                "description": "Time entries.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "wiki_pages": {
+                "description": "Wiki pages.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "projects",
+              "tasks",
+              "comments",
+              "time_entries",
+              "revisions",
+              "wiki_pages",
+              "attachments",
+              "files",
+              "activity",
+              "agent_sessions"
+            ],
+            "type": "object"
+          },
+          "ImportedProject": {
+            "additionalProperties": false,
+            "description": "One project of an import.",
+            "properties": {
+              "from_key": {
+                "description": "Its key in the archive.",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID in this workspace.",
+                "type": "string"
+              },
+              "key": {
+                "description": "Its key in this workspace.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "from_key",
+              "name",
+              "id"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The result of an import, or of checking one.",
+        "properties": {
+          "app_version": {
+            "description": "The program version that wrote the archive.",
+            "type": "string"
+          },
+          "counts": {
+            "$ref": "#/$defs/ArchiveCounts",
+            "description": "What the archive holds."
+          },
+          "dry_run": {
+            "description": "Whether this only checked the archive.",
+            "type": "boolean"
+          },
+          "format_version": {
+            "description": "The archive's format version.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo (which moves the imported\nprojects to the trash); left out for a check.",
+            "type": "string"
+          },
+          "new_ids": {
+            "description": "How many IDs existed here already and were replaced.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "projects": {
+            "description": "The projects, as they are (or would be) in this workspace.",
+            "items": {
+              "$ref": "#/$defs/ImportedProject"
+            },
+            "type": "array"
+          },
+          "taken_keys": {
+            "description": "Keys in the archive that are taken here and have no new key yet.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "dry_run",
+          "projects",
+          "counts",
+          "new_ids",
+          "format_version",
+          "app_version"
+        ],
+        "title": "ImportResult",
+        "type": "object"
+      },
+      "output_name": "ImportResult",
+      "safety": "write",
+      "summary": "Import an archive as new projects; checks it completely first and never changes existing data."
     }
   ]
 }

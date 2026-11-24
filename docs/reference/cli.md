@@ -12,6 +12,11 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel activity` | `history.feed` | The activity log, newest first: who changed what, when and through which program; optionally the agent sessions. |
 | `glyphkeel agents policy` | `agent.policy.update` | Set the most an agent may do, whatever profile it asks for. |
 | `glyphkeel agents sessions` | `agent.sessions` | List agent sessions, newest first, with their client, profile, times and counts of reads and writes. |
+| `glyphkeel backup create` | `backup.create` | Make a backup of the workspace now: a checked copy of the database and its stored files. |
+| `glyphkeel backup delete <name>` | `backup.delete` | Delete a backup and the stored files only it used. |
+| `glyphkeel backup list` | `backup.list` | The workspace's backups, newest first, with their kind and size. |
+| `glyphkeel backup restore <name>` | `backup.restore` | Replace the workspace with a backup, after backing up the current state. Other programs with the workspace open must restart. |
+| `glyphkeel backup verify <name>` | `backup.verify` | Check a backup: the database copy's integrity and every stored file it needs. |
 | `glyphkeel board <project>` | `board.get` | A project's board as the person sees it: columns in the personal order with hidden ones flagged, WIP state and compact cards. |
 | `glyphkeel board layout set <project>` | `layout.update` | Hide, show, collapse or reorder board columns, set sort modes, card fields and older closed cards, or reset to the project's layout. |
 | `glyphkeel board layout show <project>` | `layout.get` | The person's layout of a project's board: column order, hidden and collapsed columns, sort modes, card fields. |
@@ -21,17 +26,19 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel comment list <key>` | `comment.list` | A task's comments, oldest first, optionally with their earlier texts. |
 | `glyphkeel description history` | `description.history` | List the revisions of a task's or project's description, newest first, conflict copies included. |
 | `glyphkeel description show <revision>` | `description.revision` | One description revision with its text, and the differences from another revision on request. |
+| `glyphkeel export` | `transfer.export` | Export projects, or the whole workspace, to an archive of JSON and Markdown files with the attachments. |
 | `glyphkeel file attach` | `file.attach` | Attach a local file, or Base64 data with a name, to a task or a comment. |
 | `glyphkeel file cat <attachment>` | `file.read` | An attached file's content: text for text files, Base64 for images, otherwise only its details. |
 | `glyphkeel file delete <attachment>` | `file.delete` | Move an attached file to the trash. |
 | `glyphkeel file show <attachment>` | `file.get` | An attached file's name, type, size and owner. |
+| `glyphkeel import <path>` | `transfer.import` | Import an archive as new projects; checks it completely first and never changes existing data. |
 | `glyphkeel label add` | `label.create` | Add a label to a project; without a colour it gets the first palette colour the project's labels don't use yet. |
 | `glyphkeel label delete` | `label.delete` | Delete a label and take it off every task. Can't be undone. |
 | `glyphkeel label edit` | `label.update` | Rename or recolour a label. |
 | `glyphkeel project archive <project>` | `project.archive` | Archive a project and its sub-projects: they become read-only and leave the sidebar. |
 | `glyphkeel project brief <project>` | `project.brief` | The project's instructions for agents: the wiki page marked as the brief, else the project's description. |
 | `glyphkeel project create` | `project.create` | Create a project, or a sub-project that copies its parent's statuses, types and labels; without a colour it gets one its sibling projects don't use yet. |
-| `glyphkeel project delete <project>` | `project.delete` | Delete a project and its sub-projects with every task, comment and file in them. Can't be undone. |
+| `glyphkeel project delete <project>` | `project.delete` | Move a project and its sub-projects, with everything in them, to the trash. Agents need the full profile. |
 | `glyphkeel project edit <project>` | `project.update` | Change a project: name, description, colour, icon, modules, key, place in the tree, archived; add, change, reorder or remove statuses, types and labels, all in one change. |
 | `glyphkeel project list` | `project.list` | The project tree in sidebar order, with keys, names and open-task counts; archived projects on request. |
 | `glyphkeel project move <project>` | `project.move` | Move a project under another one (at most 3 levels), to the top level, or among its siblings. |
@@ -55,6 +62,7 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel task check <key>` | `checklist.update` | Tick, clear, add or remove checklist items in a task's description or a comment, by number plus expected text. |
 | `glyphkeel task claim <key>` | `task.claim` | Claim a task for your agent session for a while, so other agents leave it alone; moves it into progress. |
 | `glyphkeel task create` | `task.create` | Create a task from a title alone or with its fields; it gets the project's next key. |
+| `glyphkeel task delete <keys>` | `task.delete` | Move tasks to the trash, each with its subtasks; they can be restored from there. |
 | `glyphkeel task duplicate <key>` | `task.duplicate` | Copy a task with its subtasks (in order), labels, checklist and files; the copy is linked as a clone. |
 | `glyphkeel task edit <key>` | `task.update` | Change a task's title, description (whole, with a base revision, or by targeted edits), type, priority, labels, parent, dates, estimate or progress. |
 | `glyphkeel task link <key>` | `relation.add` | Link two tasks (blocks, relates, duplicates, clones, or make one a subtask of the other). |
@@ -74,6 +82,9 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel timer status` | `timer.get` | The workspace's timer: its task, whether it runs and the time so far. |
 | `glyphkeel timer stop` | `timer.stop` | Stop the timer and log its time as an entry on its task. |
 | `glyphkeel today` | `today.get` | What needs attention today across projects: overdue tasks, tasks due today, tasks in progress, today's reminders, agents' claims, recent changes and the timer, with counts for the sidebar. |
+| `glyphkeel trash list` | `trash.list` | The trash: deleted items with what went with them, who deleted them and when they will be purged, newest first. |
+| `glyphkeel trash purge <items>` | `trash.purge` | Delete items in the trash for good, and their text from the history. Can't be undone. |
+| `glyphkeel trash restore <items>` | `trash.restore` | Bring items back out of the trash, with everything that was deleted with them. |
 | `glyphkeel type add` | `type.create` | Add a task type to a project. |
 | `glyphkeel type delete` | `type.delete` | Delete a task type; its tasks get another type. Can't be undone. |
 | `glyphkeel type edit` | `type.update` | Rename, reshape, recolour or reorder a task type, or make it the default. |
@@ -81,6 +92,7 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel view delete <view>` | `view.delete` | Delete a saved view; it can be brought back with revert. |
 | `glyphkeel view edit <view>` | `view.update` | Rename a saved view, change its query, columns, order, grouping or totals, or make it the default. |
 | `glyphkeel view list` | `view.list` | The saved views of a project or of the whole workspace: name, query, columns, order, grouping, totals and which is the default. |
+| `glyphkeel wiki delete <page>` | `wiki.delete` | Move a wiki page, with the pages inside it, to the trash; links to it stop resolving until it is restored. |
 | `glyphkeel wiki get <page>` | `wiki.get` | One wiki page with its text, revision, headings, place in the tree and, on request, what links to it; or an older revision of it. |
 | `glyphkeel wiki history <page>` | `wiki.history` | List the revisions of a wiki page, newest first, conflict copies included; read one with wiki.get and its revision. |
 | `glyphkeel wiki list` | `wiki.list` | A project's wiki pages as a tree: titles, slugs, nesting and when each changed. |

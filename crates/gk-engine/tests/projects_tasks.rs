@@ -837,7 +837,7 @@ const BACK_TO_3: &str = "
       WHERE fired_at IS NULL AND dismissed_at IS NULL;";
 
 #[test]
-fn the_app_copies_an_older_workspace_before_upgrading_it() {
+fn the_app_backs_up_an_older_workspace_before_upgrading_it() {
     let dir = tempfile::tempdir().unwrap();
     let layout = WorkspaceLayout::new(dir.path().join("Personal"));
     open(&dir).close();
@@ -855,13 +855,14 @@ fn the_app_copies_an_older_workspace_before_upgrading_it() {
     assert_eq!(err.code, ErrorCode::Storage);
     let e = open(&dir);
     project(&e, "TM", None);
-    let copies: Vec<_> = std::fs::read_dir(layout.backups_dir())
-        .unwrap()
-        .map(|f| f.unwrap().file_name().to_string_lossy().into_owned())
-        .collect();
-    assert_eq!(copies.len(), 1);
-    let expected = format!("before-schema-{}-v1-", gk_store::SCHEMA_VERSION);
-    assert!(copies[0].starts_with(&expected), "{copies:?}");
+    let backups = e.backups().list();
+    assert_eq!(backups.len(), 1, "{backups:?}");
+    assert_eq!(
+        backups[0].kind,
+        gk_api::ops::backup::BackupKind::PreMigration
+    );
+    assert_eq!(backups[0].schema_version, 1);
+    assert!(e.backups().verify(&backups[0].name).unwrap().ok);
 }
 
 #[test]
