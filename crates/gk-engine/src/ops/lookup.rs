@@ -11,6 +11,7 @@ use gk_core::{Id, ProjectKey, Rank, TaskKey, fold};
 use gk_store::rusqlite::{OptionalExtension, Row, Transaction, params};
 
 use crate::failure::Failure;
+use crate::messages;
 
 /// The ID in column `i`.
 pub(crate) fn id_at(r: &Row<'_>, i: usize) -> gk_store::rusqlite::Result<Id> {
@@ -111,24 +112,19 @@ pub(crate) fn project(
     let keys = stmt
         .query_map([], |r| r.get::<_, String>(0))?
         .collect::<Result<Vec<_>, _>>()?;
-    Err(OpError::not_found(
-        format!("There is no project \"{text}\"."),
-        &keys.iter().map(String::as_str).collect::<Vec<_>>(),
-    )
-    .with_detail("field", field)
-    .with_hint("Use a project key from list_projects (`glyphkeel project list`).")
-    .into())
+    let args = [("project", text.to_owned())];
+    let error = messages::with("lookup-project-not-found", &args, |m| {
+        OpError::not_found(m, &keys.iter().map(String::as_str).collect::<Vec<_>>())
+    })
+    .with_detail("field", field);
+    Err(messages::hint(error, "lookup-project-not-found-hint", &[]).into())
 }
 
 /// Refuses changes to an archived project.
 pub(crate) fn ensure_active(p: &ProjectRow) -> Result<(), Failure> {
     if p.archived {
-        Err(OpError::forbidden(format!(
-            "Project {} is archived, so it can't be changed.",
-            p.key
-        ))
-        .with_hint("Unarchive it first.")
-        .into())
+        let error = messages::forbidden("project-archived", &[("project", p.key.clone())]);
+        Err(messages::hint(error, "project-archived-hint", &[]).into())
     } else {
         Ok(())
     }
@@ -168,11 +164,12 @@ impl List {
         }
     }
 
-    const fn what(self) -> &'static str {
+    /// The message that the project has no such item.
+    const fn not_found_message(self) -> &'static str {
         match self {
-            Self::Statuses => "status",
-            Self::Types => "task type",
-            Self::Labels => "label",
+            Self::Statuses => "lookup-status-not-found",
+            Self::Types => "lookup-type-not-found",
+            Self::Labels => "lookup-label-not-found",
         }
     }
 }
@@ -215,15 +212,13 @@ pub(crate) fn named(
         return Ok(found.clone());
     }
     let names: Vec<String> = items.into_iter().map(|n| n.name).collect();
-    Err(OpError::not_found(
-        format!(
-            "Project {} has no {} \"{}\".",
-            project.key,
-            list.what(),
-            text.trim()
-        ),
-        &names.iter().map(String::as_str).collect::<Vec<_>>(),
-    )
+    let args = [
+        ("project", project.key.clone()),
+        ("name", text.trim().to_owned()),
+    ];
+    Err(messages::with(list.not_found_message(), &args, |m| {
+        OpError::not_found(m, &names.iter().map(String::as_str).collect::<Vec<_>>())
+    })
     .with_detail("field", field)
     .into())
 }
@@ -305,12 +300,9 @@ pub(crate) fn task(tx: &Transaction<'_>, field: &str, text: &str) -> Result<Task
             return Ok(t);
         }
     }
-    Err(
-        OpError::not_found(format!("There is no task \"{text}\"."), &[])
-            .with_detail("field", field)
-            .with_hint("Task keys look like TM-41.")
-            .into(),
-    )
+    let error = messages::not_found("task-not-found", &[("task", text.to_owned())])
+        .with_detail("field", field);
+    Err(messages::hint(error, "task-not-found-hint", &[]).into())
 }
 
 /// The key of the task with project `project` and `number`.
@@ -330,13 +322,19 @@ pub(crate) fn check_version(
     key: &str,
 ) -> Result<(), Failure> {
     match expected {
-        Some(v) if v != task.version => Err(OpError::conflict(format!(
-            "{key} changed since you read it: it is at version {}, not {v}.",
-            task.version
-        ))
-        .with_hint("Read it again and repeat the change if it still applies.")
-        .with_detail("version", task.version)
-        .into()),
+        Some(v) if v != task.version => {
+            let error = messages::conflict(
+                "task-version-changed",
+                &[
+                    ("task", key.to_owned()),
+                    ("version", task.version.to_string()),
+                    ("expected", v.to_string()),
+                ],
+            );
+            Err(messages::hint(error, "task-version-changed-hint", &[])
+                .with_detail("version", task.version)
+                .into())
+        }
         _ => Ok(()),
     }
 }
@@ -362,7 +360,9 @@ impl Target {
             + usize::from(after.is_some())
             + usize::from(at.is_some());
         if given > 1 {
-            return Err(OpError::invalid("Give only one of `before`, `after` and `at`.").into());
+            return Err(
+                messages::error(gk_api::ErrorCode::Invalid, "place-one-target", &[]).into(),
+            );
         }
         Ok(before
             .map(Self::Before)
@@ -387,23 +387,27 @@ pub(crate) fn place(
         .filter(|(id, _)| *id != moving)
         .map(|(id, r)| (*id, r.as_str()))
         .collect();
-    let index =
-        match target {
-            Target::Top => 0,
-            Target::Bottom => list.len(),
-            Target::Before(other) | Target::After(other) => {
-                let pos = list.iter().position(|(id, _)| *id == other).ok_or_else(|| {
-                Failure::Op(OpError::invalid(
-                    "An item can't be placed next to itself or next to one in another list.",
-                ))
-            })?;
-                if matches!(target, Target::After(_)) {
-                    pos + 1
-                } else {
-                    pos
-                }
+    let index = match target {
+        Target::Top => 0,
+        Target::Bottom => list.len(),
+        Target::Before(other) | Target::After(other) => {
+            let pos = list
+                .iter()
+                .position(|(id, _)| *id == other)
+                .ok_or_else(|| {
+                    Failure::Op(messages::error(
+                        gk_api::ErrorCode::Invalid,
+                        "place-bad-neighbour",
+                        &[],
+                    ))
+                })?;
+            if matches!(target, Target::After(_)) {
+                pos + 1
+            } else {
+                pos
             }
-        };
+        }
+    };
     let parse = |i: usize| list.get(i).and_then(|(_, r)| Rank::parse(r).ok());
     let lower = index.checked_sub(1).and_then(parse);
     let upper = parse(index);

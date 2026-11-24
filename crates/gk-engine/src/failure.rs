@@ -6,6 +6,8 @@
 use gk_api::{ErrorCode, OpError};
 use gk_store::{StoreError, WriteError};
 
+use crate::messages;
+
 /// An operation failed, either by its own rules or in storage. Inside a
 /// write transaction the writer must tell lock conflicts apart, so storage
 /// errors are kept as they are until the operation returns.
@@ -50,34 +52,88 @@ impl From<Failure> for OpError {
     }
 }
 
-/// The [`OpError`] for a storage error.
+/// The [`OpError`] for a storage error, with its message and hint from the
+/// message file.
 #[must_use]
 pub fn store_error(e: &StoreError) -> OpError {
+    let path = |p: &std::path::Path| ("path", p.display().to_string());
     match e {
-        StoreError::Busy => OpError::new(ErrorCode::Busy, e.to_string())
-            .with_hint("Another program is writing to the workspace; try again in a moment."),
-        StoreError::WorkspaceUpgraded { found, expected } => {
-            OpError::new(ErrorCode::WorkspaceUpgraded, e.to_string())
-                .with_hint("Restart the program; a newer version is now needed.")
-                .with_detail("found", *found)
-                .with_detail("expected", *expected)
+        StoreError::Busy => messages::hint(
+            messages::error(ErrorCode::Busy, "storage-busy", &[]),
+            "storage-busy-hint",
+            &[],
+        ),
+        StoreError::WorkspaceUpgraded { found, expected } => messages::hint(
+            messages::error(
+                ErrorCode::WorkspaceUpgraded,
+                "storage-upgraded",
+                &[
+                    ("found", found.to_string()),
+                    ("expected", expected.to_string()),
+                ],
+            ),
+            "storage-upgraded-hint",
+            &[],
+        )
+        .with_detail("found", *found)
+        .with_detail("expected", *expected),
+        StoreError::WorkspaceReplaced => messages::hint(
+            messages::error(ErrorCode::WorkspaceUpgraded, "storage-replaced", &[]),
+            "storage-replaced-hint",
+            &[],
+        )
+        .with_detail("restored", true),
+        StoreError::TooNew { found, supported } => messages::hint(
+            messages::error(
+                ErrorCode::WorkspaceTooNew,
+                "storage-too-new",
+                &[
+                    ("found", found.to_string()),
+                    ("supported", supported.to_string()),
+                ],
+            ),
+            "storage-too-new-hint",
+            &[],
+        )
+        .with_detail("found", *found)
+        .with_detail("supported", *supported),
+        StoreError::NeedsUpgrade { found, current } => messages::hint(
+            messages::storage(
+                "storage-needs-upgrade",
+                &[
+                    ("found", found.to_string()),
+                    ("current", current.to_string()),
+                ],
+            ),
+            "storage-needs-upgrade-hint",
+            &[],
+        )
+        .with_detail("found", *found)
+        .with_detail("current", *current),
+        StoreError::InvalidName(name) => messages::error(
+            ErrorCode::Invalid,
+            "storage-invalid-name",
+            &[("name", name.clone())],
+        ),
+        StoreError::NotAWorkspace(p) => messages::storage("storage-not-a-workspace", &[path(p)]),
+        StoreError::NoWal(p) => messages::storage("storage-no-wal", &[path(p)]),
+        StoreError::NoDataDir => messages::storage("storage-no-data-dir", &[]),
+        StoreError::Closed => messages::storage("storage-closed", &[]),
+        StoreError::Migration { version, source } => messages::storage(
+            "storage-migration",
+            &[
+                ("version", version.to_string()),
+                ("error", source.to_string()),
+            ],
+        ),
+        StoreError::Corrupt(detail) => {
+            messages::storage("storage-corrupt", &[("error", detail.clone())])
         }
-        StoreError::WorkspaceReplaced => OpError::new(ErrorCode::WorkspaceUpgraded, e.to_string())
-            .with_hint("Restart the program; the workspace was restored from a backup.")
-            .with_detail("restored", true),
-        StoreError::TooNew { found, supported } => {
-            OpError::new(ErrorCode::WorkspaceTooNew, e.to_string())
-                .with_hint(
-                    "Install the Glyphkeel version that made this workspace, or a newer one.",
-                )
-                .with_detail("found", *found)
-                .with_detail("supported", *supported)
+        StoreError::Io {
+            path: p, source, ..
+        } => messages::storage("storage-io", &[path(p), ("error", source.to_string())]),
+        StoreError::Sqlite(source) => {
+            messages::storage("storage-sqlite", &[("error", source.to_string())])
         }
-        StoreError::NeedsUpgrade { found, current } => OpError::storage(e.to_string())
-            .with_hint("Open the app once to upgrade this workspace, or run `glyphkeel migrate`.")
-            .with_detail("found", *found)
-            .with_detail("current", *current),
-        StoreError::InvalidName(_) => OpError::invalid(e.to_string()),
-        _ => OpError::storage(e.to_string()),
     }
 }

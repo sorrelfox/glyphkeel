@@ -15,7 +15,7 @@ The safety class decides who may run an operation:
 
 | Operation | Class | Reachable from | MCP tool | Command |
 |---|---|---|---|---|
-| `workspace.get` | read | app, command line, MCP | `get_workspace` | `glyphkeel status` |
+| `workspace.get` | read | app, command line, MCP | `get_workspace` | `glyphkeel workspace` |
 | `settings.get` | read | app, command line, MCP | `get_workspace` | `glyphkeel settings get` |
 | `settings.update` | write | app, command line, MCP | `update_settings` | `glyphkeel settings set` |
 | `search.query` | read | app, command line, MCP | `search` | `glyphkeel search <text>` |
@@ -108,6 +108,7 @@ The safety class decides who may run an operation:
 | `backup.verify` | read | app, command line, MCP | `verify_backup` | `glyphkeel backup verify <name>` |
 | `backup.restore` | app | app, command line | — | `glyphkeel backup restore <name>` |
 | `backup.delete` | permanent | app, command line | — | `glyphkeel backup delete <name>` |
+| `backup.folder.update` | app | app | — | — |
 | `transfer.export` | write | app, command line, MCP | `export_data` | `glyphkeel export` |
 | `transfer.import` | write | app, command line, MCP | `import_data` | `glyphkeel import <path>` |
 
@@ -684,6 +685,14 @@ Delete a backup and the stored files only it used.
 Input: `BackupRef`. Output: `BackupDeleted`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 Not available to agents: backups are the person's safety net outside the workspace, so agents never remove them
+
+## `backup.folder.update`
+
+Move the backup folder to another place, or back to the default; backups already made stay where they are.
+
+Input: `BackupFolderPatch`. Output: `SettingsChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+Not available to agents: it decides where copies of all the person's data are written, so only the person may set it, in the app
 
 ## `transfer.export`
 

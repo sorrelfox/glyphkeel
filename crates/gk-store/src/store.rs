@@ -7,7 +7,7 @@ use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use gk_core::Id;
-use rusqlite::{Connection, Transaction};
+use rusqlite::{Connection, OptionalExtension, Transaction};
 
 use crate::changes::{ChangeWatcher, OwnGroups};
 use crate::checkpoint::Checkpointer;
@@ -76,6 +76,22 @@ impl Store {
         }
         let conn = connection::open(&database, Purpose::Read, Duration::from_secs(5))?;
         schema::state(&conn, SCHEMA_VERSION)
+    }
+
+    /// The stored text of workspace setting `key`, read before the store is
+    /// opened (for the backup made before a schema upgrade); `None` when
+    /// there is no database or no such row.
+    pub fn probe_setting(layout: &WorkspaceLayout, key: &str) -> Result<Option<String>> {
+        let database = layout.database();
+        if !database.exists() {
+            return Ok(None);
+        }
+        let conn = connection::open(&database, Purpose::Read, Duration::from_secs(5))?;
+        Ok(conn
+            .query_row("SELECT value FROM settings WHERE key = ?1", [key], |r| {
+                r.get(0)
+            })
+            .optional()?)
     }
 
     /// Opens the workspace at `layout`, creating the folder and the database

@@ -30,6 +30,10 @@ pub struct Settings {
     /// Hours a timer runs before it reminds that it is still running; 0
     /// never.
     pub timer_reminder_hours: u32,
+    /// The folder that holds this workspace's backups, as an absolute path;
+    /// left out: the default folder. Only the person sets it, in the app.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backup_folder: Option<String>,
 }
 
 impl Default for Settings {
@@ -43,6 +47,7 @@ impl Default for Settings {
             file_max_mb: 100,
             agent_max_profile: Profile::Standard,
             timer_reminder_hours: 8,
+            backup_folder: None,
         }
     }
 }

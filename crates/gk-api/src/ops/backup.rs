@@ -14,6 +14,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::catalog::{Exposure, Meta, OpDescriptor, OpKind, Safety};
+use crate::ops::settings::SettingsChange;
 
 /// Why a backup was made, which decides how long it is kept.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
@@ -186,11 +187,43 @@ op!(
     BackupRestored
 );
 op!(
+    /// Move the backup folder.
+    BackupFolderUpdate,
+    "backup.folder.update",
+    BackupFolderPatch,
+    SettingsChange
+);
+op!(
     /// Delete a backup.
     BackupDelete,
     "backup.delete",
     BackupRef,
     BackupDeleted
+);
+
+/// Where the backups go.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BackupFolderPatch {
+    /// The new folder: an absolute path outside the workspace's own folder,
+    /// which is created if it doesn't exist. Leave it out to go back to the
+    /// default folder. Backups already made stay where they are.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub folder: Option<String>,
+}
+
+pub(crate) const BACKUP_FOLDER_UPDATE: OpDescriptor = OpDescriptor::of::<BackupFolderUpdate>(
+    Meta {
+        summary: "Move the backup folder to another place, or back to the default; backups already made stay where they are.",
+        kind: OpKind::Command,
+        safety: Safety::App,
+        exposure: Exposure::App {
+            reason: "it decides where copies of all the person's data are written, so only the person may set it, in the app",
+        },
+        cli: None,
+        input_name: "BackupFolderPatch",
+        output_name: "SettingsChange",
+    },
 );
 
 pub(crate) const BACKUP_CREATE: OpDescriptor = OpDescriptor::of::<BackupCreate>(Meta {

@@ -293,6 +293,10 @@
                   }
                 ]
               },
+              "backup_folder": {
+                "description": "The folder that holds this workspace's backups, as an absolute path;\nleft out: the default folder. Only the person sets it, in the app.",
+                "type": "string"
+              },
               "days_per_week": {
                 "description": "Working days in a week, for durations written in weeks (`1w`).",
                 "minimum": 0,
@@ -831,7 +835,7 @@
         "history.feed",
         "agent.sessions"
       ],
-      "description": "Lists recent changes, newest first: who changed what, when, and through which program, with each field's value before and after. Filter by `session` (\"current\" for your own changes), `actor` or `group`; page with `cursor`. Set `sessions: true` to also list agent sessions. Use it to check what you or another agent changed before reverting. Example: get_activity {\"session\": \"current\", \"limit\": 20}",
+      "description": "Lists recent changes, newest first: who changed what, when, and through which program, with each field's value before and after. Filter by `session` (\"current\" for your own changes), `actor`, `actor_kind` (\"user\" or \"agent\"), `group`, `task`, `project` (with its sub-projects), and the days `from` and `to`; page with `cursor`. Set `sessions: true` to also list agent sessions. Use it to check what you or another agent changed before reverting. Example: get_activity {\"session\": \"current\", \"limit\": 20}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "Which changes to list.",
@@ -840,8 +844,27 @@
             "description": "Only changes by this actor, by name (case-insensitive).",
             "type": "string"
           },
+          "actor_kind": {
+            "description": "Only changes by the person (`user`) or only those by agents\n(`agent`).",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              }
+            ]
+          },
           "cursor": {
             "description": "`next_cursor` of the previous page.",
+            "type": "string"
+          },
+          "from": {
+            "description": "Only changes on or after this day: `YYYY-MM-DD`, or a natural form\nsuch as `today`, `yesterday` or `-7d`, in the caller's time zone.",
             "type": "string"
           },
           "group": {
@@ -852,6 +875,10 @@
             "description": "At most this many changes (default 50, at most 200).",
             "minimum": 0,
             "type": "integer"
+          },
+          "project": {
+            "description": "Only changes in this project and its sub-projects: a key or ID.",
+            "type": "string"
           },
           "session": {
             "description": "Only changes of this agent session; `\"current\"` is the caller's own.",
@@ -864,6 +891,10 @@
           },
           "task": {
             "description": "Only changes to this task (key or ID): its own fields and\ndescription revisions, its links, its comments and its files,\nincluding files attached to its comments.",
+            "type": "string"
+          },
+          "to": {
+            "description": "Only changes on or before this day (included), in the same forms as\n`from`.",
             "type": "string"
           }
         },
@@ -1163,11 +1194,23 @@
                 "reason": {
                   "description": "Why: something changed it since, it was already reverted, and so on.",
                   "type": "string"
+                },
+                "reason_args": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "description": "The reason's arguments, by name.",
+                  "type": "object"
+                },
+                "reason_id": {
+                  "description": "The reason's message ID, for showing it in another language.",
+                  "type": "string"
                 }
               },
               "required": [
                 "group",
-                "reason"
+                "reason",
+                "reason_id"
               ],
               "type": "object"
             },
@@ -31881,6 +31924,10 @@
                     "type": "string"
                   }
                 ]
+              },
+              "backup_folder": {
+                "description": "The folder that holds this workspace's backups, as an absolute path;\nleft out: the default folder. Only the person sets it, in the app.",
+                "type": "string"
               },
               "days_per_week": {
                 "description": "Working days in a week, for durations written in weeks (`1w`).",

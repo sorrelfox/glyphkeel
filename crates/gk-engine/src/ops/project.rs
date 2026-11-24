@@ -9,7 +9,7 @@
 //! on the whole subtree and makes it read-only; a status is deleted only by
 //! naming where its tasks go; the default type can't be deleted.
 
-use gk_api::OpError;
+use gk_api::ErrorCode;
 use gk_api::ops::common::{Category, Edge, Glyph, Hue};
 use gk_api::ops::project::{
     Label, LabelChange, LabelCreate, LabelCreateInput, LabelDelete, LabelDeleteInput, LabelUpdate,
@@ -30,7 +30,9 @@ use serde_json::{Value, json};
 use super::desc;
 use super::fields::{self, LABEL, PROJECT, STATUS, TASK, TYPE, id_value, text};
 use super::lookup::{self, List, Named, ProjectRow, Target, b, id_at, opt_id_at};
+use super::task::invalid;
 use crate::failure::Failure;
+use crate::messages;
 use crate::registry::{QueryCtx, Registry};
 use crate::time::rfc3339;
 use crate::write::WriteCtx;
@@ -55,7 +57,9 @@ pub(super) fn register(r: &mut Registry) {
         lookup::ensure_active(&p)?;
         let parent = if input.top_level {
             if input.parent.is_some() {
-                return Err(OpError::invalid("Give either `parent` or `top_level`.").into());
+                return Err(
+                    messages::error(ErrorCode::Invalid, "project-parent-or-top", &[]).into(),
+                );
             }
             Some(None)
         } else {
@@ -119,7 +123,7 @@ pub(super) fn register(r: &mut Registry) {
     r.command::<StatusReorder, _>(desc::<StatusReorder>(), |w, i: StatusReorderInput| {
         let p = active(w, &i.project)?;
         if i.before.is_none() && i.after.is_none() && i.at.is_none() {
-            return Err(OpError::invalid("Say where: `before`, `after` or `at`.").into());
+            return Err(messages::error(ErrorCode::Invalid, "place-say-where", &[]).into());
         }
         let change = StatusChange {
             status: Some(i.status),
@@ -259,15 +263,6 @@ fn changed(w: &WriteCtx<'_>, id: Id) -> Result<ProjectChange, Failure> {
         project: load(w.tx(), id)?,
         group: w.group_if_changed(),
     })
-}
-
-fn invalid(field: &str, e: impl std::fmt::Display) -> Failure {
-    let text = e.to_string();
-    let mut chars = text.chars();
-    let message = chars.next().map_or_else(String::new, |c| {
-        format!("{}{}.", c.to_uppercase(), chars.as_str())
-    });
-    Failure::Op(OpError::invalid_at(field, message))
 }
 
 /// The cleaned name, or `invalid` at `field`.
@@ -611,13 +606,9 @@ fn key_taken(tx: &Transaction<'_>, key: &str, except: Option<Id>) -> Result<bool
 fn check_key(tx: &Transaction<'_>, key: &str, except: Option<Id>) -> Result<ProjectKey, Failure> {
     let key = ProjectKey::new(key.trim()).map_err(|e| invalid("key", e))?;
     if key_taken(tx, key.as_str(), except)? {
-        return Err(OpError::conflict(format!(
-            "The key {} is already used by a project, now or before.",
-            key.as_str()
-        ))
-        .with_detail("field", "key")
-        .with_hint("Choose another key; old keys stay reserved so links keep working.")
-        .into());
+        let error = messages::conflict("project-key-taken", &[("key", key.as_str().to_owned())])
+            .with_detail("field", "key");
+        return Err(messages::hint(error, "project-key-taken-hint", &[]).into());
     }
     Ok(key)
 }
@@ -631,11 +622,11 @@ fn create(w: &mut WriteCtx<'_>, input: ProjectCreateInput) -> Result<ProjectChan
             lookup::ensure_active(&p)?;
             let (_, depth) = path_of(w.tx(), p.id)?;
             if depth + 1 >= MAX_LEVELS {
-                return Err(OpError::invalid_at(
+                return Err(messages::invalid(
                     "parent",
-                    format!("Projects go at most {MAX_LEVELS} levels deep; {} is already on the last level.", p.key),
-                )
-                .into());
+                    "project-parent-last-level",
+                    &[("max", MAX_LEVELS.to_string()), ("project", p.key.clone())],
+                ));
             }
             Some(p)
         }
@@ -929,9 +920,11 @@ fn update(w: &mut WriteCtx<'_>, input: ProjectUpdateInput) -> Result<ProjectChan
         (input.parent.is_some(), ProjectField::Parent, "parent"),
     ] {
         if given && clears(field) {
-            return Err(
-                OpError::invalid_at("clear", format!("{name} is both given and cleared.")).into(),
-            );
+            return Err(messages::invalid(
+                "clear",
+                "field-given-and-cleared",
+                &[("field", name.to_owned())],
+            ));
         }
     }
     if input.archived == Some(false) {
@@ -1110,26 +1103,25 @@ fn move_project(
             lookup::ensure_active(&q)?;
             let below = subtree(w.tx(), p.id)?;
             if below.contains(&q.id) {
-                return Err(OpError::invalid_at(
+                return Err(messages::invalid(
                     "parent",
-                    format!(
-                        "{} can't go under itself or one of its own sub-projects.",
-                        p.key
-                    ),
-                )
-                .into());
+                    "project-parent-loop",
+                    &[("project", p.key.clone())],
+                ));
             }
             let (_, depth) = path_of(w.tx(), q.id)?;
             let levels = depth + 2 + height(w.tx(), p.id)?;
             if levels > MAX_LEVELS {
-                return Err(OpError::invalid_at(
+                return Err(messages::invalid(
                     "parent",
-                    format!(
-                        "Projects go at most {MAX_LEVELS} levels deep; under {} {} would need {levels}.",
-                        q.key, p.key
-                    ),
-                )
-                .into());
+                    "project-move-too-deep",
+                    &[
+                        ("max", MAX_LEVELS.to_string()),
+                        ("parent", q.key.clone()),
+                        ("project", p.key.clone()),
+                        ("levels", levels.to_string()),
+                    ],
+                ));
             }
             Some(q.id)
         }
@@ -1137,11 +1129,11 @@ fn move_project(
     let sibling = |field: &str, text: &str| -> Result<Id, Failure> {
         let s = lookup::project(w.tx(), field, text)?;
         if s.parent != new_parent || s.id == p.id {
-            return Err(OpError::invalid_at(
+            return Err(messages::invalid(
                 field,
-                format!("{} is not a sibling of {} at its new place.", s.key, p.key),
-            )
-            .into());
+                "project-not-a-sibling",
+                &[("sibling", s.key.clone()), ("project", p.key.clone())],
+            ));
         }
         Ok(s.id)
     };
@@ -1189,11 +1181,9 @@ fn set_archived(w: &mut WriteCtx<'_>, p: &ProjectRow, archived: bool) -> Result<
         && let Some(parent) = p.parent
         && lookup::project_by_id(w.tx(), parent)?.is_some_and(|q| q.archived)
     {
-        return Err(OpError::forbidden(format!(
-            "{} is inside an archived project; unarchive that one instead.",
-            p.key
-        ))
-        .into());
+        return Err(
+            messages::forbidden("project-inside-archived", &[("project", p.key.clone())]).into(),
+        );
     }
     let state = if archived { "archived" } else { "active" };
     for id in subtree(w.tx(), p.id)? {
@@ -1219,10 +1209,10 @@ fn unique_name(
         .into_iter()
         .find(|n| fold(&n.name) == wanted && Some(n.id) != except);
     match clash {
-        Some(n) => Err(OpError::conflict(format!(
-            "Project {} already has \"{}\".",
-            project.key, n.name
-        ))
+        Some(n) => Err(messages::conflict(
+            "project-name-taken",
+            &[("project", project.key.clone()), ("name", n.name)],
+        )
         .with_detail("field", "name")
         .into()),
         None => Ok(()),
@@ -1277,7 +1267,7 @@ fn new_rank(
 
 fn wip(limit: Option<u32>) -> Result<Option<Value>, Failure> {
     match limit {
-        Some(0) => Err(OpError::invalid_at("wip_limit", "A WIP limit is 1 or more.").into()),
+        Some(0) => Err(messages::invalid("wip_limit", "status-wip-limit", &[])),
         Some(n) => Ok(Some(Value::from(n))),
         None => Ok(None),
     }
@@ -1287,11 +1277,15 @@ fn apply_status(w: &mut WriteCtx<'_>, p: &ProjectRow, c: &StatusChange) -> Resul
     let pid = Some(p.id);
     let clears_wip = c.clear.contains(&StatusField::WipLimit);
     if clears_wip && c.wip_limit.is_some() {
-        return Err(OpError::invalid_at("clear", "wip_limit is both given and cleared.").into());
+        return Err(messages::invalid(
+            "clear",
+            "field-given-and-cleared",
+            &[("field", "wip_limit".to_owned())],
+        ));
     }
     let Some(which) = &c.status else {
         let Some(name) = &c.name else {
-            return Err(OpError::invalid_at("name", "A new status needs a name.").into());
+            return Err(messages::invalid("name", "status-needs-name", &[]));
         };
         let name = clean_name("name", "name", name, ITEM_NAME_MAX)?;
         unique_name(w.tx(), List::Statuses, p, &name, None)?;
@@ -1418,7 +1412,7 @@ fn delete_status(
     )?;
     let all = lookup::all(w.tx(), List::Statuses, p.id)?;
     if all.len() <= 1 {
-        return Err(OpError::invalid_at("status", "A project needs at least one status.").into());
+        return Err(messages::invalid("status", "status-last-one", &[]));
     }
     if count > 0 {
         let Some(move_to) = move_to else {
@@ -1427,23 +1421,24 @@ fn delete_status(
                 .filter(|s| s.id != status.id)
                 .map(|s| s.name.clone())
                 .collect();
-            return Err(OpError::invalid_at(
+            return Err(messages::invalid_at(
                 "move_tasks_to",
-                format!(
-                    "\"{}\" has {count} tasks; say which status they move to.",
-                    status.name
-                ),
+                "status-delete-move-to",
+                &[
+                    ("status", status.name.clone()),
+                    ("count", count.to_string()),
+                ],
             )
             .with_detail("choices", others)
             .into());
         };
         let target = lookup::named(w.tx(), List::Statuses, p, "move_tasks_to", move_to)?;
         if target.id == status.id {
-            return Err(OpError::invalid_at(
+            return Err(messages::invalid(
                 "move_tasks_to",
-                "The tasks must move to another status.",
-            )
-            .into());
+                "status-move-to-same",
+                &[],
+            ));
         }
         let from: StatusCategory = status.kind.parse().unwrap_or(StatusCategory::Todo);
         let to: StatusCategory = target.kind.parse().unwrap_or(StatusCategory::Todo);
@@ -1517,7 +1512,7 @@ fn apply_type(w: &mut WriteCtx<'_>, p: &ProjectRow, c: &TypeChange) -> Result<()
     let pid = Some(p.id);
     let Some(which) = &c.task_type else {
         let Some(name) = &c.name else {
-            return Err(OpError::invalid_at("name", "A new task type needs a name.").into());
+            return Err(messages::invalid("name", "type-needs-name", &[]));
         };
         let name = clean_name("name", "name", name, ITEM_NAME_MAX)?;
         unique_name(w.tx(), List::Types, p, &name, None)?;
@@ -1626,28 +1621,20 @@ fn delete_type(
 ) -> Result<(), Failure> {
     let default = default_type(w.tx(), p.id)?;
     if default == Some(item.id) {
-        return Err(OpError::invalid_at(
+        return Err(messages::invalid(
             "type",
-            format!(
-                "\"{}\" is the default type; make another type the default first.",
-                item.name
-            ),
-        )
-        .into());
+            "type-delete-default",
+            &[("type", item.name.clone())],
+        ));
     }
     let target = match move_to {
         Some(t) => lookup::named(w.tx(), List::Types, p, "move_tasks_to", t)?.id,
-        None => default.ok_or_else(|| {
-            Failure::Op(OpError::invalid_at(
-                "move_tasks_to",
-                "Say which type the tasks get.",
-            ))
-        })?,
+        None => {
+            default.ok_or_else(|| messages::invalid("move_tasks_to", "type-delete-move-to", &[]))?
+        }
     };
     if target == item.id {
-        return Err(
-            OpError::invalid_at("move_tasks_to", "The tasks must get another type.").into(),
-        );
+        return Err(messages::invalid("move_tasks_to", "type-move-to-same", &[]));
     }
     let tasks: Vec<(Id, Id)> = {
         let mut stmt = w
@@ -1669,7 +1656,7 @@ fn apply_label(w: &mut WriteCtx<'_>, p: &ProjectRow, c: &LabelChange) -> Result<
     let pid = Some(p.id);
     let Some(which) = &c.label else {
         let Some(name) = &c.name else {
-            return Err(OpError::invalid_at("name", "A new label needs a name.").into());
+            return Err(messages::invalid("name", "label-needs-name", &[]));
         };
         let name = clean_name("name", "name", name, ITEM_NAME_MAX)?;
         unique_name(w.tx(), List::Labels, p, &name, None)?;

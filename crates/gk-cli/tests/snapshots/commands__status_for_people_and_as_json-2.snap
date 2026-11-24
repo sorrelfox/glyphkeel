@@ -1,6 +1,6 @@
 ---
 source: crates/gk-cli/tests/commands.rs
-expression: "ws.ok(&[\"status\", \"--json\"])"
+expression: "ws.ok(&[\"workspace\", \"--json\"])"
 ---
 {
   "caller": {

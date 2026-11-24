@@ -33,6 +33,7 @@ use super::{
     settings, task, time, trash, view, wiki,
 };
 use crate::failure::Failure;
+use crate::messages;
 use crate::registry::{QueryCtx, Registry};
 use crate::time::rfc3339;
 use crate::write::WriteCtx;
@@ -53,10 +54,11 @@ pub(super) fn register(r: &mut Registry) {
             groups.extend(of_session);
         }
         if groups.is_empty() {
-            return Err(
-                OpError::invalid("Name the history groups or the session to revert.")
-                    .with_hint("Pass `groups` (from get_activity) or `session`."),
-            );
+            return Err(messages::hint(
+                messages::with("history-revert-what", &[], OpError::invalid),
+                "history-revert-what-hint",
+                &[],
+            ));
         }
         let newest_first = engine
             .store()
@@ -84,14 +86,17 @@ pub(super) fn register(r: &mut Registry) {
 
 fn parse_id(field: &str, text: &str) -> Result<Id, OpError> {
     text.parse().map_err(|_| {
-        OpError::invalid_at(field, format!("\"{text}\" is not an ID."))
-            .with_hint("IDs look like 0193b2a4-5c6d-7e8f-9a0b-1c2d3e4f5a6b.")
+        messages::hint(
+            messages::invalid_at(field, "input-not-an-id", &[("text", text.to_owned())]),
+            "input-id-hint",
+            &[],
+        )
     })
 }
 
 fn session_id(own: Option<Id>, text: &str) -> Result<Id, OpError> {
     if text == "current" {
-        own.ok_or_else(|| OpError::invalid_at("session", "You have no agent session."))
+        own.ok_or_else(|| messages::invalid_at("session", "history-no-session", &[]))
     } else {
         parse_id("session", text)
     }
@@ -119,12 +124,23 @@ const OF_TASK: &str = "(
              OR ? = json_extract(changes, '$.fields.link.after.from')
              OR ? = json_extract(changes, '$.fields.link.after.to'))))";
 
+/// The activity rows of one project and its sub-projects, also those in
+/// the trash. Takes the project's ID once.
+const OF_PROJECT: &str = "project_id IN (
+    WITH RECURSIVE tree(id) AS (
+        SELECT ?
+        UNION SELECT p.id FROM projects p JOIN tree ON p.parent_id = tree.id)
+    SELECT id FROM tree)";
+
 fn feed(q: &QueryCtx<'_>, input: ActivityQuery) -> Result<ActivityPage, Failure> {
     let limit = input.limit.unwrap_or(DEFAULT_LIMIT);
     if !(1..=MAX_LIMIT).contains(&limit) {
-        return Err(
-            OpError::invalid_at("limit", format!("limit must be from 1 to {MAX_LIMIT}.")).into(),
-        );
+        return Err(messages::invalid_at(
+            "limit",
+            "input-limit",
+            &[("max", MAX_LIMIT.to_string())],
+        )
+        .into());
     }
     let mut filters: Vec<&str> = Vec::new();
     let mut args: Vec<SqlValue> = Vec::new();
@@ -137,6 +153,32 @@ fn feed(q: &QueryCtx<'_>, input: ActivityQuery) -> Result<ActivityPage, Failure>
     if let Some(actor) = &input.actor {
         filters.push("lower(actor_name) = lower(?)");
         args.push(SqlValue::Text(actor.clone()));
+    }
+    if let Some(kind) = input.actor_kind {
+        filters.push("actor_kind = ?");
+        args.push(SqlValue::Text(kind.as_str().to_owned()));
+    }
+    if let Some(project) = &input.project {
+        let root = lookup::project(q.tx, "project", project)?.id;
+        filters.push(OF_PROJECT);
+        args.push(SqlValue::Blob(root.as_bytes().to_vec()));
+    }
+    let day = |field: &str, text: &str| task::parse_date(q.tx, &q.env.zone, q.now, field, text);
+    let from = input.from.as_deref().map(|t| day("from", t)).transpose()?;
+    let to = input.to.as_deref().map(|t| day("to", t)).transpose()?;
+    if let (Some(from), Some(to)) = (from, to)
+        && to < from
+    {
+        return Err(messages::invalid("to", "activity-to-before-from", &[]));
+    }
+    if let Some(from) = from {
+        filters.push("at >= ?");
+        args.push(SqlValue::Integer(q.env.zone.moment(from, 0)));
+    }
+    if let Some(to) = to {
+        let next = to.add_days(1).map_err(|e| task::invalid("to", e))?;
+        filters.push("at < ?");
+        args.push(SqlValue::Integer(q.env.zone.moment(next, 0)));
     }
     if let Some(group) = &input.group {
         filters.push("group_id = ?");
@@ -172,7 +214,7 @@ fn feed(q: &QueryCtx<'_>, input: ActivityQuery) -> Result<ActivityPage, Failure>
     if let Some(cursor) = &input.cursor {
         let seq: i64 = cursor
             .parse()
-            .map_err(|_| OpError::invalid_at("cursor", "The cursor is not one this list gave."))?;
+            .map_err(|_| messages::invalid_at("cursor", "input-cursor-unknown", &[]))?;
         page_filters.push("seq < ?");
         page_args.push(SqlValue::Integer(seq));
     }
@@ -451,16 +493,12 @@ fn apply(
                     .tx()
                     .query_row(child, [id.as_bytes().as_slice()], |r| r.get(0))?;
                 if inside > 0 {
-                    return Err(OpError::conflict(format!(
-                        "The {} now holds {}, so its creation can't be reverted.",
-                        if is_task { "task" } else { "project" },
-                        if is_task {
-                            "subtasks"
-                        } else {
-                            "tasks or sub-projects"
-                        }
-                    ))
-                    .into());
+                    let id = if is_task {
+                        "history-task-holds-subtasks"
+                    } else {
+                        "history-project-holds-items"
+                    };
+                    return Err(messages::conflict(id, &[]).into());
                 }
                 w.tx().execute(
                     &format!(
@@ -486,9 +524,10 @@ fn apply(
         }
         (fields::STATUS | fields::TYPE | fields::LABEL, "created") => {
             if value.is_some() {
-                return Err(OpError::conflict(format!(
-                    "A deleted {entity} can't be created again by a revert."
-                ))
+                return Err(messages::conflict(
+                    "history-deleted-not-recreated",
+                    &[("entity", entity.to_owned())],
+                )
                 .into());
             }
             let (table, used) = match entity {
@@ -509,9 +548,10 @@ fn apply(
                     .query_row(used, [id.as_bytes().as_slice()], |r| r.get(0))?
             };
             if n > 0 {
-                return Err(OpError::conflict(format!(
-                    "The {entity} is in use by {n} tasks, so its creation can't be reverted."
-                ))
+                return Err(messages::conflict(
+                    "history-in-use",
+                    &[("entity", entity.to_owned()), ("count", n.to_string())],
+                )
                 .into());
             }
             w.tx().execute(
@@ -600,37 +640,55 @@ fn group_rows(tx: &Transaction<'_>, group: Id) -> Result<Vec<GroupRow>, StoreErr
     Ok(out)
 }
 
-/// Why `group` can't be reverted now, or `None` if it can.
-fn blocker(tx: &Transaction<'_>, rows: &[GroupRow]) -> Result<Option<String>, StoreError> {
+/// Settings only the person changes, in the app; a revert from anywhere
+/// else leaves them alone.
+const APP_ONLY_SETTINGS: &[&str] = &["agent_max_profile", crate::backup::SETTING];
+
+/// Why a group can't be reverted: a message ID and its arguments.
+type Reason = (&'static str, Vec<(&'static str, String)>);
+
+/// Why `group` can't be reverted now by `caller`, or `None` if it can.
+fn blocker(
+    tx: &Transaction<'_>,
+    rows: &[GroupRow],
+    caller: &crate::Context,
+) -> Result<Option<Reason>, StoreError> {
     if rows.is_empty() {
-        return Ok(Some("there is no such history group".into()));
+        return Ok(Some(("revert-no-group", vec![])));
     }
     if rows.iter().any(|r| r.reverted) {
-        return Ok(Some("it was already reverted".into()));
+        return Ok(Some(("revert-already", vec![])));
     }
     if rows.iter().any(|r| r.imported) {
-        return Ok(Some("it came from an imported archive".into()));
+        return Ok(Some(("revert-imported", vec![])));
     }
     for row in rows {
+        let entity = || ("entity", row.entity.clone());
         if row.fields.is_empty() {
-            return Ok(Some(format!(
-                "the {} it changed was deleted for good",
-                row.entity
-            )));
+            return Ok(Some(("revert-deleted-for-good", vec![entity()])));
+        }
+        if row.entity == settings::ENTITY
+            && caller.via != Via::App
+            && row
+                .fields
+                .keys()
+                .any(|f| APP_ONLY_SETTINGS.contains(&f.as_str()))
+        {
+            return Ok(Some(("revert-app-only-setting", vec![])));
         }
         for field in revertible_fields(row) {
             let after = row.fields.get(field).and_then(|c| c.get("after")).cloned();
             let Some(now) = current(tx, &row.entity, row.id, field)? else {
                 return Ok(Some(if field == "deleted" {
-                    format!("a deleted {} can't be brought back by a revert", row.entity)
+                    ("revert-deleted", vec![entity()])
                 } else {
-                    format!("changes to {} {field} can't be reverted yet", row.entity)
+                    ("revert-not-yet", vec![entity(), ("field", field.clone())])
                 }));
             };
             if now != after {
-                return Ok(Some(format!(
-                    "{} {field} was changed again since",
-                    row.entity
+                return Ok(Some((
+                    "revert-changed-since",
+                    vec![entity(), ("field", field.clone())],
                 )));
             }
         }
@@ -648,10 +706,12 @@ pub(crate) fn revert_groups(
     let mut skipped = Vec::new();
     for &group in groups {
         let rows = group_rows(w.tx(), group)?;
-        if let Some(reason) = blocker(w.tx(), &rows)? {
+        if let Some((id, args)) = blocker(w.tx(), &rows, w.caller())? {
             skipped.push(SkippedGroup {
                 group: group.to_string(),
-                reason,
+                reason: messages::text(id, &args),
+                reason_id: id.to_owned(),
+                reason_args: args.into_iter().map(|(k, v)| (k.to_owned(), v)).collect(),
             });
             continue;
         }

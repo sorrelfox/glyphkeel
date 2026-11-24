@@ -6,11 +6,13 @@
 //! locks).
 
 use gk_api::ops::backup::{
-    BackupCreate, BackupDelete, BackupDeleted, BackupKind, BackupList, BackupListOp, BackupRestore,
-    BackupVerify,
+    BackupCreate, BackupDelete, BackupDeleted, BackupFolderUpdate, BackupKind, BackupList,
+    BackupListOp, BackupRestore, BackupVerify,
 };
+use serde_json::Value;
 
-use super::desc;
+use super::{desc, settings};
+use crate::backup::{SETTING, check_folder};
 use crate::registry::Registry;
 use crate::time::rfc3339;
 
@@ -41,6 +43,27 @@ pub(super) fn register(r: &mut Registry) {
     });
     r.engine_op::<BackupRestore, _>(desc::<BackupRestore>(), |engine, ctx, input| {
         engine.restore_backup(ctx, &input.name)
+    });
+    r.command::<BackupFolderUpdate, _>(desc::<BackupFolderUpdate>(), |w, input| {
+        // Only the app reaches it: it is an app operation without a
+        // command, so the pipeline refuses agents and the command line.
+        let value = match input.folder.as_deref() {
+            Some(text) => {
+                let folder = check_folder(w.layout(), text)?;
+                Value::String(folder.to_string_lossy().into_owned())
+            }
+            None => Value::Null,
+        };
+        if value.is_null() {
+            settings::write_raw(w, SETTING, None)?;
+            let mut change = settings::set_all(w, &[])?;
+            if w.has_changes() {
+                change.changed.push(SETTING.to_owned());
+            }
+            Ok(change)
+        } else {
+            settings::set_all(w, &[(SETTING, value)])
+        }
     });
     r.engine_op::<BackupDelete, _>(desc::<BackupDelete>(), |engine, _, input| {
         let files_removed = engine.backups().delete(&input.name)?;

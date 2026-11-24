@@ -1,0 +1,72 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Glyphkeel contributors
+#
+# The command line's own text, in English: its help, the labels of its
+# output and its errors. The operations' summaries and their options' help
+# come from the operation catalog; the engine's messages are in the
+# engine's file. One message per line; placeables are { $name }.
+
+## Help
+
+cli-about = Glyphkeel, a local task manager, from the command line.
+cli-long-about = Without a command, starts the desktop app (with `--quick-add`, only its quick-add window). Every other command runs one operation on the workspace, also while the app is open.
+cli-exit-codes = Exit codes: 0 success, 1 usage error or invalid input, 2 not found, 3 change rejected, 4 workspace or storage problem.
+cli-quick-add-help = Open the desktop app's quick-add window to capture a task, starting the app if it isn't running (a command for a desktop shortcut)
+cli-workspace-help = The workspace: a name in the data folder, or a folder path [default: Personal]
+cli-json-help = Print the operation's output as JSON
+cli-quiet-help = Print nothing on success; errors still go to standard error
+cli-no-color-help = No colours in help and messages (also with NO_COLOR set)
+cli-tz-help = The time zone of "today" and local times for this command: "system" or an IANA name such as Europe/Berlin [default: the personal setting]
+cli-open-about = Start the desktop app, optionally at tasks or other links
+cli-open-links-help = A task key (`TM-41`) or a `glyphkeel://` link
+cli-mcp-about = Serve the workspace to an AI agent over MCP (standard input and output)
+cli-mcp-long-about = Serve the workspace to an AI agent over MCP (standard input and output). The arguments are those of the MCP server; `glyphkeel mcp --help` lists them.
+cli-completions-about = Print the shell completion script
+cli-man-about = Print the man page (roff)
+cli-group-about = Commands: { $commands }
+cli-input-help = The whole input as JSON, or `-` to read it from standard input; options given as well take precedence
+cli-yes-help = Confirm in advance: this can't be undone
+
+## Values of options
+
+cli-expected-bool = expected `true` or `false`
+cli-expected-integer = expected a whole number
+cli-expected-number = expected a number
+cli-expected-json = expected JSON: { $error }
+
+## Output
+
+cli-error = glyphkeel: { $message }
+cli-hint = hint: { $hint }
+cli-choices = choices: { $choices }
+cli-field = field: { $field }
+cli-shown-of-total = { $shown } of { $total }
+cli-next-page = next page: --cursor { $cursor }
+cli-none = (none)
+cli-true = yes
+cli-false = no
+cli-confirm = { $summary }
+    This can't be undone. Continue? [y/N]
+# The answers that confirm, separated by spaces.
+cli-confirm-yes = y yes
+
+## Errors
+
+cli-quick-add-alone = --quick-add opens the app's quick-add window and takes no command.
+cli-quick-add-alone-hint = Run `glyphkeel --quick-add` on its own.
+cli-man-failed = Can't write the man page: { $error }.
+cli-output-failed = Can't write the output: { $error }.
+cli-input-unreadable = Can't read the input: { $error }.
+cli-input-not-object = The input must be a JSON object.
+cli-input-not-json = The input is not valid JSON: { $error }.
+cli-no-home = Can't find the home folder, so there is no default data folder.
+cli-no-home-hint = Name the workspace folder with --workspace <path>.
+cli-workspace-name = "{ $name }" cannot be a workspace name: use letters, digits, spaces, '-' or '_', at most 64 characters.
+cli-workspace-name-hint = A name has letters, digits, spaces, '-' and '_'; to name a folder, give a path such as ./my-workspace.
+cli-workspace-missing = There is no workspace at { $path }.
+cli-workspace-missing-hint = Check the name or path given with --workspace.
+cli-link-invalid = '{ $link }' is neither a task key nor a glyphkeel:// link.
+cli-link-invalid-hint = Give a key such as TM-41, or a link such as glyphkeel://open/TM-41.
+cli-app-missing = The desktop app ({ $app }) is neither next to this program nor on PATH.
+cli-app-missing-hint = Install the desktop app, or use the commands listed by `glyphkeel --help`.
+cli-app-start-failed = Can't start { $app }: { $error }.

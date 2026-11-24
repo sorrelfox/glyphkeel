@@ -22,6 +22,7 @@ use serde_json::Value;
 use super::desc;
 use super::lookup::{self, b, id_at, opt_id_at};
 use crate::failure::Failure;
+use crate::messages;
 use crate::registry::Registry;
 use crate::time::rfc3339;
 use crate::write::WriteCtx;
@@ -259,7 +260,7 @@ fn list(tx: &Transaction<'_>, input: &ViewListInput) -> Result<ViewList, Failure
     })
 }
 
-fn invalid(field: &str, e: impl std::fmt::Display) -> Failure {
+fn invalid(field: &str, e: impl gk_core::Message) -> Failure {
     super::task::invalid(field, e)
 }
 
@@ -278,10 +279,11 @@ fn clean_list(field: &str, items: &[String]) -> Result<Vec<String>, Failure> {
         .map(|c| {
             let c = c.trim();
             if c.is_empty() || c.len() > 64 {
-                Err(Failure::Op(OpError::invalid_at(
+                Err(messages::invalid(
                     field,
-                    "Each entry is a field name of 1 to 64 characters.",
-                )))
+                    "view-field-name",
+                    &[("max", "64".to_owned())],
+                ))
             } else {
                 Ok(c.to_owned())
             }
@@ -296,12 +298,9 @@ fn check_unique(tx: &Transaction<'_>, id: Id, r: &Record) -> Result<(), Failure>
         .into_iter()
         .any(|(other, o)| other != id && o.kind == r.kind && fold(&o.name) == wanted);
     if taken {
-        return Err(
-            OpError::conflict(format!("There is already a view named \"{}\".", r.name))
-                .with_detail("field", "name")
-                .with_hint("Choose another name, or change that view.")
-                .into(),
-        );
+        let error = messages::conflict("view-name-taken", &[("view", r.name.clone())])
+            .with_detail("field", "name");
+        return Err(messages::hint(error, "view-name-taken-hint", &[]).into());
     }
     Ok(())
 }
@@ -409,21 +408,20 @@ fn find(
         1 => Ok(found.remove(0)),
         0 => {
             let names: Vec<&str> = all.iter().map(|(_, r)| r.name.as_str()).collect();
-            Err(
-                OpError::not_found(format!("There is no view \"{}\".", text.trim()), &names)
-                    .with_detail("field", "view")
-                    .with_hint("Name a view of the project given with `project`, or use its ID.")
-                    .into(),
-            )
+            let args = [("view", text.trim().to_owned())];
+            let error = messages::with("view-not-found", &args, |m| OpError::not_found(m, &names))
+                .with_detail("field", "view");
+            Err(messages::hint(error, "view-not-found-hint", &[]).into())
         }
-        _ => Err(OpError::invalid_at(
-            "view",
-            format!(
-                "Several views are named \"{}\", for different screens.",
-                text.trim()
+        _ => Err(messages::hint(
+            messages::invalid_at(
+                "view",
+                "view-name-ambiguous",
+                &[("view", text.trim().to_owned())],
             ),
+            "view-name-ambiguous-hint",
+            &[],
         )
-        .with_hint("Use the view's ID from view.list.")
         .into()),
     }
 }
@@ -443,9 +441,11 @@ fn update(w: &mut WriteCtx<'_>, input: ViewUpdateInput) -> Result<ViewChange, Fa
         (input.totals.is_some(), ViewField::Totals, "totals"),
     ] {
         if given && clears(field) {
-            return Err(
-                OpError::invalid_at("clear", format!("{name} is both given and cleared.")).into(),
-            );
+            return Err(messages::invalid(
+                "clear",
+                "field-given-and-cleared",
+                &[("field", name.to_owned())],
+            ));
         }
     }
     let mut r = old.clone();

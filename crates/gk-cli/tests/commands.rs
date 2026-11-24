@@ -99,8 +99,39 @@ macro_rules! snapshot {
 #[test]
 fn status_for_people_and_as_json() {
     let ws = Workspace::new();
-    snapshot!(ws.ok(&["status"]));
-    snapshot!(ws.ok(&["status", "--json"]));
+    snapshot!(ws.ok(&["workspace"]));
+    snapshot!(ws.ok(&["workspace", "--json"]));
+}
+
+#[test]
+fn the_old_status_command_still_shows_the_workspace_but_is_hidden() {
+    let ws = Workspace::new();
+    let old = ws.json(&["status"]);
+    let new = ws.json(&["workspace"]);
+    assert_eq!(old["name"], new["name"]);
+    assert_eq!(old["id"], new["id"]);
+    // The statuses' own commands are still under `status`.
+    let help = ws.ok(&["--help"]);
+    assert!(help.contains("workspace"), "{help}");
+    let status_help = ws.ok(&["status", "--help"]);
+    assert!(status_help.contains("add"), "{status_help}");
+    assert!(!status_help.contains("The open workspace"), "{status_help}");
+}
+
+#[test]
+fn the_activity_log_takes_filters_as_options() {
+    let ws = Workspace::new();
+    ws.ok(&["settings", "set", "--hours-per-day", "6"]);
+    let mine = ws.json(&["activity", "--actor-kind", "user", "--from", "today"]);
+    assert_eq!(mine["total"], 1, "{mine}");
+    let agents = ws.json(&["activity", "--actor-kind", "agent"]);
+    assert_eq!(agents["total"], 0, "{agents}");
+    let earlier = ws.json(&["activity", "--to", "yesterday"]);
+    assert_eq!(earlier["total"], 0, "{earlier}");
+    let out = ws.run(&["activity", "--from", "today", "--to", "yesterday"]);
+    assert_eq!(code(&out), 1, "{}", stderr(&out));
+    let out = ws.run(&["activity", "--actor-kind", "robot"]);
+    assert_ne!(code(&out), 0);
 }
 
 #[test]
@@ -257,7 +288,7 @@ fn the_timer_is_shared_between_processes() {
     let seen = ws.json(&["timer", "status"]);
     assert_eq!(seen["timer"]["task"]["key"], "GK-1");
     assert_eq!(seen["timer"]["note"], "Writing");
-    let overview = ws.json(&["status"]);
+    let overview = ws.json(&["workspace"]);
     assert_eq!(overview["timer"]["task"]["key"], "GK-1");
 
     let paused = ws.json(&["timer", "pause"]);
@@ -390,14 +421,14 @@ fn a_missing_workspace_exits_2_and_is_not_created() {
     let out = glyphkeel(dir.path())
         .arg("--workspace")
         .arg(&missing)
-        .arg("status")
+        .arg("workspace")
         .output()
         .unwrap();
     assert_eq!(code(&out), 2, "{}", stderr(&out));
     assert!(!missing.exists());
 
     let out = glyphkeel(dir.path())
-        .args(["--workspace", "Elsewhere", "status"])
+        .args(["--workspace", "Elsewhere", "workspace"])
         .output()
         .unwrap();
     assert_eq!(code(&out), 2);
@@ -407,7 +438,7 @@ fn a_missing_workspace_exits_2_and_is_not_created() {
 fn the_default_workspace_is_created_in_the_data_folder() {
     let dir = tempfile::tempdir().unwrap();
     let out = glyphkeel(dir.path())
-        .args(["--json", "status"])
+        .args(["--json", "workspace"])
         .output()
         .unwrap();
     assert_eq!(code(&out), 0, "{}", stderr(&out));
@@ -429,7 +460,7 @@ fn a_broken_database_exits_4() {
     let out = glyphkeel(dir.path())
         .arg("--workspace")
         .arg(&ws)
-        .args(["--json", "status"])
+        .args(["--json", "workspace"])
         .output()
         .unwrap();
     assert_eq!(code(&out), 4);
@@ -843,7 +874,7 @@ fn a_command_makes_the_daily_backup_and_backups_restore() {
     assert_eq!(items[0]["kind"], "daily");
     assert!(ws.path().join("backups/backups.json").is_file());
     // Not again within the day.
-    ws.ok(&["status"]);
+    ws.ok(&["workspace"]);
     assert_eq!(
         ws.json(&["backup", "list"])["items"]
             .as_array()

@@ -10,9 +10,15 @@ use std::fmt::Write as _;
 use gk_api::OpError;
 use serde_json::{Map, Value};
 
+use crate::messages::text;
+
 /// Columns that lead a table when present, in this order; the rest follow
 /// alphabetically.
 const LEADING: &[&str] = &["key", "seq", "name", "title", "id"];
+
+/// Fields that only let the app translate a text shown next to them; people
+/// read the text.
+const FOR_TRANSLATION: &[&str] = &["reason_id", "reason_args"];
 
 /// The JSON text of `value`: keys sorted at every level, so the output is
 /// the same whatever order the engine built it in.
@@ -62,18 +68,23 @@ pub(crate) fn error(e: &OpError, as_json: bool) -> String {
     if as_json {
         return json(&serde_json::to_value(e).unwrap_or(Value::Null));
     }
-    let mut out = format!("glyphkeel: {}\n", e.message);
+    let mut out = text("cli-error", &[("message", e.message.clone())]);
+    out.push('\n');
     if let Some(hint) = &e.hint {
-        let _ = writeln!(out, "hint: {hint}");
+        let _ = writeln!(out, "{}", text("cli-hint", &[("hint", hint.clone())]));
     }
     if let Some(choices) = e.details.get("choices").and_then(Value::as_array) {
         let words: Vec<String> = choices.iter().map(cell).collect();
-        let _ = writeln!(out, "choices: {}", words.join(", "));
+        let _ = writeln!(
+            out,
+            "{}",
+            text("cli-choices", &[("choices", words.join(", "))])
+        );
     }
     if let Some(path) = e.details.get("path").and_then(Value::as_str)
         && !path.is_empty()
     {
-        let _ = writeln!(out, "field: {path}");
+        let _ = writeln!(out, "{}", text("cli-field", &[("field", path.to_owned())]));
     }
     out
 }
@@ -88,10 +99,24 @@ fn list(out: &mut String, o: &Map<String, Value>) {
     if let Some(total) = total
         && total > items.len() as u64
     {
-        let _ = writeln!(out, "{} of {total}", items.len());
+        let _ = writeln!(
+            out,
+            "{}",
+            text(
+                "cli-shown-of-total",
+                &[
+                    ("shown", items.len().to_string()),
+                    ("total", total.to_string()),
+                ],
+            )
+        );
     }
     if let Some(cursor) = o.get("next_cursor").and_then(Value::as_str) {
-        let _ = writeln!(out, "next page: --cursor {cursor}");
+        let _ = writeln!(
+            out,
+            "{}",
+            text("cli-next-page", &[("cursor", cursor.to_owned())])
+        );
     }
     let rest: Map<String, Value> = o
         .iter()
@@ -113,7 +138,7 @@ fn object(out: &mut String, o: &Map<String, Value>, indent: usize) {
                 object(out, inner, indent + 2);
             }
             Value::Array(a) if a.is_empty() => {
-                let _ = writeln!(out, "{pad}{k}: (none)");
+                let _ = writeln!(out, "{pad}{k}: {}", text("cli-none", &[]));
             }
             Value::Array(a) if a.iter().any(Value::is_object) => {
                 let _ = writeln!(out, "{pad}{k}:");
@@ -149,7 +174,7 @@ fn is_field_changes(o: &Map<String, Value>) -> bool {
 fn table(out: &mut String, rows: &[Value], indent: usize) {
     let pad = " ".repeat(indent);
     if rows.is_empty() {
-        let _ = writeln!(out, "{pad}(none)");
+        let _ = writeln!(out, "{pad}{}", text("cli-none", &[]));
         return;
     }
     if !rows.iter().all(Value::is_object) {
@@ -162,7 +187,7 @@ fn table(out: &mut String, rows: &[Value], indent: usize) {
     for row in rows {
         if let Value::Object(o) = row {
             for k in o.keys() {
-                if !columns.contains(k) {
+                if !columns.contains(k) && !FOR_TRANSLATION.contains(&k.as_str()) {
                     columns.push(k.clone());
                 }
             }
@@ -212,6 +237,7 @@ fn ordered(o: &Map<String, Value>) -> Vec<(&String, &Value)> {
     let mut keys: Vec<String> = o.keys().cloned().collect();
     order(&mut keys);
     keys.iter()
+        .filter(|k| !FOR_TRANSLATION.contains(&k.as_str()))
         .filter_map(|k| o.get_key_value(k.as_str()))
         .collect()
 }
@@ -230,7 +256,7 @@ fn cell(v: &Value) -> String {
     match v {
         Value::Null => String::new(),
         Value::String(s) => s.replace('\n', " "),
-        Value::Bool(b) => if *b { "yes" } else { "no" }.to_owned(),
+        Value::Bool(b) => text(if *b { "cli-true" } else { "cli-false" }, &[]),
         Value::Number(n) => n.to_string(),
         Value::Array(a) => a.iter().map(cell).collect::<Vec<_>>().join(", "),
         Value::Object(o) if is_field_changes(o) => o

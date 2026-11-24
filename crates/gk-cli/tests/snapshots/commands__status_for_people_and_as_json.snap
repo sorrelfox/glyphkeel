@@ -1,6 +1,6 @@
 ---
 source: crates/gk-cli/tests/commands.rs
-expression: "ws.ok(&[\"status\"])"
+expression: "ws.ok(&[\"workspace\"])"
 ---
 name: Personal
 id: [id]

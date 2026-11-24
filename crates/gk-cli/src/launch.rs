@@ -11,6 +11,8 @@ use std::process::{Command, Stdio};
 
 use gk_api::OpError;
 
+use crate::messages;
+
 /// The app's executable name.
 const APP: &str = "glyphkeel-app";
 /// The scheme of the app's links.
@@ -32,12 +34,11 @@ pub(crate) fn links(args: &[String]) -> Result<Vec<String>, OpError> {
             {
                 Ok(format!("{SCHEME}open/{a}"))
             } else {
-                Err(
-                    OpError::invalid(format!("'{a}' is neither a task key nor a {SCHEME} link."))
-                        .with_hint(
-                            "Give a key such as TM-41, or a link such as glyphkeel://open/TM-41.",
-                        ),
-                )
+                Err(messages::hint(
+                    messages::error("cli-link-invalid", &[("link", a.clone())], OpError::invalid),
+                    "cli-link-invalid-hint",
+                    &[],
+                ))
             }
         })
         .collect()
@@ -46,11 +47,13 @@ pub(crate) fn links(args: &[String]) -> Result<Vec<String>, OpError> {
 /// Starts the app with `links` and returns once it has started.
 pub(crate) fn start(links: &[String]) -> Result<(), OpError> {
     let app = find().ok_or_else(|| {
-        OpError::not_found(
-            format!("The desktop app ({APP}) is neither next to this program nor on PATH."),
+        messages::hint(
+            messages::error("cli-app-missing", &[("app", APP.to_owned())], |m| {
+                OpError::not_found(m, &[])
+            }),
+            "cli-app-missing-hint",
             &[],
         )
-        .with_hint("Install the desktop app, or use the commands listed by `glyphkeel --help`.")
     })?;
     let mut cmd = Command::new(&app);
     cmd.args(links)
@@ -58,9 +61,13 @@ pub(crate) fn start(links: &[String]) -> Result<(), OpError> {
         .stdout(Stdio::null())
         .stderr(Stdio::null());
     detach(&mut cmd);
-    cmd.spawn()
-        .map(drop)
-        .map_err(|e| OpError::storage(format!("Can't start {}: {e}.", app.display())))
+    cmd.spawn().map(drop).map_err(|e| {
+        messages::error(
+            "cli-app-start-failed",
+            &[("app", app.display().to_string()), ("error", e.to_string())],
+            OpError::storage,
+        )
+    })
 }
 
 /// Its own process group, so closing the terminal or Ctrl+C there leaves

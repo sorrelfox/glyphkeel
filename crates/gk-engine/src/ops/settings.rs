@@ -7,7 +7,6 @@
 //! records the stored values, so reverting a first change removes the row
 //! again.
 
-use gk_api::OpError;
 use gk_api::ops::settings::{
     SettingKey, Settings, SettingsChange, SettingsGet, SettingsPatch, SettingsUpdate,
 };
@@ -17,6 +16,7 @@ use serde_json::{Map, Value};
 
 use super::desc;
 use crate::failure::Failure;
+use crate::messages;
 use crate::registry::Registry;
 use crate::write::WriteCtx;
 
@@ -45,9 +45,11 @@ fn update(w: &mut WriteCtx<'_>, patch: SettingsPatch) -> Result<SettingsChange, 
             SettingKey::TimerReminderHours => patch.timer_reminder_hours.is_some(),
         };
         if given {
-            return Err(
-                OpError::invalid_at("clear", format!("{name} is both given and cleared.")).into(),
-            );
+            return Err(messages::invalid(
+                "clear",
+                "settings-given-and-cleared",
+                &[("name", name.to_owned())],
+            ));
         }
         if raw(w.tx(), name)?.is_some() {
             write_raw(w, name, None)?;
@@ -61,11 +63,11 @@ fn update(w: &mut WriteCtx<'_>, patch: SettingsPatch) -> Result<SettingsChange, 
     }
     if let Some(time) = patch.reminder_time {
         if !is_clock_time(&time) {
-            return Err(OpError::invalid_at(
+            return Err(messages::invalid(
                 "reminder_time",
-                format!("\"{time}\" is not a time of day; write it as HH:MM, for example 09:00."),
-            )
-            .into());
+                "settings-not-a-time",
+                &[("time", time)],
+            ));
         }
         wanted.push(("reminder_time", time.into()));
     }
@@ -118,9 +120,15 @@ fn in_range(field: &str, value: u32, min: u32, max: u32) -> Result<(), Failure> 
     if (min..=max).contains(&value) {
         Ok(())
     } else {
-        Err(OpError::invalid_at(
+        Err(messages::invalid_at(
             field,
-            format!("{field} must be from {min} to {max}; got {value}."),
+            "settings-out-of-range",
+            &[
+                ("field", field.to_owned()),
+                ("min", min.to_string()),
+                ("max", max.to_string()),
+                ("value", value.to_string()),
+            ],
         )
         .with_detail("min", min)
         .with_detail("max", max)
@@ -138,8 +146,16 @@ fn is_clock_time(s: &str) -> bool {
 }
 
 fn to_value<T: serde::Serialize>(v: T) -> Result<Value, Failure> {
-    serde_json::to_value(v).map_err(|e| Failure::Op(OpError::storage(e.to_string())))
+    serde_json::to_value(v).map_err(|e| {
+        Failure::Op(messages::storage(
+            "storage-json",
+            &[("error", e.to_string())],
+        ))
+    })
 }
+
+/// Settings that have no value by default, so the defaults leave them out.
+const OPTIONAL: &[&str] = &[crate::backup::SETTING];
 
 /// The settings with defaults filled in. A stored value that doesn't fit
 /// (written by a newer program, say) is ignored with a warning.
@@ -153,7 +169,7 @@ pub(crate) fn load(tx: &Transaction<'_>) -> Result<Settings, StoreError> {
     let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
     for row in rows {
         let (key, text) = row?;
-        if !merged.contains_key(&key) {
+        if !merged.contains_key(&key) && !OPTIONAL.contains(&key.as_str()) {
             continue;
         }
         let fits = serde_json::from_str::<Value>(&text).ok().filter(|value| {

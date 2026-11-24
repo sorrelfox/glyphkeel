@@ -6,6 +6,8 @@
 use gk_api::OpError;
 use gk_store::{Location, StoreError, WorkspaceLayout};
 
+use crate::messages;
+
 /// The workspace `arg` (`--workspace`) names, else the one
 /// `GLYPHKEEL_WORKSPACE` names, else the default workspace, and whether it
 /// may be created when it doesn't exist. Only a workspace chosen without
@@ -16,20 +18,30 @@ pub(crate) fn resolve(arg: Option<&str>) -> Result<WorkspaceLayout, OpError> {
     let layout = Location::find(arg)
         .layout(gk_store::data_dir().as_deref())
         .map_err(|e| match e {
-            StoreError::NoDataDir => OpError::storage(
-                "Can't find the home folder, so there is no default data folder.",
-            )
-            .with_hint("Name the workspace folder with --workspace <path>."),
-            e => OpError::invalid_at("workspace", format!("{e}.")).with_hint(
-                "A name has letters, digits, spaces, '-' and '_'; to name a folder, give a path such as ./my-workspace.",
+            StoreError::NoDataDir => messages::hint(
+                messages::error("cli-no-home", &[], OpError::storage),
+                "cli-no-home-hint",
+                &[],
             ),
+            StoreError::InvalidName(name) => messages::hint(
+                messages::error("cli-workspace-name", &[("name", name)], |m| {
+                    OpError::invalid_at("workspace", m)
+                }),
+                "cli-workspace-name-hint",
+                &[],
+            ),
+            e => OpError::invalid_at("workspace", format!("{e}.")),
         })?;
     if !may_create && !layout.database().is_file() {
-        return Err(OpError::not_found(
-            format!("There is no workspace at {}.", layout.root().display()),
+        return Err(messages::hint(
+            messages::error(
+                "cli-workspace-missing",
+                &[("path", layout.root().display().to_string())],
+                |m| OpError::not_found(m, &[]),
+            ),
+            "cli-workspace-missing-hint",
             &[],
-        )
-        .with_hint("Check the name or path given with --workspace."));
+        ));
     }
     Ok(layout)
 }

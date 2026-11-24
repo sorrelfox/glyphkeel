@@ -25,6 +25,7 @@ use super::fields::{self, TASK, priority_name};
 use super::lookup::{self, b, opt_id_at};
 use super::task::{self, task_labels};
 use crate::failure::Failure;
+use crate::messages;
 use crate::registry::Registry;
 use crate::write::WriteCtx;
 
@@ -68,10 +69,6 @@ fn parts(input: &Value) -> Vec<&'static str> {
         out.push("task.update");
     }
     out
-}
-
-fn invalid(field: &str, message: impl Into<String>) -> Failure {
-    Failure::Op(OpError::invalid_at(field, message))
 }
 
 fn is_empty(c: &BulkChanges) -> bool {
@@ -165,21 +162,17 @@ fn new_date(
 ) -> Result<Option<String>, Failure> {
     let path = format!("changes.{field}");
     match (set, shift) {
-        (Some(_), Some(_)) => Err(invalid(
+        (Some(_), Some(_)) => Err(messages::invalid(
             &path,
-            format!("Give {field} or a shift of it, not both."),
+            "bulk-set-and-shift",
+            &[("field", field.to_owned())],
         )),
         (Some(text), None) => {
             let cal = super::query::calendar(w.tx(), w.zone(), w.now())?;
             gk_query::parse_natural(text, &cal)
                 .map(|d| Some(d.to_string()))
                 .ok_or_else(|| {
-                    invalid(
-                        &path,
-                        format!(
-                            "\"{text}\" is not a date. Write 2026-12-31, or today, fri, next mon, +3d."
-                        ),
-                    )
+                    messages::invalid(&path, "bulk-date-invalid", &[("text", text.clone())])
                 })
         }
         (None, Some(offset)) => {
@@ -190,9 +183,10 @@ fn new_date(
                 Some(day) => shifted(day, offset)
                     .map(|d| Some(d.to_string()))
                     .ok_or_else(|| {
-                        invalid(
+                        messages::invalid(
                             &format!("changes.shift_{}", column.trim_end_matches("_date")),
-                            format!("\"{offset}\" is not a shift. Write +2d, -1w, +1m or +1y."),
+                            "bulk-shift-invalid",
+                            &[("text", offset.clone())],
                         )
                     }),
             }
@@ -284,8 +278,8 @@ fn most(w: &WriteCtx<'_>) -> Result<usize, Failure> {
 fn bulk(w: &mut WriteCtx<'_>, input: BulkUpdateInput) -> Result<BulkResult, Failure> {
     let dry_run = input.dry_run.unwrap_or(true);
     let ids: Vec<Id> = match (&input.query, input.keys.is_empty()) {
-        (None, true) => return Err(invalid("keys", "Give the tasks' keys or a query.")),
-        (Some(_), false) => return Err(invalid("query", "Give keys or a query, not both.")),
+        (None, true) => return Err(messages::invalid("keys", "bulk-keys-or-query", &[])),
+        (Some(_), false) => return Err(messages::invalid("query", "bulk-keys-and-query", &[])),
         (None, false) => {
             let mut ids = Vec::with_capacity(input.keys.len());
             for (i, k) in input.keys.iter().enumerate() {
@@ -310,33 +304,31 @@ fn bulk(w: &mut WriteCtx<'_>, input: BulkUpdateInput) -> Result<BulkResult, Fail
         }
     };
     if is_empty(&input.changes) {
-        return Err(invalid("changes", "Say what to change."));
+        return Err(messages::invalid("changes", "bulk-no-changes", &[]));
     }
     let count = ids.len();
     let max = most(w)?;
     if count > max {
-        return Err(OpError::limit(
-            format!("A bulk change can take at most {max} tasks; this one has {count}."),
-            max as u64,
-        )
-        .with_hint("Narrow the query, or make the change in parts.")
-        .into());
+        let args = [("max", max.to_string()), ("count", count.to_string())];
+        let error = messages::with("bulk-too-many", &args, |m| OpError::limit(m, max as u64));
+        return Err(messages::hint(error, "bulk-too-many-hint", &[]).into());
     }
     if !dry_run {
         match input.expected_count {
             None => {
-                return Err(invalid(
+                return Err(messages::invalid(
                     "expected_count",
-                    "Pass expected_count, the count from the preview, to make the change.",
+                    "bulk-expected-count",
+                    &[],
                 ));
             }
             Some(n) if n != count as u64 => {
-                return Err(OpError::conflict(format!(
-                    "The change was previewed for {n} tasks, but the count is now {count}."
-                ))
-                .with_detail("count", count as u64)
-                .with_hint("Preview the change again and check the tasks.")
-                .into());
+                let error = messages::conflict(
+                    "bulk-count-changed",
+                    &[("expected", n.to_string()), ("count", count.to_string())],
+                )
+                .with_detail("count", count as u64);
+                return Err(messages::hint(error, "bulk-count-changed-hint", &[]).into());
             }
             Some(_) => {}
         }

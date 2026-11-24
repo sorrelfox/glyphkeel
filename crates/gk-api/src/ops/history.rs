@@ -11,7 +11,7 @@ use serde_json::Value;
 
 use crate::catalog::{Exposure, Meta, OpDescriptor, OpKind, Safety};
 use crate::ops::agent::AgentSession;
-use crate::ops::common::{Actor, Via};
+use crate::ops::common::{Actor, ActorKind, Via};
 
 /// Which changes to list.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -23,6 +23,21 @@ pub struct ActivityQuery {
     /// Only changes by this actor, by name (case-insensitive).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub actor: Option<String>,
+    /// Only changes by the person (`user`) or only those by agents
+    /// (`agent`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor_kind: Option<ActorKind>,
+    /// Only changes in this project and its sub-projects: a key or ID.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
+    /// Only changes on or after this day: `YYYY-MM-DD`, or a natural form
+    /// such as `today`, `yesterday` or `-7d`, in the caller's time zone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from: Option<String>,
+    /// Only changes on or before this day (included), in the same forms as
+    /// `from`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub to: Option<String>,
     /// Only the changes of this history group.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<String>,
@@ -140,6 +155,11 @@ pub struct SkippedGroup {
     pub group: String,
     /// Why: something changed it since, it was already reverted, and so on.
     pub reason: String,
+    /// The reason's message ID, for showing it in another language.
+    pub reason_id: String,
+    /// The reason's arguments, by name.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub reason_args: BTreeMap<String, String>,
 }
 
 /// No input.

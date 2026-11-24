@@ -17,6 +17,7 @@
 
 mod errors;
 mod guard;
+mod messages;
 mod options;
 mod render;
 mod server;

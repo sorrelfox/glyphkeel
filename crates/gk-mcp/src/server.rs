@@ -24,6 +24,7 @@ use serde_json::Value;
 
 use crate::errors::tool_error;
 use crate::guard::RateLimit;
+use crate::messages;
 use crate::render;
 use crate::session::{ClientInfo, Session};
 use crate::tools;
@@ -208,18 +209,28 @@ impl Server {
         let Some((tool, _)) =
             tools::find(name).filter(|(t, _)| self.inner.toolsets.contains(&t.toolset))
         else {
-            return Err(
-                OpError::not_found(format!("There is no tool \"{name}\"."), &listed)
-                    .with_hint("Use one of the listed tools."),
-            );
+            return Err(messages::hint(
+                messages::error("mcp-no-such-tool", &[("tool", name.to_owned())], |m| {
+                    OpError::not_found(m, &listed)
+                }),
+                "mcp-no-such-tool-hint",
+                &[],
+            ));
         };
         if !tool.allowed_for(profile) {
-            return Err(OpError::forbidden(format!(
-                "Your profile ({profile}) doesn't allow {}, which makes {} changes.",
-                tool.name,
-                tool.safety().as_str()
-            ))
-            .with_hint("Ask the person to allow more in Preferences › Agents, or to start the server with a higher --profile."));
+            return Err(messages::hint(
+                messages::error(
+                    "mcp-tool-not-allowed",
+                    &[
+                        ("profile", profile.to_string()),
+                        ("tool", tool.name.to_owned()),
+                        ("safety", tool.safety().as_str().to_owned()),
+                    ],
+                    OpError::forbidden,
+                ),
+                "mcp-tool-not-allowed-hint",
+                &[],
+            ));
         }
         if tool.safety() >= Safety::Write {
             self.inner.writes.check(Instant::now())?;

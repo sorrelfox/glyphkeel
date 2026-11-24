@@ -13,6 +13,8 @@ use std::time::{Duration, Instant};
 
 use gk_api::OpError;
 
+use crate::messages;
+
 /// Calls of changing tools allowed in any minute.
 pub const WRITES_PER_MINUTE: usize = 120;
 
@@ -69,15 +71,14 @@ impl RateLimit {
             .saturating_sub(now.saturating_duration_since(oldest));
         let retry_after = wait.as_secs() + u64::from(wait.subsec_nanos() > 0);
         let retry_after = retry_after.max(1);
-        Err(OpError::limit(
-            format!(
-                "This session made {} changes in the last minute, the most allowed.",
-                self.max
-            ),
-            self.max as u64,
-        )
-        .with_detail("retry_after", retry_after)
-        .with_hint(format!("Wait {retry_after} s before the next change.")))
+        Err(messages::hint(
+            messages::error("mcp-rate-limit", &[("max", self.max.to_string())], |m| {
+                OpError::limit(m, self.max as u64)
+            })
+            .with_detail("retry_after", retry_after),
+            "mcp-rate-limit-hint",
+            &[("seconds", retry_after.to_string())],
+        ))
     }
 }
 

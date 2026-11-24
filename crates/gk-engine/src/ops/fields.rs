@@ -15,6 +15,7 @@ use gk_store::rusqlite::{OptionalExtension, Transaction, params};
 use serde_json::Value;
 
 use crate::failure::Failure;
+use crate::messages;
 use crate::write::WriteCtx;
 
 /// History's name for projects.
@@ -170,11 +171,7 @@ fn to_json(enc: Enc, v: Sql) -> Option<Value> {
 }
 
 fn to_sql(enc: Enc, v: Option<&Value>) -> Result<Sql, Failure> {
-    let bad = || {
-        Failure::Op(gk_api::OpError::storage(
-            "A recorded value has the wrong type.",
-        ))
-    };
+    let bad = || Failure::Op(messages::storage("storage-value-type", &[]));
     Ok(match (enc, v) {
         (_, None | Some(Value::Null)) => Sql::Null,
         (Enc::Id, Some(Value::String(s))) => {
@@ -290,9 +287,10 @@ pub(crate) fn set(
     value: Option<Value>,
 ) -> Result<bool, Failure> {
     let s = find(entity, field).ok_or_else(|| {
-        Failure::Op(gk_api::OpError::storage(format!(
-            "{entity}.{field} is not a recorded field"
-        )))
+        Failure::Op(messages::storage(
+            "storage-unknown-field",
+            &[("entity", entity.to_owned()), ("field", field.to_owned())],
+        ))
     })?;
     let before = read(w.tx(), entity, id, field)?;
     if before == value {

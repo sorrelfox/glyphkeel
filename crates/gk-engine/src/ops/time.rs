@@ -41,6 +41,7 @@ use super::fields::text;
 use super::lookup::{self, b, id_at};
 use super::task::{invalid, task_ref, units};
 use crate::failure::Failure;
+use crate::messages;
 use crate::registry::Registry;
 use crate::time::{Zone, rfc3339};
 use crate::write::WriteCtx;
@@ -146,11 +147,12 @@ struct EntryRow {
 /// The live entry `text` names (its ID), on a live task.
 fn find(tx: &Transaction<'_>, text: &str) -> Result<EntryRow, Failure> {
     let missing = || {
-        Failure::Op(
-            OpError::not_found(format!("There is no time entry \"{text}\"."), &[])
-                .with_detail("field", "entry")
-                .with_hint("Entry IDs are listed by get_task with include [\"time\"]."),
-        )
+        Failure::Op(messages::hint(
+            messages::not_found("time-entry-not-found", &[("entry", text.to_owned())])
+                .with_detail("field", "entry"),
+            "time-entry-not-found-hint",
+            &[],
+        ))
     };
     let id: Id = text.trim().parse().map_err(|_| missing())?;
     tx.query_row(
@@ -262,12 +264,18 @@ fn update(w: &mut WriteCtx<'_>, input: TimeUpdateInput) -> Result<TimeEntryChang
     if let Some(expected) = input.expected_version
         && expected != e.version
     {
-        return Err(OpError::conflict(format!(
-            "The time entry changed since you read it: it has version {}, not {expected}.",
-            e.version
-        ))
-        .with_detail("version", e.version)
-        .with_hint("Read the entry again and repeat the change.")
+        return Err(messages::hint(
+            messages::conflict(
+                "time-entry-version",
+                &[
+                    ("version", e.version.to_string()),
+                    ("expected", expected.to_string()),
+                ],
+            )
+            .with_detail("version", e.version),
+            "time-entry-version-hint",
+            &[],
+        )
         .into());
     }
     let units = units(w.tx())?;
@@ -353,9 +361,10 @@ fn set_field(
         return Ok(false);
     }
     let corrupt = || {
-        Failure::Op(OpError::storage(format!(
-            "A recorded {field} can't be read."
-        )))
+        Failure::Op(messages::storage(
+            "storage-field-unreadable",
+            &[("field", field.to_owned())],
+        ))
     };
     match field {
         "date" => {
@@ -490,14 +499,14 @@ fn report(
     };
     let span = to.days_since_epoch() - from.days_since_epoch();
     if span < 0 {
-        return Err(OpError::invalid_at("to", "The last day is before the first.").into());
+        return Err(messages::invalid("to", "activity-to-before-from", &[]));
     }
     if span >= REPORT_MAX_DAYS {
-        return Err(OpError::invalid_at(
+        return Err(messages::invalid(
             "to",
-            format!("A report covers at most {REPORT_MAX_DAYS} days."),
-        )
-        .into());
+            "time-report-too-long",
+            &[("max", REPORT_MAX_DAYS.to_string())],
+        ));
     }
     let projects: Option<HashSet<Id>> = match &input.project {
         Some(p) => {
@@ -780,7 +789,7 @@ pub(crate) fn apply_timer(w: &mut WriteCtx<'_>, value: Option<&Value>) -> Result
     let row = match value {
         Some(v) => Some(
             row_from_value(v)
-                .ok_or_else(|| Failure::Op(OpError::storage("A recorded timer can't be read.")))?,
+                .ok_or_else(|| Failure::Op(messages::storage("timer-unreadable", &[])))?,
         ),
         None => None,
     };
@@ -797,9 +806,12 @@ fn log_timer(
 ) -> Result<(Option<Id>, Vec<String>), Failure> {
     let units = units(w.tx())?;
     let Some(task) = lookup::task_by_id(w.tx(), row.task)? else {
-        return Err(OpError::conflict("The timer's task is in the trash.")
-            .with_hint("Stop the timer with `discard` to throw its time away.")
-            .into());
+        return Err(messages::hint(
+            messages::conflict("timer-task-trashed", &[]),
+            "timer-task-trashed-hint",
+            &[],
+        )
+        .into());
     };
     ensure_active(w.tx(), task.project)?;
     let minutes = match duration {
@@ -808,21 +820,18 @@ fn log_timer(
             let elapsed = row.elapsed_at(w.now());
             let minutes = worklog::timer_minutes(elapsed);
             if minutes == 0 {
-                return Ok((
-                    None,
-                    vec!["The timer ran for under half a minute, so nothing was logged.".into()],
-                ));
+                return Ok((None, vec![messages::text("timer-too-short", &[])]));
             }
             worklog::check_entry_minutes(minutes).map_err(|_| {
-                Failure::Op(
-                    OpError::invalid(format!(
-                        "The timer ran for {}, more than a day.",
-                        format_duration(minutes, units)
-                    ))
-                    .with_hint(
-                        "Stop it with `duration` set to the time worked, or with `discard`.",
+                Failure::Op(messages::hint(
+                    messages::with(
+                        "timer-too-long",
+                        &[("duration", format_duration(minutes, units))],
+                        OpError::invalid,
                     ),
-                )
+                    "timer-too-long-hint",
+                    &[],
+                ))
             })?
         }
     };
@@ -881,9 +890,12 @@ fn timer_change(
 }
 
 fn no_timer() -> Failure {
-    OpError::not_found("No timer is running or paused.", &[])
-        .with_hint("Start one on a task with timer.start (`glyphkeel timer start KEY`).")
-        .into()
+    messages::hint(
+        messages::not_found("timer-none", &[]),
+        "timer-none-hint",
+        &[],
+    )
+    .into()
 }
 
 fn start(w: &mut WriteCtx<'_>, input: TimerStartInput) -> Result<TimerChange, Failure> {

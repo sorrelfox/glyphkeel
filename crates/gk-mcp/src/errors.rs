@@ -28,6 +28,13 @@ pub fn error_text(error: &OpError) -> String {
         text.push_str(hint);
     }
     for (key, value) in &error.details {
+        // The message's ID and arguments are for the app's translations.
+        if matches!(
+            key.as_str(),
+            "message_id" | "args" | "hint_id" | "hint_args"
+        ) {
+            continue;
+        }
         let value = match value {
             Value::String(s) => s.clone(),
             Value::Array(items) => items

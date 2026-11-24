@@ -17,6 +17,7 @@
 mod commands;
 mod input;
 mod launch;
+mod messages;
 mod output;
 mod workspace;
 
@@ -89,10 +90,11 @@ fn run(ops: &[OpCommand], matches: &ArgMatches, out: Out) -> Result<(), OpError>
     let tz = matches.get_one::<String>(commands::TZ).map(String::as_str);
     let quick_add = matches.get_flag(commands::QUICK_ADD);
     if quick_add && matches.subcommand().is_some() {
-        return Err(OpError::invalid(
-            "--quick-add opens the app's quick-add window and takes no command.",
-        )
-        .with_hint("Run `glyphkeel --quick-add` on its own."));
+        return Err(messages::hint(
+            messages::error("cli-quick-add-alone", &[], OpError::invalid),
+            "cli-quick-add-alone-hint",
+            &[],
+        ));
     }
     match matches.subcommand() {
         None if quick_add => launch::start(&[launch::QUICK_ADD.to_owned()]),
@@ -117,7 +119,13 @@ fn run(ops: &[OpCommand], matches: &ArgMatches, out: Out) -> Result<(), OpError>
             let mut buf = Vec::new();
             clap_mangen::Man::new(commands::build(ops))
                 .render(&mut buf)
-                .map_err(|e| OpError::storage(format!("Can't write the man page: {e}.")))?;
+                .map_err(|e| {
+                    messages::error(
+                        "cli-man-failed",
+                        &[("error", e.to_string())],
+                        OpError::storage,
+                    )
+                })?;
             print_bytes(&buf)
         }
         Some(_) => {
@@ -176,11 +184,17 @@ fn ask_on_terminal() -> Confirmation {
         return Confirmation::Refuse;
     }
     Confirmation::Ask(Arc::new(|req| {
-        eprint!("{}\nThis can't be undone. Continue? [y/N] ", req.op.summary);
+        eprint!(
+            "{} ",
+            messages::text("cli-confirm", &[("summary", req.op.summary.to_owned())])
+        );
         let _ = std::io::stderr().flush();
         let mut answer = String::new();
+        let yes = messages::text("cli-confirm-yes", &[]);
         std::io::stdin().read_line(&mut answer).is_ok()
-            && matches!(answer.trim().to_lowercase().as_str(), "y" | "yes")
+            && yes
+                .split_whitespace()
+                .any(|word| word == answer.trim().to_lowercase())
     }))
 }
 
@@ -191,7 +205,11 @@ fn print_bytes(bytes: &[u8]) -> Result<(), OpError> {
     match stdout.write_all(bytes).and_then(|()| stdout.flush()) {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
-        Err(e) => Err(OpError::storage(format!("Can't write the output: {e}."))),
+        Err(e) => Err(messages::error(
+            "cli-output-failed",
+            &[("error", e.to_string())],
+            OpError::storage,
+        )),
     }
 }
 

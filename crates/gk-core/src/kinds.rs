@@ -26,6 +26,24 @@ impl KindError {
             expected: expected.join(", "),
         }
     }
+
+    /// The rejected text.
+    #[must_use]
+    pub fn value(&self) -> &str {
+        &self.value
+    }
+
+    /// What was expected, in English words (`status category`).
+    #[must_use]
+    pub const fn what(&self) -> &'static str {
+        self.what
+    }
+
+    /// The valid values, comma-separated.
+    #[must_use]
+    pub fn expected(&self) -> &str {
+        &self.expected
+    }
 }
 
 macro_rules! text_enum {

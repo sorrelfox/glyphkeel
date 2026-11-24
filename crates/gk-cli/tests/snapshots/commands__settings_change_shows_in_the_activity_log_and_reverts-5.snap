@@ -5,4 +5,4 @@ expression: "ws.ok(&[\"revert\", &group])"
 reverted: (none)
 skipped:
   GROUP                                 REASON
-  [id]  it was already reverted
+  [id]  It was already reverted.

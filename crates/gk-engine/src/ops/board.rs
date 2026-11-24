@@ -33,6 +33,7 @@ use super::task::{
     task_labels,
 };
 use crate::failure::Failure;
+use crate::messages;
 use crate::registry::{QueryCtx, Registry};
 use crate::time::rfc3339;
 use crate::write::WriteCtx;
@@ -250,7 +251,7 @@ fn board(q: &QueryCtx<'_>, input: BoardGetInput) -> Result<Board, Failure> {
         for status in column.statuses.values() {
             let status: Id = status
                 .parse()
-                .map_err(|_| Failure::Op(OpError::storage("A status ID is broken.")))?;
+                .map_err(|_| Failure::Op(messages::storage("storage-status-id", &[])))?;
             cards.extend(cards_of(q.tx, status, q.now)?);
         }
         column.count = cards.len() as u64;
@@ -347,7 +348,7 @@ fn cards_of(
         let id: Id = card
             .id
             .parse()
-            .map_err(|_| Failure::Op(OpError::storage("A task ID is broken.")))?;
+            .map_err(|_| Failure::Op(messages::storage("storage-task-id", &[])))?;
         card.labels = task_labels(tx, id)?;
         card.progress_percent = super::rollup::progress(tx, id)?;
         if let Some(parent) = card.parent.take()
@@ -405,10 +406,13 @@ fn column_id(
         return Ok(c.id.clone());
     }
     let names: Vec<String> = cols.into_iter().map(|c| c.name).collect();
-    Err(OpError::not_found(
-        format!("The board of {} has no column \"{}\".", p.key, text.trim()),
-        &names.iter().map(String::as_str).collect::<Vec<_>>(),
-    )
+    let args = [
+        ("project", p.key.clone()),
+        ("column", text.trim().to_owned()),
+    ];
+    Err(messages::with("board-column-not-found", &args, |m| {
+        OpError::not_found(m, &names.iter().map(String::as_str).collect::<Vec<_>>())
+    })
     .with_detail("field", field)
     .into())
 }
@@ -473,7 +477,11 @@ fn update(w: &mut WriteCtx<'_>, input: LayoutUpdateInput) -> Result<LayoutChange
     }
     if let Some(days) = input.hide_done_after_days {
         if days > 3650 {
-            return Err(OpError::invalid_at("hide_done_after_days", "Use 0 to 3650 days.").into());
+            return Err(messages::invalid(
+                "hide_done_after_days",
+                "board-hide-done-range",
+                &[("max", "3650".to_owned())],
+            ));
         }
         layout.hide_done_after_days = days;
     }
@@ -482,9 +490,10 @@ fn update(w: &mut WriteCtx<'_>, input: LayoutUpdateInput) -> Result<LayoutChange
         for (i, f) in fields.iter().enumerate() {
             let f = f.trim().to_lowercase();
             if !CARD_FIELDS.contains(&f.as_str()) {
-                return Err(OpError::invalid_at(
-                    format!("card_fields[{i}]"),
-                    format!("Cards can't show \"{f}\"."),
+                return Err(messages::invalid_at(
+                    &format!("card_fields[{i}]"),
+                    "board-card-field",
+                    &[("field", f.clone())],
                 )
                 .with_detail("choices", CARD_FIELDS)
                 .into());
