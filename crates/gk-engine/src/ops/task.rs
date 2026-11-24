@@ -1347,7 +1347,7 @@ pub(crate) fn move_task(w: &mut WriteCtx<'_>, input: TaskMoveInput) -> Result<Ta
                     &[("task", input.key.clone()), ("count", open.to_string())],
                 ));
             }
-            let blockers = super::relation::open_blockers(w.tx(), task.id)?;
+            let (blockers, hidden) = super::relation::open_blockers(w.tx(), task.id)?;
             if !blockers.is_empty() {
                 warnings.push(messages::text(
                     "task-still-blocked",
@@ -1356,6 +1356,13 @@ pub(crate) fn move_task(w: &mut WriteCtx<'_>, input: TaskMoveInput) -> Result<Ta
                         ("blockers", blockers.join(", ")),
                         ("count", blockers.len().to_string()),
                     ],
+                ));
+            } else if hidden > 0 {
+                // Blocked only by tasks outside the caller's project: say
+                // so without naming them.
+                warnings.push(messages::text(
+                    "task-still-blocked-outside",
+                    &[("task", input.key.clone())],
                 ));
             }
         }

@@ -315,6 +315,31 @@ pub(crate) fn path_of(tx: &Transaction<'_>, id: Id) -> Result<(String, usize), F
     Ok((names.join(" / "), depth))
 }
 
+/// The names from the top-level project down to `id` as outputs show
+/// them: for a caller limited to a project, from that project down, as
+/// the projects above it are not named.
+fn shown_path(tx: &Transaction<'_>, id: Id) -> Result<String, Failure> {
+    let Some(root) = crate::scope::root() else {
+        return Ok(path_of(tx, id)?.0);
+    };
+    let mut names = Vec::new();
+    let mut next = Some(id);
+    while let Some(current) = next {
+        let (name, parent): (String, Option<Id>) = tx.query_row(
+            "SELECT name, parent_id FROM projects WHERE id = ?1",
+            [b(current)],
+            |r| Ok((r.get(0)?, opt_id_at(r, 1)?)),
+        )?;
+        names.push(name);
+        next = parent.filter(|_| current != root);
+        if names.len() > 16 {
+            break;
+        }
+    }
+    names.reverse();
+    Ok(names.join(" / "))
+}
+
 /// A project with its configuration.
 pub(crate) fn load(tx: &Transaction<'_>, id: Id) -> Result<Project, Failure> {
     let row = tx.query_row(
@@ -338,6 +363,8 @@ pub(crate) fn load(tx: &Transaction<'_>, id: Id) -> Result<Project, Failure> {
         },
     )?;
     let (key, name, description, hue, icon, state, parent, modules, created, updated) = row;
+    // The limit's project shows as a top-level project.
+    let parent = parent.filter(|_| crate::scope::root() != Some(id));
     let parent_key = match parent {
         Some(p) => Some(
             tx.query_row("SELECT key FROM projects WHERE id = ?1", [b(p)], |r| {
@@ -422,7 +449,7 @@ pub(crate) fn load(tx: &Transaction<'_>, id: Id) -> Result<Project, Failure> {
         [b(id)],
         |r| Ok((r.get(0)?, r.get(1)?)),
     )?;
-    let (path, _) = path_of(tx, id)?;
+    let path = shown_path(tx, id)?;
     let next_label_hue = suggest(labels.iter().map(|l| enum_text(l.hue)));
     Ok(Project {
         id: id.to_string(),
@@ -489,7 +516,17 @@ fn tree(tx: &Transaction<'_>) -> Result<Vec<TreeRow>, Failure> {
 }
 
 fn list(q: &QueryCtx<'_>, input: ProjectListInput) -> Result<ProjectList, Failure> {
-    let rows = tree(q.tx)?;
+    let mut rows = tree(q.tx)?;
+    if let Some(root) = crate::scope::root() {
+        // A caller limited to a project gets the tree from that project
+        // down, the project itself as a top-level one.
+        rows.retain(|r| crate::scope::sees(r.id));
+        for r in &mut rows {
+            if r.id == root {
+                r.parent = None;
+            }
+        }
+    }
     fn subtree_open(rows: &[TreeRow], id: Id) -> u64 {
         let own = rows.iter().find(|r| r.id == id).map_or(0, |r| r.open);
         own + rows
@@ -546,7 +583,6 @@ fn list(q: &QueryCtx<'_>, input: ProjectListInput) -> Result<ProjectList, Failur
     }
     let mut items = Vec::new();
     walk(&rows, None, 0, "", None, input.include_archived, &mut items);
-    items.retain(|p| p.id.parse::<Id>().is_ok_and(crate::scope::sees));
     Ok(ProjectList {
         total: items.len() as u64,
         items,
@@ -587,7 +623,8 @@ fn height(tx: &Transaction<'_>, id: Id) -> Result<usize, Failure> {
 // ---------------------------------------------------------------------
 // Creating
 
-fn key_taken(tx: &Transaction<'_>, key: &str, except: Option<Id>) -> Result<bool, Failure> {
+/// The project, other than `except`, that has or had the key `key`.
+fn key_owner(tx: &Transaction<'_>, key: &str, except: Option<Id>) -> Result<Option<Id>, Failure> {
     let owner: Option<Vec<u8>> = tx
         .query_row("SELECT id FROM projects WHERE key = ?1", [key], |r| {
             r.get(0)
@@ -600,14 +637,26 @@ fn key_taken(tx: &Transaction<'_>, key: &str, except: Option<Id>) -> Result<bool
             |r| r.get(0),
         )
         .optional()?;
-    let except = except.map(b);
-    Ok(owner.is_some_and(|o| Some(&o) != except.as_ref())
-        || alias.is_some_and(|a| Some(&a) != except.as_ref()))
+    Ok([owner, alias]
+        .into_iter()
+        .flatten()
+        .filter_map(|o| Id::from_slice(&o).ok())
+        .find(|o| Some(*o) != except))
 }
 
 fn check_key(tx: &Transaction<'_>, key: &str, except: Option<Id>) -> Result<ProjectKey, Failure> {
     let key = ProjectKey::new(key.trim()).map_err(|e| invalid("key", e))?;
-    if key_taken(tx, key.as_str(), except)? {
+    if let Some(owner) = key_owner(tx, key.as_str(), except)? {
+        if !crate::scope::allows(tx, owner)? {
+            // A caller limited to a project isn't told that a project
+            // outside it has (or had) the key.
+            let error = messages::conflict(
+                "project-key-unavailable",
+                &[("key", key.as_str().to_owned())],
+            )
+            .with_detail("field", "key");
+            return Err(messages::hint(error, "project-key-unavailable-hint", &[]).into());
+        }
         let error = messages::conflict("project-key-taken", &[("key", key.as_str().to_owned())])
             .with_detail("field", "key");
         return Err(messages::hint(error, "project-key-taken-hint", &[]).into());

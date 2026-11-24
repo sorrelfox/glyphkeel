@@ -296,6 +296,19 @@ impl Engine {
         input: &ImportInput,
         progress: &Progress,
     ) -> Result<ImportResult, OpError> {
+        if ctx.project_scope.is_some() {
+            // An import makes new top-level projects, which are outside any
+            // project a caller is limited to. Refused before the archive is
+            // read, so that a dry run doesn't list the keys taken elsewhere.
+            let refusal = self
+                .store()
+                .read(|tx| {
+                    let _scope = crate::scope::enter(tx, ctx)?;
+                    Ok::<_, crate::failure::Failure>(crate::scope::outside())
+                })
+                .map_err(OpError::from)?;
+            return Err(OpError::from(refusal));
+        }
         let path = resolve(self, ctx, &input.path, "path")?;
         import::import(self, ctx, input, &path, &Limits::default(), progress)
     }

@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Glyphkeel contributors
 
 import { useMutation, useQuery, type UseMutationResult, type UseQueryResult } from "@tanstack/react-query";
+import { useLocale } from "react-aria-components";
 
 import { useToasts, type Toast } from "../components/Toasts";
 import { type Call, type CallError, type OpMap } from "../generated/ops";
@@ -42,6 +43,14 @@ export function errorToast(t: Translate, error: unknown): Toast {
   return { tone: "error", text, detail: hint };
 }
 
+/** The names of the saved views a change rewrote, from its output. */
+export function viewsRewritten(output: unknown): string[] {
+  if (typeof output !== "object" || output === null || !("views_rewritten" in output) || !Array.isArray(output.views_rewritten)) {
+    return [];
+  }
+  return output.views_rewritten.filter((name): name is string => typeof name === "string");
+}
+
 interface CommandOptions {
   /**
    * A toast after success with this text and an Undo button. Undo runs the
@@ -63,14 +72,20 @@ export function useCommand<K extends CommandOp>(
   const toasts = useToasts();
   const t = useT();
   const { undo } = useUndo();
+  const { locale } = useLocale();
   return useMutation({
     mutationFn: (input: OpMap[K]["input"]) => call(op, input),
     onError: (error) => {
       toasts.show(errorToast(t, error));
     },
-    onSuccess: () => {
+    onSuccess: (output) => {
+      // A rename (or a label's deletion) that changed saved views says which.
+      const views = viewsRewritten(output);
+      const rewritten = views.length === 0 ? undefined : t("views-rewritten", { count: views.length, names: new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(views) });
       if (options.undoable !== undefined) {
-        toasts.show({ tone: "info", text: options.undoable, action: { label: t("toast-undo"), run: undo } });
+        toasts.show({ tone: "info", text: options.undoable, detail: rewritten, action: { label: t("toast-undo"), run: undo } });
+      } else if (rewritten !== undefined) {
+        toasts.show({ tone: "info", text: rewritten });
       }
     },
   });

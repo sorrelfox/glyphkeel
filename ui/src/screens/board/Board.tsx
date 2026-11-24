@@ -86,6 +86,8 @@ interface Drag {
   key: string;
   lanes: Record<string, string[]>;
   over: string | null;
+  /** Started from the keyboard: its steps scroll their target into view themselves. */
+  keyboard: boolean;
 }
 
 function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowOlder }: LoadedBoardProps) {
@@ -125,6 +127,10 @@ function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowO
     useSensor(KeyboardSensor, {
       keyboardCodes: { start: [KeyboardCode.Space], cancel: [KeyboardCode.Esc], end: [KeyboardCode.Space, KeyboardCode.Enter] },
       coordinateGetter: indexCoordinates,
+      // When a step would take the card past the middle of its lane, the
+      // sensor scrolls the lane under it instead. At once, so a key pressed
+      // during a smooth scroll isn't measured against a moving lane.
+      scrollBehavior: "auto",
     }),
   );
 
@@ -155,10 +161,10 @@ function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowO
 
   // ---------- pointer and keyboard drags ----------
 
-  const onDragStart = ({ active }: DragStartEvent) => {
+  const onDragStart = ({ active, activatorEvent }: DragStartEvent) => {
     const key = String(active.id);
     setSelected(key);
-    setDrag({ key, lanes: structuredClone(lanesNow), over: laneOf(key, lanesNow) ?? null });
+    setDrag({ key, lanes: structuredClone(lanesNow), over: laneOf(key, lanesNow) ?? null, keyboard: activatorEvent instanceof globalThis.KeyboardEvent });
   };
 
   const onDragOver = ({ active, over }: DragOverEvent) => {
@@ -225,18 +231,39 @@ function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowO
 
   // ---------- keyboard: selection and Alt+arrow moves ----------
 
-  const focusCard = (key: string) => {
+  // How each virtual lane brings one of its places into view (a long lane
+  // draws only the cards near the screen, so a card moved far down isn't in
+  // the page until its lane scrolls there).
+  const [scrollers] = useState(() => new Map<string, (index: number) => void>());
+
+  /** Selects a card and focuses it, once it is drawn: at `index` of `lane`, which scrolls there first. */
+  const focusCard = (key: string, lane?: string, index?: number) => {
     setSelected(key);
-    requestAnimationFrame(() => {
-      document.querySelector<HTMLElement>(`[data-card="${CSS.escape(key)}"]`)?.focus();
-    });
+    let tries = 0;
+    const attempt = () => {
+      // In its new lane: until the board draws the move, the card is still in the old one.
+      const within = lane === undefined ? "" : `section[data-lane="${CSS.escape(lane)}"] `;
+      const element = document.querySelector<HTMLElement>(`${within}[data-card="${CSS.escape(key)}"]`);
+      if (element) {
+        element.focus();
+        return;
+      }
+      if (lane !== undefined && index !== undefined) {
+        scrollers.get(lane)?.(index);
+      }
+      tries += 1;
+      if (tries < 10) {
+        requestAnimationFrame(attempt);
+      }
+    };
+    requestAnimationFrame(attempt);
   };
 
   const moveSelection = (key: string, code: string) => {
     const lanes = view.lanes.map((lane) => ({ id: lane.column.id, cards: lanesNow[lane.column.id] ?? [], closed: lane.collapsed || (lanesNow[lane.column.id] ?? []).length === 0 }));
     const next = step(lanes, key, "", code);
     if (next && cards.has(String(next.target))) {
-      focusCard(String(next.target));
+      focusCard(String(next.target), next.lane, next.index);
     }
   };
 
@@ -259,7 +286,7 @@ function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowO
     const ids = (lanesNow[next.lane] ?? []).filter((id) => id !== key);
     ids.splice(next.index, 0, key);
     commit(key, next.lane, lane.sort === "manual" ? positionIn(ids, key) : { at: "bottom" }, ids);
-    focusCard(key);
+    focusCard(key, next.lane, lane.sort === "manual" ? next.index : ids.length - 1);
   };
 
   const cardEntries = (key: string): MenuEntry[] => {
@@ -488,6 +515,9 @@ function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowO
         <DndContext
           sensors={readOnly ? [] : sensors}
           collisionDetection={pointerThenCenter}
+          // Scrolling on its own near a lane's edge would slide the cards
+          // under a card the keyboard holds still, changing its target.
+          autoScroll={!drag?.keyboard}
           measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
           accessibility={{ announcements, screenReaderInstructions: { draggable: t("drag-instructions") } }}
           onDragStart={onDragStart}
@@ -532,6 +562,13 @@ function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowO
                   }}
                   onShowOlder={() => {
                     onShowOlder(lane.column.id);
+                  }}
+                  onScroller={(run) => {
+                    if (run) {
+                      scrollers.set(lane.column.id, run);
+                    } else {
+                      scrollers.delete(lane.column.id);
+                    }
                   }}
                 />
               ),

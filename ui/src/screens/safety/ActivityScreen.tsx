@@ -17,7 +17,7 @@ import { useActivityFeed, useFailureToast, type FeedRequest, skippedReason } fro
 import { revertible } from "../../data/task";
 import { type ActivityEntry, type ActorKind, type ProjectSummary } from "../../generated/ops";
 import { useT, type Translate } from "../../i18n/I18n";
-import { useMomentFormat } from "../task/Activity";
+import { cutShort, useMomentFormat } from "../task/Activity";
 import styles from "./Safety.module.css";
 
 /** The feed's filters: one project, people or agents, and a range of days. */
@@ -52,7 +52,8 @@ function text(value: unknown): string | undefined {
 /** What an entry changed, in words: the operation, the item and the fields. */
 export function describeChange(t: Translate, entry: ActivityEntry, locale: string): { what: string; item: string | undefined; fields: string | undefined } {
   const f = entry.fields;
-  const item = text(f.key?.after) ?? text(f.key?.before) ?? text(f.title?.after) ?? text(f.title?.before) ?? text(f.name?.after) ?? text(f.name?.before);
+  const named = text(f.key?.after) ?? text(f.key?.before) ?? text(f.title?.after) ?? text(f.title?.before) ?? text(f.name?.after) ?? text(f.name?.before);
+  const item = named === undefined ? undefined : cutShort(t, named, f.key ?? f.title ?? f.name);
   const names = Object.keys(f)
     .filter((field) => !QUIET_FIELDS.has(field))
     .map((field) => (NAMED_FIELDS.has(field) ? t(`history-field-${field}`) : field));

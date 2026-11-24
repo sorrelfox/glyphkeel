@@ -186,7 +186,11 @@ transfer-format-folder = A folder
 transfer-export-choose = Choose where…
 transfer-export-start = Export
 transfer-export-browser = The archive goes to the workspace's exports folder.
-transfer-export-name = glyphkeel-export-{ $date }
+# The archive's file name: a .zip file, or a folder without an extension.
+transfer-export-name = { $format ->
+    [zip] glyphkeel-export-{ $date }.zip
+   *[folder] glyphkeel-export-{ $date }
+}
 transfer-exporting = Exporting…
 transfer-exported = { $count ->
     [one] Exported one project

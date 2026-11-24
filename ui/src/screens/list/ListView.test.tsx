@@ -121,8 +121,8 @@ describe("the list's table", () => {
     });
     const cells = within(totals).getAllByRole("gridcell");
     const header = [...document.querySelectorAll('[role="columnheader"]')].slice(1).map((cell) => cell.textContent);
-    const estimate = cells[header.findIndex((text) => text?.startsWith("Estimate"))]?.textContent ?? "";
-    const spent = cells[header.findIndex((text) => text?.startsWith("Spent"))]?.textContent ?? "";
+    const estimate = cells[header.findIndex((text) => text.startsWith("Estimate"))]?.textContent ?? "";
+    const spent = cells[header.findIndex((text) => text.startsWith("Spent"))]?.textContent ?? "";
     expect(answer.totals.estimate_minutes).toBeGreaterThan(0);
     expect(estimate).toMatch(/\d/);
     expect(spent).toMatch(/\d/);
@@ -217,6 +217,61 @@ describe("the list's table", () => {
       expect(searches().at(-1)?.group_by).toBe("due_week");
     });
     await within(grid).findAllByRole("button", { name: named(/^Week of /) });
+  });
+});
+
+describe("the groups of the list", () => {
+  it("keeps the groups the person folded, per grouping, across a restart", async () => {
+    const { transport, calls } = recorded();
+    const first = await renderList(transport);
+    fireEvent.click(screen.getByRole("button", { name: named(/^Group by: None/) }));
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: "Status" }));
+    fireEvent.click(await within(first.grid).findByRole("button", { name: named(/^Backlog/) }));
+    await waitFor(() => {
+      expect(calls.filter((each) => each.op === "list.layout.update").map((each) => each.input)).toContainEqual({ project: "TM", collapsed: { status: ["Backlog"] } });
+    });
+    // Another grouping has its own folded groups: none yet.
+    fireEvent.click(screen.getByRole("button", { name: named(/^Group by: Status/) }));
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: "Priority" }));
+    const high = await within(first.grid).findByRole("button", { name: named(/^High/) });
+    expect(high.getAttribute("aria-expanded")).toBe("true");
+
+    // The app starts again on the same workspace: grouped by status, Backlog is still folded.
+    first.view.unmount();
+    const again = await renderList(transport);
+    fireEvent.click(screen.getByRole("button", { name: named(/^Group by: None/) }));
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: "Status" }));
+    const backlog = await within(again.grid).findByRole("button", { name: named(/^Backlog/) });
+    expect(backlog.getAttribute("aria-expanded")).toBe("false");
+    expect((await within(again.grid).findByRole("button", { name: named(/^To do/) })).getAttribute("aria-expanded")).toBe("true");
+    // Kept with the person's layout of the list, not in the workspace's settings.
+    const settings = (await transport.call("settings.get", {})) as object;
+    expect(JSON.stringify(settings)).not.toContain("Backlog");
+  });
+
+  it("adds a task with a group's value from the line at the group's end", async () => {
+    const { transport, calls } = recorded();
+    const { grid } = await renderList(transport);
+    fireEvent.click(screen.getByRole("button", { name: named(/^Group by: None/) }));
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: "Priority" }));
+    const before = (await search(transport, { query: "priority:high" })).total;
+    fireEvent.click(await within(grid).findByRole("button", { name: named(/^Add a task to High$/) }));
+    const field = await within(grid).findByRole("textbox", { name: named(/^Title of the new task in High$/) });
+    expect(document.activeElement).toBe(field);
+    fireEvent.change(field, { target: { value: "Check the release notes" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+    await waitFor(() => {
+      expect(calls.filter((each) => each.op === "task.create").map((each) => each.input)).toEqual([{ project: "TM", title: "Check the release notes", priority: "high" }]);
+    });
+    await waitFor(async () => {
+      expect((await search(transport, { query: "priority:high" })).total).toBe(before + 1);
+    });
+    // The field stays, empty, for the next one; Escape closes it.
+    await waitFor(() => {
+      expect((field as HTMLInputElement).value).toBe("");
+    });
+    fireEvent.keyDown(field, { key: "Escape" });
+    expect(within(grid).queryByRole("textbox", { name: named(/^Title of the new task in High$/) })).toBeNull();
   });
 });
 

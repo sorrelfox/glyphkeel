@@ -10,7 +10,10 @@
 //!
 //! - lookups treat an item of another project as missing;
 //! - lists and searches that take a project get the limit's project when
-//!   none is given ([`narrow_input`]); the others filter by [`allows`];
+//!   none is given ([`narrow_input`]); the others filter by [`allows`] or
+//!   [`sees`], sub-projects included;
+//! - references to tasks of other projects (links, blockers) are left out,
+//!   and the projects above the limit's project are not named;
 //! - every change a command records must belong to an allowed project, or
 //!   the whole command is refused.
 
@@ -99,6 +102,24 @@ pub(crate) fn active() -> bool {
     CURRENT.with(|c| c.borrow().is_some())
 }
 
+/// The limit's project, while a limit applies. Outputs show it as a
+/// top-level project: nothing above it is named.
+pub(crate) fn root() -> Option<Id> {
+    CURRENT.with(|c| c.borrow().as_ref().map(|s| s.root))
+}
+
+/// The projects the limit allows as the operation started (the limit's
+/// project and all below it, trashed ones too), while a limit applies.
+pub(crate) fn projects() -> Option<Vec<Id>> {
+    CURRENT.with(|c| {
+        c.borrow().as_ref().map(|s| {
+            let mut ids: Vec<Id> = s.projects.iter().copied().collect();
+            ids.sort_unstable();
+            ids
+        })
+    })
+}
+
 /// Whether the project `project` may be seen and changed: always without
 /// a limit; with one, when it is the limit's project or below it (also a
 /// project made below it during this operation).
@@ -171,7 +192,7 @@ pub(crate) fn narrow_input(ctx: &Context, op: &str, mut input: Value) -> Value {
                 fields.insert("include_subprojects".to_owned(), json!(true));
             }
         }
-        "history.feed" | "time.report" | "today.get" | "wiki.search" | "trash.list" => {
+        "history.feed" | "time.report" | "today.get" => {
             if unset(fields, "project") {
                 fields.insert("project".to_owned(), json!(project));
             }

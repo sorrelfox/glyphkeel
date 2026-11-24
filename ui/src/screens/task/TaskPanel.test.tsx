@@ -278,6 +278,29 @@ describe("comments and history", () => {
     expect(describeEntry(t, names, { ...at, entity: "task", id: "t-1", fields: { parent: { after: "t-2" }, subtask_rank: { after: "a" } } })).toEqual([
       'history-set{"field":"history-field-parent","value":"TM-2"}',
     ]);
+    // A long text the engine cut short is marked as cut; a short one isn't.
+    const long = "x".repeat(500);
+    expect(describeEntry(t, names, { ...at, entity: "task", id: "t-1", fields: { title: { before: "Short", after: long, truncated: true } } })).toEqual([
+      `history-changed{"field":"history-field-title","before":"Short","after":"history-value-cut{\\"value\\":\\"${long}\\"}"}`,
+    ]);
+    // Labels are listed for the locale.
+    const labelled = { ...names, locale: "en-US", project: { ...project, labels: [{ id: "l-1", name: "docs" }, { id: "l-2", name: "ui" }, { id: "l-3", name: "cli" }] } } as unknown as Parameters<typeof describeEntry>[1];
+    expect(describeEntry(t, labelled, { ...at, entity: "task", id: "t-1", fields: { labels: { after: ["l-1", "l-2", "l-3"] } } })).toEqual([
+      'history-set{"field":"history-field-labels","value":"docs, ui, and cli"}',
+    ]);
+  });
+});
+
+describe("a workspace of one person", () => {
+  it("has no members, mentions, watchers or assignees anywhere in the task panel", async () => {
+    const { panel } = await renderPanel();
+    const words = /\b(assignee|assigned|watchers?|watching|members?|mention|invite)\b/i;
+    expect(words.test(panel.textContent)).toBe(false);
+    const labels = [...panel.querySelectorAll("[aria-label]")].map((element) => element.getAttribute("aria-label") ?? "");
+    expect(labels.filter((label) => words.test(label))).toEqual([]);
+    // Nor in any of the app's messages.
+    const messages = Object.values(import.meta.glob("../../i18n/en/*.ftl", { query: "?raw", import: "default", eager: true }) as Record<string, string>).join("\n");
+    expect(messages.split("\n").filter((line) => !line.startsWith("#") && words.test(line))).toEqual([]);
   });
 });
 

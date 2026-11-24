@@ -145,7 +145,12 @@
 .swatchName {
   position: absolute;
   bottom: calc(100% + 8px);
-  left: 50%;
+
+  /* Centred over the swatch in either writing direction: a wide box around
+     it, and equal margins inside that box. */
+  inset-inline: -160px;
+  width: max-content;
+  margin-inline: auto;
   z-index: 1;
   padding: 3px 8px;
   border-radius: var(--r-s);
@@ -154,7 +159,6 @@
   font-size: var(--fs-small);
   white-space: nowrap;
   pointer-events: none;
-  transform: translateX(-50%);
 }
 
 /* Hidden, it takes no room, so it never sticks out of the card. */

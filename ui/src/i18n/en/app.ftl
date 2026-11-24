@@ -75,6 +75,10 @@ action-quit = Quit
 action-today = Today
 action-all-tasks = All tasks
 action-time-report = Time report
+action-view-board = Show the project as a board
+action-view-list = Show the project as a list
+action-view-gantt = Show the project as a Gantt chart
+action-view-wiki = Show the project's wiki
 action-timer-toggle = Start or stop the timer
 action-gallery = Themes and components
 action-leave-gallery = Back to the app
@@ -148,6 +152,13 @@ weekday-sunday = Sunday
 ## Toasts
 
 toast-region = Notifications
+# After a status, type, label or project key was renamed, or a label deleted:
+# the saved views whose queries named it were changed to match ($names is a
+# list such as "Open bugs and This week").
+views-rewritten = { $count ->
+    [one] The saved view { $names } was updated to match.
+   *[other] The saved views { $names } were updated to match.
+}
 toast-undo = Undo
 toast-settings-changed = Settings changed
 # The app couldn't reach its workspace at all (not an error of an operation).
@@ -614,6 +625,9 @@ history-by = { $actor } · { $via } · { $time }
 history-by-reverted = { $actor } · { $via } · { $time } · reverted
 history-created = Created { $key }
 history-changed = { $field }: { $before } → { $after }
+# A long value the activity log keeps only the beginning of; the item itself
+# holds the whole text.
+history-value-cut = { $value }…
 history-set = { $field }: { $value }
 history-cleared = { $field } cleared
 history-description = Description changed

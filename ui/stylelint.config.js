@@ -20,6 +20,17 @@ export default {
       "/^border(-.*)?-radius$/": ["px", "em", "rem"],
       "/^(min-|max-)?height$/": ["px", "em", "rem"],
     },
+    // Layout follows the writing direction, so right-to-left languages work
+    // later: logical properties and values only, never left or right.
+    "property-disallowed-list": [
+      "/^(margin|padding|border)-(left|right)(-.*)?$/",
+      "/^border-(top|bottom)-(left|right)-radius$/",
+      "/^(left|right)$/",
+      "/^(overscroll-behavior|scroll-margin|scroll-padding)-(x|left|right)$/",
+    ],
+    "declaration-property-value-disallowed-list": {
+      "/^(float|clear|text-align|caption-side|resize)$/": ["/^(left|right|horizontal)$/"],
+    },
     // CSS Modules use camelCase class names, as the components import them.
     "selector-class-pattern": "^[a-z][a-zA-Z0-9]*$",
   },

@@ -407,3 +407,16 @@
   margin: 0;
   color: var(--danger);
 }
+
+/* The "+" line at the end of a group: quieter than the group's header. */
+.addRow {
+  color: var(--fg-muted);
+}
+
+.addButton {
+  font-weight: normal;
+}
+
+.addField {
+  inline-size: min(480px, 100%);
+}

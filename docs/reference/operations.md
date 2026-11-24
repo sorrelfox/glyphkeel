@@ -515,7 +515,7 @@ Input: `ViewDeleteInput`. Output: `ViewChange`. Schemas: [catalog.schema.json](c
 
 ## `list.layout.get`
 
-The person's layout of a project's list, or of the whole workspace's: column order and widths.
+The person's layout of a project's list, or of the whole workspace's: column order and widths, and the folded groups.
 
 Input: `ListLayoutGetInput`. Output: `ListLayoutChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
@@ -523,7 +523,7 @@ Not available to agents: It holds how the person's own list screen looks (the or
 
 ## `list.layout.update`
 
-Reorder the columns of a list or change their widths, or go back to the default layout.
+Reorder the columns of a list, change their widths, fold or unfold its groups, or go back to the default layout.
 
 Input: `ListLayoutUpdateInput`. Output: `ListLayoutChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 

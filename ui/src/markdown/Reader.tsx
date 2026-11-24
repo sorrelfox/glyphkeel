@@ -208,6 +208,9 @@ function TaskCard({ taskKey, top, left }: { taskKey: string; top: number; left: 
     return null;
   }
   return (
+    // The position comes from getBoundingClientRect, which is physical in
+    // every writing direction.
+    // eslint-disable-next-line no-restricted-syntax
     <div className={classes("pop", styles.card)} role="tooltip" style={{ top, left }}>
       <span className="key">{found.key}</span>
       <span className={styles.cardTitle}>{found.title}</span>

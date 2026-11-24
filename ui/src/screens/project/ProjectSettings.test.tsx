@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { App } from "../../App";
 import { fakeTransport } from "../../data/fake/transport";
-import { createClient } from "../../data/transport";
+import { createClient, type Transport } from "../../data/transport";
 import { suggestKey } from "./NewProjectDialog";
 
 afterEach(() => {
@@ -102,6 +102,33 @@ describe("project settings", () => {
 });
 
 describe("suggestKey", () => {
+  it("says which saved views a label's new name was written into", async () => {
+    const fake = fakeTransport();
+    // The engine names the saved views whose queries it rewrote.
+    const transport: Transport = {
+      ...fake,
+      call: async (op, input) => {
+        const output = await fake.call(op, input);
+        return op === "label.update" ? { ...(output as object), views_rewritten: ["Open bugs", "This week"] } : output;
+      },
+    };
+    render(<App start={{ titleBar: "app", locale: "en-US" }} client={createClient(transport)} path="/projects/PER" />);
+    await screen.findByRole("group", { name: /Board of/ });
+    fireEvent.click(screen.getByRole("button", { name: /project menu/ }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Project settings/ }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("tab", { name: "Labels" }));
+    const [name] = await within(dialog).findAllByRole("textbox", { name: "Name" });
+    if (!name) {
+      throw new Error("no label");
+    }
+    fireEvent.change(name, { target: { value: "renamed" } });
+    fireEvent.keyDown(name, { key: "Enter" });
+    await waitFor(() => {
+      expect(plain(document.querySelector(".toasts")?.textContent)).toContain("The saved views Open bugs and This week were updated to match.");
+    });
+  });
+
   it("suggests a key from a name", () => {
     expect(suggestKey("Task Manager")).toBe("TM");
     expect(suggestKey("Personal")).toBe("PER");

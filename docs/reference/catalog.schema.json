@@ -34264,8 +34264,18 @@
         "$defs": {
           "ListLayout": {
             "additionalProperties": false,
-            "description": "The person's own layout of a list: the order of its columns and their\nwidths, kept per project (and once for the whole workspace's list).\nUnlike saved views it belongs to the person, not to the workspace.",
+            "description": "The person's own layout of a list: the order of its columns, their\nwidths and the groups folded away, kept per project (and once for the\nwhole workspace's list).\nUnlike saved views it belongs to the person, not to the workspace.",
             "properties": {
+              "collapsed": {
+                "additionalProperties": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "description": "The groups the person folded away, by grouping (`status`,\n`priority`, `label`, `parent`, `due_week`, `project`): each group's\nvalue as `task.search` gives it, and an empty text for the group of\ntasks without a value. Left out when none are.",
+                "type": "object"
+              },
               "columns": {
                 "default": [],
                 "description": "The columns shown, in order; empty: the list's own choice.",
@@ -34317,7 +34327,7 @@
       },
       "output_name": "ListLayoutChange",
       "safety": "read",
-      "summary": "The person's layout of a project's list, or of the whole workspace's: column order and widths."
+      "summary": "The person's layout of a project's list, or of the whole workspace's: column order and widths, and the folded groups."
     },
     {
       "app_reason": "It changes how the person's own list screen looks (the order and widths of its columns), not the workspace's data; agents and scripts choose columns in saved views.",
@@ -34328,6 +34338,16 @@
         "additionalProperties": false,
         "description": "Changes to a list layout; fields left out keep their value.",
         "properties": {
+          "collapsed": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "description": "The folded groups to keep, by grouping; each grouping given replaces\nits list, and an empty list unfolds them all. The others keep theirs.",
+            "type": "object"
+          },
           "columns": {
             "description": "The columns shown, in order (machine names such as `due`); empty:\nthe list's own choice.",
             "items": {
@@ -34368,8 +34388,18 @@
         "$defs": {
           "ListLayout": {
             "additionalProperties": false,
-            "description": "The person's own layout of a list: the order of its columns and their\nwidths, kept per project (and once for the whole workspace's list).\nUnlike saved views it belongs to the person, not to the workspace.",
+            "description": "The person's own layout of a list: the order of its columns, their\nwidths and the groups folded away, kept per project (and once for the\nwhole workspace's list).\nUnlike saved views it belongs to the person, not to the workspace.",
             "properties": {
+              "collapsed": {
+                "additionalProperties": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "description": "The groups the person folded away, by grouping (`status`,\n`priority`, `label`, `parent`, `due_week`, `project`): each group's\nvalue as `task.search` gives it, and an empty text for the group of\ntasks without a value. Left out when none are.",
+                "type": "object"
+              },
               "columns": {
                 "default": [],
                 "description": "The columns shown, in order; empty: the list's own choice.",
@@ -34421,7 +34451,7 @@
       },
       "output_name": "ListLayoutChange",
       "safety": "write",
-      "summary": "Reorder the columns of a list or change their widths, or go back to the default layout."
+      "summary": "Reorder the columns of a list, change their widths, fold or unfold its groups, or go back to the default layout."
     },
     {
       "app_reason": "It serves the app's query field as the person types; agents and scripts run queries with task.search, which reports the same mistakes.",

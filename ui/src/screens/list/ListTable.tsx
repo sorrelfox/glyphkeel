@@ -3,7 +3,7 @@
 
 import { columnOrderingFeature, columnVisibilityFeature, createColumnHelper, tableFeatures, useTable } from "@tanstack/react-table";
 import { type VirtualItem } from "@tanstack/react-virtual";
-import { ArrowDown, ArrowUp, ChevronDown, ChevronRight } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Plus } from "lucide-react";
 import { useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent, type RefObject } from "react";
 
 import { classes } from "../../classes";
@@ -12,7 +12,7 @@ import { useDurations } from "../../data/time";
 import { type ListedTask, type ListGroup, type ListGrouping } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { Cell } from "./cells";
-import { GroupName } from "./GroupName";
+import { GroupName, useGroupText } from "./GroupName";
 import { columnWidth, COLUMNS, gridTemplate, MAX_WIDTH, MIN_WIDTH, NUMERIC_COLUMNS, SORT_KEY, sortState, type ColumnId, type ListLines, type Selection } from "./model";
 import styles from "./List.module.css";
 
@@ -52,6 +52,8 @@ interface ListTableProps {
   grouping: ListGrouping | undefined;
   isCollapsed: (group: ListGroup) => boolean;
   onToggleGroup: (group: ListGroup) => void;
+  /** Adds a task with the group's value (the line at the end of each open group); absent where a group's value can't be given. */
+  onAddToGroup?: ((group: ListGroup, title: string) => Promise<unknown>) | undefined;
   /** The order in use, as sort keys. */
   sort: readonly string[];
   /** A click on a header; `add` with Shift, for one more sort key. */
@@ -76,11 +78,12 @@ interface ListTableProps {
  * The list's table: a header that sorts (Shift adds a sort key), whose
  * columns are dragged to another place and resized at their edge; the
  * lines in view only (virtualized, fixed heights from the density), task
- * rows and, when grouped, a header per group that collapses it; and a
+ * rows and, when grouped, a header per group that collapses it and a
+ * line at its end that adds a task with the group's value; and a
  * totals row over every matching task. Rows not loaded yet show as empty
  * placeholders.
  */
-export function ListTable({ rows, columns, widths, onResize, onMove, lines, grouping, isCollapsed, onToggleGroup, sort, onSort, selection, onRowClick, onToggleAll, allSelected, onOpen, focused, onFocusRow, onKey, items, totalSize, scrollRef }: ListTableProps) {
+export function ListTable({ rows, columns, widths, onResize, onMove, lines, grouping, isCollapsed, onToggleGroup, onAddToGroup, sort, onSort, selection, onRowClick, onToggleAll, allSelected, onOpen, focused, onFocusRow, onKey, items, totalSize, scrollRef }: ListTableProps) {
   const t = useT();
   const { format } = useDurations();
   // A column edge being dragged shows its width before it is kept.
@@ -297,6 +300,19 @@ export function ListTable({ rows, columns, widths, onResize, onMove, lines, grou
                 </div>
               );
             }
+            if (line?.kind === "add") {
+              const group = groups[line.group];
+              if (!group || !onAddToGroup) {
+                return null;
+              }
+              return (
+                <div key={`add-${String(line.group)}`} className={classes("tr", styles.row, styles.groupRow, styles.addRow)} role="row" aria-rowindex={item.index + 2} style={position}>
+                  <span role="gridcell" className={styles.groupCell}>
+                    <AddToGroup group={group} grouping={grouping} onAdd={onAddToGroup} />
+                  </span>
+                </div>
+              );
+            }
             const index = line?.kind === "row" ? line.row : -1;
             const task = rows.rowAt(index);
             if (!task) {
@@ -454,4 +470,74 @@ function useColumnDrag(columns: readonly ColumnId[], onMove: (column: ColumnId, 
   };
 
   return { dragging, target, start, swallowClick };
+}
+
+interface AddToGroupProps {
+  group: ListGroup;
+  grouping: ListGrouping | undefined;
+  onAdd: (group: ListGroup, title: string) => Promise<unknown>;
+}
+
+/**
+ * The "+" line at the end of a group: a button, then a title field. Enter
+ * adds a task with the group's value and keeps the field for the next one;
+ * Escape, or leaving the field empty, closes it.
+ */
+function AddToGroup({ group, grouping, onAdd }: AddToGroupProps) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const groupText = useGroupText();
+  const name = grouping === undefined ? "" : groupText(grouping, group);
+  if (!open) {
+    return (
+      <button
+        type="button"
+        className={classes(styles.groupButton, styles.addButton)}
+        aria-label={t("list-group-add-to", { group: name })}
+        onClick={() => {
+          setOpen(true);
+        }}
+      >
+        <Plus className="ic s" aria-hidden="true" />
+        <span>{t("list-group-add")}</span>
+      </button>
+    );
+  }
+  return (
+    <span className={classes("field", styles.addField)}>
+      <input
+        aria-label={t("list-group-add-title-in", { group: name })}
+        placeholder={t("list-group-add-title")}
+        value={title}
+        // The field appears where the person asked for it.
+        autoFocus
+        onChange={(event) => {
+          setTitle(event.target.value);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && title.trim() !== "") {
+            event.preventDefault();
+            // A refusal shows as a toast; the title stays to be corrected.
+            void onAdd(group, title.trim()).then(
+              () => {
+                setTitle("");
+              },
+              () => undefined,
+            );
+          } else if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopPropagation();
+            setTitle("");
+            setOpen(false);
+          }
+        }}
+        onBlur={() => {
+          if (title.trim() === "") {
+            setOpen(false);
+          }
+        }}
+      />
+    </span>
+  );
 }
