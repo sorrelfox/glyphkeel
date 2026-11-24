@@ -6,8 +6,9 @@
 # developer's machine with `cargo xtask ci`, in the same containers this
 # workflow uses.
 #
-# A passing run publishes a GitHub pre-release with the packages, an SBOM,
-# SHA256SUMS and build-provenance attestations. The final release (v0.1.0)
+# A passing run publishes a GitHub pre-release with the packages (deb, rpm
+# and a Flatpak bundle), an SBOM, SHA256SUMS and build-provenance
+# attestations. The final release (v0.1.0)
 # does not build again: release.yml republishes these files unchanged.
 # Because the files are reused, the workspace version in Cargo.toml must
 # already be the final version (0.1.0); the suffix lives only in the tag.
@@ -225,10 +226,23 @@ jobs:
       - name: Build the packages and check them installed
         run: cargo xtask ci --engine docker --suite packages,offline --cache-dir "$RUNNER_TEMP/ci-cache"
 
-      # Hosted runners have no GPU and vary in speed, so the numbers are a
-      # record, not a gate; the budgets are checked on the reference machine.
-      - name: Performance with data set L
+      # Hosted runners have no GPU and vary in speed, so timings and memory
+      # are a record, not a gate: the suite runs without --perf-enforce, and
+      # even a failure of the measuring itself doesn't stop the release. The
+      # budgets are checked on the reference machine.
+      - name: Performance with data set L (report only)
+        continue-on-error: true
         run: cargo xtask ci --engine docker --distro ubuntu-24.04 --suite perf --cache-dir "$RUNNER_TEMP/ci-cache"
+
+      - name: Add the performance table to the run summary
+        if: always()
+        run: |
+          table="$RUNNER_TEMP/ci-cache/results/ubuntu-24.04/perf/perf.md"
+          if [[ -f "$table" ]]; then
+            { echo "## Performance with data set L (report only)"; echo; cat "$table"; } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning::No performance table was written"
+          fi
 
       - name: Screenshots in the pseudo-locale
         run: cargo xtask ci --engine docker --distro ubuntu-22.04 --suite pseudo --cache-dir "$RUNNER_TEMP/ci-cache"
@@ -259,9 +273,86 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  flatpak:
+    name: Build the Flatpak bundle
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+      # flatpak-builder-tools, pinned to a commit: the generators of the
+      # offline source lists the manifest needs. Their Python dependencies
+      # are pinned below to the versions the tools' own lock files name.
+      BUILDER_TOOLS_REPO: https://github.com/flatpak/flatpak-builder-tools.git
+      BUILDER_TOOLS_COMMIT: 9d86d336a39b9af38b86f114b6ce5820fe260f91
+      FLATPAK_DIR: crates/gk-app/packaging/flatpak
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Fetch the source list generators
+        run: |
+          tools="$RUNNER_TEMP/flatpak-builder-tools"
+          git init --quiet "$tools"
+          git -C "$tools" fetch --quiet --depth 1 "$BUILDER_TOOLS_REPO" "$BUILDER_TOOLS_COMMIT"
+          git -C "$tools" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "$tools" rev-parse HEAD)" = "$BUILDER_TOOLS_COMMIT"
+          python3 -m venv "$RUNNER_TEMP/generators"
+          "$RUNNER_TEMP/generators/bin/pip" install --quiet \
+            aiohttp==3.13.3 PyYAML==6.0.3 tomlkit==0.13.3
+          "$RUNNER_TEMP/generators/bin/pip" install --quiet --no-deps "$tools/node"
+
+      # Every crate and npm package of the lock files, as sources
+      # flatpak-builder downloads and checks before the build, which then
+      # runs without the network.
+      - name: Generate the offline source lists
+        run: |
+          tools="$RUNNER_TEMP/flatpak-builder-tools"
+          "$RUNNER_TEMP/generators/bin/python" "$tools/cargo/flatpak-cargo-generator.py" \
+            Cargo.lock -o "$FLATPAK_DIR/cargo-sources.json"
+          "$RUNNER_TEMP/generators/bin/flatpak-node-generator" pnpm pnpm-lock.yaml \
+            --pnpm-store-version v11 -o "$FLATPAK_DIR/node-sources.json"
+          ls -l "$FLATPAK_DIR"
+
+      # flatpak-builder runs its build in a bubblewrap sandbox, which needs
+      # unprivileged user namespaces; Ubuntu 24.04 restricts them by default.
+      - name: Install flatpak-builder and add Flathub
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends flatpak flatpak-builder
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+
+      - name: Install the pinned Rust toolchain for the task runner
+        run: rustup toolchain install
+
+      - name: Build the Flatpak
+        run: cargo xtask ci --engine docker --suite flatpak --cache-dir "$RUNNER_TEMP/ci-cache"
+
+      - name: Collect the bundle
+        run: |
+          bundle="$RUNNER_TEMP/ci-cache/flatpak/glyphkeel.flatpak"
+          if [[ ! -s "$bundle" ]]; then
+            echo "::error::The Flatpak bundle was not built ($bundle is missing)"
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/flatpak"
+          cp "$bundle" "$RUNNER_TEMP/flatpak/glyphkeel-${VERSION}-x86_64.flatpak"
+          ls -l "$RUNNER_TEMP/flatpak"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: flatpak
+          path: ${{ runner.temp }}/flatpak/
+          if-no-files-found: error
+          retention-days: 7
+
   publish:
     name: Publish the pre-release
-    needs: [verify, packages]
+    needs: [verify, packages, flatpak]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -280,6 +371,11 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: packages
+          path: ${{ runner.temp }}/assets
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: flatpak
           path: ${{ runner.temp }}/assets
 
       # The SBOM lists every crate and npm package from the lock files.

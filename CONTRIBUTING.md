@@ -155,7 +155,7 @@ cargo xtask ci --suite packages        # files, both programs, a command-line se
 cargo xtask ci --suite offline         # never online: every process's connections traced
 cargo xtask ci --suite perf --distro fedora   # timings and memory with data set L
 cargo xtask ci --suite pseudo --distro ubuntu-22.04   # screenshots in a pseudo-locale
-cargo xtask ci --suite flatpak         # flatpak-builder on this machine
+cargo xtask ci --suite flatpak         # flatpak-builder on this machine (needs the source lists)
 cargo xtask check-bundle               # the built UI names no remote address
 ```
 
@@ -171,7 +171,8 @@ GitHub pre-release. Pushes and pull requests start no runs, so run the checks
 above yourself. A final release (`v0.1.0`, tagged on the same commit as its
 last pre-release) builds nothing: it republishes that pre-release's files.
 Because of that, `Cargo.toml` already carries the final version while the
-pre-releases are made.
+pre-releases are made. [docs/releasing.md](docs/releasing.md) has the steps,
+the Flatpak repository on GitHub Pages and its one-time set-up.
 
 ## Dependencies
 

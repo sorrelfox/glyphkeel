@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Glyphkeel contributors
+#
+# Installs Glyphkeel from its own Flatpak repository, on GitHub Pages, and
+# keeps it updated from there:
+#
+#   flatpak install --user https://sorrelfox.github.io/glyphkeel/flatpak/io.github.sorrelfox.Glyphkeel.flatpakref
+#
+# The release workflow publishes this file with a GPGKey= line added: the
+# public half of the key that signs the repository. The runtime comes from
+# Flathub.
+[Flatpak Ref]
+Name=io.github.sorrelfox.Glyphkeel
+Branch=stable
+Title=Glyphkeel
+Comment=Plan and track tasks on boards and lists, kept on this computer
+Url=https://sorrelfox.github.io/glyphkeel/flatpak/repo/
+Homepage=https://sorrelfox.github.io/glyphkeel/
+Icon=https://sorrelfox.github.io/glyphkeel/flatpak/glyphkeel.png
+SuggestRemoteName=glyphkeel
+IsRuntime=false
+RuntimeRepo=https://dl.flathub.org/repo/flathub.flatpakrepo

@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Glyphkeel contributors
+#
+# Adds Glyphkeel's own Flatpak repository, on GitHub Pages, as a remote:
+#
+#   flatpak remote-add --user --if-not-exists glyphkeel https://sorrelfox.github.io/glyphkeel/flatpak/glyphkeel.flatpakrepo
+#   flatpak install --user glyphkeel io.github.sorrelfox.Glyphkeel
+#
+# The release workflow publishes this file with a GPGKey= line added: the
+# public half of the key that signs the repository.
+[Flatpak Repo]
+Title=Glyphkeel
+Comment=Glyphkeel's releases, from its GitHub repository
+Description=Glyphkeel, a task manager whose data stays on this computer. The runtime comes from Flathub.
+Url=https://sorrelfox.github.io/glyphkeel/flatpak/repo/
+Homepage=https://sorrelfox.github.io/glyphkeel/
+Icon=https://sorrelfox.github.io/glyphkeel/flatpak/glyphkeel.png
+DefaultBranch=stable

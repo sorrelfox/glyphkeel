@@ -9,9 +9,15 @@
 #   flatpak-node-generator pnpm pnpm-lock.yaml --pnpm-store-version v11 \
 #     -o node-sources.json
 #
-# (both from github.com/flatpak/flatpak-builder-tools). Regenerate them
-# whenever a lock file changes. `cargo xtask ci --suite flatpak` builds this
-# manifest with flatpak-builder.
+# (both from github.com/flatpak/flatpak-builder-tools). They are not kept in
+# the repository: the pre-release workflow generates them from the lock files
+# with a pinned copy of the tools, builds this manifest and attaches the
+# bundle to the pre-release. `cargo xtask ci --suite flatpak` builds it with
+# flatpak-builder on this machine, and skips when the lists are missing.
+#
+# A final release publishes that bundle, signed, as the Flatpak repository
+# https://sorrelfox.github.io/glyphkeel/flatpak/repo/ (branch `stable`); the
+# .flatpakref and .flatpakrepo next to this file point at it.
 #
 # For a Flathub submission, replace the `dir` source of the last module with
 # a `git` source naming the release tag and its commit, and keep the
@@ -24,6 +30,8 @@ sdk: org.gnome.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.node24
 command: glyphkeel-app
+# The branch of the published repository.
+default-branch: stable
 
 finish-args:
   - --share=ipc
