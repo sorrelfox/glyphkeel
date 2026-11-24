@@ -189,7 +189,10 @@ impl Suite {
                 "start, memory, board, list, MCP and command-line timings with data set L \
                  on the installed packages (from the host)"
             }
-            Self::Flatpak => "the Flatpak, built with flatpak-builder on the host",
+            Self::Flatpak => {
+                "the Flatpak, built with flatpak-builder on the host (skipped without the \
+                 generated source lists)"
+            }
         }
     }
 

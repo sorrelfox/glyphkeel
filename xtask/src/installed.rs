@@ -41,6 +41,21 @@ const FLATPAK_MANIFEST: &str = "crates/gk-app/packaging/flatpak/io.github.sorrel
 /// The generated source lists the manifest names, next to it.
 const FLATPAK_SOURCES: [&str; 2] = ["cargo-sources.json", "node-sources.json"];
 
+/// The branch the manifest builds (its `default-branch`), the one the
+/// published Flatpak repository carries.
+const FLATPAK_BRANCH: &str = "stable";
+
+/// Where the runtime comes from when the bundle is installed.
+const FLATHUB_REPO: &str = "https://dl.flathub.org/repo/flathub.flatpakrepo";
+
+/// The generated source lists that are not in `folder`.
+fn missing_sources(folder: &Path) -> Vec<&'static str> {
+    FLATPAK_SOURCES
+        .into_iter()
+        .filter(|name| !folder.join(name).is_file())
+        .collect()
+}
+
 pub(crate) struct HostRun<'a> {
     pub(crate) root: &'a Path,
     pub(crate) engine: Engine,
@@ -249,30 +264,30 @@ impl HostRun<'_> {
     }
 
     /// Builds the Flatpak with flatpak-builder and exports a bundle file.
+    /// Without the generated source lists the suite is skipped, not failed:
+    /// they are made from the lock files when a release is built.
     fn flatpak(&self) -> Result<bool> {
+        // The offline sources Flathub's build needs, generated from the lock
+        // files (see the manifest's header).
+        let manifest = self.root.join(FLATPAK_MANIFEST);
+        let folder = manifest.parent().context("the manifest has no folder")?;
+        let missing = missing_sources(folder);
+        if !missing.is_empty() {
+            eprintln!(
+                "==> flatpak: SKIPPED: {} not found in {}. They are generated from \
+                 Cargo.lock and pnpm-lock.yaml with flatpak-builder-tools, as the \
+                 manifest's header says; the release build makes them itself.",
+                missing.join(" and "),
+                folder.display()
+            );
+            return Ok(true);
+        }
         let found = Command::new("flatpak-builder")
             .arg("--version")
             .output()
             .is_ok_and(|out| out.status.success());
         if !found {
             eprintln!("==> flatpak: flatpak-builder is not installed on this machine");
-            return Ok(false);
-        }
-        // The offline sources Flathub's build needs, generated from the lock
-        // files (see the manifest's header).
-        let manifest = self.root.join(FLATPAK_MANIFEST);
-        let folder = manifest.parent().context("the manifest has no folder")?;
-        let missing: Vec<&str> = FLATPAK_SOURCES
-            .into_iter()
-            .filter(|name| !folder.join(name).is_file())
-            .collect();
-        if !missing.is_empty() {
-            eprintln!(
-                "==> flatpak: {} missing in {}; generate them from Cargo.lock and \
-                 pnpm-lock.yaml as the manifest's header says",
-                missing.join(" and "),
-                folder.display()
-            );
             return Ok(false);
         }
         let dir = self.cache_dir.join("flatpak");
@@ -292,9 +307,11 @@ impl HostRun<'_> {
             && status(
                 Command::new("flatpak")
                     .arg("build-bundle")
+                    .arg(format!("--runtime-repo={FLATHUB_REPO}"))
                     .arg(dir.join("repo"))
                     .arg(&bundle)
-                    .arg(APP_ID),
+                    .arg(APP_ID)
+                    .arg(FLATPAK_BRANCH),
             )?;
         let seconds = started.elapsed().as_secs();
         if ok {
@@ -455,5 +472,31 @@ mod tests {
                 .join(super::FLATPAK_MANIFEST)
                 .is_file()
         );
+    }
+
+    #[test]
+    fn missing_flatpak_sources_are_named() {
+        let dir = std::env::temp_dir().join(format!("gk-flatpak-sources-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        assert_eq!(
+            super::missing_sources(&dir),
+            ["cargo-sources.json", "node-sources.json"]
+        );
+        std::fs::write(dir.join("cargo-sources.json"), "[]").unwrap();
+        assert_eq!(super::missing_sources(&dir), ["node-sources.json"]);
+        std::fs::write(dir.join("node-sources.json"), "[]").unwrap();
+        assert!(super::missing_sources(&dir).is_empty());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn the_manifest_builds_the_published_branch() {
+        let manifest = std::fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("..")
+                .join(super::FLATPAK_MANIFEST),
+        )
+        .unwrap();
+        assert!(manifest.contains(&format!("\ndefault-branch: {}\n", super::FLATPAK_BRANCH)));
     }
 }

@@ -10,6 +10,12 @@
 # files, checks their checksums and attestations, and publishes the same
 # files, byte for byte, as the release. If the code changed after the last
 # pre-release, make a new pre-release first.
+#
+# Then it publishes the Flatpak repository on GitHub Pages, under /flatpak/:
+# the pre-release's Flatpak bundle, imported unchanged into an OSTree
+# repository and signed with the key in the FLATPAK_GPG_PRIVATE_KEY secret.
+# Without that secret the release is still published and the repository is
+# left as it is, with a warning. docs/releasing.md has the one-time set-up.
 
 name: Release
 
@@ -101,3 +107,193 @@ jobs:
             --title "Glyphkeel $TAG" \
             --notes-file "$RUNNER_TEMP/notes.md" \
             "$RUNNER_TEMP"/assets/*
+
+  flatpak-repository:
+    name: Sign the Flatpak repository
+    needs: promote
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      attestations: read
+    outputs:
+      publish: ${{ steps.key.outputs.publish }}
+    env:
+      TAG: ${{ github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      APP_ID: io.github.sorrelfox.Glyphkeel
+      # Where GitHub Pages serves the repository. The .flatpakref and
+      # .flatpakrepo in crates/gk-app/packaging/flatpak/ name the same place.
+      SITE_URL: https://sorrelfox.github.io/glyphkeel
+      FLATPAK_DIR: crates/gk-app/packaging/flatpak
+    steps:
+      # An unsigned repository is never published. Without the key the
+      # release stands as it is (its files, the Flatpak bundle among them,
+      # are already published), so this skips with a warning rather than
+      # failing the run.
+      - name: Check for the signing key
+        id: key
+        env:
+          FLATPAK_GPG_PRIVATE_KEY: ${{ secrets.FLATPAK_GPG_PRIVATE_KEY }}
+        run: |
+          if [[ -z "$FLATPAK_GPG_PRIVATE_KEY" ]]; then
+            echo "::warning title=Flatpak repository not published::The repository secret FLATPAK_GPG_PRIVATE_KEY is not set, so the Flatpak repository on GitHub Pages was left as it was. The release and its files are published. docs/releasing.md says how to add the key."
+            {
+              echo "### Flatpak repository not published"
+              echo
+              echo "The repository secret \`FLATPAK_GPG_PRIVATE_KEY\` is not set. The release and its files, the Flatpak bundle among them, are published; the signed Flatpak repository on GitHub Pages is not. See \`docs/releasing.md\`."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.key.outputs.publish == 'true'
+        with:
+          persist-credentials: false
+
+      - name: Install flatpak and ostree
+        if: steps.key.outputs.publish == 'true'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends flatpak ostree
+
+      # The bundle the pre-release built, from this release, checked against
+      # the release's SHA256SUMS and its build-provenance attestation.
+      - name: Download and check the bundle
+        if: steps.key.outputs.publish == 'true'
+        run: |
+          mkdir "$RUNNER_TEMP/release"
+          gh release download "$TAG" --dir "$RUNNER_TEMP/release" --pattern '*.flatpak' --pattern SHA256SUMS
+          cd "$RUNNER_TEMP/release"
+          shopt -s nullglob
+          bundles=(*.flatpak)
+          if [[ ${#bundles[@]} -ne 1 ]]; then
+            echo "::error::The release $TAG should have exactly one Flatpak bundle; it has ${#bundles[@]}"
+            exit 1
+          fi
+          grep -F -- " ${bundles[0]}" SHA256SUMS | sha256sum --check --strict
+          gh attestation verify "${bundles[0]}" \
+            --repo "$GH_REPO" \
+            --signer-workflow "$GH_REPO/.github/workflows/prerelease.yml"
+          echo "BUNDLE=$RUNNER_TEMP/release/${bundles[0]}" >> "$GITHUB_ENV"
+
+      # The secret is the private key, ASCII-armoured, with no passphrase:
+      # the secret store is what protects it. Its public half is derived from
+      # it, so there is nothing else to keep in step.
+      - name: Import the signing key
+        if: steps.key.outputs.publish == 'true'
+        env:
+          FLATPAK_GPG_PRIVATE_KEY: ${{ secrets.FLATPAK_GPG_PRIVATE_KEY }}
+        run: |
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+          mkdir -m 700 "$GNUPGHOME"
+          printf '%s\n' "$FLATPAK_GPG_PRIVATE_KEY" | gpg --batch --quiet --import
+          key=$(gpg --batch --with-colons --list-secret-keys | awk -F: '$1 == "fpr" { print $10; exit }')
+          if [[ -z "$key" ]]; then
+            echo "::error::FLATPAK_GPG_PRIVATE_KEY holds no private key. Store the output of 'gpg --armor --export-secret-keys KEY' in it."
+            exit 1
+          fi
+          if ! echo check | gpg --batch --pinentry-mode error --local-user "$key" --sign > /dev/null; then
+            echo "::error::The key in FLATPAK_GPG_PRIVATE_KEY can't sign without a passphrase. Store a copy of the key without one."
+            exit 1
+          fi
+          gpg --batch --export "$key" > "$RUNNER_TEMP/glyphkeel.gpg"
+          echo "Signing with $key"
+          {
+            echo "GNUPGHOME=$GNUPGHOME"
+            echo "KEY_ID=$key"
+          } >> "$GITHUB_ENV"
+
+      # The site: the project's website from site/ when the repository has
+      # one (a Pages deployment replaces the whole site, so the website must
+      # travel with it), else a short start page; then the Flatpak repository
+      # and its files under flatpak/.
+      - name: Build the signed repository and the site
+        if: steps.key.outputs.publish == 'true'
+        run: |
+          site="$RUNNER_TEMP/site"
+          mkdir -p "$site/flatpak"
+          if [[ -d site ]]; then
+            cp -R site/. "$site/"
+          else
+            cat > "$site/index.html" <<'HTML'
+          <!doctype html>
+          <html lang="en">
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>Glyphkeel</title>
+          <h1>Glyphkeel</h1>
+          <p>A task manager whose data stays on this computer.</p>
+          <ul>
+            <li><a href="https://github.com/sorrelfox/glyphkeel">Source code</a></li>
+            <li><a href="https://github.com/sorrelfox/glyphkeel/releases">Releases</a></li>
+            <li><a href="flatpak/io.github.sorrelfox.Glyphkeel.flatpakref">Install the Flatpak</a></li>
+          </ul>
+          </html>
+          HTML
+          fi
+
+          repo="$site/flatpak/repo"
+          ostree --repo="$repo" init --mode=archive
+          flatpak build-import-bundle --no-update-summary \
+            --gpg-sign="$KEY_ID" --gpg-homedir="$GNUPGHOME" \
+            "$repo" "$BUNDLE"
+          flatpak build-update-repo \
+            --title=Glyphkeel \
+            --homepage="$SITE_URL/" \
+            --default-branch=stable \
+            --gpg-import="$RUNNER_TEMP/glyphkeel.gpg" \
+            --gpg-sign="$KEY_ID" --gpg-homedir="$GNUPGHOME" \
+            --generate-static-deltas \
+            --prune \
+            "$repo"
+          rm -rf "${repo:?}/tmp" "$repo/.lock"
+          mkdir "$repo/tmp"
+
+          key=$(base64 --wrap=0 "$RUNNER_TEMP/glyphkeel.gpg")
+          for file in io.github.sorrelfox.Glyphkeel.flatpakref glyphkeel.flatpakrepo; do
+            { cat "$FLATPAK_DIR/$file"; echo "GPGKey=$key"; } > "$site/flatpak/$file"
+          done
+          cp "$RUNNER_TEMP/glyphkeel.gpg" "$site/flatpak/glyphkeel.gpg"
+          cp crates/gk-app/icons/128x128.png "$site/flatpak/glyphkeel.png"
+
+      # The repository as a client sees it: the summary and the commit
+      # verify against the published key, and the ref is there.
+      - name: Check the repository with the published files
+        if: steps.key.outputs.publish == 'true'
+        run: |
+          site="$RUNNER_TEMP/site"
+          flatpak remote-add --user --gpg-import="$site/flatpak/glyphkeel.gpg" \
+            glyphkeel-check "file://$site/flatpak/repo"
+          flatpak remote-ls --user glyphkeel-check
+          flatpak remote-info --user glyphkeel-check "app/$APP_ID/x86_64/stable"
+          flatpak remote-delete --user glyphkeel-check
+          rm -rf "$GNUPGHOME"
+          du -sh "$site"
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        if: steps.key.outputs.publish == 'true'
+        with:
+          path: ${{ runner.temp }}/site
+
+  pages:
+    name: Publish the Flatpak repository on GitHub Pages
+    needs: flatpak-repository
+    if: needs.flatpak-repository.outputs.publish == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
