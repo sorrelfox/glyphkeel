@@ -515,3 +515,60 @@ fn task_dates_accept_natural_forms_in_the_workspace_zone() {
     );
     assert_eq!(east["task"]["start_date"], "2026-11-24");
 }
+
+#[test]
+fn recent_changes_show_the_latest_change_to_the_task_or_what_it_holds() {
+    let ws = open();
+    ws.call("project.create", json!({ "name": "T", "key": "TM" }));
+    let commented = ws.task("TM", "Commented on", "");
+    let logged = ws.task("TM", "Time logged", "");
+    let untouched = ws.task("TM", "Left alone", "");
+    let agent = ws.agent("Helper");
+    ws.engine
+        .call(
+            &agent,
+            "time.log",
+            json!({ "key": logged, "duration": "30m" }),
+        )
+        .unwrap();
+    ws.engine
+        .call(
+            &agent,
+            "comment.add",
+            json!({ "key": commented, "body": "Done?" }),
+        )
+        .unwrap();
+
+    let out = ws.call("today.get", json!({}));
+    assert_eq!(keys(&out["recent"]), [commented, logged, untouched.clone()]);
+    let recent = out["recent"].as_array().unwrap();
+    assert_eq!(recent[0]["changed_by"]["name"], "Helper");
+    assert_eq!(recent[1]["changed_by"]["name"], "Helper");
+    assert_eq!(recent[2]["changed_by"]["kind"], "user");
+    let at = |i: usize| recent[i]["changed_at"].as_str().unwrap().to_owned();
+    assert!(at(0) > at(1) && at(1) > at(2), "{recent:?}");
+
+    // A link removed later still counts, though the link itself is gone.
+    let other = ws.task("TM", "Other", "");
+    ws.call(
+        "relation.add",
+        json!({ "key": untouched, "kind": "relates", "other": other }),
+    );
+    let before = ws.call("today.get", json!({}))["recent"][0]["changed_at"].clone();
+    ws.engine
+        .call(
+            &agent,
+            "relation.remove",
+            json!({ "key": untouched, "kind": "relates", "other": other }),
+        )
+        .unwrap();
+    let out = ws.call("today.get", json!({}));
+    let first = out["recent"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["task"]["key"] == untouched.as_str())
+        .unwrap();
+    assert_eq!(first["changed_by"]["name"], "Helper");
+    assert!(first["changed_at"].as_str().unwrap() > before.as_str().unwrap());
+}

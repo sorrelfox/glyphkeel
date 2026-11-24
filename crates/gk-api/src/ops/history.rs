@@ -101,9 +101,26 @@ pub struct ActivityEntry {
     pub id: String,
     /// The changed fields, each with its value before and after.
     pub fields: BTreeMap<String, FieldChange>,
+    /// The task the change belongs to, as it is now: the changed task
+    /// itself, or the task of a changed comment, time entry or file. Left
+    /// out for other items and for tasks deleted for good.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub task: Option<ActivityTask>,
     /// The group that reverted this change, if one did.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reverted_by: Option<String>,
+}
+
+/// A task as the activity log names it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ActivityTask {
+    /// The task's ID.
+    pub id: String,
+    /// Its key (`TM-41`).
+    pub key: String,
+    /// Its title.
+    pub title: String,
 }
 
 /// One field's change. A side is left out when the field had no value.

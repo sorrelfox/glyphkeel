@@ -1182,3 +1182,29 @@ fn attached_images_get_thumbnails_in_the_cache() {
     let err = ws.fails(&me(), "file.thumbnail", json!({ "attachment": id }));
     assert_eq!(err.code, ErrorCode::Forbidden);
 }
+
+#[test]
+fn the_activity_log_names_the_task_of_each_change() {
+    let dir = TempDir::new().unwrap();
+    let ws = open(&dir);
+    ws.call("project.create", json!({ "name": "T", "key": "TM" }));
+    let a = ws.new_task("TM", "Write the parser");
+    ws.call("task.move", json!({ "key": a, "status": "In progress" }));
+    ws.call("comment.add", json!({ "key": a, "body": "Started" }));
+    ws.call("time.log", json!({ "key": a, "duration": "20m" }));
+    ws.call(
+        "task.update",
+        json!({ "key": a, "title": "Write the lexer" }),
+    );
+
+    let feed = ws.call("history.feed", json!({ "limit": 50 }));
+    let items = feed["items"].as_array().unwrap();
+    for entity in ["task", "comment", "time_entry"] {
+        let entry = items.iter().find(|e| e["entity"] == entity).unwrap();
+        // The task as it is now, not as the change left it.
+        assert_eq!(entry["task"]["key"], a.as_str(), "{entry}");
+        assert_eq!(entry["task"]["title"], "Write the lexer", "{entry}");
+    }
+    let project = items.iter().find(|e| e["entity"] == "project").unwrap();
+    assert!(project.get("task").is_none(), "{project}");
+}

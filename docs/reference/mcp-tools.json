@@ -1055,6 +1055,30 @@
                   "description": "The agent session, for changes through MCP.",
                   "type": "string"
                 },
+                "task": {
+                  "additionalProperties": false,
+                  "description": "The task the change belongs to, as it is now: the changed task\nitself, or the task of a changed comment, time entry or file. Left\nout for other items and for tasks deleted for good.",
+                  "properties": {
+                    "id": {
+                      "description": "The task's ID.",
+                      "type": "string"
+                    },
+                    "key": {
+                      "description": "Its key (`TM-41`).",
+                      "type": "string"
+                    },
+                    "title": {
+                      "description": "Its title.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "key",
+                    "title"
+                  ],
+                  "type": "object"
+                },
                 "via": {
                   "description": "Through which program.",
                   "oneOf": [

@@ -47,6 +47,15 @@ describe("the activity feed's filters and words", () => {
     expect(trashed.item).toBe("PER-3");
     expect(describeChange(t, entry({ created: { after: true } }, { entity: "wiki_page" }), "en-US").what).toBe("Wiki page created");
     expect(describeChange(t, entry({}, { entity: "something_new" }), "en-US").what).toBe("Item changed");
+    // Fields by their names; bookkeeping and fields the entry tells already are left out.
+    expect(describeChange(t, entry({ closed_at: { after: 1 }, status: { before: "s-1", after: "s-2" } }), "en-US").fields).toBe("Status");
+    expect(describeChange(t, entry({ claim: { after: { agent: "Helper" } }, status: { before: "s-1", after: "s-2" } }), "en-US").fields).toBe("Claim and Status");
+    expect(describeChange(t, entry({ record: { before: {}, after: {} } }, { entity: "view" }), "en-US")).toEqual({ what: "Saved view changed", item: undefined, fields: undefined });
+    expect(describeChange(t, entry({ timer: { after: {} } }, { entity: "timer" }), "en-US").fields).toBeUndefined();
+    // A task the engine names stands for itself; the recorded title isn't repeated.
+    const named = describeChange(t, entry({ title: { before: "Old", after: "New" } }, { task: { id: "t-1", key: "PER-1", title: "New" } }), "en-US");
+    expect(named.item).toBeUndefined();
+    expect(named.fields).toBe("Title");
     // A name the engine cut short says so.
     const long = "a".repeat(500);
     expect(describeChange(t, entry({ name: { after: long, truncated: true } }, { entity: "wiki_page" }), "en-US").item).toBe(`${long}…`);
@@ -154,7 +163,9 @@ describe("the activity screen", () => {
     render(<App start={{ titleBar: "app", locale: "en-US" }} client={createClient(transport)} path="/activity" />);
     const table = await screen.findByRole("table", { name: "Activity" });
     expect((await within(table).findAllByText((text) => plain(text) === "Task created")).length).toBeGreaterThanOrEqual(2);
-    expect(within(table).getByRole("button", { name: first.key })).toBeDefined();
+    // The task by its key and title, and no count of tasks in the status bar.
+    expect(within(table).getAllByRole("button", { name: (name) => plain(name) === `${first.key}: Plan the trip` }).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole("contentinfo").textContent).not.toContain("tasks");
     fireEvent.click(screen.getByRole("radio", { name: "Agents" }));
     await screen.findByText("No changes match the filters.");
     expect(screen.queryByRole("table", { name: "Activity" })).toBeNull();

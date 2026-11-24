@@ -670,6 +670,23 @@ history-field-estimate = Estimate
 history-field-progress = Progress
 history-field-rank = Place
 history-field-project = Project
+history-field-claim = Claim
+history-field-reminder = Reminder
+history-field-name = Name
+history-field-hue = Colour
+history-field-icon = Icon
+history-field-modules = Parts
+history-field-key = Key
+history-field-state = State
+history-field-category = Category
+history-field-wip_limit = WIP limit
+history-field-glyph = Shape
+history-field-is_default = Default
+history-field-slug = Address
+history-field-body = Text
+history-field-date = Day
+history-field-minutes = Duration
+history-field-note = Note
 
 ## Preferences: appearance
 

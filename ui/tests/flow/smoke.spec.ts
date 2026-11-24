@@ -8,7 +8,9 @@ test("the window shows its header bar, sidebar and status bar", async ({ page })
   await expect(page.getByRole("banner")).toContainText("Today");
   await expect(page.getByRole("button", { name: "Close" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Workspace" })).toBeVisible();
-  await expect(page.getByRole("contentinfo")).toContainText("No tasks");
+  // Today has no count of its own: the status bar shows only the workspace.
+  await expect(page.getByRole("contentinfo").getByTestId("status-workspace")).toBeVisible();
+  await expect(page.getByRole("contentinfo")).not.toContainText("tasks");
   await expect(page).toHaveTitle(/Glyphkeel: .*Today/);
 });
 

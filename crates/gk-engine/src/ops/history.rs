@@ -18,8 +18,8 @@ use gk_api::OpError;
 use gk_api::ops::agent::AgentSessionsInput;
 use gk_api::ops::common::{Actor, ActorKind, DEFAULT_LIMIT, MAX_LIMIT, Via};
 use gk_api::ops::history::{
-    ActivityEntry, ActivityPage, ActivityQuery, FieldChange, HistoryFeed, HistoryRedo,
-    HistoryRevert, HistoryUndo, RevertResult, SkippedGroup, UndoResult,
+    ActivityEntry, ActivityPage, ActivityQuery, ActivityTask, FieldChange, HistoryFeed,
+    HistoryRedo, HistoryRevert, HistoryUndo, RevertResult, SkippedGroup, UndoResult,
 };
 use gk_core::Id;
 use gk_store::StoreError;
@@ -238,6 +238,9 @@ fn feed(q: &QueryCtx<'_>, input: ActivityQuery) -> Result<ActivityPage, Failure>
     } else {
         None
     };
+    for item in &mut items {
+        item.task = task_of(q.tx, &item.entity, &item.id)?;
+    }
     let sessions = if input.sessions {
         Some(agent::list(q.tx, &AgentSessionsInput::default())?.items)
     } else {
@@ -249,6 +252,39 @@ fn feed(q: &QueryCtx<'_>, input: ActivityQuery) -> Result<ActivityPage, Failure>
         next_cursor,
         sessions,
     })
+}
+
+/// The task an item of the log belongs to, as it is now: the task itself,
+/// or the task of a comment, time entry or file.
+fn task_of(tx: &Transaction<'_>, entity: &str, id: &str) -> Result<Option<ActivityTask>, Failure> {
+    let owner = match entity {
+        fields::TASK => "?1",
+        comment::ENTITY => "(SELECT task_id FROM comments WHERE id = ?1)",
+        time::ENTRY => "(SELECT task_id FROM time_entries WHERE id = ?1)",
+        file::ENTITY => {
+            "(SELECT CASE a.owner_kind
+                       WHEN 'task' THEN a.owner_id
+                       WHEN 'comment' THEN (SELECT c.task_id FROM comments c WHERE c.id = a.owner_id)
+                     END
+                FROM attachments a WHERE a.id = ?1)"
+        }
+        _ => return Ok(None),
+    };
+    let Ok(id) = id.parse::<Id>() else {
+        return Ok(None);
+    };
+    let found = tx
+        .query_row(
+            &format!(
+                "SELECT t.id, p.key || '-' || t.number, t.title
+                   FROM tasks t JOIN projects p ON p.id = t.project_id
+                  WHERE t.id = {owner}"
+            ),
+            [id.as_bytes().as_slice()],
+            |r| Ok((id_at(r, 0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?)),
+        )
+        .optional()?;
+    Ok(found.and_then(|(id, key, title)| id.map(|id| ActivityTask { id, key, title })))
 }
 
 fn id_at(r: &Row<'_>, i: usize) -> gk_store::rusqlite::Result<Option<String>> {
@@ -293,6 +329,7 @@ fn entry(r: &Row<'_>) -> gk_store::rusqlite::Result<ActivityEntry> {
         entity: r.get(9)?,
         id: id_at(r, 10)?.unwrap_or_default(),
         fields,
+        task: None,
         reverted_by: id_at(r, 12)?,
     })
 }

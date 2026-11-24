@@ -11,7 +11,7 @@ use gk_api::ops::common::{Actor, ActorKind};
 use gk_api::ops::today::{RecentTask, Today, TodayCounts, TodayGet, TodayInput};
 use gk_core::Id;
 use gk_store::rusqlite::types::Value as Sql;
-use gk_store::rusqlite::{OptionalExtension, Transaction, params_from_iter};
+use gk_store::rusqlite::{OptionalExtension, Row, Transaction, params, params_from_iter};
 
 use super::desc;
 use super::lookup::{self, b, id_at};
@@ -68,28 +68,68 @@ fn ids(
     Ok(rows)
 }
 
-/// Who changed task `id` last, and when.
+/// Who changed task `id` last, and when: the latest change to the task
+/// itself, its comments, its time entries, its files (also those on its
+/// comments) or its links. A task lands in "recent" through any of these,
+/// so its own fields alone may be older than the change that put it there.
 fn last_change(tx: &Transaction<'_>, id: Id) -> Result<Option<(Actor, i64)>, Failure> {
-    Ok(tx
+    let actor = |r: &Row<'_>| -> gk_store::rusqlite::Result<(Actor, i64)> {
+        Ok((
+            Actor {
+                kind: if r.get::<_, String>(0)? == "agent" {
+                    ActorKind::Agent
+                } else {
+                    ActorKind::User
+                },
+                name: r.get(1)?,
+            },
+            r.get(2)?,
+        ))
+    };
+    let found = tx
         .query_row(
             "SELECT actor_kind, actor_name, at FROM activity
-              WHERE entity_kind = 'task' AND entity_id = ?1 ORDER BY seq DESC LIMIT 1",
+              WHERE (entity_kind = 'task' AND entity_id = ?1)
+                 OR (entity_kind = 'comment'
+                     AND entity_id IN (SELECT id FROM comments WHERE task_id = ?1))
+                 OR (entity_kind = 'time_entry'
+                     AND entity_id IN (SELECT id FROM time_entries WHERE task_id = ?1))
+                 OR (entity_kind = 'attachment'
+                     AND entity_id IN (SELECT id FROM attachments
+                                        WHERE (owner_kind = 'task' AND owner_id = ?1)
+                                           OR (owner_kind = 'comment' AND owner_id IN
+                                               (SELECT id FROM comments WHERE task_id = ?1))))
+                 OR (entity_kind = 'relation'
+                     AND entity_id IN (SELECT id FROM task_relations
+                                        WHERE from_task = ?1 OR to_task = ?1))
+              ORDER BY seq DESC LIMIT 1",
             [b(id)],
-            |r| {
-                Ok((
-                    Actor {
-                        kind: if r.get::<_, String>(0)? == "agent" {
-                            ActorKind::Agent
-                        } else {
-                            ActorKind::User
-                        },
-                        name: r.get(1)?,
-                    },
-                    r.get(2)?,
-                ))
-            },
+            actor,
         )
-        .optional()?)
+        .optional()?;
+    // A removed link is gone from the links table; its change names the
+    // task only in the recorded link. Look for one only when the task was
+    // updated after everything found above.
+    let updated: i64 =
+        tx.query_row("SELECT updated_at FROM tasks WHERE id = ?1", [b(id)], |r| {
+            r.get(0)
+        })?;
+    if found.as_ref().is_some_and(|(_, at)| *at >= updated) {
+        return Ok(found);
+    }
+    let text = id.to_string();
+    let unlinked = tx
+        .query_row(
+            "SELECT actor_kind, actor_name, at FROM activity
+              WHERE entity_kind = 'relation' AND at >= ?1
+                AND (?2 = json_extract(changes, '$.fields.link.before.from')
+                     OR ?2 = json_extract(changes, '$.fields.link.before.to'))
+              ORDER BY seq DESC LIMIT 1",
+            params![updated, text],
+            actor,
+        )
+        .optional()?;
+    Ok(unlinked.or(found))
 }
 
 fn count(ids: &[Id]) -> u64 {
@@ -180,12 +220,18 @@ fn today(q: &QueryCtx<'_>, input: TodayInput) -> Result<Today, Failure> {
                 .unwrap_or(q.now),
             )
         });
-        recent_items.push(RecentTask {
-            task,
-            changed_by,
-            changed_at: rfc3339(at),
-        });
+        recent_items.push((
+            at,
+            RecentTask {
+                task,
+                changed_by,
+                changed_at: rfc3339(at),
+            },
+        ));
     }
+    // A comment can be newer than the change that listed the task.
+    recent_items.sort_by_key(|(at, _)| std::cmp::Reverse(*at));
+    let recent_items: Vec<RecentTask> = recent_items.into_iter().map(|(_, r)| r).collect();
     let counts = TodayCounts {
         today: count(&overdue) + count(&due_today) + count(&in_progress),
         overdue: count(&overdue),
