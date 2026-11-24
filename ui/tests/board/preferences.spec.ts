@@ -8,7 +8,7 @@ const SMALLEST_WINDOW = { width: 760, height: 520 };
 
 const THEMES = ["Light", "Dark", "Slate", "Sand", "Contrast"] as const;
 const DENSITIES = ["Regular", "Compact"] as const;
-const PAGES = ["Appearance", "Time", "Reminders and background", "Workspace"] as const;
+const PAGES = ["Appearance", "Time", "Notifications", "Workspace"] as const;
 
 async function openPreferences(page: Page): Promise<Locator> {
   // At this size the sidebar is hidden: open them from the main menu.
