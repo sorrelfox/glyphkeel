@@ -8,10 +8,10 @@ import { App } from "../../App";
 import { fakeTransport } from "../../data/fake/transport";
 import { daysLeft, declined, formatBytes } from "../../data/safety";
 import { createClient, OpFailure } from "../../data/transport";
-import { type ActivityEntry, type TaskChange } from "../../generated/ops";
+import { type ActivityEntry, type ActivityPage, type ActivityQuery, type TaskChange } from "../../generated/ops";
 import { type Translate } from "../../i18n/I18n";
 import { createBundle } from "../../i18n/i18n";
-import { describeChange, engineFilters, feedRequest, passes } from "./ActivityScreen";
+import { describeChange, feedRequest } from "./ActivityScreen";
 import { keyChanges } from "./ImportDialog";
 
 // jsdom lays nothing out; the editor measures text ranges.
@@ -37,16 +37,6 @@ function entry(fields: ActivityEntry["fields"], extra: Partial<ActivityEntry> = 
 }
 
 describe("the activity feed's filters and words", () => {
-  it("filters by project, people or agents, and days", () => {
-    const change = entry({}, { project: "p-1", actor: { kind: "agent", name: "Agent" } });
-    expect(passes(change, "2026-11-20", {})).toBe(true);
-    expect(passes(change, "2026-11-20", { project: "p-2" })).toBe(false);
-    expect(passes(change, "2026-11-20", { actor: "user" })).toBe(false);
-    expect(passes(change, "2026-11-20", { actor: "agent", from: "2026-11-20", to: "2026-11-20" })).toBe(true);
-    expect(passes(change, "2026-11-20", { from: "2026-11-21" })).toBe(false);
-    expect(passes(change, "2026-11-20", { to: "2026-11-19" })).toBe(false);
-  });
-
   it("says what changed, on which item, and which fields", () => {
     const changed = describeChange(t, entry({ title: { before: "Old", after: "New" }, priority: { before: "low", after: "high" } }), "en-US");
     expect(changed.what).toBe("Task changed");
@@ -164,19 +154,33 @@ describe("the activity screen", () => {
     expect(within(table).getByRole("button", { name: first.key })).toBeDefined();
     fireEvent.click(screen.getByRole("radio", { name: "Agents" }));
     await screen.findByText("No changes match the filters.");
+    expect(screen.queryByRole("table", { name: "Activity" })).toBeNull();
+    fireEvent.click(screen.getByRole("radio", { name: "People" }));
+    expect((await within(await screen.findByRole("table", { name: "Activity" })).findAllByText((text) => plain(text) === "Task created")).length).toBeGreaterThanOrEqual(2);
   });
 });
 
 describe("the activity feed's request", () => {
-  it("keeps the filters in the page until the engine takes them, and then hands them over", () => {
+  it("hands the filters to the engine, which counts sub-projects in and both days", async () => {
     const filter = { project: "p-1", actor: "agent" as const, from: "2026-11-20", to: "2026-11-21" };
-    expect(feedRequest(filter, "UTC")).toEqual({ request: {}, inPage: filter });
-    expect(feedRequest(filter, "UTC", true).inPage).toEqual({});
-    expect(engineFilters(filter, "Europe/Berlin")).toEqual({
-      actor_kind: "agent",
-      project: "p-1",
-      from: "2026-11-19T23:00:00.000Z",
-      to: "2026-11-21T23:00:00.000Z",
-    });
+    expect(feedRequest(filter)).toEqual({ actor_kind: "agent", project: "p-1", from: "2026-11-20", to: "2026-11-21" });
+    expect(feedRequest({})).toEqual({});
+
+    const transport = fakeTransport({ today: () => new Date(2026, 10, 20, 12) });
+    for (const project of ["TM", "CLI", "PER"]) {
+      await transport.call("task.create", { project, title: `In ${project}` });
+    }
+    const titles = async (query: ActivityQuery) =>
+      ((await transport.call("history.feed", query)) as ActivityPage).items.map((item) => item.fields.title?.after);
+    expect(await titles({ project: "TM" })).toEqual(["In CLI", "In TM"]);
+    expect(await titles({ project: "CLI" })).toEqual(["In CLI"]);
+    expect(await titles({ actor_kind: "agent" })).toEqual([]);
+    expect((await titles({ actor_kind: "user", from: "2026-11-20", to: "2026-11-20" })).length).toBe(3);
+    expect(await titles({ from: "2026-11-21" })).toEqual([]);
+    expect(await titles({ to: "2026-11-19" })).toEqual([]);
+    const page = (await transport.call("history.feed", { project: "TM", limit: 1 })) as ActivityPage;
+    const next = (await transport.call("history.feed", { project: "TM", limit: 1, cursor: page.next_cursor ?? null })) as ActivityPage;
+    expect([page.total, next.items[0]?.fields.title?.after, next.next_cursor]).toEqual([2, "In TM", undefined]);
+    await expect(transport.call("history.feed", { from: "2026-11-21", to: "2026-11-20" })).rejects.toMatchObject({ code: "invalid", details: { path: "to" } });
   });
 });

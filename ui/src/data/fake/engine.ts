@@ -1468,9 +1468,33 @@ export class FakeWorkspace {
       const settings: Settings = { ...this.state.settings };
       return { output: { changed, settings }, changes: changed.length ? [{ entity: "settings", id: "w-1", fields: changed }] : [] };
     },
-    "history.feed": ({ limit, cursor, task: ref }) => {
+    "history.feed": ({ limit, cursor, task: ref, actor_kind, project: projectRef, from: fromText, to: toText }) => {
       const task = ref === null || ref === undefined ? null : this.task(ref);
-      const all = [...this.state.activity].reverse().filter((entry) => task === null || this.concerns(entry, task.id));
+      // A project's changes include its sub-projects'.
+      const projects = new Set<string>();
+      if (projectRef !== null && projectRef !== undefined) {
+        const add = (id: string) => {
+          projects.add(id);
+          this.state.projects.filter((each) => each.parent === id).forEach((each) => { add(each.id); });
+        };
+        add(this.project(projectRef).id);
+      }
+      // Whole days in the caller's zone, the last one included.
+      const from = fromText === null || fromText === undefined ? null : this.dayInput(fromText, "from");
+      const to = toText === null || toText === undefined ? null : this.dayInput(toText, "to");
+      if (from !== null && to !== null && to < from) {
+        fail("invalid", "The last day comes before the first.", { details: { path: "to", message_id: "activity-to-before-from" } });
+      }
+      const all = [...this.state.activity].reverse().filter((entry) => {
+        const day = localDay(new Date(entry.at));
+        return (
+          (task === null || this.concerns(entry, task.id)) &&
+          (actor_kind === null || actor_kind === undefined || entry.actor.kind === actor_kind) &&
+          (projects.size === 0 || (entry.project !== undefined && projects.has(entry.project))) &&
+          (from === null || day >= from) &&
+          (to === null || day <= to)
+        );
+      });
       const start = cursor ? Number(cursor) : 0;
       const end = start + (limit ?? 50);
       const items = all.slice(start, end);
@@ -2034,6 +2058,20 @@ export class FakeWorkspace {
       this.state.trash = (this.state.trash ?? []).filter((deletion) => !chosen.includes(deletion));
       const changes = chosen.flatMap((deletion) => deletion.tasks.map((task) => ({ entity: "task", id: task.id, fields: ["purged"], project: deletion.entry.project ?? "" })));
       return { output: { items: chosen.map((deletion) => deletion.entry), total: changes.length }, changes };
+    },
+    "backup.folder.update": ({ folder }) => {
+      const settings = this.state.settings;
+      const chosen = folder === null || folder === undefined || folder === "" ? undefined : folder;
+      if (chosen !== undefined && !chosen.startsWith("/")) {
+        fail("invalid", "The backup folder must be an absolute path.", { details: { path: "folder" } });
+      }
+      const changed = settings.backup_folder === chosen ? [] : ["backup_folder"];
+      if (chosen === undefined) {
+        delete settings.backup_folder;
+      } else {
+        settings.backup_folder = chosen;
+      }
+      return { output: { changed, settings: { ...settings } }, changes: changed.length ? [{ entity: "settings", id: "w-1", fields: changed }] : [] };
     },
     "backup.list": () => {
       const items = this.state.backups ?? [];

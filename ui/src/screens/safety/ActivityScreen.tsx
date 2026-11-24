@@ -15,7 +15,6 @@ import { useToasts } from "../../components/Toasts";
 import { useCall, useOp } from "../../data/hooks";
 import { useActivityFeed, useFailureToast, type FeedRequest, skippedReason } from "../../data/safety";
 import { revertible } from "../../data/task";
-import { dayIn, momentFrom, useTimeZone } from "../../data/zone";
 import { type ActivityEntry, type ActorKind, type ProjectSummary } from "../../generated/ops";
 import { useT, type Translate } from "../../i18n/I18n";
 import { useMomentFormat } from "../task/Activity";
@@ -26,64 +25,19 @@ export interface FeedFilter {
   /** A project's ID; every project when absent. */
   project?: string | undefined;
   actor?: ActorKind | undefined;
-  /** First and last day, `YYYY-MM-DD`, in the workspace's zone. */
+  /** First and last day, `YYYY-MM-DD`, both included, in the person's zone. */
   from?: string | undefined;
   to?: string | undefined;
 }
 
-/**
- * Whether the engine's activity read takes the screen's filters. The
- * generated client of this build doesn't have them yet, so the page
- * filters; switching over is this one constant.
- */
-const ENGINE_FILTERS = false;
-
-/** The filters as the engine's activity read takes them: an actor kind, a project (with its sub-projects) and a range of moments. */
-export interface EngineFeedFilters {
-  actor_kind?: ActorKind;
-  project?: string;
-  /** The first moment, RFC 3339. */
-  from?: string;
-  /** The moment the range ends (the start of the day after the last), RFC 3339. */
-  to?: string;
-}
-
-/** The screen's filter as the engine's read takes it; days become moments in the person's zone. */
-export function engineFilters(filter: FeedFilter, zone: string | undefined): EngineFeedFilters {
-  const startOf = (day: string) => new Date(momentFrom(`${day}T00:00`, zone)).toISOString();
-  const dayAfter = (day: string) => {
-    const next = new Date(`${day}T12:00:00Z`);
-    next.setUTCDate(next.getUTCDate() + 1);
-    return next.toISOString().slice(0, 10);
-  };
+/** The filter as the engine's activity read takes it; the engine counts the project's sub-projects in, and the days in the person's zone. */
+export function feedRequest(filter: FeedFilter): FeedRequest {
   return {
     ...(filter.actor === undefined ? {} : { actor_kind: filter.actor }),
     ...(filter.project === undefined ? {} : { project: filter.project }),
-    ...(filter.from === undefined ? {} : { from: startOf(filter.from) }),
-    ...(filter.to === undefined ? {} : { to: startOf(dayAfter(filter.to)) }),
+    ...(filter.from === undefined ? {} : { from: filter.from }),
+    ...(filter.to === undefined ? {} : { to: filter.to }),
   };
-}
-
-/**
- * Splits the filter into what the engine's activity read applies and what
- * the page still applies to the entries it reads.
- */
-export function feedRequest(filter: FeedFilter, zone: string | undefined, engine: boolean = ENGINE_FILTERS): { request: FeedRequest; inPage: FeedFilter } {
-  if (engine) {
-    // The page's project filter is exact; the engine's includes sub-projects, as the screen means.
-    return { request: engineFilters(filter, zone) as FeedRequest, inPage: {} };
-  }
-  return { request: {}, inPage: filter };
-}
-
-/** Whether an entry passes the filter; `day` is its day in the workspace's zone. */
-export function passes(entry: ActivityEntry, day: string, filter: FeedFilter): boolean {
-  return (
-    (filter.project === undefined || entry.project === filter.project) &&
-    (filter.actor === undefined || entry.actor.kind === filter.actor) &&
-    (filter.from === undefined || day >= filter.from) &&
-    (filter.to === undefined || day <= filter.to)
-  );
 }
 
 /** Fields that tell nothing on their own in the feed. */
@@ -134,7 +88,6 @@ type ActorChoice = ActorKind | typeof ALL;
  */
 export function ActivityScreen() {
   const t = useT();
-  const zone = useTimeZone();
   const projects = useOp("project.list", { include_archived: true });
   const [project, setProject] = useState<string>(ALL);
   const [actor, setActor] = useState<ActorChoice>(ALL);
@@ -146,14 +99,10 @@ export function ActivityScreen() {
     from: from === "" ? undefined : from,
     to: to === "" ? undefined : to,
   };
-  const { request, inPage } = feedRequest(filter, zone);
-  const feed = useActivityFeed(request);
-  const loaded = feed.data?.pages.flatMap((page) => page.items) ?? [];
-  const rows = loaded.filter((entry) => passes(entry, dayIn(new Date(entry.at), zone), inPage));
-  const oldest = loaded.at(-1);
-  // Newest first: once the log reaches back before the first day, older pages can't match.
-  const pastRange = inPage.from !== undefined && oldest !== undefined && dayIn(new Date(oldest.at), zone) < inPage.from;
-  const canLoad = feed.hasNextPage && !feed.isFetchingNextPage && !pastRange;
+  const filtered = from !== "" || to !== "" || project !== ALL || actor !== ALL;
+  const feed = useActivityFeed(feedRequest(filter));
+  const rows = feed.data?.pages.flatMap((page) => page.items) ?? [];
+  const canLoad = feed.hasNextPage && !feed.isFetchingNextPage;
   const byId = new Map((projects.data?.items ?? []).map((each) => [each.id, each]));
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -166,7 +115,7 @@ export function ActivityScreen() {
   });
   const items = virtualizer.getVirtualItems();
   const lastShown = items.at(-1)?.index ?? -1;
-  // Near the end of what is loaded (or nothing matches yet): read the next page.
+  // Near the end of what is loaded: read the next page.
   const wantMore = canLoad && lastShown >= rows.length - 10;
   const { fetchNextPage } = feed;
   useEffect(() => {
@@ -177,7 +126,7 @@ export function ActivityScreen() {
 
   const seen = new Set<string>();
   const firstOfGroup = new Set<number>();
-  for (const entry of loaded) {
+  for (const entry of rows) {
     if (!seen.has(entry.group)) {
       seen.add(entry.group);
       firstOfGroup.add(entry.seq);
@@ -211,7 +160,7 @@ export function ActivityScreen() {
         <span className={classes("field", styles.dayField)}>
           <input type="date" aria-label={t("activity-to")} value={to} min={from === "" ? undefined : from} onChange={(event) => { setTo(event.target.value); }} />
         </span>
-        {(from !== "" || to !== "" || project !== ALL || actor !== ALL) && (
+        {filtered && (
           <Button
             className="btn flat sm"
             onPress={() => {
@@ -228,7 +177,7 @@ export function ActivityScreen() {
         {feed.data && <span className={classes("muted num", styles.small)}>{t("activity-count", { shown: rows.length, total: feed.data.pages[0]?.total ?? 0 })}</span>}
       </div>
       {feed.isError && <p className={classes("faint", styles.note)}>{feed.error.error.message}</p>}
-      {feed.data && rows.length === 0 && !canLoad && <p className={classes("muted", styles.note)}>{t(loaded.length === 0 ? "activity-none" : "activity-none-matching")}</p>}
+      {feed.data && rows.length === 0 && !canLoad && <p className={classes("muted", styles.note)}>{t(filtered ? "activity-none-matching" : "activity-none")}</p>}
       <div ref={scrollRef} className={styles.scroll}>
         {rows.length > 0 && (
           <div role="table" aria-label={t("view-activity")} aria-rowcount={rows.length + 1}>
