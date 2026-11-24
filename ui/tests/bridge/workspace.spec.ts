@@ -5,8 +5,12 @@ import { deflateSync } from "node:zlib";
 
 import { expect, test, type Page } from "@playwright/test";
 
+// This file's own workspace, which no other file touches: the flows below
+// check the whole workspace, starting with an empty Undo stack (see
+// playwright.bridge.config.ts).
 const token = process.env.GK_BRIDGE_TOKEN ?? "";
-const PAGE = `/?bridge=${process.env.GK_BRIDGE_PORT ?? "5321"}&token=${token}`;
+const BRIDGE = process.env.GK_BRIDGE_FRESH_PORT ?? "5322";
+const PAGE = `/?bridge=${BRIDGE}&token=${token}`;
 
 async function openPreferences(page: Page) {
   await page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: /Preferences/ }).click();
@@ -48,7 +52,7 @@ test("two windows work on one workspace and follow each other's changes", async 
 });
 
 test("a page with the wrong token gets no workspace", async ({ page }) => {
-  await page.goto(`/?bridge=${process.env.GK_BRIDGE_PORT ?? "5321"}&token=wrong`);
+  await page.goto(`/?bridge=${BRIDGE}&token=wrong`);
   await expect(page.getByTestId("status-workspace")).toHaveText("Workspace unavailable");
 });
 

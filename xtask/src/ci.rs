@@ -61,7 +61,9 @@ Options:
                 The locale of the `pseudo` screenshots. Default: en-XA.
   --perf-enforce
                 Fail the `perf` suite when a result is over its budget.
-                Without it the suite only reports.
+                Without it results over budget are only reported. The
+                suite fails either way when the app or its web view dies
+                or a result is missing.
   --here        Run the suites on this machine, without containers. This is
                 what runs inside each container.
   --list        List the suites and distributions.
@@ -530,7 +532,11 @@ impl Flow {
 
 /// Variables removed from the flows' environment, so that each
 /// configuration starts its bridge on a new workspace.
-const FLOW_ENV_CLEARED: [&str; 2] = ["GK_BRIDGE_WORKSPACE", "GK_BRIDGE_TOKEN"];
+const FLOW_ENV_CLEARED: [&str; 3] = [
+    "GK_BRIDGE_WORKSPACE",
+    "GK_BRIDGE_FRESH_WORKSPACE",
+    "GK_BRIDGE_TOKEN",
+];
 
 /// Runs the flows one after another, all of them even when one fails, and
 /// prints how each went.
@@ -1068,6 +1074,7 @@ pub(crate) fn build_image(
     let file = context.join(format!("{}.Containerfile", distro.name()));
     let mut cmd = Command::new(engine.program());
     cmd.arg("build")
+        .args(NO_CORE_DUMPS)
         .arg("--file")
         .arg(&file)
         .arg("--tag")
@@ -1088,6 +1095,17 @@ pub(crate) fn build_image(
     cmd.arg(&context);
     status(&mut cmd)
 }
+
+/// Keeps a crash inside a container away from the host's crash reporter.
+///
+/// When the host's `core_pattern` pipes core dumps to a program (as
+/// systemd-coredump does), the kernel runs that program on the host for a
+/// crash in any container, whatever the core size limit, with one
+/// exception: a limit of exactly 1 byte skips the dump. A limit of 0 is not
+/// enough; the host still records the crash and may show it on the desktop.
+/// The hard limit is 1 byte too, so nothing in the container can raise it;
+/// a script must not lower it either (`ulimit -c 0` sets 0).
+pub(crate) const NO_CORE_DUMPS: [&str; 2] = ["--ulimit", "core=1:1"];
 
 /// Environment variables passed from the host into the containers, when set.
 const FORWARDED_ENV: [&str; 2] = ["CARGO_BUILD_JOBS", "CARGO_TERM_COLOR"];
@@ -1163,6 +1181,7 @@ pub(crate) fn run_in_container(
         .context("the repository path is not valid UTF-8")?;
     let mut cmd = Command::new(engine.program());
     cmd.args(["run", "--rm", "--init", "--interactive"])
+        .args(NO_CORE_DUMPS)
         // The source is only read; relabelling it for SELinux is not needed.
         .args(["--security-opt", "label=disable"])
         .arg("--volume")

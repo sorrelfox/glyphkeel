@@ -13,20 +13,30 @@ import { defineConfig, devices } from "@playwright/test";
 // from Chromium. Playwright starts both and stops them afterwards.
 // The bridge takes the UI's development port only. Its own port can be
 // another of 5320–5329, so that a bridge left running doesn't stop a run.
+//
+// Two bridges, each on a workspace of its own. workspace.spec.ts checks
+// what the whole workspace holds (an empty Undo stack, the first change of
+// a setting), so it gets a workspace that no other file has touched, on
+// GK_BRIDGE_FRESH_PORT. The other files make their own projects and share
+// the second workspace, on GK_BRIDGE_PORT, in whatever order they run.
 const UI_PORT = 5310;
 process.env.GK_BRIDGE_PORT ??= "5321";
+process.env.GK_BRIDGE_FRESH_PORT ??= "5322";
 const BRIDGE_PORT = Number(process.env.GK_BRIDGE_PORT);
+const FRESH_PORT = Number(process.env.GK_BRIDGE_FRESH_PORT);
 const BRIDGE_DIST = "node_modules/.cache/bridge-dist";
 
-// The workers inherit these, so every test sees the same token and folder.
+// The workers inherit these, so every test sees the same token and folders.
 process.env.GK_BRIDGE_TOKEN ??= randomBytes(16).toString("hex");
 process.env.GK_BRIDGE_WORKSPACE ??= join(mkdtempSync(join(tmpdir(), "glyphkeel-bridge-")), "Personal");
+process.env.GK_BRIDGE_FRESH_WORKSPACE ??= join(mkdtempSync(join(tmpdir(), "glyphkeel-bridge-")), "Personal");
 const token = process.env.GK_BRIDGE_TOKEN;
 const workspace = process.env.GK_BRIDGE_WORKSPACE;
+const fresh = process.env.GK_BRIDGE_FRESH_WORKSPACE;
 
 export default defineConfig({
   testDir: "./tests/bridge",
-  // One workspace for all: the flows run one after another.
+  // The flows that share a workspace run one after another.
   workers: 1,
   fullyParallel: false,
   forbidOnly: true,
@@ -44,6 +54,13 @@ export default defineConfig({
       port: BRIDGE_PORT,
       reuseExistingServer: false,
       // The first run compiles the bridge.
+      timeout: 600_000,
+    },
+    {
+      command: `cargo run --quiet -p gk-devbridge -- --workspace "${fresh}" --port ${String(FRESH_PORT)} --token ${token}`,
+      cwd: "..",
+      port: FRESH_PORT,
+      reuseExistingServer: false,
       timeout: 600_000,
     },
     {

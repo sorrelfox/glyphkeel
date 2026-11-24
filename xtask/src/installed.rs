@@ -23,8 +23,8 @@ use std::time::Instant;
 use anyhow::{Context, Result, bail};
 
 use crate::ci::{
-    ContainerRun, DATA_DIR, Distro, Engine, Pins, Suite, build_image, prefix, run_in_container,
-    status,
+    ContainerRun, DATA_DIR, Distro, Engine, NO_CORE_DUMPS, Pins, Suite, build_image, prefix,
+    run_in_container, status,
 };
 
 /// The build caches when `--cache-dir` is not given: the host suites need
@@ -221,6 +221,7 @@ impl HostRun<'_> {
             .with_context(|| format!("cannot copy {}", package.display()))?;
         let mut cmd = Command::new(self.engine.program());
         cmd.arg("build")
+            .args(NO_CORE_DUMPS)
             .arg("--file")
             .arg(self.root.join("ci/containers").join(containerfile))
             .arg("--tag")
@@ -371,6 +372,7 @@ fn check_args(
     ]
     .map(str::to_owned)
     .to_vec();
+    args.extend(NO_CORE_DUMPS.map(str::to_owned));
     for (host, inside, mode) in [
         (mounts.scripts, "/ci", "ro"),
         (mounts.data, "/data", "ro"),
@@ -445,6 +447,8 @@ mod tests {
         assert!(joined.contains(":/data:ro"));
         assert!(joined.contains(":/out:rw"));
         assert!(joined.contains("EXPECTED_VERSION=0.0.7"));
+        // A crash in the container never reaches the host's crash reporter.
+        assert!(joined.contains("--ulimit core=1:1"));
         assert!(!joined.contains("PERF_ENFORCE"));
         assert!(
             check_args(&mounts, "x", "1", true)
