@@ -41,7 +41,19 @@ agents-profile-read-only-about = Agents can read, search and report, but change 
 agents-profile-standard-about = Agents can create and change tasks, and move items to the trash, but delete nothing for good.
 agents-profile-full-about = Agents can do everything you can, including emptying the trash and deleting projects.
 agents-limits = Limits
-agents-limits-about = Each agent session makes at most { $perMinute } changes a minute. With Standard, it moves at most { $perCall } items to the trash at a time and { $perHour } an hour.
+agents-limits-about = Each agent session makes at most { $perMinute ->
+        [one] one change
+       *[other] { $perMinute } changes
+    } a minute and creates at most { $perDay ->
+        [one] one new task
+       *[other] { $perDay } new tasks
+    } a day. With Standard, it moves at most { $perCall ->
+        [one] one item
+       *[other] { $perCall } items
+    } to the trash at a time and { $perHour ->
+        [one] one
+       *[other] { $perHour }
+    } an hour.
 agents-raise = Raising the limit
 agents-raise-about = Letting agents do more asks you in a window of the desktop, so that an agent can't widen its own rights.
 

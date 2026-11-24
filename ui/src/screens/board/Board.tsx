@@ -50,11 +50,25 @@ export function Board({ projectKey, openTask, now = () => new Date() }: BoardPro
   const project = useProject(projectKey);
   const layout = useLayout(projectKey);
   const include = layout.data?.layout.include_subprojects ?? false;
-  const board = useBoard(projectKey, include, layout.isSuccess);
+  // The columns whose older closed cards show; the first one asks the engine for them.
+  const [showOlder, setShowOlder] = useState<ReadonlySet<string>>(new Set());
+  const board = useBoard(projectKey, include, layout.isSuccess, showOlder.size > 0);
   if (!project.data || !layout.data || !board.data) {
     return <div className={styles.board} aria-busy="true" />;
   }
-  return <LoadedBoard project={project.data} layout={layout.data.layout} board={board.data} openTask={openTask} now={now} />;
+  return (
+    <LoadedBoard
+      project={project.data}
+      layout={layout.data.layout}
+      board={board.data}
+      openTask={openTask}
+      now={now}
+      showOlder={showOlder}
+      onShowOlder={(column) => {
+        setShowOlder(new Set([...showOlder, column]));
+      }}
+    />
+  );
 }
 
 interface LoadedBoardProps {
@@ -63,6 +77,8 @@ interface LoadedBoardProps {
   board: BoardData;
   openTask: string | undefined;
   now: () => Date;
+  showOlder: ReadonlySet<string>;
+  onShowOlder: (column: string) => void;
 }
 
 /** During a drag: the lanes as they will be after the drop. */
@@ -72,19 +88,18 @@ interface Drag {
   over: string | null;
 }
 
-function LoadedBoard({ project, layout, board, openTask, now }: LoadedBoardProps) {
+function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowOlder }: LoadedBoardProps) {
   const t = useT();
   const navigate = useNavigate();
   const toasts = useToasts();
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
-  const [showOlder, setShowOlder] = useState<ReadonlySet<string>>(new Set());
   const [selected, setSelected] = useState<string | null>(openTask ?? null);
   const [adding, setAdding] = useState<string | null>(board.columns.every((column) => column.count === 0) ? (board.columns[0]?.id ?? null) : null);
   const [cardSize, setCardSize] = useState<CardSize>(() => loadCardSize(project.id));
   const [drag, setDrag] = useState<Drag | null>(null);
   const [note, setNote] = useState<string | undefined>(undefined);
   const updateLayout = useUpdateLayout(project.key);
-  const move = useMoveTask(board);
+  const move = useMoveTask(board, showOlder.size > 0);
   const create = useCreateTask();
   const update = useUpdateTask();
   const menu = useContextMenu(t("card-menu"));
@@ -516,7 +531,7 @@ function LoadedBoard({ project, layout, board, openTask, now }: LoadedBoardProps
                     setAdding(null);
                   }}
                   onShowOlder={() => {
-                    setShowOlder(new Set([...showOlder, lane.column.id]));
+                    onShowOlder(lane.column.id);
                   }}
                 />
               ),

@@ -114,7 +114,7 @@ export function useTaskCompletion(): CompletionProviders {
       const input = { project: projectKey, show_older: true };
       let board;
       try {
-        board = await queryClient.query({ queryKey: opKey("board.get", input), queryFn: () => call("board.get", input), staleTime: 30_000 });
+        board = await queryClient.query({ queryKey: opKey("board.get", input), queryFn: () => call("board.get", input), staleTime: 30_000, gcTime: 30_000 });
       } catch {
         return [];
       }
