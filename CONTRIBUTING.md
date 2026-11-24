@@ -146,6 +146,24 @@ packages the way a release does: both programs, the menu entry, the shell
 completions (bash, zsh, fish) and the man page. A rebuild of the same version
 takes `--package-release N` for the rpm's release number.
 
+The checks of what ships run from the host, on the packages built in the
+Ubuntu 22.04 image and installed in a clean container of each distribution
+with no network:
+
+```sh
+cargo xtask ci --suite packages        # files, both programs, a command-line session
+cargo xtask ci --suite offline         # never online: every process's connections traced
+cargo xtask ci --suite perf --distro fedora   # timings and memory with data set L
+cargo xtask ci --suite pseudo --distro ubuntu-22.04   # screenshots in a pseudo-locale
+cargo xtask ci --suite flatpak         # flatpak-builder on this machine
+cargo xtask check-bundle               # the built UI names no remote address
+```
+
+Their results land in `target/ci-cache/results/<distro>/<suite>/` (the
+performance table is `perf.md`). `perf` reports by default; `--perf-enforce`
+fails it on a result over budget. Set `GLYPHKEEL_CI_PREFIX` to give the
+images and containers of a second checkout their own names.
+
 GitHub Actions run only when a pre-release tag (`v0.1.0-rc.1`) is pushed: the
 same suites in the same containers, a Windows build with the unit tests, the
 packages, an SBOM, checksums and build-provenance attestations, published as a

@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Glyphkeel contributors
+#
+# The menu entry of the Flatpak. The deb and rpm make theirs from
+# ../glyphkeel.desktop.
+[Desktop Entry]
+Type=Application
+Name=Glyphkeel
+GenericName=Task Manager
+Comment=Plan and track tasks on boards and lists, kept on this computer
+Exec=glyphkeel-app %u
+Icon=io.github.sorrelfox.Glyphkeel
+StartupWMClass=glyphkeel-app
+Terminal=false
+Categories=Office;ProjectManagement;
+Keywords=tasks;todo;kanban;board;project;planning;
+MimeType=x-scheme-handler/glyphkeel;

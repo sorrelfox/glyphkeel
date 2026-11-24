@@ -1,0 +1,131 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Glyphkeel contributors
+#
+# The Flatpak of Glyphkeel, built the way Flathub requires: from source, with
+# no network inside the build. Every crate and npm package comes from the
+# generated source lists next to this file, made from the lock files:
+#
+#   flatpak-cargo-generator.py Cargo.lock -o cargo-sources.json
+#   flatpak-node-generator pnpm pnpm-lock.yaml --pnpm-store-version v11 \
+#     -o node-sources.json
+#
+# (both from github.com/flatpak/flatpak-builder-tools). Regenerate them
+# whenever a lock file changes. `cargo xtask ci --suite flatpak` builds this
+# manifest with flatpak-builder.
+#
+# For a Flathub submission, replace the `dir` source of the last module with
+# a `git` source naming the release tag and its commit, and keep the
+# generated lists in the Flathub repository.
+
+id: io.github.sorrelfox.Glyphkeel
+runtime: org.gnome.Platform
+runtime-version: "51"
+sdk: org.gnome.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.node24
+command: glyphkeel-app
+
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  # The app's own D-Bus name: a second start hands its links to the first.
+  - --own-name=io.github.sorrelfox.Glyphkeel
+  # Reminders, and the tray icon of background mode.
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.kde.StatusNotifierWatcher
+  # No --share=network: the app never connects to the network. Files reach
+  # it through the file chooser portal; workspaces live in its own data
+  # folder (~/.var/app/io.github.sorrelfox.Glyphkeel/).
+
+cleanup:
+  - /include
+  - /lib/pkgconfig
+  - "*.a"
+
+modules:
+  # The Rust toolchain the project pins (rust-toolchain.toml), from the Rust
+  # project's own release archive: the SDK's rust-stable extension is older
+  # than the version the workspace needs. Used for the build only.
+  - name: rust
+    buildsystem: simple
+    build-commands:
+      - ./install.sh --prefix=/app/rust --components=rustc,cargo,rust-std-x86_64-unknown-linux-gnu
+        --disable-ldconfig
+    cleanup:
+      - "*"
+    sources:
+      - type: archive
+        url: https://static.rust-lang.org/dist/rust-1.100.0-x86_64-unknown-linux-gnu.tar.xz
+        sha256: 98ee6bec240e1cfe944f17e7092412dc5ef6e008484bb668c6936d35a7d15acd
+        only-arches:
+          - x86_64
+
+  # pnpm at the version package.json names, run with the node24 extension's
+  # Node. Used for the build only.
+  - name: pnpm
+    buildsystem: simple
+    build-commands:
+      - mkdir -p /app/pnpm
+      - cp -r . /app/pnpm/
+    cleanup:
+      - "*"
+    sources:
+      - type: archive
+        url: https://registry.npmjs.org/pnpm/-/pnpm-12.21.0.tgz
+        sha512: 66fd8278ee28935ce951792d34367ff3af5c432a2756445823029533835b8da529bbe0be5130afd56ed0713fb8789e47bad82d93bd5ae2fe54b15562d6276ef0
+
+  - name: glyphkeel
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/node24/bin:/app/rust/bin
+      env:
+        CARGO_HOME: /run/build/glyphkeel/cargo
+        CARGO_NET_OFFLINE: "true"
+        # The pnpm store the node sources fill.
+        XDG_CACHE_HOME: /run/build/glyphkeel/flatpak-node/cache
+        npm_config_store_dir: /run/build/glyphkeel/flatpak-node/cache/pnpm-store
+        CI: "1"
+    build-commands:
+      # The UI: dependencies from the store, without the network; the
+      # lockfile is trusted as it is, since the registry can't be asked.
+      - node /app/pnpm/bin/pnpm.cjs install --offline --frozen-lockfile --trust-lockfile
+      - node /app/pnpm/bin/pnpm.cjs --filter ui exec vite build
+      # Both programs, with the release profile, from the vendored crates.
+      - cargo --offline build --locked --profile dist --package gk-cli
+      - cargo --offline build --locked --profile dist --package gk-app --features tauri/custom-protocol
+      - install -Dm755 target/dist/glyphkeel-app /app/bin/glyphkeel-app
+      - install -Dm755 target/dist/glyphkeel /app/bin/glyphkeel
+      # The command line's completions and man page, which it writes itself.
+      - mkdir -p cli-files
+      - target/dist/glyphkeel completions bash > cli-files/glyphkeel.bash
+      - target/dist/glyphkeel completions zsh > cli-files/_glyphkeel
+      - target/dist/glyphkeel completions fish > cli-files/glyphkeel.fish
+      - target/dist/glyphkeel man | gzip -9 -n > cli-files/glyphkeel.1.gz
+      - install -Dm644 cli-files/glyphkeel.bash /app/share/bash-completion/completions/glyphkeel
+      - install -Dm644 cli-files/_glyphkeel /app/share/zsh/site-functions/_glyphkeel
+      - install -Dm644 cli-files/glyphkeel.fish /app/share/fish/vendor_completions.d/glyphkeel.fish
+      - install -Dm644 cli-files/glyphkeel.1.gz /app/share/man/man1/glyphkeel.1.gz
+      # The menu entry, icons and AppStream data under the application ID.
+      - install -Dm644 crates/gk-app/packaging/flatpak/io.github.sorrelfox.Glyphkeel.desktop
+        /app/share/applications/io.github.sorrelfox.Glyphkeel.desktop
+      - sed 's|<launchable type="desktop-id">Glyphkeel.desktop</launchable>|<launchable type="desktop-id">io.github.sorrelfox.Glyphkeel.desktop</launchable>|'
+        crates/gk-app/packaging/io.github.sorrelfox.Glyphkeel.metainfo.xml > io.github.sorrelfox.Glyphkeel.metainfo.xml
+      - install -Dm644 io.github.sorrelfox.Glyphkeel.metainfo.xml
+        /app/share/metainfo/io.github.sorrelfox.Glyphkeel.metainfo.xml
+      - install -Dm644 crates/gk-app/icons/32x32.png /app/share/icons/hicolor/32x32/apps/io.github.sorrelfox.Glyphkeel.png
+      - install -Dm644 crates/gk-app/icons/128x128.png /app/share/icons/hicolor/128x128/apps/io.github.sorrelfox.Glyphkeel.png
+      - install -Dm644 crates/gk-app/icons/256x256.png /app/share/icons/hicolor/256x256/apps/io.github.sorrelfox.Glyphkeel.png
+      - install -Dm644 crates/gk-app/icons/icon.png /app/share/icons/hicolor/512x512/apps/io.github.sorrelfox.Glyphkeel.png
+    sources:
+      # The repository this manifest lives in.
+      - type: dir
+        path: ../../../..
+        skip:
+          - target
+          - node_modules
+          - ui/node_modules
+          - ui/dist
+      - cargo-sources.json
+      - node-sources.json
