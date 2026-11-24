@@ -9,16 +9,16 @@ a command line and a built-in MCP server.**
 [![Platform: Linux](https://img.shields.io/badge/platform-Linux-informational)](#status-and-roadmap)
 [![Status: early development](https://img.shields.io/badge/status-early%20development-orange)](#status-and-roadmap)
 
-<img src="docs/screenshots/board.png" alt="Design preview of the Glyphkeel board: a project sidebar, four columns of task cards and a filter bar" width="900">
+<img src="docs/screenshots/board.png" alt="The Glyphkeel board in the light theme: a sidebar with Today, All tasks and three projects, a filter bar, and five columns from Backlog to Done with task cards showing labels, due dates, checklist progress, comments and time spent" width="900">
 
-<sub>Design preview of the planned interface, not a screenshot of the running app.</sub>
+<sub>The board of version 0.1.0, with a running timer in the sidebar.</sub>
 
 </div>
 
 > [!IMPORTANT]
-> Glyphkeel is in early development. There are no releases yet, and nothing
-> here is ready for daily use. The pictures in this README are design previews
-> of the interface being built.
+> Glyphkeel is in early development. The first release, 0.1.0, is being
+> prepared, and nothing here is ready for daily use yet. The pictures in this README are screenshots of
+> version 0.1.0, except the two marked as planned.
 
 ## Why
 
@@ -86,22 +86,16 @@ not a separate service.
 
 ## Screenshots
 
-These are design previews of the planned interface, rendered from the UI
-design, not screenshots of the running app. The finished app may differ in
-detail.
+Screenshots of version 0.1.0, taken with a sample workspace.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/list.png" alt="Design preview: task list with a saved view, filter chips and tasks grouped by status"><br><sub>Task list with a saved view, filter chips and grouping</sub></td>
-    <td width="50%"><img src="docs/screenshots/task.png" alt="Design preview: the board in the dark theme with the task panel open"><br><sub>Task panel with checklist, links and a running timer (dark theme)</sub></td>
+    <td width="50%"><img src="docs/screenshots/list.png" alt="The task list with the saved view Open work by status: a query in the filter bar, a condition chip, tasks grouped by status with columns for priority, labels, due date, estimate and time spent, and totals"><br><sub>Task list with a saved view, a query and grouping</sub></td>
+    <td width="50%"><img src="docs/screenshots/task.png" alt="The board in the dark theme with the task panel open: status, a running timer, priority, dates, labels, a description with a checklist, subtasks and links to other tasks"><br><sub>Task panel with checklist, subtasks, links and a running timer (dark theme)</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/screenshots/gantt.png" alt="Design preview: Gantt chart with task bars, a dependency, a milestone and unscheduled tasks"><br><sub>Gantt chart with dependencies, a milestone and unscheduled tasks</sub></td>
-    <td width="50%"><img src="docs/screenshots/wiki.png" alt="Design preview: a wiki page about the query language, with a page tree and an outline"><br><sub>Wiki page with a page tree, outline and links to tasks</sub></td>
-  </tr>
-  <tr>
-    <td width="50%"><img src="docs/screenshots/today.png" alt="Design preview: the command palette open over the Today view, in the dark theme"><br><sub>Command palette over the Today view (dark theme)</sub></td>
-    <td width="50%"><img src="docs/screenshots/board-sand.png" alt="Design preview: the board in the warm, light Sand theme"><br><sub>The board in the Sand theme</sub></td>
+    <td width="50%"><img src="docs/screenshots/today.png" alt="The command palette open over the Today view in the dark theme, listing matching actions, tasks and projects"><br><sub>Command palette over the Today view (dark theme)</sub></td>
+    <td width="50%"><img src="docs/screenshots/board-sand.png" alt="The board in the warm, light Sand theme"><br><sub>The board in the Sand theme</sub></td>
   </tr>
 </table>
 
@@ -110,28 +104,39 @@ detail.
 
 <br>
 
-<img src="docs/screenshots/board-slate.png" alt="Design preview: the board in the cool, dark Slate theme" width="900">
+<img src="docs/screenshots/board-slate.png" alt="The board in the cool, dark Slate theme" width="900">
 
 <sub>The board in the Slate theme</sub>
 
-<img src="docs/screenshots/themes.png" alt="Design preview: the Light, Dark, Slate, Sand and Contrast themes with sample components" width="900">
+<img src="docs/screenshots/themes.png" alt="The board cut into five vertical slices, each in one theme: Light, Sand, Slate, Dark and Contrast" width="900">
 
-<sub>The five themes with sample components</sub>
+<sub>The board in the Light, Sand, Slate, Dark and Contrast themes</sub>
 
 </details>
+
+### Planned
+
+These two features are not built yet. The pictures are design previews,
+rendered from the UI design, not screenshots of the app.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/gantt.png" alt="Design preview of a planned feature: Gantt chart with task bars, a dependency, a milestone and unscheduled tasks"><br><sub>Design preview: Gantt chart with dependencies, a milestone and unscheduled tasks</sub></td>
+    <td width="50%"><img src="docs/screenshots/wiki.png" alt="Design preview of a planned feature: a wiki page about the query language, with a page tree and an outline"><br><sub>Design preview: wiki page with a page tree, outline and links to tasks</sub></td>
+  </tr>
+</table>
 
 ## Status and roadmap
 
 Glyphkeel is being built in the open, in vertical slices: each slice adds a
 feature to the engine, the MCP server, the command line and the app together.
 
-- **Now:** the repository skeleton. The workspace builds, the desktop app
-  opens a window with an empty shell, and the command line prints its help. No feature
-  works yet.
-- **Next:** projects, tasks and the board, with their MCP tools and commands;
-  then task details, time tracking, the list and query language, search,
-  history and backups. That set makes the first release, 0.1.
-- **Later:** the wiki, the Gantt chart and calendar, and deeper project
+- **Now:** version 0.1.0, the first release, is being prepared. Projects, tasks and the board,
+  task details, time tracking, the list and query language, search, history,
+  the trash and backups work in the app, on the command line and through the
+  MCP server.
+- **Next:** feedback on 0.1.0, then the wiki in the app.
+- **Later:** the Gantt chart and calendar, and deeper project
   settings such as custom fields, versions and recurring tasks.
 - **Platforms:** Linux first, packaged as deb, rpm and Flatpak. Windows
   support follows after 1.0. macOS is not planned at present.
