@@ -187,3 +187,11 @@ list-exported = { $count ->
     [one] { $count } task exported
    *[other] { $count } tasks exported
   }
+
+# The line at the end of each group of the list that adds a task with the
+# group's value (its status, priority, label, parent, due week or project).
+list-group-add = Add task
+list-group-add-to = Add a task to { $group }
+list-group-add-title = Title of the new task
+list-group-add-title-in = Title of the new task in { $group }
+list-group-added = { $key } added to { $group }

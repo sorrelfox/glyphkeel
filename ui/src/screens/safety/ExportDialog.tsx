@@ -61,7 +61,7 @@ export function ExportDialog({ isOpen, onOpenChange, projects: initial = [] }: {
   };
   const start = () => {
     setRunning(true);
-    const name = t("transfer-export-name", { date: today }) + (format === "zip" ? ".zip" : "");
+    const name = t("transfer-export-name", { date: today, format });
     exportArchive(call, { projects, folder: format === "folder", name }).then(
       (result) => {
         setRunning(false);

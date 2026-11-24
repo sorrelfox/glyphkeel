@@ -224,7 +224,7 @@ const theme = EditorView.theme({
   ".cm-tooltip": { backgroundColor: "var(--popover)", border: "1px solid var(--border)", borderRadius: "var(--r-m)", color: "var(--fg)", fontFamily: "var(--font-ui)" },
   ".cm-tooltip-autocomplete > ul > li": { padding: "2px 8px" },
   ".cm-tooltip-autocomplete > ul > li[aria-selected]": { backgroundColor: "var(--selected)", color: "var(--fg)" },
-  ".cm-completionDetail": { color: "var(--fg-muted)", marginLeft: "12px", fontStyle: "normal" },
+  ".cm-completionDetail": { color: "var(--fg-muted)", marginInlineStart: "12px", fontStyle: "normal" },
 });
 
 export interface QueryFieldOptions {

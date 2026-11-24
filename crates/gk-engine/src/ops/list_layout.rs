@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-//! The person's layout of a list: the order of its columns and their
-//! widths, kept per project in `view_settings` (the whole workspace's list
+//! The person's layout of a list: the order of its columns, their widths
+//! and the groups folded away, kept per project in `view_settings` (the whole workspace's list
 //! under the scope `all`), apart from the workspace's settings and its
 //! saved views. Changes are recorded in history like the board's layout,
 //! so they can be reverted.
 
 use gk_api::OpError;
+use gk_api::ops::query::ListGrouping;
 use gk_api::ops::view::{
     ListLayout, ListLayoutChange, ListLayoutGet, ListLayoutGetInput, ListLayoutUpdate,
     ListLayoutUpdateInput,
@@ -37,6 +38,10 @@ const ALL: &str = "all";
 const COLUMN_MAX: usize = 64;
 /// The most columns a layout names.
 const COLUMNS_MAX: usize = 64;
+/// The most folded groups kept per grouping.
+const COLLAPSED_MAX: usize = 500;
+/// The longest group value kept, in characters.
+const VALUE_MAX: usize = 500;
 /// The narrowest and widest column, in pixels.
 const WIDTH_MIN: u32 = 40;
 const WIDTH_MAX: u32 = 1200;
@@ -165,6 +170,33 @@ fn update(w: &mut WriteCtx<'_>, input: ListLayoutUpdateInput) -> Result<ListLayo
             ));
         }
         layout.widths.insert(column, *width);
+    }
+    for (grouping, values) in &input.collapsed {
+        let path = format!("collapsed.{grouping}");
+        if serde_json::from_value::<ListGrouping>(Value::String(grouping.clone())).is_err() {
+            return Err(messages::invalid(&path, "list-layout-grouping", &[]));
+        }
+        if values.len() > COLLAPSED_MAX || values.iter().any(|v| v.chars().count() > VALUE_MAX) {
+            return Err(messages::invalid(
+                &path,
+                "list-layout-collapsed",
+                &[
+                    ("max", COLLAPSED_MAX.to_string()),
+                    ("length", VALUE_MAX.to_string()),
+                ],
+            ));
+        }
+        let mut kept: Vec<String> = Vec::new();
+        for value in values {
+            if !kept.contains(value) {
+                kept.push(value.clone());
+            }
+        }
+        if kept.is_empty() {
+            layout.collapsed.remove(grouping);
+        } else {
+            layout.collapsed.insert(grouping.clone(), kept);
+        }
     }
     if layout.widths.len() > COLUMNS_MAX {
         return Err(messages::invalid(

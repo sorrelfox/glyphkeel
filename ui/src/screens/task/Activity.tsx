@@ -193,6 +193,19 @@ interface Names {
   keys: ReadonlyMap<string, string>;
   /** The workspace's working day and week, for durations. */
   units?: DurationUnits;
+  /** The locale, for lists of names; the browser's when left out. */
+  locale?: string;
+}
+
+/** How long a text value of a list may be before the engine cuts it, in characters. */
+const CUT_AT = 500;
+
+/**
+ * A value as shown, marked as cut short when the engine cut it (long text
+ * in history is cut to its first 500 characters; the item keeps it whole).
+ */
+export function cutShort(t: Translate, value: string, change: { truncated?: boolean } | undefined): string {
+  return change?.truncated === true && value.length >= CUT_AT ? t("history-value-cut", { value }) : value;
 }
 
 const BACKWARDS: Record<string, string> = { blocks: "blocked_by", duplicates: "duplicated_by", clones: "cloned_by", relates: "relates" };
@@ -214,7 +227,7 @@ function shown(t: Translate, names: Names, field: string, value: unknown): strin
     case "type":
       return byId(names.project.types, value);
     case "labels":
-      return Array.isArray(value) ? value.map((id) => byId(names.project.labels, id)).join(", ") : plainText(value);
+      return Array.isArray(value) ? new Intl.ListFormat(names.locale, { style: "long", type: "conjunction" }).format(value.map((id) => byId(names.project.labels, id))) : plainText(value);
     case "priority":
       return typeof value === "string" && ["none", "low", "normal", "high", "urgent"].includes(value) ? t(`priority-${value}`) : plainText(value);
     case "estimate":
@@ -306,8 +319,8 @@ export function describeEntry(t: Translate, names: Names, entry: ActivityEntry):
         change.after === undefined
           ? t("history-cleared", { field: name })
           : change.before === undefined
-            ? t("history-set", { field: name, value: shown(t, names, field, change.after) })
-            : t("history-changed", { field: name, before: shown(t, names, field, change.before), after: shown(t, names, field, change.after) }),
+            ? t("history-set", { field: name, value: cutShort(t, shown(t, names, field, change.after), change) })
+            : t("history-changed", { field: name, before: cutShort(t, shown(t, names, field, change.before), change), after: cutShort(t, shown(t, names, field, change.after), change) }),
       );
     }
   }
@@ -333,6 +346,7 @@ function HistoryList({
   const [actor, setActor] = useState<ActorKind | "all">("all");
   const history = useTaskHistory(task.id, true, actor === "all" ? undefined : actor);
   const units = useDurationUnits();
+  const { locale } = useLocale();
   const keys = new Map<string, string>([[task.id, task.key]]);
   for (const link of task.links ?? []) {
     keys.set(link.task.id, link.task.key);
@@ -386,7 +400,7 @@ function HistoryList({
     {who}
     <ol className={styles.history} aria-label={t("history-title")}>
       {entries.map((entry) => {
-        const lines = describeEntry(t, { task, project, keys, units }, entry);
+        const lines = describeEntry(t, { task, project, keys, units, locale }, entry);
         if (lines.length === 0) {
           return null;
         }

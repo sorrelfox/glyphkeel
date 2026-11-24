@@ -1111,8 +1111,10 @@ export type ListGroup = {
 /** What a list's rows are grouped by. */
 export type ListGrouping = "status" | "priority" | "label" | "parent" | "due_week" | "project";
 
-/** The person's own layout of a list: the order of its columns and their widths, kept per project (and once for the whole workspace's list). Unlike saved views it belongs to the person, not to the workspace. */
+/** The person's own layout of a list: the order of its columns, their widths and the groups folded away, kept per project (and once for the whole workspace's list). Unlike saved views it belongs to the person, not to the workspace. */
 export type ListLayout = {
+  /** The groups the person folded away, by grouping (`status`, `priority`, `label`, `parent`, `due_week`, `project`): each group's value as `task.search` gives it, and an empty text for the group of tasks without a value. Left out when none are. */
+  collapsed?: Record<string, string[]>;
   /** The columns shown, in order; empty: the list's own choice. */
   columns: string[];
   /** Column widths in pixels, by column; the columns left out keep their default width. */
@@ -1137,6 +1139,8 @@ export type ListLayoutGetInput = {
 
 /** Changes to a list layout; fields left out keep their value. */
 export type ListLayoutUpdateInput = {
+  /** The folded groups to keep, by grouping; each grouping given replaces its list, and an empty list unfolds them all. The others keep theirs. */
+  collapsed?: Record<string, string[]>;
   /** The columns shown, in order (machine names such as `due`); empty: the list's own choice. */
   columns?: string[] | null;
   /** The project (key or ID); left out: the list of the whole workspace. */
@@ -3544,9 +3548,9 @@ export function makeOps(call: Call) {
       update: (input: OpMap["layout.update"]["input"]) => call("layout.update", input),
     },
     list: {
-      /** The person's layout of a project's list, or of the whole workspace's: column order and widths. (read) */
+      /** The person's layout of a project's list, or of the whole workspace's: column order and widths, and the folded groups. (read) */
       layoutGet: (input: OpMap["list.layout.get"]["input"] = {}) => call("list.layout.get", input),
-      /** Reorder the columns of a list or change their widths, or go back to the default layout. (write) */
+      /** Reorder the columns of a list, change their widths, fold or unfold its groups, or go back to the default layout. (write) */
       layoutUpdate: (input: OpMap["list.layout.update"]["input"] = {}) => call("list.layout.update", input),
     },
     markdown: {

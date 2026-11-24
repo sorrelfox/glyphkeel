@@ -223,8 +223,9 @@ pub struct ViewChange {
     pub group: Option<String>,
 }
 
-/// The person's own layout of a list: the order of its columns and their
-/// widths, kept per project (and once for the whole workspace's list).
+/// The person's own layout of a list: the order of its columns, their
+/// widths and the groups folded away, kept per project (and once for the
+/// whole workspace's list).
 /// Unlike saved views it belongs to the person, not to the workspace.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -236,6 +237,12 @@ pub struct ListLayout {
     /// default width.
     #[serde(default)]
     pub widths: BTreeMap<String, u32>,
+    /// The groups the person folded away, by grouping (`status`,
+    /// `priority`, `label`, `parent`, `due_week`, `project`): each group's
+    /// value as `task.search` gives it, and an empty text for the group of
+    /// tasks without a value. Left out when none are.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub collapsed: BTreeMap<String, Vec<String>>,
 }
 
 /// Which list layout to read.
@@ -265,6 +272,10 @@ pub struct ListLayoutUpdateInput {
     /// theirs.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub widths: BTreeMap<String, u32>,
+    /// The folded groups to keep, by grouping; each grouping given replaces
+    /// its list, and an empty list unfolds them all. The others keep theirs.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub collapsed: BTreeMap<String, Vec<String>>,
 }
 
 /// A list layout, after a change or as read.
@@ -326,7 +337,7 @@ op!(
 );
 
 pub(crate) const LIST_LAYOUT_GET: OpDescriptor = OpDescriptor::of::<ListLayoutGet>(Meta {
-    summary: "The person's layout of a project's list, or of the whole workspace's: column order and widths.",
+    summary: "The person's layout of a project's list, or of the whole workspace's: column order and widths, and the folded groups.",
     kind: OpKind::Query,
     safety: Safety::Read,
     exposure: Exposure::App {
@@ -338,7 +349,7 @@ pub(crate) const LIST_LAYOUT_GET: OpDescriptor = OpDescriptor::of::<ListLayoutGe
 });
 
 pub(crate) const LIST_LAYOUT_UPDATE: OpDescriptor = OpDescriptor::of::<ListLayoutUpdate>(Meta {
-    summary: "Reorder the columns of a list or change their widths, or go back to the default layout.",
+    summary: "Reorder the columns of a list, change their widths, fold or unfold its groups, or go back to the default layout.",
     kind: OpKind::Command,
     safety: Safety::Write,
     exposure: Exposure::App {

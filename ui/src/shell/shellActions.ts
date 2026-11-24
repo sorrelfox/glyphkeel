@@ -12,6 +12,8 @@ export interface ShellCommands {
   /** Shows the quick-add window; null where there is none (a plain browser). */
   quickAdd: (() => void) | null;
   setView: (view: "today" | "all-tasks" | "time" | "trash" | "activity") => void;
+  /** Shows the open project as a board or a list; null outside a project. */
+  projectView: ((view: "board" | "list") => void) | null;
   toggleSidebar: () => void;
   showShortcuts: () => void;
   openPreferences: () => void;
@@ -48,6 +50,10 @@ export function shellActions(commands: ShellCommands): Action[] {
     action("nav.timeReport", "action-time-report", "navigation", () => { commands.setView("time"); }),
     action("nav.activity", "action-activity", "navigation", () => { commands.setView("activity"); }),
     action("nav.trash", "action-trash", "navigation", () => { commands.setView("trash"); }),
+    action("view.board", "action-view-board", "navigation", () => commands.projectView?.("board"), commands.projectView ? {} : UNAVAILABLE),
+    action("view.list", "action-view-list", "navigation", () => commands.projectView?.("list"), commands.projectView ? {} : UNAVAILABLE),
+    action("view.gantt", "action-view-gantt", "navigation", nothing, UNAVAILABLE),
+    action("view.wiki", "action-view-wiki", "navigation", nothing, UNAVAILABLE),
     action("sidebar.toggle", "action-toggle-sidebar", "window", commands.toggleSidebar),
     action("focus.nextRegion", "action-next-region", "window", () => { focusRegion(1); }),
     action("focus.previousRegion", "action-previous-region", "window", () => { focusRegion(-1); }),

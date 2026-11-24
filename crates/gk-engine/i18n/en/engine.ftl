@@ -308,6 +308,7 @@ task-open-subtasks = { $count ->
        *[other] { $task } still has { $count } open subtasks.
     }
 task-still-blocked = { $task } is still blocked by { $blockers }.
+task-still-blocked-outside = { $task } is still blocked by a task outside the project you work in.
 task-label-left-off = Label "{ $label }" doesn't exist in { $project } and was left off.
 storage-task-no-project = A task needs a project.
 storage-task-no-number = A task needs a number.
@@ -318,6 +319,8 @@ project-parent-or-top = Give either `parent` or `top_level`.
 place-say-where = Say where: `before`, `after` or `at`.
 project-key-taken = The key { $key } is already used by a project, now or before.
 project-key-taken-hint = Choose another key; old keys stay reserved so links keep working.
+project-key-unavailable = The key { $key } can't be used here.
+project-key-unavailable-hint = Choose another key.
 project-parent-last-level = Projects go at most { $max } levels deep; { $project } is already on the last level.
 project-parent-loop = { $project } can't go under itself or one of its own sub-projects.
 project-move-too-deep = Projects go at most { $max } levels deep; under { $parent } { $project } would need { $levels }.
@@ -385,6 +388,8 @@ board-card-field = Cards can't show "{ $field }".
 view-field-name = Each entry is a field name of 1 to { $max } characters.
 list-layout-columns = A list layout names at most { $max } columns.
 list-layout-width = A column is { $min } to { $max } pixels wide.
+list-layout-grouping = Groups can be folded only for status, priority, label, parent, due week or project.
+list-layout-collapsed = A list keeps at most { $max } folded groups per grouping, each name at most { $length } characters long.
 view-name-taken = There is already a view named "{ $view }".
 view-name-taken-hint = Choose another name, or change that view.
 view-not-found = There is no view "{ $view }".

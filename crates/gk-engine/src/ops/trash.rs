@@ -650,8 +650,8 @@ fn any_project(tx: &Transaction<'_>, text: &str) -> Result<Id, Failure> {
         )
         .optional()?;
     match by.and_then(|v| Id::from_slice(&v).ok()) {
-        Some(id) => Ok(id),
-        None => lookup::project(tx, "project", text).map(|p| p.id),
+        Some(id) if crate::scope::sees(id) => Ok(id),
+        _ => lookup::project(tx, "project", text).map(|p| p.id),
     }
 }
 
@@ -675,6 +675,13 @@ fn list(q: &QueryCtx<'_>, input: TrashListInput) -> Result<TrashList, Failure> {
     if let Some(p) = &input.project {
         filters.push("project_id = ?".to_owned());
         args.push(SqlValue::Blob(b(any_project(q.tx, p)?)));
+    }
+    // A caller limited to a project sees the trash of it and its
+    // sub-projects only.
+    if let Some(projects) = crate::scope::projects() {
+        let marks = vec!["?"; projects.len()].join(", ");
+        filters.push(format!("project_id IN ({marks})"));
+        args.extend(projects.into_iter().map(|p| SqlValue::Blob(b(p))));
     }
     if !input.kinds.is_empty() {
         let marks = vec!["?"; input.kinds.len()].join(", ");

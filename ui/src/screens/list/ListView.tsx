@@ -8,6 +8,8 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Button, Menu, MenuItem, MenuTrigger, Popover } from "react-aria-components";
 
 import { useTrashTasks } from "../../data/safety";
+import { useCreateTask } from "../../data/board";
+import { useGroupText } from "./GroupName";
 import { useAppearance } from "../../appearance/AppearanceProvider";
 import { classes } from "../../classes";
 import { Kbd } from "../../components/Kbd";
@@ -28,7 +30,7 @@ import { CellContext, type CellActions } from "./cells";
 import { Chips } from "./Chips";
 import { SaveControls, useViewCommands, ViewPicker } from "./ViewMenu";
 import { ListTable } from "./ListTable";
-import { changedFrom, clickRow, COLUMNS, exportName, FIXED_COLUMNS, GROUPINGS, isGrouping, listLines, moveColumn, nextSort, NO_SELECTION, removeRanges, viewColumns, withSort, type ColumnId, type Selection } from "./model";
+import { changedFrom, clickRow, COLUMNS, exportName, FIXED_COLUMNS, GROUPINGS, groupTaskInput, isGrouping, listLines, moveColumn, nextSort, NO_SELECTION, removeRanges, viewColumns, withSort, type ColumnId, type Selection } from "./model";
 import styles from "./List.module.css";
 
 /** How long typing pauses before the query runs. */
@@ -61,8 +63,8 @@ export function ListView({ project, openTask, onOpen }: ListViewProps) {
   return <LoadedList key={project ?? ""} project={project} views={saved.views} layout={own.layout?.layout ?? { columns: [], widths: {} }} openTask={openTask} onOpen={onOpen} />;
 }
 
-/** A group's key among the collapsed ones: its value, or one mark for the tasks without one. */
-const groupKey = (group: ListGroup) => group.value ?? "\u0000";
+/** A group's key among the folded ones, as the engine keeps it: its value, or an empty text for the tasks without one. */
+const groupKey = (group: ListGroup) => group.value ?? "";
 
 /** The engine's message for a query mistake, in the person's language. */
 function useProblemText(): (problem: QueryProblem) => string {
@@ -98,7 +100,9 @@ function LoadedList({ project, views, layout, openTask, onOpen }: LoadedListProp
   const [widths, setWidths] = useState<Readonly<Record<string, number>>>(layout.widths);
   const [columns, setColumns] = useState<ColumnId[]>(() => viewColumns(initial, workspaceWide, layout.columns));
   const [groupBy, setGroupBy] = useState<ListGrouping | undefined>(isGrouping(initial?.group_by) ? initial.group_by : undefined);
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+  // The groups the person folded away, per grouping, kept by the engine with the layout.
+  const [folded, setFolded] = useState<Readonly<Record<string, readonly string[]>>>(layout.collapsed ?? {});
+  const collapsed: ReadonlySet<string> = new Set(groupBy === undefined ? [] : (folded[groupBy] ?? []));
   const [includeSubprojects, setIncludeSubprojects] = useState(false);
   const [selection, setSelection] = useState<Selection>(NO_SELECTION);
   const [focused, setFocused] = useState(0);
@@ -137,11 +141,19 @@ function LoadedList({ project, views, layout, openTask, onOpen }: LoadedListProp
   });
   const items = virtualizer.getVirtualItems();
   const isCollapsed = (group: ListGroup) => collapsed.has(groupKey(group));
+  // Each open group ends with a "+" line that adds a task with its value,
+  // where there is a project to put it in.
+  const adds = groupBy !== undefined && (project !== undefined || groupBy === "project" || groupBy === "parent");
   const linesOf = (groups: readonly ListGroup[] | undefined, total: number) =>
-    listLines(total, groups, (index) => {
-      const group = groups?.[index];
-      return group !== undefined && isCollapsed(group);
-    });
+    listLines(
+      total,
+      groups,
+      (index) => {
+        const group = groups?.[index];
+        return group !== undefined && isCollapsed(group);
+      },
+      adds,
+    );
   const rows = useListRows(scope, (groups, total) => linesOf(groups, total).rowsIn(items[0]?.index ?? 0, items.at(-1)?.index ?? LIST_PAGE - 1));
   const lines = linesOf(rows.groups, rows.total ?? 0);
   if (rows.total !== undefined && lines.count !== lineCount) {
@@ -195,7 +207,6 @@ function LoadedList({ project, views, layout, openTask, onOpen }: LoadedListProp
     setSort(view?.sort ?? "");
     setColumns(viewColumns(view, workspaceWide, ownColumns));
     setGroupBy(isGrouping(view?.group_by) ? view.group_by : undefined);
-    setCollapsed(new Set());
     setSelection(NO_SELECTION);
   };
 
@@ -219,7 +230,31 @@ function LoadedList({ project, views, layout, openTask, onOpen }: LoadedListProp
 
   const group = (next: ListGrouping | undefined) => {
     setGroupBy(next);
-    setCollapsed(new Set());
+  };
+
+  const createTask = useCreateTask();
+  const groupText = useGroupText();
+  /** Adds a task with a group's value, from the "+" line at the group's end. */
+  const addToGroup = async (target: ListGroup, title: string) => {
+    const input = groupBy === undefined ? undefined : groupTaskInput(groupBy, target, project, title);
+    if (input === undefined) {
+      return;
+    }
+    const change = await createTask.mutateAsync(input);
+    toasts.show({ tone: "info", text: t("list-group-added", { key: change.task.key, group: groupBy === undefined ? "" : groupText(groupBy, target) }) });
+  };
+
+  /** Folds a group away or opens it again, and keeps that for the person. */
+  const toggleGroup = (toggled: ListGroup) => {
+    if (groupBy === undefined) {
+      return;
+    }
+    const next = new Set(collapsed);
+    if (!next.delete(groupKey(toggled))) {
+      next.add(groupKey(toggled));
+    }
+    setFolded({ ...folded, [groupBy]: [...next] });
+    keepLayout.mutate({ ...(project === undefined ? {} : { project }), collapsed: { [groupBy]: [...next] } });
   };
 
   const viewCommands = useViewCommands({
@@ -354,6 +389,27 @@ function LoadedList({ project, views, layout, openTask, onOpen }: LoadedListProp
       toggleAll();
     }
   };
+
+  // New results replace the rows (each row is its task), so the row that had
+  // the focus can leave the page and take the focus with it. The focus then
+  // stays in the list, on the row at the same place.
+  const lastRow = useRef<Element | null>(null);
+  useEffect(() => {
+    const onFocusIn = (event: FocusEvent) => {
+      lastRow.current = event.target instanceof Element ? event.target.closest("[data-list-scroll] [data-index]") : null;
+    };
+    document.addEventListener("focusin", onFocusIn);
+    return () => {
+      document.removeEventListener("focusin", onFocusIn);
+    };
+  }, []);
+  useEffect(() => {
+    const row = lastRow.current;
+    if (row && !row.isConnected && (document.activeElement === null || document.activeElement === document.body)) {
+      lastRow.current = null;
+      focusRow(focused);
+    }
+  });
 
   // Ctrl+F puts the cursor in the query field.
   useEffect(() => {
@@ -498,13 +554,8 @@ function LoadedList({ project, views, layout, openTask, onOpen }: LoadedListProp
             lines={lines}
             grouping={groupBy}
             isCollapsed={isCollapsed}
-            onToggleGroup={(toggled) => {
-              const next = new Set(collapsed);
-              if (!next.delete(groupKey(toggled))) {
-                next.add(groupKey(toggled));
-              }
-              setCollapsed(next);
-            }}
+            onToggleGroup={toggleGroup}
+            onAddToGroup={adds ? addToGroup : undefined}
             sort={shownSort}
             onSort={sortBy}
             selection={selection}

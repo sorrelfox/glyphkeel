@@ -63,10 +63,12 @@ fn api_kind(kind: LinkKind) -> ApiLinkKind {
 }
 
 /// Every link of task `id`, in the order they were made. Links to tasks
-/// in the trash are left out.
+/// in the trash are left out, and so are, for a caller limited to a
+/// project, links to tasks outside it.
 pub(crate) fn links(tx: &Transaction<'_>, id: Id) -> Result<Vec<Link>, Failure> {
     let mut stmt = tx.prepare_cached(
-        "SELECT r.id, r.from_task, r.to_task, r.kind FROM task_relations r
+        "SELECT r.id, r.from_task, r.to_task, r.kind, f.project_id, t.project_id
+           FROM task_relations r
            JOIN tasks f ON f.id = r.from_task JOIN tasks t ON t.id = r.to_task
           WHERE (r.from_task = ?1 OR r.to_task = ?1)
             AND f.deleted_at IS NULL AND t.deleted_at IS NULL
@@ -79,14 +81,20 @@ pub(crate) fn links(tx: &Transaction<'_>, id: Id) -> Result<Vec<Link>, Failure> 
                 id_at(r, 1)?,
                 id_at(r, 2)?,
                 r.get::<_, String>(3)?,
+                id_at(r, 4)?,
+                id_at(r, 5)?,
             ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
     let mut out = Vec::with_capacity(rows.len());
-    for (link, from, to, kind) in rows {
+    for (link, from, to, kind, from_project, to_project) in rows {
         let Ok(relation) = kind.parse::<Relation>() else {
             continue;
         };
+        let other_project = if from == id { to_project } else { from_project };
+        if !crate::scope::allows(tx, other_project)? {
+            continue;
+        }
         if let Some((kind, other)) = LinkKind::seen_from(relation, from, to, id) {
             out.push(Link {
                 kind: api_kind(kind),
@@ -98,19 +106,30 @@ pub(crate) fn links(tx: &Transaction<'_>, id: Id) -> Result<Vec<Link>, Failure> 
     Ok(out)
 }
 
-/// The keys of the open tasks that block task `id`.
-pub(crate) fn open_blockers(tx: &Transaction<'_>, id: Id) -> Result<Vec<String>, Failure> {
+/// The open tasks that block task `id`: the keys of those the caller may
+/// see, and how many others there are (outside the project a caller is
+/// limited to).
+pub(crate) fn open_blockers(tx: &Transaction<'_>, id: Id) -> Result<(Vec<String>, usize), Failure> {
     let mut stmt = tx.prepare_cached(
-        "SELECT p.key || '-' || o.number FROM task_relations r
+        "SELECT p.key || '-' || o.number, p.id FROM task_relations r
            JOIN tasks o ON o.id = r.from_task JOIN projects p ON p.id = o.project_id
           WHERE r.to_task = ?1 AND r.kind = 'blocks' AND o.deleted_at IS NULL
             AND o.closed_at IS NULL
           ORDER BY p.key, o.number",
     )?;
-    let keys = stmt
-        .query_map([b(id)], |r| r.get::<_, String>(0))?
+    let rows = stmt
+        .query_map([b(id)], |r| Ok((r.get::<_, String>(0)?, id_at(r, 1)?)))?
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(keys)
+    let mut keys = Vec::with_capacity(rows.len());
+    let mut hidden = 0;
+    for (key, project) in rows {
+        if crate::scope::allows(tx, project)? {
+            keys.push(key);
+        } else {
+            hidden += 1;
+        }
+    }
+    Ok((keys, hidden))
 }
 
 /// Whether `ancestor` is above `id` in its parent chain.

@@ -43,6 +43,55 @@ const uiText = [
   },
 ];
 
+// A sentence is one message with placeables, never pieces put together in
+// code: word order and punctuation differ between languages. Lists of names
+// are joined with Intl.ListFormat.
+const translated = "CallExpression[callee.name='t']";
+export const joinedText = [
+  {
+    selector: `BinaryExpression[operator='+']:has(> ${translated})`,
+    message: "Don't join translated text with +; write one message with placeables.",
+  },
+  {
+    selector: `TemplateLiteral:has(> ${translated})`,
+    message: "Don't build text around a translated message; write one message with placeables.",
+  },
+  {
+    selector: `CallExpression[callee.property.name='join'][callee.object.type='ArrayExpression']:has(${translated})`,
+    message: "Don't join translated pieces; write one message, or use Intl.ListFormat for a list.",
+  },
+  {
+    selector: `JSXExpressionContainer:has(> ${translated}) ~ :matches(JSXText[value=/[^\\s]/u], JSXExpressionContainer:has(> Literal[value=/[^\\s]/u]))`,
+    message: "Text next to a translated message belongs in the message; use one message with placeables.",
+  },
+  {
+    selector: `:matches(JSXText[value=/[^\\s]/u], JSXExpressionContainer:has(> Literal[value=/[^\\s]/u])) ~ JSXExpressionContainer:has(> ${translated})`,
+    message: "Text next to a translated message belongs in the message; use one message with placeables.",
+  },
+  {
+    selector: `JSXExpressionContainer:has(> ${translated}) ~ JSXExpressionContainer:has(> ${translated})`,
+    message: "Two translated messages side by side make one sentence; write one message with placeables.",
+  },
+];
+
+// Layout follows the writing direction, so right-to-left languages work
+// later: inline styles use logical properties too. Positions taken from the
+// pointer or from getBoundingClientRect are physical by nature and say so.
+export const physicalStyles = [
+  {
+    selector: "Property[key.name=/^(margin|padding)(Left|Right)$|^border(Left|Right)|^border(Top|Bottom)(Left|Right)Radius$/]",
+    message: "Use the logical property (marginInlineStart, paddingInlineEnd, borderInlineStart…).",
+  },
+  {
+    selector: "JSXAttribute[name.name='style'] Property[key.name=/^(left|right)$/]",
+    message: "Use insetInlineStart or insetInlineEnd, or explain why the position is physical.",
+  },
+  {
+    selector: "Property[key.name=/^(textAlign|float|clear)$/][value.value=/^(left|right)$/]",
+    message: "Use start or end, which follow the writing direction.",
+  },
+];
+
 // The platform's own drop-down list ignores the theme (WebKitGTK opens an
 // unstyled GTK list); choices use the shared Select component instead.
 const nativeControls = [
@@ -76,7 +125,14 @@ export default defineConfig([
       "@typescript-eslint/no-implied-eval": "error",
       "no-new-func": "error",
       "no-script-url": "error",
-      "no-restricted-syntax": ["error", ...htmlInsertion, ...uiText, ...nativeControls],
+      "no-restricted-syntax": [
+        "error",
+        ...htmlInsertion,
+        ...uiText,
+        ...joinedText,
+        ...physicalStyles,
+        ...nativeControls,
+      ],
       "no-restricted-globals": ["error", ...networkGlobals],
     },
   },

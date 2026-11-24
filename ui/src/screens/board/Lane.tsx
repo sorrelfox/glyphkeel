@@ -105,10 +105,12 @@ interface LaneProps {
   onCreate: (title: string) => void;
   onStopAdding: () => void;
   onShowOlder: () => void;
+  /** Hands the board how to bring a place of this lane into view while it is drawn virtually, and null when not. */
+  onScroller?: (run: ((index: number) => void) | null) => void;
 }
 
 /** One board column: its header with the count and WIP limit, its cards, and the inline Add task field. */
-export function Lane({ lane, keys, cards, handlers, active, closed, hot, adding, menu, onAdd, onCreate, onStopAdding, onShowOlder }: LaneProps) {
+export function Lane({ lane, keys, cards, handlers, active, closed, hot, adding, menu, onAdd, onCreate, onStopAdding, onShowOlder, onScroller }: LaneProps) {
   const t = useT();
   const { column } = lane;
   const limit = column.wip_limit;
@@ -116,6 +118,12 @@ export function Lane({ lane, keys, cards, handlers, active, closed, hot, adding,
   // A virtual lane hands over how to bring an index into view, for keyboard moves.
   const [scrollTo, setScrollTo] = useState<{ run: (index: number) => void } | null>(null);
   const data: LaneData = { kind: "lane", cards: keys, closed, scrollTo: scrollTo?.run };
+  useEffect(() => {
+    onScroller?.(scrollTo?.run ?? null);
+    return () => {
+      onScroller?.(null);
+    };
+  }, [onScroller, scrollTo]);
   const { setNodeRef } = useDroppable({ id: column.id, data, disabled: closed });
   const body = keys.length > VIRTUAL_OVER;
   const label = limit === undefined ? t("lane-label", { name: column.name, count: lane.total }) : t("lane-label-wip", { name: column.name, count: lane.total, limit });

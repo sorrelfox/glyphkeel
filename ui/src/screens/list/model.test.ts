@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { changedFrom, clickRow, columnWidth, exportName, gridTemplate, listLines, moveColumn, nextSort, NO_SELECTION, removeRanges, sortState, viewColumns, withSort } from "./model";
+import { changedFrom, clickRow, columnWidth, exportName, gridTemplate, groupTaskInput, listLines, moveColumn, nextSort, NO_SELECTION, removeRanges, sortState, viewColumns, withSort } from "./model";
 
 describe("sorting by a column header", () => {
   it("goes ascending, descending, then back to the default order", () => {
@@ -93,6 +93,38 @@ describe("columns and views", () => {
 });
 
 describe("groups of rows", () => {
+  it("ends each open group with a line that adds a task to it", () => {
+    const lines = listLines(5, [{ count: 2 }, { count: 3 }], (group) => group === 1, true);
+    // Header, two rows, the add line; then the folded group's header alone.
+    expect(lines.count).toBe(5);
+    expect([0, 1, 2, 3, 4].map((line) => lines.at(line))).toEqual([
+      { kind: "group", group: 0 },
+      { kind: "row", row: 0 },
+      { kind: "row", row: 1 },
+      { kind: "add", group: 0 },
+      { kind: "group", group: 1 },
+    ]);
+    expect(lines.lineOf(1)).toBe(2);
+    expect(lines.rowsIn(3, 3)).toEqual({ first: 2, last: 2 });
+    const open = listLines(5, [{ count: 2 }, { count: 3 }], () => false, true);
+    expect(open.count).toBe(9);
+    expect(open.at(8)).toEqual({ kind: "add", group: 1 });
+    expect(open.lineOf(2)).toBe(5);
+  });
+
+  it("gives a new task the value of the group it is added to", () => {
+    expect(groupTaskInput("status", { value: "Review" }, "TM", "A")).toEqual({ project: "TM", title: "A", status: "Review" });
+    expect(groupTaskInput("priority", { value: "urgent" }, "TM", "A")).toEqual({ project: "TM", title: "A", priority: "urgent" });
+    expect(groupTaskInput("label", { value: "docs" }, "TM", "A")).toEqual({ project: "TM", title: "A", labels: ["docs"] });
+    expect(groupTaskInput("label", {}, "TM", "A")).toEqual({ project: "TM", title: "A" });
+    expect(groupTaskInput("due_week", { value: "2026-11-23" }, "TM", "A")).toEqual({ project: "TM", title: "A", due_date: "2026-11-23" });
+    // A subtask goes into its parent's project; grouped by project, into that project.
+    expect(groupTaskInput("parent", { value: "CLI-12" }, "TM", "A")).toEqual({ project: "CLI", title: "A", parent: "CLI-12" });
+    expect(groupTaskInput("project", { value: "DOC" }, undefined, "A")).toEqual({ project: "DOC", title: "A" });
+    // Nowhere to put it: the whole workspace's list grouped by status.
+    expect(groupTaskInput("status", { value: "Review" }, undefined, "A")).toBeUndefined();
+  });
+
   it("puts a header line before each group's rows", () => {
     const lines = listLines(5, [{ count: 2 }, { count: 3 }]);
     expect(lines.count).toBe(7);

@@ -5,7 +5,8 @@
 // groups of rows, the query text edits that chips and headers make, and
 // selections.
 
-import { type ListGrouping, type QueryToken, type SavedView, type TextRange } from "../../generated/ops";
+import { PRIORITIES } from "../../data/catalog";
+import { type ListGrouping, type QueryToken, type SavedView, type TaskCreateInput, type TextRange } from "../../generated/ops";
 
 /** Every column the list offers, in their default order. */
 export const COLUMNS = [
@@ -161,8 +162,8 @@ export function isGrouping(value: string | undefined): value is ListGrouping {
   return (GROUPINGS as readonly string[]).includes(value ?? "");
 }
 
-/** One line of a grouped list: a group's header, or a task row by its place among all rows. */
-export type ListLine = { kind: "group"; group: number } | { kind: "row"; row: number };
+/** One line of a grouped list: a group's header, a task row by its place among all rows, or the line that adds a task to a group. */
+export type ListLine = { kind: "group"; group: number } | { kind: "row"; row: number } | { kind: "add"; group: number };
 
 /** The lines of a list, with or without groups, and the way between lines and rows. */
 export interface ListLines {
@@ -177,9 +178,10 @@ export interface ListLines {
 
 /**
  * Lines for rows in groups of the given sizes (in row order); collapsed
- * groups show only their header. Without groups every line is a row.
+ * groups show only their header. With `adds`, an open group ends with a line
+ * that adds a task to it. Without groups every line is a row.
  */
-export function listLines(total: number, groups: readonly { count: number }[] | undefined, collapsed: (group: number) => boolean = () => false): ListLines {
+export function listLines(total: number, groups: readonly { count: number }[] | undefined, collapsed: (group: number) => boolean = () => false, adds = false): ListLines {
   if (groups === undefined || groups.length === 0) {
     return {
       count: total,
@@ -196,7 +198,7 @@ export function listLines(total: number, groups: readonly { count: number }[] | 
   groups.forEach((group, index) => {
     lineStart.push(line);
     rowStart.push(row);
-    line += 1 + (collapsed(index) ? 0 : group.count);
+    line += 1 + (collapsed(index) ? 0 : group.count + (adds ? 1 : 0));
     row += group.count;
   });
   const count = line;
@@ -220,7 +222,11 @@ export function listLines(total: number, groups: readonly { count: number }[] | 
     }
     const group = groupAt(lineStart, index);
     const offset = index - (lineStart[group] ?? 0);
-    return offset === 0 ? { kind: "group", group } : { kind: "row", row: (rowStart[group] ?? 0) + offset - 1 };
+    if (offset === 0) {
+      return { kind: "group", group };
+    }
+    const rows = (rowStart[group + 1] ?? row) - (rowStart[group] ?? 0);
+    return offset > rows ? { kind: "add", group } : { kind: "row", row: (rowStart[group] ?? 0) + offset - 1 };
   };
   return {
     count,
@@ -237,6 +243,11 @@ export function listLines(total: number, groups: readonly { count: number }[] | 
         }
         if (found.kind === "row") {
           return found.row;
+        }
+        if (found.kind === "add") {
+          // After the group's last row.
+          const next = rowStart[found.group + 1] ?? row;
+          return forward ? Math.min(next, Math.max(0, row - 1)) : Math.max(0, next - 1);
         }
         return forward ? (rowStart[found.group] ?? 0) : Math.max(0, (rowStart[found.group] ?? 0) - 1);
       };
@@ -334,4 +345,39 @@ export function clickRow(selection: Selection, index: number, key: string, mods:
 export function exportName(view: string | undefined, today: string, extension: "csv" | "json"): string {
   const base = (view ?? "tasks").replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-+|-+$/g, "").toLowerCase() || "tasks";
   return `${base}-${today}.${extension}`;
+}
+
+/**
+ * The new task the "+" line of a group adds: in the list's project (or the
+ * group's, grouped by project; a parent's, grouped by parent), with the
+ * group's status, priority, label, parent or due week (its first day)
+ * filled in. Undefined where there is no project to put it in.
+ */
+export function groupTaskInput(grouping: ListGrouping, group: { value?: string }, project: string | undefined, title: string): TaskCreateInput | undefined {
+  const value = group.value;
+  const parentProject = grouping === "parent" && value !== undefined ? value.slice(0, Math.max(0, value.lastIndexOf("-"))) : "";
+  const home = grouping === "project" ? value : parentProject !== "" ? parentProject : project;
+  if (home === undefined || home === "") {
+    return undefined;
+  }
+  const input: TaskCreateInput = { project: home, title };
+  if (value === undefined) {
+    return input;
+  }
+  switch (grouping) {
+    case "status":
+      return { ...input, status: value };
+    case "priority": {
+      const priority = PRIORITIES.find((candidate) => candidate === value);
+      return priority === undefined ? input : { ...input, priority };
+    }
+    case "label":
+      return { ...input, labels: [value] };
+    case "parent":
+      return { ...input, parent: value };
+    case "due_week":
+      return { ...input, due_date: value };
+    case "project":
+      return input;
+  }
 }

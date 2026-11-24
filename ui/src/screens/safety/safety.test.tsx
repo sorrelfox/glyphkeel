@@ -47,6 +47,9 @@ describe("the activity feed's filters and words", () => {
     expect(trashed.item).toBe("PER-3");
     expect(describeChange(t, entry({ created: { after: true } }, { entity: "wiki_page" }), "en-US").what).toBe("Wiki page created");
     expect(describeChange(t, entry({}, { entity: "something_new" }), "en-US").what).toBe("Item changed");
+    // A name the engine cut short says so.
+    const long = "a".repeat(500);
+    expect(describeChange(t, entry({ name: { after: long, truncated: true } }, { entity: "wiki_page" }), "en-US").item).toBe(`${long}…`);
   });
 });
 

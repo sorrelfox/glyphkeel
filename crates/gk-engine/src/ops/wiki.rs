@@ -624,7 +624,9 @@ fn search(q: &QueryCtx<'_>, input: WikiSearchInput) -> Result<WikiSearchResult, 
         .as_deref()
         .map(|p| lookup::project(tx, "project", p))
         .transpose()?;
-    let pages = pages_in(tx, project.as_ref())?;
+    let mut pages = pages_in(tx, project.as_ref())?;
+    // A caller limited to a project searches it and its sub-projects.
+    pages.retain(|p| crate::scope::sees(p.project));
     let text = input.text.trim();
     let words_of = |s: &str| -> Vec<String> {
         s.split_whitespace()

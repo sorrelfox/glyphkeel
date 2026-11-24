@@ -369,3 +369,70 @@ fn a_saved_view_reads_its_relative_dates_each_time_it_runs() {
     let stored = call(&e, "view.list", json!({ "project": "TM" }));
     assert_eq!(stored["items"][0]["query"], "due<=+2d");
 }
+
+#[test]
+fn folded_groups_are_kept_per_grouping_for_the_person_and_survive_reopening() {
+    let dir = TempDir::new().unwrap();
+    {
+        let e = open(&dir);
+        data_set(&e);
+        let folded = call(
+            &e,
+            "list.layout.update",
+            json!({ "project": "TM", "collapsed": { "status": ["Done", "Backlog", "Done"], "label": [""] } }),
+        );
+        assert!(folded["group"].is_string());
+        assert_eq!(
+            folded["layout"]["collapsed"],
+            json!({ "label": [""], "status": ["Done", "Backlog"] })
+        );
+        // A grouping given again replaces its list; the others keep theirs.
+        let changed = call(
+            &e,
+            "list.layout.update",
+            json!({ "project": "TM", "collapsed": { "status": ["Done"] } }),
+        );
+        assert_eq!(
+            changed["layout"]["collapsed"],
+            json!({ "label": [""], "status": ["Done"] })
+        );
+        // Undo takes the last fold back; an empty list unfolds a grouping.
+        call(&e, "history.undo", json!({}));
+        assert_eq!(
+            call(&e, "list.layout.get", json!({ "project": "TM" }))["layout"]["collapsed"]["status"],
+            json!(["Done", "Backlog"])
+        );
+        call(
+            &e,
+            "list.layout.update",
+            json!({ "project": "TM", "collapsed": { "label": [] } }),
+        );
+        // Unknown groupings are refused.
+        let err = e
+            .call(
+                &Context::user(Via::App),
+                "list.layout.update",
+                json!({ "project": "TM", "collapsed": { "colour": ["red"] } }),
+            )
+            .unwrap_err();
+        assert_eq!(err.code, ErrorCode::Invalid);
+        assert_eq!(err.details["message_id"], "list-layout-grouping");
+        // Folded groups are the person's own: not in the workspace's settings or its views.
+        assert!(
+            call(&e, "settings.get", json!({}))
+                .to_string()
+                .find("Backlog")
+                .is_none()
+        );
+        assert_eq!(
+            call(&e, "list.layout.get", json!({ "project": "YARD" }))["layout"],
+            json!({ "columns": [], "widths": {} })
+        );
+        e.close();
+    }
+    let e = open(&dir);
+    assert_eq!(
+        call(&e, "list.layout.get", json!({ "project": "TM" }))["layout"]["collapsed"],
+        json!({ "status": ["Done", "Backlog"] })
+    );
+}

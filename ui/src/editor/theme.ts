@@ -36,6 +36,8 @@ const theme = EditorView.theme({
   "&.cm-focused": { outline: "none" },
   ".cm-scroller": { fontFamily: "var(--font-ui)", lineHeight: "var(--lh-read)" },
   ".cm-content": { padding: "12px 16px", caretColor: "var(--fg)" },
+  // CodeMirror draws the caret as a left border in every writing direction.
+  // eslint-disable-next-line no-restricted-syntax
   ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--fg)" },
   "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": {
     backgroundColor: "color-mix(in srgb, var(--accent) 28%, transparent)",
@@ -75,7 +77,7 @@ const theme = EditorView.theme({
   },
   ".cm-tooltip": { backgroundColor: "var(--popover)", border: "1px solid var(--border)", borderRadius: "var(--r-m)", color: "var(--fg)" },
   ".cm-tooltip-autocomplete > ul > li[aria-selected]": { backgroundColor: "var(--selected)", color: "var(--fg)" },
-  ".cm-completionDetail": { color: "var(--fg-muted)", marginLeft: "12px", fontStyle: "normal" },
+  ".cm-completionDetail": { color: "var(--fg-muted)", marginInlineStart: "12px", fontStyle: "normal" },
 });
 
 export const editorTheme = [theme, syntaxHighlighting(highlight)];

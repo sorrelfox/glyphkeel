@@ -109,6 +109,8 @@ export function useContextMenu(label: string) {
 
   const menu = at && (
     <>
+      {/* The pointer's position is physical in every writing direction. */}
+      {/* eslint-disable-next-line no-restricted-syntax */}
       <div ref={anchor} style={{ position: "fixed", left: at.x, top: at.y, width: 0, height: 0 }} />
       <Popover
         className="pop menuPopover"

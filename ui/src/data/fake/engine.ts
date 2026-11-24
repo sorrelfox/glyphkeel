@@ -2373,7 +2373,7 @@ export class FakeWorkspace {
       const project = ref === null || ref === undefined ? undefined : this.project(ref);
       return { ...some("project", project?.key), layout: structuredClone(this.state.listLayouts?.[project?.id ?? "all"] ?? { columns: [], widths: {} }) };
     },
-    "list.layout.update": ({ project: ref, reset, columns, widths }) => {
+    "list.layout.update": ({ project: ref, reset, columns, widths, collapsed }) => {
       const project = ref === null || ref === undefined ? undefined : this.project(ref);
       const scope = project?.id ?? "all";
       this.state.listLayouts ??= {};
@@ -2383,7 +2383,22 @@ export class FakeWorkspace {
           fail("invalid", "A column is 40 to 1200 pixels wide.", { details: { path: `widths.${column}`, message_id: "list-layout-width", args: { min: 40, max: 1200 } } });
         }
       }
-      const next: ListLayout = { columns: columns ? [...new Set(columns)] : [...before.columns], widths: { ...before.widths, ...widths } };
+      const folded: Record<string, string[]> = { ...before.collapsed };
+      for (const [grouping, values] of Object.entries(collapsed ?? {})) {
+        if (!["status", "priority", "label", "parent", "due_week", "project"].includes(grouping)) {
+          fail("invalid", "Groups can be folded only for status, priority, label, parent, due week or project.", { details: { path: `collapsed.${grouping}`, message_id: "list-layout-grouping" } });
+        }
+        if (values.length === 0) {
+          delete folded[grouping];
+        } else {
+          folded[grouping] = [...new Set(values)];
+        }
+      }
+      const next: ListLayout = {
+        columns: columns ? [...new Set(columns)] : [...before.columns],
+        widths: { ...before.widths, ...widths },
+        ...(Object.keys(folded).length > 0 ? { collapsed: folded } : {}),
+      };
       this.state.listLayouts[scope] = next;
       return {
         output: { ...some("project", project?.key), layout: structuredClone(next) },

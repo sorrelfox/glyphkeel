@@ -138,6 +138,12 @@ export function Shell({ titleBar, openGallery, firstRun = false }: ShellProps) {
     setView: (next) => {
       void navigate({ to: next === "all-tasks" ? "/all" : next === "time" ? "/time" : next === "trash" ? "/trash" : next === "activity" ? "/activity" : "/" });
     },
+    projectView:
+      view === "project" && projectKey !== undefined
+        ? (next) => {
+            void navigate(next === "list" ? { to: "/projects/$key/list", params: { key: projectKey } } : { to: "/projects/$key", params: { key: projectKey } });
+          }
+        : null,
     toggleSidebar: () => {
       setSidebarOpen((open) => !open);
     },
