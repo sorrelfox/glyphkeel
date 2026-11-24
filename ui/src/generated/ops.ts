@@ -1075,6 +1075,57 @@ export type Link = {
 /** How a link reads from one task. */
 export type LinkKind = "blocks" | "blocked_by" | "relates" | "duplicates" | "duplicated_by" | "clones" | "cloned_by";
 
+/** One group of a grouped list. */
+export type ListGroup = {
+  /** Its tasks. */
+  count: number;
+  /** The status's or label's colour. */
+  hue?: Hue;
+  /** The parent's title or the project's name, for grouping by parent or by project. */
+  title?: string;
+  /** What its tasks share: the status, label or project name, the priority (`urgent` … `none`), the parent's key, or the first day of the due week (`YYYY-MM-DD`); left out for the tasks without one. */
+  value?: string;
+};
+
+/** What a list's rows are grouped by. */
+export type ListGrouping = "status" | "priority" | "label" | "parent" | "due_week" | "project";
+
+/** The person's own layout of a list: the order of its columns and their widths, kept per project (and once for the whole workspace's list). Unlike saved views it belongs to the person, not to the workspace. */
+export type ListLayout = {
+  /** The columns shown, in order; empty: the list's own choice. */
+  columns: string[];
+  /** Column widths in pixels, by column; the columns left out keep their default width. */
+  widths: Record<string, number>;
+};
+
+/** A list layout, after a change or as read. */
+export type ListLayoutChange = {
+  /** The history group; left out when nothing changed. */
+  group?: string;
+  /** The layout. */
+  layout: ListLayout;
+  /** The project's key; left out for the list of the whole workspace. */
+  project?: string;
+};
+
+/** Which list layout to read. */
+export type ListLayoutGetInput = {
+  /** The project (key or ID); left out: the list of the whole workspace. */
+  project?: string | null;
+};
+
+/** Changes to a list layout; fields left out keep their value. */
+export type ListLayoutUpdateInput = {
+  /** The columns shown, in order (machine names such as `due`); empty: the list's own choice. */
+  columns?: string[] | null;
+  /** The project (key or ID); left out: the list of the whole workspace. */
+  project?: string | null;
+  /** Go back to the default layout first. */
+  reset?: boolean;
+  /** Widths to set, in pixels (40 to 1200), by column; the others keep theirs. */
+  widths?: Record<string, number>;
+};
+
 /** Totals over every matching task, not only the page. */
 export type ListTotals = {
   /** Matching tasks. */
@@ -2265,6 +2316,8 @@ export type TaskResolveInput = {
 export type TaskSearchInput = {
   /** The `next_cursor` of the page before. */
   cursor?: string | null;
+  /** Groups the rows: they come group by group (each group sorted by the query's order), and the result names the groups with their counts. */
+  group_by?: ListGrouping | null;
   /** With `project`: its sub-projects' tasks too. */
   include_subprojects?: boolean;
   /** Tasks per page, 1 to 200; default 50. */
@@ -2279,6 +2332,8 @@ export type TaskSearchInput = {
 
 /** One page of matching tasks. */
 export type TaskSearchResult = {
+  /** With `group_by`: the groups, in the order the rows come. */
+  groups?: ListGroup[];
   /** The tasks of this page, in order. */
   items: ListedTask[];
   /** Pass as `cursor` for the next page; left out on the last page. */
@@ -3234,6 +3289,8 @@ export interface OpMap {
   "view.create": { input: ViewCreateInput; output: ViewChange; safety: "write"; kind: "command" };
   "view.update": { input: ViewUpdateInput; output: ViewChange; safety: "write"; kind: "command" };
   "view.delete": { input: ViewDeleteInput; output: ViewChange; safety: "write"; kind: "command" };
+  "list.layout.get": { input: ListLayoutGetInput; output: ListLayoutChange; safety: "read"; kind: "query" };
+  "list.layout.update": { input: ListLayoutUpdateInput; output: ListLayoutChange; safety: "write"; kind: "command" };
   "query.parse": { input: QueryParseInput; output: ParsedQuery; safety: "read"; kind: "query" };
   "wiki.list": { input: WikiListInput; output: WikiTree; safety: "read"; kind: "query" };
   "wiki.search": { input: WikiSearchInput; output: WikiSearchResult; safety: "read"; kind: "query" };
@@ -3337,6 +3394,8 @@ export const OP_SAFETY = {
   "view.create": "write",
   "view.update": "write",
   "view.delete": "write",
+  "list.layout.get": "read",
+  "list.layout.update": "write",
   "query.parse": "read",
   "wiki.list": "read",
   "wiki.search": "read",
@@ -3454,6 +3513,12 @@ export function makeOps(call: Call) {
       get: (input: OpMap["layout.get"]["input"]) => call("layout.get", input),
       /** Hide, show, collapse or reorder board columns, set sort modes, card fields and older closed cards, or reset to the project's layout. (write) */
       update: (input: OpMap["layout.update"]["input"]) => call("layout.update", input),
+    },
+    list: {
+      /** The person's layout of a project's list, or of the whole workspace's: column order and widths. (read) */
+      layoutGet: (input: OpMap["list.layout.get"]["input"] = {}) => call("list.layout.get", input),
+      /** Reorder the columns of a list or change their widths, or go back to the default layout. (write) */
+      layoutUpdate: (input: OpMap["list.layout.update"]["input"] = {}) => call("list.layout.update", input),
     },
     markdown: {
       /** Render descriptions, comments or editor text to the reader's sanitized HTML, with numbered checkboxes and linked task keys. (read) */

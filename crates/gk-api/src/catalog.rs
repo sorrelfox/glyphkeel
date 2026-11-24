@@ -219,6 +219,8 @@ pub static CATALOG: &[OpDescriptor] = &[
     view::VIEW_CREATE,
     view::VIEW_UPDATE,
     view::VIEW_DELETE,
+    view::LIST_LAYOUT_GET,
+    view::LIST_LAYOUT_UPDATE,
     query::QUERY_PARSE,
     wiki::WIKI_LIST,
     wiki::WIKI_SEARCH,

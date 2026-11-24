@@ -8,7 +8,10 @@
 // engine's message IDs, and every range is in UTF-16 units, as the engine's.
 
 import {
+  type Hue,
   type ListedTask,
+  type ListGroup,
+  type ListGrouping,
   type ListTotals,
   type ParsedQuery,
   type QueryChip,
@@ -26,6 +29,11 @@ import {
   type ViewUpdateInput,
 } from "../../generated/ops";
 import { parseDuration } from "../duration";
+
+/** `{ [key]: value }` when there is a value; nothing otherwise. */
+function some<K extends string, V>(key: K, value: V | null | undefined): { [P in K]?: V } {
+  return value === null || value === undefined ? {} : ({ [key]: value } as { [P in K]?: V });
+}
 
 /** The names a query may use, from the workspace. */
 export interface QueryNames {
@@ -725,18 +733,94 @@ function findTasks(
   return { found, order };
 }
 
+/** What the fake needs to group tasks: their status's colour and place, parents' titles, projects' names, the week's first day. */
+export interface GroupInfo {
+  statusHue: (task: ListedTask) => Hue | undefined;
+  titleOf: (key: string) => string | undefined;
+  projectName: (key: string) => string | undefined;
+  weekStart: (day: string) => string;
+}
+
+interface Grouped {
+  found: ListedTask[];
+  groups: ListGroup[];
+}
+
+const PRIORITY_RANK = ["urgent", "high", "normal", "low", "none"];
+
+/**
+ * Groups tasks found in order, as the engine does: groups in their order
+ * (empty values last), each group's tasks in the order they were found.
+ */
+function groupTasks(found: readonly ListedTask[], by: ListGrouping, statusOrder: (task: ListedTask) => number, info: GroupInfo): Grouped {
+  const keyOf = (task: ListedTask): { value: string | undefined; order: (string | number)[]; title?: string; hue?: Hue } => {
+    switch (by) {
+      case "status":
+        return { value: task.status.name, order: [statusOrder(task), task.status.name.toLowerCase()], ...some("hue", info.statusHue(task)) };
+      case "priority":
+        return { value: task.priority, order: [PRIORITY_RANK.indexOf(task.priority)] };
+      case "label": {
+        const first = [...task.labels].sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()))[0];
+        return first ? { value: first.name, order: [first.name.toLowerCase()], hue: first.hue } : { value: undefined, order: [] };
+      }
+      case "parent":
+        return task.parent
+          ? { value: task.parent, order: [task.parent.split("-")[0] ?? "", Number(task.parent.split("-")[1])], ...some("title", info.titleOf(task.parent)) }
+          : { value: undefined, order: [] };
+      case "due_week": {
+        const week = task.due_date ? info.weekStart(task.due_date) : undefined;
+        return { value: week, order: week ? [week] : [] };
+      }
+      case "project":
+        return { value: task.project, order: [task.project], ...some("title", info.projectName(task.project)) };
+    }
+  };
+  const byValue = new Map<string, { group: ListGroup; order: (string | number)[]; tasks: ListedTask[] }>();
+  for (const task of found) {
+    const key = keyOf(task);
+    const id = key.value ?? "\u0000";
+    let entry = byValue.get(id);
+    if (!entry) {
+      entry = { group: { count: 0, ...some("value", key.value), ...some("title", key.title), ...some("hue", key.hue) }, order: key.order, tasks: [] };
+      byValue.set(id, entry);
+    }
+    entry.group.count += 1;
+    entry.tasks.push(task);
+  }
+  const entries = [...byValue.values()].sort((a, b) => {
+    if (a.group.value === undefined || b.group.value === undefined) {
+      return a.group.value === undefined ? (b.group.value === undefined ? 0 : 1) : -1;
+    }
+    for (let at = 0; at < Math.max(a.order.length, b.order.length); at += 1) {
+      const x = a.order[at] ?? "";
+      const y = b.order[at] ?? "";
+      if (x !== y) {
+        return x < y ? -1 : 1;
+      }
+    }
+    return 0;
+  });
+  return { found: entries.flatMap((entry) => entry.tasks), groups: entries.map((entry) => entry.group) };
+}
+
 /** `task.search` over the given tasks (already scoped to a project, when one was asked for). */
 export function searchTasks(
   all: readonly ListedTask[],
   input: TaskSearchInput,
   names: QueryNames,
-  options: { archived: ReadonlySet<string>; scoped: boolean; statusOrder: (task: ListedTask) => number; cache?: Map<string, { found: ListedTask[]; order: string[] }> },
+  options: { archived: ReadonlySet<string>; scoped: boolean; statusOrder: (task: ListedTask) => number; cache?: Map<string, { found: ListedTask[]; order: string[]; groups?: ListGroup[] }>; groupInfo?: GroupInfo },
 ): TaskSearchResult {
   const text = input.query ?? "";
   // Pages of one query share its matches: long lists ask for many pages.
-  const cacheKey = JSON.stringify([text, input.sort ?? "", input.project ?? "", input.include_subprojects ?? false]);
-  const { found, order } = options.cache?.get(cacheKey) ?? findTasks(all, input, names, options);
-  options.cache?.set(cacheKey, { found, order });
+  const cacheKey = JSON.stringify([text, input.sort ?? "", input.project ?? "", input.include_subprojects ?? false, input.group_by ?? ""]);
+  let cached = options.cache?.get(cacheKey);
+  if (!cached) {
+    const plain = findTasks(all, input, names, options);
+    const grouped = input.group_by && options.groupInfo ? groupTasks(plain.found, input.group_by, options.statusOrder, options.groupInfo) : undefined;
+    cached = { found: grouped?.found ?? plain.found, order: plain.order, ...some("groups", grouped?.groups) };
+  }
+  options.cache?.set(cacheKey, cached);
+  const { found, order, groups } = cached;
   const offset = input.cursor ? Number(input.cursor) : 0;
   const limit = Math.min(Math.max(input.limit ?? 50, 1), 200);
   const items = found.slice(offset, offset + limit);
@@ -755,6 +839,7 @@ export function searchTasks(
     sort: order,
     total: found.length,
     totals,
+    ...(groups && groups.length > 0 ? { groups } : {}),
   };
 }
 
@@ -826,6 +911,7 @@ export function createView(views: SavedView[], input: ViewCreateInput, now: stri
     ...(project !== undefined ? { project } : {}),
     ...(input.sort ? { sort: input.sort } : {}),
     ...(input.columns ? { columns: input.columns } : {}),
+    ...(input.group_by ? { group_by: input.group_by } : {}),
     ...(input.totals ? { totals: input.totals } : {}),
     ...(input.description ? { description: input.description } : {}),
   };
@@ -861,6 +947,9 @@ export function updateView(views: SavedView[], input: ViewUpdateInput, now: stri
   }
   if (input.columns) {
     view.columns = input.columns;
+  }
+  if (input.group_by !== null && input.group_by !== undefined) {
+    view.group_by = input.group_by;
   }
   if (input.totals) {
     view.totals = input.totals;

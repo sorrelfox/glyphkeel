@@ -112,6 +112,10 @@ list-column-progress = Progress
 list-column-created = Created
 list-column-updated = Updated
 list-sort-by = Sort by { $column }
+list-sorted-ascending = Sort key { $position }, ascending. Shift-click adds a sort key.
+list-sorted-descending = Sort key { $position }, descending. Shift-click adds a sort key.
+list-sort-position = { $position }
+list-resize-column = Width of { $column }
 list-select-all = Select all
 list-select-task = Select { $key }
 list-blocked = Blocked
@@ -125,6 +129,26 @@ list-edit-status = Status of { $key }: { $value }. Change
 list-edit-priority = Priority of { $key }: { $value }. Change
 list-edit-due = Due date of { $key }
 list-edit-due-value = Due date of { $key }: { $value }. Change
+
+## Groups
+
+list-group = Group
+list-group-button = Group by: { $grouping }. Change
+list-group-by-none = None
+list-group-by-status = Status
+list-group-by-priority = Priority
+list-group-by-label = Label
+list-group-by-parent = Parent
+list-group-by-due_week = Due week
+list-group-by-project = Project
+list-group-none-label = No label
+list-group-none-parent = No parent
+list-group-none-due_week = No due date
+# A parent task or a project: its key, then its title or name.
+list-group-titled = { $key } · { $title }
+# $day is the week's first day, formatted for the locale.
+list-group-week = Week of { $day }
+list-group-count = { $count }
 
 ## Selection and bulk changes
 

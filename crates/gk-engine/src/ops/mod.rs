@@ -18,6 +18,7 @@ pub(crate) mod duplicate;
 pub(crate) mod fields;
 pub(crate) mod file;
 pub(crate) mod history;
+pub(crate) mod list_layout;
 pub(crate) mod lookup;
 pub(crate) mod project;
 pub(crate) mod project_delete;
@@ -61,6 +62,7 @@ pub(crate) fn register(r: &mut Registry) {
     query::register(r);
     bulk::register(r);
     view::register(r);
+    list_layout::register(r);
     search::register(r);
     today::register(r);
     wiki::register(r);

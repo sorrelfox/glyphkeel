@@ -13,9 +13,9 @@ use std::collections::BTreeMap;
 use gk_api::OpError;
 use gk_api::ops::common::{Actor, ActorKind, Category, Glyph, Priority};
 use gk_api::ops::query::{
-    ListTotals, ListedTask, ParsedQuery, QueryChip, QueryField, QueryParse, QueryParseInput,
-    QueryProblem, QueryToken, QueryTokenKind, TaskSearch, TaskSearchInput, TaskSearchResult,
-    TextRange,
+    ListGroup, ListGrouping, ListTotals, ListedTask, ParsedQuery, QueryChip, QueryField,
+    QueryParse, QueryParseInput, QueryProblem, QueryToken, QueryTokenKind, TaskSearch,
+    TaskSearchInput, TaskSearchResult, TextRange,
 };
 use gk_api::ops::settings::WeekStart;
 use gk_api::ops::task::{Checklist, StatusRef, TypeRef};
@@ -452,7 +452,30 @@ fn search(q: &QueryCtx<'_>, input: TaskSearchInput) -> Result<TaskSearchResult, 
         })?,
         None => 0,
     };
-    let (normal, compiled) = compile_search(q.tx, &q.env.zone, q.now, &input)?;
+    let (normal, mut compiled) = compile_search(q.tx, &q.env.zone, q.now, &input)?;
+    let groups = match input.group_by {
+        Some(by) => {
+            let week_start = super::settings::load(q.tx)?.week_start;
+            let g = grouping(by, week_start);
+            compiled.group_first(&g.rows);
+            let sql = compiled.groups(
+                &format!("{} AS g, {}, {}, {}", g.key, g.value, g.title, g.hue),
+                "g",
+                &g.order,
+            );
+            let mut stmt = q.tx.prepare(&sql.text)?;
+            stmt.query_map(params_from_iter(sql_params(&sql.params)), |r| {
+                Ok(ListGroup {
+                    value: r.get(1)?,
+                    title: r.get(2)?,
+                    hue: r.get::<_, Option<String>>(3)?.and_then(|h| parse_enum(&h)),
+                    count: u64::try_from(r.get::<_, i64>(4)?).unwrap_or(0),
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?
+        }
+        None => Vec::new(),
+    };
     let sql = compiled.totals();
     let totals =
         q.tx.query_row(&sql.text, params_from_iter(sql_params(&sql.params)), |r| {
@@ -482,7 +505,126 @@ fn search(q: &QueryCtx<'_>, input: TaskSearchInput) -> Result<TaskSearchResult, 
         query: normal,
         sort: compiled.sort().to_vec(),
         totals,
+        groups,
     })
+}
+
+/// The SQL of a grouping, over the tables `t`, `p`, `s` and `y` of a
+/// query: the key each task is grouped by, the row order that keeps the
+/// groups together, a group's value, title and colour, and the order of
+/// the groups. Tasks without a value (no label, parent or due date) come
+/// last, as one group.
+struct GroupSql {
+    key: String,
+    rows: String,
+    value: String,
+    title: String,
+    hue: String,
+    order: String,
+}
+
+fn grouping(by: ListGrouping, week_start: WeekStart) -> GroupSql {
+    let text = |s: &str| s.to_owned();
+    match by {
+        ListGrouping::Status => {
+            // Statuses of the same name in several projects are one group,
+            // in the place the first of them has on its board.
+            let place = "(SELECT min(x.rank) FROM statuses x WHERE x.name_fold = s.name_fold)";
+            GroupSql {
+                key: text("s.name_fold"),
+                rows: format!("{place} ASC, s.name_fold ASC"),
+                value: text("min(s.name)"),
+                title: text("NULL"),
+                hue: text("min(s.hue)"),
+                order: format!("min({place}) ASC, g ASC"),
+            }
+        }
+        ListGrouping::Priority => {
+            let names = gk_query::fields::PRIORITIES
+                .iter()
+                .enumerate()
+                .map(|(n, name)| format!("WHEN {n} THEN '{name}'"))
+                .collect::<Vec<_>>()
+                .join(" ");
+            GroupSql {
+                key: text("t.priority"),
+                rows: text("t.priority DESC"),
+                value: format!("CASE t.priority {names} END"),
+                title: text("NULL"),
+                hue: text("NULL"),
+                order: text("g DESC"),
+            }
+        }
+        ListGrouping::Label => {
+            let first = |column: &str| {
+                format!(
+                    "(SELECT l.{column} FROM task_labels tl JOIN labels l ON l.id = tl.label_id \
+                     WHERE tl.task_id = t.id ORDER BY l.name_fold, l.name LIMIT 1)"
+                )
+            };
+            GroupSql {
+                key: first("name_fold"),
+                rows: format!("{} ASC NULLS LAST", first("name_fold")),
+                value: format!("min({})", first("name")),
+                title: text("NULL"),
+                hue: format!("min({})", first("hue")),
+                order: text("g IS NULL, g ASC"),
+            }
+        }
+        ListGrouping::Parent => {
+            let parent = |column: &str| {
+                format!(
+                    "(SELECT {column} FROM tasks k JOIN projects pp ON pp.id = k.project_id \
+                     WHERE k.id = t.parent_id)"
+                )
+            };
+            let key = parent("pp.key || '-' || k.number");
+            GroupSql {
+                rows: format!(
+                    "{} ASC NULLS LAST, {} ASC NULLS LAST",
+                    parent("pp.key"),
+                    parent("k.number")
+                ),
+                value: format!("min({key})"),
+                title: format!("min({})", parent("k.title")),
+                hue: text("NULL"),
+                order: format!(
+                    "g IS NULL, min({}) ASC, min({}) ASC",
+                    parent("pp.key"),
+                    parent("k.number")
+                ),
+                key,
+            }
+        }
+        ListGrouping::DueWeek => {
+            let first_day = match week_start {
+                WeekStart::Sunday => 0,
+                WeekStart::Monday => 1,
+                WeekStart::Saturday => 6,
+            };
+            // `%w` counts from Sunday (0); step back to the week's first day.
+            let week = format!(
+                "date(t.due_date, '-' || ((CAST(strftime('%w', t.due_date) AS INTEGER) \
+                 - {first_day} + 7) % 7) || ' days')"
+            );
+            GroupSql {
+                rows: format!("{week} ASC NULLS LAST"),
+                value: week.clone(),
+                title: text("NULL"),
+                hue: text("NULL"),
+                order: text("g IS NULL, g ASC"),
+                key: week,
+            }
+        }
+        ListGrouping::Project => GroupSql {
+            key: text("p.key"),
+            rows: text("p.key ASC"),
+            value: text("p.key"),
+            title: text("min(p.name)"),
+            hue: text("NULL"),
+            order: text("g ASC"),
+        },
+    }
 }
 
 fn count(n: i64) -> u32 {

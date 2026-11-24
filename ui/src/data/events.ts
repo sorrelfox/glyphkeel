@@ -22,12 +22,14 @@ export const ENTITY_QUERIES: Readonly<Record<string, readonly OpId[]>> = {
   // Deleting, restoring and purging show in the trash.
   task: ["trash.list", "task.get", "board.get", "project.list", "markdown.render", "description.history", "description.revision", "time.report", "timer.get", "task.search", "today.get", "search.query"],
   // Statuses, types and labels show on every card and in the task panel.
-  project: ["trash.list", "project.list", "project.get", "board.get", "task.get", "layout.get", "markdown.render", "time.report", "task.search", "query.parse", "view.list", "today.get", "search.query", "wiki.search", "wiki.get"],
+  project: ["trash.list", "project.list", "project.get", "board.get", "task.get", "layout.get", "list.layout.get", "markdown.render", "time.report", "task.search", "query.parse", "view.list", "today.get", "search.query", "wiki.search", "wiki.get"],
   status: ["project.get", "board.get", "task.get", "project.list", "task.search", "query.parse", "today.get", "search.query"],
   task_type: ["project.get", "board.get", "task.get", "task.search", "query.parse"],
   label: ["project.get", "board.get", "task.get", "task.search", "query.parse"],
   // The board leaves out the cards of hidden columns.
   layout: ["layout.get", "board.get"],
+  // The order and widths of the list's columns.
+  list_layout: ["list.layout.get"],
   // Cards count comments and files, and show the Blocked badge.
   comment: ["trash.list", "comment.list", "task.get", "board.get", "markdown.render", "task.search", "today.get", "search.query"],
   attachment: ["trash.list", "comment.list", "task.get", "board.get", "file.get", "file.read", "task.search", "search.query"],

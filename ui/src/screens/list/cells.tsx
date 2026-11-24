@@ -66,7 +66,7 @@ function percentFormat(locale: string): Intl.NumberFormat {
 }
 
 /** A day (`YYYY-MM-DD`, no time zone) as "Nov 24". */
-function useDayFormat(): (day: string) => string {
+export function useDayFormat(): (day: string) => string {
   const { locale } = useLocale();
   const format = dateFormat(locale, true);
   return (day) => format.format(new Date(`${day}T00:00:00Z`));

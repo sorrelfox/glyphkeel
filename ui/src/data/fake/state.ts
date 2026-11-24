@@ -8,6 +8,7 @@ import {
   type Actor,
   type ProjectIcon,
   type BoardLayout,
+  type ListLayout,
   type Category,
   type CommentRevision,
   type FileKind,
@@ -227,6 +228,8 @@ export interface FakeState {
   activity: ActivityEntry[];
   /** Board layouts by project ID. */
   layouts: Record<string, BoardLayout>;
+  /** List layouts by project ID, and `all` for the whole workspace's list; none until one changes. */
+  listLayouts?: Record<string, ListLayout>;
   timeEntries: FakeTimeEntry[];
   timer: FakeTimer | null;
   reminders: FakeReminder[];

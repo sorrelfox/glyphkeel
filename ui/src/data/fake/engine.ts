@@ -8,6 +8,7 @@
 
 import {
   type ActivityEntry,
+  type Actor,
   type Backup,
   type BulkItem,
   type BulkResult,
@@ -16,6 +17,7 @@ import {
   type Attachment,
   type Board,
   type BoardLayout,
+  type ListLayout,
   type Card,
   type Column,
   type Comment,
@@ -55,6 +57,7 @@ import {
   type TimerChange,
   type TimerStatus,
   type TypeRef,
+  type Via,
   type WikiPage,
   type WikiPageSummary,
 } from "../../generated/ops";
@@ -65,7 +68,7 @@ import { checklistOf, merge3, publicChecklist, renderFake, setChecked, unifiedDi
 import { newProject, nextFileId, nextId, SAMPLE_AGENT } from "./seed";
 import { type FakeComment, type FakeFile, type FakeProject, type FakeRelation, type FakeReminder, type FakeRevision, type FakeState, type FakeTask, type FakeTimeEntry, type FakeWikiPage } from "./state";
 import { naturalDay, nextDay, searchAll, searchWiki, slugOf, headingsOf } from "./overview";
-import { createView, deleteView, listViews, matchingKeys, parseQuery, queryError, searchTasks, updateView, type QueryNames } from "./query";
+import { createView, deleteView, listViews, matchingKeys, parseQuery, queryError, searchTasks, updateView, type GroupInfo, type QueryNames } from "./query";
 import { addDays, localDay, MAX_ENTRY_MINUTES, momentOf, reminderAt, reminderOut, sortDue, timeEntryOut, timerElapsedMs, timerOut, unitsOf, weekStart, workDay } from "./time";
 
 /** An operation failed: the engine's error, as the transports deliver it. */
@@ -191,7 +194,8 @@ export class FakeWorkspace {
   }
 
   /** Runs one operation. Commands record an Undo step and return their changes. */
-  call(op: string, input: unknown): FakeAnswer {
+  /** Runs an operation; `by` records its changes as another actor's (an agent's, through MCP), for tests. */
+  call(op: string, input: unknown, by?: { actor: Actor; via: Via }): FakeAnswer {
     if (op === "history.undo" || op === "history.redo") {
       return this.undoOrRedo(op);
     }
@@ -213,19 +217,19 @@ export class FakeWorkspace {
     }
     this.state.seq += 1;
     const group = `g-${String(this.state.seq)}`;
-    this.record(before, op, group, answer.changes);
+    this.record(before, op, group, answer.changes, by);
     this.undoStack.push({ state: before, op, group });
     this.redoStack = [];
     return { output: withGroup(answer.output, group), changes: { group, seq: this.state.seq, changes: answer.changes } };
   }
 
   /** Adds one command's changes to the activity log. */
-  private record(before: FakeState, op: string, group: string, changes: readonly EntityChange[]): void {
+  private record(before: FakeState, op: string, group: string, changes: readonly EntityChange[], by: { actor: Actor; via: Via } = { actor: { kind: "user", name: "You" }, via: "app" }): void {
     const at = this.today().toISOString();
     for (const change of changes) {
       const project = this.state.projects.find((candidate) => candidate.key === change.project);
       const entry: ActivityEntry = {
-        actor: { kind: "user", name: "You" },
+        actor: by.actor,
         at,
         entity: change.entity,
         fields: recordedFields(before, this.state, change, (task) => this.keyOf(task)),
@@ -234,7 +238,7 @@ export class FakeWorkspace {
         op,
         ...some("project", project?.id),
         seq: this.state.seq,
-        via: "app",
+        via: by.via,
       };
       this.state.activity.push(entry);
     }
@@ -2311,7 +2315,34 @@ export class FakeWorkspace {
         this.searchCache.set(this.state, cache);
       }
       const results = cache.results;
-      return this.runQuery(() => searchTasks(tasks, input, this.queryNames(), { archived: this.archivedKeys(), scoped: scope !== null, statusOrder: order, cache: results }));
+      const groupInfo: GroupInfo = {
+        statusHue: (task) => this.state.projects.find((candidate) => candidate.key === task.project)?.statuses.find((status) => status.id === task.status.id)?.hue,
+        titleOf: (key) => tasks.find((task) => task.key === key)?.title ?? this.listedTasks().find((task) => task.key === key)?.title,
+        projectName: (key) => this.state.projects.find((candidate) => candidate.key === key)?.name,
+        weekStart: (day) => weekStart(day, this.state.settings.week_start),
+      };
+      return this.runQuery(() => searchTasks(tasks, input, this.queryNames(), { archived: this.archivedKeys(), scoped: scope !== null, statusOrder: order, cache: results, groupInfo }));
+    },
+    "list.layout.get": ({ project: ref }) => {
+      const project = ref === null || ref === undefined ? undefined : this.project(ref);
+      return { ...some("project", project?.key), layout: structuredClone(this.state.listLayouts?.[project?.id ?? "all"] ?? { columns: [], widths: {} }) };
+    },
+    "list.layout.update": ({ project: ref, reset, columns, widths }) => {
+      const project = ref === null || ref === undefined ? undefined : this.project(ref);
+      const scope = project?.id ?? "all";
+      this.state.listLayouts ??= {};
+      const before = reset === true ? { columns: [], widths: {} } : (this.state.listLayouts[scope] ?? { columns: [], widths: {} });
+      for (const [column, width] of Object.entries(widths ?? {})) {
+        if (!Number.isInteger(width) || width < 40 || width > 1200) {
+          fail("invalid", "A column is 40 to 1200 pixels wide.", { details: { path: `widths.${column}`, message_id: "list-layout-width", args: { min: 40, max: 1200 } } });
+        }
+      }
+      const next: ListLayout = { columns: columns ? [...new Set(columns)] : [...before.columns], widths: { ...before.widths, ...widths } };
+      this.state.listLayouts[scope] = next;
+      return {
+        output: { ...some("project", project?.key), layout: structuredClone(next) },
+        changes: [{ entity: "list_layout", id: project?.id ?? "00000000-0000-0000-0000-000000000000", fields: ["settings"], ...some("project", project?.key) }],
+      };
     },
     "task.bulk_update": (input) => this.bulk(input),
     "view.list": (input) => {

@@ -254,6 +254,24 @@ impl Compiled {
         sql
     }
 
+    /// Keeps groups of rows together: `order` (an `ORDER BY` list over the
+    /// tables `t`, `p`, `s` and `y`) comes before the query's own order.
+    pub fn group_first(&mut self, order: &str) {
+        self.order = format!("{order}, {}", self.order);
+    }
+
+    /// One row per group of the matching tasks: `SELECT {select}, count(*)
+    /// … GROUP BY {group} ORDER BY {order}`, over the same tables as the
+    /// rows.
+    #[must_use]
+    pub fn groups(&self, select: &str, group: &str, order: &str) -> Sql {
+        let mut sql = Sql::default();
+        let _ = write!(sql.text, "SELECT {select}, count(*) FROM {FROM} WHERE ");
+        sql.append(self.filter.clone());
+        let _ = write!(sql.text, " GROUP BY {group} ORDER BY {order}");
+        sql
+    }
+
     /// Whether the task `?` matches: `SELECT 1 … WHERE t.id = ? AND …`.
     #[must_use]
     pub fn matches_one(&self) -> Sql {

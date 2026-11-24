@@ -81,6 +81,8 @@ The safety class decides who may run an operation:
 | `view.create` | write | app, command line, MCP | `create_view` | `glyphkeel view create` |
 | `view.update` | write | app, command line, MCP | `update_view` | `glyphkeel view edit <view>` |
 | `view.delete` | write | app, command line, MCP | `delete_view` | `glyphkeel view delete <view>` |
+| `list.layout.get` | read | app | — | — |
+| `list.layout.update` | write | app | — | — |
 | `query.parse` | read | app | — | — |
 | `wiki.list` | read | app, command line, MCP | `list_wiki_pages` | `glyphkeel wiki list` |
 | `wiki.search` | read | app, command line, MCP | `search_wiki_pages` | `glyphkeel wiki search <text>` |
@@ -509,6 +511,22 @@ Input: `ViewUpdateInput`. Output: `ViewChange`. Schemas: [catalog.schema.json](c
 Delete a saved view; it can be brought back with revert.
 
 Input: `ViewDeleteInput`. Output: `ViewChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `list.layout.get`
+
+The person's layout of a project's list, or of the whole workspace's: column order and widths.
+
+Input: `ListLayoutGetInput`. Output: `ListLayoutChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+Not available to agents: It holds how the person's own list screen looks (the order and widths of its columns), not the workspace's data; agents and scripts choose columns in saved views.
+
+## `list.layout.update`
+
+Reorder the columns of a list or change their widths, or go back to the default layout.
+
+Input: `ListLayoutUpdateInput`. Output: `ListLayoutChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+Not available to agents: It changes how the person's own list screen looks (the order and widths of its columns), not the workspace's data; agents and scripts choose columns in saved views.
 
 ## `query.parse`
 

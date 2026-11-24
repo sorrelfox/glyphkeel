@@ -477,6 +477,11 @@
   gap: 2px;
 }
 
+.historyFilter {
+  display: flex;
+  margin-block-end: 10px;
+}
+
 .history {
   display: flex;
   flex-direction: column;
