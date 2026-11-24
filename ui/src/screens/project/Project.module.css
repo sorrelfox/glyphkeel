@@ -21,16 +21,16 @@
 
 .treeRow {
   gap: 6px;
-  padding-left: 4px;
+  padding-inline-start: 4px;
 }
 
 /* 16 px indent per level, as the design's tree rows. */
 .treeItem[aria-level="2"] .treeRow {
-  padding-left: 24px;
+  padding-inline-start: 24px;
 }
 
 .treeItem[aria-level="3"] .treeRow {
-  padding-left: 40px;
+  padding-inline-start: 40px;
 }
 
 .chevron {
@@ -58,7 +58,7 @@
   flex-direction: column;
   gap: 1px;
   margin-top: 12px;
-  padding-left: 8px;
+  padding-inline-start: 8px;
 }
 
 .archivedRow {
@@ -295,4 +295,9 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--gap);
+}
+
+/* Delete from the tree's menu: the question alone in a dialog. */
+.deleteDialog {
+  max-inline-size: 44ch;
 }

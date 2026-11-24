@@ -11,7 +11,7 @@ import { createClient, OpFailure } from "../../data/transport";
 import { type ActivityEntry, type TaskChange } from "../../generated/ops";
 import { type Translate } from "../../i18n/I18n";
 import { createBundle } from "../../i18n/i18n";
-import { describeChange, passes } from "./ActivityScreen";
+import { describeChange, engineFilters, feedRequest, passes } from "./ActivityScreen";
 import { keyChanges } from "./ImportDialog";
 
 // jsdom lays nothing out; the editor measures text ranges.
@@ -164,5 +164,19 @@ describe("the activity screen", () => {
     expect(within(table).getByRole("button", { name: first.key })).toBeDefined();
     fireEvent.click(screen.getByRole("radio", { name: "Agents" }));
     await screen.findByText("No changes match the filters.");
+  });
+});
+
+describe("the activity feed's request", () => {
+  it("keeps the filters in the page until the engine takes them, and then hands them over", () => {
+    const filter = { project: "p-1", actor: "agent" as const, from: "2026-11-20", to: "2026-11-21" };
+    expect(feedRequest(filter, "UTC")).toEqual({ request: {}, inPage: filter });
+    expect(feedRequest(filter, "UTC", true).inPage).toEqual({});
+    expect(engineFilters(filter, "Europe/Berlin")).toEqual({
+      actor_kind: "agent",
+      project: "p-1",
+      from: "2026-11-19T23:00:00.000Z",
+      to: "2026-11-21T23:00:00.000Z",
+    });
   });
 });

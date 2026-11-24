@@ -11,14 +11,16 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
+use gk_api::Profile;
 use gk_api::ops::common::{Actor, ActorKind, Via};
 use gk_api::{Changed, EntityChange, ErrorCode, OpError, Origin};
-use gk_engine::{Confirmation, Context, Engine, EngineConfig, system_clock};
+use gk_engine::{ConfirmRequest, Confirmation, Context, Engine, EngineConfig, system_clock};
 use gk_store::{WatcherHandle, WorkspaceLayout};
 use serde_json::Value;
 use tauri::ipc::Channel;
 
 use super::windows::Windows;
+use crate::messages::text;
 use crate::reminders::{self, Notifier};
 
 /// How often other programs' commits are looked for.
@@ -29,6 +31,13 @@ const JOBS_INTERVAL: Duration = Duration::from_secs(5);
 const REOPEN_WAIT: Duration = Duration::from_secs(10);
 /// The operation after which the engine must be replaced.
 const RESTORE_OP: &str = "backup.restore";
+/// The operation that sets the most an agent may do.
+const POLICY_OP: &str = "agent.policy.update";
+
+/// Whether going from `current` to `wanted` lets agents do more.
+fn raises(current: Profile, wanted: Profile) -> bool {
+    wanted > current
+}
 
 /// The workspace the app has open, or why it couldn't open it. Every call
 /// of the page goes through [`Workspace::call`].
@@ -46,6 +55,8 @@ pub(crate) struct Workspace {
     reopen: Mutex<Reopen>,
     /// Why the workspace stayed closed after a restore, if it did.
     lost: Mutex<Option<OpError>>,
+    /// Whether opening it made it: it didn't exist before this start.
+    created: bool,
 }
 
 /// How the workspace was opened, to open it the same way again.
@@ -82,6 +93,7 @@ impl Workspace {
         confirm: Confirmation,
     ) -> Self {
         let windows = Arc::new(Windows::default());
+        let created = !layout.database().exists();
         let (engine, background) = match start(layout, config.clone(), &windows) {
             Ok(started) => started,
             Err(err) => return Self::failed(err),
@@ -98,6 +110,7 @@ impl Workspace {
                 notifier: None,
             }),
             lost: Mutex::new(None),
+            created,
         }
     }
 
@@ -112,6 +125,7 @@ impl Workspace {
             background: Mutex::new(None),
             reopen: Mutex::new(Reopen::default()),
             lost: Mutex::new(None),
+            created: false,
         }
     }
 
@@ -157,6 +171,11 @@ impl Workspace {
         self.failure.clone().or_else(|| lock(&self.lost).clone())
     }
 
+    /// Whether this start made the workspace, so it is the first run on it.
+    pub(crate) fn created(&self) -> bool {
+        self.created
+    }
+
     /// The workspace folder, while it is open.
     pub(crate) fn layout(&self) -> Option<&WorkspaceLayout> {
         self.layout.as_ref()
@@ -172,6 +191,9 @@ impl Workspace {
     ) -> Result<Value, OpError> {
         let result = {
             let engine = self.engine()?;
+            if op == POLICY_OP {
+                self.confirm_raise(&engine, &input)?;
+            }
             let mut ctx = Context::user(Via::App).with_confirmation(self.confirm.clone());
             ctx.request_id = request_id;
             engine.call(&ctx, op, input)
@@ -188,6 +210,46 @@ impl Workspace {
             );
         }
         result
+    }
+
+    /// Raising the most an agent may do needs the person's native
+    /// confirmation, so that script in the page can't widen what agents
+    /// may do. Lowering it, or setting it again, doesn't ask.
+    fn confirm_raise(&self, engine: &Engine, input: &Value) -> Result<(), OpError> {
+        let Some(wanted) = input
+            .get("max_profile")
+            .and_then(Value::as_str)
+            .and_then(|name| name.parse::<Profile>().ok())
+        else {
+            // The engine refuses the input with its own message.
+            return Ok(());
+        };
+        let settings = engine.call(
+            &Context::user(Via::App),
+            "settings.get",
+            Value::Object(serde_json::Map::new()),
+        )?;
+        let current = settings
+            .get("agent_max_profile")
+            .and_then(Value::as_str)
+            .and_then(|name| name.parse::<Profile>().ok())
+            .unwrap_or(Profile::ReadOnly);
+        if !raises(current, wanted) {
+            return Ok(());
+        }
+        let confirmed = match (&self.confirm, gk_api::descriptor(POLICY_OP)) {
+            (Confirmation::Given, _) => true,
+            (Confirmation::Ask(ask), Some(op)) => ask(&ConfirmRequest {
+                op,
+                input: input.clone(),
+            }),
+            _ => false,
+        };
+        if confirmed {
+            Ok(())
+        } else {
+            Err(OpError::forbidden(text("confirm-agent-raise-refused", &[])))
+        }
     }
 
     /// The time zone the engine counts "today" and local times in, by its

@@ -20,6 +20,17 @@ confirm-purge-items = { $count ->
 confirm-backup-delete = Delete the backup “{ $name }” for good? The stored files only it used are deleted with it.
 confirm-backup-restore = Replace the whole workspace with the backup “{ $name }”? The current state is backed up first, and the workspace reopens afterwards.
 confirm-other = { $summary }
+confirm-agent-raise-title = Let agents do more?
+confirm-agent-raise = _Allow
+confirm-agent-raise-standard = Let agents change tasks and move items to the trash? Every agent connected through MCP may then do this, unless it asks for less.
+confirm-agent-raise-full = Let agents do everything, including deleting for good? Every agent connected through MCP may then empty the trash and delete projects, unless it asks for less.
+confirm-agent-raise-refused = Agents may do no more than before: the change was not confirmed.
+
+## The command-line tool
+
+cli-install-nothing = There is no command-line tool to install: the shell finds it already, or it didn't come with the app.
+cli-install-exists = { $path } already exists and is not a link to this app's command-line tool. Remove it first, or keep using it.
+cli-install-failed = The link { $path } could not be made: { $reason }
 
 ## File choosers
 
@@ -35,3 +46,5 @@ chooser-import-title = Import an archive
 chooser-import-folder-title = Import an archive folder
 chooser-import = _Choose
 chooser-zip-filter = Archives (.zip)
+chooser-backup-folder-title = Choose a folder for backups
+chooser-backup-folder = _Choose

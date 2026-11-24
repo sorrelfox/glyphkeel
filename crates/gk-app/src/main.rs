@@ -9,6 +9,7 @@
 
 mod app_settings;
 mod background;
+mod cli_tool;
 mod files;
 #[cfg(target_os = "linux")]
 mod instance;
@@ -99,6 +100,7 @@ fn main() -> ExitCode {
             transfer::export_archive,
             transfer::choose_import,
             transfer::import_archive,
+            transfer::choose_backup_folder,
             links::open_link,
             open_links::watch_open_links,
             task_window::open_task_window,
@@ -111,6 +113,8 @@ fn main() -> ExitCode {
             quick_add::watch_quick_add,
             shortcut::quick_add_shortcut,
             shortcut::set_quick_add_shortcut,
+            cli_tool::cli_status,
+            cli_tool::install_cli,
             quit_app
         ])
         // Attached images, by attachment ID, for the page's <img> elements.

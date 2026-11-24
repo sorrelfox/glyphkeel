@@ -593,6 +593,8 @@ pub(crate) mod dialog {
         Export { name: String, folder: bool },
         /// Choose an archive to import: a `.zip` file, or a folder.
         Import { folder: bool },
+        /// Choose the folder backups go to.
+        BackupFolder,
     }
 
     /// Shows GTK's native file chooser (the desktop portal's, where there is
@@ -643,6 +645,11 @@ pub(crate) mod dialog {
                 "chooser-import",
                 FileChooserAction::SelectFolder,
             ),
+            Mode::BackupFolder => (
+                "chooser-backup-folder-title",
+                "chooser-backup-folder",
+                FileChooserAction::SelectFolder,
+            ),
         };
         let dialog = FileChooserNative::new(
             Some(&text(title, &[])),
@@ -673,7 +680,7 @@ pub(crate) mod dialog {
                 dialog.set_do_overwrite_confirmation(true);
             }
             Mode::Import { folder: false } => dialog.add_filter(zip_filter()),
-            Mode::Import { folder: true } => {}
+            Mode::Import { folder: true } | Mode::BackupFolder => {}
         }
         // The dialog lives until it answers; then the answer is sent once.
         let keep = RefCell::new(Some((dialog.clone(), answer)));
@@ -703,6 +710,7 @@ pub(crate) mod dialog {
         Save(String),
         Export { name: String, folder: bool },
         Import { folder: bool },
+        BackupFolder,
     }
 
     pub(crate) async fn choose(

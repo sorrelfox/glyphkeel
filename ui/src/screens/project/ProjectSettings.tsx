@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Glyphkeel contributors
 
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
-import { useNavigate } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
 import { Button, Tab, TabList, TabPanel, Tabs } from "react-aria-components";
 
@@ -13,11 +12,10 @@ import { TypeGlyph } from "../../components/Glyphs";
 import { Switch } from "../../components/Switch";
 import { useProject } from "../../data/board";
 import { GLYPHS, HUES, MODULES, STATUS_CATEGORIES, type Hue, type Project, type Status } from "../../data/catalog";
-import { useCall, useCommand, useOp } from "../../data/hooks";
-import { useFailureToast } from "../../data/safety";
-import { useToasts } from "../../components/Toasts";
+import { useCommand } from "../../data/hooks";
 import { useT } from "../../i18n/I18n";
 import { HuePicker } from "./HuePicker";
+import { DeleteQuestion } from "./DeleteProject";
 import { IconPicker } from "./IconPicker";
 import styles from "./Project.module.css";
 
@@ -186,50 +184,10 @@ function General({ project, onDeleted }: { project: Project; onDeleted: () => vo
   );
 }
 
-/**
- * Moves the project, its sub-projects and everything in them to the trash,
- * after a confirmation that names how much goes. It can be restored from
- * the trash, so the page asks, not the app's native dialog.
- */
+/** Moves the project and everything under it to the trash, after the question. */
 function DeleteProject({ project, onDeleted }: { project: Project; onDeleted: () => void }) {
   const t = useT();
-  const call = useCall();
-  const toasts = useToasts();
-  const fail = useFailureToast();
-  const navigate = useNavigate();
-  const all = useOp("project.list", { include_archived: true });
   const [asking, setAsking] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const subprojects = (all.data?.items ?? []).filter((each) => isBelow(all.data?.items ?? [], each.key, project.key)).length;
-  const remove = () => {
-    setBusy(true);
-    call("project.delete", { project: project.key }).then(
-      (deleted) => {
-        setBusy(false);
-        toasts.show({
-          tone: "info",
-          text: t("project-deleted", { name: project.name, subprojects: Math.max(0, deleted.projects.length - 1), tasks: deleted.tasks }),
-          action: {
-            label: t("toast-undo"),
-            run: () => {
-              call("history.revert", { groups: [deleted.group] }).then((result) => {
-                const skipped = result.skipped[0];
-                if (skipped) {
-                  toasts.show({ tone: "error", text: t("history-not-reverted"), detail: skipped.reason });
-                }
-              }, fail);
-            },
-          },
-        });
-        onDeleted();
-        void navigate({ to: "/" });
-      },
-      (error: unknown) => {
-        setBusy(false);
-        fail(error);
-      },
-    );
-  };
   if (!asking) {
     return (
       <Button className="btn danger" onPress={() => { setAsking(true); }}>
@@ -239,31 +197,14 @@ function DeleteProject({ project, onDeleted }: { project: Project; onDeleted: ()
     );
   }
   return (
-    <div className={classes(styles.confirm, styles.deleteConfirm)} role="group" aria-label={t("project-delete")}>
-      <p>{t("project-delete-confirm", { name: project.name, subprojects, tasks: project.total_tasks })}</p>
-      <div className={styles.confirmButtons}>
-        <Button className="btn" isDisabled={busy} onPress={() => { setAsking(false); }}>
-          {t("dialog-cancel")}
-        </Button>
-        <Button className="btn primary" isDisabled={busy} onPress={remove}>
-          {t("project-delete-confirm-button")}
-        </Button>
-      </div>
-    </div>
+    <DeleteQuestion
+      project={project}
+      onCancel={() => {
+        setAsking(false);
+      }}
+      onDeleted={onDeleted}
+    />
   );
-}
-
-/** Whether project `key` sits somewhere below project `ancestor`. */
-function isBelow(items: readonly { key: string; parent?: string }[], key: string, ancestor: string): boolean {
-  let parent = items.find((each) => each.key === key)?.parent;
-  for (let depth = 0; parent !== undefined && depth < 8; depth += 1) {
-    if (parent === ancestor) {
-      return true;
-    }
-    const above = parent;
-    parent = items.find((each) => each.key === above)?.parent;
-  }
-  return false;
 }
 
 function HueSelect({ label, value, onChange, className }: { label: string; value: Hue; onChange: (hue: Hue) => void; className?: string | undefined }) {

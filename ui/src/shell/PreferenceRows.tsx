@@ -17,18 +17,18 @@ export function Group({ title, lead, children }: { title: string; lead?: ReactNo
 }
 
 /**
- * One setting: its name, an optional line about it, and its control on the
- * right. When the row is too narrow for both, the control moves below the
+ * One setting: its name, an optional line about it, and its control (if
+ * any) on the right. When the row is too narrow for both, the control moves below the
  * text instead of running out of the box.
  */
-export function Row({ label, about, children }: { label: string; about?: string | undefined; children: ReactNode }) {
+export function Row({ label, about, children }: { label: string; about?: string | undefined; children?: ReactNode }) {
   return (
     <div className={styles.row}>
       <span className={styles.text}>
         <span>{label}</span>
         {about !== undefined && <small>{about}</small>}
       </span>
-      <span className={styles.control}>{children}</span>
+      {children !== undefined && <span className={styles.control}>{children}</span>}
     </div>
   );
 }

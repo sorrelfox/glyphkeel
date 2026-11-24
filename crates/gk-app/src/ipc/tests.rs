@@ -371,3 +371,79 @@ fn deleting_a_backup_asks_first() {
     assert_eq!(err.code, ErrorCode::Forbidden);
     workspace.close();
 }
+
+#[test]
+fn raising_what_agents_may_do_asks_natively_and_lowering_does_not() {
+    let dir = TempDir::new().unwrap();
+    let asked = Arc::new(AtomicUsize::new(0));
+    let answer = Arc::new(Mutex::new(false));
+    let workspace = {
+        let asked = Arc::clone(&asked);
+        let answer = Arc::clone(&answer);
+        open(
+            &dir,
+            Confirmation::Ask(Arc::new(move |request| {
+                assert_eq!(request.op.id, "agent.policy.update");
+                asked.fetch_add(1, Ordering::SeqCst);
+                *answer.lock().unwrap()
+            })),
+        )
+    };
+    let cap = |workspace: &Workspace| {
+        workspace.call("settings.get", Value::Null, None).unwrap()["agent_max_profile"].clone()
+    };
+    assert_eq!(cap(&workspace), "standard");
+
+    // Lowering, and setting the same again, go through without a question.
+    workspace
+        .call(
+            "agent.policy.update",
+            json!({ "max_profile": "read-only" }),
+            None,
+        )
+        .unwrap();
+    assert_eq!(cap(&workspace), "read-only");
+    workspace
+        .call(
+            "agent.policy.update",
+            json!({ "max_profile": "read-only" }),
+            None,
+        )
+        .unwrap();
+    assert_eq!(asked.load(Ordering::SeqCst), 0);
+
+    // Raising asks; a refusal changes nothing.
+    let refused = workspace
+        .call(
+            "agent.policy.update",
+            json!({ "max_profile": "full" }),
+            None,
+        )
+        .unwrap_err();
+    assert_eq!(refused.code, ErrorCode::Forbidden);
+    assert_eq!(cap(&workspace), "read-only");
+    assert_eq!(asked.load(Ordering::SeqCst), 1);
+
+    *answer.lock().unwrap() = true;
+    workspace
+        .call(
+            "agent.policy.update",
+            json!({ "max_profile": "full" }),
+            None,
+        )
+        .unwrap();
+    assert_eq!(cap(&workspace), "full");
+    assert_eq!(asked.load(Ordering::SeqCst), 2);
+    workspace.close();
+}
+
+#[test]
+fn the_first_start_on_a_workspace_is_known_as_such() {
+    let dir = TempDir::new().unwrap();
+    let first = open(&dir, Confirmation::Refuse);
+    assert!(first.created());
+    first.close();
+    let again = open(&dir, Confirmation::Refuse);
+    assert!(!again.created());
+    again.close();
+}

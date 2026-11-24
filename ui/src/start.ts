@@ -15,12 +15,14 @@ export interface StartData {
   open?: string;
   /** The quick-add window: its page shows the quick-add field alone. */
   quickAdd?: boolean;
+  /** The workspace was made at this start: the main window offers the first-run set-up. */
+  firstRun?: boolean;
 }
 
 declare global {
   interface Window {
     /** Set by the app's initialization script; absent in a plain browser. */
-    readonly __GLYPHKEEL_START__?: { titleBar?: unknown; locale?: unknown; task?: unknown; open?: unknown; prefs?: unknown; quickAdd?: unknown };
+    readonly __GLYPHKEEL_START__?: { titleBar?: unknown; locale?: unknown; task?: unknown; open?: unknown; prefs?: unknown; quickAdd?: unknown; firstRun?: unknown };
   }
 }
 
@@ -42,6 +44,10 @@ export function readStart(win: Window = window): StartData {
   }
   if (given.quickAdd === true) {
     start.quickAdd = true;
+  }
+  // Outside the app, `?first-run` asks for the set-up, for work on it and its browser flows.
+  if (given.firstRun === true || (win.__GLYPHKEEL_START__ === undefined && new URLSearchParams((win.location as Location | undefined)?.search ?? "").has("first-run"))) {
+    start.firstRun = true;
   }
   return start;
 }

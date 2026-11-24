@@ -31,7 +31,7 @@
   border: 0;
   font: inherit;
   color: inherit;
-  text-align: left;
+  text-align: start;
   cursor: text;
 }
 
@@ -46,7 +46,7 @@
 .suggestions {
   position: absolute;
   top: calc(100% + 4px);
-  left: 0;
+  inset-inline-start: 0;
   z-index: 50;
   width: max(100%, 320px);
   max-height: 60vh;
@@ -87,7 +87,8 @@
   align-items: center;
   height: var(--h-row);
   margin-top: 8px;
-  padding: 0 8px 0 16px;
+  padding-block: 0;
+  padding-inline: 16px 8px;
 }
 
 .projectTree {
@@ -103,7 +104,7 @@
 }
 
 .navHint {
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 
 .splitter {
@@ -133,7 +134,8 @@
   flex: none;
   align-items: center;
   gap: 6px;
-  padding: 0 10px 0 8px;
+  padding-block: 0;
+  padding-inline: 8px 10px;
   outline: none;
 }
 
@@ -181,7 +183,7 @@
 .windowControls {
   display: flex;
   gap: 8px;
-  margin-left: 8px;
+  margin-inline-start: 8px;
 }
 
 .content {
@@ -276,7 +278,8 @@
   align-items: center;
   gap: 8px;
   margin: 4px 8px 0;
-  padding: 6px 6px 6px 10px;
+  padding-block: 6px;
+  padding-inline: 10px 6px;
   border-radius: var(--r-m);
   background: var(--hover);
 }

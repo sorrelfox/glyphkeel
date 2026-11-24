@@ -1,0 +1,61 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+   Copyright (C) 2026 Glyphkeel contributors */
+
+/* One step of the set-up: a heading, a few lines, its controls. The width
+   follows the text, so longer languages wrap instead of clipping. */
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  inline-size: min(64ch, 86vw);
+  min-block-size: 40vh;
+
+  /* The theme tiles lay themselves out by this width, as in Preferences. */
+  container: preferences-page / inline-size;
+}
+
+.body p {
+  margin: 0;
+}
+
+.heading {
+  margin: 0;
+  font-size: var(--fs-title);
+  font-weight: 600;
+}
+
+.path {
+  padding-block: 6px;
+  padding-inline: 10px;
+  border-radius: var(--r-m);
+  background: var(--sunken);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  overflow-wrap: anywhere;
+}
+
+.line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap);
+}
+
+.name {
+  flex: 1 1 24ch;
+  min-inline-size: 0;
+}
+
+.key {
+  flex: none;
+}
+
+.progress {
+  align-self: center;
+  margin-inline-end: auto;
+  font-size: var(--fs-small);
+}
+
+.error {
+  color: var(--danger);
+}

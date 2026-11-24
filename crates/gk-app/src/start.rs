@@ -45,6 +45,10 @@ pub(crate) struct StartData {
     /// The quick-add window: the page shows the quick-add field alone.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub(crate) quick_add: bool,
+    /// The workspace was made at this start: the main window offers the
+    /// first-run set-up.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) first_run: bool,
 }
 
 impl StartData {
@@ -209,6 +213,7 @@ mod tests {
             open: None,
             prefs: None,
             quick_add: false,
+            first_run: false,
         }
         .script();
         assert_eq!(
@@ -226,6 +231,7 @@ mod tests {
             open: None,
             prefs: None,
             quick_add: false,
+            first_run: false,
         }
         .script();
         assert!(script.contains(r#""task":"TM-41""#), "{script}");
@@ -240,6 +246,7 @@ mod tests {
             open: None,
             prefs: None,
             quick_add: true,
+            first_run: false,
         }
         .script();
         assert!(script.contains(r#""quickAdd":true"#), "{script}");

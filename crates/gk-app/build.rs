@@ -19,6 +19,7 @@ fn main() {
         "export_archive",
         "choose_import",
         "import_archive",
+        "choose_backup_folder",
         "open_link",
         "watch_open_links",
         "open_task_window",
@@ -31,6 +32,8 @@ fn main() {
         "watch_quick_add",
         "quick_add_shortcut",
         "set_quick_add_shortcut",
+        "cli_status",
+        "install_cli",
         "quit_app",
     ]);
     if let Err(err) = tauri_build::try_build(tauri_build::Attributes::new().app_manifest(manifest))

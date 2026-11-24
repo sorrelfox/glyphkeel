@@ -2042,7 +2042,7 @@ export class FakeWorkspace {
     "backup.create": () => {
       const at = this.today();
       const backup: Backup = {
-        app_version: "0.0.0",
+        app_version: __VERSION__,
         created_at: at.toISOString(),
         files: this.state.files.length,
         files_size: this.state.files.reduce((sum, file) => sum + file.size, 0),
@@ -2304,7 +2304,7 @@ export class FakeWorkspace {
     },
     "history.revert": ({ groups, dry_run }) => {
       const reverted: string[] = [];
-      const skipped: { group: string; reason: string }[] = [];
+      const skipped: { group: string; reason: string; reason_id: string; reason_args: Record<string, string> }[] = [];
       for (const group of groups ?? []) {
         const latest = this.undoStack[this.undoStack.length - 1];
         if (latest?.group === group && dry_run !== true) {
@@ -2313,7 +2313,7 @@ export class FakeWorkspace {
         } else if (latest?.group === group) {
           reverted.push(group);
         } else {
-          skipped.push({ group, reason: "The sample workspace reverts only its latest change." });
+          skipped.push({ group, reason: "The sample workspace reverts only its latest change.", reason_id: "revert-skipped-not-latest", reason_args: {} });
         }
       }
       if (reverted.length === 0 || dry_run === true) {

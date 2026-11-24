@@ -66,13 +66,22 @@ pub(crate) struct ChosenArchive {
     name: String,
 }
 
+/// The operation that sets the folder backups go to.
+const BACKUP_FOLDER_OP: &str = "backup.folder.update";
+
 /// Whether the page may run `op` with `input` through the `op` command:
-/// not an export or import that names a path.
+/// not an export or import that names a path, and no backup folder named
+/// by the page (setting it back to the default, with no folder, is fine).
 pub(crate) fn page_may_run(op: &str, input: &Value) -> Result<(), OpError> {
-    let names_path = input.get("path").is_some_and(|path| !path.is_null());
-    if matches!(op, "transfer.export" | "transfer.import") && names_path {
+    let names = |field: &str| input.get(field).is_some_and(|value| !value.is_null());
+    if matches!(op, "transfer.export" | "transfer.import") && names("path") {
         return Err(OpError::forbidden(format!(
             "{op} takes its path from the file chooser, not from the page."
+        )));
+    }
+    if op == BACKUP_FOLDER_OP && names("folder") {
+        return Err(OpError::forbidden(format!(
+            "{op} takes its folder from the folder chooser, not from the page."
         )));
     }
     Ok(())
@@ -134,6 +143,30 @@ pub(crate) async fn choose_import(
     }))
 }
 
+/// Lets the person choose the folder backups go to, in the native folder
+/// chooser, and keeps it; the page never names the folder. Returns the
+/// settings change, or `null` when the person cancelled. Backups made
+/// before stay where they are.
+#[tauri::command]
+pub(crate) async fn choose_backup_folder(
+    window: WebviewWindow,
+    workspace: State<'_, Arc<Workspace>>,
+) -> Result<Option<Value>, OpError> {
+    let workspace = Arc::clone(&workspace);
+    let Some(path) = dialog::choose(&window, dialog::Mode::BackupFolder)
+        .await?
+        .into_iter()
+        .next()
+    else {
+        return Ok(None);
+    };
+    blocking(move || {
+        let input = json!({ "folder": path.to_string_lossy() });
+        workspace.call(BACKUP_FOLDER_OP, input, None).map(Some)
+    })
+    .await
+}
+
 /// Checks (`dry_run`) or imports the archive chosen under `token`, with new
 /// keys for projects whose key is taken.
 #[tauri::command]
@@ -174,6 +207,8 @@ mod tests {
         assert!(page_may_run("transfer.export", &json!({ "projects": [] })).is_ok());
         assert!(page_may_run("transfer.export", &json!({ "path": null })).is_ok());
         assert!(page_may_run("task.create", &json!({ "path": "x" })).is_ok());
+        assert!(page_may_run("backup.folder.update", &json!({ "folder": "/mnt" })).is_err());
+        assert!(page_may_run("backup.folder.update", &json!({})).is_ok());
     }
 
     #[test]

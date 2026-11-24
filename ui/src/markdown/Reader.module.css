@@ -42,13 +42,13 @@
 
 .reader ol {
   margin: 0 0 10px;
-  padding-left: 22px;
+  padding-inline-start: 22px;
 }
 
 .reader blockquote {
   margin: 0 0 10px;
-  padding-left: 12px;
-  border-left: 3px solid var(--border-strong);
+  padding-inline-start: 12px;
+  border-inline-start: 3px solid var(--border-strong);
   color: var(--fg-muted);
 }
 
@@ -68,7 +68,8 @@
 }
 
 .reader li[class~="task-item"] > input {
-  margin: 0 6px 0 -20px;
+  margin-block: 0;
+  margin-inline: -20px 6px;
   vertical-align: -2px;
 }
 
@@ -152,7 +153,8 @@
   align-items: center;
   justify-content: space-between;
   height: var(--h-control);
-  padding: 0 4px 0 12px;
+  padding-block: 0;
+  padding-inline: 12px 4px;
   color: var(--fg-muted);
   font-size: var(--fs-small);
 }

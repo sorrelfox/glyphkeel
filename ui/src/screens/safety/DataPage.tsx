@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button } from "react-aria-components";
 
@@ -11,6 +12,8 @@ import { useCall, useOp } from "../../data/hooks";
 import { useBytes, useFailureToast, useRefreshBackups } from "../../data/safety";
 import { type Backup, type BackupCheck } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
+import { chooseBackupFolder, chosenBackupFolder, choosesFiles, resetBackupFolder } from "../../ipc/transfer";
+import { opPrefix } from "../../data/queries";
 import { Group, Row } from "../../shell/PreferenceRows";
 import { useMomentFormat } from "../task/Activity";
 import styles from "./Safety.module.css";
@@ -60,12 +63,13 @@ export function DataPage() {
     <>
       <Group title={t("backups-title")} lead={<p className={classes("faint", styles.small)}>{t("backups-about")}</p>}>
         {backups.isError && <p className="faint">{backups.error.error.message}</p>}
-        <Row label={t("backups-folder")}>
+        <Row label={t("backups-folder")} about={t("backups-folder-about")}>
           {backups.data ? (
             <span className={classes("selectable", styles.path)} data-testid="backup-folder">
               {backups.data.folder}
             </span>
           ) : null}
+          <BackupFolderButtons />
         </Row>
         <Row label={t("backups-last")}>
           <span className="num" data-testid="last-backup">
@@ -91,6 +95,43 @@ export function DataPage() {
           </Button>
         </Row>
       </Group>
+    </>
+  );
+}
+
+/**
+ * Change… picks another folder for backups in the native folder chooser
+ * (only in the app: the page never names a folder); Use default goes back
+ * to the workspace's own. Backups made before stay where they are.
+ */
+function BackupFolderButtons() {
+  const t = useT();
+  const call = useCall();
+  const toasts = useToasts();
+  const fail = useFailureToast();
+  const refresh = useRefreshBackups();
+  const queryClient = useQueryClient();
+  const settings = useOp("settings.get", {});
+  const chosen = chosenBackupFolder(settings.data);
+  const done = (changed: boolean) => {
+    if (changed) {
+      refresh();
+      void queryClient.invalidateQueries({ queryKey: opPrefix("settings.get") });
+      toasts.show({ tone: "info", text: t("backups-folder-changed"), detail: t("backups-folder-old-stay") });
+    }
+  };
+  return (
+    <>
+      {choosesFiles() && (
+        <Button className="btn sm" onPress={() => void chooseBackupFolder().then(done, fail)}>
+          {t("backups-folder-change")}
+        </Button>
+      )}
+      {chosen !== undefined && (
+        <Button className="btn sm" onPress={() => void resetBackupFolder(call).then(() => { done(true); }, fail)}>
+          {t("backups-folder-default")}
+        </Button>
+      )}
     </>
   );
 }

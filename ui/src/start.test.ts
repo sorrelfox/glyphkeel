@@ -29,6 +29,13 @@ describe("readStart", () => {
     expect(readStart(windowWith({ task: "../TM-41", open: 41 }))).toEqual({ titleBar: "app", locale: "fr-FR" });
   });
 
+  it("offers the first-run set-up when the app made the workspace, or the address asks for it outside the app", () => {
+    expect(readStart(windowWith({ firstRun: true })).firstRun).toBe(true);
+    expect(readStart(windowWith({ firstRun: "yes" })).firstRun).toBeUndefined();
+    const browser = { navigator: { language: "fr-FR" }, location: { search: "?first-run" } } as unknown as Window;
+    expect(readStart(browser).firstRun).toBe(true);
+  });
+
   it("finds a task's project in its key", () => {
     expect(projectOfKey("TM-41")).toBe("TM");
     expect(projectOfKey("CLI2-7")).toBe("CLI2");

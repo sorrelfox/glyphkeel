@@ -15,6 +15,7 @@ import { useT } from "../i18n/I18n";
 import { hasQuickAddWindow, showQuickAdd } from "../ipc/quickAdd";
 import { appWindow } from "../ipc/window";
 import { CommandPalette } from "../screens/palette/CommandPalette";
+import { DeleteProjectDialog } from "../screens/project/DeleteProject";
 import { NewProjectDialog, type NewProjectRequest } from "../screens/project/NewProjectDialog";
 import { ProjectSettings } from "../screens/project/ProjectSettings";
 import { useBackUpNow } from "../screens/safety/DataPage";
@@ -22,8 +23,9 @@ import { ExportDialog } from "../screens/safety/ExportDialog";
 import { ImportDialog } from "../screens/safety/ImportDialog";
 import { type TitleBar } from "../start";
 import { ShellContext, type ShellHooks, type StatusInfo } from "./context";
+import { FirstRun, markFirstRunPending } from "./FirstRun";
 import { HeaderBar } from "./HeaderBar";
-import { Preferences } from "./Preferences";
+import { Preferences, type PreferencePage } from "./Preferences";
 import { ShortcutSheet } from "./ShortcutSheet";
 import { shellActions, type View } from "./shellActions";
 import { Sidebar } from "./Sidebar";
@@ -38,6 +40,8 @@ interface ShellProps {
   titleBar: TitleBar;
   /** Opens the development gallery; absent in release builds. */
   openGallery?: (() => void) | undefined;
+  /** Offers the first-run set-up over the window. */
+  firstRun?: boolean | undefined;
 }
 
 /** Which view a path shows. */
@@ -74,7 +78,7 @@ const VIEW_TITLES: Record<Exclude<View, "project">, string> = {
  * The window: sidebar with the project tree, header bar, the screen of the
  * current route, status bar.
  */
-export function Shell({ titleBar, openGallery }: ShellProps) {
+export function Shell({ titleBar, openGallery, firstRun = false }: ShellProps) {
   const t = useT();
   const { locale } = useLocale();
   const zone = useTimeZone();
@@ -91,12 +95,20 @@ export function Shell({ titleBar, openGallery }: ShellProps) {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
+  const [preferencesPage, setPreferencesPage] = useState<PreferencePage>("appearance");
+  const [settingUp, setSettingUp] = useState(firstRun);
+  useEffect(() => {
+    if (settingUp) {
+      markFirstRunPending();
+    }
+  }, [settingUp]);
   // The projects an export starts with; null while the dialog is closed.
   const [exporting, setExporting] = useState<readonly string[] | null>(null);
   const [importing, setImporting] = useState(false);
   const backUp = useBackUpNow();
   const [newProject, setNewProject] = useState<NewProjectRequest | null>(null);
   const [settingsOf, setSettingsOf] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [status, setStatus] = useState<StatusInfo | null>(null);
   const [newTask, setNewTask] = useState<(() => void) | null>(null);
   const [timerTask, setTimerTask] = useState<string | null>(null);
@@ -133,6 +145,7 @@ export function Shell({ titleBar, openGallery }: ShellProps) {
       setShortcutsOpen(true);
     },
     openPreferences: () => {
+      setPreferencesPage("appearance");
       setPreferencesOpen(true);
     },
     newTask,
@@ -178,6 +191,10 @@ export function Shell({ titleBar, openGallery }: ShellProps) {
                 width={sidebarWidth}
                 onNewProject={setNewProject}
                 onProjectSettings={setSettingsOf}
+                onExportProject={(key) => {
+                  setExporting([key]);
+                }}
+                onDeleteProject={setDeleting}
               />
               <Splitter label={t("sidebar-resize")} value={sidebarWidth} min={SIDEBAR_WIDTH.min} max={SIDEBAR_WIDTH.max} onChange={setChosenWidth} />
             </>
@@ -201,7 +218,19 @@ export function Shell({ titleBar, openGallery }: ShellProps) {
         </div>
         <CommandPalette isOpen={paletteOpen} onOpenChange={setPaletteOpen} />
         <ShortcutSheet isOpen={shortcutsOpen} onOpenChange={setShortcutsOpen} />
-        <Preferences isOpen={preferencesOpen} onOpenChange={setPreferencesOpen} />
+        <Preferences isOpen={preferencesOpen} onOpenChange={setPreferencesOpen} page={preferencesPage} />
+        {settingUp && (
+          <FirstRun
+            onClose={() => {
+              setSettingUp(false);
+            }}
+            onSetUpAgents={() => {
+              setSettingUp(false);
+              setPreferencesPage("agents");
+              setPreferencesOpen(true);
+            }}
+          />
+        )}
         {exporting !== null && (
           <ExportDialog
             isOpen
@@ -222,6 +251,14 @@ export function Shell({ titleBar, openGallery }: ShellProps) {
               if (created) {
                 void navigate({ to: "/projects/$key", params: { key: created } });
               }
+            }}
+          />
+        )}
+        {deleting !== null && (
+          <DeleteProjectDialog
+            projectKey={deleting}
+            onClose={() => {
+              setDeleting(null);
             }}
           />
         )}

@@ -21,13 +21,16 @@ import { chordLabel } from "../components/Kbd";
 import { Select } from "../components/Select";
 import { DataPage } from "../screens/safety/DataPage";
 import { Group, Row } from "./PreferenceRows";
+import { AgentsPage } from "./preferences/AgentsPage";
+import { LanguagePage } from "./preferences/LanguagePage";
+import { ShortcutsPage } from "./preferences/ShortcutsPage";
 import styles from "./Preferences.module.css";
 import { TimeZonePicker } from "./TimeZonePicker";
 
 const WEEK_STARTS: readonly WeekStart[] = ["monday", "saturday", "sunday"];
 
 /** The pages, in the order of the list on the left. */
-export const PREFERENCE_PAGES = ["appearance", "time", "reminders", "quick-add", "workspace", "data"] as const;
+export const PREFERENCE_PAGES = ["appearance", "language", "time", "notifications", "quick-add", "shortcuts", "agents", "workspace", "data"] as const;
 export type PreferencePage = (typeof PREFERENCE_PAGES)[number];
 
 interface PreferencesProps {
@@ -39,9 +42,10 @@ interface PreferencesProps {
 
 /**
  * Preferences: a list of pages on the left, the page on the right. Every
- * change applies at once; there is no OK or Apply. The appearance belongs to
- * this computer; time, reminders and trash are the workspace's settings, kept
- * by the engine; background mode and notifications are the app's own.
+ * change applies at once; there is no OK or Apply. The appearance and the
+ * language are this person's; time, reminders, trash and what agents may
+ * do are the workspace's settings, kept by the engine; background mode,
+ * notifications and the time zone are the app's own.
  */
 export function Preferences({ isOpen, onOpenChange, page = "appearance" }: PreferencesProps) {
   const t = useT();
@@ -58,14 +62,23 @@ export function Preferences({ isOpen, onOpenChange, page = "appearance" }: Prefe
         <TabPanel id="appearance" className={classes(styles.page)}>
           <AppearancePage />
         </TabPanel>
+        <TabPanel id="language" className={classes(styles.page)}>
+          <LanguagePage />
+        </TabPanel>
         <TabPanel id="time" className={classes(styles.page)}>
           <TimePage />
         </TabPanel>
-        <TabPanel id="reminders" className={classes(styles.page)}>
-          <RemindersPage />
+        <TabPanel id="notifications" className={classes(styles.page)}>
+          <NotificationsPage />
         </TabPanel>
         <TabPanel id="quick-add" className={classes(styles.page)}>
           <QuickAddPage />
+        </TabPanel>
+        <TabPanel id="shortcuts" className={classes(styles.page)}>
+          <ShortcutsPage />
+        </TabPanel>
+        <TabPanel id="agents" className={classes(styles.page)}>
+          <AgentsPage />
         </TabPanel>
         <TabPanel id="workspace" className={classes(styles.page)}>
           <WorkspacePage />
@@ -155,7 +168,7 @@ function ThemePreview({ theme, accent }: { theme: Theme; accent: Accent }) {
  * light and the dark theme it follows side by side. The tiles wrap onto more
  * lines when the page is narrow. Arrow keys move between them.
  */
-function ThemeTiles({
+export function ThemeTiles({
   label,
   value,
   accent,
@@ -477,13 +490,26 @@ function systemZoneName(): string | undefined {
   return zone === "" ? undefined : zone;
 }
 
-function RemindersPage() {
+/** Desktop notifications, when reminders come, and whether the app stays for them. */
+function NotificationsPage() {
   const t = useT();
   const { settings, change } = useSettings();
   const app = useAppSettings();
   const updateApp = useUpdateAppSettings();
   return (
     <>
+      <Group title={t("preferences-notifications-group")}>
+        <Row label={t("preferences-notifications")} about={t("preferences-notifications-about")}>
+          <Switch
+            aria-label={t("preferences-notifications")}
+            isDisabled={!app.data}
+            isSelected={app.data?.notifications ?? true}
+            onChange={(notifications) => {
+              updateApp({ notifications });
+            }}
+          />
+        </Row>
+      </Group>
       <Group title={t("preferences-reminders")}>
         {settings.isError && <Failure message={settings.error.error.message} />}
         {settings.data && (
@@ -497,16 +523,6 @@ function RemindersPage() {
             />
           </Row>
         )}
-        <Row label={t("preferences-notifications")} about={t("preferences-notifications-about")}>
-          <Switch
-            aria-label={t("preferences-notifications")}
-            isDisabled={!app.data}
-            isSelected={app.data?.notifications ?? true}
-            onChange={(notifications) => {
-              updateApp({ notifications });
-            }}
-          />
-        </Row>
       </Group>
       <Group title={t("preferences-background")}>
         <Row label={t("preferences-run-in-background")} about={t("preferences-run-in-background-about")}>

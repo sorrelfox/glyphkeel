@@ -22,6 +22,10 @@ interface ProjectTreeProps {
   current: string | undefined;
   onNewProject: (request: NewProjectRequest) => void;
   onSettings: (key: string) => void;
+  /** Opens the export dialog with this project chosen. */
+  onExport: (key: string) => void;
+  /** Asks before moving this project and everything under it to the trash. */
+  onDelete: (key: string) => void;
 }
 
 /** Projects under each parent key; the top level under "". */
@@ -40,7 +44,7 @@ export function childrenByParent(projects: readonly ProjectSummary[]): Map<strin
  * remembered. Its count is its own open tasks; closed, the count covers
  * everything under it. Archived projects are listed apart, below.
  */
-export function ProjectTree({ current, onNewProject, onSettings }: ProjectTreeProps) {
+export function ProjectTree({ current, onNewProject, onSettings, onExport, onDelete }: ProjectTreeProps) {
   const t = useT();
   const navigate = useNavigate();
   const projects = useProjects();
@@ -60,6 +64,9 @@ export function ProjectTree({ current, onNewProject, onSettings }: ProjectTreePr
       ? [
           { id: "open", label: t("project-open"), run: () => { open(project.key); } },
           { id: "unarchive", label: t("project-unarchive"), run: () => { unarchive.mutate({ project: project.key }); } },
+          { id: "export", label: t("project-export"), run: () => { onExport(project.key); } },
+          "separator",
+          { id: "delete", label: t("project-delete"), run: () => { onDelete(project.key); } },
         ]
       : [
           { id: "open", label: t("project-open"), run: () => { open(project.key); } },
@@ -67,6 +74,8 @@ export function ProjectTree({ current, onNewProject, onSettings }: ProjectTreePr
           { id: "settings", label: t("project-settings"), run: () => { onSettings(project.key); } },
           "separator",
           { id: "archive", label: t("project-archive"), run: () => { archive.mutate({ project: project.key }); } },
+          { id: "export", label: t("project-export"), run: () => { onExport(project.key); } },
+          { id: "delete", label: t("project-delete"), run: () => { onDelete(project.key); } },
         ];
 
   const row = (project: ProjectSummary, hasChildren: boolean, isExpanded: boolean): ReactNode => {
