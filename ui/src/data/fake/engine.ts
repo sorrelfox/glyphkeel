@@ -2383,21 +2383,21 @@ export class FakeWorkspace {
           fail("invalid", "A column is 40 to 1200 pixels wide.", { details: { path: `widths.${column}`, message_id: "list-layout-width", args: { min: 40, max: 1200 } } });
         }
       }
-      const folded: Record<string, string[]> = { ...before.collapsed };
+      const folded = new Map<string, string[]>(Object.entries(before.collapsed ?? {}));
       for (const [grouping, values] of Object.entries(collapsed ?? {})) {
         if (!["status", "priority", "label", "parent", "due_week", "project"].includes(grouping)) {
           fail("invalid", "Groups can be folded only for status, priority, label, parent, due week or project.", { details: { path: `collapsed.${grouping}`, message_id: "list-layout-grouping" } });
         }
         if (values.length === 0) {
-          delete folded[grouping];
+          folded.delete(grouping);
         } else {
-          folded[grouping] = [...new Set(values)];
+          folded.set(grouping, [...new Set(values)]);
         }
       }
       const next: ListLayout = {
         columns: columns ? [...new Set(columns)] : [...before.columns],
         widths: { ...before.widths, ...widths },
-        ...(Object.keys(folded).length > 0 ? { collapsed: folded } : {}),
+        ...(folded.size > 0 ? { collapsed: Object.fromEntries(folded) } : {}),
       };
       this.state.listLayouts[scope] = next;
       return {

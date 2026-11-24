@@ -299,7 +299,7 @@ describe("a workspace of one person", () => {
     const labels = [...panel.querySelectorAll("[aria-label]")].map((element) => element.getAttribute("aria-label") ?? "");
     expect(labels.filter((label) => words.test(label))).toEqual([]);
     // Nor in any of the app's messages.
-    const messages = Object.values(import.meta.glob("../../i18n/en/*.ftl", { query: "?raw", import: "default", eager: true }) as Record<string, string>).join("\n");
+    const messages = Object.values(import.meta.glob<string>("../../i18n/en/*.ftl", { query: "?raw", import: "default", eager: true })).join("\n");
     expect(messages.split("\n").filter((line) => !line.startsWith("#") && words.test(line))).toEqual([]);
   });
 });
