@@ -1736,6 +1736,7 @@ dependencies = [
  "clap",
  "clap_complete",
  "clap_mangen",
+ "embed-resource",
  "gk-api",
  "gk-engine",
  "gk-mcp",

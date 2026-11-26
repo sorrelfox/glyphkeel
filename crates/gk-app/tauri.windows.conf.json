@@ -1,0 +1,54 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "app": {
+    "security": {
+      "csp": {
+        "img-src": "'self' http://gk-file.localhost data: blob:"
+      },
+      "devCsp": {
+        "img-src": "'self' http://gk-file.localhost data: blob: http://127.0.0.1:5310"
+      }
+    }
+  },
+  "bundle": {
+    "targets": ["nsis"],
+    "licenseFile": "../../LICENSE",
+    "windows": {
+      "allowDowngrades": true,
+      "webviewInstallMode": {
+        "type": "embedBootstrapper",
+        "silent": true
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "installerIcon": "icons/icon.ico",
+        "installerHooks": "packaging/windows/installer-hooks.nsh",
+        "compression": "lzma",
+        "displayLanguageSelector": false,
+        "languages": [
+          "English",
+          "Arabic",
+          "Bulgarian",
+          "Dutch",
+          "French",
+          "German",
+          "Italian",
+          "Japanese",
+          "Korean",
+          "Norwegian",
+          "Portuguese",
+          "PortugueseBR",
+          "Russian",
+          "SimpChinese",
+          "Spanish",
+          "SpanishInternational",
+          "Swedish",
+          "TradChinese",
+          "Turkish",
+          "Ukrainian",
+          "Vietnamese"
+        ]
+      }
+    }
+  }
+}

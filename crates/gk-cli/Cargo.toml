@@ -17,6 +17,9 @@ publish.workspace = true
 name = "glyphkeel"
 path = "src/main.rs"
 
+[build-dependencies]
+embed-resource = { workspace = true }
+
 [dependencies]
 clap = { workspace = true, features = ["string"] }
 clap_complete = { workspace = true }

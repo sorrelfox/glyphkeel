@@ -42,8 +42,15 @@ fn main() {
         "install_cli",
         "quit_app",
     ]);
-    if let Err(err) = tauri_build::try_build(tauri_build::Attributes::new().app_manifest(manifest))
-    {
+    // On Windows: UTF-8 code page, long paths and per-monitor DPI, besides the
+    // common controls that Tauri's own manifest asks for.
+    let windows = tauri_build::WindowsAttributes::new()
+        .app_manifest(include_str!("packaging/windows/glyphkeel-app.manifest"));
+    println!("cargo:rerun-if-changed=packaging/windows/glyphkeel-app.manifest");
+    let attributes = tauri_build::Attributes::new()
+        .app_manifest(manifest)
+        .windows_attributes(windows);
+    if let Err(err) = tauri_build::try_build(attributes) {
         panic!("tauri-build: {err:#}");
     }
 }

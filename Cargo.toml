@@ -105,6 +105,9 @@ tracing = "0.1.44"
 # with `@tauri-apps/api` in ui/package.json.
 tauri = "=2.12.7"
 tauri-build = "=2.7.6"
+# The Windows resources of the command line: manifest, icon and version
+# (already in the lock through tauri-build).
+embed-resource = "=3.0.12"
 # The GTK bindings Tauri itself uses, for the window's title bar, bringing it
 # forward with an activation token, and its remembered geometry (Linux only).
 gtk = "=0.18.2"
