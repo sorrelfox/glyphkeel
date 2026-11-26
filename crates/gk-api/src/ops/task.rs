@@ -161,6 +161,14 @@ pub struct Task {
     /// Its personal reminder, when asked for with `include` and it has one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reminder: Option<crate::ops::time::Reminder>,
+    /// The wiki pages, other tasks and comments that mention it, when asked
+    /// for with `include`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backlinks: Option<Vec<crate::ops::link::Backlink>>,
+    /// What its description and comments link to, when asked for with
+    /// `include`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub references: Option<Vec<crate::ops::link::Reference>>,
     /// Its place in its status column.
     pub rank: String,
     /// Keys it had before; they still find it.
@@ -278,6 +286,10 @@ pub enum TaskPart {
     Time,
     /// The personal reminder.
     Reminder,
+    /// The wiki pages, other tasks and comments that mention it.
+    Backlinks,
+    /// The pages and tasks its description and comments link to.
+    References,
 }
 
 /// A task changed, with the history group of the change.
@@ -307,7 +319,8 @@ pub struct TaskGetInput {
     /// One to 20 task keys or IDs.
     pub keys: Vec<String>,
     /// What to add to each task: `subtasks`, `links`, `comments`, `files`,
-    /// `checklist`, `revisions`, `time`, `reminder`.
+    /// `checklist`, `revisions`, `time`, `reminder`, `backlinks`,
+    /// `references`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub include: Vec<TaskPart>,
 }

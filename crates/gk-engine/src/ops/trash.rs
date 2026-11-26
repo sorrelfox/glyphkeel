@@ -45,7 +45,7 @@ use serde_json::{Value, json};
 use super::comment::actor;
 use super::fields::{PROJECT, TASK, WIKI};
 use super::lookup::{self, b, id_at, opt_id_at};
-use super::{comment, desc, file, project_delete, settings, time, wiki};
+use super::{comment, desc, file, links, project_delete, settings, time, wiki};
 use crate::context::Context;
 use crate::failure::Failure;
 use crate::messages;
@@ -1327,6 +1327,7 @@ fn purge_comment(w: &WriteCtx<'_>, id: Id, files: &mut Vec<String>) -> Result<()
     ] {
         tx.execute(sql, [b(id)])?;
     }
+    links::forget(tx, links::Source::Comment(id))?;
     Ok(())
 }
 
@@ -1389,6 +1390,7 @@ fn purge_page_tree(w: &WriteCtx<'_>, root: Id, files: &mut Vec<String>) -> Resul
         ] {
             tx.execute(sql, [b(*p)])?;
         }
+        links::forget(tx, links::Source::Wiki(*p))?;
     }
     Ok(all.len() as u64)
 }

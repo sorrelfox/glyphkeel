@@ -3,7 +3,8 @@
 
 //! Wiki pages over a real workspace: names unique ignoring case, the tree,
 //! finding pages and headings, revisions with merges and conflict copies
-//! (in one process and across two), history, Undo and revert, backlinks.
+//! (in one process and across two), history, Undo and revert, links and
+//! backlinks, moves.
 //!
 //! The two-process test starts this test binary again with an environment
 //! variable that makes `child_editor` save one page edit as an agent, the
@@ -18,7 +19,7 @@ use std::sync::atomic::{AtomicI64, Ordering};
 
 use gk_api::ops::common::Via;
 use gk_api::{ErrorCode, OpError, Profile};
-use gk_engine::{Context, Engine, EngineConfig, Role, SessionStart};
+use gk_engine::{Confirmation, Context, Engine, EngineConfig, Role, SessionStart};
 use gk_store::WorkspaceLayout;
 use serde_json::{Value, json};
 use tempfile::TempDir;
@@ -439,18 +440,368 @@ fn backlinks_list_pages_and_tasks_that_link_here() {
         "task.create",
         json!({ "project": "TM", "title": "Ship", "description": "Follow [[Release plan]]." }),
     );
+    ws.call(
+        "comment.add",
+        json!({ "key": "TM-1", "body": "Dates are in [[release-plan#Dates]]." }),
+    );
     let page = ws.call(
         "wiki.get",
         json!({ "project": "TM", "page": "Release plan", "include": ["backlinks"] }),
     );
+    let comment = ws.call(
+        "task.get",
+        json!({ "keys": ["TM-1"], "include": ["comments"] }),
+    )["items"][0]["comments"][0]["id"]
+        .clone();
     assert_eq!(
         page["backlinks"],
         json!([
             { "page": { "title": "Index", "slug": "index", "id": ws.get("Index")["id"] },
-              "title": "Index", "heading": "Dates" },
-            { "task": "TM-1", "title": "Ship" }
+              "project": "TM", "title": "Index", "heading": "Dates" },
+            { "task": "TM-1", "project": "TM", "title": "Ship" },
+            { "task": "TM-1", "comment": comment, "project": "TM", "title": "Ship",
+              "heading": "Dates" }
         ])
     );
+    let alone = ws.call(
+        "wiki.backlinks",
+        json!({ "project": "TM", "page": "Release plan" }),
+    );
+    assert_eq!(alone["items"], page["backlinks"]);
+    assert_eq!(alone["total"], 3);
+
+    // What the index links to: one page that exists, one that doesn't yet.
+    let refs = ws.call(
+        "wiki.references",
+        json!({ "project": "TM", "page": "Index" }),
+    );
+    assert_eq!(
+        refs["items"],
+        json!([
+            { "kind": "page", "target": "release plan", "heading": "Dates", "found": true,
+              "page": { "title": "Release plan", "slug": "release-plan",
+                        "id": ws.get("Release plan")["id"] },
+              "project": "TM", "title": "Release plan" },
+            { "kind": "page", "target": "Setup", "found": false }
+        ])
+    );
+    // A page made later is found by the links already written.
+    ws.page("Setup", "");
+    let setup = ws.call(
+        "wiki.backlinks",
+        json!({ "project": "TM", "page": "Setup" }),
+    );
+    assert_eq!(setup["items"][0]["title"], "Index");
+}
+
+#[test]
+fn task_keys_link_pages_tasks_and_comments_to_a_task() {
+    let ws = open();
+    ws.call("task.create", json!({ "project": "TM", "title": "Target" }));
+    ws.call(
+        "task.create",
+        json!({ "project": "TM", "title": "Other", "description": "Blocked by TM-1, see TM-99." }),
+    );
+    ws.call(
+        "comment.add",
+        json!({ "key": "TM-2", "body": "TM-1 first, then [[Plan]]." }),
+    );
+    // Mentions of a task in its own text are not backlinks.
+    ws.call(
+        "comment.add",
+        json!({ "key": "TM-1", "body": "This is TM-1." }),
+    );
+    ws.page("Plan", "Work on TM-1 and `TM-2` (code doesn't count).\n");
+    let back = ws.call("task.backlinks", json!({ "key": "tm-1" }));
+    let kinds: Vec<(Value, Value, bool)> = back["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|b| {
+            (
+                b["title"].clone(),
+                b["task"].clone(),
+                b.get("comment").is_some(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        kinds,
+        [
+            (json!("Plan"), Value::Null, false),
+            (json!("Other"), json!("TM-2"), false),
+            (json!("Other"), json!("TM-2"), true),
+        ]
+    );
+    // The same through task.get.
+    let task = ws.call(
+        "task.get",
+        json!({ "keys": ["TM-1"], "include": ["backlinks"] }),
+    );
+    assert_eq!(task["items"][0]["backlinks"], back["items"]);
+    assert!(
+        ws.call("task.backlinks", json!({ "key": "TM-2" }))["items"]
+            .as_array()
+            .unwrap()
+            .is_empty(),
+        "a key in code is not a link"
+    );
+
+    let refs = ws.call("task.references", json!({ "key": "TM-2" }));
+    let found: Vec<(Value, Value, bool, bool)> = refs["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| {
+            (
+                r["kind"].clone(),
+                r["target"].clone(),
+                r["found"].as_bool().unwrap(),
+                r.get("comment").is_some(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        found,
+        [
+            (json!("task"), json!("TM-1"), true, false),
+            (json!("task"), json!("TM-99"), false, false),
+            (json!("page"), json!("Plan"), true, true),
+            (json!("task"), json!("TM-1"), true, true),
+        ]
+    );
+    // Edits replace a text's links.
+    ws.call(
+        "task.update",
+        json!({ "key": "TM-2", "description": "Nothing here." }),
+    );
+    let back = ws.call("task.backlinks", json!({ "key": "TM-1" }));
+    assert_eq!(back["total"], 2);
+}
+
+#[test]
+fn links_survive_renames_moves_and_a_trip_through_the_trash() {
+    let ws = open();
+    ws.page("Guide", "");
+    let plan = ws.page("Release plan", BASE);
+    ws.page("Index", "See [[Release plan#Dates]].\n");
+    let backlinks = |ws: &Ws| -> Vec<String> {
+        ws.call("wiki.backlinks", json!({ "page": plan["id"] }))["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|b| b["title"].as_str().unwrap().to_owned())
+            .collect()
+    };
+    let target_found = |ws: &Ws| -> bool {
+        ws.call(
+            "wiki.references",
+            json!({ "project": "TM", "page": "Index" }),
+        )["items"][0]["found"]
+            .as_bool()
+            .unwrap()
+    };
+    assert_eq!(backlinks(&ws), ["Index"]);
+
+    // Renamed: the old slug still finds it, so the old link does too.
+    ws.call(
+        "wiki.update",
+        json!({ "project": "TM", "page": "Release plan", "title": "Roadmap" }),
+    );
+    assert_eq!(backlinks(&ws), ["Index"]);
+    assert!(target_found(&ws));
+
+    // Moved into another page: the slug stays.
+    let moved = ws.call(
+        "wiki.move",
+        json!({ "project": "TM", "page": "Roadmap", "parent": "Guide" }),
+    );
+    assert_eq!(moved["page"]["parent"]["title"], "Guide");
+    assert_eq!(moved["page"]["slug"], "roadmap");
+    assert!(moved["group"].is_string());
+    assert_eq!(backlinks(&ws), ["Index"]);
+
+    // The linking page in the trash: no backlink until it is back.
+    let index = ws.get("Index")["id"].as_str().unwrap().to_owned();
+    ws.call("wiki.delete", json!({ "project": "TM", "page": "Index" }));
+    assert!(backlinks(&ws).is_empty());
+    ws.call("trash.restore", json!({ "items": [index] }));
+    assert_eq!(backlinks(&ws), ["Index"]);
+
+    // The target in the trash (with the page holding it): the link finds
+    // nothing until it is back.
+    ws.call("wiki.delete", json!({ "project": "TM", "page": "Guide" }));
+    assert!(!target_found(&ws));
+    let guide = ws.call("trash.list", json!({}))["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|i| i["title"] == "Guide")
+        .unwrap()["id"]
+        .clone();
+    ws.call("trash.restore", json!({ "items": [guide] }));
+    assert!(target_found(&ws));
+    assert_eq!(backlinks(&ws), ["Index"]);
+
+    // Undo of an edit brings its links back too.
+    ws.call(
+        "wiki.update",
+        json!({ "project": "TM", "page": "Index", "edits":
+            [{ "old_text": "[[Release plan#Dates]]", "new_text": "nothing" }] }),
+    );
+    assert!(backlinks(&ws).is_empty());
+    ws.call("history.undo", json!({}));
+    assert_eq!(backlinks(&ws), ["Index"]);
+
+    // Purged for good: its rows go with it.
+    ws.call("wiki.delete", json!({ "project": "TM", "page": "Index" }));
+    ws.engine
+        .call(
+            &Context::user(Via::Cli).with_confirmation(Confirmation::Given),
+            "trash.purge",
+            json!({ "items": [index] }),
+        )
+        .unwrap();
+    let rows: i64 = ws
+        .engine
+        .store()
+        .read(|tx| {
+            tx.query_row(
+                "SELECT count(*) FROM text_links WHERE source_kind = 'wiki'",
+                [],
+                |r| r.get(0),
+            )
+            .map_err(gk_store::StoreError::from)
+        })
+        .unwrap();
+    assert_eq!(rows, 0);
+}
+
+#[test]
+fn a_link_can_name_a_page_of_another_project() {
+    let ws = open();
+    ws.call("project.create", json!({ "name": "Lab", "key": "LAB" }));
+    ws.call("wiki.create", json!({ "project": "LAB", "title": "Setup" }));
+    ws.page("Notes", "Use [[LAB:Setup]] and [[Setup]].\n");
+    let refs = ws.call(
+        "wiki.references",
+        json!({ "project": "TM", "page": "Notes" }),
+    );
+    assert_eq!(refs["items"][0]["found"], true);
+    assert_eq!(refs["items"][0]["project"], "LAB");
+    assert_eq!(
+        refs["items"][1]["found"], false,
+        "[[Setup]] is TM's own page"
+    );
+    let back = ws.call(
+        "wiki.backlinks",
+        json!({ "project": "LAB", "page": "setup" }),
+    );
+    assert_eq!(back["items"][0]["title"], "Notes");
+    assert_eq!(back["items"][0]["project"], "TM");
+    // A page of that whole name in the linking project wins.
+    ws.page("LAB:Setup", "");
+    let refs = ws.call(
+        "wiki.references",
+        json!({ "project": "TM", "page": "Notes" }),
+    );
+    assert_eq!(refs["items"][0]["project"], "TM");
+}
+
+#[test]
+fn pages_move_within_the_tree_but_never_into_themselves() {
+    let ws = open();
+    ws.page("Guide", "");
+    ws.child("Install", "Guide");
+    ws.child("Linux", "Install");
+    ws.page("FAQ", "");
+    for (input, id) in [
+        (json!({ "parent": "Linux" }), "wiki-parent-loop"),
+        (json!({ "parent": "Guide" }), "wiki-parent-loop"),
+        (
+            json!({ "parent": "FAQ", "top_level": true }),
+            "wiki-parent-and-top",
+        ),
+        (json!({}), "wiki-move-nowhere"),
+    ] {
+        let mut input = input;
+        input["project"] = json!("TM");
+        input["page"] = json!("Guide");
+        let e = ws.fails("wiki.move", input.clone());
+        assert_eq!(e.code, ErrorCode::Invalid, "{input}");
+        assert_eq!(e.details["message_id"], id, "{input}");
+    }
+    ws.call(
+        "wiki.move",
+        json!({ "project": "TM", "page": "Install", "parent": "FAQ" }),
+    );
+    assert_eq!(ws.titles(), ["Guide", "FAQ", "  Install", "    Linux"]);
+    ws.call(
+        "wiki.move",
+        json!({ "project": "TM", "page": "Linux", "top_level": true, "before": "Guide" }),
+    );
+    ws.call(
+        "wiki.move",
+        json!({ "project": "TM", "page": "FAQ", "at": "top" }),
+    );
+    assert_eq!(ws.titles(), ["FAQ", "  Install", "Linux", "Guide"]);
+    // Undo puts the last move back.
+    ws.call("history.undo", json!({}));
+    assert_eq!(ws.titles(), ["Linux", "Guide", "FAQ", "  Install"]);
+}
+
+#[test]
+fn texts_written_before_the_link_index_are_read_on_the_next_start() {
+    let dir = tempfile::tempdir().unwrap();
+    let layout = WorkspaceLayout::new(dir.path().join("Personal"));
+    {
+        let engine = Engine::open(&layout, EngineConfig::new(Role::App)).unwrap();
+        let call = |op: &str, input: Value| engine.call(&me(), op, input).unwrap();
+        call(
+            "project.create",
+            json!({ "name": "Task Manager", "key": "TM" }),
+        );
+        call("wiki.create", json!({ "project": "TM", "title": "Plan" }));
+        call(
+            "task.create",
+            json!({ "project": "TM", "title": "Ship", "description": "See [[Plan]]." }),
+        );
+        // As a workspace from before the index: no rows, and the mark the
+        // schema upgrade leaves.
+        engine
+            .store()
+            .write("test", |tx| {
+                tx.execute_batch(
+                    "DELETE FROM text_links;
+                     INSERT INTO meta (key, value) VALUES ('text_links_pending', '1');",
+                )
+                .map_err(gk_store::StoreError::from)
+            })
+            .unwrap();
+        let back = call("wiki.backlinks", json!({ "project": "TM", "page": "Plan" }));
+        assert_eq!(back["total"], 0);
+    }
+    let engine = Engine::open(&layout, EngineConfig::new(Role::App)).unwrap();
+    let back = engine
+        .call(
+            &me(),
+            "wiki.backlinks",
+            json!({ "project": "TM", "page": "Plan" }),
+        )
+        .unwrap();
+    assert_eq!(back["items"][0]["task"], "TM-1");
+    let left: i64 = engine
+        .store()
+        .read(|tx| {
+            tx.query_row(
+                "SELECT count(*) FROM meta WHERE key = 'text_links_pending'",
+                [],
+                |r| r.get(0),
+            )
+            .map_err(gk_store::StoreError::from)
+        })
+        .unwrap();
+    assert_eq!(left, 0);
 }
 
 // ---------------------------------------------------------------------

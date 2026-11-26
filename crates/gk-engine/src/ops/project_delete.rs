@@ -99,6 +99,7 @@ pub(crate) fn clear_task(
     task: Id,
     files: &mut Vec<String>,
 ) -> Result<(), Failure> {
+    super::links::forget_task(w.tx(), task)?;
     let comments = ids(w.tx(), "SELECT id FROM comments WHERE task_id = ?1", task)?;
     for c in &comments {
         collect_files(w.tx(), "comment", *c, files)?;
@@ -226,6 +227,7 @@ pub(crate) fn purge_projects(
             *p,
         )? {
             collect_files(w.tx(), "wiki_page", page, files)?;
+            super::links::forget(w.tx(), super::links::Source::Wiki(page))?;
             for sql in [
                 "DELETE FROM attachments WHERE owner_kind = 'wiki_page' AND owner_id = ?1",
                 "DELETE FROM wiki_redirects WHERE page_id = ?1",

@@ -12435,6 +12435,16 @@
                 "const": "reminder",
                 "description": "The personal reminder.",
                 "type": "string"
+              },
+              {
+                "const": "backlinks",
+                "description": "The wiki pages, other tasks and comments that mention it.",
+                "type": "string"
+              },
+              {
+                "const": "references",
+                "description": "The pages and tasks its description and comments link to.",
+                "type": "string"
               }
             ]
           }
@@ -12444,7 +12454,7 @@
         "description": "Which tasks to read.",
         "properties": {
           "include": {
-            "description": "What to add to each task: `subtasks`, `links`, `comments`, `files`,\n`checklist`, `revisions`, `time`, `reminder`.",
+            "description": "What to add to each task: `subtasks`, `links`, `comments`, `files`,\n`checklist`, `revisions`, `time`, `reminder`, `backlinks`,\n`references`.",
             "items": {
               "$ref": "#/$defs/TaskPart"
             },
@@ -12572,6 +12582,41 @@
               "task",
               "added_by",
               "created_at"
+            ],
+            "type": "object"
+          },
+          "Backlink": {
+            "additionalProperties": false,
+            "description": "A text that links somewhere: a wiki page, a task's description or a\ncomment on a task.",
+            "properties": {
+              "comment": {
+                "description": "The comment's ID, for a link in a comment.",
+                "type": "string"
+              },
+              "heading": {
+                "description": "The heading the link names, if any.",
+                "type": "string"
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "A page, for a link in its text."
+              },
+              "project": {
+                "description": "The key of the project the task or page is in.",
+                "type": "string"
+              },
+              "task": {
+                "description": "A task's key, for a link in its description or in a comment on it.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the task or page.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "project",
+              "title"
             ],
             "type": "object"
           },
@@ -12996,6 +13041,69 @@
               }
             ]
           },
+          "Reference": {
+            "additionalProperties": false,
+            "description": "One link in a text, resolved now.",
+            "properties": {
+              "comment": {
+                "description": "The comment the link is in, when it is not in the description.",
+                "type": "string"
+              },
+              "found": {
+                "description": "Whether the target was found; false for a page that doesn't exist\n(yet), a task key that names nothing, or a target in the trash.",
+                "type": "boolean"
+              },
+              "heading": {
+                "description": "The heading a page link names, if any.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/ReferenceKind",
+                "description": "A page or a task."
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "The page found."
+              },
+              "project": {
+                "description": "The key of the project of the page or task found.",
+                "type": "string"
+              },
+              "target": {
+                "description": "The page name or task key as written.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task found: its current key.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the page or task found.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "target",
+              "found"
+            ],
+            "type": "object"
+          },
+          "ReferenceKind": {
+            "description": "What a link points at.",
+            "oneOf": [
+              {
+                "const": "page",
+                "description": "A wiki page.",
+                "type": "string"
+              },
+              {
+                "const": "task",
+                "description": "A task.",
+                "type": "string"
+              }
+            ]
+          },
           "Reminder": {
             "additionalProperties": false,
             "description": "A task's personal reminder.",
@@ -13159,6 +13267,13 @@
             "additionalProperties": false,
             "description": "One task.",
             "properties": {
+              "backlinks": {
+                "description": "The wiki pages, other tasks and comments that mention it, when asked\nfor with `include`.",
+                "items": {
+                  "$ref": "#/$defs/Backlink"
+                },
+                "type": "array"
+              },
               "blocked": {
                 "description": "Whether a task that blocks it is still open.",
                 "type": "boolean"
@@ -13305,6 +13420,13 @@
               "rank": {
                 "description": "Its place in its status column.",
                 "type": "string"
+              },
+              "references": {
+                "description": "What its description and comments link to, when asked for with\n`include`.",
+                "items": {
+                  "$ref": "#/$defs/Reference"
+                },
+                "type": "array"
               },
               "reminder": {
                 "$ref": "#/$defs/Reminder",
@@ -13565,6 +13687,30 @@
                 "type": "string"
               }
             ]
+          },
+          "WikiPageRef": {
+            "additionalProperties": false,
+            "description": "Another page, as a page names its parent and children.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "slug": {
+                "description": "Its slug.",
+                "type": "string"
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "slug",
+              "id"
+            ],
+            "type": "object"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -13875,6 +14021,41 @@
               "task",
               "added_by",
               "created_at"
+            ],
+            "type": "object"
+          },
+          "Backlink": {
+            "additionalProperties": false,
+            "description": "A text that links somewhere: a wiki page, a task's description or a\ncomment on a task.",
+            "properties": {
+              "comment": {
+                "description": "The comment's ID, for a link in a comment.",
+                "type": "string"
+              },
+              "heading": {
+                "description": "The heading the link names, if any.",
+                "type": "string"
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "A page, for a link in its text."
+              },
+              "project": {
+                "description": "The key of the project the task or page is in.",
+                "type": "string"
+              },
+              "task": {
+                "description": "A task's key, for a link in its description or in a comment on it.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the task or page.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "project",
+              "title"
             ],
             "type": "object"
           },
@@ -14321,6 +14502,69 @@
               }
             ]
           },
+          "Reference": {
+            "additionalProperties": false,
+            "description": "One link in a text, resolved now.",
+            "properties": {
+              "comment": {
+                "description": "The comment the link is in, when it is not in the description.",
+                "type": "string"
+              },
+              "found": {
+                "description": "Whether the target was found; false for a page that doesn't exist\n(yet), a task key that names nothing, or a target in the trash.",
+                "type": "boolean"
+              },
+              "heading": {
+                "description": "The heading a page link names, if any.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/ReferenceKind",
+                "description": "A page or a task."
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "The page found."
+              },
+              "project": {
+                "description": "The key of the project of the page or task found.",
+                "type": "string"
+              },
+              "target": {
+                "description": "The page name or task key as written.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task found: its current key.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the page or task found.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "target",
+              "found"
+            ],
+            "type": "object"
+          },
+          "ReferenceKind": {
+            "description": "What a link points at.",
+            "oneOf": [
+              {
+                "const": "page",
+                "description": "A wiki page.",
+                "type": "string"
+              },
+              {
+                "const": "task",
+                "description": "A task.",
+                "type": "string"
+              }
+            ]
+          },
           "Reminder": {
             "additionalProperties": false,
             "description": "A task's personal reminder.",
@@ -14509,6 +14753,13 @@
             "additionalProperties": false,
             "description": "One task.",
             "properties": {
+              "backlinks": {
+                "description": "The wiki pages, other tasks and comments that mention it, when asked\nfor with `include`.",
+                "items": {
+                  "$ref": "#/$defs/Backlink"
+                },
+                "type": "array"
+              },
               "blocked": {
                 "description": "Whether a task that blocks it is still open.",
                 "type": "boolean"
@@ -14655,6 +14906,13 @@
               "rank": {
                 "description": "Its place in its status column.",
                 "type": "string"
+              },
+              "references": {
+                "description": "What its description and comments link to, when asked for with\n`include`.",
+                "items": {
+                  "$ref": "#/$defs/Reference"
+                },
+                "type": "array"
               },
               "reminder": {
                 "$ref": "#/$defs/Reminder",
@@ -14915,6 +15173,30 @@
                 "type": "string"
               }
             ]
+          },
+          "WikiPageRef": {
+            "additionalProperties": false,
+            "description": "Another page, as a page names its parent and children.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "slug": {
+                "description": "Its slug.",
+                "type": "string"
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "slug",
+              "id"
+            ],
+            "type": "object"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -15358,6 +15640,41 @@
             ],
             "type": "object"
           },
+          "Backlink": {
+            "additionalProperties": false,
+            "description": "A text that links somewhere: a wiki page, a task's description or a\ncomment on a task.",
+            "properties": {
+              "comment": {
+                "description": "The comment's ID, for a link in a comment.",
+                "type": "string"
+              },
+              "heading": {
+                "description": "The heading the link names, if any.",
+                "type": "string"
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "A page, for a link in its text."
+              },
+              "project": {
+                "description": "The key of the project the task or page is in.",
+                "type": "string"
+              },
+              "task": {
+                "description": "A task's key, for a link in its description or in a comment on it.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the task or page.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "project",
+              "title"
+            ],
+            "type": "object"
+          },
           "Category": {
             "description": "What a status means for the work in it.",
             "oneOf": [
@@ -15801,6 +16118,69 @@
               }
             ]
           },
+          "Reference": {
+            "additionalProperties": false,
+            "description": "One link in a text, resolved now.",
+            "properties": {
+              "comment": {
+                "description": "The comment the link is in, when it is not in the description.",
+                "type": "string"
+              },
+              "found": {
+                "description": "Whether the target was found; false for a page that doesn't exist\n(yet), a task key that names nothing, or a target in the trash.",
+                "type": "boolean"
+              },
+              "heading": {
+                "description": "The heading a page link names, if any.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/ReferenceKind",
+                "description": "A page or a task."
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "The page found."
+              },
+              "project": {
+                "description": "The key of the project of the page or task found.",
+                "type": "string"
+              },
+              "target": {
+                "description": "The page name or task key as written.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task found: its current key.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the page or task found.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "target",
+              "found"
+            ],
+            "type": "object"
+          },
+          "ReferenceKind": {
+            "description": "What a link points at.",
+            "oneOf": [
+              {
+                "const": "page",
+                "description": "A wiki page.",
+                "type": "string"
+              },
+              {
+                "const": "task",
+                "description": "A task.",
+                "type": "string"
+              }
+            ]
+          },
           "Reminder": {
             "additionalProperties": false,
             "description": "A task's personal reminder.",
@@ -15989,6 +16369,13 @@
             "additionalProperties": false,
             "description": "One task.",
             "properties": {
+              "backlinks": {
+                "description": "The wiki pages, other tasks and comments that mention it, when asked\nfor with `include`.",
+                "items": {
+                  "$ref": "#/$defs/Backlink"
+                },
+                "type": "array"
+              },
               "blocked": {
                 "description": "Whether a task that blocks it is still open.",
                 "type": "boolean"
@@ -16135,6 +16522,13 @@
               "rank": {
                 "description": "Its place in its status column.",
                 "type": "string"
+              },
+              "references": {
+                "description": "What its description and comments link to, when asked for with\n`include`.",
+                "items": {
+                  "$ref": "#/$defs/Reference"
+                },
+                "type": "array"
               },
               "reminder": {
                 "$ref": "#/$defs/Reminder",
@@ -16395,6 +16789,30 @@
                 "type": "string"
               }
             ]
+          },
+          "WikiPageRef": {
+            "additionalProperties": false,
+            "description": "Another page, as a page names its parent and children.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "slug": {
+                "description": "Its slug.",
+                "type": "string"
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "slug",
+              "id"
+            ],
+            "type": "object"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -16631,6 +17049,41 @@
             ],
             "type": "object"
           },
+          "Backlink": {
+            "additionalProperties": false,
+            "description": "A text that links somewhere: a wiki page, a task's description or a\ncomment on a task.",
+            "properties": {
+              "comment": {
+                "description": "The comment's ID, for a link in a comment.",
+                "type": "string"
+              },
+              "heading": {
+                "description": "The heading the link names, if any.",
+                "type": "string"
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "A page, for a link in its text."
+              },
+              "project": {
+                "description": "The key of the project the task or page is in.",
+                "type": "string"
+              },
+              "task": {
+                "description": "A task's key, for a link in its description or in a comment on it.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the task or page.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "project",
+              "title"
+            ],
+            "type": "object"
+          },
           "Category": {
             "description": "What a status means for the work in it.",
             "oneOf": [
@@ -17074,6 +17527,69 @@
               }
             ]
           },
+          "Reference": {
+            "additionalProperties": false,
+            "description": "One link in a text, resolved now.",
+            "properties": {
+              "comment": {
+                "description": "The comment the link is in, when it is not in the description.",
+                "type": "string"
+              },
+              "found": {
+                "description": "Whether the target was found; false for a page that doesn't exist\n(yet), a task key that names nothing, or a target in the trash.",
+                "type": "boolean"
+              },
+              "heading": {
+                "description": "The heading a page link names, if any.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/ReferenceKind",
+                "description": "A page or a task."
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "The page found."
+              },
+              "project": {
+                "description": "The key of the project of the page or task found.",
+                "type": "string"
+              },
+              "target": {
+                "description": "The page name or task key as written.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task found: its current key.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the page or task found.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "target",
+              "found"
+            ],
+            "type": "object"
+          },
+          "ReferenceKind": {
+            "description": "What a link points at.",
+            "oneOf": [
+              {
+                "const": "page",
+                "description": "A wiki page.",
+                "type": "string"
+              },
+              {
+                "const": "task",
+                "description": "A task.",
+                "type": "string"
+              }
+            ]
+          },
           "Reminder": {
             "additionalProperties": false,
             "description": "A task's personal reminder.",
@@ -17262,6 +17778,13 @@
             "additionalProperties": false,
             "description": "One task.",
             "properties": {
+              "backlinks": {
+                "description": "The wiki pages, other tasks and comments that mention it, when asked\nfor with `include`.",
+                "items": {
+                  "$ref": "#/$defs/Backlink"
+                },
+                "type": "array"
+              },
               "blocked": {
                 "description": "Whether a task that blocks it is still open.",
                 "type": "boolean"
@@ -17408,6 +17931,13 @@
               "rank": {
                 "description": "Its place in its status column.",
                 "type": "string"
+              },
+              "references": {
+                "description": "What its description and comments link to, when asked for with\n`include`.",
+                "items": {
+                  "$ref": "#/$defs/Reference"
+                },
+                "type": "array"
               },
               "reminder": {
                 "$ref": "#/$defs/Reminder",
@@ -17668,6 +18198,30 @@
                 "type": "string"
               }
             ]
+          },
+          "WikiPageRef": {
+            "additionalProperties": false,
+            "description": "Another page, as a page names its parent and children.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "slug": {
+                "description": "Its slug.",
+                "type": "string"
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "slug",
+              "id"
+            ],
+            "type": "object"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -18436,6 +18990,41 @@
             ],
             "type": "object"
           },
+          "Backlink": {
+            "additionalProperties": false,
+            "description": "A text that links somewhere: a wiki page, a task's description or a\ncomment on a task.",
+            "properties": {
+              "comment": {
+                "description": "The comment's ID, for a link in a comment.",
+                "type": "string"
+              },
+              "heading": {
+                "description": "The heading the link names, if any.",
+                "type": "string"
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "A page, for a link in its text."
+              },
+              "project": {
+                "description": "The key of the project the task or page is in.",
+                "type": "string"
+              },
+              "task": {
+                "description": "A task's key, for a link in its description or in a comment on it.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the task or page.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "project",
+              "title"
+            ],
+            "type": "object"
+          },
           "Category": {
             "description": "What a status means for the work in it.",
             "oneOf": [
@@ -18879,6 +19468,69 @@
               }
             ]
           },
+          "Reference": {
+            "additionalProperties": false,
+            "description": "One link in a text, resolved now.",
+            "properties": {
+              "comment": {
+                "description": "The comment the link is in, when it is not in the description.",
+                "type": "string"
+              },
+              "found": {
+                "description": "Whether the target was found; false for a page that doesn't exist\n(yet), a task key that names nothing, or a target in the trash.",
+                "type": "boolean"
+              },
+              "heading": {
+                "description": "The heading a page link names, if any.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/ReferenceKind",
+                "description": "A page or a task."
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "The page found."
+              },
+              "project": {
+                "description": "The key of the project of the page or task found.",
+                "type": "string"
+              },
+              "target": {
+                "description": "The page name or task key as written.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task found: its current key.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the page or task found.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "target",
+              "found"
+            ],
+            "type": "object"
+          },
+          "ReferenceKind": {
+            "description": "What a link points at.",
+            "oneOf": [
+              {
+                "const": "page",
+                "description": "A wiki page.",
+                "type": "string"
+              },
+              {
+                "const": "task",
+                "description": "A task.",
+                "type": "string"
+              }
+            ]
+          },
           "Reminder": {
             "additionalProperties": false,
             "description": "A task's personal reminder.",
@@ -19067,6 +19719,13 @@
             "additionalProperties": false,
             "description": "One task.",
             "properties": {
+              "backlinks": {
+                "description": "The wiki pages, other tasks and comments that mention it, when asked\nfor with `include`.",
+                "items": {
+                  "$ref": "#/$defs/Backlink"
+                },
+                "type": "array"
+              },
               "blocked": {
                 "description": "Whether a task that blocks it is still open.",
                 "type": "boolean"
@@ -19213,6 +19872,13 @@
               "rank": {
                 "description": "Its place in its status column.",
                 "type": "string"
+              },
+              "references": {
+                "description": "What its description and comments link to, when asked for with\n`include`.",
+                "items": {
+                  "$ref": "#/$defs/Reference"
+                },
+                "type": "array"
               },
               "reminder": {
                 "$ref": "#/$defs/Reminder",
@@ -19473,6 +20139,30 @@
                 "type": "string"
               }
             ]
+          },
+          "WikiPageRef": {
+            "additionalProperties": false,
+            "description": "Another page, as a page names its parent and children.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "slug": {
+                "description": "Its slug.",
+                "type": "string"
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "slug",
+              "id"
+            ],
+            "type": "object"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -19686,6 +20376,41 @@
             ],
             "type": "object"
           },
+          "Backlink": {
+            "additionalProperties": false,
+            "description": "A text that links somewhere: a wiki page, a task's description or a\ncomment on a task.",
+            "properties": {
+              "comment": {
+                "description": "The comment's ID, for a link in a comment.",
+                "type": "string"
+              },
+              "heading": {
+                "description": "The heading the link names, if any.",
+                "type": "string"
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "A page, for a link in its text."
+              },
+              "project": {
+                "description": "The key of the project the task or page is in.",
+                "type": "string"
+              },
+              "task": {
+                "description": "A task's key, for a link in its description or in a comment on it.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the task or page.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "project",
+              "title"
+            ],
+            "type": "object"
+          },
           "Category": {
             "description": "What a status means for the work in it.",
             "oneOf": [
@@ -20129,6 +20854,69 @@
               }
             ]
           },
+          "Reference": {
+            "additionalProperties": false,
+            "description": "One link in a text, resolved now.",
+            "properties": {
+              "comment": {
+                "description": "The comment the link is in, when it is not in the description.",
+                "type": "string"
+              },
+              "found": {
+                "description": "Whether the target was found; false for a page that doesn't exist\n(yet), a task key that names nothing, or a target in the trash.",
+                "type": "boolean"
+              },
+              "heading": {
+                "description": "The heading a page link names, if any.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/ReferenceKind",
+                "description": "A page or a task."
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "The page found."
+              },
+              "project": {
+                "description": "The key of the project of the page or task found.",
+                "type": "string"
+              },
+              "target": {
+                "description": "The page name or task key as written.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task found: its current key.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the page or task found.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "target",
+              "found"
+            ],
+            "type": "object"
+          },
+          "ReferenceKind": {
+            "description": "What a link points at.",
+            "oneOf": [
+              {
+                "const": "page",
+                "description": "A wiki page.",
+                "type": "string"
+              },
+              {
+                "const": "task",
+                "description": "A task.",
+                "type": "string"
+              }
+            ]
+          },
           "Reminder": {
             "additionalProperties": false,
             "description": "A task's personal reminder.",
@@ -20317,6 +21105,13 @@
             "additionalProperties": false,
             "description": "One task.",
             "properties": {
+              "backlinks": {
+                "description": "The wiki pages, other tasks and comments that mention it, when asked\nfor with `include`.",
+                "items": {
+                  "$ref": "#/$defs/Backlink"
+                },
+                "type": "array"
+              },
               "blocked": {
                 "description": "Whether a task that blocks it is still open.",
                 "type": "boolean"
@@ -20463,6 +21258,13 @@
               "rank": {
                 "description": "Its place in its status column.",
                 "type": "string"
+              },
+              "references": {
+                "description": "What its description and comments link to, when asked for with\n`include`.",
+                "items": {
+                  "$ref": "#/$defs/Reference"
+                },
+                "type": "array"
               },
               "reminder": {
                 "$ref": "#/$defs/Reminder",
@@ -20723,6 +21525,30 @@
                 "type": "string"
               }
             ]
+          },
+          "WikiPageRef": {
+            "additionalProperties": false,
+            "description": "Another page, as a page names its parent and children.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "slug": {
+                "description": "Its slug.",
+                "type": "string"
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "slug",
+              "id"
+            ],
+            "type": "object"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -21155,6 +21981,41 @@
             ],
             "type": "object"
           },
+          "Backlink": {
+            "additionalProperties": false,
+            "description": "A text that links somewhere: a wiki page, a task's description or a\ncomment on a task.",
+            "properties": {
+              "comment": {
+                "description": "The comment's ID, for a link in a comment.",
+                "type": "string"
+              },
+              "heading": {
+                "description": "The heading the link names, if any.",
+                "type": "string"
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "A page, for a link in its text."
+              },
+              "project": {
+                "description": "The key of the project the task or page is in.",
+                "type": "string"
+              },
+              "task": {
+                "description": "A task's key, for a link in its description or in a comment on it.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the task or page.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "project",
+              "title"
+            ],
+            "type": "object"
+          },
           "Category": {
             "description": "What a status means for the work in it.",
             "oneOf": [
@@ -21598,6 +22459,69 @@
               }
             ]
           },
+          "Reference": {
+            "additionalProperties": false,
+            "description": "One link in a text, resolved now.",
+            "properties": {
+              "comment": {
+                "description": "The comment the link is in, when it is not in the description.",
+                "type": "string"
+              },
+              "found": {
+                "description": "Whether the target was found; false for a page that doesn't exist\n(yet), a task key that names nothing, or a target in the trash.",
+                "type": "boolean"
+              },
+              "heading": {
+                "description": "The heading a page link names, if any.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/ReferenceKind",
+                "description": "A page or a task."
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "The page found."
+              },
+              "project": {
+                "description": "The key of the project of the page or task found.",
+                "type": "string"
+              },
+              "target": {
+                "description": "The page name or task key as written.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task found: its current key.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the page or task found.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "target",
+              "found"
+            ],
+            "type": "object"
+          },
+          "ReferenceKind": {
+            "description": "What a link points at.",
+            "oneOf": [
+              {
+                "const": "page",
+                "description": "A wiki page.",
+                "type": "string"
+              },
+              {
+                "const": "task",
+                "description": "A task.",
+                "type": "string"
+              }
+            ]
+          },
           "Reminder": {
             "additionalProperties": false,
             "description": "A task's personal reminder.",
@@ -21786,6 +22710,13 @@
             "additionalProperties": false,
             "description": "One task.",
             "properties": {
+              "backlinks": {
+                "description": "The wiki pages, other tasks and comments that mention it, when asked\nfor with `include`.",
+                "items": {
+                  "$ref": "#/$defs/Backlink"
+                },
+                "type": "array"
+              },
               "blocked": {
                 "description": "Whether a task that blocks it is still open.",
                 "type": "boolean"
@@ -21932,6 +22863,13 @@
               "rank": {
                 "description": "Its place in its status column.",
                 "type": "string"
+              },
+              "references": {
+                "description": "What its description and comments link to, when asked for with\n`include`.",
+                "items": {
+                  "$ref": "#/$defs/Reference"
+                },
+                "type": "array"
               },
               "reminder": {
                 "$ref": "#/$defs/Reminder",
@@ -22192,6 +23130,30 @@
                 "type": "string"
               }
             ]
+          },
+          "WikiPageRef": {
+            "additionalProperties": false,
+            "description": "Another page, as a page names its parent and children.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "slug": {
+                "description": "Its slug.",
+                "type": "string"
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "slug",
+              "id"
+            ],
+            "type": "object"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -22385,6 +23347,41 @@
             ],
             "type": "object"
           },
+          "Backlink": {
+            "additionalProperties": false,
+            "description": "A text that links somewhere: a wiki page, a task's description or a\ncomment on a task.",
+            "properties": {
+              "comment": {
+                "description": "The comment's ID, for a link in a comment.",
+                "type": "string"
+              },
+              "heading": {
+                "description": "The heading the link names, if any.",
+                "type": "string"
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "A page, for a link in its text."
+              },
+              "project": {
+                "description": "The key of the project the task or page is in.",
+                "type": "string"
+              },
+              "task": {
+                "description": "A task's key, for a link in its description or in a comment on it.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the task or page.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "project",
+              "title"
+            ],
+            "type": "object"
+          },
           "Category": {
             "description": "What a status means for the work in it.",
             "oneOf": [
@@ -22828,6 +23825,69 @@
               }
             ]
           },
+          "Reference": {
+            "additionalProperties": false,
+            "description": "One link in a text, resolved now.",
+            "properties": {
+              "comment": {
+                "description": "The comment the link is in, when it is not in the description.",
+                "type": "string"
+              },
+              "found": {
+                "description": "Whether the target was found; false for a page that doesn't exist\n(yet), a task key that names nothing, or a target in the trash.",
+                "type": "boolean"
+              },
+              "heading": {
+                "description": "The heading a page link names, if any.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/ReferenceKind",
+                "description": "A page or a task."
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "The page found."
+              },
+              "project": {
+                "description": "The key of the project of the page or task found.",
+                "type": "string"
+              },
+              "target": {
+                "description": "The page name or task key as written.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task found: its current key.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the page or task found.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "target",
+              "found"
+            ],
+            "type": "object"
+          },
+          "ReferenceKind": {
+            "description": "What a link points at.",
+            "oneOf": [
+              {
+                "const": "page",
+                "description": "A wiki page.",
+                "type": "string"
+              },
+              {
+                "const": "task",
+                "description": "A task.",
+                "type": "string"
+              }
+            ]
+          },
           "Reminder": {
             "additionalProperties": false,
             "description": "A task's personal reminder.",
@@ -23016,6 +24076,13 @@
             "additionalProperties": false,
             "description": "One task.",
             "properties": {
+              "backlinks": {
+                "description": "The wiki pages, other tasks and comments that mention it, when asked\nfor with `include`.",
+                "items": {
+                  "$ref": "#/$defs/Backlink"
+                },
+                "type": "array"
+              },
               "blocked": {
                 "description": "Whether a task that blocks it is still open.",
                 "type": "boolean"
@@ -23162,6 +24229,13 @@
               "rank": {
                 "description": "Its place in its status column.",
                 "type": "string"
+              },
+              "references": {
+                "description": "What its description and comments link to, when asked for with\n`include`.",
+                "items": {
+                  "$ref": "#/$defs/Reference"
+                },
+                "type": "array"
               },
               "reminder": {
                 "$ref": "#/$defs/Reminder",
@@ -23422,6 +24496,30 @@
                 "type": "string"
               }
             ]
+          },
+          "WikiPageRef": {
+            "additionalProperties": false,
+            "description": "Another page, as a page names its parent and children.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "slug": {
+                "description": "Its slug.",
+                "type": "string"
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "slug",
+              "id"
+            ],
+            "type": "object"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -23608,6 +24706,41 @@
             ],
             "type": "object"
           },
+          "Backlink": {
+            "additionalProperties": false,
+            "description": "A text that links somewhere: a wiki page, a task's description or a\ncomment on a task.",
+            "properties": {
+              "comment": {
+                "description": "The comment's ID, for a link in a comment.",
+                "type": "string"
+              },
+              "heading": {
+                "description": "The heading the link names, if any.",
+                "type": "string"
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "A page, for a link in its text."
+              },
+              "project": {
+                "description": "The key of the project the task or page is in.",
+                "type": "string"
+              },
+              "task": {
+                "description": "A task's key, for a link in its description or in a comment on it.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the task or page.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "project",
+              "title"
+            ],
+            "type": "object"
+          },
           "Category": {
             "description": "What a status means for the work in it.",
             "oneOf": [
@@ -24051,6 +25184,69 @@
               }
             ]
           },
+          "Reference": {
+            "additionalProperties": false,
+            "description": "One link in a text, resolved now.",
+            "properties": {
+              "comment": {
+                "description": "The comment the link is in, when it is not in the description.",
+                "type": "string"
+              },
+              "found": {
+                "description": "Whether the target was found; false for a page that doesn't exist\n(yet), a task key that names nothing, or a target in the trash.",
+                "type": "boolean"
+              },
+              "heading": {
+                "description": "The heading a page link names, if any.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/ReferenceKind",
+                "description": "A page or a task."
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "The page found."
+              },
+              "project": {
+                "description": "The key of the project of the page or task found.",
+                "type": "string"
+              },
+              "target": {
+                "description": "The page name or task key as written.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task found: its current key.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the page or task found.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "target",
+              "found"
+            ],
+            "type": "object"
+          },
+          "ReferenceKind": {
+            "description": "What a link points at.",
+            "oneOf": [
+              {
+                "const": "page",
+                "description": "A wiki page.",
+                "type": "string"
+              },
+              {
+                "const": "task",
+                "description": "A task.",
+                "type": "string"
+              }
+            ]
+          },
           "Reminder": {
             "additionalProperties": false,
             "description": "A task's personal reminder.",
@@ -24239,6 +25435,13 @@
             "additionalProperties": false,
             "description": "One task.",
             "properties": {
+              "backlinks": {
+                "description": "The wiki pages, other tasks and comments that mention it, when asked\nfor with `include`.",
+                "items": {
+                  "$ref": "#/$defs/Backlink"
+                },
+                "type": "array"
+              },
               "blocked": {
                 "description": "Whether a task that blocks it is still open.",
                 "type": "boolean"
@@ -24385,6 +25588,13 @@
               "rank": {
                 "description": "Its place in its status column.",
                 "type": "string"
+              },
+              "references": {
+                "description": "What its description and comments link to, when asked for with\n`include`.",
+                "items": {
+                  "$ref": "#/$defs/Reference"
+                },
+                "type": "array"
               },
               "reminder": {
                 "$ref": "#/$defs/Reminder",
@@ -24645,6 +25855,30 @@
                 "type": "string"
               }
             ]
+          },
+          "WikiPageRef": {
+            "additionalProperties": false,
+            "description": "Another page, as a page names its parent and children.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "slug": {
+                "description": "Its slug.",
+                "type": "string"
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "slug",
+              "id"
+            ],
+            "type": "object"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -24874,6 +26108,41 @@
             ],
             "type": "object"
           },
+          "Backlink": {
+            "additionalProperties": false,
+            "description": "A text that links somewhere: a wiki page, a task's description or a\ncomment on a task.",
+            "properties": {
+              "comment": {
+                "description": "The comment's ID, for a link in a comment.",
+                "type": "string"
+              },
+              "heading": {
+                "description": "The heading the link names, if any.",
+                "type": "string"
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "A page, for a link in its text."
+              },
+              "project": {
+                "description": "The key of the project the task or page is in.",
+                "type": "string"
+              },
+              "task": {
+                "description": "A task's key, for a link in its description or in a comment on it.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the task or page.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "project",
+              "title"
+            ],
+            "type": "object"
+          },
           "Category": {
             "description": "What a status means for the work in it.",
             "oneOf": [
@@ -25317,6 +26586,69 @@
               }
             ]
           },
+          "Reference": {
+            "additionalProperties": false,
+            "description": "One link in a text, resolved now.",
+            "properties": {
+              "comment": {
+                "description": "The comment the link is in, when it is not in the description.",
+                "type": "string"
+              },
+              "found": {
+                "description": "Whether the target was found; false for a page that doesn't exist\n(yet), a task key that names nothing, or a target in the trash.",
+                "type": "boolean"
+              },
+              "heading": {
+                "description": "The heading a page link names, if any.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/ReferenceKind",
+                "description": "A page or a task."
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "The page found."
+              },
+              "project": {
+                "description": "The key of the project of the page or task found.",
+                "type": "string"
+              },
+              "target": {
+                "description": "The page name or task key as written.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task found: its current key.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the page or task found.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "target",
+              "found"
+            ],
+            "type": "object"
+          },
+          "ReferenceKind": {
+            "description": "What a link points at.",
+            "oneOf": [
+              {
+                "const": "page",
+                "description": "A wiki page.",
+                "type": "string"
+              },
+              {
+                "const": "task",
+                "description": "A task.",
+                "type": "string"
+              }
+            ]
+          },
           "Reminder": {
             "additionalProperties": false,
             "description": "A task's personal reminder.",
@@ -25505,6 +26837,13 @@
             "additionalProperties": false,
             "description": "One task.",
             "properties": {
+              "backlinks": {
+                "description": "The wiki pages, other tasks and comments that mention it, when asked\nfor with `include`.",
+                "items": {
+                  "$ref": "#/$defs/Backlink"
+                },
+                "type": "array"
+              },
               "blocked": {
                 "description": "Whether a task that blocks it is still open.",
                 "type": "boolean"
@@ -25651,6 +26990,13 @@
               "rank": {
                 "description": "Its place in its status column.",
                 "type": "string"
+              },
+              "references": {
+                "description": "What its description and comments link to, when asked for with\n`include`.",
+                "items": {
+                  "$ref": "#/$defs/Reference"
+                },
+                "type": "array"
               },
               "reminder": {
                 "$ref": "#/$defs/Reminder",
@@ -25911,6 +27257,30 @@
                 "type": "string"
               }
             ]
+          },
+          "WikiPageRef": {
+            "additionalProperties": false,
+            "description": "Another page, as a page names its parent and children.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "slug": {
+                "description": "Its slug.",
+                "type": "string"
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "slug",
+              "id"
+            ],
+            "type": "object"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -26140,6 +27510,41 @@
             ],
             "type": "object"
           },
+          "Backlink": {
+            "additionalProperties": false,
+            "description": "A text that links somewhere: a wiki page, a task's description or a\ncomment on a task.",
+            "properties": {
+              "comment": {
+                "description": "The comment's ID, for a link in a comment.",
+                "type": "string"
+              },
+              "heading": {
+                "description": "The heading the link names, if any.",
+                "type": "string"
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "A page, for a link in its text."
+              },
+              "project": {
+                "description": "The key of the project the task or page is in.",
+                "type": "string"
+              },
+              "task": {
+                "description": "A task's key, for a link in its description or in a comment on it.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the task or page.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "project",
+              "title"
+            ],
+            "type": "object"
+          },
           "Category": {
             "description": "What a status means for the work in it.",
             "oneOf": [
@@ -26583,6 +27988,69 @@
               }
             ]
           },
+          "Reference": {
+            "additionalProperties": false,
+            "description": "One link in a text, resolved now.",
+            "properties": {
+              "comment": {
+                "description": "The comment the link is in, when it is not in the description.",
+                "type": "string"
+              },
+              "found": {
+                "description": "Whether the target was found; false for a page that doesn't exist\n(yet), a task key that names nothing, or a target in the trash.",
+                "type": "boolean"
+              },
+              "heading": {
+                "description": "The heading a page link names, if any.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/ReferenceKind",
+                "description": "A page or a task."
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "The page found."
+              },
+              "project": {
+                "description": "The key of the project of the page or task found.",
+                "type": "string"
+              },
+              "target": {
+                "description": "The page name or task key as written.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task found: its current key.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the page or task found.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "target",
+              "found"
+            ],
+            "type": "object"
+          },
+          "ReferenceKind": {
+            "description": "What a link points at.",
+            "oneOf": [
+              {
+                "const": "page",
+                "description": "A wiki page.",
+                "type": "string"
+              },
+              {
+                "const": "task",
+                "description": "A task.",
+                "type": "string"
+              }
+            ]
+          },
           "Reminder": {
             "additionalProperties": false,
             "description": "A task's personal reminder.",
@@ -26771,6 +28239,13 @@
             "additionalProperties": false,
             "description": "One task.",
             "properties": {
+              "backlinks": {
+                "description": "The wiki pages, other tasks and comments that mention it, when asked\nfor with `include`.",
+                "items": {
+                  "$ref": "#/$defs/Backlink"
+                },
+                "type": "array"
+              },
               "blocked": {
                 "description": "Whether a task that blocks it is still open.",
                 "type": "boolean"
@@ -26917,6 +28392,13 @@
               "rank": {
                 "description": "Its place in its status column.",
                 "type": "string"
+              },
+              "references": {
+                "description": "What its description and comments link to, when asked for with\n`include`.",
+                "items": {
+                  "$ref": "#/$defs/Reference"
+                },
+                "type": "array"
               },
               "reminder": {
                 "$ref": "#/$defs/Reminder",
@@ -27177,6 +28659,30 @@
                 "type": "string"
               }
             ]
+          },
+          "WikiPageRef": {
+            "additionalProperties": false,
+            "description": "Another page, as a page names its parent and children.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "slug": {
+                "description": "Its slug.",
+                "type": "string"
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "slug",
+              "id"
+            ],
+            "type": "object"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -35682,7 +37188,12 @@
             "oneOf": [
               {
                 "const": "backlinks",
-                "description": "The pages and tasks that link to it.",
+                "description": "The pages, task descriptions and comments that link to it.",
+                "type": "string"
+              },
+              {
+                "const": "references",
+                "description": "The pages and tasks its text links to.",
                 "type": "string"
               }
             ]
@@ -35693,7 +37204,7 @@
         "description": "A page to read.",
         "properties": {
           "include": {
-            "description": "What to add: `backlinks`.",
+            "description": "What to add: `backlinks`, `references`.",
             "items": {
               "$ref": "#/$defs/WikiPart"
             },
@@ -35731,8 +37242,12 @@
         "$defs": {
           "Backlink": {
             "additionalProperties": false,
-            "description": "What links to a page.",
+            "description": "A text that links somewhere: a wiki page, a task's description or a\ncomment on a task.",
             "properties": {
+              "comment": {
+                "description": "The comment's ID, for a link in a comment.",
+                "type": "string"
+              },
               "heading": {
                 "description": "The heading the link names, if any.",
                 "type": "string"
@@ -35741,8 +37256,12 @@
                 "$ref": "#/$defs/WikiPageRef",
                 "description": "A page, for a link in its text."
               },
+              "project": {
+                "description": "The key of the project the task or page is in.",
+                "type": "string"
+              },
               "task": {
-                "description": "A task's key, for a link in its description.",
+                "description": "A task's key, for a link in its description or in a comment on it.",
                 "type": "string"
               },
               "title": {
@@ -35751,9 +37270,73 @@
               }
             },
             "required": [
+              "project",
               "title"
             ],
             "type": "object"
+          },
+          "Reference": {
+            "additionalProperties": false,
+            "description": "One link in a text, resolved now.",
+            "properties": {
+              "comment": {
+                "description": "The comment the link is in, when it is not in the description.",
+                "type": "string"
+              },
+              "found": {
+                "description": "Whether the target was found; false for a page that doesn't exist\n(yet), a task key that names nothing, or a target in the trash.",
+                "type": "boolean"
+              },
+              "heading": {
+                "description": "The heading a page link names, if any.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/ReferenceKind",
+                "description": "A page or a task."
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "The page found."
+              },
+              "project": {
+                "description": "The key of the project of the page or task found.",
+                "type": "string"
+              },
+              "target": {
+                "description": "The page name or task key as written.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task found: its current key.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the page or task found.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "target",
+              "found"
+            ],
+            "type": "object"
+          },
+          "ReferenceKind": {
+            "description": "What a link points at.",
+            "oneOf": [
+              {
+                "const": "page",
+                "description": "A wiki page.",
+                "type": "string"
+              },
+              {
+                "const": "task",
+                "description": "A task.",
+                "type": "string"
+              }
+            ]
           },
           "WikiHeading": {
             "additionalProperties": false,
@@ -35874,6 +37457,13 @@
           "project": {
             "description": "Its project's key.",
             "type": "string"
+          },
+          "references": {
+            "description": "What its text links to, in order, when asked for with `include`.",
+            "items": {
+              "$ref": "#/$defs/Reference"
+            },
+            "type": "array"
           },
           "revision": {
             "description": "The revision of `body`; pass it as `base_revision` when you save a\nnew text. Left out while the page has no text yet.",
@@ -36012,8 +37602,12 @@
         "$defs": {
           "Backlink": {
             "additionalProperties": false,
-            "description": "What links to a page.",
+            "description": "A text that links somewhere: a wiki page, a task's description or a\ncomment on a task.",
             "properties": {
+              "comment": {
+                "description": "The comment's ID, for a link in a comment.",
+                "type": "string"
+              },
               "heading": {
                 "description": "The heading the link names, if any.",
                 "type": "string"
@@ -36022,8 +37616,12 @@
                 "$ref": "#/$defs/WikiPageRef",
                 "description": "A page, for a link in its text."
               },
+              "project": {
+                "description": "The key of the project the task or page is in.",
+                "type": "string"
+              },
               "task": {
-                "description": "A task's key, for a link in its description.",
+                "description": "A task's key, for a link in its description or in a comment on it.",
                 "type": "string"
               },
               "title": {
@@ -36032,6 +37630,7 @@
               }
             },
             "required": [
+              "project",
               "title"
             ],
             "type": "object"
@@ -36057,6 +37656,69 @@
               "outcome"
             ],
             "type": "object"
+          },
+          "Reference": {
+            "additionalProperties": false,
+            "description": "One link in a text, resolved now.",
+            "properties": {
+              "comment": {
+                "description": "The comment the link is in, when it is not in the description.",
+                "type": "string"
+              },
+              "found": {
+                "description": "Whether the target was found; false for a page that doesn't exist\n(yet), a task key that names nothing, or a target in the trash.",
+                "type": "boolean"
+              },
+              "heading": {
+                "description": "The heading a page link names, if any.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/ReferenceKind",
+                "description": "A page or a task."
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "The page found."
+              },
+              "project": {
+                "description": "The key of the project of the page or task found.",
+                "type": "string"
+              },
+              "target": {
+                "description": "The page name or task key as written.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task found: its current key.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the page or task found.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "target",
+              "found"
+            ],
+            "type": "object"
+          },
+          "ReferenceKind": {
+            "description": "What a link points at.",
+            "oneOf": [
+              {
+                "const": "page",
+                "description": "A wiki page.",
+                "type": "string"
+              },
+              {
+                "const": "task",
+                "description": "A task.",
+                "type": "string"
+              }
+            ]
           },
           "SaveOutcome": {
             "description": "What became of a description that was saved.",
@@ -36177,6 +37839,13 @@
               "project": {
                 "description": "Its project's key.",
                 "type": "string"
+              },
+              "references": {
+                "description": "What its text links to, in order, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/Reference"
+                },
+                "type": "array"
               },
               "revision": {
                 "description": "The revision of `body`; pass it as `base_revision` when you save a\nnew text. Left out while the page has no text yet.",
@@ -36451,7 +38120,7 @@
             "description": "Resolve a conflict copy of the text."
           },
           "title": {
-            "description": "A new title; old links by the old title stop working.",
+            "description": "A new title. The old slug keeps finding the page, so links by the\nold title still resolve until another page takes that name.",
             "type": [
               "string",
               "null"
@@ -36471,8 +38140,12 @@
         "$defs": {
           "Backlink": {
             "additionalProperties": false,
-            "description": "What links to a page.",
+            "description": "A text that links somewhere: a wiki page, a task's description or a\ncomment on a task.",
             "properties": {
+              "comment": {
+                "description": "The comment's ID, for a link in a comment.",
+                "type": "string"
+              },
               "heading": {
                 "description": "The heading the link names, if any.",
                 "type": "string"
@@ -36481,8 +38154,12 @@
                 "$ref": "#/$defs/WikiPageRef",
                 "description": "A page, for a link in its text."
               },
+              "project": {
+                "description": "The key of the project the task or page is in.",
+                "type": "string"
+              },
               "task": {
-                "description": "A task's key, for a link in its description.",
+                "description": "A task's key, for a link in its description or in a comment on it.",
                 "type": "string"
               },
               "title": {
@@ -36491,6 +38168,7 @@
               }
             },
             "required": [
+              "project",
               "title"
             ],
             "type": "object"
@@ -36516,6 +38194,69 @@
               "outcome"
             ],
             "type": "object"
+          },
+          "Reference": {
+            "additionalProperties": false,
+            "description": "One link in a text, resolved now.",
+            "properties": {
+              "comment": {
+                "description": "The comment the link is in, when it is not in the description.",
+                "type": "string"
+              },
+              "found": {
+                "description": "Whether the target was found; false for a page that doesn't exist\n(yet), a task key that names nothing, or a target in the trash.",
+                "type": "boolean"
+              },
+              "heading": {
+                "description": "The heading a page link names, if any.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/ReferenceKind",
+                "description": "A page or a task."
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "The page found."
+              },
+              "project": {
+                "description": "The key of the project of the page or task found.",
+                "type": "string"
+              },
+              "target": {
+                "description": "The page name or task key as written.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task found: its current key.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the page or task found.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "target",
+              "found"
+            ],
+            "type": "object"
+          },
+          "ReferenceKind": {
+            "description": "What a link points at.",
+            "oneOf": [
+              {
+                "const": "page",
+                "description": "A wiki page.",
+                "type": "string"
+              },
+              {
+                "const": "task",
+                "description": "A task.",
+                "type": "string"
+              }
+            ]
           },
           "SaveOutcome": {
             "description": "What became of a description that was saved.",
@@ -36637,6 +38378,13 @@
                 "description": "Its project's key.",
                 "type": "string"
               },
+              "references": {
+                "description": "What its text links to, in order, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/Reference"
+                },
+                "type": "array"
+              },
               "revision": {
                 "description": "The revision of `body`; pass it as `base_revision` when you save a\nnew text. Left out while the page has no text yet.",
                 "type": "string"
@@ -36718,6 +38466,420 @@
       "output_name": "WikiChange",
       "safety": "write",
       "summary": "Change a wiki page: its text (whole, with a base revision, or by targeted edits), title, parent or place; or resolve a conflict copy."
+    },
+    {
+      "cli": "wiki move <page>",
+      "exposure": "data",
+      "id": "wiki.move",
+      "input": {
+        "$defs": {
+          "Edge": {
+            "description": "The two ends of an ordered list.",
+            "oneOf": [
+              {
+                "const": "top",
+                "description": "First.",
+                "type": "string"
+              },
+              {
+                "const": "bottom",
+                "description": "Last.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Where to move a page: into another parent, to the top, or to another\nplace among its siblings. Its slug stays, so links to it keep working.",
+        "properties": {
+          "after": {
+            "description": "Place it after this page of the (new) parent.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "at": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Edge"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Place it first or last; default when the parent changes: last."
+          },
+          "before": {
+            "description": "Place it before this page of the (new) parent.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "page": {
+            "description": "The page: its title (any case), slug or ID.",
+            "type": "string"
+          },
+          "parent": {
+            "description": "The new parent page (title, slug or ID, same project). Not the page\nitself or a page inside it.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "project": {
+            "description": "The project (key or ID); needed unless `page` is an ID.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "top_level": {
+            "description": "Move it to the top of the tree, out of its parent.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "page"
+        ],
+        "title": "WikiMoveInput",
+        "type": "object"
+      },
+      "input_name": "WikiMoveInput",
+      "kind": "command",
+      "mcp_tool": "update_wiki_page",
+      "output": {
+        "$defs": {
+          "Backlink": {
+            "additionalProperties": false,
+            "description": "A text that links somewhere: a wiki page, a task's description or a\ncomment on a task.",
+            "properties": {
+              "comment": {
+                "description": "The comment's ID, for a link in a comment.",
+                "type": "string"
+              },
+              "heading": {
+                "description": "The heading the link names, if any.",
+                "type": "string"
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "A page, for a link in its text."
+              },
+              "project": {
+                "description": "The key of the project the task or page is in.",
+                "type": "string"
+              },
+              "task": {
+                "description": "A task's key, for a link in its description or in a comment on it.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the task or page.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "project",
+              "title"
+            ],
+            "type": "object"
+          },
+          "DescriptionSave": {
+            "additionalProperties": false,
+            "description": "The result of saving a description.",
+            "properties": {
+              "conflict_copy": {
+                "description": "The conflict copy that holds the edit, after a conflict.",
+                "type": "string"
+              },
+              "outcome": {
+                "$ref": "#/$defs/SaveOutcome",
+                "description": "What became of the edit."
+              },
+              "revision": {
+                "description": "The description's revision now; pass it as `base_revision` next\ntime. Left out while the description has none.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "outcome"
+            ],
+            "type": "object"
+          },
+          "Reference": {
+            "additionalProperties": false,
+            "description": "One link in a text, resolved now.",
+            "properties": {
+              "comment": {
+                "description": "The comment the link is in, when it is not in the description.",
+                "type": "string"
+              },
+              "found": {
+                "description": "Whether the target was found; false for a page that doesn't exist\n(yet), a task key that names nothing, or a target in the trash.",
+                "type": "boolean"
+              },
+              "heading": {
+                "description": "The heading a page link names, if any.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/ReferenceKind",
+                "description": "A page or a task."
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "The page found."
+              },
+              "project": {
+                "description": "The key of the project of the page or task found.",
+                "type": "string"
+              },
+              "target": {
+                "description": "The page name or task key as written.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task found: its current key.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the page or task found.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "target",
+              "found"
+            ],
+            "type": "object"
+          },
+          "ReferenceKind": {
+            "description": "What a link points at.",
+            "oneOf": [
+              {
+                "const": "page",
+                "description": "A wiki page.",
+                "type": "string"
+              },
+              {
+                "const": "task",
+                "description": "A task.",
+                "type": "string"
+              }
+            ]
+          },
+          "SaveOutcome": {
+            "description": "What became of a description that was saved.",
+            "oneOf": [
+              {
+                "const": "saved",
+                "description": "Saved as the new description.",
+                "type": "string"
+              },
+              {
+                "const": "merged",
+                "description": "Somebody saved in between; both edits were merged.",
+                "type": "string"
+              },
+              {
+                "const": "conflict",
+                "description": "Somebody changed the same lines in between: the description stays\nas they left it, and this edit was kept as a conflict copy.",
+                "type": "string"
+              },
+              {
+                "const": "unchanged",
+                "description": "The text was already that.",
+                "type": "string"
+              }
+            ]
+          },
+          "WikiHeading": {
+            "additionalProperties": false,
+            "description": "One heading of a page.",
+            "properties": {
+              "level": {
+                "description": "1 to 6.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "line": {
+                "description": "The line it starts on, from 1.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "text": {
+                "description": "Its text; a link to it is `[[Page#text]]`.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "level",
+              "text",
+              "line"
+            ],
+            "type": "object"
+          },
+          "WikiPage": {
+            "additionalProperties": false,
+            "description": "One wiki page.",
+            "properties": {
+              "agent_brief": {
+                "description": "Whether it is the project's instructions for agents.",
+                "type": "boolean"
+              },
+              "backlinks": {
+                "description": "What links to it, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/Backlink"
+                },
+                "type": "array"
+              },
+              "body": {
+                "description": "Its text (Markdown).",
+                "type": "string"
+              },
+              "children": {
+                "description": "The pages it holds, in order.",
+                "items": {
+                  "$ref": "#/$defs/WikiPageRef"
+                },
+                "type": "array"
+              },
+              "conflict_copies": {
+                "description": "Edits that clashed with another and wait to be resolved (conflict\ncopies).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "current": {
+                "description": "Whether `body` is the current text (false when an older revision was\nasked for).",
+                "type": "boolean"
+              },
+              "headings": {
+                "description": "The headings of `body`, for links to a heading.",
+                "items": {
+                  "$ref": "#/$defs/WikiHeading"
+                },
+                "type": "array"
+              },
+              "id": {
+                "description": "The page's ID.",
+                "type": "string"
+              },
+              "parent": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "The parent page; left out for a page at the top."
+              },
+              "path": {
+                "description": "The pages it is nested in, outermost first.",
+                "items": {
+                  "$ref": "#/$defs/WikiPageRef"
+                },
+                "type": "array"
+              },
+              "project": {
+                "description": "Its project's key.",
+                "type": "string"
+              },
+              "references": {
+                "description": "What its text links to, in order, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/Reference"
+                },
+                "type": "array"
+              },
+              "revision": {
+                "description": "The revision of `body`; pass it as `base_revision` when you save a\nnew text. Left out while the page has no text yet.",
+                "type": "string"
+              },
+              "slug": {
+                "description": "Its name in addresses, made from the title.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The page's title.",
+                "type": "string"
+              },
+              "updated_at": {
+                "description": "When it last changed.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "slug",
+              "project",
+              "body",
+              "current",
+              "conflict_copies",
+              "created_at",
+              "updated_at",
+              "id"
+            ],
+            "type": "object"
+          },
+          "WikiPageRef": {
+            "additionalProperties": false,
+            "description": "Another page, as a page names its parent and children.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "slug": {
+                "description": "Its slug.",
+                "type": "string"
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "slug",
+              "id"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A page changed, with the history group of the change.",
+        "properties": {
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "page": {
+            "$ref": "#/$defs/WikiPage",
+            "description": "The page after the change."
+          },
+          "save": {
+            "$ref": "#/$defs/DescriptionSave",
+            "description": "What became of a new text: saved, merged with another edit, or kept\nas a conflict copy."
+          }
+        },
+        "required": [
+          "page"
+        ],
+        "title": "WikiChange",
+        "type": "object"
+      },
+      "output_name": "WikiChange",
+      "safety": "write",
+      "summary": "Move a wiki page, with the pages inside it, into another parent page or to the top, and to a place among its siblings; refuses moves into itself; links to it keep working."
     },
     {
       "cli": "wiki delete <page>",
@@ -37106,6 +39268,532 @@
       "output_name": "RevisionList",
       "safety": "read",
       "summary": "List the revisions of a wiki page, newest first, conflict copies included; read one with wiki.get and its revision."
+    },
+    {
+      "cli": "wiki backlinks <page>",
+      "exposure": "data",
+      "id": "wiki.backlinks",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A wiki page whose links to read.",
+        "properties": {
+          "page": {
+            "description": "The page: its title (any case), slug or ID.",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project (key or ID); needed unless `page` is an ID.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "page"
+        ],
+        "title": "WikiLinksInput",
+        "type": "object"
+      },
+      "input_name": "WikiLinksInput",
+      "kind": "query",
+      "mcp_tool": "get_wiki_page",
+      "output": {
+        "$defs": {
+          "Backlink": {
+            "additionalProperties": false,
+            "description": "A text that links somewhere: a wiki page, a task's description or a\ncomment on a task.",
+            "properties": {
+              "comment": {
+                "description": "The comment's ID, for a link in a comment.",
+                "type": "string"
+              },
+              "heading": {
+                "description": "The heading the link names, if any.",
+                "type": "string"
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "A page, for a link in its text."
+              },
+              "project": {
+                "description": "The key of the project the task or page is in.",
+                "type": "string"
+              },
+              "task": {
+                "description": "A task's key, for a link in its description or in a comment on it.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the task or page.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "project",
+              "title"
+            ],
+            "type": "object"
+          },
+          "WikiPageRef": {
+            "additionalProperties": false,
+            "description": "Another page, as a page names its parent and children.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "slug": {
+                "description": "Its slug.",
+                "type": "string"
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "slug",
+              "id"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "What links to a page or a task: pages first (by title), then task\ndescriptions (by key), then comments (oldest first). Each text is listed\nonce, with the heading of its first link.",
+        "properties": {
+          "items": {
+            "description": "The texts that link here.",
+            "items": {
+              "$ref": "#/$defs/Backlink"
+            },
+            "type": "array"
+          },
+          "total": {
+            "description": "How many.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "BacklinkList",
+        "type": "object"
+      },
+      "output_name": "BacklinkList",
+      "safety": "read",
+      "summary": "The wiki pages, task descriptions and comments that link to a wiki page, by its title, slug, an old slug or its ID."
+    },
+    {
+      "cli": "wiki references <page>",
+      "exposure": "data",
+      "id": "wiki.references",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A wiki page whose links to read.",
+        "properties": {
+          "page": {
+            "description": "The page: its title (any case), slug or ID.",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project (key or ID); needed unless `page` is an ID.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "page"
+        ],
+        "title": "WikiLinksInput",
+        "type": "object"
+      },
+      "input_name": "WikiLinksInput",
+      "kind": "query",
+      "mcp_tool": "get_wiki_page",
+      "output": {
+        "$defs": {
+          "Reference": {
+            "additionalProperties": false,
+            "description": "One link in a text, resolved now.",
+            "properties": {
+              "comment": {
+                "description": "The comment the link is in, when it is not in the description.",
+                "type": "string"
+              },
+              "found": {
+                "description": "Whether the target was found; false for a page that doesn't exist\n(yet), a task key that names nothing, or a target in the trash.",
+                "type": "boolean"
+              },
+              "heading": {
+                "description": "The heading a page link names, if any.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/ReferenceKind",
+                "description": "A page or a task."
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "The page found."
+              },
+              "project": {
+                "description": "The key of the project of the page or task found.",
+                "type": "string"
+              },
+              "target": {
+                "description": "The page name or task key as written.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task found: its current key.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the page or task found.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "target",
+              "found"
+            ],
+            "type": "object"
+          },
+          "ReferenceKind": {
+            "description": "What a link points at.",
+            "oneOf": [
+              {
+                "const": "page",
+                "description": "A wiki page.",
+                "type": "string"
+              },
+              {
+                "const": "task",
+                "description": "A task.",
+                "type": "string"
+              }
+            ]
+          },
+          "WikiPageRef": {
+            "additionalProperties": false,
+            "description": "Another page, as a page names its parent and children.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "slug": {
+                "description": "Its slug.",
+                "type": "string"
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "slug",
+              "id"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The links a text makes, in the order they first appear: for a task, its\ndescription's, then its comments' (oldest first).",
+        "properties": {
+          "items": {
+            "description": "The links.",
+            "items": {
+              "$ref": "#/$defs/Reference"
+            },
+            "type": "array"
+          },
+          "total": {
+            "description": "How many.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "ReferenceList",
+        "type": "object"
+      },
+      "output_name": "ReferenceList",
+      "safety": "read",
+      "summary": "The pages and tasks a wiki page's text links to, in order, each resolved now; links that find nothing are marked."
+    },
+    {
+      "cli": "task backlinks <key>",
+      "exposure": "data",
+      "id": "task.backlinks",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A task whose links to read.",
+        "properties": {
+          "key": {
+            "description": "The task: its key (current or old) or ID.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "title": "TaskLinksInput",
+        "type": "object"
+      },
+      "input_name": "TaskLinksInput",
+      "kind": "query",
+      "mcp_tool": "get_task",
+      "output": {
+        "$defs": {
+          "Backlink": {
+            "additionalProperties": false,
+            "description": "A text that links somewhere: a wiki page, a task's description or a\ncomment on a task.",
+            "properties": {
+              "comment": {
+                "description": "The comment's ID, for a link in a comment.",
+                "type": "string"
+              },
+              "heading": {
+                "description": "The heading the link names, if any.",
+                "type": "string"
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "A page, for a link in its text."
+              },
+              "project": {
+                "description": "The key of the project the task or page is in.",
+                "type": "string"
+              },
+              "task": {
+                "description": "A task's key, for a link in its description or in a comment on it.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the task or page.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "project",
+              "title"
+            ],
+            "type": "object"
+          },
+          "WikiPageRef": {
+            "additionalProperties": false,
+            "description": "Another page, as a page names its parent and children.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "slug": {
+                "description": "Its slug.",
+                "type": "string"
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "slug",
+              "id"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "What links to a page or a task: pages first (by title), then task\ndescriptions (by key), then comments (oldest first). Each text is listed\nonce, with the heading of its first link.",
+        "properties": {
+          "items": {
+            "description": "The texts that link here.",
+            "items": {
+              "$ref": "#/$defs/Backlink"
+            },
+            "type": "array"
+          },
+          "total": {
+            "description": "How many.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "BacklinkList",
+        "type": "object"
+      },
+      "output_name": "BacklinkList",
+      "safety": "read",
+      "summary": "The wiki pages, other tasks' descriptions and comments that mention a task by its key (current or old)."
+    },
+    {
+      "cli": "task references <key>",
+      "exposure": "data",
+      "id": "task.references",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A task whose links to read.",
+        "properties": {
+          "key": {
+            "description": "The task: its key (current or old) or ID.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "title": "TaskLinksInput",
+        "type": "object"
+      },
+      "input_name": "TaskLinksInput",
+      "kind": "query",
+      "mcp_tool": "get_task",
+      "output": {
+        "$defs": {
+          "Reference": {
+            "additionalProperties": false,
+            "description": "One link in a text, resolved now.",
+            "properties": {
+              "comment": {
+                "description": "The comment the link is in, when it is not in the description.",
+                "type": "string"
+              },
+              "found": {
+                "description": "Whether the target was found; false for a page that doesn't exist\n(yet), a task key that names nothing, or a target in the trash.",
+                "type": "boolean"
+              },
+              "heading": {
+                "description": "The heading a page link names, if any.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/ReferenceKind",
+                "description": "A page or a task."
+              },
+              "page": {
+                "$ref": "#/$defs/WikiPageRef",
+                "description": "The page found."
+              },
+              "project": {
+                "description": "The key of the project of the page or task found.",
+                "type": "string"
+              },
+              "target": {
+                "description": "The page name or task key as written.",
+                "type": "string"
+              },
+              "task": {
+                "description": "The task found: its current key.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The title of the page or task found.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "target",
+              "found"
+            ],
+            "type": "object"
+          },
+          "ReferenceKind": {
+            "description": "What a link points at.",
+            "oneOf": [
+              {
+                "const": "page",
+                "description": "A wiki page.",
+                "type": "string"
+              },
+              {
+                "const": "task",
+                "description": "A task.",
+                "type": "string"
+              }
+            ]
+          },
+          "WikiPageRef": {
+            "additionalProperties": false,
+            "description": "Another page, as a page names its parent and children.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "slug": {
+                "description": "Its slug.",
+                "type": "string"
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "slug",
+              "id"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The links a text makes, in the order they first appear: for a task, its\ndescription's, then its comments' (oldest first).",
+        "properties": {
+          "items": {
+            "description": "The links.",
+            "items": {
+              "$ref": "#/$defs/Reference"
+            },
+            "type": "array"
+          },
+          "total": {
+            "description": "How many.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "ReferenceList",
+        "type": "object"
+      },
+      "output_name": "ReferenceList",
+      "safety": "read",
+      "summary": "The pages and tasks a task's description and comments link to, in order, each resolved now; links that find nothing are marked."
     },
     {
       "cli": "file show <attachment>",

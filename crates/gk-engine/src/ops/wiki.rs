@@ -21,9 +21,9 @@ use std::collections::HashMap;
 
 use gk_api::ops::description::{RevisionList, SaveOutcome};
 use gk_api::ops::wiki::{
-    Backlink, WikiChange, WikiCreate, WikiCreateInput, WikiField, WikiGet, WikiGetInput,
-    WikiHeading, WikiHistory, WikiHistoryInput, WikiList, WikiListInput, WikiMatch, WikiPage,
-    WikiPageRef, WikiPageSummary, WikiPart, WikiSearch, WikiSearchHit, WikiSearchInput,
+    WikiChange, WikiCreate, WikiCreateInput, WikiField, WikiGet, WikiGetInput, WikiHeading,
+    WikiHistory, WikiHistoryInput, WikiList, WikiListInput, WikiMatch, WikiMove, WikiMoveInput,
+    WikiPage, WikiPageRef, WikiPageSummary, WikiPart, WikiSearch, WikiSearchHit, WikiSearchInput,
     WikiSearchResult, WikiTree, WikiUpdate, WikiUpdateInput,
 };
 use gk_core::{Id, PageTitleError, TextError, fold};
@@ -56,6 +56,7 @@ pub(super) fn register(r: &mut Registry) {
     r.query::<WikiGet, _>(desc::<WikiGet>(), get);
     r.command::<WikiCreate, _>(desc::<WikiCreate>(), create);
     r.command::<WikiUpdate, _>(desc::<WikiUpdate>(), update);
+    r.command::<WikiMove, _>(desc::<WikiMove>(), move_op);
     r.query::<WikiHistory, _>(desc::<WikiHistory>(), |q, input: WikiHistoryInput| {
         let page = find(q.tx, input.project.as_deref(), "page", &input.page)?;
         let items = description::revisions(q.tx, Owner::Wiki(page.id))?;
@@ -74,9 +75,9 @@ pub(super) fn register(r: &mut Registry) {
 pub(crate) struct PageRow {
     pub(crate) id: Id,
     pub(crate) project: Id,
-    parent: Option<Id>,
-    title: String,
-    slug: String,
+    pub(crate) parent: Option<Id>,
+    pub(crate) title: String,
+    pub(crate) slug: String,
     rank: String,
     agent_brief: bool,
     created_at: i64,
@@ -101,7 +102,7 @@ fn page_row(r: &Row<'_>) -> gk_store::rusqlite::Result<PageRow> {
 }
 
 /// The live page `id`.
-fn by_id(tx: &Transaction<'_>, id: Id) -> Result<Option<PageRow>, Failure> {
+pub(crate) fn by_id(tx: &Transaction<'_>, id: Id) -> Result<Option<PageRow>, Failure> {
     Ok(tx
         .query_row(
             &format!("SELECT {PAGE_COLUMNS} FROM wiki_pages WHERE id = ?1 AND deleted_at IS NULL"),
@@ -112,20 +113,23 @@ fn by_id(tx: &Transaction<'_>, id: Id) -> Result<Option<PageRow>, Failure> {
         .filter(|p| crate::scope::sees(p.project)))
 }
 
-/// The live page of `project` that `text` names: its title (any case),
-/// slug, an old slug, or its ID.
-fn in_project(
+/// The live page of project `project` that `text` names: its title (any
+/// case), slug, an old slug, or its ID; `None` when none does. Wiki links
+/// resolve the same way.
+pub(crate) fn page_in(
     tx: &Transaction<'_>,
-    project: &ProjectRow,
-    field: &str,
+    project: Id,
     text: &str,
-) -> Result<PageRow, Failure> {
+) -> Result<Option<PageRow>, Failure> {
     let text = text.trim();
+    if text.is_empty() {
+        return Ok(None);
+    }
     if let Ok(id) = text.parse::<Id>()
         && let Some(p) = by_id(tx, id)?
-        && p.project == project.id
+        && p.project == project
     {
-        return Ok(p);
+        return Ok(Some(p));
     }
     let one = |sql: &str, arg: &str| -> Result<Option<PageRow>, Failure> {
         Ok(tx
@@ -134,27 +138,43 @@ fn in_project(
                     "SELECT {PAGE_COLUMNS} FROM wiki_pages
                       WHERE project_id = ?1 AND {sql} AND deleted_at IS NULL"
                 ),
-                params![b(project.id), arg],
+                params![b(project), arg],
                 page_row,
             )
-            .optional()?)
+            .optional()?
+            .filter(|p| crate::scope::sees(p.project)))
     };
     if let Some(p) = one("title_fold = ?2", &fold(text))? {
-        return Ok(p);
+        return Ok(Some(p));
     }
     if let Some(p) = one("slug = ?2", &text.to_lowercase())? {
-        return Ok(p);
+        return Ok(Some(p));
     }
     let redirect: Option<Vec<u8>> = tx
         .query_row(
             "SELECT page_id FROM wiki_redirects WHERE project_id = ?1 AND slug = ?2",
-            params![b(project.id), gk_core::slug(text)],
+            params![b(project), gk_core::slug(text)],
             |r| r.get(0),
         )
         .optional()?;
     if let Some(id) = redirect.and_then(|v| Id::from_slice(&v).ok())
         && let Some(p) = by_id(tx, id)?
     {
+        return Ok(Some(p));
+    }
+    Ok(None)
+}
+
+/// The live page of `project` that `text` names, as [`page_in`]; an error
+/// that lists the project's pages when none does.
+fn in_project(
+    tx: &Transaction<'_>,
+    project: &ProjectRow,
+    field: &str,
+    text: &str,
+) -> Result<PageRow, Failure> {
+    let text = text.trim();
+    if let Some(p) = page_in(tx, project.id, text)? {
         return Ok(p);
     }
     let mut stmt = tx.prepare_cached(
@@ -312,7 +332,7 @@ fn height(tx: &Transaction<'_>, id: Id) -> Result<u32, Failure> {
     Ok(height)
 }
 
-fn page_ref(p: &PageRow) -> WikiPageRef {
+pub(crate) fn page_ref(p: &PageRow) -> WikiPageRef {
     WikiPageRef {
         title: p.title.clone(),
         slug: p.slug.clone(),
@@ -368,9 +388,10 @@ fn headings_of(body: &str) -> Vec<WikiHeading> {
 // ---------------------------------------------------------------------
 // The search index
 
-/// Keeps the page's search entry in step: indexed while live, removed while
-/// deleted.
+/// Keeps the page's search entry in step (indexed while live, removed while
+/// deleted) and its links, which are kept while it is in the trash.
 pub(crate) fn reindex(w: &WriteCtx<'_>, id: Id) -> Result<(), Failure> {
+    super::links::index(w.tx(), super::links::Source::Wiki(id))?;
     match by_id(w.tx(), id)? {
         Some(p) => {
             let (body, _) = description::current_text(w.tx(), Owner::Wiki(id))?;
@@ -447,7 +468,7 @@ fn page_out(
     tx: &Transaction<'_>,
     p: &PageRow,
     revision: Option<&str>,
-    backlinks: bool,
+    include: &[WikiPart],
 ) -> Result<WikiPage, Failure> {
     let owner = Owner::Wiki(p.id);
     let (current_body, current_rev) = description::current_text(tx, owner)?;
@@ -485,8 +506,13 @@ fn page_out(
         body,
         conflict_copies: u32::try_from(conflicts).unwrap_or(0),
         agent_brief: p.agent_brief,
-        backlinks: if backlinks {
-            Some(backlinks_of(tx, p)?)
+        backlinks: if include.contains(&WikiPart::Backlinks) {
+            Some(super::links::page_backlinks(tx, p)?)
+        } else {
+            None
+        },
+        references: if include.contains(&WikiPart::References) {
+            Some(super::links::page_references(tx, p)?)
         } else {
             None
         },
@@ -496,74 +522,9 @@ fn page_out(
     })
 }
 
-/// The pages and task descriptions of the page's project that link to it.
-fn backlinks_of(tx: &Transaction<'_>, page: &PageRow) -> Result<Vec<Backlink>, Failure> {
-    let target = fold(&page.title);
-    let heading_of = |body: &str| -> Option<Option<String>> {
-        gk_markdown::references(body)
-            .wiki_links
-            .into_iter()
-            .find(|l| fold(&l.page) == target)
-            .map(|l| l.heading)
-    };
-    let mut out = Vec::new();
-    let mut stmt = tx.prepare_cached(&format!(
-        "SELECT {PAGE_COLUMNS} FROM wiki_pages
-          WHERE project_id = ?1 AND deleted_at IS NULL AND id <> ?2 ORDER BY title_fold"
-    ))?;
-    let pages = stmt
-        .query_map(params![b(page.project), b(page.id)], page_row)?
-        .collect::<Result<Vec<_>, _>>()?;
-    for other in pages {
-        let (body, _) = description::current_text(tx, Owner::Wiki(other.id))?;
-        if !body.contains("[[") {
-            continue;
-        }
-        if let Some(heading) = heading_of(&body) {
-            out.push(Backlink {
-                task: None,
-                page: Some(page_ref(&other)),
-                title: other.title.clone(),
-                heading,
-            });
-        }
-    }
-    let mut stmt = tx.prepare_cached(
-        "SELECT t.id, t.number, t.title, t.description FROM tasks t
-          WHERE t.project_id = ?1 AND t.deleted_at IS NULL AND instr(t.description, '[[') > 0
-          ORDER BY t.number",
-    )?;
-    let tasks = stmt
-        .query_map([b(page.project)], |r| {
-            Ok((
-                id_at(r, 0)?,
-                r.get::<_, i64>(1)?,
-                r.get::<_, String>(2)?,
-                r.get::<_, String>(3)?,
-            ))
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
-    for (_, number, title, body) in tasks {
-        if let Some(heading) = heading_of(&body) {
-            out.push(Backlink {
-                task: Some(lookup::task_key(tx, page.project, number)?),
-                page: None,
-                title,
-                heading,
-            });
-        }
-    }
-    Ok(out)
-}
-
 fn get(q: &QueryCtx<'_>, input: WikiGetInput) -> Result<WikiPage, Failure> {
     let page = find(q.tx, input.project.as_deref(), "page", &input.page)?;
-    page_out(
-        q.tx,
-        &page,
-        input.revision.as_deref(),
-        input.include.contains(&WikiPart::Backlinks),
-    )
+    page_out(q.tx, &page, input.revision.as_deref(), &input.include)
 }
 
 // ---------------------------------------------------------------------
@@ -1049,40 +1010,19 @@ fn update(w: &mut WriteCtx<'_>, input: WikiUpdateInput) -> Result<WikiChange, Fa
     }
 
     let new_parent = match (&input.parent, clears_parent) {
-        (Some(p), _) => Some(Some(parent_for(w.tx(), &project, p, Some(page.id))?.id)),
+        (Some(p), _) => Some(Some(p.as_str())),
         (None, true) => Some(None),
         (None, false) => None,
     };
-    let moved = new_parent.is_some_and(|p| p != page.parent);
-    let parent = new_parent.unwrap_or(page.parent);
-    let siblings = children(w.tx(), project.id, parent)?;
-    let placed = target(
-        w.tx(),
+    move_page(
+        w,
         &project,
-        &siblings,
+        &page,
+        new_parent,
         input.before.as_deref(),
         input.after.as_deref(),
         input.at,
     )?;
-    if moved {
-        fields::set(
-            w,
-            WIKI,
-            page.id,
-            Some(project.id),
-            "parent",
-            parent.and_then(id_value),
-        )?;
-    }
-    if moved || placed.is_some() {
-        place(
-            w,
-            project.id,
-            page.id,
-            &siblings,
-            placed.unwrap_or(Target::Bottom),
-        )?;
-    }
 
     let mut save = None;
     if let Some(body) = &input.body {
@@ -1138,6 +1078,84 @@ fn update(w: &mut WriteCtx<'_>, input: WikiUpdateInput) -> Result<WikiChange, Fa
     changed(w, page.id, save)
 }
 
+/// Moves `page` (with the pages inside it) into `new_parent` (`Some(None)`:
+/// to the top; `None`: it stays) and to the place `before`/`after`/`at`
+/// names. A page that changes parent goes last unless placed. Refuses a
+/// parent that is the page or inside it, or that would nest too deep.
+#[allow(clippy::option_option)]
+fn move_page(
+    w: &mut WriteCtx<'_>,
+    project: &ProjectRow,
+    page: &PageRow,
+    new_parent: Option<Option<&str>>,
+    before: Option<&str>,
+    after: Option<&str>,
+    at: Option<gk_api::ops::common::Edge>,
+) -> Result<(), Failure> {
+    let new_parent = match new_parent {
+        Some(Some(p)) => Some(Some(parent_for(w.tx(), project, p, Some(page.id))?.id)),
+        Some(None) => Some(None),
+        None => None,
+    };
+    let moved = new_parent.is_some_and(|p| p != page.parent);
+    let parent = new_parent.unwrap_or(page.parent);
+    let siblings = children(w.tx(), project.id, parent)?;
+    let placed = target(w.tx(), project, &siblings, before, after, at)?;
+    if moved {
+        fields::set(
+            w,
+            WIKI,
+            page.id,
+            Some(project.id),
+            "parent",
+            parent.and_then(id_value),
+        )?;
+    }
+    if moved || placed.is_some() {
+        place(
+            w,
+            project.id,
+            page.id,
+            &siblings,
+            placed.unwrap_or(Target::Bottom),
+        )?;
+    }
+    Ok(())
+}
+
+fn move_op(w: &mut WriteCtx<'_>, input: WikiMoveInput) -> Result<WikiChange, Failure> {
+    let page = find(w.tx(), input.project.as_deref(), "page", &input.page)?;
+    let project = project_of(w.tx(), &page)?;
+    lookup::ensure_active(&project)?;
+    lookup::ensure_wiki_on(w.tx(), &project)?;
+    if input.top_level && input.parent.is_some() {
+        return Err(messages::invalid("top_level", "wiki-parent-and-top", &[]));
+    }
+    if !input.top_level
+        && input.parent.is_none()
+        && input.before.is_none()
+        && input.after.is_none()
+        && input.at.is_none()
+    {
+        return Err(messages::invalid("parent", "wiki-move-nowhere", &[]));
+    }
+    let new_parent = match (&input.parent, input.top_level) {
+        (Some(p), _) => Some(Some(p.as_str())),
+        (None, true) => Some(None),
+        (None, false) => None,
+    };
+    move_page(
+        w,
+        &project,
+        &page,
+        new_parent,
+        input.before.as_deref(),
+        input.after.as_deref(),
+        input.at,
+    )?;
+    changed(w, page.id, None)
+}
+
 fn changed(
     w: &WriteCtx<'_>,
     id: Id,
@@ -1146,7 +1164,7 @@ fn changed(
     let page = by_id(w.tx(), id)?
         .ok_or_else(|| Failure::Op(messages::not_found("wiki-page-gone", &[])))?;
     Ok(WikiChange {
-        page: page_out(w.tx(), &page, None, false)?,
+        page: page_out(w.tx(), &page, None, &[])?,
         group: w.group_if_changed(),
         save,
     })

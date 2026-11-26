@@ -19,7 +19,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 use crate::error::{Result, StoreError};
 
 /// The schema version this program is built for.
-pub const SCHEMA_VERSION: i64 = 7;
+pub const SCHEMA_VERSION: i64 = 8;
 
 /// One migration: the SQL that takes the schema from `version - 1` to
 /// `version`.
@@ -58,6 +58,10 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 7,
         sql: include_str!("../migrations/0007_personal_drafts.sql"),
+    },
+    Migration {
+        version: 8,
+        sql: include_str!("../migrations/0008_text_links.sql"),
     },
 ];
 
@@ -441,7 +445,7 @@ mod tests {
                     ('new_comment', x'01010101010101010101010101010101', NULL, 'Hi', NULL, 6);",
         )
         .unwrap();
-        migrate(&mut conn, MIGRATIONS, |_| Ok(())).unwrap();
+        migrate(&mut conn, &MIGRATIONS[..7], |_| Ok(())).unwrap();
         assert_eq!(user_version(&conn).unwrap(), 7);
         let kept: Vec<(String, String, String, String, i64)> = conn
             .prepare(

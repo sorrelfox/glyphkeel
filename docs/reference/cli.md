@@ -57,6 +57,7 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel status delete` | `status.delete` | Delete a status; its tasks move to the status named. Can't be undone. |
 | `glyphkeel status edit` | `status.update` | Rename or recolour a status, change its category or its WIP limit. |
 | `glyphkeel status move` | `status.reorder` | Move a status in the project's board order. |
+| `glyphkeel task backlinks <key>` | `task.backlinks` | The wiki pages, other tasks' descriptions and comments that mention a task by its key (current or old). |
 | `glyphkeel task bulk` | `task.bulk_update` | Make the same change to many tasks chosen by key or query (status, type, priority, labels, parent, dates set or shifted, estimate, project), previewed first, as one change for Undo and revert. |
 | `glyphkeel task check <key>` | `checklist.update` | Tick, clear, add or remove checklist items in a task's description or a comment, by number plus expected text. |
 | `glyphkeel task claim <key>` | `task.claim` | Claim a task for your agent session for a while, so other agents leave it alone; moves it into progress. |
@@ -67,6 +68,7 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel task link <key>` | `relation.add` | Link two tasks (blocks, relates, duplicates, clones, or make one a subtask of the other). |
 | `glyphkeel task list` | `task.search` | List the tasks matching a query (is:open due<+7d label:bug sort:due), a page at a time, with totals of estimates and logged time. |
 | `glyphkeel task move <key>` | `task.move` | Move a task to another status or place in its column, or to another project (new key; the old one forwards). |
+| `glyphkeel task references <key>` | `task.references` | The pages and tasks a task's description and comments link to, in order, each resolved now; links that find nothing are marked. |
 | `glyphkeel task release <key>` | `task.release` | Give up a claim on a task, optionally moving it and adding a comment. |
 | `glyphkeel task reorder-subtask <key>` | `task.reorder_subtask` | Move a subtask to another place among its parent's subtasks (before or after another one, first or last); returns the parent with its subtasks in the new order. |
 | `glyphkeel task resolve <key>` | `task.resolve_conflict` | Resolve a conflict copy of a task's description: keep the description, use the copy, or save a combined text. |
@@ -91,12 +93,15 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel view delete <view>` | `view.delete` | Delete a saved view; it can be brought back with revert. |
 | `glyphkeel view edit <view>` | `view.update` | Rename a saved view, change its query, columns, order, grouping or totals, or make it the default. |
 | `glyphkeel view list` | `view.list` | The saved views of a project or of the whole workspace: name, query, columns, order, grouping, totals and which is the default. |
+| `glyphkeel wiki backlinks <page>` | `wiki.backlinks` | The wiki pages, task descriptions and comments that link to a wiki page, by its title, slug, an old slug or its ID. |
 | `glyphkeel wiki delete <page>` | `wiki.delete` | Move a wiki page, with the pages inside it, to the trash; links to it stop resolving until it is restored. |
 | `glyphkeel wiki get <page>` | `wiki.get` | One wiki page with its text, revision, headings, place in the tree and, on request, what links to it; or an older revision of it. |
 | `glyphkeel wiki history <page>` | `wiki.history` | List the revisions of a wiki page, newest first, conflict copies included; read one with wiki.get and its revision. |
 | `glyphkeel wiki list` | `wiki.list` | A project's wiki pages as a tree: titles, slugs, nesting and when each changed. |
+| `glyphkeel wiki move <page>` | `wiki.move` | Move a wiki page, with the pages inside it, into another parent page or to the top, and to a place among its siblings; refuses moves into itself; links to it keep working. |
 | `glyphkeel wiki new` | `wiki.create` | Create a wiki page with a title unique in its project, optionally inside another page and with its text. |
 | `glyphkeel wiki put <page>` | `wiki.update` | Change a wiki page: its text (whole, with a base revision, or by targeted edits), title, parent or place; or resolve a conflict copy. |
+| `glyphkeel wiki references <page>` | `wiki.references` | The pages and tasks a wiki page's text links to, in order, each resolved now; links that find nothing are marked. |
 | `glyphkeel wiki search <text>` | `wiki.search` | Find wiki pages by title, heading or text, for example to link one; `Page#Heading` lists a page's headings. |
 | `glyphkeel workspace` | `workspace.get` | The open workspace: its name and ID, the schema and program versions, who is asking with which rights, the settings, the limits on agents and a short guide. |
 

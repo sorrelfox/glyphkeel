@@ -31,6 +31,7 @@ pub mod description;
 pub mod draft;
 pub mod file;
 pub mod history;
+pub mod link;
 pub mod project;
 pub mod query;
 pub mod search;
