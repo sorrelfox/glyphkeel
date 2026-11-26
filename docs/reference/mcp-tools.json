@@ -16,6 +16,7 @@
       "create_task",
       "update_task",
       "move_task",
+      "check_move",
       "delete_tasks",
       "bulk_update_tasks",
       "reorder_subtask",
@@ -70,6 +71,7 @@
       "get_agent_brief",
       "search_tasks",
       "get_task",
+      "check_move",
       "get_description_revision",
       "get_time_report",
       "get_reminders",
@@ -99,6 +101,7 @@
       "create_task",
       "update_task",
       "move_task",
+      "check_move",
       "delete_tasks",
       "bulk_update_tasks",
       "reorder_subtask",
@@ -10187,7 +10190,7 @@
       "covers": [
         "task.move"
       ],
-      "description": "Moves a task to another `status` (by name), to a place in its column (`before` or `after` another task's key, or `at`: top or bottom), or to another `project`, where it gets a new key while the old one keeps finding it. Entering a done or cancelled status closes the task. Example: move_task {\"key\": \"TM-41\", \"status\": \"In progress\", \"at\": \"top\"}",
+      "description": "Moves a task to another `status` (by name), to a place in its column (`before` or `after` another task's key, or `at`: top or bottom), or to another `project`, where it gets a new key while the old one keeps finding it; its subtasks, comments, files, time and links come along. Statuses, types and labels are matched by name there; check_move first shows which have no match, and `mapping` ({statuses, types, labels}: from the old name to the target's name) says what takes their place. Entering a done or cancelled status closes the task. Example: move_task {\"key\": \"TM-41\", \"status\": \"In progress\", \"at\": \"top\"}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "Where to move a task: another status, another place in its column, or\nanother project.",
@@ -10222,6 +10225,34 @@
           "key": {
             "description": "The task: its key or ID.",
             "type": "string"
+          },
+          "mapping": {
+            "additionalProperties": false,
+            "description": "With `project`: which status, type or label of that project stands\nin for one it has no match for.",
+            "properties": {
+              "labels": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Label names, the same way.",
+                "type": "object"
+              },
+              "statuses": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Status names: from the task's project to the target project.",
+                "type": "object"
+              },
+              "types": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Type names, the same way.",
+                "type": "object"
+              }
+            },
+            "type": "object"
           },
           "override_claim": {
             "default": false,
@@ -11888,6 +11919,181 @@
     },
     {
       "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Check a move to another project"
+      },
+      "covers": [
+        "task.move_check"
+      ],
+      "description": "Shows what moving tasks to another project would do, without moving them: the key each task (and subtask) would get, and for each of their statuses, types and labels the target's item of the same name, or none. Pass what has no match as `mapping` to move_task. Example: check_move {\"keys\": [\"TM-41\"], \"project\": \"OPS\"}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Tasks that might move to another project, to see first what the move\nwould do.",
+        "properties": {
+          "keys": {
+            "description": "The tasks: keys or IDs, 1 to 500. Their subtasks would move with them.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "project": {
+            "description": "The project they would move to.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "keys",
+          "project"
+        ],
+        "title": "TaskMoveCheckInput",
+        "type": "object"
+      },
+      "name": "check_move",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "What moving tasks to another project would do: their new keys, and how\ntheir statuses, types and labels would be matched there.",
+        "properties": {
+          "fallback_status": {
+            "description": "The target's status for those it has no match for: its first one.",
+            "type": "string"
+          },
+          "fallback_type": {
+            "description": "The target's type for those it has no match for: its default one.",
+            "type": "string"
+          },
+          "keys": {
+            "description": "Every task that would move, subtasks included, with its key now and\nthe key it would get.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A key now and the one a move would give.",
+              "properties": {
+                "from": {
+                  "description": "The key now.",
+                  "type": "string"
+                },
+                "to": {
+                  "description": "The key in the target project.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "from",
+                "to"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "labels": {
+            "description": "Their labels.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A status, type or label of the moving tasks, and its match in the target\nproject.",
+              "properties": {
+                "name": {
+                  "description": "Its name.",
+                  "type": "string"
+                },
+                "target": {
+                  "description": "The target's item of the same name; absent when it has none.",
+                  "type": "string"
+                },
+                "tasks": {
+                  "description": "How many of the moving tasks have it.",
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "name",
+                "tasks"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "project": {
+            "description": "The target project's key.",
+            "type": "string"
+          },
+          "statuses": {
+            "description": "The statuses the tasks have now.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A status, type or label of the moving tasks, and its match in the target\nproject.",
+              "properties": {
+                "name": {
+                  "description": "Its name.",
+                  "type": "string"
+                },
+                "target": {
+                  "description": "The target's item of the same name; absent when it has none.",
+                  "type": "string"
+                },
+                "tasks": {
+                  "description": "How many of the moving tasks have it.",
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "name",
+                "tasks"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "types": {
+            "description": "Their types.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A status, type or label of the moving tasks, and its match in the target\nproject.",
+              "properties": {
+                "name": {
+                  "description": "Its name.",
+                  "type": "string"
+                },
+                "target": {
+                  "description": "The target's item of the same name; absent when it has none.",
+                  "type": "string"
+                },
+                "tasks": {
+                  "description": "How many of the moving tasks have it.",
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "name",
+                "tasks"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "project",
+          "keys",
+          "statuses",
+          "types",
+          "labels",
+          "fallback_status",
+          "fallback_type"
+        ],
+        "title": "MoveCheck",
+        "type": "object"
+      },
+      "title": "Check a move to another project",
+      "toolset": "tasks"
+    },
+    {
+      "annotations": {
         "destructiveHint": true,
         "idempotentHint": true,
         "openWorldHint": false,
@@ -12160,6 +12366,34 @@
                   "type": "string"
                 },
                 "type": "array"
+              },
+              "mapping": {
+                "additionalProperties": false,
+                "description": "With `project`: which status, type or label of that project stands\nin for one it has no match for.",
+                "properties": {
+                  "labels": {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "description": "Label names, the same way.",
+                    "type": "object"
+                  },
+                  "statuses": {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "description": "Status names: from the task's project to the target project.",
+                    "type": "object"
+                  },
+                  "types": {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "description": "Type names, the same way.",
+                    "type": "object"
+                  }
+                },
+                "type": "object"
               },
               "parent": {
                 "description": "Make them subtasks of this task.",

@@ -2,8 +2,8 @@
 // Copyright (C) 2026 Glyphkeel contributors
 
 //! Which workspace the app opens: the one `GLYPHKEEL_WORKSPACE` names, by
-//! name or by path, or else the default workspace "Personal" in the data
-//! folder, created on the first run. The rule is the storage layer's, shared
+//! name or by path, else the one the person last opened, else the default
+//! workspace "Personal" in the data folder, created on the first run. The rule is the storage layer's, shared
 //! with the command line and the agent server.
 
 use std::path::{Path, PathBuf};
@@ -15,7 +15,8 @@ use gk_store::{Location, StoreError, WorkspaceLayout};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AppLocation(Location);
 
-/// The workspace `GLYPHKEEL_WORKSPACE` names, or the default one.
+/// The workspace `GLYPHKEEL_WORKSPACE` names, else the one last opened,
+/// else the default one.
 pub(crate) fn from_env() -> AppLocation {
     AppLocation(Location::find(None))
 }

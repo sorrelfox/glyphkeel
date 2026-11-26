@@ -81,7 +81,7 @@ pub use files::{
 };
 pub use layout::{
     DATA_DIR_ENV, DATABASE_FILE, DEFAULT_WORKSPACE, Location, LockFile, WORKSPACE_ENV,
-    WorkspaceLayout, data_dir,
+    WorkspaceLayout, check_name as check_workspace_name, data_dir,
 };
 pub use requests::{REQUEST_WINDOW_MS, RequestKey, purge_requests, remember, remembered};
 pub use schema::{SCHEMA_VERSION, SchemaState};

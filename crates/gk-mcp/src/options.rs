@@ -25,7 +25,7 @@ pub const DEFAULT_WORKSPACE: &str = gk_store::DEFAULT_WORKSPACE;
 pub struct Options {
     /// Which workspace: a name under the data folder, or a path to a
     /// workspace folder. Default: the one `GLYPHKEEL_WORKSPACE` names, else
-    /// "Personal".
+    /// the one last opened in the app, else "Personal".
     #[arg(long, value_name = "NAME|PATH")]
     pub workspace: Option<String>,
 
@@ -106,7 +106,8 @@ impl Options {
 }
 
 /// The workspace named by `--workspace`, else by `GLYPHKEEL_WORKSPACE`,
-/// else the default one: a path when it contains a path separator or starts
+/// else the one the person last opened in the app or with `glyphkeel
+/// workspace open`, else the default one: a path when it contains a path separator or starts
 /// with `.` or `~`, otherwise a name under the data folder
 /// (`$XDG_DATA_HOME/glyphkeel/workspaces/<name>`).
 ///

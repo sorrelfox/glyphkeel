@@ -182,6 +182,7 @@ pub static CATALOG: &[OpDescriptor] = &[
     task::TASK_CREATE,
     task::TASK_UPDATE,
     task::TASK_MOVE,
+    task::TASK_MOVE_CHECK,
     task::TASK_DELETE,
     bulk::TASK_BULK_UPDATE,
     task::TASK_REORDER_SUBTASK,

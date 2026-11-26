@@ -69,6 +69,7 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel task link <key>` | `relation.add` | Link two tasks (blocks, relates, duplicates, clones, or make one a subtask of the other). |
 | `glyphkeel task list` | `task.search` | List the tasks matching a query (is:open due<+7d label:bug sort:due), a page at a time, with totals of estimates and logged time. |
 | `glyphkeel task move <key>` | `task.move` | Move a task to another status or place in its column, or to another project (new key; the old one forwards). |
+| `glyphkeel task move-check <keys>` | `task.move_check` | What moving tasks to another project would do: their new keys, and which of their statuses, types and labels the target project has no match for. |
 | `glyphkeel task references <key>` | `task.references` | The pages and tasks a task's description and comments link to, in order, each resolved now; links that find nothing are marked. |
 | `glyphkeel task release <key>` | `task.release` | Give up a claim on a task, optionally moving it and adding a comment. |
 | `glyphkeel task reorder-subtask <key>` | `task.reorder_subtask` | Move a subtask to another place among its parent's subtasks (before or after another one, first or last); returns the parent with its subtasks in the new order. |
@@ -107,6 +108,17 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel wiki references <page>` | `wiki.references` | The pages and tasks a wiki page's text links to, in order, each resolved now; links that find nothing are marked. |
 | `glyphkeel wiki search <text>` | `wiki.search` | Find wiki pages by title, heading or text, for example to link one; `Page#Heading` lists a page's headings. |
 | `glyphkeel workspace` | `workspace.get` | The open workspace: its name and ID, the schema and program versions, who is asking with which rights, the settings, the limits on agents and a short guide. |
+
+## Workspaces
+
+A command works in the workspace `--workspace` names (a name in the data folder, or a folder path), else the one `GLYPHKEEL_WORKSPACE` names, else the one last opened in the app or with `glyphkeel workspace open`, else `Personal`. `glyphkeel mcp` chooses the same way. These commands work on the workspaces of the data folder rather than inside one:
+
+| Command | What it does |
+|---|---|
+| `glyphkeel workspace list` | List the workspaces; the one commands work in is marked |
+| `glyphkeel workspace create <name>` | Make a new, empty workspace |
+| `glyphkeel workspace rename <old> <new>` | Rename a workspace that nobody has open |
+| `glyphkeel workspace open <name or path>` | Work in this workspace from now on: commands, agents and the app's next start use it |
 
 ## Exit codes
 

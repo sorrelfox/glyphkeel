@@ -22,6 +22,7 @@ mod scope;
 mod thumbs;
 mod time;
 pub mod transfer;
+pub mod workspaces;
 mod write;
 
 pub use context::{ConfirmRequest, Confirmation, Context};

@@ -19,9 +19,10 @@
 //!
 //! The app, the command line and the agent server find the workspace the
 //! same way ([`Location::find`]): the one they are told (`--workspace`),
-//! else the one `GLYPHKEEL_WORKSPACE` names, else the default workspace
-//! [`DEFAULT_WORKSPACE`] in the data folder ([`data_dir`], which
-//! [`DATA_DIR_ENV`] can move). A value with a
+//! else the one `GLYPHKEEL_WORKSPACE` names, else the one the person last
+//! chose (the personal setting `workspace`, while that workspace still
+//! exists), else the default workspace [`DEFAULT_WORKSPACE`] in the data
+//! folder ([`data_dir`], which [`DATA_DIR_ENV`] can move). A value with a
 //! path separator, or one that starts with `.` or `~`, is a folder; any
 //! other value is a name in the data folder.
 
@@ -89,22 +90,45 @@ pub enum Location {
 impl Location {
     /// The workspace to open: `arg` when given (the program's
     /// `--workspace`), else the value of [`WORKSPACE_ENV`], else the
+    /// workspace the person last chose ([`Location::chosen`]), else the
     /// default workspace. Empty values count as not given.
     #[must_use]
     pub fn find(arg: Option<&str>) -> Self {
         let env = std::env::var(WORKSPACE_ENV).ok();
-        Self::choose(arg, env.as_deref())
+        let chosen = Self::chosen();
+        Self::choose_from(arg, env.as_deref(), chosen.as_deref())
     }
 
-    /// As [`Location::find`], with the environment's value passed in.
+    /// As [`Location::find`], with the environment's value passed in and
+    /// no personal choice.
     #[must_use]
     pub fn choose(arg: Option<&str>, env: Option<&str>) -> Self {
+        Self::choose_from(arg, env, None)
+    }
+
+    /// As [`Location::find`], with the environment's value and the
+    /// person's choice passed in.
+    #[must_use]
+    pub fn choose_from(arg: Option<&str>, env: Option<&str>, chosen: Option<&str>) -> Self {
         fn given(v: Option<&str>) -> Option<&str> {
             v.map(str::trim).filter(|v| !v.is_empty())
         }
         given(arg)
             .or_else(|| given(env))
+            .or_else(|| given(chosen))
             .map_or_else(|| Self::Named(DEFAULT_WORKSPACE.to_owned()), Self::parse)
+    }
+
+    /// The workspace the person last chose in the app or with `glyphkeel
+    /// workspace open` (the personal setting `workspace`), while it still
+    /// has a database; a workspace renamed or removed since is forgotten.
+    #[must_use]
+    pub fn chosen() -> Option<String> {
+        let chosen = crate::UserSettings::load_default().workspace?;
+        let layout = Self::parse(chosen.trim())
+            .layout(data_dir().as_deref())
+            .ok()?;
+        layout.database().is_file().then_some(chosen)
     }
 
     /// A folder when `value` has a path separator, starts with `.` or `~`,
@@ -292,7 +316,12 @@ impl WorkspaceLayout {
     }
 }
 
-fn check_name(name: &str) -> Result<()> {
+/// Checks that `name` can be a workspace's name: a folder name on every
+/// platform, of letters, digits, spaces, `-` and `_`, at most 64 long.
+///
+/// # Errors
+/// [`StoreError::InvalidName`] when it can't.
+pub fn check_name(name: &str) -> Result<()> {
     let ok = !name.is_empty()
         && name.chars().count() <= 64
         && !name.starts_with(['.', ' '])
@@ -464,6 +493,26 @@ mod tests {
         assert_eq!(
             Location::parse("~/ws"),
             Location::Path(PathBuf::from("~/ws"))
+        );
+    }
+
+    #[test]
+    fn the_chosen_workspace_comes_after_the_environment() {
+        assert_eq!(
+            Location::choose_from(None, None, Some("Side")),
+            Location::Named("Side".into())
+        );
+        assert_eq!(
+            Location::choose_from(None, Some("Env"), Some("Side")),
+            Location::Named("Env".into())
+        );
+        assert_eq!(
+            Location::choose_from(Some("Arg"), Some("Env"), Some("Side")),
+            Location::Named("Arg".into())
+        );
+        assert_eq!(
+            Location::choose_from(None, None, Some(" ")),
+            Location::Named(DEFAULT_WORKSPACE.into())
         );
     }
 

@@ -12,7 +12,8 @@
 //! ```text
 //! $XDG_CONFIG_HOME/glyphkeel/settings.json     (normally ~/.config/glyphkeel)
 //! {
-//!   "time_zone": "Europe/Berlin"
+//!   "time_zone": "Europe/Berlin",
+//!   "workspace": "Side project"
 //! }
 //! ```
 //!
@@ -20,6 +21,11 @@
 //!   reminder times and the days of time entries are counted: `"system"`
 //!   (the computer's zone; also when the field is left out) or an IANA name
 //!   such as `"Europe/Berlin"`. Stored times stay in UTC.
+//! - `workspace`: the workspace the person last opened in the app or chose
+//!   with `glyphkeel workspace open`, by name or folder. The app opens it,
+//!   and the command line and the agent server work in it unless told
+//!   another (see [`Location::find`](crate::Location::find)). Left out, it
+//!   is the default workspace.
 //!
 //! Fields this program doesn't know are kept when it writes the file, so an
 //! older and a newer program can share it. A missing or damaged file means
@@ -75,6 +81,10 @@ pub struct UserSettings {
     /// `"system"`, or an IANA zone name; `None` (left out) is `"system"`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub time_zone: Option<String>,
+    /// The workspace last chosen, by name or folder; `None` (left out) is
+    /// the default workspace.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace: Option<String>,
     /// Fields of other versions of the program, kept as they are.
     #[serde(flatten)]
     pub other: Map<String, Value>,
