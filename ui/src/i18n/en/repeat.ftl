@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Glyphkeel contributors
+
 ## Recurring tasks and templates.
 
 ## A rule in words. $interval is a number; $days a list of weekday names;

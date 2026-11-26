@@ -15,6 +15,8 @@ publish.workspace = true
 anyhow = { workspace = true }
 gk-api = { workspace = true }
 serde_json = { workspace = true }
+# The licence policy (licences.toml) and cargo-deny's list, for the notices.
+toml = { workspace = true }
 
 [lints]
 workspace = true

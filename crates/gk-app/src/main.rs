@@ -15,6 +15,7 @@ mod files;
 mod graphics;
 mod instance;
 mod ipc;
+mod legal;
 mod links;
 mod main_window;
 #[cfg(target_os = "linux")]
@@ -153,7 +154,8 @@ fn main() -> ExitCode {
             workspaces::create_workspace,
             workspaces::open_workspace,
             workspaces::rename_workspace,
-            quit_app
+            quit_app,
+            legal::legal_text
         ])
         // Attached images, by attachment ID, for the page's <img> elements.
         .register_asynchronous_uri_scheme_protocol(files::SCHEME, |ctx, request, responder| {

@@ -80,18 +80,63 @@ fn has_header(text: &str) -> bool {
     text.lines().take(5).any(|line| line.contains(SPDX))
 }
 
+/// File types the check covers: every kind of source, script, build file,
+/// translation, migration and packaging file. Left out are the formats that
+/// can't hold a comment (JSON, images) and data kept as it came: Markdown
+/// documents, test data (`.txt`, `.csv`, snapshots) and the generated
+/// notices.
+const EXTENSIONS: &[&str] = &[
+    // Code and styles.
+    "rs",
+    "ts",
+    "tsx",
+    "mts",
+    "cts",
+    "js",
+    "mjs",
+    "cjs",
+    "css",
+    "html",
+    "py",
+    "sh",
+    "ps1",
+    // Configuration and build files.
+    "toml",
+    "yaml",
+    "yml",
+    // Translations and database migrations.
+    "ftl",
+    "sql",
+    // Packaging: desktop entries, AppStream, Flatpak, Windows manifests and
+    // installer scripts.
+    "desktop",
+    "xml",
+    "flatpakref",
+    "flatpakrepo",
+    "manifest",
+    "nsh",
+    "nsi",
+];
+
+/// Files known by their whole name.
+const NAMES: &[&str] = &[
+    ".gitignore",
+    ".gitattributes",
+    "Containerfile",
+    "Dockerfile",
+];
+
 fn checked(path: &Path) -> bool {
     let name = path
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or_default();
-    if name.ends_with(".Containerfile") {
+    if name.ends_with(".Containerfile") || NAMES.contains(&name) {
         return true;
     }
-    matches!(
-        path.extension().and_then(|e| e.to_str()),
-        Some("rs" | "toml" | "sh" | "py" | "ts" | "tsx" | "js" | "css" | "yaml" | "yml")
-    )
+    path.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|ext| EXTENSIONS.contains(&ext))
 }
 
 /// Whether a file, relative to the root, is one the check covers.
@@ -191,6 +236,28 @@ mod tests {
     fn skipped_directories_files_and_extensions_are_left_out() {
         assert!(wanted(Path::new("crates/gk-core/src/lib.rs")));
         assert!(wanted(Path::new("ci/containers/fedora.Containerfile")));
+        for file in [
+            ".gitignore",
+            "ui/index.html",
+            "ui/scripts/check-bundle.mjs",
+            "ui/src/i18n/en/app.ftl",
+            "crates/gk-store/migrations/0001_initial.sql",
+            "crates/gk-app/packaging/glyphkeel.desktop",
+            "crates/gk-app/packaging/io.github.sorrelfox.Glyphkeel.metainfo.xml",
+            "crates/gk-app/packaging/windows/installer-hooks.nsh",
+            "crates/gk-app/packaging/windows/glyphkeel.manifest",
+            "crates/gk-app/packaging/flatpak/glyphkeel.flatpakref",
+        ] {
+            assert!(wanted(Path::new(file)), "{file}");
+        }
+        for file in [
+            "THIRD-PARTY-NOTICES.txt",
+            "crates/gk-engine/tests/csv/jira.csv",
+            "crates/gk-app/capabilities/main.json",
+            "crates/gk-app/icons/icon.png",
+        ] {
+            assert!(!wanted(Path::new(file)), "{file}");
+        }
         assert!(!wanted(Path::new("ui/node_modules/x/index.js")));
         assert!(!wanted(Path::new("third_party/a/lib.rs")));
         assert!(!wanted(Path::new("ui/src/styles/tokens.css")));

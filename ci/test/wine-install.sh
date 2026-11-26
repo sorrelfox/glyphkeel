@@ -68,6 +68,8 @@ install_dir=$(unix_path "$install_dir_win")
 echo "== the files"
 check "glyphkeel-app.exe is installed" [ -f "$install_dir/glyphkeel-app.exe" ]
 check "the uninstaller is installed" [ -f "$(unix_path "$uninstaller_win")" ]
+check "the licence is installed" [ -s "$install_dir/LICENSE.txt" ]
+check "the third-party notices are installed" [ -s "$install_dir/THIRD-PARTY-NOTICES.txt" ]
 find "$install_dir" -maxdepth 2 -type f | sed "s|^$install_dir/|  |"
 if [ "$install_dir_win" = "$expected_dir_win" ]; then
   pass "installed in %LOCALAPPDATA%\\Programs\\Glyphkeel, apart from the data"

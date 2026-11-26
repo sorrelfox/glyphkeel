@@ -126,6 +126,10 @@ modules:
       - install -Dm644 crates/gk-app/icons/128x128.png /app/share/icons/hicolor/128x128/apps/io.github.sorrelfox.Glyphkeel.png
       - install -Dm644 crates/gk-app/icons/256x256.png /app/share/icons/hicolor/256x256/apps/io.github.sorrelfox.Glyphkeel.png
       - install -Dm644 crates/gk-app/icons/icon.png /app/share/icons/hicolor/512x512/apps/io.github.sorrelfox.Glyphkeel.png
+      # The licence and the third-party notices, which Preferences › About
+      # shows.
+      - install -Dm644 LICENSE /app/share/licenses/io.github.sorrelfox.Glyphkeel/LICENSE
+      - install -Dm644 THIRD-PARTY-NOTICES.txt /app/share/licenses/io.github.sorrelfox.Glyphkeel/THIRD-PARTY-NOTICES.txt
     sources:
       # The repository this manifest lives in.
       - type: dir

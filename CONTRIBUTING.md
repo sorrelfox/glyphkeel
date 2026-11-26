@@ -44,6 +44,7 @@ embedded files (`pnpm dev` starts it; `pnpm tauri dev` starts both).
 | `cargo xtask ci` | Runs the full check suites in containers, on every supported distribution; see [Checks](#checks) |
 | `cargo xtask check-deps` | Checks the dependency rules below |
 | `cargo xtask check-headers` | Checks that every source file starts with the licence header |
+| `cargo xtask notices` | Writes `THIRD-PARTY-NOTICES.txt` and checks every shipped licence; `--check` fails when the file is out of date |
 
 ## Repository layout
 
@@ -202,11 +203,17 @@ A new dependency, Rust or JavaScript, needs a reason, written in the pull
 request and next to the dependency (a comment in `Cargo.toml`; the pull
 request for `package.json`, which has no comments).
 
-- **Licences:** shipped code must be compatible with GPL-3.0-or-later. For
-  crates, `cargo deny check` enforces the allowlist in `deny.toml`. Shipped npm
-  packages may use MIT, ISC, BSD-2-Clause, BSD-3-Clause, Apache-2.0, 0BSD,
-  MPL-2.0, Unicode-3.0, CC0-1.0, or OFL for fonts. Development-only tools may
+- **Licences:** shipped code must be compatible with GPL-3.0-or-later. The
+  allowlist is in `licences.toml`, and `cargo xtask notices --check` applies
+  it to every shipped crate, npm package and bundled component; `cargo deny
+  check` applies its copy in `deny.toml` to the crates, and the two lists
+  must stay the same. After a dependency changes, run `cargo xtask notices`
+  and commit the new `THIRD-PARTY-NOTICES.txt`. Development-only tools may
   use any open-source licence.
+- **Copied code:** code or data taken from another project goes under
+  `third_party/<name>/`, with a `PROVENANCE.md` (where it came from, which
+  version, what was changed) and the project's licence text. Test data taken
+  from elsewhere keeps the same two files next to it.
 - **npm supply chain** (`pnpm-workspace.yaml`): versions are exact, the
   lockfile is committed and installs are frozen, versions younger than seven
   days are refused, and install scripts never run unless allowed by name.

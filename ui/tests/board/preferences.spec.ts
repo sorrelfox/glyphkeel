@@ -8,7 +8,7 @@ const SMALLEST_WINDOW = { width: 760, height: 520 };
 
 const THEMES = ["Light", "Dark", "Slate", "Sand", "Contrast"] as const;
 const DENSITIES = ["Regular", "Compact"] as const;
-const PAGES = ["Appearance", "Time", "Notifications", "Workspace"] as const;
+const PAGES = ["Appearance", "Time", "Notifications", "Workspace", "About"] as const;
 
 async function openPreferences(page: Page): Promise<Locator> {
   // At this size the sidebar is hidden: open them from the main menu.
@@ -103,6 +103,34 @@ test("the theme tiles wrap instead of running out of the page", async ({ page })
   // At the smallest size they take two lines.
   expect(last.y).toBeGreaterThan(first.y + first.height);
   expect(await overflows(panel)).toEqual([]);
+});
+
+test("About shows the version, the licence and the third-party notices, which scroll by keys", async ({ page }) => {
+  await page.goto("/");
+  const dialog = await openPreferences(page);
+  await dialog.getByRole("tab", { name: "About" }).click();
+  const panel = dialog.getByRole("tabpanel", { name: "About" });
+  await expect(panel.getByTestId("about-version")).toHaveText(/^\d+\.\d+\.\d+/u);
+  await expect(panel.getByText(/GNU General Public License, version 3 or later/u)).toBeVisible();
+
+  await panel.getByRole("button", { name: "Show notices" }).click();
+  const text = panel.getByTestId("legal-text");
+  await expect(text).toContainText("Third-party notices for Glyphkeel");
+  await expect(text).toContainText("4. Licence texts");
+  // Back has the focus; the text is next, and scrolls by keys.
+  await expect(panel.getByRole("button", { name: "Back" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(text).toBeFocused();
+  await page.keyboard.press("End");
+  await expect.poll(() => text.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  // The text stays inside the page: the page itself doesn't scroll sideways.
+  expect(await panel.evaluate((root) => root.scrollWidth <= root.clientWidth + 1)).toBe(true);
+
+  await panel.getByRole("button", { name: "Back" }).click();
+  await panel.getByRole("button", { name: "Show licence" }).click();
+  await expect(panel.getByTestId("legal-text")).toContainText("GNU GENERAL PUBLIC LICENSE");
+  await panel.getByRole("button", { name: "Back" }).click();
+  await expect(panel.getByRole("button", { name: "Show notices" })).toBeVisible();
 });
 
 // ---------- choices drawn by the app, never by the platform ----------

@@ -56,7 +56,7 @@ const KEYRING: &[&str] = &[
 
 /// The targets the programs ship for. Dependencies that exist only on other
 /// targets (Tauri's mobile code, for example) never reach a release.
-const SHIPPED_TARGETS: &[&str] = &[
+pub(crate) const SHIPPED_TARGETS: &[&str] = &[
     "x86_64-unknown-linux-gnu",
     "aarch64-unknown-linux-gnu",
     "x86_64-pc-windows-msvc",
@@ -66,7 +66,7 @@ const SHIPPED_TARGETS: &[&str] = &[
 const DESKTOP_PACKAGES: &[&str] = &["gk-app"];
 
 /// The packages that build the shipped programs.
-const SHIPPED_PACKAGES: &[&str] = &["gk-cli", "gk-app"];
+pub(crate) const SHIPPED_PACKAGES: &[&str] = &["gk-cli", "gk-app"];
 
 pub(crate) fn run(root: &Path) -> Result<bool> {
     let graph = Graph::load(root)?;

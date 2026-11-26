@@ -106,7 +106,8 @@ pub(crate) fn prefix() -> String {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Suite {
     /// Formatting, licence headers, dependency rules, generated files,
-    /// clippy, ESLint, stylelint and the TypeScript check.
+    /// clippy, the third-party notices and their licences, ESLint, stylelint
+    /// and the TypeScript check.
     Static,
     /// Every Rust test.
     Rust,
@@ -175,8 +176,8 @@ impl Suite {
     fn about(self) -> &'static str {
         match self {
             Self::Static => {
-                "fmt, licence headers, dependency rules, generated files, clippy, ESLint, \
-                 stylelint, tsc"
+                "fmt, licence headers, dependency rules, generated files, clippy, \
+                 third-party notices and licences, ESLint, stylelint, tsc"
             }
             Self::Rust => "cargo test for the whole workspace",
             Self::Ui => {
@@ -253,6 +254,8 @@ impl Suite {
                     "-D",
                     "warnings",
                 ]),
+                // After clippy, which has fetched every crate's source.
+                Step::Notices,
                 Step::pnpm(&["lint"]),
                 Step::pnpm(&["typecheck"]),
             ],
@@ -722,6 +725,8 @@ enum Step {
     Headers,
     Deps,
     GenCheck,
+    /// THIRD-PARTY-NOTICES.txt is current and every licence is allowed.
+    Notices,
     /// The command line's completions and man page, for the packages.
     CliFiles,
     /// The built UI checked for remote addresses.
@@ -749,6 +754,7 @@ impl Step {
             Self::Headers => crate::headers::run(root),
             Self::Deps => crate::deps::run(root),
             Self::GenCheck => crate::codegen::run(root, &["--check".to_owned()]),
+            Self::Notices => crate::notices::run(root, &["--check".to_owned()]),
             Self::CliFiles => write_cli_files(root),
             Self::Bundle => crate::bundle::run(root, &[]),
             Self::Seed(set) => write_data_set(root, set),
@@ -769,6 +775,7 @@ impl fmt::Display for Step {
             Self::Headers => f.write_str("cargo xtask check-headers"),
             Self::Deps => f.write_str("cargo xtask check-deps"),
             Self::GenCheck => f.write_str("cargo xtask gen --check"),
+            Self::Notices => f.write_str("cargo xtask notices --check"),
             Self::CliFiles => write!(f, "glyphkeel completions and man into {CLI_FILES_DIR}"),
             Self::Bundle => f.write_str("cargo xtask check-bundle"),
             Self::Seed(set) => write!(f, "gk-seed --set {set} into {DATA_DIR}/{set}"),
@@ -1749,11 +1756,21 @@ mod tests {
 
     #[test]
     fn the_suites_check_generated_files_the_bundle_and_every_flow() {
+        let static_steps = Suite::Static.steps(None, &Flow::ALL, "en-XA");
+        assert!(static_steps.contains(&Step::GenCheck));
+        let notices = static_steps
+            .iter()
+            .position(|step| *step == Step::Notices)
+            .unwrap();
+        let clippy = static_steps
+            .iter()
+            .position(|step| step.to_string().starts_with("cargo clippy"))
+            .unwrap();
         assert!(
-            Suite::Static
-                .steps(None, &Flow::ALL, "en-XA")
-                .contains(&Step::GenCheck)
+            clippy < notices,
+            "the notices read the sources clippy fetched"
         );
+        assert_eq!(Step::Notices.to_string(), "cargo xtask notices --check");
         let ui: Vec<String> = Suite::Ui
             .steps(None, &Flow::ALL, "en-XA")
             .iter()

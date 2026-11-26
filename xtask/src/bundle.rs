@@ -37,7 +37,10 @@ const KNOWN_HOSTS: &[(&str, &str)] = &[
         "langium.org",
         "links in the diagram parser's error messages",
     ),
-    ("github.com", "links in libraries' error messages"),
+    (
+        "github.com",
+        "links in libraries' error messages, and the source code's address in About",
+    ),
     ("react.dev", "links in React's error messages"),
     ("rolldown.rs", "a link in the bundler's error message"),
     (
@@ -145,6 +148,8 @@ fn check_text(kind: Kind, text: &str) -> Vec<String> {
             .chars()
             .take_while(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
             .collect();
+        // The full stop of a sentence that ends with the address.
+        let host = host.trim_end_matches('.').to_owned();
         let shown = format!("{scheme}{host}");
         match kind {
             // Namespace names are fine in a page too (an SVG's xmlns);
@@ -222,6 +227,12 @@ mod tests {
         // A scheme joined to a name at run time is not an address.
         assert!(check_text(Kind::Script, "n=`http://`+t[0]").is_empty());
         assert!(!check_text(Kind::Script, "new WebSocket(`wss://evil.test`)").is_empty());
+        // An address at the end of a sentence is the host without the full stop.
+        assert!(check_text(Kind::Script, "`for example https://react.dev.`").is_empty());
+        assert_eq!(
+            check_text(Kind::Script, "`see https://cdn.example.net.`"),
+            ["names the unknown host https://cdn.example.net"]
+        );
     }
 
     #[test]

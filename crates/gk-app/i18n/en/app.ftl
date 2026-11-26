@@ -39,6 +39,11 @@ cli-install-nothing = There is no command-line tool to install: the shell finds 
 cli-install-exists = { $path } already exists and is not a link to this app's command-line tool. Remove it first, or keep using it.
 cli-install-failed = The link { $path } could not be made: { $reason }
 
+## Preferences › About
+
+# $file is a file name, such as THIRD-PARTY-NOTICES.txt.
+legal-text-missing = { $file } did not come with this copy of the app. It is also in the source code of Glyphkeel.
+
 ## File choosers
 
 chooser-cancel = _Cancel
