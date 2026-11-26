@@ -39,6 +39,7 @@ pub(crate) mod time;
 pub(crate) mod today;
 pub(crate) mod transfer;
 pub(crate) mod trash;
+pub(crate) mod version;
 pub(crate) mod view;
 pub(crate) mod wiki;
 pub(crate) mod workspace;
@@ -70,6 +71,7 @@ pub(crate) fn register(r: &mut Registry) {
     query::register(r);
     bulk::register(r);
     view::register(r);
+    version::register(r);
     schedule::register(r);
     list_layout::register(r);
     gantt_layout::register(r);

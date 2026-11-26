@@ -16,6 +16,7 @@ import { useToasts } from "../../components/Toasts";
 import { errorToast, useCommand, useOp, useUndo } from "../../data/hooks";
 import { defaultView, useListNames, useParsedQuery, useQueryFields, useSavedViews } from "../../data/list";
 import { useGanttLayout, useSchedule } from "../../data/schedule";
+import { markersOf, useVersions } from "../../data/versions";
 import { type GanttGrouping, type QueryProblem, type ReadOnlyReason, type SavedView, type Schedule, type ScheduleDependency } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { saveExport } from "../../ipc/exportFile";
@@ -135,6 +136,9 @@ function LoadedGantt({ project, openTask, onOpen, saved, views }: GanttViewProps
 
   const data = useSchedule({ project, includeSubprojects, query: running });
   const schedule = data.schedule;
+  // The project's versions with due dates show as markers.
+  const versionList = useVersions(project);
+  const versionMarkers = useMemo(() => markersOf(versionList.data?.items), [versionList.data]);
   const span = schedule ? chartSpan(schedule.range, schedule.today, layout.zoom) : undefined;
 
   // Groups by status follow the board's order; labels sort in the person's language.
@@ -455,6 +459,7 @@ function LoadedGantt({ project, openTask, onOpen, saved, views }: GanttViewProps
             }}
             onRange={setRange}
             onRefused={onRefused}
+            versions={versionMarkers}
           />
         </>
       )}

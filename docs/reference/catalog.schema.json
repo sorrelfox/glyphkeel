@@ -11724,6 +11724,1843 @@
       "summary": "Delete a label and take it off every task. Can't be undone."
     },
     {
+      "cli": "version list <project>",
+      "exposure": "data",
+      "id": "version.list",
+      "input": {
+        "$defs": {
+          "VersionStatus": {
+            "description": "Where a version stands.",
+            "oneOf": [
+              {
+                "const": "open",
+                "description": "Tasks can be planned for it (the default).",
+                "type": "string"
+              },
+              {
+                "const": "locked",
+                "description": "No new tasks; the tasks in it stay.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Finished; no new tasks.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Which versions to list.",
+        "properties": {
+          "include_tasks": {
+            "description": "Include each version's tasks, for the roadmap.",
+            "type": "boolean"
+          },
+          "own_only": {
+            "description": "Leave out the versions ancestors share with the project.",
+            "type": "boolean"
+          },
+          "project": {
+            "description": "The project (key or ID): its own versions and those its ancestors\nshare with it.",
+            "type": "string"
+          },
+          "status": {
+            "description": "Only versions with these statuses; default: all.",
+            "items": {
+              "$ref": "#/$defs/VersionStatus"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "title": "VersionListInput",
+        "type": "object"
+      },
+      "input_name": "VersionListInput",
+      "kind": "query",
+      "mcp_tool": "list_versions",
+      "output": {
+        "$defs": {
+          "Category": {
+            "description": "What a status means for the work in it.",
+            "oneOf": [
+              {
+                "const": "todo",
+                "description": "Not started.",
+                "type": "string"
+              },
+              {
+                "const": "in_progress",
+                "description": "Being worked on.",
+                "type": "string"
+              },
+              {
+                "const": "done",
+                "description": "Finished; closes the task.",
+                "type": "string"
+              },
+              {
+                "const": "cancelled",
+                "description": "Dropped; closes the task.",
+                "type": "string"
+              }
+            ]
+          },
+          "StatusRef": {
+            "additionalProperties": false,
+            "description": "A task's status, as tasks carry it.",
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/Category",
+                "description": "Its category."
+              },
+              "id": {
+                "description": "The status's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "category"
+            ],
+            "type": "object"
+          },
+          "Version": {
+            "additionalProperties": false,
+            "description": "A version.",
+            "properties": {
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "description": {
+                "description": "What it is for: plain text.",
+                "type": "string"
+              },
+              "due_date": {
+                "description": "When it is due (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "inherited": {
+                "description": "Whether it belongs to an ancestor project and is shared with this\none, when listed for a project.",
+                "type": "boolean"
+              },
+              "name": {
+                "description": "Its name, unique in its project (ignoring case).",
+                "type": "string"
+              },
+              "progress": {
+                "$ref": "#/$defs/VersionProgress",
+                "description": "Its progress."
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place among the project's versions.",
+                "type": "string"
+              },
+              "sharing": {
+                "$ref": "#/$defs/VersionSharing",
+                "description": "Which projects can plan tasks for it."
+              },
+              "start_date": {
+                "description": "When work on it starts (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/VersionStatus",
+                "description": "Where it stands."
+              },
+              "tasks": {
+                "description": "Its tasks, when asked for: top-level first by board order.",
+                "items": {
+                  "$ref": "#/$defs/VersionTask"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "description": "When it last changed.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "status",
+              "sharing",
+              "progress",
+              "rank",
+              "created_at",
+              "updated_at",
+              "id"
+            ],
+            "type": "object"
+          },
+          "VersionProgress": {
+            "additionalProperties": false,
+            "description": "How far a version has come.",
+            "properties": {
+              "closed": {
+                "description": "How many of them are closed.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "estimate_minutes": {
+                "description": "The tasks' estimates added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "percent": {
+                "description": "Done, in percent: each task's progress weighted by its estimate;\nclosed tasks count as 100 %, unestimated ones get the average weight.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "spent_minutes": {
+                "description": "The time logged on them, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "total": {
+                "description": "The tasks planned for it (not in the trash).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "total",
+              "closed",
+              "percent",
+              "estimate_minutes",
+              "spent_minutes"
+            ],
+            "type": "object"
+          },
+          "VersionSharing": {
+            "description": "Which projects can plan tasks for a version.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "Only its own project (the default).",
+                "type": "string"
+              },
+              {
+                "const": "descendants",
+                "description": "Its project and every sub-project below it.",
+                "type": "string"
+              }
+            ]
+          },
+          "VersionStatus": {
+            "description": "Where a version stands.",
+            "oneOf": [
+              {
+                "const": "open",
+                "description": "Tasks can be planned for it (the default).",
+                "type": "string"
+              },
+              {
+                "const": "locked",
+                "description": "No new tasks; the tasks in it stay.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Finished; no new tasks.",
+                "type": "string"
+              }
+            ]
+          },
+          "VersionTask": {
+            "additionalProperties": false,
+            "description": "A task of a version, as the roadmap lists it.",
+            "properties": {
+              "closed": {
+                "description": "Whether it is closed (done or cancelled).",
+                "type": "boolean"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "Its key.",
+                "type": "string"
+              },
+              "progress_percent": {
+                "description": "Its progress in percent.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "project": {
+                "description": "Its project's key.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/StatusRef",
+                "description": "Its status."
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              },
+              "type": {
+                "description": "Its type's name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "project",
+              "status",
+              "closed",
+              "type",
+              "progress_percent",
+              "id"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Versions: by due date (those without one last), then by their order.",
+        "properties": {
+          "items": {
+            "description": "The versions.",
+            "items": {
+              "$ref": "#/$defs/Version"
+            },
+            "type": "array"
+          },
+          "total": {
+            "description": "How many.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "unplanned": {
+            "description": "With `include_tasks`: the project's open tasks planned for no\nversion.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "VersionList",
+        "type": "object"
+      },
+      "output_name": "VersionList",
+      "safety": "read",
+      "summary": "The versions of a project and those its ancestors share with it, with status, dates and progress; with their tasks for the roadmap."
+    },
+    {
+      "cli": "version show <version>",
+      "exposure": "data",
+      "id": "version.get",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "One version to read.",
+        "properties": {
+          "project": {
+            "description": "With a name: the project (key or ID); its own versions come first,\nthen those shared with it.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "version": {
+            "description": "The version: its ID, or its name.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "VersionGetInput",
+        "type": "object"
+      },
+      "input_name": "VersionGetInput",
+      "kind": "query",
+      "mcp_tool": "get_version",
+      "output": {
+        "$defs": {
+          "Category": {
+            "description": "What a status means for the work in it.",
+            "oneOf": [
+              {
+                "const": "todo",
+                "description": "Not started.",
+                "type": "string"
+              },
+              {
+                "const": "in_progress",
+                "description": "Being worked on.",
+                "type": "string"
+              },
+              {
+                "const": "done",
+                "description": "Finished; closes the task.",
+                "type": "string"
+              },
+              {
+                "const": "cancelled",
+                "description": "Dropped; closes the task.",
+                "type": "string"
+              }
+            ]
+          },
+          "StatusRef": {
+            "additionalProperties": false,
+            "description": "A task's status, as tasks carry it.",
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/Category",
+                "description": "Its category."
+              },
+              "id": {
+                "description": "The status's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "category"
+            ],
+            "type": "object"
+          },
+          "VersionProgress": {
+            "additionalProperties": false,
+            "description": "How far a version has come.",
+            "properties": {
+              "closed": {
+                "description": "How many of them are closed.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "estimate_minutes": {
+                "description": "The tasks' estimates added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "percent": {
+                "description": "Done, in percent: each task's progress weighted by its estimate;\nclosed tasks count as 100 %, unestimated ones get the average weight.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "spent_minutes": {
+                "description": "The time logged on them, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "total": {
+                "description": "The tasks planned for it (not in the trash).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "total",
+              "closed",
+              "percent",
+              "estimate_minutes",
+              "spent_minutes"
+            ],
+            "type": "object"
+          },
+          "VersionSharing": {
+            "description": "Which projects can plan tasks for a version.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "Only its own project (the default).",
+                "type": "string"
+              },
+              {
+                "const": "descendants",
+                "description": "Its project and every sub-project below it.",
+                "type": "string"
+              }
+            ]
+          },
+          "VersionStatus": {
+            "description": "Where a version stands.",
+            "oneOf": [
+              {
+                "const": "open",
+                "description": "Tasks can be planned for it (the default).",
+                "type": "string"
+              },
+              {
+                "const": "locked",
+                "description": "No new tasks; the tasks in it stay.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Finished; no new tasks.",
+                "type": "string"
+              }
+            ]
+          },
+          "VersionTask": {
+            "additionalProperties": false,
+            "description": "A task of a version, as the roadmap lists it.",
+            "properties": {
+              "closed": {
+                "description": "Whether it is closed (done or cancelled).",
+                "type": "boolean"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "Its key.",
+                "type": "string"
+              },
+              "progress_percent": {
+                "description": "Its progress in percent.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "project": {
+                "description": "Its project's key.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/StatusRef",
+                "description": "Its status."
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              },
+              "type": {
+                "description": "Its type's name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "project",
+              "status",
+              "closed",
+              "type",
+              "progress_percent",
+              "id"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A version.",
+        "properties": {
+          "created_at": {
+            "description": "When it was created (RFC 3339, UTC).",
+            "type": "string"
+          },
+          "description": {
+            "description": "What it is for: plain text.",
+            "type": "string"
+          },
+          "due_date": {
+            "description": "When it is due (`YYYY-MM-DD`).",
+            "type": "string"
+          },
+          "id": {
+            "description": "Its ID.",
+            "type": "string"
+          },
+          "inherited": {
+            "description": "Whether it belongs to an ancestor project and is shared with this\none, when listed for a project.",
+            "type": "boolean"
+          },
+          "name": {
+            "description": "Its name, unique in its project (ignoring case).",
+            "type": "string"
+          },
+          "progress": {
+            "$ref": "#/$defs/VersionProgress",
+            "description": "Its progress."
+          },
+          "project": {
+            "description": "The key of the project it belongs to.",
+            "type": "string"
+          },
+          "rank": {
+            "description": "Its place among the project's versions.",
+            "type": "string"
+          },
+          "sharing": {
+            "$ref": "#/$defs/VersionSharing",
+            "description": "Which projects can plan tasks for it."
+          },
+          "start_date": {
+            "description": "When work on it starts (`YYYY-MM-DD`).",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/$defs/VersionStatus",
+            "description": "Where it stands."
+          },
+          "tasks": {
+            "description": "Its tasks, when asked for: top-level first by board order.",
+            "items": {
+              "$ref": "#/$defs/VersionTask"
+            },
+            "type": "array"
+          },
+          "updated_at": {
+            "description": "When it last changed.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "project",
+          "status",
+          "sharing",
+          "progress",
+          "rank",
+          "created_at",
+          "updated_at",
+          "id"
+        ],
+        "title": "Version",
+        "type": "object"
+      },
+      "output_name": "Version",
+      "safety": "read",
+      "summary": "One version with its progress and its tasks."
+    },
+    {
+      "cli": "version create",
+      "exposure": "data",
+      "id": "version.create",
+      "input": {
+        "$defs": {
+          "VersionSharing": {
+            "description": "Which projects can plan tasks for a version.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "Only its own project (the default).",
+                "type": "string"
+              },
+              {
+                "const": "descendants",
+                "description": "Its project and every sub-project below it.",
+                "type": "string"
+              }
+            ]
+          },
+          "VersionStatus": {
+            "description": "Where a version stands.",
+            "oneOf": [
+              {
+                "const": "open",
+                "description": "Tasks can be planned for it (the default).",
+                "type": "string"
+              },
+              {
+                "const": "locked",
+                "description": "No new tasks; the tasks in it stay.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Finished; no new tasks.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A new version.",
+        "properties": {
+          "description": {
+            "description": "What it is for: plain text, up to 4,000 characters.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "due_date": {
+            "description": "When it is due: `YYYY-MM-DD`, or `today`, `fri`, `+2w`, `dec 1`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "description": "Its name, up to 100 characters, unique in the project.",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project (key or ID).",
+            "type": "string"
+          },
+          "sharing": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/VersionSharing"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which projects can plan tasks for it; default: only its own."
+          },
+          "start_date": {
+            "description": "When work starts: `YYYY-MM-DD`, or `today`, `fri`, `+2w`, `dec 1`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/VersionStatus"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where it stands; default: open."
+          }
+        },
+        "required": [
+          "project",
+          "name"
+        ],
+        "title": "VersionCreateInput",
+        "type": "object"
+      },
+      "input_name": "VersionCreateInput",
+      "kind": "command",
+      "mcp_tool": "create_version",
+      "output": {
+        "$defs": {
+          "Category": {
+            "description": "What a status means for the work in it.",
+            "oneOf": [
+              {
+                "const": "todo",
+                "description": "Not started.",
+                "type": "string"
+              },
+              {
+                "const": "in_progress",
+                "description": "Being worked on.",
+                "type": "string"
+              },
+              {
+                "const": "done",
+                "description": "Finished; closes the task.",
+                "type": "string"
+              },
+              {
+                "const": "cancelled",
+                "description": "Dropped; closes the task.",
+                "type": "string"
+              }
+            ]
+          },
+          "StatusRef": {
+            "additionalProperties": false,
+            "description": "A task's status, as tasks carry it.",
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/Category",
+                "description": "Its category."
+              },
+              "id": {
+                "description": "The status's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "category"
+            ],
+            "type": "object"
+          },
+          "Version": {
+            "additionalProperties": false,
+            "description": "A version.",
+            "properties": {
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "description": {
+                "description": "What it is for: plain text.",
+                "type": "string"
+              },
+              "due_date": {
+                "description": "When it is due (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "inherited": {
+                "description": "Whether it belongs to an ancestor project and is shared with this\none, when listed for a project.",
+                "type": "boolean"
+              },
+              "name": {
+                "description": "Its name, unique in its project (ignoring case).",
+                "type": "string"
+              },
+              "progress": {
+                "$ref": "#/$defs/VersionProgress",
+                "description": "Its progress."
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place among the project's versions.",
+                "type": "string"
+              },
+              "sharing": {
+                "$ref": "#/$defs/VersionSharing",
+                "description": "Which projects can plan tasks for it."
+              },
+              "start_date": {
+                "description": "When work on it starts (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/VersionStatus",
+                "description": "Where it stands."
+              },
+              "tasks": {
+                "description": "Its tasks, when asked for: top-level first by board order.",
+                "items": {
+                  "$ref": "#/$defs/VersionTask"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "description": "When it last changed.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "status",
+              "sharing",
+              "progress",
+              "rank",
+              "created_at",
+              "updated_at",
+              "id"
+            ],
+            "type": "object"
+          },
+          "VersionProgress": {
+            "additionalProperties": false,
+            "description": "How far a version has come.",
+            "properties": {
+              "closed": {
+                "description": "How many of them are closed.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "estimate_minutes": {
+                "description": "The tasks' estimates added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "percent": {
+                "description": "Done, in percent: each task's progress weighted by its estimate;\nclosed tasks count as 100 %, unestimated ones get the average weight.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "spent_minutes": {
+                "description": "The time logged on them, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "total": {
+                "description": "The tasks planned for it (not in the trash).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "total",
+              "closed",
+              "percent",
+              "estimate_minutes",
+              "spent_minutes"
+            ],
+            "type": "object"
+          },
+          "VersionSharing": {
+            "description": "Which projects can plan tasks for a version.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "Only its own project (the default).",
+                "type": "string"
+              },
+              {
+                "const": "descendants",
+                "description": "Its project and every sub-project below it.",
+                "type": "string"
+              }
+            ]
+          },
+          "VersionStatus": {
+            "description": "Where a version stands.",
+            "oneOf": [
+              {
+                "const": "open",
+                "description": "Tasks can be planned for it (the default).",
+                "type": "string"
+              },
+              {
+                "const": "locked",
+                "description": "No new tasks; the tasks in it stay.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Finished; no new tasks.",
+                "type": "string"
+              }
+            ]
+          },
+          "VersionTask": {
+            "additionalProperties": false,
+            "description": "A task of a version, as the roadmap lists it.",
+            "properties": {
+              "closed": {
+                "description": "Whether it is closed (done or cancelled).",
+                "type": "boolean"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "Its key.",
+                "type": "string"
+              },
+              "progress_percent": {
+                "description": "Its progress in percent.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "project": {
+                "description": "Its project's key.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/StatusRef",
+                "description": "Its status."
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              },
+              "type": {
+                "description": "Its type's name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "project",
+              "status",
+              "closed",
+              "type",
+              "progress_percent",
+              "id"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A version after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether it was deleted.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "tasks_changed": {
+            "description": "The keys of the tasks whose version changed with it: moved on when\nit closed, or cleared by a deletion or new sharing.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "version": {
+            "$ref": "#/$defs/Version",
+            "description": "The version after the change (before it, for a deletion)."
+          },
+          "views_rewritten": {
+            "description": "The saved views whose query was rewritten because they named the\nversion (renamed or deleted), by name.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "VersionChange",
+        "type": "object"
+      },
+      "output_name": "VersionChange",
+      "safety": "write",
+      "summary": "Create a version of a project: name, description, status, start and due dates, and whether its sub-projects can use it."
+    },
+    {
+      "cli": "version edit <version>",
+      "exposure": "data",
+      "id": "version.update",
+      "input": {
+        "$defs": {
+          "VersionField": {
+            "description": "A version field that can be cleared.",
+            "oneOf": [
+              {
+                "const": "description",
+                "description": "The description.",
+                "type": "string"
+              },
+              {
+                "const": "start_date",
+                "description": "The start date.",
+                "type": "string"
+              },
+              {
+                "const": "due_date",
+                "description": "The due date.",
+                "type": "string"
+              }
+            ]
+          },
+          "VersionSharing": {
+            "description": "Which projects can plan tasks for a version.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "Only its own project (the default).",
+                "type": "string"
+              },
+              {
+                "const": "descendants",
+                "description": "Its project and every sub-project below it.",
+                "type": "string"
+              }
+            ]
+          },
+          "VersionStatus": {
+            "description": "Where a version stands.",
+            "oneOf": [
+              {
+                "const": "open",
+                "description": "Tasks can be planned for it (the default).",
+                "type": "string"
+              },
+              {
+                "const": "locked",
+                "description": "No new tasks; the tasks in it stay.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Finished; no new tasks.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Changes to a version; fields left out keep their value.",
+        "properties": {
+          "clear": {
+            "description": "Fields to clear.",
+            "items": {
+              "$ref": "#/$defs/VersionField"
+            },
+            "type": "array"
+          },
+          "description": {
+            "description": "A new description.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "due_date": {
+            "description": "A new due date.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "move_open_tasks_to": {
+            "description": "When closing it: plan its open tasks for this other open version (its\nname or ID) instead, or `none` to plan them for no version. Left\nout, open tasks stay in the closed version.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "description": "A new name; saved views that name the old one are rewritten.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "project": {
+            "description": "With a name: the version's project (key or ID).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sharing": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/VersionSharing"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "New sharing. Tasks of projects that no longer see the version lose\nit."
+          },
+          "start_date": {
+            "description": "A new start date.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/VersionStatus"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A new status."
+          },
+          "version": {
+            "description": "The version: its ID, or its name.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "VersionUpdateInput",
+        "type": "object"
+      },
+      "input_name": "VersionUpdateInput",
+      "kind": "command",
+      "mcp_tool": "update_version",
+      "output": {
+        "$defs": {
+          "Category": {
+            "description": "What a status means for the work in it.",
+            "oneOf": [
+              {
+                "const": "todo",
+                "description": "Not started.",
+                "type": "string"
+              },
+              {
+                "const": "in_progress",
+                "description": "Being worked on.",
+                "type": "string"
+              },
+              {
+                "const": "done",
+                "description": "Finished; closes the task.",
+                "type": "string"
+              },
+              {
+                "const": "cancelled",
+                "description": "Dropped; closes the task.",
+                "type": "string"
+              }
+            ]
+          },
+          "StatusRef": {
+            "additionalProperties": false,
+            "description": "A task's status, as tasks carry it.",
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/Category",
+                "description": "Its category."
+              },
+              "id": {
+                "description": "The status's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "category"
+            ],
+            "type": "object"
+          },
+          "Version": {
+            "additionalProperties": false,
+            "description": "A version.",
+            "properties": {
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "description": {
+                "description": "What it is for: plain text.",
+                "type": "string"
+              },
+              "due_date": {
+                "description": "When it is due (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "inherited": {
+                "description": "Whether it belongs to an ancestor project and is shared with this\none, when listed for a project.",
+                "type": "boolean"
+              },
+              "name": {
+                "description": "Its name, unique in its project (ignoring case).",
+                "type": "string"
+              },
+              "progress": {
+                "$ref": "#/$defs/VersionProgress",
+                "description": "Its progress."
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place among the project's versions.",
+                "type": "string"
+              },
+              "sharing": {
+                "$ref": "#/$defs/VersionSharing",
+                "description": "Which projects can plan tasks for it."
+              },
+              "start_date": {
+                "description": "When work on it starts (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/VersionStatus",
+                "description": "Where it stands."
+              },
+              "tasks": {
+                "description": "Its tasks, when asked for: top-level first by board order.",
+                "items": {
+                  "$ref": "#/$defs/VersionTask"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "description": "When it last changed.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "status",
+              "sharing",
+              "progress",
+              "rank",
+              "created_at",
+              "updated_at",
+              "id"
+            ],
+            "type": "object"
+          },
+          "VersionProgress": {
+            "additionalProperties": false,
+            "description": "How far a version has come.",
+            "properties": {
+              "closed": {
+                "description": "How many of them are closed.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "estimate_minutes": {
+                "description": "The tasks' estimates added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "percent": {
+                "description": "Done, in percent: each task's progress weighted by its estimate;\nclosed tasks count as 100 %, unestimated ones get the average weight.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "spent_minutes": {
+                "description": "The time logged on them, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "total": {
+                "description": "The tasks planned for it (not in the trash).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "total",
+              "closed",
+              "percent",
+              "estimate_minutes",
+              "spent_minutes"
+            ],
+            "type": "object"
+          },
+          "VersionSharing": {
+            "description": "Which projects can plan tasks for a version.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "Only its own project (the default).",
+                "type": "string"
+              },
+              {
+                "const": "descendants",
+                "description": "Its project and every sub-project below it.",
+                "type": "string"
+              }
+            ]
+          },
+          "VersionStatus": {
+            "description": "Where a version stands.",
+            "oneOf": [
+              {
+                "const": "open",
+                "description": "Tasks can be planned for it (the default).",
+                "type": "string"
+              },
+              {
+                "const": "locked",
+                "description": "No new tasks; the tasks in it stay.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Finished; no new tasks.",
+                "type": "string"
+              }
+            ]
+          },
+          "VersionTask": {
+            "additionalProperties": false,
+            "description": "A task of a version, as the roadmap lists it.",
+            "properties": {
+              "closed": {
+                "description": "Whether it is closed (done or cancelled).",
+                "type": "boolean"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "Its key.",
+                "type": "string"
+              },
+              "progress_percent": {
+                "description": "Its progress in percent.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "project": {
+                "description": "Its project's key.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/StatusRef",
+                "description": "Its status."
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              },
+              "type": {
+                "description": "Its type's name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "project",
+              "status",
+              "closed",
+              "type",
+              "progress_percent",
+              "id"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A version after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether it was deleted.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "tasks_changed": {
+            "description": "The keys of the tasks whose version changed with it: moved on when\nit closed, or cleared by a deletion or new sharing.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "version": {
+            "$ref": "#/$defs/Version",
+            "description": "The version after the change (before it, for a deletion)."
+          },
+          "views_rewritten": {
+            "description": "The saved views whose query was rewritten because they named the\nversion (renamed or deleted), by name.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "VersionChange",
+        "type": "object"
+      },
+      "output_name": "VersionChange",
+      "safety": "write",
+      "summary": "Rename a version, change its description, dates, sharing or status, or close it and move its open tasks to another version."
+    },
+    {
+      "cli": "version delete <version>",
+      "exposure": "data",
+      "id": "version.delete",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Which version to delete.",
+        "properties": {
+          "project": {
+            "description": "With a name: the version's project (key or ID).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "version": {
+            "description": "The version: its ID, or its name.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "VersionDeleteInput",
+        "type": "object"
+      },
+      "input_name": "VersionDeleteInput",
+      "kind": "command",
+      "mcp_tool": "delete_version",
+      "output": {
+        "$defs": {
+          "Category": {
+            "description": "What a status means for the work in it.",
+            "oneOf": [
+              {
+                "const": "todo",
+                "description": "Not started.",
+                "type": "string"
+              },
+              {
+                "const": "in_progress",
+                "description": "Being worked on.",
+                "type": "string"
+              },
+              {
+                "const": "done",
+                "description": "Finished; closes the task.",
+                "type": "string"
+              },
+              {
+                "const": "cancelled",
+                "description": "Dropped; closes the task.",
+                "type": "string"
+              }
+            ]
+          },
+          "StatusRef": {
+            "additionalProperties": false,
+            "description": "A task's status, as tasks carry it.",
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/Category",
+                "description": "Its category."
+              },
+              "id": {
+                "description": "The status's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "category"
+            ],
+            "type": "object"
+          },
+          "Version": {
+            "additionalProperties": false,
+            "description": "A version.",
+            "properties": {
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "description": {
+                "description": "What it is for: plain text.",
+                "type": "string"
+              },
+              "due_date": {
+                "description": "When it is due (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "inherited": {
+                "description": "Whether it belongs to an ancestor project and is shared with this\none, when listed for a project.",
+                "type": "boolean"
+              },
+              "name": {
+                "description": "Its name, unique in its project (ignoring case).",
+                "type": "string"
+              },
+              "progress": {
+                "$ref": "#/$defs/VersionProgress",
+                "description": "Its progress."
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place among the project's versions.",
+                "type": "string"
+              },
+              "sharing": {
+                "$ref": "#/$defs/VersionSharing",
+                "description": "Which projects can plan tasks for it."
+              },
+              "start_date": {
+                "description": "When work on it starts (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/VersionStatus",
+                "description": "Where it stands."
+              },
+              "tasks": {
+                "description": "Its tasks, when asked for: top-level first by board order.",
+                "items": {
+                  "$ref": "#/$defs/VersionTask"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "description": "When it last changed.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "status",
+              "sharing",
+              "progress",
+              "rank",
+              "created_at",
+              "updated_at",
+              "id"
+            ],
+            "type": "object"
+          },
+          "VersionProgress": {
+            "additionalProperties": false,
+            "description": "How far a version has come.",
+            "properties": {
+              "closed": {
+                "description": "How many of them are closed.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "estimate_minutes": {
+                "description": "The tasks' estimates added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "percent": {
+                "description": "Done, in percent: each task's progress weighted by its estimate;\nclosed tasks count as 100 %, unestimated ones get the average weight.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "spent_minutes": {
+                "description": "The time logged on them, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "total": {
+                "description": "The tasks planned for it (not in the trash).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "total",
+              "closed",
+              "percent",
+              "estimate_minutes",
+              "spent_minutes"
+            ],
+            "type": "object"
+          },
+          "VersionSharing": {
+            "description": "Which projects can plan tasks for a version.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "Only its own project (the default).",
+                "type": "string"
+              },
+              {
+                "const": "descendants",
+                "description": "Its project and every sub-project below it.",
+                "type": "string"
+              }
+            ]
+          },
+          "VersionStatus": {
+            "description": "Where a version stands.",
+            "oneOf": [
+              {
+                "const": "open",
+                "description": "Tasks can be planned for it (the default).",
+                "type": "string"
+              },
+              {
+                "const": "locked",
+                "description": "No new tasks; the tasks in it stay.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Finished; no new tasks.",
+                "type": "string"
+              }
+            ]
+          },
+          "VersionTask": {
+            "additionalProperties": false,
+            "description": "A task of a version, as the roadmap lists it.",
+            "properties": {
+              "closed": {
+                "description": "Whether it is closed (done or cancelled).",
+                "type": "boolean"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "Its key.",
+                "type": "string"
+              },
+              "progress_percent": {
+                "description": "Its progress in percent.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "project": {
+                "description": "Its project's key.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/StatusRef",
+                "description": "Its status."
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              },
+              "type": {
+                "description": "Its type's name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "project",
+              "status",
+              "closed",
+              "type",
+              "progress_percent",
+              "id"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A version after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether it was deleted.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "tasks_changed": {
+            "description": "The keys of the tasks whose version changed with it: moved on when\nit closed, or cleared by a deletion or new sharing.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "version": {
+            "$ref": "#/$defs/Version",
+            "description": "The version after the change (before it, for a deletion)."
+          },
+          "views_rewritten": {
+            "description": "The saved views whose query was rewritten because they named the\nversion (renamed or deleted), by name.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "VersionChange",
+        "type": "object"
+      },
+      "output_name": "VersionChange",
+      "safety": "write",
+      "summary": "Delete a version; its tasks are planned for no version. Revert brings both back."
+    },
+    {
       "cli": "field list",
       "exposure": "data",
       "id": "field.list",
@@ -13106,6 +14943,10 @@
                 "minimum": 0,
                 "type": "integer"
               },
+              "fix_version": {
+                "$ref": "#/$defs/VersionRef",
+                "description": "The version it is planned for."
+              },
               "id": {
                 "description": "The task's ID.",
                 "type": "string"
@@ -13285,6 +15126,59 @@
               "glyph"
             ],
             "type": "object"
+          },
+          "VersionRef": {
+            "additionalProperties": false,
+            "description": "A version as a task shows it.",
+            "properties": {
+              "due_date": {
+                "description": "Its due date (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/VersionStatus",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "status",
+              "id"
+            ],
+            "type": "object"
+          },
+          "VersionStatus": {
+            "description": "Where a version stands.",
+            "oneOf": [
+              {
+                "const": "open",
+                "description": "Tasks can be planned for it (the default).",
+                "type": "string"
+              },
+              {
+                "const": "locked",
+                "description": "No new tasks; the tasks in it stay.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Finished; no new tasks.",
+                "type": "string"
+              }
+            ]
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -14418,6 +16312,10 @@
                 },
                 "type": "array"
               },
+              "fix_version": {
+                "$ref": "#/$defs/VersionRef",
+                "description": "The version (release) it is planned for."
+              },
               "id": {
                 "description": "The task's ID.",
                 "type": "string"
@@ -14724,6 +16622,59 @@
             ],
             "type": "object"
           },
+          "VersionRef": {
+            "additionalProperties": false,
+            "description": "A version as a task shows it.",
+            "properties": {
+              "due_date": {
+                "description": "Its due date (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/VersionStatus",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "status",
+              "id"
+            ],
+            "type": "object"
+          },
+          "VersionStatus": {
+            "description": "Where a version stands.",
+            "oneOf": [
+              {
+                "const": "open",
+                "description": "Tasks can be planned for it (the default).",
+                "type": "string"
+              },
+              {
+                "const": "locked",
+                "description": "No new tasks; the tasks in it stay.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Finished; no new tasks.",
+                "type": "string"
+              }
+            ]
+          },
           "Via": {
             "description": "The program a change came through.",
             "oneOf": [
@@ -14911,6 +16862,13 @@
             "additionalProperties": true,
             "description": "Custom field values, by field name, query name or ID (see\n`field.list`): a string, a number, `true`/`false`, or a list of\noptions for a multi-select field. Fields with a default get it\nunless given here; a required field needs a value.",
             "type": "object"
+          },
+          "fix_version": {
+            "description": "The version it is planned for (name or ID): an open version of the\nproject or one shared with it.",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "labels": {
             "description": "Labels, by name or ID.",
@@ -16040,6 +17998,10 @@
                 },
                 "type": "array"
               },
+              "fix_version": {
+                "$ref": "#/$defs/VersionRef",
+                "description": "The version (release) it is planned for."
+              },
               "id": {
                 "description": "The task's ID.",
                 "type": "string"
@@ -16346,6 +18308,59 @@
             ],
             "type": "object"
           },
+          "VersionRef": {
+            "additionalProperties": false,
+            "description": "A version as a task shows it.",
+            "properties": {
+              "due_date": {
+                "description": "Its due date (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/VersionStatus",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "status",
+              "id"
+            ],
+            "type": "object"
+          },
+          "VersionStatus": {
+            "description": "Where a version stands.",
+            "oneOf": [
+              {
+                "const": "open",
+                "description": "Tasks can be planned for it (the default).",
+                "type": "string"
+              },
+              {
+                "const": "locked",
+                "description": "No new tasks; the tasks in it stay.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Finished; no new tasks.",
+                "type": "string"
+              }
+            ]
+          },
           "Via": {
             "description": "The program a change came through.",
             "oneOf": [
@@ -16551,6 +18566,11 @@
                 "const": "labels",
                 "description": "Every label.",
                 "type": "string"
+              },
+              {
+                "const": "fix_version",
+                "description": "The version it is planned for.",
+                "type": "string"
               }
             ]
           },
@@ -16639,6 +18659,13 @@
             "additionalProperties": true,
             "description": "Custom field values to set, by field name, query name or ID: a\nstring, a number, `true`/`false`, a list of options for a\nmulti-select field, or `null` to clear the value.",
             "type": "object"
+          },
+          "fix_version": {
+            "description": "Plan it for this version (name or ID): an open version of the\nproject or one shared with it.",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "key": {
             "description": "The task: its key or ID.",
@@ -17804,6 +19831,10 @@
                 },
                 "type": "array"
               },
+              "fix_version": {
+                "$ref": "#/$defs/VersionRef",
+                "description": "The version (release) it is planned for."
+              },
               "id": {
                 "description": "The task's ID.",
                 "type": "string"
@@ -18109,6 +20140,59 @@
               "glyph"
             ],
             "type": "object"
+          },
+          "VersionRef": {
+            "additionalProperties": false,
+            "description": "A version as a task shows it.",
+            "properties": {
+              "due_date": {
+                "description": "Its due date (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/VersionStatus",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "status",
+              "id"
+            ],
+            "type": "object"
+          },
+          "VersionStatus": {
+            "description": "Where a version stands.",
+            "oneOf": [
+              {
+                "const": "open",
+                "description": "Tasks can be planned for it (the default).",
+                "type": "string"
+              },
+              {
+                "const": "locked",
+                "description": "No new tasks; the tasks in it stay.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Finished; no new tasks.",
+                "type": "string"
+              }
+            ]
           },
           "Via": {
             "description": "The program a change came through.",
@@ -19383,6 +21467,10 @@
                 },
                 "type": "array"
               },
+              "fix_version": {
+                "$ref": "#/$defs/VersionRef",
+                "description": "The version (release) it is planned for."
+              },
               "id": {
                 "description": "The task's ID.",
                 "type": "string"
@@ -19689,6 +21777,59 @@
             ],
             "type": "object"
           },
+          "VersionRef": {
+            "additionalProperties": false,
+            "description": "A version as a task shows it.",
+            "properties": {
+              "due_date": {
+                "description": "Its due date (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/VersionStatus",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "status",
+              "id"
+            ],
+            "type": "object"
+          },
+          "VersionStatus": {
+            "description": "Where a version stands.",
+            "oneOf": [
+              {
+                "const": "open",
+                "description": "Tasks can be planned for it (the default).",
+                "type": "string"
+              },
+              {
+                "const": "locked",
+                "description": "No new tasks; the tasks in it stay.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Finished; no new tasks.",
+                "type": "string"
+              }
+            ]
+          },
           "Via": {
             "description": "The program a change came through.",
             "oneOf": [
@@ -19904,6 +22045,14 @@
               "$ref": "#/$defs/MoveMatch"
             },
             "type": "array"
+          },
+          "versions": {
+            "default": [],
+            "description": "The versions they are planned for. The target is the same version\nwhen the target project can plan tasks for it; absent when the move\nwould take it off.",
+            "items": {
+              "$ref": "#/$defs/MoveMatch"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -19913,6 +22062,7 @@
           "types",
           "labels",
           "fields",
+          "versions",
           "fallback_status",
           "fallback_type"
         ],
@@ -20166,6 +22316,13 @@
                   "null"
                 ]
               },
+              "fix_version": {
+                "description": "Plan them for the version of this name (in each task's project,\nor shared with it).",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "labels": {
                 "description": "Replace the labels with these.",
                 "items": {
@@ -20344,6 +22501,11 @@
               {
                 "const": "labels",
                 "description": "Every label.",
+                "type": "string"
+              },
+              {
+                "const": "fix_version",
+                "description": "The version it is planned for.",
                 "type": "string"
               }
             ]
@@ -21642,6 +23804,10 @@
                 },
                 "type": "array"
               },
+              "fix_version": {
+                "$ref": "#/$defs/VersionRef",
+                "description": "The version (release) it is planned for."
+              },
               "id": {
                 "description": "The task's ID.",
                 "type": "string"
@@ -21947,6 +24113,59 @@
               "glyph"
             ],
             "type": "object"
+          },
+          "VersionRef": {
+            "additionalProperties": false,
+            "description": "A version as a task shows it.",
+            "properties": {
+              "due_date": {
+                "description": "Its due date (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/VersionStatus",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "status",
+              "id"
+            ],
+            "type": "object"
+          },
+          "VersionStatus": {
+            "description": "Where a version stands.",
+            "oneOf": [
+              {
+                "const": "open",
+                "description": "Tasks can be planned for it (the default).",
+                "type": "string"
+              },
+              {
+                "const": "locked",
+                "description": "No new tasks; the tasks in it stay.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Finished; no new tasks.",
+                "type": "string"
+              }
+            ]
           },
           "Via": {
             "description": "The program a change came through.",
@@ -23166,6 +25385,10 @@
                 },
                 "type": "array"
               },
+              "fix_version": {
+                "$ref": "#/$defs/VersionRef",
+                "description": "The version (release) it is planned for."
+              },
               "id": {
                 "description": "The task's ID.",
                 "type": "string"
@@ -23471,6 +25694,59 @@
               "glyph"
             ],
             "type": "object"
+          },
+          "VersionRef": {
+            "additionalProperties": false,
+            "description": "A version as a task shows it.",
+            "properties": {
+              "due_date": {
+                "description": "Its due date (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/VersionStatus",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "status",
+              "id"
+            ],
+            "type": "object"
+          },
+          "VersionStatus": {
+            "description": "Where a version stands.",
+            "oneOf": [
+              {
+                "const": "open",
+                "description": "Tasks can be planned for it (the default).",
+                "type": "string"
+              },
+              {
+                "const": "locked",
+                "description": "No new tasks; the tasks in it stay.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Finished; no new tasks.",
+                "type": "string"
+              }
+            ]
           },
           "Via": {
             "description": "The program a change came through.",
@@ -24927,6 +27203,10 @@
                 },
                 "type": "array"
               },
+              "fix_version": {
+                "$ref": "#/$defs/VersionRef",
+                "description": "The version (release) it is planned for."
+              },
               "id": {
                 "description": "The task's ID.",
                 "type": "string"
@@ -25232,6 +27512,59 @@
               "glyph"
             ],
             "type": "object"
+          },
+          "VersionRef": {
+            "additionalProperties": false,
+            "description": "A version as a task shows it.",
+            "properties": {
+              "due_date": {
+                "description": "Its due date (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/VersionStatus",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "status",
+              "id"
+            ],
+            "type": "object"
+          },
+          "VersionStatus": {
+            "description": "Where a version stands.",
+            "oneOf": [
+              {
+                "const": "open",
+                "description": "Tasks can be planned for it (the default).",
+                "type": "string"
+              },
+              {
+                "const": "locked",
+                "description": "No new tasks; the tasks in it stay.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Finished; no new tasks.",
+                "type": "string"
+              }
+            ]
           },
           "Via": {
             "description": "The program a change came through.",
@@ -26431,6 +28764,10 @@
                 },
                 "type": "array"
               },
+              "fix_version": {
+                "$ref": "#/$defs/VersionRef",
+                "description": "The version (release) it is planned for."
+              },
               "id": {
                 "description": "The task's ID.",
                 "type": "string"
@@ -26736,6 +29073,59 @@
               "glyph"
             ],
             "type": "object"
+          },
+          "VersionRef": {
+            "additionalProperties": false,
+            "description": "A version as a task shows it.",
+            "properties": {
+              "due_date": {
+                "description": "Its due date (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/VersionStatus",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "status",
+              "id"
+            ],
+            "type": "object"
+          },
+          "VersionStatus": {
+            "description": "Where a version stands.",
+            "oneOf": [
+              {
+                "const": "open",
+                "description": "Tasks can be planned for it (the default).",
+                "type": "string"
+              },
+              {
+                "const": "locked",
+                "description": "No new tasks; the tasks in it stay.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Finished; no new tasks.",
+                "type": "string"
+              }
+            ]
           },
           "Via": {
             "description": "The program a change came through.",
@@ -27928,6 +30318,10 @@
                 },
                 "type": "array"
               },
+              "fix_version": {
+                "$ref": "#/$defs/VersionRef",
+                "description": "The version (release) it is planned for."
+              },
               "id": {
                 "description": "The task's ID.",
                 "type": "string"
@@ -28233,6 +30627,59 @@
               "glyph"
             ],
             "type": "object"
+          },
+          "VersionRef": {
+            "additionalProperties": false,
+            "description": "A version as a task shows it.",
+            "properties": {
+              "due_date": {
+                "description": "Its due date (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/VersionStatus",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "status",
+              "id"
+            ],
+            "type": "object"
+          },
+          "VersionStatus": {
+            "description": "Where a version stands.",
+            "oneOf": [
+              {
+                "const": "open",
+                "description": "Tasks can be planned for it (the default).",
+                "type": "string"
+              },
+              {
+                "const": "locked",
+                "description": "No new tasks; the tasks in it stay.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Finished; no new tasks.",
+                "type": "string"
+              }
+            ]
           },
           "Via": {
             "description": "The program a change came through.",
@@ -29468,6 +31915,10 @@
                 },
                 "type": "array"
               },
+              "fix_version": {
+                "$ref": "#/$defs/VersionRef",
+                "description": "The version (release) it is planned for."
+              },
               "id": {
                 "description": "The task's ID.",
                 "type": "string"
@@ -29773,6 +32224,59 @@
               "glyph"
             ],
             "type": "object"
+          },
+          "VersionRef": {
+            "additionalProperties": false,
+            "description": "A version as a task shows it.",
+            "properties": {
+              "due_date": {
+                "description": "Its due date (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/VersionStatus",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "status",
+              "id"
+            ],
+            "type": "object"
+          },
+          "VersionStatus": {
+            "description": "Where a version stands.",
+            "oneOf": [
+              {
+                "const": "open",
+                "description": "Tasks can be planned for it (the default).",
+                "type": "string"
+              },
+              {
+                "const": "locked",
+                "description": "No new tasks; the tasks in it stay.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Finished; no new tasks.",
+                "type": "string"
+              }
+            ]
           },
           "Via": {
             "description": "The program a change came through.",
@@ -31008,6 +33512,10 @@
                 },
                 "type": "array"
               },
+              "fix_version": {
+                "$ref": "#/$defs/VersionRef",
+                "description": "The version (release) it is planned for."
+              },
               "id": {
                 "description": "The task's ID.",
                 "type": "string"
@@ -31313,6 +33821,59 @@
               "glyph"
             ],
             "type": "object"
+          },
+          "VersionRef": {
+            "additionalProperties": false,
+            "description": "A version as a task shows it.",
+            "properties": {
+              "due_date": {
+                "description": "Its due date (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/VersionStatus",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "status",
+              "id"
+            ],
+            "type": "object"
+          },
+          "VersionStatus": {
+            "description": "Where a version stands.",
+            "oneOf": [
+              {
+                "const": "open",
+                "description": "Tasks can be planned for it (the default).",
+                "type": "string"
+              },
+              {
+                "const": "locked",
+                "description": "No new tasks; the tasks in it stay.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Finished; no new tasks.",
+                "type": "string"
+              }
+            ]
           },
           "Via": {
             "description": "The program a change came through.",
@@ -36718,6 +39279,10 @@
                 "minimum": 0,
                 "type": "integer"
               },
+              "fix_version": {
+                "$ref": "#/$defs/VersionRef",
+                "description": "The version it is planned for."
+              },
               "id": {
                 "description": "The task's ID.",
                 "type": "string"
@@ -37107,6 +39672,59 @@
               "glyph"
             ],
             "type": "object"
+          },
+          "VersionRef": {
+            "additionalProperties": false,
+            "description": "A version as a task shows it.",
+            "properties": {
+              "due_date": {
+                "description": "Its due date (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/VersionStatus",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "status",
+              "id"
+            ],
+            "type": "object"
+          },
+          "VersionStatus": {
+            "description": "Where a version stands.",
+            "oneOf": [
+              {
+                "const": "open",
+                "description": "Tasks can be planned for it (the default).",
+                "type": "string"
+              },
+              {
+                "const": "locked",
+                "description": "No new tasks; the tasks in it stay.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Finished; no new tasks.",
+                "type": "string"
+              }
+            ]
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",

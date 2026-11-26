@@ -3,7 +3,7 @@
 
 //! Keeping saved queries in step with the names they use.
 //!
-//! When a status, type, label or project key is renamed, [`rename`]
+//! When a status, type, label, version or project key is renamed, [`rename`]
 //! rewrites only the values that name it and leaves the rest of the text as
 //! the person wrote it. When a label is deleted, [`remove_label`] takes it
 //! out of the query and prints the rest in its normal form.
@@ -69,7 +69,10 @@ fn predicate(p: &Predicate, kind: NameKind, old: &str, new: &str, edits: &mut Ve
         let renamed = match (kind, field.ty) {
             (NameKind::Status, FieldType::Status)
             | (NameKind::Type, FieldType::Type)
-            | (NameKind::Label, FieldType::Label) => same_name(text, old).then(|| new.to_owned()),
+            | (NameKind::Label, FieldType::Label)
+            | (NameKind::Version, FieldType::Version) => {
+                same_name(text, old).then(|| new.to_owned())
+            }
             (NameKind::Project, FieldType::Project) => match text.strip_suffix("/*") {
                 Some(key) if key.eq_ignore_ascii_case(old) => Some(format!("{new}/*")),
                 None if text.eq_ignore_ascii_case(old) => Some(new.to_owned()),
@@ -122,12 +125,23 @@ fn written(text: &str, quoted: bool) -> String {
 /// form. `None` when the query doesn't use the label or doesn't parse.
 #[must_use]
 pub fn remove_label(src: &str, name: &str) -> Option<String> {
+    remove_name(src, FieldType::Label, name)
+}
+
+/// `src` without the version `name` (any case), as [`remove_label`] takes
+/// out a label.
+#[must_use]
+pub fn remove_version(src: &str, name: &str) -> Option<String> {
+    remove_name(src, FieldType::Version, name)
+}
+
+fn remove_name(src: &str, ty: FieldType, name: &str) -> Option<String> {
     let query = parse(src).ok()?;
     let mut removed = false;
     let filter = query
         .filter
         .clone()
-        .and_then(|f| without_label(f, name, &mut removed));
+        .and_then(|f| without_label(f, ty, name, &mut removed));
     if !removed {
         return None;
     }
@@ -137,12 +151,12 @@ pub fn remove_label(src: &str, name: &str) -> Option<String> {
     }))
 }
 
-fn without_label(e: Expr, name: &str, removed: &mut bool) -> Option<Expr> {
+fn without_label(e: Expr, ty: FieldType, name: &str, removed: &mut bool) -> Option<Expr> {
     match e {
         Expr::And(items) => {
             let mut kept: Vec<Expr> = items
                 .into_iter()
-                .filter_map(|i| without_label(i, name, removed))
+                .filter_map(|i| without_label(i, ty, name, removed))
                 .collect();
             match kept.len() {
                 0 => None,
@@ -153,7 +167,7 @@ fn without_label(e: Expr, name: &str, removed: &mut bool) -> Option<Expr> {
         Expr::Or(items) => {
             let mut kept: Vec<Expr> = items
                 .into_iter()
-                .filter_map(|i| without_label(i, name, removed))
+                .filter_map(|i| without_label(i, ty, name, removed))
                 .collect();
             match kept.len() {
                 0 => None,
@@ -162,13 +176,13 @@ fn without_label(e: Expr, name: &str, removed: &mut bool) -> Option<Expr> {
             }
         }
         Expr::Not(inner, negation, span) => {
-            without_label(*inner, name, removed).map(|i| Expr::Not(Box::new(i), negation, span))
+            without_label(*inner, ty, name, removed).map(|i| Expr::Not(Box::new(i), negation, span))
         }
         Expr::Group(inner, span) => {
-            without_label(*inner, name, removed).map(|i| Expr::Group(Box::new(i), span))
+            without_label(*inner, ty, name, removed).map(|i| Expr::Group(Box::new(i), span))
         }
         Expr::Pred(mut p) => {
-            if fields::find(&p.field).is_some_and(|f| f.ty == FieldType::Label) {
+            if fields::find(&p.field).is_some_and(|f| f.ty == ty) {
                 let before = p.values.len();
                 p.values.retain(|v| match &v.kind {
                     ValueKind::Word { text, .. } => !same_name(text, name),
@@ -374,6 +388,25 @@ fn prune_values(e: Expr, change: &mut dyn FnMut(&mut Predicate)) -> Option<Expr>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn versions_are_renamed_and_removed() {
+        assert_eq!(
+            rename(
+                "version:1.0,\"2.0 beta\" label:1.0",
+                NameKind::Version,
+                "1.0",
+                "1.0.1"
+            )
+            .as_deref(),
+            Some("version:1.0.1,\"2.0 beta\" label:1.0")
+        );
+        assert_eq!(
+            remove_version("version:1.0 is:open", "1.0").as_deref(),
+            Some("is:open")
+        );
+        assert_eq!(remove_version("label:1.0", "1.0"), None);
+    }
 
     #[test]
     fn a_renamed_custom_field_is_renamed_in_conditions_and_sort_keys() {

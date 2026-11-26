@@ -19,7 +19,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 use crate::error::{Result, StoreError};
 
 /// The schema version this program is built for.
-pub const SCHEMA_VERSION: i64 = 11;
+pub const SCHEMA_VERSION: i64 = 12;
 
 /// One migration: the SQL that takes the schema from `version - 1` to
 /// `version`.
@@ -74,6 +74,10 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 11,
         sql: include_str!("../migrations/0011_custom_fields.sql"),
+    },
+    Migration {
+        version: 12,
+        sql: include_str!("../migrations/0012_versions.sql"),
     },
 ];
 
@@ -572,6 +576,45 @@ mod tests {
     }
 
     #[test]
+    fn version_12_adds_versions_and_plans_no_task_for_one() {
+        let mut conn = memory();
+        let before = MIGRATIONS.iter().position(|m| m.version == 12).unwrap();
+        migrate(&mut conn, &MIGRATIONS[..before], |_| Ok(())).unwrap();
+        conn.execute_batch(
+            "INSERT INTO projects (id, rank, key, name, name_fold, hue, modules, created_at,
+                                   updated_at)
+             VALUES (x'01010101010101010101010101010101', 'i', 'WK', 'WK', 'wk', 'blue', '{}',
+                     0, 0);",
+        )
+        .unwrap();
+        migrate(&mut conn, MIGRATIONS, |_| Ok(())).unwrap();
+        assert!(user_version(&conn).unwrap() >= 12);
+        let add = |id: u8, name: &str, status: &str| {
+            conn.execute(
+                "INSERT INTO versions (id, project_id, name, name_fold, status, rank, created_at,
+                                       updated_at)
+                 VALUES (?1, x'01010101010101010101010101010101', ?2, lower(?2), ?3, 'i', 0, 0)",
+                rusqlite::params![vec![id; 16], name, status],
+            )
+        };
+        add(2, "1.0", "open").unwrap();
+        assert!(
+            add(3, "1.0", "open").is_err(),
+            "names are unique per project"
+        );
+        assert!(add(4, "2.0", "done").is_err(), "open, locked or closed");
+        add(5, "2.0", "locked").unwrap();
+        let columns: i64 = conn
+            .query_row(
+                "SELECT count(*) FROM pragma_table_info('tasks') WHERE name = 'fix_version_id'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(columns, 1);
+    }
+
+    #[test]
     fn version_11_keeps_values_with_their_task_and_field() {
         let mut conn = memory();
         migrate(&mut conn, &MIGRATIONS[..10], |_| Ok(())).unwrap();
@@ -594,7 +637,7 @@ mod tests {
                      x'03030303030303030303030303030303', 'i', 0, 'user', 'me', 0, 0);",
         )
         .unwrap();
-        migrate(&mut conn, MIGRATIONS, |_| Ok(())).unwrap();
+        migrate(&mut conn, &MIGRATIONS[..11], |_| Ok(())).unwrap();
         assert_eq!(user_version(&conn).unwrap(), 11);
         conn.execute_batch(
             "INSERT INTO custom_fields (id, project_id, name, name_fold, query_name, kind, rank,
