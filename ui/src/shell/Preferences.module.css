@@ -486,3 +486,24 @@
   padding-inline: 14px;
   color: var(--fg-muted);
 }
+
+.lead {
+  margin-block: 0 8px;
+}
+
+/* A kind of work: its name, how many entries use it, archived, delete. */
+.kindRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 6px 14px;
+}
+
+.kindName {
+  flex: 1 1 12rem;
+}
+
+.kindUses {
+  min-inline-size: max-content;
+}

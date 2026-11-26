@@ -369,6 +369,71 @@ fn mistakes_and_unknown_names_are_errors_with_choices() {
 }
 
 #[test]
+fn history_conditions_are_answered_from_the_activity() {
+    let (_dir, e) = workspace();
+    call(
+        &e,
+        "task.move",
+        json!({ "key": "TM-1", "status": "In progress" }),
+    );
+    call(&e, "task.move", json!({ "key": "TM-1", "status": "To do" }));
+    call(&e, "task.update", json!({ "key": "TM-1", "type": "Task" }));
+    call(
+        &e,
+        "task.update",
+        json!({ "key": "TM-2", "labels": ["ui"], "priority": "low" }),
+    );
+    let agent = agent_of(&e, Profile::Standard);
+    e.call(
+        &agent,
+        "task.update",
+        json!({ "key": "TM-4", "due_date": "2026-12-05" }),
+    )
+    .unwrap();
+    // TM-1's changes were a month ago.
+    e.store()
+        .write("test.history", |tx| {
+            tx.execute(
+                "UPDATE activity SET at = ?1 WHERE entity_kind = 'task'
+                    AND entity_id = (SELECT id FROM tasks WHERE number = 1
+                        AND project_id = (SELECT id FROM projects WHERE key = 'TM'))",
+                params![NOW - 30 * 86_400_000],
+            )?;
+            Ok::<_, Failure>(())
+        })
+        .unwrap();
+
+    assert_eq!(find(&e, "was:status:\"in progress\""), v(&["TM-1"]));
+    assert_eq!(find(&e, "was:status:Done"), v(&["TM-3"]));
+    assert_eq!(find(&e, "was:category:in_progress"), v(&["TM-1"]));
+    assert_eq!(
+        find(&e, "project:TM -was:status:\"In progress\""),
+        v(&["TM-2", "TM-3", "TM-4", "TM-5"])
+    );
+    assert_eq!(find(&e, "was:type:Bug"), v(&["TM-1"]));
+    assert_eq!(find(&e, "type:Bug"), Vec::<String>::new());
+    assert_eq!(find(&e, "was:label:crash"), v(&["TM-2"]));
+    assert_eq!(find(&e, "was:priority:urgent"), v(&["TM-2"]));
+    assert_eq!(find(&e, "was:priority:low"), v(&["SITE-1", "TM-2"]));
+
+    // Creation is not a change.
+    assert_eq!(find(&e, "changed:status"), v(&["TM-1", "TM-3"]));
+    assert_eq!(find(&e, "changed:status>-7d"), v(&["TM-3"]));
+    assert_eq!(find(&e, "changed:status<-7d"), v(&["TM-1"]));
+    assert_eq!(find(&e, "changed:due"), v(&["TM-4"]));
+    assert_eq!(find(&e, "changed:due,labels"), v(&["TM-2", "TM-4"]));
+    assert_eq!(find(&e, "changed:type:-30d"), v(&["TM-1"]));
+    assert_eq!(find(&e, "changed-by:agent"), v(&["TM-4"]));
+    assert_eq!(find(&e, "changed-by:\"test AGENT\""), v(&["TM-4"]));
+    assert!(!find(&e, "changed-by:me").contains(&"TM-4".to_owned()));
+
+    let err = fails(&e, "task.search", json!({ "query": "was:status:Doing" }));
+    assert_eq!(err.details["message_id"], "query-unknown-status");
+    let err = fails(&e, "task.search", json!({ "query": "was:due:today" }));
+    assert_eq!(err.details["message_id"], "query-history-field");
+}
+
+#[test]
 fn the_query_field_gets_tokens_chips_and_errors() {
     let (_dir, e) = workspace();
     let out = call(
@@ -969,6 +1034,37 @@ fn generate(e: &Engine, n: usize) {
                         updated_at) VALUES ('task', ?1, ?1, ?2, ?3, ?4, ?5)",
                     params![id, project, title, format!("Body of {title}."), NOW],
                 )?;
+                // Its history: the creation, then a change of status, of
+                // the due date and of the priority, a day apart, the last
+                // ones by an agent for every fourth task.
+                let text_id = |b: &[u8]| gk_core::Id::from_slice(b).unwrap().to_string();
+                let first = text_id(&statuses[0]);
+                let changes = [
+                    json!({ "fields": { "created": { "after": true },
+                                        "status": { "after": first } } }),
+                    json!({ "fields": { "status": { "before": first,
+                                                    "after": text_id(status) } } }),
+                    json!({ "fields": { "due_date": { "after": due } } }),
+                    json!({ "fields": { "priority": { "before": "none",
+                                                      "after": "high" } } }),
+                ];
+                for (k, change) in changes.iter().enumerate() {
+                    let agent = i % 4 == 0 && k > 1;
+                    tx.execute(
+                        "INSERT INTO activity (group_id, at, op, actor_kind, actor_name, via,
+                            project_id, entity_kind, entity_id, changes)
+                         VALUES (?1, ?2, 'task.update', ?3, ?4, 'app', ?5, 'task', ?6, ?7)",
+                        params![
+                            gk_core::Id::generate().as_bytes().to_vec(),
+                            NOW - (i as i64) * 60_000 - (3 - k as i64) * 86_400_000,
+                            if agent { "agent" } else { "user" },
+                            if agent { "Build bot" } else { "You" },
+                            project,
+                            id,
+                            change.to_string(),
+                        ],
+                    )?;
+                }
             }
             tx.execute(
                 "UPDATE projects SET next_number = ?1 WHERE id = ?2",
@@ -998,6 +1094,12 @@ fn twenty_thousand_tasks_filter_and_sort_within_budget() {
         "timeout",
         "login cache sort:due",
         "is:overdue sort:-estimate",
+        "was:status:Done",
+        "was:category:in_progress is:open",
+        "changed:due>-2d",
+        "changed:status:this-week sort:due",
+        "changed-by:agent",
+        "-was:priority:urgent changed-by:me",
     ] {
         // Once to warm the caches, then timed.
         call(&e, "task.search", json!({ "query": query, "limit": 100 }));

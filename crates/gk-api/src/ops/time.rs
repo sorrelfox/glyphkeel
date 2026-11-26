@@ -13,6 +13,11 @@
 //! running one first and logs its time. A paused timer keeps its time until
 //! it is started again or stopped.
 //!
+//! Time may be marked with a kind of work (Development, Design, Meeting…)
+//! from the workspace's list, so the report can group by it. A kind that
+//! entries use is archived rather than deleted: it leaves the pickers and
+//! keeps its name in reports.
+//!
 //! A task has at most one personal reminder: a moment, or a number of days
 //! before its due date. Open tasks with a due date also alert the day before
 //! the due date, at the workspace's reminder time.
@@ -44,6 +49,9 @@ pub struct TimeEntry {
     /// What was done; left out when empty.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub note: String,
+    /// The kind of work; left out when none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub work_kind: Option<WorkKindRef>,
     /// Who logged it.
     pub author: Actor,
     /// When it was logged (RFC 3339, UTC).
@@ -70,6 +78,9 @@ pub struct TimeLogInput {
     /// What was done, at most 2000 characters.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
+    /// The kind of work: its name (any case) or ID, from `work_kind.list`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub work_kind: Option<String>,
     /// Your own ID for this request; repeating it within 24 hours returns
     /// the first answer instead of logging the time twice.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -91,6 +102,9 @@ pub struct TimeUpdateInput {
     /// The new note; an empty text removes it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
+    /// The new kind of work (name or ID); an empty text removes it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub work_kind: Option<String>,
     /// Refuse the change unless the entry still has this version.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub expected_version: Option<i64>,
@@ -142,6 +156,8 @@ pub enum TimeGroupBy {
     Project,
     /// By the person or agent who logged the time.
     Person,
+    /// By kind of work; time without one is a group of its own.
+    WorkKind,
 }
 
 /// What the time report also returns as CSV text.
@@ -179,8 +195,12 @@ pub struct TimeReportInput {
     /// or the person or agent of that name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub person: Option<String>,
-    /// How to group: `day`, `week`, `month`, `task` (default), `project`
-    /// or `person`.
+    /// Only the time of this kind of work (name or ID), or `none` for time
+    /// without one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub work_kind: Option<String>,
+    /// How to group: `day`, `week`, `month`, `task` (default), `project`,
+    /// `person` or `work_kind`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group_by: Option<TimeGroupBy>,
     /// Also list the entries, oldest first.
@@ -196,10 +216,12 @@ pub struct TimeReportInput {
 #[serde(deny_unknown_fields)]
 pub struct TimeReportRow {
     /// The day; the week's first day; the month (`YYYY-MM`); the task's
-    /// or the project's key; or the person (`user:Name`, `agent:Name`).
+    /// or the project's key; the person (`user:Name`, `agent:Name`); or
+    /// the kind of work's ID (`none` for time without one).
     pub key: String,
     /// The weekday; the week's days (`2026-11-23..2026-11-29`); the month;
-    /// the task's title; the project's name; or the person's name.
+    /// the task's title; the project's name; the person's name; or the kind
+    /// of work's name (empty for time without one).
     pub title: String,
     /// The person or agent, when grouped by person.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -243,6 +265,97 @@ pub struct TimeReport {
 }
 
 // ---------------------------------------------------------------------
+// Kinds of work
+
+/// A kind of work as entries name it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkKindRef {
+    /// Its ID.
+    pub id: String,
+    /// Its name.
+    pub name: String,
+}
+
+/// A kind of work of the workspace.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkKind {
+    /// Its ID.
+    pub id: String,
+    /// Its name.
+    pub name: String,
+    /// Archived: kept for the entries that name it, not offered for new
+    /// time.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub archived: bool,
+    /// How many live entries name it.
+    pub entries: u64,
+}
+
+/// Which kinds of work to list.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkKindListInput {
+    /// Also the archived ones.
+    #[serde(default)]
+    pub include_archived: bool,
+}
+
+/// The workspace's kinds of work, by name.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkKindList {
+    /// The kinds.
+    pub items: Vec<WorkKind>,
+}
+
+/// A new kind of work.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkKindCreateInput {
+    /// Its name, 1 to 60 characters, unique in the workspace (any case).
+    pub name: String,
+}
+
+/// Changes to a kind of work.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkKindUpdateInput {
+    /// The kind: its name (any case) or ID.
+    pub kind: String,
+    /// A new name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Archive it (`true`) or offer it again (`false`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub archived: Option<bool>,
+}
+
+/// Names one kind of work.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkKindDeleteInput {
+    /// The kind: its name (any case) or ID.
+    pub kind: String,
+}
+
+/// A kind of work after a change.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkKindChange {
+    /// The kind after the change; as it was, when deleted.
+    pub kind: WorkKind,
+    /// Whether it was deleted.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub deleted: bool,
+    /// The history group, for revert and Undo; left out when nothing
+    /// changed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
+}
+
+// ---------------------------------------------------------------------
 // The timer
 
 /// Whether the timer runs.
@@ -275,6 +388,9 @@ pub struct Timer {
     /// The note the entry will get; left out when empty.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub note: String,
+    /// The kind of work the entry will get; left out when none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub work_kind: Option<WorkKindRef>,
     /// Who started it.
     pub started_by: Actor,
     /// Whether the task is in the trash; stop the timer with `discard`.
@@ -307,6 +423,10 @@ pub struct TimerStartInput {
     /// The note the entry will get, at most 2000 characters.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
+    /// The kind of work the entry will get (name or ID); an empty text
+    /// removes it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub work_kind: Option<String>,
 }
 
 /// No input.
@@ -321,6 +441,10 @@ pub struct TimerStopInput {
     /// The entry's note; default the timer's own note.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
+    /// The entry's kind of work (name or ID); default the timer's own; an
+    /// empty text logs none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub work_kind: Option<String>,
     /// Log this duration instead of the time measured, for example when the
     /// timer ran on by mistake.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -551,6 +675,34 @@ op!(
     TimeReport
 );
 op!(
+    /// The workspace's kinds of work.
+    WorkKindListOp,
+    "work_kind.list",
+    WorkKindListInput,
+    WorkKindList
+);
+op!(
+    /// Creates a kind of work.
+    WorkKindCreate,
+    "work_kind.create",
+    WorkKindCreateInput,
+    WorkKindChange
+);
+op!(
+    /// Changes a kind of work.
+    WorkKindUpdate,
+    "work_kind.update",
+    WorkKindUpdateInput,
+    WorkKindChange
+);
+op!(
+    /// Deletes a kind of work no entry names.
+    WorkKindDelete,
+    "work_kind.delete",
+    WorkKindDeleteInput,
+    WorkKindChange
+);
+op!(
     /// The timer.
     TimerGet,
     "timer.get",
@@ -607,8 +759,48 @@ op!(
     ReminderAcknowledged
 );
 
+pub(crate) const WORK_KIND_LIST: OpDescriptor = OpDescriptor::of::<WorkKindListOp>(Meta {
+    summary: "The workspace's kinds of work for logged time (Development, Design, Meeting…), by name, with how many entries use each.",
+    kind: OpKind::Query,
+    safety: Safety::Read,
+    exposure: Exposure::Data,
+    cli: Some("work-kind list"),
+    input_name: "WorkKindListInput",
+    output_name: "WorkKindList",
+});
+
+pub(crate) const WORK_KIND_CREATE: OpDescriptor = OpDescriptor::of::<WorkKindCreate>(Meta {
+    summary: "Add a kind of work that time entries can be marked with.",
+    kind: OpKind::Command,
+    safety: Safety::Write,
+    exposure: Exposure::Data,
+    cli: Some("work-kind create"),
+    input_name: "WorkKindCreateInput",
+    output_name: "WorkKindChange",
+});
+
+pub(crate) const WORK_KIND_UPDATE: OpDescriptor = OpDescriptor::of::<WorkKindUpdate>(Meta {
+    summary: "Rename a kind of work, or archive it so it is no longer offered while its entries keep it.",
+    kind: OpKind::Command,
+    safety: Safety::Write,
+    exposure: Exposure::Data,
+    cli: Some("work-kind edit <kind>"),
+    input_name: "WorkKindUpdateInput",
+    output_name: "WorkKindChange",
+});
+
+pub(crate) const WORK_KIND_DELETE: OpDescriptor = OpDescriptor::of::<WorkKindDelete>(Meta {
+    summary: "Delete a kind of work that no time entry names; archive one that is in use.",
+    kind: OpKind::Command,
+    safety: Safety::Write,
+    exposure: Exposure::Data,
+    cli: Some("work-kind delete <kind>"),
+    input_name: "WorkKindDeleteInput",
+    output_name: "WorkKindChange",
+});
+
 pub(crate) const TIME_LOG: OpDescriptor = OpDescriptor::of::<TimeLog>(Meta {
-    summary: "Log time on a task: a duration, the day of the work (default today) and a note.",
+    summary: "Log time on a task: a duration, the day of the work (default today), a note and a kind of work.",
     kind: OpKind::Command,
     safety: Safety::Write,
     exposure: Exposure::Data,
@@ -618,7 +810,7 @@ pub(crate) const TIME_LOG: OpDescriptor = OpDescriptor::of::<TimeLog>(Meta {
 });
 
 pub(crate) const TIME_UPDATE: OpDescriptor = OpDescriptor::of::<TimeUpdate>(Meta {
-    summary: "Change a time entry's duration, day or note.",
+    summary: "Change a time entry's duration, day, note or kind of work.",
     kind: OpKind::Command,
     safety: Safety::Write,
     exposure: Exposure::Data,
@@ -638,7 +830,7 @@ pub(crate) const TIME_DELETE: OpDescriptor = OpDescriptor::of::<TimeDelete>(Meta
 });
 
 pub(crate) const TIME_REPORT: OpDescriptor = OpDescriptor::of::<TimeReportOp>(Meta {
-    summary: "Logged time over a range of days, grouped by day, week, month, task, project or person, with totals in the workspace's units and optional CSV.",
+    summary: "Logged time over a range of days, grouped by day, week, month, task, project, person or kind of work, with totals in the workspace's units and optional CSV.",
     kind: OpKind::Query,
     safety: Safety::Read,
     exposure: Exposure::Data,

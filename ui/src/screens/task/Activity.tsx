@@ -11,7 +11,7 @@ import { Segmented } from "../../components/Segmented";
 import { skippedReason } from "../../data/safety";
 import { useToasts } from "../../components/Toasts";
 import { type Project } from "../../data/catalog";
-import { errorToast, useCall, useCommand } from "../../data/hooks";
+import { errorToast, useCall, useCommand, useOp } from "../../data/hooks";
 import { appendQuote, commentLink, commentShown, isComment, linkedComments, quoteMarkdown, useCommentRequests, useRequestedComment } from "../../data/commentLinks";
 import { readDraft, useDraft, useTaskDrafts, writeDraft, type DraftTarget } from "../../data/drafts";
 import { toggleChecklist, useRendered } from "../../data/markdown";
@@ -315,7 +315,7 @@ function CommentsList({ task, readOnly, onOpenTask }: { task: Task; readOnly: bo
 const LABELLED_FIELDS = new Set([
   "title", "description", "status", "type", "priority", "labels", "parent", "start_date", "due_date", "estimate", "progress", "rank", "project",
   "claim", "reminder", "name", "hue", "icon", "modules", "key", "state", "category", "wip_limit", "glyph", "is_default", "slug", "body",
-  "date", "minutes", "note", "agent_brief", "home", "template", "fix_version", "rules", "agent_rules",
+  "date", "minutes", "note", "agent_brief", "home", "template", "fix_version", "rules", "agent_rules", "wip_min", "work_kind",
 ]);
 
 /** A recorded field's name as people read it; nothing for a field that isn't shown. */
@@ -334,6 +334,8 @@ interface Names {
   locale?: string;
   /** Version names by ID, as far as the panel knows them. */
   versions?: ReadonlyMap<string, string>;
+  /** Kinds of work by ID. */
+  kinds?: ReadonlyMap<string, string>;
 }
 
 /** How long a text value of a list may be before the engine cuts it, in characters. */
@@ -373,6 +375,8 @@ function shown(t: Translate, names: Names, field: string, value: unknown): strin
       return typeof value === "number" ? formatDuration(value, names.units) : plainText(value);
     case "parent":
       return names.keys.get(plainText(value)) ?? plainText(value);
+    case "work_kind":
+      return names.kinds?.get(plainText(value)) ?? t("history-work-kind-gone");
     case "fix_version":
       return names.versions?.get(plainText(value)) ?? (names.task.fix_version?.id === value ? names.task.fix_version.name : t("history-version-gone"));
     default:
@@ -496,6 +500,8 @@ function HistoryList({
   const keys = new Map<string, string>([[task.id, task.key]]);
   const versionList = useVersions(task.project);
   const versions = new Map((versionList.data?.items ?? []).map((version) => [version.id, version.name]));
+  const kindList = useOp("work_kind.list", { include_archived: true });
+  const kinds = new Map((kindList.data?.items ?? []).map((kind) => [kind.id, kind.name]));
   for (const link of task.links ?? []) {
     keys.set(link.task.id, link.task.key);
   }
@@ -548,7 +554,7 @@ function HistoryList({
     {who}
     <ol className={styles.history} aria-label={t("history-title")}>
       {entries.map((entry) => {
-        const lines = describeEntry(t, { task, project, keys, units, locale, versions }, entry);
+        const lines = describeEntry(t, { task, project, keys, units, locale, versions, kinds }, entry);
         if (lines.length === 0) {
           return null;
         }

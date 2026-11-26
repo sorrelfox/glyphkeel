@@ -25,9 +25,10 @@ import {
   type PointerEvent as ReactPointerEvent,
   type Ref,
 } from "react";
-import { useLocale } from "react-aria-components";
+import { Button, Group, Input, Label, NumberField, useLocale } from "react-aria-components";
 
 import { classes } from "../../classes";
+import { Dialog } from "../../components/Dialog";
 import { useMovePreview } from "../../data/schedule";
 import { type VersionMarker } from "../../data/versions";
 import { type GanttGrouping, type ReadOnlyReason, type Schedule, type ScheduleDependency, type SchedulePreviewInput, type ScheduleProblem, type ScheduledTask, type UnscheduledTask } from "../../generated/ops";
@@ -104,6 +105,8 @@ export interface GanttProps {
   onDates: (task: Movable, next: Dates) => Promise<boolean>;
   onLink: (from: string, to: string) => Promise<boolean>;
   onUnlink: (dependency: ScheduleDependency) => Promise<boolean>;
+  /** Gives a dependency a lag in days (0 removes it); true once it is made. */
+  onLag: (dependency: ScheduleDependency, days: number) => Promise<boolean>;
   onOpen: (key: string) => void;
   onZoom: (zoom: Zoom) => void;
   onTable: (width: number) => void;
@@ -207,6 +210,7 @@ export const Gantt = memo(function Gantt({
   onDates,
   onLink,
   onUnlink,
+  onLag,
   onOpen,
   onZoom,
   onTable,
@@ -459,6 +463,24 @@ export const Gantt = memo(function Gantt({
     void onUnlink(dependency).then((done) => {
       if (done) {
         setLive(t("gantt-link-removed", { from: dependency.from, to: dependency.to }));
+      }
+    });
+  };
+
+  /** The dependency whose lag is being edited, and the days typed. */
+  const [lagEdit, setLagEdit] = useState<{ dependency: ScheduleDependency; days: number } | null>(null);
+  const saveLag = () => {
+    if (!lagEdit) {
+      return;
+    }
+    const { dependency, days } = lagEdit;
+    setLagEdit(null);
+    if (days === (dependency.lag_days ?? 0)) {
+      return;
+    }
+    void onLag(dependency, days).then((done) => {
+      if (done) {
+        setLive(t("gantt-lag-set", { from: dependency.from, to: dependency.to, days }));
       }
     });
   };
@@ -1130,19 +1152,25 @@ export const Gantt = memo(function Gantt({
                   if (!ga || !gb || ya === undefined || yb === undefined) {
                     return null;
                   }
-                  const warn = dependency.violated || gb.x1 < ga.x2;
-                  const d = elbow(ga.x2, ya * ROW + ROW / 2, gb.x1, yb * ROW + ROW / 2);
+                  // A lag holds the blocked task back: the line leaves after it.
+                  const lag = dependency.lag_days ?? 0;
+                  const xa = ga.x2 + lag * ppd;
+                  const warn = dependency.violated || gb.x1 < xa;
+                  const d = elbow(xa, ya * ROW + ROW / 2, gb.x1, yb * ROW + ROW / 2);
                   return (
-                    <g key={dependency.id} data-dependency={`${dependency.from}>${dependency.to}`}>
+                    <g key={dependency.id} data-dependency={`${dependency.from}>${dependency.to}`} data-lag={lag > 0 ? lag : undefined}>
+                      {lag > 0 && <line className={classes(styles.lagSpan, warn && styles.warn)} x1={ga.x2} x2={xa} y1={ya * ROW + ROW / 2} y2={ya * ROW + ROW / 2} />}
                       <path d={d} className={classes(styles.link, warn && styles.warn)} markerEnd={`url(#${ids}-arrow${warn ? "-warn" : ""})`} />
                       <path
-                        d={d}
+                        d={lag > 0 ? `M${String(ga.x2)},${String(ya * ROW + ROW / 2)} H${String(xa)} ${d.replace(/^M[^ ]+ /u, "")}` : d}
                         className={styles.linkHit}
                         onClick={() => {
-                          unlink(dependency);
+                          if (!readOnly) {
+                            setLagEdit({ dependency, days: lag });
+                          }
                         }}
                       >
-                        <title>{t("gantt-remove-dependency", { from: dependency.from, to: dependency.to })}</title>
+                        <title>{t("gantt-edit-dependency", { from: dependency.from, to: dependency.to, days: lag })}</title>
                       </path>
                     </g>
                   );
@@ -1192,6 +1220,20 @@ export const Gantt = memo(function Gantt({
                   </span>
                 );
               })}
+              {dependencies.map((dependency) => {
+                const lag = dependency.lag_days ?? 0;
+                const a = byKey.get(dependency.from);
+                const ga = a && geoOf(a);
+                const ya = index.get(dependency.from);
+                if (lag <= 0 || !ga || ya === undefined) {
+                  return null;
+                }
+                return (
+                  <span key={dependency.id} className={styles.lagLabel} style={{ insetInlineStart: ga.x2 + 2, insetBlockStart: ya * ROW + ROW / 2 + 1 }} data-lag-label={`${dependency.from}>${dependency.to}`}>
+                    {t("gantt-lag-short", { days: lag })}
+                  </span>
+                );
+              })}
               {tooltip && (
                 <span className={styles.tip} style={{ insetInlineStart: tooltip.x + 12, insetBlockStart: Math.max(0, tooltip.y) }} data-testid="gantt-tip">
                   {tooltip.text.map((line) => (
@@ -1206,6 +1248,71 @@ export const Gantt = memo(function Gantt({
       <div className={styles.hidden} aria-live="polite" data-testid="gantt-live">
         {live}
       </div>
+      <Dialog
+        title={lagEdit ? t("gantt-dependency-title", { from: lagEdit.dependency.from, to: lagEdit.dependency.to }) : ""}
+        isOpen={lagEdit !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setLagEdit(null);
+          }
+        }}
+        footer={
+          lagEdit && (
+            <>
+              <Button
+                className="btn danger"
+                onPress={() => {
+                  const { dependency } = lagEdit;
+                  setLagEdit(null);
+                  unlink(dependency);
+                }}
+              >
+                {t("gantt-dependency-remove")}
+              </Button>
+              <div className="grow" />
+              <Button
+                className="btn"
+                onPress={() => {
+                  setLagEdit(null);
+                }}
+              >
+                {t("dialog-cancel")}
+              </Button>
+              <Button className="btn primary" onPress={saveLag}>
+                {t("gantt-dependency-save")}
+              </Button>
+            </>
+          )
+        }
+      >
+        {lagEdit && (
+          <form
+            className={styles.lagForm}
+            onSubmit={(event) => {
+              event.preventDefault();
+              saveLag();
+            }}
+          >
+            <p className="muted">{t("gantt-lag-about", { from: lagEdit.dependency.from, to: lagEdit.dependency.to })}</p>
+            <NumberField
+              className={classes(styles.lagField)}
+              minValue={0}
+              maxValue={365}
+              step={1}
+              value={lagEdit.days}
+              onChange={(days) => {
+                setLagEdit({ ...lagEdit, days: Number.isFinite(days) ? Math.round(days) : 0 });
+              }}
+              autoFocus
+            >
+              <Label>{t("gantt-lag-label")}</Label>
+              <Group className="field">
+                <Input className="num" />
+              </Group>
+            </NumberField>
+          </form>
+        )}
+      </Dialog>
     </div>
   );
 });

@@ -100,6 +100,22 @@ fn custom_fields_by_kind() {
 }
 
 #[test]
+fn the_history() {
+    insta::assert_snapshot!(golden(
+        &[
+            "was:status:Review",
+            "was:category:closed -was:type:Bug",
+            "was:label:bug,crash was:priority:high was:version:1.0",
+            "changed:due>-7d",
+            "changed:status:this-week,2026-11-01..2026-11-02",
+            "changed:due,start -changed-by:agent",
+            "changed-by:me,Helper",
+        ],
+        None,
+    ));
+}
+
+#[test]
 fn a_span_of_days() {
     insta::assert_snapshot!(golden(
         &[

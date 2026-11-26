@@ -419,6 +419,37 @@
   stroke: var(--warning);
 }
 
+.lagSpan {
+  stroke: var(--fg-muted);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 3;
+}
+
+.lagSpan.warn {
+  stroke: var(--warning);
+}
+
+.notes .lagLabel {
+  position: absolute;
+  font-size: var(--fs-micro);
+  line-height: 1;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.lagForm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lagField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-inline-size: 12rem;
+}
+
 .linkHit {
   fill: none;
   stroke: transparent;

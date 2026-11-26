@@ -533,6 +533,8 @@ Example: delete_version {\"version\": \"1.1\", \"project\": \"TM\"}",
 logged time. The query language: `is:open`, `status:\"In progress\"`, `label:bug,crash` (any of), \
 `-label:wontfix` (not; includes tasks without labels), `priority>=high`, `due<+7d`, \
 `updated>-3d`, `created:this-month`, `during:2026-12-01..2026-12-31` (start to due overlaps), \
+the history with `was:status:Review` (had that value at any time), `changed:due>-7d` (changed \
+in the last week) and `changed-by:agent`, \
 `estimate:1h..4h`, `has:due`, `parent:TM-12`, \
 `project:TM/*` (with sub-projects), `(a OR b)`, words and \"phrases\" for full text, a bare key \
 `TM-41`, and `sort:due,-priority`. Dates: 2026-12-31, today, +7d, -1m, this-week, next-month. \
@@ -617,7 +619,9 @@ it gets a new key while the old one keeps finding it; its subtasks, comments, fi
 links come along. Statuses, types and labels are matched by name there; check_move first shows \
 which have no match, and `mapping` ({statuses, types, labels}: from the old name to the target's \
 name) says what takes their place. Custom field values go to the target's field of the same \
-name and kind; others are left off, with a warning. Entering a done or cancelled status closes the task. \
+name and kind; others are left off, with a warning. Entering a done or cancelled status closes the task; \
+`close_duplicates: true` closes the open tasks marked as its duplicates in the same change (left \
+out, a warning names them). \
 Example: move_task {\"key\": \"TM-41\", \"status\": \"In progress\", \"at\": \"top\"}",
         main: "task.move",
         covers: &["task.move"],
@@ -718,8 +722,10 @@ Example: get_description_revision {\"revision\": \"0193b2a4-5c6d-7e8f-9a0b-1c2d3
         title: "Link tasks",
         description: "Links a task to another: `blocks`, `blocked_by`, `relates`, `duplicates`, \
 `duplicated_by`, `clones`, `cloned_by`, or makes one a subtask of the other with `subtask_of` or \
-`parent_of`. A task is blocked while a task that blocks it is open. Links to the task itself, \
-between a task and its own subtasks, and loops of `blocks` are refused. \
+`parent_of`. A task is blocked while a task that blocks it is open. A `blocks` or `blocked_by` \
+link takes `lag_days` (0 to 365): the days that must pass after the blocker ends before the \
+blocked task may begin; linking again with another `lag_days` changes it. Links to the task \
+itself, between a task and its own subtasks, and loops of `blocks` are refused. \
 Example: link_tasks {\"key\": \"TM-41\", \"kind\": \"blocked_by\", \"other\": \"TM-40\"}",
         main: "relation.add",
         covers: &["relation.add"],
@@ -865,8 +871,8 @@ Example: delete_comment {\"comment\": \"0193b2a4-5c6d-7e8f-9a0b-1c2d3e4f5a6b\"}"
         title: "Log time",
         description: "Logs time worked on a task: `duration` as `1h 30m`, `90m`, `1.5h`, `1:30` or \
 `+30m` (1 minute to 24 hours; `d` and `w` use the workspace's working day and week), the day of \
-the work as `date` (`YYYY-MM-DD`, `today` or `yesterday`; default today) and a `note` saying what \
-was done. Returns the entry and the task's new total. Pass `client_request_id` so a retry doesn't \
+the work as `date` (`YYYY-MM-DD`, `today` or `yesterday`; default today), a `note` saying what \
+was done and an optional `work_kind` (a name from list_work_kinds). Returns the entry and the task's new total. Pass `client_request_id` so a retry doesn't \
 log the time twice. \
 Example: log_time {\"key\": \"TM-41\", \"duration\": \"1h 30m\", \"note\": \"Wrote the parser\"}",
         main: "time.log",
@@ -877,8 +883,8 @@ Example: log_time {\"key\": \"TM-41\", \"duration\": \"1h 30m\", \"note\": \"Wro
         name: "update_time_entry",
         toolset: Toolset::Time,
         title: "Update a time entry",
-        description: "Changes a time entry's `duration`, `date` or `note`; fields left out keep \
-their value, and an empty note removes it. Name the entry by its ID (from get_task with \
+        description: "Changes a time entry's `duration`, `date`, `note` or `work_kind`; fields left \
+out keep their value, and an empty note or kind removes it. Name the entry by its ID (from get_task with \
 `include: [\"time\"]` or get_time_report with `entries: true`); pass its `version` as \
 `expected_version` to be sure nobody changed it since. \
 Example: update_time_entry {\"entry\": \"0193b2a4-5c6d-7e8f-9a0b-1c2d3e4f5a6b\", \"duration\": \"45m\"}",
@@ -902,14 +908,59 @@ Example: delete_time_entry {\"entry\": \"0193b2a4-5c6d-7e8f-9a0b-1c2d3e4f5a6b\"}
         toolset: Toolset::Time,
         title: "Time report",
         description: "Sums the time logged from `from` to `to` (days, both included; default the \
-current week), grouped by `day`, `week`, `month`, `task` (default), `project` or `person`, with \
-totals in the workspace's units (`1w 2d 4h`). Narrow it to a `project` (with its sub-projects \
-unless `include_subprojects: false`), a `task` (with its subtasks) or a `person` (`me`, `agent` \
-or a name); add `entries: true` to list the entries too, or `csv: \"groups\"` or `\"entries\"` \
+current week), grouped by `day`, `week`, `month`, `task` (default), `project`, `person` or \
+`work_kind`, with totals in the workspace's units (`1w 2d 4h`). Narrow it to a `project` (with its \
+sub-projects unless `include_subprojects: false`), a `task` (with its subtasks), a `person` (`me`, \
+`agent` or a name) or a `work_kind` (a name, or `none`); add `entries: true` to list the entries too, or `csv: \"groups\"` or `\"entries\"` \
 for CSV text. \
 Example: get_time_report {\"from\": \"2026-11-01\", \"to\": \"2026-11-30\", \"group_by\": \"project\"}",
         main: "time.report",
         covers: &["time.report"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "list_work_kinds",
+        toolset: Toolset::Time,
+        title: "List kinds of work",
+        description: "Lists the workspace's kinds of work (Development, Design, Meeting…) that time \
+entries can be marked with, by name, with how many entries use each; `include_archived: true` \
+adds the archived ones, which entries keep but new time can't use. \
+Example: list_work_kinds {}",
+        main: "work_kind.list",
+        covers: &["work_kind.list"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "create_work_kind",
+        toolset: Toolset::Time,
+        title: "Add a kind of work",
+        description: "Adds a kind of work that time entries can be marked with; names are unique \
+in the workspace, ignoring case. Add one only when the person asks for it. \
+Example: create_work_kind {\"name\": \"Code review\"}",
+        main: "work_kind.create",
+        covers: &["work_kind.create"],
+        idempotent: false,
+    },
+    McpTool {
+        name: "update_work_kind",
+        toolset: Toolset::Time,
+        title: "Change a kind of work",
+        description: "Renames a kind of work, or archives it (`archived: true`) so it is no longer \
+offered while its entries keep it; `archived: false` offers it again. \
+Example: update_work_kind {\"kind\": \"Meeting\", \"name\": \"Meetings\"}",
+        main: "work_kind.update",
+        covers: &["work_kind.update"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "delete_work_kind",
+        toolset: Toolset::Time,
+        title: "Delete a kind of work",
+        description: "Deletes a kind of work that no live time entry and not the timer use; one \
+in use is refused, archive it instead. revert_changes brings it back. \
+Example: delete_work_kind {\"kind\": \"Travel\"}",
+        main: "work_kind.delete",
+        covers: &["work_kind.delete"],
         idempotent: true,
     },
     McpTool {
@@ -962,7 +1013,8 @@ Example: get_cycle_time {\"project\": \"TM\", \"bucket\": \"month\", \"tasks\": 
         description: "Starts the workspace's one timer on a task, or without `key` starts the \
 paused timer again. A timer running on another task is stopped first and its time logged (the \
 result has that `entry`). The person sees the timer in the app; start it only when you are \
-asked to or are about to work on the task yourself. get_workspace shows the timer. \
+asked to or are about to work on the task yourself. `work_kind` names the kind of work the entry \
+will get. get_workspace shows the timer. \
 Example: start_timer {\"key\": \"TM-41\"}",
         main: "timer.start",
         covers: &["timer.start"],
@@ -985,7 +1037,8 @@ Example: pause_timer {}",
         title: "Stop the timer",
         description: "Stops the timer and logs its time, rounded to the minute, on its task, on the \
 day it was started. Give `note` for the entry, `duration` to log another time instead (when it \
-ran on by mistake), or `discard: true` to log nothing. \
+ran on by mistake), `work_kind` for another kind of work than the timer's, or `discard: true` to \
+log nothing. \
 Example: stop_timer {\"note\": \"Reviewed the pull request\"}",
         main: "timer.stop",
         covers: &["timer.stop"],
@@ -1618,6 +1671,7 @@ mod tests {
                 "get_description_revision",
                 "preview_recurrence",
                 "get_time_report",
+                "list_work_kinds",
                 "get_created_closed_report",
                 "get_cumulative_flow",
                 "get_cycle_time",

@@ -5,6 +5,7 @@ import { RouterProvider } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { AppearanceProvider } from "./appearance/AppearanceProvider";
+import { DuplicatePromptHost } from "./components/DuplicatePrompt";
 import { ToastProvider } from "./components/Toasts";
 import { defaultClient } from "./data/connect";
 import { DataProvider } from "./data/DataProvider";
@@ -31,6 +32,7 @@ export function App({ start = readStart(), client = defaultClient(), path }: App
         <ToastProvider>
           <DataProvider client={client}>
             <RouterProvider router={router} />
+            <DuplicatePromptHost />
           </DataProvider>
         </ToastProvider>
       </I18n>

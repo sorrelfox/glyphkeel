@@ -53,6 +53,10 @@
       "update_time_entry",
       "delete_time_entry",
       "get_time_report",
+      "list_work_kinds",
+      "create_work_kind",
+      "update_work_kind",
+      "delete_work_kind",
       "get_created_closed_report",
       "get_cumulative_flow",
       "get_cycle_time",
@@ -102,6 +106,7 @@
       "get_description_revision",
       "preview_recurrence",
       "get_time_report",
+      "list_work_kinds",
       "get_created_closed_report",
       "get_cumulative_flow",
       "get_cycle_time",
@@ -168,6 +173,10 @@
       "update_time_entry",
       "delete_time_entry",
       "get_time_report",
+      "list_work_kinds",
+      "create_work_kind",
+      "update_work_kind",
+      "delete_work_kind",
       "get_created_closed_report",
       "get_cumulative_flow",
       "get_cycle_time",
@@ -623,6 +632,25 @@
               "task_trashed": {
                 "description": "Whether the task is in the trash; stop the timer with `discard`.",
                 "type": "boolean"
+              },
+              "work_kind": {
+                "additionalProperties": false,
+                "description": "The kind of work the entry will get; left out when none.",
+                "properties": {
+                  "id": {
+                    "description": "Its ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ],
+                "type": "object"
               }
             },
             "required": [
@@ -2124,6 +2152,11 @@
                   "description": "Most tasks the column should hold; left out when there is no limit.",
                   "minimum": 0,
                   "type": "integer"
+                },
+                "wip_min": {
+                  "description": "Fewest tasks the column should hold; left out when there is no\nminimum.",
+                  "minimum": 0,
+                  "type": "integer"
                 }
               },
               "required": [
@@ -2942,6 +2975,11 @@
                       "description": "Most tasks the column should hold; left out when there is no limit.",
                       "minimum": 0,
                       "type": "integer"
+                    },
+                    "wip_min": {
+                      "description": "Fewest tasks the column should hold; left out when there is no\nminimum.",
+                      "minimum": 0,
+                      "type": "integer"
                     }
                   },
                   "required": [
@@ -3480,6 +3518,11 @@
                         "const": "wip_limit",
                         "description": "The WIP limit.",
                         "type": "string"
+                      },
+                      {
+                        "const": "wip_min",
+                        "description": "The WIP minimum.",
+                        "type": "string"
                       }
                     ]
                   },
@@ -3554,6 +3597,11 @@
                 },
                 "wip_limit": {
                   "description": "Its WIP limit, 1 or more.",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "wip_min": {
+                  "description": "Its WIP minimum, 1 or more and not above the limit; the count shows\na warning while the column holds fewer tasks.",
                   "minimum": 0,
                   "type": "integer"
                 }
@@ -4221,6 +4269,11 @@
                     },
                     "wip_limit": {
                       "description": "Most tasks the column should hold; left out when there is no limit.",
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "wip_min": {
+                      "description": "Fewest tasks the column should hold; left out when there is no\nminimum.",
                       "minimum": 0,
                       "type": "integer"
                     }
@@ -6077,6 +6130,11 @@
                       "description": "Most tasks the column should hold.",
                       "minimum": 0,
                       "type": "integer"
+                    },
+                    "wip_min": {
+                      "description": "Fewest tasks the column should hold.",
+                      "minimum": 0,
+                      "type": "integer"
                     }
                   },
                   "required": [
@@ -7282,6 +7340,11 @@
                     },
                     "wip_limit": {
                       "description": "Most tasks the column should hold.",
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "wip_min": {
+                      "description": "Fewest tasks the column should hold.",
                       "minimum": 0,
                       "type": "integer"
                     }
@@ -8874,6 +8937,11 @@
                       "description": "Most tasks the column should hold; left out when there is no limit.",
                       "minimum": 0,
                       "type": "integer"
+                    },
+                    "wip_min": {
+                      "description": "Fewest tasks the column should hold; left out when there is no\nminimum.",
+                      "minimum": 0,
+                      "type": "integer"
                     }
                   },
                   "required": [
@@ -9936,6 +10004,10 @@
                         }
                       ]
                     },
+                    "lag_days": {
+                      "description": "For `blocks` and `blocked_by`: the days between the end of the\nblocking task and the start of the blocked one; left out when none.",
+                      "type": "integer"
+                    },
                     "task": {
                       "additionalProperties": false,
                       "description": "The task at the other end.",
@@ -10811,6 +10883,25 @@
                     "version": {
                       "description": "Goes up by one with every edit; pass it as `expected_version`.",
                       "type": "integer"
+                    },
+                    "work_kind": {
+                      "additionalProperties": false,
+                      "description": "The kind of work; left out when none.",
+                      "properties": {
+                        "id": {
+                          "description": "Its ID.",
+                          "type": "string"
+                        },
+                        "name": {
+                          "description": "Its name.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name"
+                      ],
+                      "type": "object"
                     }
                   },
                   "required": [
@@ -12554,7 +12645,7 @@
       "covers": [
         "task.search"
       ],
-      "description": "Lists the tasks matching a query, a page at a time, with totals of estimates and logged time. The query language: `is:open`, `status:\"In progress\"`, `label:bug,crash` (any of), `-label:wontfix` (not; includes tasks without labels), `priority>=high`, `due<+7d`, `updated>-3d`, `created:this-month`, `during:2026-12-01..2026-12-31` (start to due overlaps), `estimate:1h..4h`, `has:due`, `parent:TM-12`, `project:TM/*` (with sub-projects), `(a OR b)`, words and \"phrases\" for full text, a bare key `TM-41`, and `sort:due,-priority`. Dates: 2026-12-31, today, +7d, -1m, this-week, next-month. A mistake comes back as `invalid` with the place and a suggestion. Use the `query` it echoes when you need the normal form; page with `cursor`. Example: search_tasks {\"query\": \"is:open label:bug due<+7d sort:due\", \"limit\": 20}",
+      "description": "Lists the tasks matching a query, a page at a time, with totals of estimates and logged time. The query language: `is:open`, `status:\"In progress\"`, `label:bug,crash` (any of), `-label:wontfix` (not; includes tasks without labels), `priority>=high`, `due<+7d`, `updated>-3d`, `created:this-month`, `during:2026-12-01..2026-12-31` (start to due overlaps), the history with `was:status:Review` (had that value at any time), `changed:due>-7d` (changed in the last week) and `changed-by:agent`, `estimate:1h..4h`, `has:due`, `parent:TM-12`, `project:TM/*` (with sub-projects), `(a OR b)`, words and \"phrases\" for full text, a bare key `TM-41`, and `sort:due,-priority`. Dates: 2026-12-31, today, +7d, -1m, this-week, next-month. A mistake comes back as `invalid` with the place and a suggestion. Use the `query` it echoes when you need the normal form; page with `cursor`. Example: search_tasks {\"query\": \"is:open label:bug due<+7d sort:due\", \"limit\": 20}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "Which tasks to list.",
@@ -14240,6 +14331,10 @@
                           }
                         ]
                       },
+                      "lag_days": {
+                        "description": "For `blocks` and `blocked_by`: the days between the end of the\nblocking task and the start of the blocked one; left out when none.",
+                        "type": "integer"
+                      },
                       "task": {
                         "additionalProperties": false,
                         "description": "The task at the other end.",
@@ -15115,6 +15210,25 @@
                       "version": {
                         "description": "Goes up by one with every edit; pass it as `expected_version`.",
                         "type": "integer"
+                      },
+                      "work_kind": {
+                        "additionalProperties": false,
+                        "description": "The kind of work; left out when none.",
+                        "properties": {
+                          "id": {
+                            "description": "Its ID.",
+                            "type": "string"
+                          },
+                          "name": {
+                            "description": "Its name.",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name"
+                        ],
+                        "type": "object"
                       }
                     },
                     "required": [
@@ -15439,6 +15553,13 @@
               "outcome"
             ],
             "type": "object"
+          },
+          "duplicates_closed": {
+            "description": "The duplicates closed with the task (`close_duplicates`), by key.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "group": {
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
@@ -16382,6 +16503,10 @@
                         }
                       ]
                     },
+                    "lag_days": {
+                      "description": "For `blocks` and `blocked_by`: the days between the end of the\nblocking task and the start of the blocked one; left out when none.",
+                      "type": "integer"
+                    },
                     "task": {
                       "additionalProperties": false,
                       "description": "The task at the other end.",
@@ -17257,6 +17382,25 @@
                     "version": {
                       "description": "Goes up by one with every edit; pass it as `expected_version`.",
                       "type": "integer"
+                    },
+                    "work_kind": {
+                      "additionalProperties": false,
+                      "description": "The kind of work; left out when none.",
+                      "properties": {
+                        "id": {
+                          "description": "Its ID.",
+                          "type": "string"
+                        },
+                        "name": {
+                          "description": "Its name.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name"
+                      ],
+                      "type": "object"
                     }
                   },
                   "required": [
@@ -17699,6 +17843,13 @@
             ],
             "type": "object"
           },
+          "duplicates_closed": {
+            "description": "The duplicates closed with the task (`close_duplicates`), by key.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "group": {
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
             "type": "string"
@@ -18641,6 +18792,10 @@
                         }
                       ]
                     },
+                    "lag_days": {
+                      "description": "For `blocks` and `blocked_by`: the days between the end of the\nblocking task and the start of the blocked one; left out when none.",
+                      "type": "integer"
+                    },
                     "task": {
                       "additionalProperties": false,
                       "description": "The task at the other end.",
@@ -19516,6 +19671,25 @@
                     "version": {
                       "description": "Goes up by one with every edit; pass it as `expected_version`.",
                       "type": "integer"
+                    },
+                    "work_kind": {
+                      "additionalProperties": false,
+                      "description": "The kind of work; left out when none.",
+                      "properties": {
+                        "id": {
+                          "description": "Its ID.",
+                          "type": "string"
+                        },
+                        "name": {
+                          "description": "Its name.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name"
+                      ],
+                      "type": "object"
                     }
                   },
                   "required": [
@@ -19670,7 +19844,7 @@
       "covers": [
         "task.move"
       ],
-      "description": "Moves a task to another `status` (by name), to a place in its column (`before` or `after` another task's key, or `at`: top or bottom), or to another `project`, where it gets a new key while the old one keeps finding it; its subtasks, comments, files, time and links come along. Statuses, types and labels are matched by name there; check_move first shows which have no match, and `mapping` ({statuses, types, labels}: from the old name to the target's name) says what takes their place. Custom field values go to the target's field of the same name and kind; others are left off, with a warning. Entering a done or cancelled status closes the task. Example: move_task {\"key\": \"TM-41\", \"status\": \"In progress\", \"at\": \"top\"}",
+      "description": "Moves a task to another `status` (by name), to a place in its column (`before` or `after` another task's key, or `at`: top or bottom), or to another `project`, where it gets a new key while the old one keeps finding it; its subtasks, comments, files, time and links come along. Statuses, types and labels are matched by name there; check_move first shows which have no match, and `mapping` ({statuses, types, labels}: from the old name to the target's name) says what takes their place. Custom field values go to the target's field of the same name and kind; others are left off, with a warning. Entering a done or cancelled status closes the task; `close_duplicates: true` closes the open tasks marked as its duplicates in the same change (left out, a warning names them). Example: move_task {\"key\": \"TM-41\", \"status\": \"In progress\", \"at\": \"top\"}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "Where to move a task: another status, another place in its column, or\nanother project.",
@@ -19697,6 +19871,10 @@
           "before": {
             "description": "Place it before this task of the target status.",
             "type": "string"
+          },
+          "close_duplicates": {
+            "description": "When the move closes the task: `true` closes the open tasks marked\nas its duplicates too, in the same change (each into the status of\nthe same name in its project, else the first one of the same\ncategory); `false` leaves them open without a warning. Left out, they\nstay open and a warning names them.",
+            "type": "boolean"
           },
           "expected_version": {
             "description": "Refuse the move unless the task still has this version.",
@@ -19801,6 +19979,13 @@
               "outcome"
             ],
             "type": "object"
+          },
+          "duplicates_closed": {
+            "description": "The duplicates closed with the task (`close_duplicates`), by key.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "group": {
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
@@ -20744,6 +20929,10 @@
                         }
                       ]
                     },
+                    "lag_days": {
+                      "description": "For `blocks` and `blocked_by`: the days between the end of the\nblocking task and the start of the blocked one; left out when none.",
+                      "type": "integer"
+                    },
                     "task": {
                       "additionalProperties": false,
                       "description": "The task at the other end.",
@@ -21619,6 +21808,25 @@
                     "version": {
                       "description": "Goes up by one with every edit; pass it as `expected_version`.",
                       "type": "integer"
+                    },
+                    "work_kind": {
+                      "additionalProperties": false,
+                      "description": "The kind of work; left out when none.",
+                      "properties": {
+                        "id": {
+                          "description": "Its ID.",
+                          "type": "string"
+                        },
+                        "name": {
+                          "description": "Its name.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name"
+                      ],
+                      "type": "object"
                     }
                   },
                   "required": [
@@ -22604,6 +22812,13 @@
             ],
             "type": "object"
           },
+          "duplicates_closed": {
+            "description": "The duplicates closed with the task (`close_duplicates`), by key.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "group": {
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
             "type": "string"
@@ -23546,6 +23761,10 @@
                         }
                       ]
                     },
+                    "lag_days": {
+                      "description": "For `blocks` and `blocked_by`: the days between the end of the\nblocking task and the start of the blocked one; left out when none.",
+                      "type": "integer"
+                    },
                     "task": {
                       "additionalProperties": false,
                       "description": "The task at the other end.",
@@ -24421,6 +24640,25 @@
                     "version": {
                       "description": "Goes up by one with every edit; pass it as `expected_version`.",
                       "type": "integer"
+                    },
+                    "work_kind": {
+                      "additionalProperties": false,
+                      "description": "The kind of work; left out when none.",
+                      "properties": {
+                        "id": {
+                          "description": "Its ID.",
+                          "type": "string"
+                        },
+                        "name": {
+                          "description": "Its name.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name"
+                      ],
+                      "type": "object"
                     }
                   },
                   "required": [
@@ -24953,7 +25191,7 @@
       "covers": [
         "relation.add"
       ],
-      "description": "Links a task to another: `blocks`, `blocked_by`, `relates`, `duplicates`, `duplicated_by`, `clones`, `cloned_by`, or makes one a subtask of the other with `subtask_of` or `parent_of`. A task is blocked while a task that blocks it is open. Links to the task itself, between a task and its own subtasks, and loops of `blocks` are refused. Example: link_tasks {\"key\": \"TM-41\", \"kind\": \"blocked_by\", \"other\": \"TM-40\"}",
+      "description": "Links a task to another: `blocks`, `blocked_by`, `relates`, `duplicates`, `duplicated_by`, `clones`, `cloned_by`, or makes one a subtask of the other with `subtask_of` or `parent_of`. A task is blocked while a task that blocks it is open. A `blocks` or `blocked_by` link takes `lag_days` (0 to 365): the days that must pass after the blocker ends before the blocked task may begin; linking again with another `lag_days` changes it. Links to the task itself, between a task and its own subtasks, and loops of `blocks` are refused. Example: link_tasks {\"key\": \"TM-41\", \"kind\": \"blocked_by\", \"other\": \"TM-40\"}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "A link to add or remove.",
@@ -25011,6 +25249,10 @@
                 "type": "string"
               }
             ]
+          },
+          "lag_days": {
+            "description": "For `blocks` and `blocked_by` with `relation.add`: the days that must\npass after the blocking task ends before the blocked one may begin\n(finish-to-start plus a lag), 0 to 365. On an existing link it\nchanges the lag; 0 removes it.",
+            "type": "integer"
           },
           "other": {
             "description": "The other task: its key or ID.",
@@ -25072,6 +25314,13 @@
               "outcome"
             ],
             "type": "object"
+          },
+          "duplicates_closed": {
+            "description": "The duplicates closed with the task (`close_duplicates`), by key.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "group": {
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
@@ -26015,6 +26264,10 @@
                         }
                       ]
                     },
+                    "lag_days": {
+                      "description": "For `blocks` and `blocked_by`: the days between the end of the\nblocking task and the start of the blocked one; left out when none.",
+                      "type": "integer"
+                    },
                     "task": {
                       "additionalProperties": false,
                       "description": "The task at the other end.",
@@ -26890,6 +27143,25 @@
                     "version": {
                       "description": "Goes up by one with every edit; pass it as `expected_version`.",
                       "type": "integer"
+                    },
+                    "work_kind": {
+                      "additionalProperties": false,
+                      "description": "The kind of work; left out when none.",
+                      "properties": {
+                        "id": {
+                          "description": "Its ID.",
+                          "type": "string"
+                        },
+                        "name": {
+                          "description": "Its name.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name"
+                      ],
+                      "type": "object"
                     }
                   },
                   "required": [
@@ -27103,6 +27375,10 @@
               }
             ]
           },
+          "lag_days": {
+            "description": "For `blocks` and `blocked_by` with `relation.add`: the days that must\npass after the blocking task ends before the blocked one may begin\n(finish-to-start plus a lag), 0 to 365. On an existing link it\nchanges the lag; 0 removes it.",
+            "type": "integer"
+          },
           "other": {
             "description": "The other task: its key or ID.",
             "type": "string"
@@ -27163,6 +27439,13 @@
               "outcome"
             ],
             "type": "object"
+          },
+          "duplicates_closed": {
+            "description": "The duplicates closed with the task (`close_duplicates`), by key.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "group": {
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
@@ -28106,6 +28389,10 @@
                         }
                       ]
                     },
+                    "lag_days": {
+                      "description": "For `blocks` and `blocked_by`: the days between the end of the\nblocking task and the start of the blocked one; left out when none.",
+                      "type": "integer"
+                    },
                     "task": {
                       "additionalProperties": false,
                       "description": "The task at the other end.",
@@ -28981,6 +29268,25 @@
                     "version": {
                       "description": "Goes up by one with every edit; pass it as `expected_version`.",
                       "type": "integer"
+                    },
+                    "work_kind": {
+                      "additionalProperties": false,
+                      "description": "The kind of work; left out when none.",
+                      "properties": {
+                        "id": {
+                          "description": "Its ID.",
+                          "type": "string"
+                        },
+                        "name": {
+                          "description": "Its name.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name"
+                      ],
+                      "type": "object"
                     }
                   },
                   "required": [
@@ -29216,6 +29522,13 @@
             ],
             "type": "object"
           },
+          "duplicates_closed": {
+            "description": "The duplicates closed with the task (`close_duplicates`), by key.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "group": {
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
             "type": "string"
@@ -30158,6 +30471,10 @@
                         }
                       ]
                     },
+                    "lag_days": {
+                      "description": "For `blocks` and `blocked_by`: the days between the end of the\nblocking task and the start of the blocked one; left out when none.",
+                      "type": "integer"
+                    },
                     "task": {
                       "additionalProperties": false,
                       "description": "The task at the other end.",
@@ -31033,6 +31350,25 @@
                     "version": {
                       "description": "Goes up by one with every edit; pass it as `expected_version`.",
                       "type": "integer"
+                    },
+                    "work_kind": {
+                      "additionalProperties": false,
+                      "description": "The kind of work; left out when none.",
+                      "properties": {
+                        "id": {
+                          "description": "Its ID.",
+                          "type": "string"
+                        },
+                        "name": {
+                          "description": "Its name.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name"
+                      ],
+                      "type": "object"
                     }
                   },
                   "required": [
@@ -31270,6 +31606,13 @@
             ],
             "type": "object"
           },
+          "duplicates_closed": {
+            "description": "The duplicates closed with the task (`close_duplicates`), by key.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "group": {
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
             "type": "string"
@@ -32212,6 +32555,10 @@
                         }
                       ]
                     },
+                    "lag_days": {
+                      "description": "For `blocks` and `blocked_by`: the days between the end of the\nblocking task and the start of the blocked one; left out when none.",
+                      "type": "integer"
+                    },
                     "task": {
                       "additionalProperties": false,
                       "description": "The task at the other end.",
@@ -33087,6 +33434,25 @@
                     "version": {
                       "description": "Goes up by one with every edit; pass it as `expected_version`.",
                       "type": "integer"
+                    },
+                    "work_kind": {
+                      "additionalProperties": false,
+                      "description": "The kind of work; left out when none.",
+                      "properties": {
+                        "id": {
+                          "description": "Its ID.",
+                          "type": "string"
+                        },
+                        "name": {
+                          "description": "Its name.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name"
+                      ],
+                      "type": "object"
                     }
                   },
                   "required": [
@@ -33318,6 +33684,13 @@
             ],
             "type": "object"
           },
+          "duplicates_closed": {
+            "description": "The duplicates closed with the task (`close_duplicates`), by key.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "group": {
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
             "type": "string"
@@ -34260,6 +34633,10 @@
                         }
                       ]
                     },
+                    "lag_days": {
+                      "description": "For `blocks` and `blocked_by`: the days between the end of the\nblocking task and the start of the blocked one; left out when none.",
+                      "type": "integer"
+                    },
                     "task": {
                       "additionalProperties": false,
                       "description": "The task at the other end.",
@@ -35135,6 +35512,25 @@
                     "version": {
                       "description": "Goes up by one with every edit; pass it as `expected_version`.",
                       "type": "integer"
+                    },
+                    "work_kind": {
+                      "additionalProperties": false,
+                      "description": "The kind of work; left out when none.",
+                      "properties": {
+                        "id": {
+                          "description": "Its ID.",
+                          "type": "string"
+                        },
+                        "name": {
+                          "description": "Its name.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name"
+                      ],
+                      "type": "object"
                     }
                   },
                   "required": [
@@ -37779,7 +38175,7 @@
       "covers": [
         "time.log"
       ],
-      "description": "Logs time worked on a task: `duration` as `1h 30m`, `90m`, `1.5h`, `1:30` or `+30m` (1 minute to 24 hours; `d` and `w` use the workspace's working day and week), the day of the work as `date` (`YYYY-MM-DD`, `today` or `yesterday`; default today) and a `note` saying what was done. Returns the entry and the task's new total. Pass `client_request_id` so a retry doesn't log the time twice. Example: log_time {\"key\": \"TM-41\", \"duration\": \"1h 30m\", \"note\": \"Wrote the parser\"}",
+      "description": "Logs time worked on a task: `duration` as `1h 30m`, `90m`, `1.5h`, `1:30` or `+30m` (1 minute to 24 hours; `d` and `w` use the workspace's working day and week), the day of the work as `date` (`YYYY-MM-DD`, `today` or `yesterday`; default today), a `note` saying what was done and an optional `work_kind` (a name from list_work_kinds). Returns the entry and the task's new total. Pass `client_request_id` so a retry doesn't log the time twice. Example: log_time {\"key\": \"TM-41\", \"duration\": \"1h 30m\", \"note\": \"Wrote the parser\"}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "Time to log on a task.",
@@ -37802,6 +38198,10 @@
           },
           "note": {
             "description": "What was done, at most 2000 characters.",
+            "type": "string"
+          },
+          "work_kind": {
+            "description": "The kind of work: its name (any case) or ID, from `work_kind.list`.",
             "type": "string"
           }
         },
@@ -37891,6 +38291,25 @@
               "version": {
                 "description": "Goes up by one with every edit; pass it as `expected_version`.",
                 "type": "integer"
+              },
+              "work_kind": {
+                "additionalProperties": false,
+                "description": "The kind of work; left out when none.",
+                "properties": {
+                  "id": {
+                    "description": "Its ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ],
+                "type": "object"
               }
             },
             "required": [
@@ -37936,7 +38355,7 @@
       "covers": [
         "time.update"
       ],
-      "description": "Changes a time entry's `duration`, `date` or `note`; fields left out keep their value, and an empty note removes it. Name the entry by its ID (from get_task with `include: [\"time\"]` or get_time_report with `entries: true`); pass its `version` as `expected_version` to be sure nobody changed it since. Example: update_time_entry {\"entry\": \"0193b2a4-5c6d-7e8f-9a0b-1c2d3e4f5a6b\", \"duration\": \"45m\"}",
+      "description": "Changes a time entry's `duration`, `date`, `note` or `work_kind`; fields left out keep their value, and an empty note or kind removes it. Name the entry by its ID (from get_task with `include: [\"time\"]` or get_time_report with `entries: true`); pass its `version` as `expected_version` to be sure nobody changed it since. Example: update_time_entry {\"entry\": \"0193b2a4-5c6d-7e8f-9a0b-1c2d3e4f5a6b\", \"duration\": \"45m\"}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "Changes to a time entry; fields left out keep their value.",
@@ -37959,6 +38378,10 @@
           },
           "note": {
             "description": "The new note; an empty text removes it.",
+            "type": "string"
+          },
+          "work_kind": {
+            "description": "The new kind of work (name or ID); an empty text removes it.",
             "type": "string"
           }
         },
@@ -38047,6 +38470,25 @@
               "version": {
                 "description": "Goes up by one with every edit; pass it as `expected_version`.",
                 "type": "integer"
+              },
+              "work_kind": {
+                "additionalProperties": false,
+                "description": "The kind of work; left out when none.",
+                "properties": {
+                  "id": {
+                    "description": "Its ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ],
+                "type": "object"
               }
             },
             "required": [
@@ -38187,6 +38629,25 @@
               "version": {
                 "description": "Goes up by one with every edit; pass it as `expected_version`.",
                 "type": "integer"
+              },
+              "work_kind": {
+                "additionalProperties": false,
+                "description": "The kind of work; left out when none.",
+                "properties": {
+                  "id": {
+                    "description": "Its ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ],
+                "type": "object"
               }
             },
             "required": [
@@ -38232,7 +38693,7 @@
       "covers": [
         "time.report"
       ],
-      "description": "Sums the time logged from `from` to `to` (days, both included; default the current week), grouped by `day`, `week`, `month`, `task` (default), `project` or `person`, with totals in the workspace's units (`1w 2d 4h`). Narrow it to a `project` (with its sub-projects unless `include_subprojects: false`), a `task` (with its subtasks) or a `person` (`me`, `agent` or a name); add `entries: true` to list the entries too, or `csv: \"groups\"` or `\"entries\"` for CSV text. Example: get_time_report {\"from\": \"2026-11-01\", \"to\": \"2026-11-30\", \"group_by\": \"project\"}",
+      "description": "Sums the time logged from `from` to `to` (days, both included; default the current week), grouped by `day`, `week`, `month`, `task` (default), `project`, `person` or `work_kind`, with totals in the workspace's units (`1w 2d 4h`). Narrow it to a `project` (with its sub-projects unless `include_subprojects: false`), a `task` (with its subtasks), a `person` (`me`, `agent` or a name) or a `work_kind` (a name, or `none`); add `entries: true` to list the entries too, or `csv: \"groups\"` or `\"entries\"` for CSV text. Example: get_time_report {\"from\": \"2026-11-01\", \"to\": \"2026-11-30\", \"group_by\": \"project\"}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "Which time to report.",
@@ -38262,7 +38723,7 @@
             "type": "string"
           },
           "group_by": {
-            "description": "How to group: `day`, `week`, `month`, `task` (default), `project`\nor `person`.",
+            "description": "How to group: `day`, `week`, `month`, `task` (default), `project`,\n`person` or `work_kind`.",
             "oneOf": [
               {
                 "const": "day",
@@ -38293,6 +38754,11 @@
                 "const": "person",
                 "description": "By the person or agent who logged the time.",
                 "type": "string"
+              },
+              {
+                "const": "work_kind",
+                "description": "By kind of work; time without one is a group of its own.",
+                "type": "string"
               }
             ]
           },
@@ -38314,6 +38780,10 @@
           },
           "to": {
             "description": "The last day, included; default six days after `from`. At most 366\ndays after `from`.",
+            "type": "string"
+          },
+          "work_kind": {
+            "description": "Only the time of this kind of work (name or ID), or `none` for time\nwithout one.",
             "type": "string"
           }
         },
@@ -38405,6 +38875,25 @@
                 "version": {
                   "description": "Goes up by one with every edit; pass it as `expected_version`.",
                   "type": "integer"
+                },
+                "work_kind": {
+                  "additionalProperties": false,
+                  "description": "The kind of work; left out when none.",
+                  "properties": {
+                    "id": {
+                      "description": "Its ID.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name"
+                  ],
+                  "type": "object"
                 }
               },
               "required": [
@@ -38457,6 +38946,11 @@
                 "const": "person",
                 "description": "By the person or agent who logged the time.",
                 "type": "string"
+              },
+              {
+                "const": "work_kind",
+                "description": "By kind of work; time without one is a group of its own.",
+                "type": "string"
               }
             ]
           },
@@ -38481,7 +38975,7 @@
                   "type": "integer"
                 },
                 "key": {
-                  "description": "The day; the week's first day; the month (`YYYY-MM`); the task's\nor the project's key; or the person (`user:Name`, `agent:Name`).",
+                  "description": "The day; the week's first day; the month (`YYYY-MM`); the task's\nor the project's key; the person (`user:Name`, `agent:Name`); or\nthe kind of work's ID (`none` for time without one).",
                   "type": "string"
                 },
                 "minutes": {
@@ -38519,7 +39013,7 @@
                   "type": "object"
                 },
                 "title": {
-                  "description": "The weekday; the week's days (`2026-11-23..2026-11-29`); the month;\nthe task's title; the project's name; or the person's name.",
+                  "description": "The weekday; the week's days (`2026-11-23..2026-11-29`); the month;\nthe task's title; the project's name; the person's name; or the kind\nof work's name (empty for time without one).",
                   "type": "string"
                 }
               },
@@ -38561,6 +39055,324 @@
         "type": "object"
       },
       "title": "Time report",
+      "toolset": "time"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "List kinds of work"
+      },
+      "covers": [
+        "work_kind.list"
+      ],
+      "description": "Lists the workspace's kinds of work (Development, Design, Meeting…) that time entries can be marked with, by name, with how many entries use each; `include_archived: true` adds the archived ones, which entries keep but new time can't use. Example: list_work_kinds {}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Which kinds of work to list.",
+        "properties": {
+          "include_archived": {
+            "default": false,
+            "description": "Also the archived ones.",
+            "type": "boolean"
+          }
+        },
+        "title": "WorkKindListInput",
+        "type": "object"
+      },
+      "name": "list_work_kinds",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "The workspace's kinds of work, by name.",
+        "properties": {
+          "items": {
+            "description": "The kinds.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A kind of work of the workspace.",
+              "properties": {
+                "archived": {
+                  "description": "Archived: kept for the entries that name it, not offered for new\ntime.",
+                  "type": "boolean"
+                },
+                "entries": {
+                  "description": "How many live entries name it.",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "id": {
+                  "description": "Its ID.",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "Its name.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "entries"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "WorkKindList",
+        "type": "object"
+      },
+      "title": "List kinds of work",
+      "toolset": "time"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Add a kind of work"
+      },
+      "covers": [
+        "work_kind.create"
+      ],
+      "description": "Adds a kind of work that time entries can be marked with; names are unique in the workspace, ignoring case. Add one only when the person asks for it. Example: create_work_kind {\"name\": \"Code review\"}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "A new kind of work.",
+        "properties": {
+          "name": {
+            "description": "Its name, 1 to 60 characters, unique in the workspace (any case).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "WorkKindCreateInput",
+        "type": "object"
+      },
+      "name": "create_work_kind",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "A kind of work after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether it was deleted.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "kind": {
+            "additionalProperties": false,
+            "description": "The kind after the change; as it was, when deleted.",
+            "properties": {
+              "archived": {
+                "description": "Archived: kept for the entries that name it, not offered for new\ntime.",
+                "type": "boolean"
+              },
+              "entries": {
+                "description": "How many live entries name it.",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "entries"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "WorkKindChange",
+        "type": "object"
+      },
+      "title": "Add a kind of work",
+      "toolset": "time"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Change a kind of work"
+      },
+      "covers": [
+        "work_kind.update"
+      ],
+      "description": "Renames a kind of work, or archives it (`archived: true`) so it is no longer offered while its entries keep it; `archived: false` offers it again. Example: update_work_kind {\"kind\": \"Meeting\", \"name\": \"Meetings\"}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Changes to a kind of work.",
+        "properties": {
+          "archived": {
+            "description": "Archive it (`true`) or offer it again (`false`).",
+            "type": "boolean"
+          },
+          "kind": {
+            "description": "The kind: its name (any case) or ID.",
+            "type": "string"
+          },
+          "name": {
+            "description": "A new name.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "WorkKindUpdateInput",
+        "type": "object"
+      },
+      "name": "update_work_kind",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "A kind of work after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether it was deleted.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "kind": {
+            "additionalProperties": false,
+            "description": "The kind after the change; as it was, when deleted.",
+            "properties": {
+              "archived": {
+                "description": "Archived: kept for the entries that name it, not offered for new\ntime.",
+                "type": "boolean"
+              },
+              "entries": {
+                "description": "How many live entries name it.",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "entries"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "WorkKindChange",
+        "type": "object"
+      },
+      "title": "Change a kind of work",
+      "toolset": "time"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Delete a kind of work"
+      },
+      "covers": [
+        "work_kind.delete"
+      ],
+      "description": "Deletes a kind of work that no live time entry and not the timer use; one in use is refused, archive it instead. revert_changes brings it back. Example: delete_work_kind {\"kind\": \"Travel\"}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Names one kind of work.",
+        "properties": {
+          "kind": {
+            "description": "The kind: its name (any case) or ID.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "WorkKindDeleteInput",
+        "type": "object"
+      },
+      "name": "delete_work_kind",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "A kind of work after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether it was deleted.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "kind": {
+            "additionalProperties": false,
+            "description": "The kind after the change; as it was, when deleted.",
+            "properties": {
+              "archived": {
+                "description": "Archived: kept for the entries that name it, not offered for new\ntime.",
+                "type": "boolean"
+              },
+              "entries": {
+                "description": "How many live entries name it.",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "entries"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "WorkKindChange",
+        "type": "object"
+      },
+      "title": "Delete a kind of work",
       "toolset": "time"
     },
     {
@@ -39477,7 +40289,7 @@
       "covers": [
         "timer.start"
       ],
-      "description": "Starts the workspace's one timer on a task, or without `key` starts the paused timer again. A timer running on another task is stopped first and its time logged (the result has that `entry`). The person sees the timer in the app; start it only when you are asked to or are about to work on the task yourself. get_workspace shows the timer. Example: start_timer {\"key\": \"TM-41\"}",
+      "description": "Starts the workspace's one timer on a task, or without `key` starts the paused timer again. A timer running on another task is stopped first and its time logged (the result has that `entry`). The person sees the timer in the app; start it only when you are asked to or are about to work on the task yourself. `work_kind` names the kind of work the entry will get. get_workspace shows the timer. Example: start_timer {\"key\": \"TM-41\"}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "Start the timer, or start a paused one again.",
@@ -39488,6 +40300,10 @@
           },
           "note": {
             "description": "The note the entry will get, at most 2000 characters.",
+            "type": "string"
+          },
+          "work_kind": {
+            "description": "The kind of work the entry will get (name or ID); an empty text\nremoves it.",
             "type": "string"
           }
         },
@@ -39568,6 +40384,25 @@
               "version": {
                 "description": "Goes up by one with every edit; pass it as `expected_version`.",
                 "type": "integer"
+              },
+              "work_kind": {
+                "additionalProperties": false,
+                "description": "The kind of work; left out when none.",
+                "properties": {
+                  "id": {
+                    "description": "Its ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ],
+                "type": "object"
               }
             },
             "required": [
@@ -39733,6 +40568,25 @@
               "task_trashed": {
                 "description": "Whether the task is in the trash; stop the timer with `discard`.",
                 "type": "boolean"
+              },
+              "work_kind": {
+                "additionalProperties": false,
+                "description": "The kind of work the entry will get; left out when none.",
+                "properties": {
+                  "id": {
+                    "description": "Its ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ],
+                "type": "object"
               }
             },
             "required": [
@@ -39851,6 +40705,25 @@
               "version": {
                 "description": "Goes up by one with every edit; pass it as `expected_version`.",
                 "type": "integer"
+              },
+              "work_kind": {
+                "additionalProperties": false,
+                "description": "The kind of work; left out when none.",
+                "properties": {
+                  "id": {
+                    "description": "Its ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ],
+                "type": "object"
               }
             },
             "required": [
@@ -40016,6 +40889,25 @@
               "task_trashed": {
                 "description": "Whether the task is in the trash; stop the timer with `discard`.",
                 "type": "boolean"
+              },
+              "work_kind": {
+                "additionalProperties": false,
+                "description": "The kind of work the entry will get; left out when none.",
+                "properties": {
+                  "id": {
+                    "description": "Its ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ],
+                "type": "object"
               }
             },
             "required": [
@@ -40053,7 +40945,7 @@
       "covers": [
         "timer.stop"
       ],
-      "description": "Stops the timer and logs its time, rounded to the minute, on its task, on the day it was started. Give `note` for the entry, `duration` to log another time instead (when it ran on by mistake), or `discard: true` to log nothing. Example: stop_timer {\"note\": \"Reviewed the pull request\"}",
+      "description": "Stops the timer and logs its time, rounded to the minute, on its task, on the day it was started. Give `note` for the entry, `duration` to log another time instead (when it ran on by mistake), `work_kind` for another kind of work than the timer's, or `discard: true` to log nothing. Example: stop_timer {\"note\": \"Reviewed the pull request\"}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "Stop the timer and log its time.",
@@ -40069,6 +40961,10 @@
           },
           "note": {
             "description": "The entry's note; default the timer's own note.",
+            "type": "string"
+          },
+          "work_kind": {
+            "description": "The entry's kind of work (name or ID); default the timer's own; an\nempty text logs none.",
             "type": "string"
           }
         },
@@ -40149,6 +41045,25 @@
               "version": {
                 "description": "Goes up by one with every edit; pass it as `expected_version`.",
                 "type": "integer"
+              },
+              "work_kind": {
+                "additionalProperties": false,
+                "description": "The kind of work; left out when none.",
+                "properties": {
+                  "id": {
+                    "description": "Its ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ],
+                "type": "object"
               }
             },
             "required": [
@@ -40314,6 +41229,25 @@
               "task_trashed": {
                 "description": "Whether the task is in the trash; stop the timer with `discard`.",
                 "type": "boolean"
+              },
+              "work_kind": {
+                "additionalProperties": false,
+                "description": "The kind of work the entry will get; left out when none.",
+                "properties": {
+                  "id": {
+                    "description": "Its ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ],
+                "type": "object"
               }
             },
             "required": [
@@ -43592,6 +44526,25 @@
               "task_trashed": {
                 "description": "Whether the task is in the trash; stop the timer with `discard`.",
                 "type": "boolean"
+              },
+              "work_kind": {
+                "additionalProperties": false,
+                "description": "The kind of work the entry will get; left out when none.",
+                "properties": {
+                  "id": {
+                    "description": "Its ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ],
+                "type": "object"
               }
             },
             "required": [
@@ -44128,8 +45081,18 @@
                   "description": "Every status shown in this column, by project key: one, or more when\nsub-projects are included.",
                   "type": "object"
                 },
+                "under_minimum": {
+                  "default": false,
+                  "description": "Whether the column holds fewer tasks than its WIP minimum.",
+                  "type": "boolean"
+                },
                 "wip_limit": {
                   "description": "The WIP limit, if the status has one.",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "wip_min": {
+                  "description": "The WIP minimum, if the status has one.",
                   "minimum": 0,
                   "type": "integer"
                 }
@@ -44141,6 +45104,7 @@
                 "hue",
                 "statuses",
                 "over_limit",
+                "under_minimum",
                 "count",
                 "older",
                 "hidden",

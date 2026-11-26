@@ -520,8 +520,8 @@ fn setup_of(w: &WriteCtx<'_>, p: &ProjectRow, tasks: bool) -> Result<ProjectBlue
         |r| Ok((r.get(0)?, r.get(1)?)),
     )?;
     let mut stmt = tx.prepare(
-        "SELECT name, category, hue, wip_limit, rules FROM statuses WHERE project_id = ?1
-          ORDER BY rank, id",
+        "SELECT name, category, hue, wip_limit, rules, wip_min FROM statuses
+          WHERE project_id = ?1 ORDER BY rank, id",
     )?;
     let statuses = stmt
         .query_map([b(p.id)], |r| {
@@ -531,6 +531,9 @@ fn setup_of(w: &WriteCtx<'_>, p: &ProjectRow, tasks: bool) -> Result<ProjectBlue
                 hue: parse_enum(&r.get::<_, String>(2)?).unwrap_or(Hue::Grey),
                 wip_limit: r
                     .get::<_, Option<i64>>(3)?
+                    .and_then(|n| u32::try_from(n).ok()),
+                wip_min: r
+                    .get::<_, Option<i64>>(5)?
                     .and_then(|n| u32::try_from(n).ok()),
                 rules: super::rules::parse(r.get::<_, Option<String>>(4)?.as_deref()),
             })
@@ -1317,8 +1320,8 @@ fn set_up(w: &WriteCtx<'_>, p: &ProjectRow, setup: &ProjectBlueprint) -> Result<
             status_ids.push(status);
             tx.execute(
                 "INSERT INTO statuses (id, project_id, name, name_fold, category, hue, rank,
-                                       wip_limit)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                                       wip_limit, wip_min)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                 params![
                     b(status),
                     b(id),
@@ -1327,7 +1330,9 @@ fn set_up(w: &WriteCtx<'_>, p: &ProjectRow, setup: &ProjectBlueprint) -> Result<
                     enum_text(s.category),
                     enum_text(s.hue),
                     rank.as_str(),
-                    s.wip_limit.filter(|n| *n > 0)
+                    s.wip_limit.filter(|n| *n > 0),
+                    s.wip_min
+                        .filter(|n| *n > 0 && s.wip_limit.is_none_or(|l| *n <= l))
                 ],
             )?;
         }

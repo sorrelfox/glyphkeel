@@ -21,6 +21,8 @@ export interface BlocksLink {
   id: string;
   from: string;
   to: string;
+  /** Days that must pass after the blocker ends; none when left out. */
+  lagDays?: number | undefined;
 }
 
 const DAY_MS = 86_400_000;
@@ -34,14 +36,14 @@ interface Dates {
 const begin = (d: Dates) => d.start ?? d.due;
 const end = (d: Dates) => d.due ?? d.start;
 
-/** The day after the blocker ends, when the blocked task starts too soon. */
-function tooEarly(blocker: Dates, blocked: Dates): { begin: string; end: string; earliest: string } | undefined {
+/** The day after the blocker ends (and its lag), when the blocked task starts too soon. */
+function tooEarly(blocker: Dates, blocked: Dates, lag = 0): { begin: string; end: string; earliest: string } | undefined {
   const e = end(blocker);
   const b = begin(blocked);
   if (e === undefined || b === undefined) {
     return undefined;
   }
-  const earliest = addDays(e, 1);
+  const earliest = addDays(e, 1 + Math.max(0, lag));
   return b < earliest ? { begin: b, end: e, earliest } : undefined;
 }
 
@@ -171,8 +173,8 @@ export function scheduleOf(tasks: readonly ListedTask[], links: readonly BlocksL
     if (!from || !to) {
       continue;
     }
-    const early = tooEarly({ start: from.start_date, due: from.due_date }, { start: to.start_date, due: to.due_date });
-    dependencies.push({ id: link.id, from: from.key, to: to.key, violated: early !== undefined });
+    const early = tooEarly({ start: from.start_date, due: from.due_date }, { start: to.start_date, due: to.due_date }, link.lagDays);
+    dependencies.push({ id: link.id, from: from.key, to: to.key, ...(link.lagDays ? { lag_days: link.lagDays } : {}), violated: early !== undefined });
     if (early) {
       problems.push(
         problem("starts_before_blocker_ends", to.key, "schedule-starts-before-blocker", `${to.key} starts on ${early.begin}, before ${from.key} ends on ${early.end}.`, { task: to.key, start: early.begin, blocker: from.key, end: early.end }, from.key),
@@ -254,7 +256,7 @@ export function moveDependents(id: string, tasks: ReadonlyMap<string, Movable>, 
       if (!task || task.closed || link.to === id) {
         continue;
       }
-      const early = tooEarly({ start: blocker.start ?? undefined, due: blocker.due ?? undefined }, { start: task.start ?? undefined, due: task.due ?? undefined });
+      const early = tooEarly({ start: blocker.start ?? undefined, due: blocker.due ?? undefined }, { start: task.start ?? undefined, due: task.due ?? undefined }, link.lagDays);
       if (!early) {
         continue;
       }

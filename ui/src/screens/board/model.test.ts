@@ -65,6 +65,7 @@ function column(id: string, cards: Card[] = [], overrides: Partial<Column> = {})
     count: cards.length,
     older: 0,
     over_limit: false,
+    under_minimum: false,
     hidden: false,
     collapsed: false,
     sort_mode: "manual",

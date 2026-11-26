@@ -154,6 +154,12 @@ pub struct Column {
     pub wip_limit: Option<u32>,
     /// Whether the column holds more tasks than its WIP limit.
     pub over_limit: bool,
+    /// The WIP minimum, if the status has one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wip_min: Option<u32>,
+    /// Whether the column holds fewer tasks than its WIP minimum.
+    #[serde(default)]
+    pub under_minimum: bool,
     /// Tasks in the column, including hidden older ones.
     pub count: u64,
     /// Closed cards hidden behind "Show older".

@@ -106,6 +106,7 @@ const SPECS: &[Spec] = &[
     spec(STATUS, "category", "statuses", "category", Enc::Text),
     spec(STATUS, "hue", "statuses", "hue", Enc::Text),
     spec(STATUS, "wip_limit", "statuses", "wip_limit", Enc::Int),
+    spec(STATUS, "wip_min", "statuses", "wip_min", Enc::Int),
     spec(STATUS, "rank", "statuses", "rank", Enc::Text),
     spec(STATUS, "rules", "statuses", "rules", Enc::Json),
     folded(TYPE, "name", "task_types"),

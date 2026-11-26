@@ -40,6 +40,8 @@ export interface FakeStatus {
   category: Category;
   hue: Hue;
   wip_limit: number | null;
+  /** The fewest tasks the column should hold; none when left out. */
+  wip_min?: number | null | undefined;
   /** Its rules for tasks entering it; none when left out. */
   rules?: StatusRules | undefined;
 }
@@ -161,6 +163,8 @@ export interface FakeRelation {
   from: string;
   to: string;
   kind: "blocks" | "relates" | "duplicates" | "clones";
+  /** For `blocks`: the days between the blocker's end and the blocked task's start. */
+  lagDays?: number | undefined;
 }
 
 export interface FakeComment {
@@ -234,6 +238,15 @@ export interface FakeTimeEntry {
   editedAt: string | null;
   version: number;
   deletedAt: string | null;
+  /** The kind of work; none when left out. */
+  workKindId?: string | undefined;
+}
+
+/** A kind of work of the workspace. */
+export interface FakeWorkKind {
+  id: string;
+  name: string;
+  archived: boolean;
 }
 
 /** The workspace's one timer. */
@@ -245,6 +258,8 @@ export interface FakeTimer {
   /** Earlier running stretches, in milliseconds. */
   elapsedMs: number;
   note: string;
+  /** The kind of work the entry will get; none when left out. */
+  workKindId?: string | undefined;
 }
 
 /** A task's personal reminder: a moment, or days before the due date. */
@@ -304,6 +319,8 @@ export interface FakeState {
   /** Gantt chart layouts by project ID; none until one changes. */
   ganttLayouts?: Record<string, GanttLayout>;
   timeEntries: FakeTimeEntry[];
+  /** Kinds of work for logged time; none until one is made. */
+  workKinds?: FakeWorkKind[];
   timer: FakeTimer | null;
   reminders: FakeReminder[];
   settings: Settings;

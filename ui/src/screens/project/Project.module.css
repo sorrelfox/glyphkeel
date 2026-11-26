@@ -145,7 +145,7 @@
 
 .statusRow {
   display: grid;
-  grid-template-columns: 12px minmax(0, 1fr) 140px 130px 72px auto;
+  grid-template-columns: 12px minmax(0, 1fr) 140px 130px minmax(72px, max-content) minmax(72px, max-content) auto;
   align-items: center;
   gap: 8px;
 }

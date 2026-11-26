@@ -140,8 +140,8 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
     )?;
     let statuses = all(
         tx,
-        "SELECT id, name, category, hue, rank, wip_limit, rules FROM statuses WHERE project_id = ?1
-          ORDER BY rank, id",
+        "SELECT id, name, category, hue, rank, wip_limit, rules, wip_min FROM statuses
+          WHERE project_id = ?1 ORDER BY rank, id",
         &pid,
         |r| {
             Ok(Status {
@@ -151,6 +151,7 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
                 hue: r.get(3)?,
                 rank: r.get(4)?,
                 wip_limit: r.get(5)?,
+                wip_min: r.get(7)?,
                 rules: json_of(r.get::<_, Option<String>>(6)?),
             })
         },
@@ -441,10 +442,11 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
     }
     let time = all(
         tx,
-        "SELECT e.id, e.task_id, e.work_date, e.minutes, e.note, e.activity, e.actor_kind,
-                e.actor_name, e.session_id, e.created_at, e.edited_at, e.deleted_at,
+        "SELECT e.id, e.task_id, e.work_date, e.minutes, e.note, coalesce(k.name, e.activity),
+                e.actor_kind, e.actor_name, e.session_id, e.created_at, e.edited_at, e.deleted_at,
                 e.deleted_group, e.version
            FROM time_entries e JOIN tasks t ON t.id = e.task_id
+           LEFT JOIN work_kinds k ON k.id = e.work_kind_id
           WHERE t.project_id = ?1 ORDER BY e.work_date, e.id",
         &pid,
         |r| {

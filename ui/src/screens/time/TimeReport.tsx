@@ -23,7 +23,11 @@ import styles from "./TimeReport.module.css";
 /** The list's key for "all projects"; no project key has this form. */
 const ALL_PROJECTS = "*";
 
-const GROUPS = ["day", "week", "month", "task", "project", "person"] as const satisfies readonly TimeGroupBy[];
+const GROUPS = ["day", "week", "month", "task", "project", "person", "work_kind"] as const satisfies readonly TimeGroupBy[];
+
+/** The list's keys for "every kind of work" and "time without a kind"; no ID has these forms. */
+const ALL_KINDS = "*";
+const NO_KIND = "-";
 
 function addDays(day: string, days: number): string {
   const [y, m, d] = day.split("-").map(Number);
@@ -96,7 +100,15 @@ export function TimeReportScreen() {
   const [groupBy, setGroupBy] = useState<TimeGroupBy>("task");
   const [project, setProject] = useState("");
   const [subprojects, setSubprojects] = useState(true);
-  const input: TimeReportInput = { from, to, group_by: groupBy, ...(project === "" ? {} : { project, include_subprojects: subprojects }) };
+  const kinds = useOp("work_kind.list", { include_archived: true });
+  const [kind, setKind] = useState(ALL_KINDS);
+  const input: TimeReportInput = {
+    from,
+    to,
+    group_by: groupBy,
+    ...(project === "" ? {} : { project, include_subprojects: subprojects }),
+    ...(kind === ALL_KINDS ? {} : { work_kind: kind === NO_KIND ? "none" : kind }),
+  };
   const report = useOp("time.report", input);
   const dayFormat = new Intl.DateTimeFormat(locale, { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
   const weekFormat = new Intl.DateTimeFormat(locale, { month: "short", day: "numeric", timeZone: "UTC" });
@@ -146,6 +158,8 @@ export function TimeReportScreen() {
             {row.title}
           </>
         );
+      case "work_kind":
+        return row.title === "" ? <span className="faint">{t("report-no-work-kind")}</span> : <span>{row.title}</span>;
       case "person":
         return (
           <span className={styles.person}>
@@ -192,6 +206,19 @@ export function TimeReportScreen() {
           <Switch isSelected={subprojects} onChange={setSubprojects}>
             {t("report-subprojects")}
           </Switch>
+        )}
+        {(kinds.data?.items.length ?? 0) > 0 && (
+          <Select
+            className={styles.select}
+            label={t("report-work-kind")}
+            value={kind}
+            onChange={setKind}
+            options={[
+              { id: ALL_KINDS, label: t("report-all-work-kinds") },
+              { id: NO_KIND, label: t("report-no-work-kind") },
+              ...(kinds.data?.items ?? []).map((each) => ({ id: each.id, label: each.name })),
+            ]}
+          />
         )}
         <Select
           className={styles.select}

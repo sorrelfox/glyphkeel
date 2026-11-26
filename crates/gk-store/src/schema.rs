@@ -19,7 +19,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 use crate::error::{Result, StoreError};
 
 /// The schema version this program is built for.
-pub const SCHEMA_VERSION: i64 = 14;
+pub const SCHEMA_VERSION: i64 = 15;
 
 /// One migration: the SQL that takes the schema from `version - 1` to
 /// `version`.
@@ -86,6 +86,10 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 14,
         sql: include_str!("../migrations/0014_recurrence_and_templates.sql"),
+    },
+    Migration {
+        version: 15,
+        sql: include_str!("../migrations/0015_lag_wip_minimum_and_kinds_of_work.sql"),
     },
 ];
 
@@ -597,7 +601,7 @@ mod tests {
                      'Task', 'task', 'task', 'grey', 'i');",
         )
         .unwrap();
-        migrate(&mut conn, MIGRATIONS, |_| Ok(())).unwrap();
+        migrate(&mut conn, &MIGRATIONS[..14], |_| Ok(())).unwrap();
         assert_eq!(user_version(&conn).unwrap(), 14);
         let offset: Option<i64> = conn
             .query_row("SELECT due_offset_days FROM task_types", [], |r| r.get(0))
@@ -644,6 +648,48 @@ mod tests {
             conn.execute("UPDATE task_series SET rule = 'not json'", [])
                 .is_err()
         );
+    }
+
+    #[test]
+    fn version_15_adds_wip_minimums_and_kinds_of_work() {
+        let mut conn = memory();
+        migrate(&mut conn, &MIGRATIONS[..14], |_| Ok(())).unwrap();
+        conn.execute_batch(
+            "INSERT INTO projects (id, rank, key, name, name_fold, hue, modules, created_at,
+                                   updated_at)
+             VALUES (x'01010101010101010101010101010101', 'i', 'RT', 'RT', 'rt', 'blue', '{}',
+                     0, 0);
+             INSERT INTO statuses (id, project_id, name, name_fold, category, hue, rank,
+                                   wip_limit)
+             VALUES (x'02020202020202020202020202020202', x'01010101010101010101010101010101',
+                     'Doing', 'doing', 'in_progress', 'blue', 'i', 3);",
+        )
+        .unwrap();
+        migrate(&mut conn, MIGRATIONS, |_| Ok(())).unwrap();
+        assert_eq!(user_version(&conn).unwrap(), 15);
+        let (min, max): (Option<i64>, Option<i64>) = conn
+            .query_row("SELECT wip_min, wip_limit FROM statuses", [], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })
+            .unwrap();
+        assert_eq!(
+            (min, max),
+            (None, Some(3)),
+            "columns keep their limit and no minimum"
+        );
+        conn.execute("UPDATE statuses SET wip_min = 1", []).unwrap();
+        assert!(conn.execute("UPDATE statuses SET wip_min = 0", []).is_err());
+        let kind = |name: &str| {
+            conn.execute(
+                "INSERT INTO work_kinds (id, name, name_fold, created_at, created_by_kind,
+                                         created_by_name, updated_at)
+                 VALUES (randomblob(16), ?1, lower(?1), 0, 'user', 'You', 0)",
+                [name],
+            )
+        };
+        kind("Design").unwrap();
+        assert!(kind("design").is_err(), "names are unique");
+        assert!(kind("").is_err(), "names are not empty");
     }
 
     #[test]

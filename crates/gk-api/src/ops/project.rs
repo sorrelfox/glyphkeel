@@ -141,6 +141,10 @@ pub struct Status {
     /// Most tasks the column should hold; left out when there is no limit.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wip_limit: Option<u32>,
+    /// Fewest tasks the column should hold; left out when there is no
+    /// minimum.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wip_min: Option<u32>,
     /// Its rules for tasks entering it; left out when it has none.
     #[serde(
         default,
@@ -316,6 +320,8 @@ pub enum ProjectField {
 pub enum StatusField {
     /// The WIP limit.
     WipLimit,
+    /// The WIP minimum.
+    WipMin,
 }
 
 /// Changes to a status, a task type or a label inside
@@ -339,6 +345,10 @@ pub struct StatusChange {
     /// Its WIP limit, 1 or more.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wip_limit: Option<u32>,
+    /// Its WIP minimum, 1 or more and not above the limit; the count shows
+    /// a warning while the column holds fewer tasks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wip_min: Option<u32>,
     /// Fields to clear.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub clear: Vec<StatusField>,
@@ -532,6 +542,10 @@ pub struct StatusCreateInput {
     /// Its WIP limit, 1 or more.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wip_limit: Option<u32>,
+    /// Its WIP minimum, 1 or more and not above the limit; the count shows
+    /// a warning while the column holds fewer tasks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wip_min: Option<u32>,
     /// Place it before this status.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub before: Option<String>,
@@ -563,6 +577,9 @@ pub struct StatusUpdateInput {
     /// A new WIP limit, 1 or more.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wip_limit: Option<u32>,
+    /// A new WIP minimum, 1 or more and not above the limit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wip_min: Option<u32>,
     /// Fields to clear.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub clear: Vec<StatusField>,

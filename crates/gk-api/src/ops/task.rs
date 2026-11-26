@@ -278,6 +278,10 @@ pub struct Link {
     pub task: TaskRef,
     /// The link's ID.
     pub id: String,
+    /// For `blocks` and `blocked_by`: the days between the end of the
+    /// blocking task and the start of the blocked one; left out when none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lag_days: Option<i64>,
 }
 
 /// What `task.get` adds to each task.
@@ -327,6 +331,9 @@ pub struct TaskChange {
     /// The tasks "also move dependents" moved, blockers first.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub moved: Vec<MovedTask>,
+    /// The duplicates closed with the task (`close_duplicates`), by key.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub duplicates_closed: Vec<String>,
 }
 
 /// Which tasks to read.
@@ -556,6 +563,13 @@ pub struct TaskMoveInput {
     /// Move the task although another agent claimed it (full profile only).
     #[serde(default)]
     pub override_claim: bool,
+    /// When the move closes the task: `true` closes the open tasks marked
+    /// as its duplicates too, in the same change (each into the status of
+    /// the same name in its project, else the first one of the same
+    /// category); `false` leaves them open without a warning. Left out, they
+    /// stay open and a warning names them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub close_duplicates: Option<bool>,
 }
 
 /// What tasks moving to another project take there in place of the
@@ -708,6 +722,12 @@ pub struct RelationInput {
     pub kind: RelationKind,
     /// The other task: its key or ID.
     pub other: String,
+    /// For `blocks` and `blocked_by` with `relation.add`: the days that must
+    /// pass after the blocking task ends before the blocked one may begin
+    /// (finish-to-start plus a lag), 0 to 365. On an existing link it
+    /// changes the lag; 0 removes it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lag_days: Option<i64>,
 }
 
 /// The kinds of link, as read from the first task.
@@ -888,7 +908,7 @@ pub(crate) const TASK_RELEASE: OpDescriptor = OpDescriptor::of::<TaskRelease>(co
     "TaskReleaseInput",
 ));
 pub(crate) const RELATION_ADD: OpDescriptor = OpDescriptor::of::<RelationAdd>(command(
-    "Link two tasks (blocks, relates, duplicates, clones, or make one a subtask of the other).",
+    "Link two tasks (blocks, with an optional lag in days; relates, duplicates, clones; or make one a subtask of the other).",
     "task link <key>",
     "RelationInput",
 ));
@@ -965,7 +985,7 @@ pub(crate) const TASK_MOVE_CHECK: OpDescriptor = OpDescriptor::of::<TaskMoveChec
 });
 
 pub(crate) const TASK_MOVE: OpDescriptor = OpDescriptor::of::<TaskMove>(Meta {
-    summary: "Move a task to another status or place in its column, or to another project (new key; the old one forwards).",
+    summary: "Move a task to another status or place in its column, or to another project (new key; the old one forwards); closing it can close its duplicates too.",
     kind: OpKind::Command,
     safety: Safety::Write,
     exposure: Exposure::Data,

@@ -36,12 +36,31 @@ const NAMED_FIELDS = new Set([
 
 const OPERATORS: Record<string, string> = { ":": "is", "=": "is", "<": "lt", "<=": "le", ">": "gt", ">=": "ge", "!=": "is-not" };
 
+/** A field's name in words, or as written when it has none. */
+const fieldName = (t: Translate, field: string) => (NAMED_FIELDS.has(field) ? t(`list-field-${field}`) : field);
+
 /** A chip in words: "Status is not Backlog", "Due before +7d", "Text contains login". */
 export function chipText(t: Translate, chip: QueryChip, values: string): string {
   if (chip.field === undefined) {
     return t("list-chip-text", { values });
   }
-  const field = NAMED_FIELDS.has(chip.field) ? t(`list-field-${chip.field}`) : chip.field;
+  // The history: "Status was Review", "Due changed after -7d", "Changed by agent".
+  const history = /^(was|changed):(.+)$/u.exec(chip.field);
+  if (history) {
+    const field = fieldName(t, history[2] ?? "");
+    if (history[1] === "was") {
+      return t(chip.negated ? "list-chip-was-not" : "list-chip-was", { field, values });
+    }
+    const op = OPERATORS[chip.op ?? ":"] ?? "is";
+    return t(chip.negated ? "list-chip-changed-not" : "list-chip-changed", { field, op, values });
+  }
+  if (chip.field === "changed") {
+    return t(chip.negated ? "list-chip-changed-any-not" : "list-chip-changed-any", { values });
+  }
+  if (chip.field === "changed-by") {
+    return t(chip.negated ? "list-chip-changed-by-not" : "list-chip-changed-by", { values });
+  }
+  const field = fieldName(t, chip.field);
   let operator = OPERATORS[chip.op ?? ":"] ?? "is";
   if (chip.negated) {
     operator = operator === "is" ? "is-not" : operator === "is-not" ? "is" : `not-${operator}`;

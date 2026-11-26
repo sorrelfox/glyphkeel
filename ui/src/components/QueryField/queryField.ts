@@ -132,6 +132,9 @@ function valuesFor(field: QueryField, names: QueryNames, fields: readonly QueryF
     case "updated":
     case "closed":
       return DATE_WORDS;
+    case "author":
+    case "changed-by":
+      return ["me", "agent"];
     case "sort":
       return fields.filter((candidate) => candidate.sortable).flatMap((candidate) => [candidate.name, `-${candidate.name}`]);
     default:
@@ -159,6 +162,19 @@ export function queryCompletions(environment: CompletionEnvironment) {
       return null;
     }
     const before = context.state.sliceDoc(Math.max(0, context.pos - 200), context.pos);
+    // A condition on the history names a field of its own: `was:status:Re`, `changed:due>`.
+    const history = /(?:^|[\s(])-?(was|changed):([a-zA-Z][a-zA-Z-]*)((?:!=|<=|>=|:|<|>|=)(?:"[^"]*"|[^\s,"()]*,)*)("?[^\s,"()]*)$/i.exec(before);
+    if (history) {
+      const [, kind = "", inner = "", , partial = ""] = history;
+      const field = findField(fields, inner);
+      if (!field) {
+        return null;
+      }
+      const values = (kind.toLowerCase() === "changed" ? DATE_WORDS : valuesFor(field, environment.names(), fields)).filter((value) => value !== "none");
+      return values.length === 0
+        ? null
+        : { from: context.pos - partial.length, options: values.map((value) => ({ label: quoteValue(value), type: "constant" })), validFor: /^"?[^\s,"()]*$/ };
+    }
     const word = /(?:^|[\s(])(-?)([a-zA-Z][a-zA-Z-]*)?((?:!=|<=|>=|:|<|>|=)(?:"[^"]*"|[^\s,"()]*,)*)?("?[^\s,"()]*)$/.exec(before);
     if (!word) {
       return null;
@@ -188,6 +204,21 @@ export function queryCompletions(environment: CompletionEnvironment) {
     const values = valuesFor(field, environment.names(), fields);
     if (values.length === 0) {
       return null;
+    }
+    // `was:` takes a field and then its value: `status:` comes first, then the statuses.
+    if (field.name === "was") {
+      return {
+        from: context.pos - partial.length,
+        options: values.map((value) => ({
+          label: `${value}:`,
+          type: "property",
+          apply: (view, _completion, from, to) => {
+            view.dispatch({ changes: { from, to, insert: `${value}:` }, selection: { anchor: from + value.length + 1 } });
+            startCompletion(view);
+          },
+        })),
+        validFor: /^[a-zA-Z-]*$/,
+      };
     }
     return {
       from: context.pos - partial.length,

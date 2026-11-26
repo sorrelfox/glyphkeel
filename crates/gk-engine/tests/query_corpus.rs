@@ -221,6 +221,8 @@ fn every_field_of_the_registry_filters_data_set_s() {
             "task.update",
             json!({ "key": "TM-1", "fix_version": "1.0" }),
         ),
+        // And a recorded change of status, for the history.
+        ("task.move", json!({ "key": "TM-2", "status": "Review" })),
     ] {
         e.call(&Context::user(Via::App), op, input).unwrap();
     }
@@ -253,6 +255,9 @@ fn every_field_of_the_registry_filters_data_set_s() {
             FieldType::Count(_) => format!("{name}>0"),
             FieldType::Is => format!("{name}:open"),
             FieldType::Has => format!("{name}:due"),
+            FieldType::Was => format!("{name}:status:Review"),
+            FieldType::Changed => format!("{name}:status"),
+            FieldType::ChangedBy => format!("{name}:me"),
         };
         let found = run(&e, &query).len();
         assert!(

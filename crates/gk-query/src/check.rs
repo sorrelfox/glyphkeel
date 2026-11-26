@@ -16,7 +16,7 @@ use crate::dates::{Calendar, Days, parse_query_date};
 use crate::error::{QueryError, closest};
 use crate::fields::{
     self, CATEGORIES, CountOf, CustomField, DateColumn, DurationColumn, Field, FieldType,
-    HAS_PARTS, IS_FLAGS, LinkField, MomentColumn, PRIORITIES, TextScope,
+    HAS_PARTS, History, IS_FLAGS, LinkField, MomentColumn, PRIORITIES, TextScope,
 };
 use crate::syntax::{Expr, Op, Predicate, Query, Span, Value, ValueKind};
 
@@ -194,6 +194,36 @@ pub enum Cond {
     Has(Vec<&'static str>),
     /// A condition on a custom field.
     Custom(CustomCond),
+    /// The task has, or had at any time, one of these values.
+    Was(WasTest),
+    /// One of these fields (history names, such as `due_date`) changed
+    /// after the task was created, at a moment within any of the bounds
+    /// (milliseconds), or at any time when there are none.
+    Changed {
+        /// The fields, as the history names them.
+        keys: Vec<&'static str>,
+        /// When.
+        at: Vec<Bounds>,
+    },
+    /// Any of these changed the task's fields after it was created.
+    ChangedBy(Vec<AuthorRef>),
+}
+
+/// What `was:` looks for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WasTest {
+    /// Statuses of these names.
+    Statuses(Vec<NameRef>),
+    /// Statuses of these categories (database names).
+    Categories(Vec<&'static str>),
+    /// Types of these names.
+    Types(Vec<NameRef>),
+    /// These priorities, by name.
+    Priorities(Vec<&'static str>),
+    /// Labels of these names.
+    Labels(Vec<NameRef>),
+    /// Versions of these names.
+    Versions(Vec<NameRef>),
 }
 
 /// A condition on a custom field: the task's own field of that query name
@@ -419,6 +449,13 @@ fn collect_names(f: &Filter, out: &mut Vec<NameUse>) {
             Cond::Types(n) => names(NameKind::Type, n, out),
             Cond::Labels(n) => names(NameKind::Label, n, out),
             Cond::Versions { names: n, .. } => names(NameKind::Version, n, out),
+            Cond::Was(w) => match w {
+                WasTest::Statuses(n) => names(NameKind::Status, n, out),
+                WasTest::Types(n) => names(NameKind::Type, n, out),
+                WasTest::Labels(n) => names(NameKind::Label, n, out),
+                WasTest::Versions(n) => names(NameKind::Version, n, out),
+                WasTest::Categories(_) | WasTest::Priorities(_) => {}
+            },
             Cond::Projects(p) => out.extend(p.iter().map(|p| NameUse {
                 kind: NameKind::Project,
                 text: p.key.clone(),
@@ -557,6 +594,9 @@ fn usage(field: &Field) -> String {
 }
 
 fn predicate(p: &Predicate, env: CheckEnv<'_>) -> Result<Filter, QueryError> {
+    if let Some((kind, inner)) = fields::split_history(&p.field) {
+        return history_predicate(p, kind, inner, env);
+    }
     let prefixed = fields::strip_custom_prefix(&p.field).is_some();
     if let Some(custom) = fields::find_custom(&p.field, env.custom) {
         return custom_predicate(p, custom, env);
@@ -1161,19 +1201,7 @@ fn condition(
             let none = values.iter().any(is_none);
             let mut b = Vec::new();
             for v in values.iter().filter(|v| !is_none(v)) {
-                let (first, last) = days_of(v, env)?;
-                let days = bounds(op, first.days_since_epoch(), last.days_since_epoch());
-                let start = |d: i64| {
-                    Day::from_days_since_epoch(d)
-                        .map(|d| env.calendar.start_of(d))
-                        .unwrap_or(if d < 0 { i64::MIN } else { i64::MAX })
-                };
-                b.push(Bounds {
-                    lo: days.lo.map(start),
-                    hi: days
-                        .hi
-                        .map(|d| start(d.saturating_add(1)).saturating_sub(1)),
-                });
+                b.push(moment_bounds(op, v, env)?);
             }
             Cond::Moment {
                 column,
@@ -1207,19 +1235,7 @@ fn condition(
                 .map(|v| whole_number(v, false).map(|(lo, hi)| bounds(op, lo, hi)))
                 .collect::<Result<_, _>>()?,
         ),
-        FieldType::Author => Cond::Author(
-            values
-                .iter()
-                .map(|v| {
-                    let text = v.text();
-                    match text.to_lowercase().as_str() {
-                        "me" => AuthorRef::Me,
-                        "agent" => AuthorRef::Agent,
-                        _ => AuthorRef::Named(text),
-                    }
-                })
-                .collect(),
-        ),
+        FieldType::Author => Cond::Author(values.iter().map(author_ref).collect()),
         FieldType::Claimed => {
             if values.iter().any(is_any) {
                 Cond::Claimed(None)
@@ -1233,6 +1249,23 @@ fn condition(
                 .map(|v| choice(v, field, IS_FLAGS))
                 .collect::<Result<_, _>>()?,
         ),
+        FieldType::Was => {
+            return Err(QueryError::new("query-was-value", values[0].span));
+        }
+        FieldType::Changed => {
+            let mut keys = Vec::new();
+            for v in values {
+                let key = history_field(v.span, word(v), History::Changed)?;
+                if !keys.contains(&key.1) {
+                    keys.push(key.1);
+                }
+            }
+            Cond::Changed {
+                keys,
+                at: Vec::new(),
+            }
+        }
+        FieldType::ChangedBy => Cond::ChangedBy(values.iter().map(author_ref).collect()),
         FieldType::Has => Cond::Has(
             values
                 .iter()
@@ -1241,6 +1274,179 @@ fn condition(
         ),
     };
     Ok(Filter::Cond(cond))
+}
+
+fn author_ref(v: &Value) -> AuthorRef {
+    let text = v.text();
+    match text.to_lowercase().as_str() {
+        "me" => AuthorRef::Me,
+        "agent" => AuthorRef::Agent,
+        _ => AuthorRef::Named(text),
+    }
+}
+
+/// The moments of a day value under `op`: from the start of its first day
+/// to the end of its last, in the workspace's time zone.
+fn moment_bounds(op: Op, v: &Value, env: CheckEnv<'_>) -> Result<Bounds, QueryError> {
+    let (first, last) = days_of(v, env)?;
+    let days = bounds(op, first.days_since_epoch(), last.days_since_epoch());
+    let start = |d: i64| {
+        Day::from_days_since_epoch(d)
+            .map(|d| env.calendar.start_of(d))
+            .unwrap_or(if d < 0 { i64::MIN } else { i64::MAX })
+    };
+    Ok(Bounds {
+        lo: days.lo.map(start),
+        hi: days
+            .hi
+            .map(|d| start(d.saturating_add(1)).saturating_sub(1)),
+    })
+}
+
+/// The field a history condition looks at, with its name in the history.
+fn history_field(
+    span: Span,
+    written: &str,
+    kind: History,
+) -> Result<(&'static Field, &'static str), QueryError> {
+    let choices = match kind {
+        History::Was => fields::WAS_FIELDS,
+        History::Changed => fields::CHANGED_FIELDS,
+    };
+    let found = fields::find(written)
+        .filter(|f| choices.contains(&f.name))
+        .and_then(|f| fields::history_key(f.ty).map(|k| (f, k)));
+    // The category is read from the status.
+    let found = found.or_else(|| {
+        fields::find(written)
+            .filter(|f| kind == History::Was && f.ty == FieldType::Category)
+            .map(|f| (f, "status"))
+    });
+    found.ok_or_else(|| {
+        let lower = written.to_ascii_lowercase();
+        match closest(&lower, choices.iter().copied()) {
+            Some(s) => QueryError::new("query-history-field-suggest", span)
+                .arg("field", written)
+                .arg("history", kind.as_str())
+                .arg("suggestion", s),
+            None => QueryError::new("query-history-field", span)
+                .arg("field", written)
+                .arg("history", kind.as_str())
+                .arg("choices", choices.join(", ")),
+        }
+    })
+}
+
+/// `was:<field><op>values` or `changed:<field><op>dates`.
+fn history_predicate(
+    p: &Predicate,
+    kind: History,
+    inner: &str,
+    env: CheckEnv<'_>,
+) -> Result<Filter, QueryError> {
+    let inner_span = Span::new(p.field_span.end - inner.len(), p.field_span.end);
+    let (field, key) = history_field(inner_span, inner, kind)?;
+    let written = format!("{}:{}", kind.as_str(), field.name);
+    let ops: &[Op] = match kind {
+        History::Was => &[Op::Is, Op::Eq, Op::Ne],
+        History::Changed => &[Op::Is, Op::Eq, Op::Ne, Op::Lt, Op::Le, Op::Gt, Op::Ge],
+    };
+    if !ops.contains(&p.op) {
+        let usage = ops
+            .iter()
+            .filter(|op| **op != Op::Eq)
+            .map(|op| format!("{written}{}", op.as_str()))
+            .collect::<Vec<_>>()
+            .join(", ");
+        return Err(QueryError::new("query-operator", p.op_span)
+            .arg("op", p.op.as_str())
+            .arg("field", written)
+            .arg("usage", usage));
+    }
+    for v in &p.values {
+        if is_none(v) {
+            return Err(QueryError::new("query-history-none", v.span)
+                .arg("history", kind.as_str())
+                .arg("field", field.name));
+        }
+        if let ValueKind::Range(..) = v.kind {
+            if kind == History::Was {
+                return Err(QueryError::new("query-no-range", v.span)
+                    .arg("field", written.clone())
+                    .arg("usage", format!("{written}:, {written}!=")));
+            }
+            if !matches!(p.op, Op::Is | Op::Eq) {
+                return Err(
+                    QueryError::new("query-range-operator", v.span).arg("field", written.clone())
+                );
+            }
+        }
+    }
+    let (op, negate) = match p.op {
+        Op::Ne => (Op::Is, true),
+        Op::Eq => (Op::Is, false),
+        op => (op, false),
+    };
+    let cond = match kind {
+        History::Changed => Cond::Changed {
+            keys: vec![key],
+            at: p
+                .values
+                .iter()
+                .map(|v| moment_bounds(op, v, env))
+                .collect::<Result<_, _>>()?,
+        },
+        History::Was => Cond::Was(match field.ty {
+            FieldType::Status => WasTest::Statuses(
+                p.values
+                    .iter()
+                    .map(|v| name_ref(v, field))
+                    .collect::<Result<_, _>>()?,
+            ),
+            FieldType::Type => WasTest::Types(
+                p.values
+                    .iter()
+                    .map(|v| name_ref(v, field))
+                    .collect::<Result<_, _>>()?,
+            ),
+            FieldType::Label => WasTest::Labels(
+                p.values
+                    .iter()
+                    .map(|v| name_ref(v, field))
+                    .collect::<Result<_, _>>()?,
+            ),
+            FieldType::Version => WasTest::Versions(
+                p.values
+                    .iter()
+                    .map(|v| name_ref(v, field))
+                    .collect::<Result<_, _>>()?,
+            ),
+            FieldType::Category => {
+                let mut cats = Vec::new();
+                for v in &p.values {
+                    match choice(v, field, CATEGORIES)? {
+                        "open" => cats.extend(["todo", "in_progress"]),
+                        "closed" => cats.extend(["done", "cancelled"]),
+                        c => cats.push(c),
+                    }
+                }
+                cats.dedup();
+                WasTest::Categories(cats)
+            }
+            _ => WasTest::Priorities(
+                p.values
+                    .iter()
+                    .map(|v| choice(v, field, PRIORITIES))
+                    .collect::<Result<_, _>>()?,
+            ),
+        }),
+    };
+    let cond = Filter::Cond(cond);
+    Ok(if negate {
+        Filter::Not(Box::new(cond))
+    } else {
+        cond
+    })
 }
 
 fn any_of(mut items: Vec<Filter>) -> Filter {
@@ -1423,6 +1629,61 @@ mod tests {
     fn not_equal_is_a_negation() {
         let c = run("label!=bug").expect("query");
         assert!(matches!(c.filter, Some(Filter::Not(_))));
+    }
+
+    #[test]
+    fn history_conditions_are_checked() {
+        let day = |d: &str| {
+            let day: Day = d.parse().expect("day");
+            cal().start_of(day)
+        };
+        let checked = run("changed:due>-7d").expect("query");
+        assert_eq!(
+            checked.filter,
+            Some(Filter::Cond(Cond::Changed {
+                keys: vec!["due_date"],
+                at: vec![Bounds {
+                    lo: Some(day("2026-11-17")),
+                    hi: None
+                }],
+            }))
+        );
+        let checked = run("changed:due,labels,due").expect("query");
+        assert_eq!(
+            checked.filter,
+            Some(Filter::Cond(Cond::Changed {
+                keys: vec!["due_date", "labels"],
+                at: Vec::new(),
+            }))
+        );
+        assert!(matches!(
+            run("was:cat:open").expect("query").filter,
+            Some(Filter::Cond(Cond::Was(WasTest::Categories(c)))) if c == ["todo", "in_progress"]
+        ));
+        assert!(matches!(
+            run("was:status!=Done").expect("query").filter,
+            Some(Filter::Not(_))
+        ));
+        assert!(matches!(
+            run("changed-by:agent").expect("query").filter,
+            Some(Filter::Cond(Cond::ChangedBy(w))) if w == [AuthorRef::Agent]
+        ));
+        let names = run("was:status:Review was:label:bug")
+            .expect("query")
+            .names();
+        assert_eq!(names.len(), 2);
+        assert_eq!(names[0].kind, NameKind::Status);
+        assert_eq!(err("was:status").id, "query-was-value");
+        assert_eq!(err("was:stauts:Review").id, "query-history-field-suggest");
+        assert_eq!(err("was:due:today").id, "query-history-field");
+        assert_eq!(err("changed:stauts").id, "query-history-field-suggest");
+        assert_eq!(err("was:status>Done").id, "query-operator");
+        assert_eq!(err("was:status:none").id, "query-history-none");
+        assert_eq!(err("was:priority:hgih").id, "query-bad-choice-suggest");
+        assert_eq!(err("changed:due:soon").id, "query-bad-date");
+        assert_eq!(err("was:status:a..b").id, "query-no-range");
+        let e = err("was:stauts:Review");
+        assert_eq!(e.span.of("was:stauts:Review"), "stauts");
     }
 
     #[test]

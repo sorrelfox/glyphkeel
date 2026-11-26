@@ -348,6 +348,7 @@ function Statuses({ project }: { project: Project }) {
         <span>{t("status-name")}</span>
         <span>{t("status-category")}</span>
         <span>{t("status-colour")}</span>
+        <span>{t("status-wip-minimum")}</span>
         <span>{t("status-wip")}</span>
         <span />
       </div>
@@ -365,6 +366,14 @@ function Statuses({ project }: { project: Project }) {
             options={STATUS_CATEGORIES.map((category) => ({ id: category, label: t(`category-${category}`) }))}
           />
           <HueSelect label={t("status-colour")} value={status.hue} onChange={(hue) => { update.mutate({ ...ref, status: status.id, hue }); }} />
+          <SaveField
+            className={classes(styles.narrow)}
+            label={t("status-wip-minimum")}
+            value={status.wip_min === undefined ? "" : String(status.wip_min)}
+            onSave={(value) => {
+              update.mutate(value.trim() === "" ? { ...ref, status: status.id, clear: ["wip_min"] } : { ...ref, status: status.id, wip_min: Number(value) });
+            }}
+          />
           <SaveField
             className={classes(styles.narrow)}
             label={t("status-wip")}

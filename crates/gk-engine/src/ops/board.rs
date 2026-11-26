@@ -130,13 +130,14 @@ struct StatusInfo {
     category: String,
     hue: String,
     wip: Option<i64>,
+    wip_min: Option<i64>,
 }
 
 fn statuses(tx: &Transaction<'_>, projects: &[Id]) -> Result<Vec<StatusInfo>, Failure> {
     let mut out = Vec::new();
     for p in projects {
         let mut stmt = tx.prepare_cached(
-            "SELECT s.id, p.key, s.name, s.category, s.hue, s.wip_limit
+            "SELECT s.id, p.key, s.name, s.category, s.hue, s.wip_limit, s.wip_min
                FROM statuses s JOIN projects p ON p.id = s.project_id
               WHERE s.project_id = ?1 ORDER BY s.rank, s.id",
         )?;
@@ -148,6 +149,7 @@ fn statuses(tx: &Transaction<'_>, projects: &[Id]) -> Result<Vec<StatusInfo>, Fa
                 category: r.get(3)?,
                 hue: r.get(4)?,
                 wip: r.get(5)?,
+                wip_min: r.get(6)?,
             })
         })?;
         for row in rows {
@@ -181,6 +183,8 @@ fn columns(all: &[StatusInfo]) -> Vec<Column> {
                 statuses,
                 wip_limit: s.wip.and_then(|n| u32::try_from(n).ok()),
                 over_limit: false,
+                wip_min: s.wip_min.and_then(|n| u32::try_from(n).ok()),
+                under_minimum: false,
                 count: 0,
                 older: 0,
                 hidden: false,
@@ -258,6 +262,7 @@ fn board(q: &QueryCtx<'_>, input: BoardGetInput) -> Result<Board, Failure> {
         column.over_limit = column
             .wip_limit
             .is_some_and(|l| column.count > u64::from(l));
+        column.under_minimum = column.wip_min.is_some_and(|m| column.count < u64::from(m));
         if let Some(cutoff) = cutoff {
             let before = cards.len();
             cards.retain(|(_, closed)| closed.is_none_or(|t| t >= cutoff));
@@ -546,6 +551,8 @@ mod tests {
             statuses: BTreeMap::new(),
             wip_limit: None,
             over_limit: false,
+            wip_min: None,
+            under_minimum: false,
             count: 0,
             older: 0,
             hidden: false,

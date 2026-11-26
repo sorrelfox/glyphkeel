@@ -83,9 +83,9 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel task delete <keys>` | `task.delete` | Move tasks to the trash, each with its subtasks; they can be restored from there. |
 | `glyphkeel task duplicate <key>` | `task.duplicate` | Copy a task with its subtasks (in order), labels, checklist and files; the copy is linked as a clone. |
 | `glyphkeel task edit <key>` | `task.update` | Change a task's title, description (whole, with a base revision, or by targeted edits), type, priority, labels, parent, dates, estimate or progress. |
-| `glyphkeel task link <key>` | `relation.add` | Link two tasks (blocks, relates, duplicates, clones, or make one a subtask of the other). |
+| `glyphkeel task link <key>` | `relation.add` | Link two tasks (blocks, with an optional lag in days; relates, duplicates, clones; or make one a subtask of the other). |
 | `glyphkeel task list` | `task.search` | List the tasks matching a query (is:open due<+7d label:bug sort:due), a page at a time, with totals of estimates and logged time. |
-| `glyphkeel task move <key>` | `task.move` | Move a task to another status or place in its column, or to another project (new key; the old one forwards). |
+| `glyphkeel task move <key>` | `task.move` | Move a task to another status or place in its column, or to another project (new key; the old one forwards); closing it can close its duplicates too. |
 | `glyphkeel task move-check <keys>` | `task.move_check` | What moving tasks to another project would do: their new keys, and which of their statuses, types and labels the target project has no match for. |
 | `glyphkeel task references <key>` | `task.references` | The pages and tasks a task's description and comments link to, in order, each resolved now; links that find nothing are marked. |
 | `glyphkeel task release <key>` | `task.release` | Give up a claim on a task, optionally moving it and adding a comment. |
@@ -100,9 +100,9 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel template show <template>` | `template.get` | One template with its content. |
 | `glyphkeel template use <template>` | `template.apply` | Use a template: a task template makes a task with its subtasks; a project template makes a project with its set-up, pages and tasks. |
 | `glyphkeel time delete <entry>` | `time.delete` | Move a time entry to the trash. |
-| `glyphkeel time edit <entry>` | `time.update` | Change a time entry's duration, day or note. |
-| `glyphkeel time log <key>` | `time.log` | Log time on a task: a duration, the day of the work (default today) and a note. |
-| `glyphkeel time report` | `time.report` | Logged time over a range of days, grouped by day, week, month, task, project or person, with totals in the workspace's units and optional CSV. |
+| `glyphkeel time edit <entry>` | `time.update` | Change a time entry's duration, day, note or kind of work. |
+| `glyphkeel time log <key>` | `time.log` | Log time on a task: a duration, the day of the work (default today), a note and a kind of work. |
+| `glyphkeel time report` | `time.report` | Logged time over a range of days, grouped by day, week, month, task, project, person or kind of work, with totals in the workspace's units and optional CSV. |
 | `glyphkeel timer pause` | `timer.pause` | Pause the running timer; it keeps its time. |
 | `glyphkeel timer start <key>` | `timer.start` | Start the timer on a task, or start the paused timer again; a timer on another task is stopped and its time logged. |
 | `glyphkeel timer status` | `timer.get` | The workspace's timer: its task, whether it runs and the time so far. |
@@ -135,6 +135,10 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel wiki put <page>` | `wiki.update` | Change a wiki page: its text (whole, with a base revision, or by targeted edits), title, parent or place, whether it is the home page or a template; or resolve a conflict copy. |
 | `glyphkeel wiki references <page>` | `wiki.references` | The pages and tasks a wiki page's text links to, in order, each resolved now; links that find nothing are marked. |
 | `glyphkeel wiki search <text>` | `wiki.search` | Find wiki pages by title, heading or text, for example to link one; `Page#Heading` lists a page's headings. |
+| `glyphkeel work-kind create` | `work_kind.create` | Add a kind of work that time entries can be marked with. |
+| `glyphkeel work-kind delete <kind>` | `work_kind.delete` | Delete a kind of work that no time entry names; archive one that is in use. |
+| `glyphkeel work-kind edit <kind>` | `work_kind.update` | Rename a kind of work, or archive it so it is no longer offered while its entries keep it. |
+| `glyphkeel work-kind list` | `work_kind.list` | The workspace's kinds of work for logged time (Development, Design, Meeting…), by name, with how many entries use each. |
 | `glyphkeel workspace` | `workspace.get` | The open workspace: its name and ID, the schema and program versions, who is asking with which rights, the settings, the limits on agents and a short guide. |
 
 ## Workspaces

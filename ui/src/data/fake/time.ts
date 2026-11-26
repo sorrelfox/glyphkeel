@@ -4,7 +4,7 @@
 // The stand-in engine's time entries, timer and reminders: pure helpers on
 // its records, with the engine's rules where the screens can see them.
 
-import { type DueReminder, type Reminder, type Settings, type TimeEntry, type Timer } from "../../generated/ops";
+import { type DueReminder, type Reminder, type Settings, type TimeEntry, type Timer, type WorkKindRef } from "../../generated/ops";
 import { formatDuration, type DurationUnits } from "../duration";
 import { type FakeReminder, type FakeTimeEntry, type FakeTimer } from "./state";
 
@@ -48,8 +48,9 @@ export function weekStart(day: string, start: Settings["week_start"]): string {
   return addDays(day, -back);
 }
 
-export function timeEntryOut(entry: FakeTimeEntry, taskKey: string, units: DurationUnits): TimeEntry {
+export function timeEntryOut(entry: FakeTimeEntry, taskKey: string, units: DurationUnits, kind?: WorkKindRef): TimeEntry {
   return {
+    ...(kind === undefined ? {} : { work_kind: kind }),
     author: entry.author,
     created_at: entry.createdAt,
     date: entry.date,
@@ -68,9 +69,10 @@ export function timerElapsedMs(timer: FakeTimer, now: Date): number {
   return timer.elapsedMs + (timer.runningSince === null ? 0 : Math.max(0, now.getTime() - Date.parse(timer.runningSince)));
 }
 
-export function timerOut(timer: FakeTimer, task: Timer["task"], now: Date, units: DurationUnits): Timer {
+export function timerOut(timer: FakeTimer, task: Timer["task"], now: Date, units: DurationUnits, kind?: WorkKindRef): Timer {
   const seconds = Math.floor(timerElapsedMs(timer, now) / 1000);
   return {
+    ...(kind === undefined ? {} : { work_kind: kind }),
     elapsed: formatDuration(Math.round(seconds / 60), units),
     elapsed_seconds: seconds,
     ...(timer.note === "" ? {} : { note: timer.note }),

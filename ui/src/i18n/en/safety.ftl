@@ -109,6 +109,7 @@ activity-entity-project = Project
 activity-entity-comment = Comment
 activity-entity-attachment = File
 activity-entity-time_entry = Time entry
+activity-entity-work_kind = Kind of work
 activity-entity-relation = Link
 activity-entity-status = Status
 activity-entity-task_type = Task type

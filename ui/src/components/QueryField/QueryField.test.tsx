@@ -19,6 +19,9 @@ const FIELDS: FieldInfo[] = [
   { name: "priority", aliases: ["prio"], choices: ["none", "low", "normal", "high", "urgent"], operators: [":", "<", ">"], ranges: false, sortable: true, values: "none < low" },
   { name: "due", operators: [":", "<", ">"], ranges: true, sortable: true, values: "a date" },
   { name: "label", aliases: ["labels"], operators: [":", "!="], ranges: false, sortable: false, values: "label names" },
+  { name: "was", choices: ["status", "priority", "label"], operators: [":"], ranges: false, sortable: false, values: "a field and a value" },
+  { name: "changed", choices: ["status", "due"], operators: [":"], ranges: false, sortable: false, values: "a field" },
+  { name: "changed-by", operators: [":", "!="], ranges: false, sortable: false, values: "me, agent" },
 ];
 const NAMES: QueryNames = { statuses: ["To do", "In progress", "Done"], types: ["Task"], labels: ["bug"], projects: ["TM"] };
 
@@ -39,6 +42,18 @@ describe("completion", () => {
     expect(labels(complete("prio>"))).toEqual(["none", "low", "normal", "high", "urgent"]);
     expect(labels(complete("due<"))).toContain("today");
     expect(labels(complete("sort:"))).toEqual(["status", "-status", "priority", "-priority", "due", "-due"]);
+  });
+
+  it("completes the history: a field after was:, then its values; dates after changed:", () => {
+    expect(labels(complete("was:"))).toEqual(["status:", "priority:", "label:"]);
+    expect(labels(complete("was:status:"))).toEqual(['"To do"', '"In progress"', "Done"]);
+    expect(complete("is:open was:status:Do")?.from).toBe(19);
+    expect(labels(complete("-was:prio:"))).toEqual(["low", "normal", "high", "urgent"]);
+    expect(labels(complete("changed:"))).toEqual(["status", "due"]);
+    expect(labels(complete("changed:due>"))).toContain("-7d");
+    expect(labels(complete("changed:due>"))).not.toContain("none");
+    expect(labels(complete("changed-by:"))).toEqual(["me", "agent"]);
+    expect(complete("was:nothing:")).toBeNull();
   });
 
   it("offers the next value after a comma, and nothing for unknown fields", () => {

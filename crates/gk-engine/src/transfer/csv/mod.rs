@@ -1038,6 +1038,7 @@ fn run(
                 key: key.clone(),
                 kind: link.kind,
                 other,
+                lag_days: None,
             };
             let before = w.changed_of(relation::ENTITY).len();
             match w.attempt(|w| relation::add(w, input)) {

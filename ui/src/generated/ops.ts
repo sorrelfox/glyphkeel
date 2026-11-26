@@ -697,8 +697,12 @@ export type Column = {
   sort_mode: SortMode;
   /** Every status shown in this column, by project key: one, or more when sub-projects are included. */
   statuses: Record<string, string>;
+  /** Whether the column holds fewer tasks than its WIP minimum. */
+  under_minimum: boolean;
   /** The WIP limit, if the status has one. */
   wip_limit?: number;
+  /** The WIP minimum, if the status has one. */
+  wip_min?: number;
 };
 
 /** One comment. */
@@ -1882,6 +1886,8 @@ export type Link = {
   id: string;
   /** How the link reads from this task. */
   kind: LinkKind;
+  /** For `blocks` and `blocked_by`: the days between the end of the blocking task and the start of the blocked one; left out when none. */
+  lag_days?: number;
   /** The task at the other end. */
   task: TaskRef;
 };
@@ -2664,6 +2670,8 @@ export type RelationInput = {
   key: string;
   /** How the link reads from this task. `subtask_of` and `parent_of` change the parent instead of adding a link. */
   kind: RelationKind;
+  /** For `blocks` and `blocked_by` with `relation.add`: the days that must pass after the blocking task ends before the blocked one may begin (finish-to-start plus a lag), 0 to 365. On an existing link it changes the lag; 0 removes it. */
+  lag_days?: number | null;
   /** The other task: its key or ID. */
   other: string;
 };
@@ -3235,6 +3243,8 @@ export type Status = {
   tasks: number;
   /** Most tasks the column should hold; left out when there is no limit. */
   wip_limit?: number;
+  /** Fewest tasks the column should hold; left out when there is no minimum. */
+  wip_min?: number;
 };
 
 /** A status of a project template. */
@@ -3249,6 +3259,8 @@ export type StatusBlueprint = {
   rules?: StatusRules;
   /** Most tasks the column should hold. */
   wip_limit?: number | null;
+  /** Fewest tasks the column should hold. */
+  wip_min?: number | null;
 };
 
 /** Changes to a status, a task type or a label inside [`ProjectUpdateInput`]. Without `status`/`type`/`label` (`name`) it adds one; with `remove` it deletes the named one; otherwise it changes it. */
@@ -3275,6 +3287,8 @@ export type StatusChange = {
   status?: string | null;
   /** Its WIP limit, 1 or more. */
   wip_limit?: number | null;
+  /** Its WIP minimum, 1 or more and not above the limit; the count shows a warning while the column holds fewer tasks. */
+  wip_min?: number | null;
 };
 
 /** A new status. */
@@ -3295,6 +3309,8 @@ export type StatusCreateInput = {
   project: string;
   /** Its WIP limit, 1 or more. */
   wip_limit?: number | null;
+  /** Its WIP minimum, 1 or more and not above the limit; the count shows a warning while the column holds fewer tasks. */
+  wip_min?: number | null;
 };
 
 /** A status to delete. */
@@ -3308,7 +3324,7 @@ export type StatusDeleteInput = {
 };
 
 /** A status field that can be cleared. */
-export type StatusField = "wip_limit";
+export type StatusField = "wip_limit" | "wip_min";
 
 /** A task's status, as tasks carry it. */
 export type StatusRef = {
@@ -3376,6 +3392,8 @@ export type StatusUpdateInput = {
   status: string;
   /** A new WIP limit, 1 or more. */
   wip_limit?: number | null;
+  /** A new WIP minimum, 1 or more and not above the limit. */
+  wip_min?: number | null;
 };
 
 /** A subtask of a [`TaskBlueprint`]. */
@@ -3550,6 +3568,8 @@ export type TaskBlueprint = {
 export type TaskChange = {
   /** What became of a new description: saved, merged with another edit, or kept as a conflict copy. */
   description_save?: DescriptionSave;
+  /** The duplicates closed with the task (`close_duplicates`), by key. */
+  duplicates_closed?: string[];
   /** The history group, for revert and Undo; left out when nothing changed. */
   group?: string;
   /** The tasks "also move dependents" moved, blockers first. */
@@ -3673,6 +3693,8 @@ export type TaskMoveInput = {
   at?: Edge | null;
   /** Place it before this task of the target status. */
   before?: string | null;
+  /** When the move closes the task: `true` closes the open tasks marked as its duplicates too, in the same change (each into the status of the same name in its project, else the first one of the same category); `false` leaves them open without a warning. Left out, they stay open and a warning names them. */
+  close_duplicates?: boolean | null;
   /** Refuse the move unless the task still has this version. */
   expected_version?: number | null;
   /** The task: its key or ID. */
@@ -4043,6 +4065,8 @@ export type TimeEntry = {
   task: string;
   /** Goes up by one with every edit; pass it as `expected_version`. */
   version: number;
+  /** The kind of work; left out when none. */
+  work_kind?: WorkKindRef;
 };
 
 /** A time entry changed, with the history group of the change. */
@@ -4064,7 +4088,7 @@ export type TimeEntryRef = {
 };
 
 /** How the time report groups the entries. */
-export type TimeGroupBy = "day" | "week" | "month" | "task" | "project" | "person";
+export type TimeGroupBy = "day" | "week" | "month" | "task" | "project" | "person" | "work_kind";
 
 /** Time to log on a task. */
 export type TimeLogInput = {
@@ -4078,6 +4102,8 @@ export type TimeLogInput = {
   key: string;
   /** What was done, at most 2000 characters. */
   note?: string | null;
+  /** The kind of work: its name (any case) or ID, from `work_kind.list`. */
+  work_kind?: string | null;
 };
 
 /** Logged time over a range of days, grouped, with the total. */
@@ -4115,7 +4141,7 @@ export type TimeReportInput = {
   entries?: boolean;
   /** The first day: `YYYY-MM-DD`, `today` or `yesterday`; default the first day of the current week. */
   from?: string | null;
-  /** How to group: `day`, `week`, `month`, `task` (default), `project` or `person`. */
+  /** How to group: `day`, `week`, `month`, `task` (default), `project`, `person` or `work_kind`. */
   group_by?: TimeGroupBy | null;
   /** With `project`: its sub-projects' time too; default true. */
   include_subprojects?: boolean | null;
@@ -4127,6 +4153,8 @@ export type TimeReportInput = {
   task?: string | null;
   /** The last day, included; default six days after `from`. At most 366 days after `from`. */
   to?: string | null;
+  /** Only the time of this kind of work (name or ID), or `none` for time without one. */
+  work_kind?: string | null;
 };
 
 /** One group of the time report. */
@@ -4135,13 +4163,13 @@ export type TimeReportRow = {
   duration: string;
   /** How many entries. */
   entry_count: number;
-  /** The day; the week's first day; the month (`YYYY-MM`); the task's or the project's key; or the person (`user:Name`, `agent:Name`). */
+  /** The day; the week's first day; the month (`YYYY-MM`); the task's or the project's key; the person (`user:Name`, `agent:Name`); or the kind of work's ID (`none` for time without one). */
   key: string;
   /** The time in minutes. */
   minutes: number;
   /** The person or agent, when grouped by person. */
   person?: Actor;
-  /** The weekday; the week's days (`2026-11-23..2026-11-29`); the month; the task's title; the project's name; or the person's name. */
+  /** The weekday; the week's days (`2026-11-23..2026-11-29`); the month; the task's title; the project's name; the person's name; or the kind of work's name (empty for time without one). */
   title: string;
 };
 
@@ -4157,6 +4185,8 @@ export type TimeUpdateInput = {
   expected_version?: number | null;
   /** The new note; an empty text removes it. */
   note?: string | null;
+  /** The new kind of work (name or ID); an empty text removes it. */
+  work_kind?: string | null;
 };
 
 /** The workspace's timer. */
@@ -4179,6 +4209,8 @@ export type Timer = {
   task: TaskRef;
   /** Whether the task is in the trash; stop the timer with `discard`. */
   task_trashed?: boolean;
+  /** The kind of work the entry will get; left out when none. */
+  work_kind?: WorkKindRef;
 };
 
 /** The timer after a change. */
@@ -4205,6 +4237,8 @@ export type TimerStartInput = {
   key?: string | null;
   /** The note the entry will get, at most 2000 characters. */
   note?: string | null;
+  /** The kind of work the entry will get (name or ID); an empty text removes it. */
+  work_kind?: string | null;
 };
 
 /** Whether the timer runs. */
@@ -4224,6 +4258,8 @@ export type TimerStopInput = {
   duration?: string | null;
   /** The entry's note; default the timer's own note. */
   note?: string | null;
+  /** The entry's kind of work (name or ID); default the timer's own; an empty text logs none. */
+  work_kind?: string | null;
 };
 
 /** What needs attention today. */
@@ -5142,6 +5178,70 @@ export type WikiUpdateInput = {
   title?: string | null;
 };
 
+/** A kind of work of the workspace. */
+export type WorkKind = {
+  /** Archived: kept for the entries that name it, not offered for new time. */
+  archived?: boolean;
+  /** How many live entries name it. */
+  entries: number;
+  /** Its ID. */
+  id: string;
+  /** Its name. */
+  name: string;
+};
+
+/** A kind of work after a change. */
+export type WorkKindChange = {
+  /** Whether it was deleted. */
+  deleted?: boolean;
+  /** The history group, for revert and Undo; left out when nothing changed. */
+  group?: string;
+  /** The kind after the change; as it was, when deleted. */
+  kind: WorkKind;
+};
+
+/** A new kind of work. */
+export type WorkKindCreateInput = {
+  /** Its name, 1 to 60 characters, unique in the workspace (any case). */
+  name: string;
+};
+
+/** Names one kind of work. */
+export type WorkKindDeleteInput = {
+  /** The kind: its name (any case) or ID. */
+  kind: string;
+};
+
+/** The workspace's kinds of work, by name. */
+export type WorkKindList = {
+  /** The kinds. */
+  items: WorkKind[];
+};
+
+/** Which kinds of work to list. */
+export type WorkKindListInput = {
+  /** Also the archived ones. */
+  include_archived?: boolean;
+};
+
+/** A kind of work as entries name it. */
+export type WorkKindRef = {
+  /** Its ID. */
+  id: string;
+  /** Its name. */
+  name: string;
+};
+
+/** Changes to a kind of work. */
+export type WorkKindUpdateInput = {
+  /** Archive it (`true`) or offer it again (`false`). */
+  archived?: boolean | null;
+  /** The kind: its name (any case) or ID. */
+  kind: string;
+  /** A new name. */
+  name?: string | null;
+};
+
 /** No input. */
 export type WorkspaceGetInput = Record<string, never>;
 
@@ -5253,6 +5353,10 @@ export interface OpMap {
   "time.update": { input: TimeUpdateInput; output: TimeEntryChange; safety: "write"; kind: "command" };
   "time.delete": { input: TimeEntryRef; output: TimeEntryChange; safety: "trash"; kind: "command" };
   "time.report": { input: TimeReportInput; output: TimeReport; safety: "read"; kind: "query" };
+  "work_kind.list": { input: WorkKindListInput; output: WorkKindList; safety: "read"; kind: "query" };
+  "work_kind.create": { input: WorkKindCreateInput; output: WorkKindChange; safety: "write"; kind: "command" };
+  "work_kind.update": { input: WorkKindUpdateInput; output: WorkKindChange; safety: "write"; kind: "command" };
+  "work_kind.delete": { input: WorkKindDeleteInput; output: WorkKindChange; safety: "write"; kind: "command" };
   "report.created_closed": { input: FlowReportInput; output: CreatedClosedReport; safety: "read"; kind: "query" };
   "report.cumulative_flow": { input: FlowReportInput; output: CumulativeFlowReport; safety: "read"; kind: "query" };
   "report.cycle_time": { input: FlowReportInput; output: CycleTimeReport; safety: "read"; kind: "query" };
@@ -5403,6 +5507,10 @@ export const OP_SAFETY = {
   "time.update": "write",
   "time.delete": "trash",
   "time.report": "read",
+  "work_kind.list": "read",
+  "work_kind.create": "write",
+  "work_kind.update": "write",
+  "work_kind.delete": "write",
   "report.created_closed": "read",
   "report.cumulative_flow": "read",
   "report.cycle_time": "read",
@@ -5644,7 +5752,7 @@ export function makeOps(call: Call) {
       run: (input: OpMap["recurrence.run"]["input"] = {}) => call("recurrence.run", input),
     },
     relation: {
-      /** Link two tasks (blocks, relates, duplicates, clones, or make one a subtask of the other). (write) */
+      /** Link two tasks (blocks, with an optional lag in days; relates, duplicates, clones; or make one a subtask of the other). (write) */
       add: (input: OpMap["relation.add"]["input"]) => call("relation.add", input),
       /** Remove a link between two tasks, or a subtask from its parent. (write) */
       remove: (input: OpMap["relation.remove"]["input"]) => call("relation.remove", input),
@@ -5706,7 +5814,7 @@ export function makeOps(call: Call) {
       create: (input: OpMap["task.create"]["input"]) => call("task.create", input),
       /** Change a task's title, description (whole, with a base revision, or by targeted edits), type, priority, labels, parent, dates, estimate or progress. (write) */
       update: (input: OpMap["task.update"]["input"]) => call("task.update", input),
-      /** Move a task to another status or place in its column, or to another project (new key; the old one forwards). (write) */
+      /** Move a task to another status or place in its column, or to another project (new key; the old one forwards); closing it can close its duplicates too. (write) */
       move: (input: OpMap["task.move"]["input"]) => call("task.move", input),
       /** What moving tasks to another project would do: their new keys, and which of their statuses, types and labels the target project has no match for. (read) */
       moveCheck: (input: OpMap["task.move_check"]["input"]) => call("task.move_check", input),
@@ -5744,13 +5852,13 @@ export function makeOps(call: Call) {
       apply: (input: OpMap["template.apply"]["input"]) => call("template.apply", input),
     },
     time: {
-      /** Log time on a task: a duration, the day of the work (default today) and a note. (write) */
+      /** Log time on a task: a duration, the day of the work (default today), a note and a kind of work. (write) */
       log: (input: OpMap["time.log"]["input"]) => call("time.log", input),
-      /** Change a time entry's duration, day or note. (write) */
+      /** Change a time entry's duration, day, note or kind of work. (write) */
       update: (input: OpMap["time.update"]["input"]) => call("time.update", input),
       /** Move a time entry to the trash. (trash) */
       delete: (input: OpMap["time.delete"]["input"]) => call("time.delete", input),
-      /** Logged time over a range of days, grouped by day, week, month, task, project or person, with totals in the workspace's units and optional CSV. (read) */
+      /** Logged time over a range of days, grouped by day, week, month, task, project, person or kind of work, with totals in the workspace's units and optional CSV. (read) */
       report: (input: OpMap["time.report"]["input"] = {}) => call("time.report", input),
     },
     timer: {
@@ -5838,6 +5946,16 @@ export function makeOps(call: Call) {
       backlinks: (input: OpMap["wiki.backlinks"]["input"]) => call("wiki.backlinks", input),
       /** The pages and tasks a wiki page's text links to, in order, each resolved now; links that find nothing are marked. (read) */
       references: (input: OpMap["wiki.references"]["input"]) => call("wiki.references", input),
+    },
+    work_kind: {
+      /** The workspace's kinds of work for logged time (Development, Design, Meeting…), by name, with how many entries use each. (read) */
+      list: (input: OpMap["work_kind.list"]["input"] = {}) => call("work_kind.list", input),
+      /** Add a kind of work that time entries can be marked with. (write) */
+      create: (input: OpMap["work_kind.create"]["input"]) => call("work_kind.create", input),
+      /** Rename a kind of work, or archive it so it is no longer offered while its entries keep it. (write) */
+      update: (input: OpMap["work_kind.update"]["input"]) => call("work_kind.update", input),
+      /** Delete a kind of work that no time entry names; archive one that is in use. (write) */
+      delete: (input: OpMap["work_kind.delete"]["input"]) => call("work_kind.delete", input),
     },
     workspace: {
       /** The open workspace: its name and ID, the schema and program versions, who is asking with which rights, the settings, the limits on agents and a short guide. (read) */
