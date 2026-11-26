@@ -84,8 +84,10 @@ fn main() -> ExitCode {
         }
     };
     #[cfg(not(target_os = "linux"))]
-    let (first_links, first_quick_add) =
-        (Vec::new(), std::env::args().any(|arg| arg == "--quick-add"));
+    let (first_links, first_quick_add) = (
+        Vec::<String>::new(),
+        std::env::args().any(|arg| arg == "--quick-add"),
+    );
 
     let title_bar = TitleBar::from_env();
     let app_settings = AppSettings::load();

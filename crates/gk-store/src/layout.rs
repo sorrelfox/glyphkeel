@@ -20,7 +20,8 @@
 //! The app, the command line and the agent server find the workspace the
 //! same way ([`Location::find`]): the one they are told (`--workspace`),
 //! else the one `GLYPHKEEL_WORKSPACE` names, else the default workspace
-//! [`DEFAULT_WORKSPACE`] in the data folder ([`data_dir`]). A value with a
+//! [`DEFAULT_WORKSPACE`] in the data folder ([`data_dir`], which
+//! [`DATA_DIR_ENV`] can move). A value with a
 //! path separator, or one that starts with `.` or `~`, is a folder; any
 //! other value is a name in the data folder.
 
@@ -40,11 +41,33 @@ pub const DEFAULT_WORKSPACE: &str = "Personal";
 /// one, by name or by path.
 pub const WORKSPACE_ENV: &str = "GLYPHKEEL_WORKSPACE";
 
-/// The program's data folder: `$XDG_DATA_HOME/glyphkeel` (normally
-/// `~/.local/share/glyphkeel`) on Linux, `%LOCALAPPDATA%\Glyphkeel` on
-/// Windows. `None` when no home folder can be found.
+/// The environment variable that puts the data folder (workspaces and
+/// their backups) elsewhere: an absolute path, used as it is. It works the
+/// same on every platform, so tests and portable set-ups need not know where
+/// each system keeps its data. The personal settings have their own
+/// variable, [`CONFIG_DIR_ENV`](crate::CONFIG_DIR_ENV).
+pub const DATA_DIR_ENV: &str = "GLYPHKEEL_DATA_DIR";
+
+/// The absolute folder an environment variable names, if it names one.
+pub(crate) fn folder_from_env(name: &str) -> Option<PathBuf> {
+    absolute_folder(std::env::var_os(name))
+}
+
+/// `value` as a folder when it is an absolute path; an empty or relative
+/// value would depend on the current folder and counts as not given.
+fn absolute_folder(value: Option<std::ffi::OsString>) -> Option<PathBuf> {
+    value.map(PathBuf::from).filter(|path| path.is_absolute())
+}
+
+/// The program's data folder: the folder [`DATA_DIR_ENV`] names, else
+/// `$XDG_DATA_HOME/glyphkeel` (normally `~/.local/share/glyphkeel`) on
+/// Linux and `%LOCALAPPDATA%\Glyphkeel` on Windows. `None` when no home
+/// folder can be found.
 #[must_use]
 pub fn data_dir() -> Option<PathBuf> {
+    if let Some(dir) = folder_from_env(DATA_DIR_ENV) {
+        return Some(dir);
+    }
     let base = directories::BaseDirs::new()?;
     let name = if cfg!(windows) {
         "Glyphkeel"
@@ -348,6 +371,18 @@ fn open_lock_file(path: &Path) -> Result<File> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_an_absolute_folder_moves_the_base_folders() {
+        let absolute = std::env::temp_dir().join("glyphkeel-data");
+        assert_eq!(
+            absolute_folder(Some(absolute.clone().into_os_string())),
+            Some(absolute)
+        );
+        assert_eq!(absolute_folder(Some("relative/data".into())), None);
+        assert_eq!(absolute_folder(Some("".into())), None);
+        assert_eq!(absolute_folder(None), None);
+    }
 
     #[test]
     fn paths() {

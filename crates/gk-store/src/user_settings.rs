@@ -39,11 +39,21 @@ pub const USER_SETTINGS_FILE: &str = "settings.json";
 /// The value of `time_zone` that means the computer's own zone.
 pub const SYSTEM_TIME_ZONE: &str = "system";
 
-/// The program's configuration folder: `$XDG_CONFIG_HOME/glyphkeel`
-/// (normally `~/.config/glyphkeel`) on Linux, `%APPDATA%\Glyphkeel` on
-/// Windows. `None` when no home folder can be found.
+/// The environment variable that puts the configuration folder, with the
+/// personal settings, elsewhere: an absolute path, used as it is. The data
+/// folder has its own variable, [`DATA_DIR_ENV`](crate::DATA_DIR_ENV), so
+/// personal settings and shared workspace data stay apart.
+pub const CONFIG_DIR_ENV: &str = "GLYPHKEEL_CONFIG_DIR";
+
+/// The program's configuration folder: the folder [`CONFIG_DIR_ENV`] names,
+/// else `$XDG_CONFIG_HOME/glyphkeel` (normally `~/.config/glyphkeel`) on
+/// Linux and `%APPDATA%\Glyphkeel` on Windows. `None` when no home folder
+/// can be found.
 #[must_use]
 pub fn config_dir() -> Option<PathBuf> {
+    if let Some(dir) = crate::layout::folder_from_env(CONFIG_DIR_ENV) {
+        return Some(dir);
+    }
     let base = directories::BaseDirs::new()?;
     let name = if cfg!(windows) {
         "Glyphkeel"

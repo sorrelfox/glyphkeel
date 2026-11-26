@@ -98,6 +98,10 @@ pub(crate) fn load(path: &Path) -> Geometry {
 }
 
 /// Stores the geometry, replacing the file in one step.
+#[cfg_attr(
+    not(any(target_os = "linux", test)),
+    expect(dead_code, reason = "the geometry is followed only on Linux so far")
+)]
 pub(crate) fn save(path: &Path, geometry: &Geometry) -> std::io::Result<()> {
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir)?;

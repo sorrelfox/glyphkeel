@@ -777,6 +777,10 @@ pub(crate) mod dialog {
     use gk_api::OpError;
     use tauri::WebviewWindow;
 
+    #[expect(
+        dead_code,
+        reason = "the fields are read once this platform has a file chooser"
+    )]
     pub(crate) enum Mode {
         Open,
         Save(String),

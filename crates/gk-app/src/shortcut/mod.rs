@@ -38,6 +38,7 @@ use tauri::{AppHandle, Manager, State as TauriState};
 use crate::app_settings::AppSettings;
 
 /// The shortcut's ID with the desktop.
+#[cfg(target_os = "linux")]
 pub(crate) const SHORTCUT_ID: &str = "quick-add";
 
 /// The keys Preferences offers. Each is free on the common desktops'
@@ -132,6 +133,7 @@ impl Keys {
 
     /// The form the portal takes as the preferred trigger (the XDG
     /// shortcuts format: `CTRL+ALT+space`, key names as XKB key symbols).
+    #[cfg(any(target_os = "linux", test))]
     pub(crate) fn portal_trigger(&self) -> String {
         let mut parts: Vec<String> = Vec::new();
         for (on, name) in [
@@ -255,6 +257,10 @@ pub(crate) enum Outcome {
     /// The shortcut works now.
     Bound,
     /// The person refused it in the desktop's dialog.
+    #[cfg_attr(
+        not(any(target_os = "linux", test)),
+        expect(dead_code, reason = "only the desktop portal on Linux asks the person")
+    )]
     Refused,
     /// The route isn't there or failed; the next one may work.
     Unavailable,
@@ -444,7 +450,11 @@ async fn work(
             continue;
         };
         let mut tried = Vec::new();
+        // Only the portal reports the trigger it bound.
+        #[cfg(target_os = "linux")]
         let mut trigger = None;
+        #[cfg(not(target_os = "linux"))]
+        let trigger = None;
         let mut detail = None;
         let state = loop {
             match next_step(&desktop, &tried) {

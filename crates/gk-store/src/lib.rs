@@ -80,7 +80,8 @@ pub use files::{
     thumb_path,
 };
 pub use layout::{
-    DATABASE_FILE, DEFAULT_WORKSPACE, Location, LockFile, WORKSPACE_ENV, WorkspaceLayout, data_dir,
+    DATA_DIR_ENV, DATABASE_FILE, DEFAULT_WORKSPACE, Location, LockFile, WORKSPACE_ENV,
+    WorkspaceLayout, data_dir,
 };
 pub use requests::{REQUEST_WINDOW_MS, RequestKey, purge_requests, remember, remembered};
 pub use schema::{SCHEMA_VERSION, SchemaState};
@@ -90,7 +91,8 @@ pub use snapshot::{
 };
 pub use store::{Store, StoreConfig, open_raw};
 pub use user_settings::{
-    SYSTEM_TIME_ZONE, USER_SETTINGS_FILE, UserSettings, config_dir, user_settings_file,
+    CONFIG_DIR_ENV, SYSTEM_TIME_ZONE, USER_SETTINGS_FILE, UserSettings, config_dir,
+    user_settings_file,
 };
 pub use writer::{SlowWrite, WriterStats};
 
