@@ -1,0 +1,103 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Glyphkeel contributors
+#
+# The Arch Linux package, built from the source tarball of a release tag
+# (glyphkeel-<version>.tar.gz, one of the release's files). `cargo xtask ci
+# --distro arch` fills in pkgver, pkgrel and the checksum, builds it with
+# makepkg, checks it with namcap and installs it in a clean container. The
+# release workflow attaches the filled-in PKGBUILD and its .SRCINFO, ready for
+# the AUR, as glyphkeel-<version>-aur.tar.gz.
+#
+# Maintainer: sorrelfox <348316453+sorrelfox@users.noreply.github.com>
+
+pkgname=glyphkeel
+pkgver=0.1.6
+pkgrel=1
+pkgdesc='Plan and track tasks on your own computer, with a command line and an MCP server'
+arch=('x86_64')
+url='https://github.com/sorrelfox/glyphkeel'
+license=('GPL-3.0-or-later')
+depends=(
+  'cairo'
+  'dbus'
+  'gdk-pixbuf2'
+  'glib2'
+  'glibc'
+  'gtk3'
+  'hicolor-icon-theme'
+  'libgcc'
+  'libsoup3'
+  'webkit2gtk-4.1'
+)
+makedepends=(
+  'cargo'
+  # package.json allows Node 24 only.
+  'nodejs-lts-krypton'
+  'pnpm'
+)
+optdepends=(
+  'libayatana-appindicator: the tray icon in background mode'
+  'hunspell-en_us: spell checking in English'
+)
+# makepkg's LTO flags turn the bundled SQLite into GCC bitcode, which Rust's
+# linker can't read; Cargo's own profile does the link-time optimisation.
+options=('!lto')
+source=("$pkgname-$pkgver.tar.gz::https://github.com/sorrelfox/glyphkeel/releases/download/v$pkgver/$pkgname-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+prepare() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+  # The UI's build tools; nothing of them ships.
+  CI=1 pnpm install --frozen-lockfile
+}
+
+build() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  pnpm build
+  # Both programs with the release profile the other packages use.
+  cargo build --frozen --profile dist --package gk-cli
+  cargo build --frozen --profile dist --package gk-app --features tauri/custom-protocol
+  # The command line's completions and man page, which it writes itself.
+  mkdir -p cli-files
+  target/dist/glyphkeel completions bash > cli-files/glyphkeel.bash
+  target/dist/glyphkeel completions zsh > cli-files/_glyphkeel
+  target/dist/glyphkeel completions fish > cli-files/glyphkeel.fish
+  target/dist/glyphkeel man > cli-files/glyphkeel.1
+  # The menu entry, from the template the deb and rpm use.
+  sed -e 's/{{name}}/Glyphkeel/' -e 's/{{exec}}/glyphkeel-app/g' -e 's/{{icon}}/glyphkeel-app/' \
+    -e '/{{#if mime_type}}/,/{{\/if}}/d' -e '/^#/d' \
+    crates/gk-app/packaging/glyphkeel.desktop > cli-files/Glyphkeel.desktop
+}
+
+check() {
+  cd "$pkgname-$pkgver"
+  test "$(target/dist/glyphkeel --version)" = "glyphkeel $pkgver"
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  install -Dm755 target/dist/glyphkeel-app "$pkgdir/usr/bin/glyphkeel-app"
+  install -Dm755 target/dist/glyphkeel "$pkgdir/usr/bin/glyphkeel"
+
+  install -Dm644 cli-files/glyphkeel.bash "$pkgdir/usr/share/bash-completion/completions/glyphkeel"
+  install -Dm644 cli-files/_glyphkeel "$pkgdir/usr/share/zsh/site-functions/_glyphkeel"
+  install -Dm644 cli-files/glyphkeel.fish "$pkgdir/usr/share/fish/vendor_completions.d/glyphkeel.fish"
+  install -Dm644 cli-files/glyphkeel.1 "$pkgdir/usr/share/man/man1/glyphkeel.1"
+
+  install -Dm644 cli-files/Glyphkeel.desktop "$pkgdir/usr/share/applications/Glyphkeel.desktop"
+  install -Dm644 crates/gk-app/packaging/io.github.sorrelfox.Glyphkeel.metainfo.xml \
+    "$pkgdir/usr/share/metainfo/io.github.sorrelfox.Glyphkeel.metainfo.xml"
+  local size
+  for size in 32x32 128x128 256x256; do
+    install -Dm644 "crates/gk-app/icons/$size.png" "$pkgdir/usr/share/icons/hicolor/$size/apps/glyphkeel-app.png"
+  done
+  install -Dm644 crates/gk-app/icons/icon.png "$pkgdir/usr/share/icons/hicolor/512x512/apps/glyphkeel-app.png"
+
+  # The licence and the third-party notices, which Preferences > About shows.
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 THIRD-PARTY-NOTICES.txt "$pkgdir/usr/share/licenses/$pkgname/THIRD-PARTY-NOTICES.txt"
+}

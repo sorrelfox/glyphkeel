@@ -3,13 +3,17 @@
 
 //! Repository automation, run as `cargo xtask <command>`.
 
+mod arch;
 mod bundle;
 mod ci;
 mod codegen;
 mod deps;
+mod flathub;
 mod headers;
 mod installed;
 mod notices;
+mod repos;
+mod source;
 mod windows;
 
 use std::path::{Path, PathBuf};
@@ -43,6 +47,15 @@ Commands:
                       reference pages and the TypeScript client. With
                       --check, write nothing and fail when a file is stale.
                       `codegen` is the same command.
+  source-tarball [--out DIR]
+                      Write glyphkeel-<version>.tar.gz, the source of a
+                      release, reproducibly (default DIR: target/dist).
+  flathub --tag TAG --commit SHA --out DIR [--sources DIR]
+                      Write the Flathub repository's files: the manifest
+                      with the release's git source, flathub.json and the
+                      generated source lists.
+  repos [options]     Build the signed APT and DNF repositories from a deb
+                      and an rpm. See `cargo xtask repos --help`.
 ";
 
 fn main() -> ExitCode {
@@ -81,6 +94,9 @@ fn run() -> Result<bool> {
         }
         "gen" | "codegen" => codegen::run(&root, rest),
         "notices" => notices::run(&root, rest),
+        "source-tarball" => source::run(&root, rest),
+        "repos" => repos::run(rest),
+        "flathub" => flathub::run(&root, rest),
         other => {
             eprint!("unknown command `{other}`\n\n{HELP}");
             Ok(false)

@@ -11,6 +11,8 @@
 //!   network (`--network none`, loopback only).
 //! - `flatpak`: flatpak-builder on the host, with the manifest in
 //!   `crates/gk-app/packaging/flatpak/`.
+//! - `repos` and `flathub`: see `repos.rs` and `flathub.rs`; `repos` uses
+//!   the same deb and rpm.
 //!
 //! Results and logs land in `<cache>/results/<distro>/<suite>/`; the
 //! performance table is `perf.md` there.
@@ -65,6 +67,9 @@ pub(crate) struct HostRun<'a> {
     pub(crate) rebuild: bool,
     pub(crate) package_release: Option<u32>,
     pub(crate) perf_enforce: bool,
+    /// Where the `repos` suite takes the deb and rpm from, instead of
+    /// building them.
+    pub(crate) packages_from: Option<&'a Path>,
     pub(crate) cache_dir: PathBuf,
 }
 
@@ -86,18 +91,58 @@ impl HostRun<'_> {
             .copied()
             .filter(|suite| matches!(suite, Suite::Packages | Suite::Offline | Suite::Perf))
             .collect();
+        let mut built = None;
         if !on_packages.is_empty() {
             match self.build_packages()? {
                 Some(packages) => {
                     for &distro in self.distros {
                         failed.extend(self.check_installed(distro, &packages, &on_packages)?);
                     }
+                    built = Some(packages);
                 }
                 None => failed.push(format!("package build on {}", BUILD_DISTRO.name())),
             }
         }
+        if self.suites.contains(&Suite::Repos) {
+            let packages = match (self.packages_from, built) {
+                (Some(dir), _) => Some(crate::repos::packages_in(dir)?),
+                (None, Some(packages)) => Some((packages.deb, packages.rpm)),
+                (None, None) if on_packages.is_empty() => self
+                    .build_packages()?
+                    .map(|packages| (packages.deb, packages.rpm)),
+                (None, None) => None,
+            };
+            match packages {
+                Some((deb, rpm)) => failed.extend(
+                    crate::repos::Check {
+                        root: self.root,
+                        engine: self.engine,
+                        pins: self.pins,
+                        distros: self.distros,
+                        rebuild: self.rebuild,
+                        cache_dir: &self.cache_dir,
+                        deb: &deb,
+                        rpm: &rpm,
+                    }
+                    .run()?,
+                ),
+                None => failed.push("repos: no packages".to_owned()),
+            }
+        }
         if self.suites.contains(&Suite::Flatpak) && !self.flatpak()? {
             failed.push("flatpak on the host".to_owned());
+        }
+        if self.suites.contains(&Suite::Flathub) {
+            let check = crate::flathub::Check {
+                root: self.root,
+                engine: self.engine,
+                pins: self.pins,
+                rebuild: self.rebuild,
+                cache_dir: &self.cache_dir,
+            };
+            if !check.run()? {
+                failed.push("flathub".to_owned());
+            }
         }
         Ok(failed)
     }
@@ -334,17 +379,17 @@ fn script(suite: Suite) -> &'static str {
 }
 
 /// The host folders a check sees.
-struct CheckMounts<'a> {
-    scripts: &'a Path,
-    data: &'a Path,
-    out: &'a Path,
+pub(crate) struct CheckMounts<'a> {
+    pub(crate) scripts: &'a Path,
+    pub(crate) data: &'a Path,
+    pub(crate) out: &'a Path,
 }
 
 /// The `run` arguments of a check: no network but loopback, the scripts and
 /// data read-only, the results folder writable, and room for WebKit's
 /// shared memory. strace needs ptrace, which the default seccomp profile of
 /// both engines allows for a process's own children.
-fn check_args(
+pub(crate) fn check_args(
     mounts: &CheckMounts<'_>,
     name: &str,
     version: &str,

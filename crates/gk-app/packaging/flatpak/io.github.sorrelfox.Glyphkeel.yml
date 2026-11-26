@@ -19,9 +19,12 @@
 # https://sorrelfox.github.io/glyphkeel/flatpak/repo/ (branch `stable`); the
 # .flatpakref and .flatpakrepo next to this file point at it.
 #
-# For a Flathub submission, replace the `dir` source of the last module with
-# a `git` source naming the release tag and its commit, and keep the
-# generated lists in the Flathub repository.
+# For Flathub, `cargo xtask flathub` writes this manifest with a `git` source
+# naming the release tag and its commit instead of the `dir` source of the
+# last module, without `default-branch`, next to flathub.json and the
+# generated lists; the pre-release attaches them as
+# glyphkeel-<version>-flathub.tar.gz. `cargo xtask ci --suite flathub` builds
+# and lints it in a container.
 
 id: io.github.sorrelfox.Glyphkeel
 runtime: org.gnome.Platform
@@ -38,8 +41,8 @@ finish-args:
   - --socket=wayland
   - --socket=fallback-x11
   - --device=dri
-  # The app's own D-Bus name: a second start hands its links to the first.
-  - --own-name=io.github.sorrelfox.Glyphkeel
+  # The app owns its own D-Bus name, through which a second start hands its
+  # links to the first; Flatpak allows that without a permission.
   # Reminders, and the tray icon of background mode.
   - --talk-name=org.freedesktop.Notifications
   - --talk-name=org.kde.StatusNotifierWatcher
@@ -58,6 +61,10 @@ modules:
   # than the version the workspace needs. Used for the build only.
   - name: rust
     buildsystem: simple
+    # Its libraries are used as they come: splitting off their debug
+    # information breaks rustc's libLLVM.
+    build-options:
+      no-debuginfo: true
     build-commands:
       - ./install.sh --prefix=/app/rust --components=rustc,cargo,rust-std-x86_64-unknown-linux-gnu
         --disable-ldconfig
@@ -70,19 +77,34 @@ modules:
         only-arches:
           - x86_64
 
-  # pnpm at the version package.json names, run with the node24 extension's
-  # Node. Used for the build only.
+  # pnpm at the version package.json names. Since pnpm 12 the program is a
+  # native binary, in the package @pnpm/exe.linux-x64; it replaces the
+  # placeholder of the pnpm package, as that package's install script does,
+  # and finds the rest of the package (its dist/ folder) next to it. Used for
+  # the build only.
   - name: pnpm
     buildsystem: simple
+    # The binary carries its JavaScript in an extra section; it is used as it
+    # comes.
+    build-options:
+      no-debuginfo: true
     build-commands:
       - mkdir -p /app/pnpm
-      - cp -r . /app/pnpm/
+      - cp -r pnpm/. /app/pnpm/
+      - install -m755 exe/pnpm /app/pnpm/pnpm
     cleanup:
       - "*"
     sources:
       - type: archive
         url: https://registry.npmjs.org/pnpm/-/pnpm-12.21.0.tgz
         sha512: 66fd8278ee28935ce951792d34367ff3af5c432a2756445823029533835b8da529bbe0be5130afd56ed0713fb8789e47bad82d93bd5ae2fe54b15562d6276ef0
+        dest: pnpm
+      - type: archive
+        url: https://registry.npmjs.org/@pnpm/exe.linux-x64/-/exe.linux-x64-12.21.0.tgz
+        sha512: f1eb9f0a31d7b2929b352fe487cab843482a2683aebc2e10e69828b3a5d2f01cbf9c032d3fe8dff05d42c3d7abf38d247c05fe3c9fedb3e03daa72c4f75aef5d
+        dest: exe
+        only-arches:
+          - x86_64
 
   - name: glyphkeel
     buildsystem: simple
@@ -98,8 +120,8 @@ modules:
     build-commands:
       # The UI: dependencies from the store, without the network; the
       # lockfile is trusted as it is, since the registry can't be asked.
-      - node /app/pnpm/bin/pnpm.cjs install --offline --frozen-lockfile --trust-lockfile
-      - node /app/pnpm/bin/pnpm.cjs --filter ui exec vite build
+      - /app/pnpm/pnpm install --offline --frozen-lockfile --trust-lockfile
+      - /app/pnpm/pnpm --filter ui exec vite build
       # Both programs, with the release profile, from the vendored crates.
       - cargo --offline build --locked --profile dist --package gk-cli
       - cargo --offline build --locked --profile dist --package gk-app --features tauri/custom-protocol
