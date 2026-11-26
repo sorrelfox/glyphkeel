@@ -9,6 +9,7 @@ mod codegen;
 mod deps;
 mod headers;
 mod installed;
+mod notices;
 mod windows;
 
 use std::path::{Path, PathBuf};
@@ -32,6 +33,11 @@ Commands:
   check-deps          Check the dependency rules: the command line and the
                       library crates never link the desktop toolkit or the web
                       view, and the shipped programs link no HTTP client.
+  notices [--check]   Write THIRD-PARTY-NOTICES.txt: the licences of every
+                      crate, npm package and component that ships, checked
+                      against the policy in licences.toml. With --check,
+                      write nothing and fail when the file is stale or a
+                      licence isn't allowed.
   gen [--check]       Generate the files that come from the operation
                       catalog: the JSON Schemas, the MCP tool list, the
                       reference pages and the TypeScript client. With
@@ -74,6 +80,7 @@ fn run() -> Result<bool> {
             deps::run(&root)
         }
         "gen" | "codegen" => codegen::run(&root, rest),
+        "notices" => notices::run(&root, rest),
         other => {
             eprint!("unknown command `{other}`\n\n{HELP}");
             Ok(false)

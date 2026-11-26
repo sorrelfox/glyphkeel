@@ -22,6 +22,7 @@ import { chordLabel } from "../components/Kbd";
 import { Select } from "../components/Select";
 import { DataPage } from "../screens/safety/DataPage";
 import { Group, NumberSetting, Row } from "./PreferenceRows";
+import { AboutPage } from "./preferences/AboutPage";
 import { AgentsPage } from "./preferences/AgentsPage";
 import { LanguagePage } from "./preferences/LanguagePage";
 import { ShortcutsPage } from "./preferences/ShortcutsPage";
@@ -32,7 +33,7 @@ import { TimeZonePicker } from "./TimeZonePicker";
 const WEEK_STARTS: readonly WeekStart[] = ["monday", "saturday", "sunday"];
 
 /** The pages, in the order of the list on the left. */
-export const PREFERENCE_PAGES = ["appearance", "language", "time", "notifications", "quick-add", "shortcuts", "agents", "workspace", "data"] as const;
+export const PREFERENCE_PAGES = ["appearance", "language", "time", "notifications", "quick-add", "shortcuts", "agents", "workspace", "data", "about"] as const;
 export type PreferencePage = (typeof PREFERENCE_PAGES)[number];
 
 interface PreferencesProps {
@@ -88,6 +89,9 @@ export function Preferences({ isOpen, onOpenChange, page = "appearance" }: Prefe
         </TabPanel>
         <TabPanel id="data" className={classes(styles.page)}>
           <DataPage />
+        </TabPanel>
+        <TabPanel id="about" className={classes(styles.page)}>
+          <AboutPage />
         </TabPanel>
       </Tabs>
     </Dialog>

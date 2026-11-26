@@ -1,0 +1,148 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Glyphkeel contributors
+#
+# The licence policy of everything Glyphkeel ships, and the extra entries of
+# THIRD-PARTY-NOTICES.txt. `cargo xtask notices` writes the notices from the
+# lock files and this file; `cargo xtask notices --check` (part of the static
+# checks) fails when the notices are out of date or when a shipped crate, npm
+# package or component has a licence this file doesn't allow.
+#
+# cargo-deny checks the crates' licences as well, with its own copy of the
+# list in the `[licenses]` section of deny.toml. The check here fails when
+# the two `allow` lists differ, so change both together.
+#
+# Every exception, override and component needs a reason.
+
+# Licences compatible with distributing Glyphkeel under GPL-3.0-or-later. An
+# expression with OR passes when one choice is allowed, one with AND when
+# every part is.
+allow = [
+    "MIT",
+    "MIT-0",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "0BSD",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "CC0-1.0",
+    "MPL-2.0",
+    "LGPL-2.1-or-later",
+    "LGPL-3.0-only",
+    "LGPL-3.0-or-later",
+    "GPL-3.0-only",
+    "GPL-3.0-or-later",
+    "Unlicense",
+    "BSL-1.0",
+    # Fonts only.
+    "OFL-1.1",
+]
+
+# One more licence for one package. `kind` is "crate", "npm" or "component".
+[[exception]]
+kind = "crate"
+name = "finl_unicode"
+allow = ["Unicode-DFS-2016"]
+reason = """
+Unicode character categories for the Markdown parser. Its data tables are \
+under the older Unicode licence, a permissive licence compatible with the GPL.\
+"""
+
+[[exception]]
+kind = "component"
+name = "SQLite"
+allow = ["blessing"]
+reason = "SQLite is in the public domain; the blessing is not a licence condition."
+
+[[exception]]
+kind = "component"
+name = "Microsoft Edge WebView2 bootstrapper"
+allow = ["LicenseRef-Microsoft-WebView2"]
+reason = """
+A separate Microsoft program carried by the Windows installer, which runs it \
+to install the web view when Windows lacks it. It is not linked with \
+Glyphkeel: aggregation, which the GPL allows.\
+"""
+
+# A licence for a package whose metadata names none or names it wrongly. The
+# package's own licence file was read to decide.
+[[override]]
+kind = "npm"
+name = "khroma"
+licence = "MIT"
+reason = "package.json has no licence field; its `license` file is the MIT licence."
+
+# Packages from the UI's development dependencies whose code ends up in the
+# built interface anyway: the bundler's own helpers. `path` is the installed
+# package, relative to the repository.
+[[bundled]]
+name = "vite"
+path = "ui/node_modules/vite"
+reason = "the module preload helper in the built interface"
+
+[[bundled]]
+name = "rolldown"
+path = "node_modules/.pnpm/node_modules/rolldown"
+reason = "the runtime helpers of the bundled modules"
+
+# Parts that are not crates or npm packages. `texts` are files in the
+# repository; `copyright` is shown with them.
+[[component]]
+name = "The Rust standard library"
+licence = "MIT OR Apache-2.0"
+source = "https://github.com/rust-lang/rust"
+used = "Compiled into both programs."
+copyright = "The Rust Project Developers"
+texts = ["xtask/licences/MIT.txt", "xtask/licences/Apache-2.0.txt"]
+
+[[component]]
+name = "SQLite"
+licence = "blessing"
+source = "https://sqlite.org/"
+used = "The database engine, compiled into both programs by the libsqlite3-sys crate."
+note = """
+The author disclaims copyright to this source code. In place of a legal \
+notice, here is a blessing:
+
+    May you do good and not evil.
+    May you find forgiveness for yourself and forgive others.
+    May you share freely, never taking more than you give.\
+"""
+
+[[component]]
+name = "KaTeX fonts"
+licence = "MIT"
+source = "https://github.com/KaTeX/KaTeX"
+used = "The math fonts in the app's interface, which come with the katex package and are under its licence (listed with the JavaScript packages)."
+
+[[component]]
+name = "TextMate grammars"
+licence = "MIT"
+source = "https://github.com/shikijs/textmate-grammars-themes"
+used = """
+The grammars of code highlighting, which come with the @shikijs/langs package \
+(listed with the JavaScript packages). Each grammar comes from its own \
+project, under that project's licence; the list of grammars, their sources \
+and licences is kept at the source address.\
+"""
+
+[[component]]
+name = "NSIS"
+licence = "Zlib"
+source = "https://nsis.sourceforge.io/"
+used = "The Windows installer and uninstaller are made with it and contain its code."
+copyright = "Nullsoft and Contributors"
+texts = ["xtask/licences/Zlib.txt"]
+
+[[component]]
+name = "Microsoft Edge WebView2 bootstrapper"
+licence = "LicenseRef-Microsoft-WebView2"
+source = "https://developer.microsoft.com/microsoft-edge/webview2/"
+used = "Carried by the Windows installer, which runs it to install the web view when Windows lacks it."
+note = """
+A separate program by Microsoft Corporation, distributed under Microsoft's \
+licence terms for the WebView2 Runtime. It is not part of Glyphkeel and is \
+not covered by Glyphkeel's licence.\
+"""

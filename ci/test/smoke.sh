@@ -39,6 +39,23 @@ for file in \
   [ -s "$file" ] || fail "$file is missing or empty"
   echo "ok $file"
 done
+# The licence and the third-party notices: the rpm keeps them with the
+# licences, the deb with the documentation and its copyright file.
+legal_dir=
+for dir in /usr/share/licenses/glyphkeel /usr/share/doc/glyphkeel; do
+  [ -s "$dir/THIRD-PARTY-NOTICES.txt" ] && legal_dir=$dir
+done
+[ -n "$legal_dir" ] || fail "THIRD-PARTY-NOTICES.txt is missing"
+for file in "$legal_dir/LICENSE" "$legal_dir/THIRD-PARTY-NOTICES.txt"; do
+  [ -s "$file" ] || fail "$file is missing or empty"
+  echo "ok $file"
+done
+grep -q 'GNU GENERAL PUBLIC LICENSE' "$legal_dir/LICENSE" || fail "LICENSE is not the GPL"
+head -1 "$legal_dir/THIRD-PARTY-NOTICES.txt" | grep -q '^Third-party notices for Glyphkeel$' \
+  || fail "THIRD-PARTY-NOTICES.txt does not start with its title"
+if [ "$legal_dir" = /usr/share/doc/glyphkeel ]; then
+  [ -s /usr/share/doc/glyphkeel/copyright ] || fail "the deb has no copyright file"
+fi
 grep -q '^[[:space:]]*complete .*glyphkeel$' /usr/share/bash-completion/completions/glyphkeel \
   || fail "the bash completion registers nothing"
 bash -n /usr/share/bash-completion/completions/glyphkeel || fail "the bash completion does not parse"

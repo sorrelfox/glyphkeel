@@ -13,6 +13,10 @@
   "bundle": {
     "targets": ["nsis"],
     "licenseFile": "../../LICENSE",
+    "resources": {
+      "../../LICENSE": "LICENSE.txt",
+      "../../THIRD-PARTY-NOTICES.txt": "THIRD-PARTY-NOTICES.txt"
+    },
     "windows": {
       "allowDowngrades": true,
       "webviewInstallMode": {

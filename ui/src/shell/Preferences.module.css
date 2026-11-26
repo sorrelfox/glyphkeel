@@ -507,3 +507,54 @@
 .kindUses {
   min-inline-size: max-content;
 }
+
+/* About: the copyright line under the group. */
+.aboutCopyright {
+  margin: 0;
+  padding-inline: 2px;
+  font-size: var(--fs-small);
+}
+
+/* The licence or the notices, in place of the About page: a header with
+   Back, then the text in a box that fills the rest of the page and scrolls. */
+.legal {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 8px;
+  min-block-size: 0;
+}
+
+.legalHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.legalText {
+  flex: 1 1 auto;
+  min-block-size: 12em;
+  margin: 0;
+  padding-block: 10px;
+  padding-inline: 12px;
+  overflow: auto;
+  border-radius: var(--r-l);
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--border);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.legalText:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.legalMissing {
+  margin: 0;
+  color: var(--fg-muted);
+}

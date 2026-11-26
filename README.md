@@ -205,4 +205,7 @@ same author: the vane reads the wind, the keel holds the course.
 ## Licence
 
 Glyphkeel is free software, licensed under the
-[GNU General Public License, version 3 or later](LICENSE).
+[GNU General Public License, version 3 or later](LICENSE). The licences of the
+third-party software it contains are in
+[THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt), which every package
+installs and the app shows under Preferences > About.
