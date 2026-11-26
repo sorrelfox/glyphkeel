@@ -37,6 +37,8 @@ export interface EditorOptions {
   mode: EditorMode;
   readOnly: boolean;
   spellChecker: SpellChecker | null;
+  /** The web view checks spelling itself; see `labelExtension`. */
+  webViewSpelling?: boolean;
   renderBlock: BlockRenderer | null;
   label: string;
   environment: EditorEnvironment;
@@ -65,9 +67,13 @@ export function readOnlyExtension(readOnly: boolean): Extension {
   return [EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)];
 }
 
-export function labelExtension(label: string): Extension {
-  // The web view's own spell checker stays off; spelling comes from the app.
-  return EditorView.contentAttributes.of({ "aria-label": label, "aria-multiline": "true", spellcheck: "false", autocorrect: "off", autocapitalize: "off" });
+/**
+ * The text area's name, and whether the web view's own spell checker runs:
+ * off where spelling comes from the app, on where the web view checks it
+ * itself (WebView2 on Windows).
+ */
+export function labelExtension(label: string, webViewSpelling = false): Extension {
+  return EditorView.contentAttributes.of({ "aria-label": label, "aria-multiline": "true", spellcheck: webViewSpelling ? "true" : "false", autocorrect: "off", autocapitalize: "off" });
 }
 
 export function rendererExtension(renderer: BlockRenderer | null): Extension {
@@ -95,7 +101,7 @@ export function editorExtensions(options: EditorOptions): Extension[] {
     compartments.readOnly.of(readOnlyExtension(options.readOnly)),
     compartments.spelling.of(spellingExtension(options.spellChecker)),
     compartments.renderer.of(rendererExtension(options.renderBlock)),
-    compartments.label.of(labelExtension(options.label)),
+    compartments.label.of(labelExtension(options.label, options.webViewSpelling)),
     ...(options.extensions ?? []),
   ];
 }

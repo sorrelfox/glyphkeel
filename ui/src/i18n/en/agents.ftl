@@ -19,6 +19,9 @@ agents-cli-install = Install command-line tool
 agents-cli-installed = The command-line tool is installed.
 agents-cli-missing = It is not on the PATH, and no copy came with the app. Install it with your package manager.
 agents-cli-missing-chip = Not found
+# On Windows, where the installer puts the tool beside the app and its folder on the PATH.
+agents-cli-bundled-not-on-path-windows = A terminal can't run it by name: the installer couldn't add its folder to your PATH. Agents use the copy that came with the app, at { $path }. To run it from a terminal, add that folder to your user PATH in Windows' environment variables, then open a new terminal.
+agents-cli-missing-windows = It is not on the PATH, and no copy came with the app. Install Glyphkeel again to get it back.
 
 agents-clients = Connect an agent
 agents-clients-about = Agents connect over MCP and work on this workspace while the app is open or closed.

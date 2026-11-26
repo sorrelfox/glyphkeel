@@ -15,7 +15,8 @@ import { useCommand, useOp } from "../data/hooks";
 import { type SettingsPatch, type WeekStart } from "../generated/ops";
 import { useT } from "../i18n/I18n";
 import { canRestart, restartApp, SYSTEM_ZONE, useAppSettings, useSetAutostart, useTimeZones, useUpdateAppSettings } from "../ipc/appSettings";
-import { useQuickAddShortcut, useSetQuickAddShortcut, type QuickAddShortcut } from "../ipc/quickAdd";
+import { useQuickAddShortcut, useSetQuickAddShortcut, type QuickAddShortcut, type ShortcutState as ShortcutStateName } from "../ipc/quickAdd";
+import { platform, type Platform } from "../platform";
 import { parseChord } from "../actions/keymap";
 import { chordLabel } from "../components/Kbd";
 import { Select } from "../components/Select";
@@ -483,6 +484,7 @@ function NotificationsPage() {
   const app = useAppSettings();
   const updateApp = useUpdateAppSettings();
   const setAutostart = useSetAutostart();
+  const autostart = autostartMessages(platform());
   return (
     <>
       <Group title={t("preferences-notifications-group")}>
@@ -522,9 +524,9 @@ function NotificationsPage() {
             }}
           />
         </Row>
-        <Row label={t("preferences-autostart")} about={t("preferences-autostart-about")}>
+        <Row label={t(autostart.label)} about={t(autostart.about)}>
           <Switch
-            aria-label={t("preferences-autostart")}
+            aria-label={t(autostart.label)}
             isDisabled={!app.data}
             isSelected={app.data?.autostart ?? false}
             onChange={setAutostart}
@@ -537,33 +539,62 @@ function NotificationsPage() {
 
 // ---------- Quick add ----------
 
+/**
+ * Starting with the system: on Windows it is signing in, and Task Manager
+ * can switch it off too.
+ */
+export function autostartMessages(on: Platform): { label: string; about: string } {
+  return on === "windows"
+    ? { label: "preferences-autostart-windows", about: "preferences-autostart-windows-about" }
+    : { label: "preferences-autostart", about: "preferences-autostart-about" };
+}
+
+/**
+ * The message for the shortcut's state, and whether the person needs the
+ * command to bind it in the desktop's settings. Windows has no portal and no
+ * such settings: the app holds the keys itself, or they are taken.
+ */
+export function shortcutStateMessage(state: ShortcutStateName, on: Platform): { id: string; needsCommand: boolean } {
+  if (on === "windows") {
+    switch (state) {
+      case "grab":
+        return { id: "preferences-shortcut-state-grab", needsCommand: false };
+      case "manual":
+      case "refused":
+        return { id: "preferences-shortcut-state-taken", needsCommand: false };
+      default:
+        return { id: "preferences-shortcut-first-time-windows", needsCommand: false };
+    }
+  }
+  switch (state) {
+    case "off":
+      return { id: "preferences-shortcut-first-time", needsCommand: false };
+    case "waiting":
+      return { id: "preferences-shortcut-state-waiting", needsCommand: false };
+    case "portal":
+      return { id: "preferences-shortcut-state-portal", needsCommand: false };
+    case "grab":
+      return { id: "preferences-shortcut-state-grab", needsCommand: false };
+    case "manual":
+      return { id: "preferences-shortcut-state-manual", needsCommand: true };
+    case "refused":
+      return { id: "preferences-shortcut-state-refused", needsCommand: true };
+  }
+}
+
 /** What the shortcut's state means, in a sentence; the command where the person binds it. */
 function ShortcutState({ shortcut, onAskAgain }: { shortcut: QuickAddShortcut; onAskAgain: () => void }) {
   const t = useT();
   const keys = chordLabel(parseChord(shortcut.keys), t);
-  const text = (() => {
-    switch (shortcut.state) {
-      case "off":
-        return t("preferences-shortcut-first-time");
-      case "waiting":
-        return t("preferences-shortcut-state-waiting");
-      case "portal":
-        return t("preferences-shortcut-state-portal", { trigger: shortcut.trigger ?? keys });
-      case "grab":
-        return t("preferences-shortcut-state-grab", { keys });
-      case "manual":
-        return t("preferences-shortcut-state-manual");
-      case "refused":
-        return t("preferences-shortcut-state-refused");
-    }
-  })();
-  const needsCommand = shortcut.state === "manual" || shortcut.state === "refused";
+  const message = shortcutStateMessage(shortcut.state, platform());
+  const text = t(message.id, { keys, trigger: shortcut.trigger ?? keys });
+  const needsCommand = message.needsCommand;
   return (
     <div className={styles.shortcutState} role="status" data-testid="shortcut-state" data-state={shortcut.state}>
       <p>{text}</p>
       {needsCommand && <code className={classes("selectable", styles.command)}>{shortcut.command}</code>}
       {shortcut.detail !== undefined && needsCommand && <small className="faint">{shortcut.detail}</small>}
-      {shortcut.state === "refused" && (
+      {shortcut.state === "refused" && platform() !== "windows" && (
         <button type="button" className="btn sm" onClick={onAskAgain}>
           {t("preferences-shortcut-try-again")}
         </button>

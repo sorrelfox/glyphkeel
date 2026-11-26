@@ -1,2 +1,14 @@
+# Text files are checked out with LF on every platform, Windows included, so
+# snapshots, generated references and other files that tests compare byte
+# for byte match there as well.
+* text=auto eol=lf
+
+# Snapshots of the command line, the engine and the query language.
+*.snap text eol=lf
+
+# Binary files: never converted.
+*.png binary
+*.ico binary
+
 # Test corpora whose exact bytes matter (line endings included)
 ui/src/editor/corpus/** -text

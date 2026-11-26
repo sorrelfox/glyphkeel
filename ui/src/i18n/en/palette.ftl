@@ -63,3 +63,6 @@ preferences-shortcut-state-manual = This desktop doesn't let Glyphkeel have the 
 preferences-shortcut-state-refused = The desktop's request was declined, so the shortcut is off. Turn it on to be asked again, or add a shortcut in the desktop's keyboard settings that runs this command:
 preferences-shortcut-unavailable = The shortcut belongs to the desktop app.
 preferences-shortcut-try-again = Ask again
+# On Windows, where Glyphkeel registers the keys itself.
+preferences-shortcut-first-time-windows = Glyphkeel registers the keys itself while it runs. If another program already uses them, choose other keys.
+preferences-shortcut-state-taken = Another program already uses these keys, so the shortcut is off. Choose other keys.

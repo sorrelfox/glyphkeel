@@ -6,7 +6,7 @@
 a command line and a built-in MCP server.**
 
 [![Licence: GPL-3.0-or-later](https://img.shields.io/badge/licence-GPL--3.0--or--later-blue)](LICENSE)
-[![Platform: Linux](https://img.shields.io/badge/platform-Linux-informational)](#status-and-roadmap)
+[![Platforms: Linux, Windows](https://img.shields.io/badge/platforms-Linux%20%7C%20Windows-informational)](#status-and-roadmap)
 [![Status: early development](https://img.shields.io/badge/status-early%20development-orange)](#status-and-roadmap)
 
 <img src="docs/screenshots/board.png" alt="The Glyphkeel board in the light theme: a sidebar with Today, All tasks and three projects, a filter bar, and five columns from Backlog to Done with task cards showing labels, due dates, checklist progress, comments and time spent" width="900">
@@ -83,6 +83,10 @@ output; nothing listens on the network.
 
 The MCP server works while the app is closed. It is part of the command line,
 not a separate service.
+[Connecting MCP clients](docs/mcp-clients.md) has the set-up for common
+clients, on Linux and on Windows (`glyphkeel.exe mcp`). Where your workspaces
+and settings are kept, and how to move them, is in
+[Data and settings](docs/data-and-settings.md).
 
 ## Screenshots
 
@@ -138,8 +142,9 @@ feature to the engine, the MCP server, the command line and the app together.
 - **Next:** feedback on 0.1.0, then the wiki in the app.
 - **Later:** the Gantt chart and calendar, and deeper project
   settings such as custom fields, versions and recurring tasks.
-- **Platforms:** Linux first, packaged as deb, rpm and Flatpak. Windows
-  support follows after 1.0. macOS is not planned at present.
+- **Platforms:** Linux, packaged as deb, rpm and Flatpak, and Windows 10
+  and 11, with a per-user installer ([Glyphkeel on Windows](docs/windows.md)).
+  macOS is not planned at present.
 
 Releases will appear on the [releases page](https://github.com/sorrelfox/glyphkeel/releases).
 
