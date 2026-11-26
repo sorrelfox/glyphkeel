@@ -29620,6 +29620,13 @@
                   "null"
                 ]
               },
+              "page": {
+                "description": "A wiki page: its ID. Alone, its current text is rendered; with\n`source` or `revision`, that text is rendered as the page's. Either\nway the page's macros (`{{toc}}`, `{{children}}`, `{{include …}}`,\n`{{tasks …}}`) are expanded; in any other text they stay as written.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "project": {
                 "description": "A project's description: its key or ID.",
                 "type": [
@@ -38619,6 +38626,10 @@
                 "description": "Its name in addresses, made from the title.",
                 "type": "string"
               },
+              "template": {
+                "description": "Whether it is a template, offered when a new page is made.",
+                "type": "boolean"
+              },
               "title": {
                 "description": "The page's title.",
                 "type": "string"
@@ -38824,6 +38835,10 @@
               "slug": {
                 "description": "Its name in addresses, made from the title.",
                 "type": "string"
+              },
+              "template": {
+                "description": "Whether it is a template, offered when a new page is made.",
+                "type": "boolean"
               },
               "title": {
                 "description": "The page's title.",
@@ -39419,6 +39434,10 @@
             "description": "Its name in addresses, made from the title.",
             "type": "string"
           },
+          "template": {
+            "description": "Whether it is a template, offered when a new page is made.",
+            "type": "boolean"
+          },
           "title": {
             "description": "The page's title.",
             "type": "string"
@@ -39528,6 +39547,13 @@
           "project": {
             "description": "The project: its key or ID.",
             "type": "string"
+          },
+          "template": {
+            "description": "Start from this page's text: a template (or any page) by title,\nslug, ID or `KEY:Page` for another project's; not with `body`.",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "title": {
             "description": "The title, 1 to 200 characters, unique in the project ignoring case,\nwithout `[`, `]`, `#` or `|`.",
@@ -39991,6 +40017,10 @@
                 "description": "Its name in addresses, made from the title.",
                 "type": "string"
               },
+              "template": {
+                "description": "Whether it is a template, offered when a new page is made.",
+                "type": "boolean"
+              },
               "title": {
                 "description": "The page's title.",
                 "type": "string"
@@ -40063,7 +40093,7 @@
       },
       "output_name": "WikiChange",
       "safety": "write",
-      "summary": "Create a wiki page with a title unique in its project, optionally inside another page and with its text."
+      "summary": "Create a wiki page with a title unique in its project, optionally inside another page and with its text or a template's."
     },
     {
       "cli": "wiki put <page>",
@@ -40268,6 +40298,13 @@
               }
             ],
             "description": "Resolve a conflict copy of the text."
+          },
+          "template": {
+            "description": "Mark it as a template (`true`), which the app offers when a new page\nis made, or unmark it (`false`).",
+            "type": [
+              "boolean",
+              "null"
+            ]
           },
           "title": {
             "description": "A new title. The old slug keeps finding the page, so links by the\nold title still resolve until another page takes that name.",
@@ -40733,6 +40770,10 @@
                 "description": "Its name in addresses, made from the title.",
                 "type": "string"
               },
+              "template": {
+                "description": "Whether it is a template, offered when a new page is made.",
+                "type": "boolean"
+              },
               "title": {
                 "description": "The page's title.",
                 "type": "string"
@@ -40805,7 +40846,7 @@
       },
       "output_name": "WikiChange",
       "safety": "write",
-      "summary": "Change a wiki page: its text (whole, with a base revision, or by targeted edits), title, parent or place, whether it is the home page; or resolve a conflict copy."
+      "summary": "Change a wiki page: its text (whole, with a base revision, or by targeted edits), title, parent or place, whether it is the home page or a template; or resolve a conflict copy."
     },
     {
       "cli": "wiki move <page>",
@@ -41336,6 +41377,10 @@
               "slug": {
                 "description": "Its name in addresses, made from the title.",
                 "type": "string"
+              },
+              "template": {
+                "description": "Whether it is a template, offered when a new page is made.",
+                "type": "boolean"
               },
               "title": {
                 "description": "The page's title.",

@@ -72,7 +72,7 @@ import {
 import { PROJECT_ICONS, suggestHue } from "../catalog";
 import { formatDuration, parseDuration } from "../duration";
 import { decodeBase64, materialize, recordedFields, sniff } from "./details";
-import { checklistOf, merge3, publicChecklist, renderFake, setChecked, unifiedDiff } from "./markdown";
+import { checklistOf, escapeHtml, merge3, publicChecklist, renderFake, setChecked, unifiedDiff } from "./markdown";
 import { newProject, nextFileId, nextId, nextUuid, SAMPLE_AGENT } from "./seed";
 import { type FakeComment, type FakeFile, type FakeProject, type FakeRelation, type FakeReminder, type FakeRevision, type FakeState, type FakeTask, type FakeTimeEntry, type FakeWikiPage } from "./state";
 import { naturalDay, nextDay, searchAll, searchWiki, slugOf, headingsOf } from "./overview";
@@ -1325,6 +1325,7 @@ export class FakeWorkspace {
       ...some("parent", page.parentId),
       ...(page.agentBrief === true ? { agent_brief: true } : {}),
       ...(page.home === true ? { home: true } : {}),
+      ...(page.template === true ? { template: true } : {}),
       updated_at: page.updatedAt,
     };
   }
@@ -1355,6 +1356,82 @@ export class FakeWorkspace {
       pages.find((page) => page.slug === wanted.toLowerCase() || page.slug === slug) ??
       pages.find((page) => (page.oldSlugs ?? []).includes(slug))
     );
+  }
+
+  /**
+   * A wiki page's text with its macros expanded, as the engine's renderer
+   * writes them: `{{toc}}`, `{{children}}`, `{{include Page}}` (three levels,
+   * never inside itself) and `{{tasks <query>}}` (in the page's project
+   * unless the query names one; 50 at most).
+   */
+  private renderPage(text: string, page: FakeWikiPage, known: (key: string) => boolean, stack: string[]): string {
+    const lines = text.split(/\r\n|\r|\n/);
+    const macros: string[] = [];
+    const blank = (line: string | undefined) => line === undefined || line.trim() === "";
+    const marked = lines.map((line, index) => {
+      const found = /^\s*\{\{\s*(toc|children|include|tasks)(?:\s+([^{}]*?))?\s*\}\}\s*$/i.exec(line);
+      if (!found || !blank(lines[index - 1]) || !blank(lines[index + 1])) {
+        return line;
+      }
+      const name = (found[1] ?? "").toLowerCase();
+      const argument = (found[2] ?? "").trim();
+      if ((name === "toc" || name === "children") !== (argument === "") || (name === "include" && argument === "")) {
+        return line;
+      }
+      macros.push(this.macroHtml(name, argument, text, page, known, stack));
+      return `GKMACRO${String(macros.length - 1)}X`;
+    });
+    let html = renderFake(marked.join("\n"), known);
+    macros.forEach((macro, index) => {
+      html = html.replace(`<p>GKMACRO${String(index)}X</p>`, macro);
+    });
+    return html;
+  }
+
+  private macroHtml(name: string, argument: string, text: string, page: FakeWikiPage, known: (key: string) => boolean, stack: string[]): string {
+    const note = (kind: string, value = "") => `<p data-macro-note="${kind}"${value === "" ? "" : ` data-macro-arg="${escapeHtml(value)}"`}></p>`;
+    const link = (target: string, label: string) => `<a data-wiki="${escapeHtml(target)}">${escapeHtml(label)}</a>`;
+    const project = this.state.projects.find((candidate) => candidate.id === page.projectId);
+    let inner: string;
+    if (name === "toc") {
+      const headings = headingsOf(text);
+      inner = headings.length === 0 ? note("toc-empty") : `<ul>${headings.map((heading) => `<li>${link(`#${heading.text}`, heading.text)}</li>`).join("")}</ul>`;
+    } else if (name === "children") {
+      const kids = (this.state.wiki ?? []).filter((other) => other.parentId === page.id);
+      inner = kids.length === 0 ? note("children-empty") : `<ul>${kids.map((kid) => `<li>${link(kid.title, kid.title)}</li>`).join("")}</ul>`;
+    } else if (name === "include") {
+      const found = project === undefined ? undefined : this.linkedPage(project, argument);
+      inner =
+        stack.length > 3
+          ? note("include-too-deep", argument)
+          : found === undefined
+            ? note("include-missing", argument)
+            : stack.includes(found.id)
+              ? note("include-loop", argument)
+              : this.renderPage(found.body, found, known, [...stack, found.id]).replace(/data-item="\d+"/g, 'disabled=""');
+    } else {
+      const names = this.queryNames();
+      const scoped = /(^|\s)-?project:/i.test(argument) || project === undefined ? null : new Set([project, ...this.descendants(project)].map((each) => each.key));
+      const all = this.listedTasks().filter((task) => scoped === null || scoped.has(task.project));
+      let keys: string[];
+      try {
+        keys = matchingKeys(all, argument, names, this.archivedKeys());
+      } catch (error) {
+        return `<div data-macro="tasks">${note("tasks-error", queryError(error)?.message ?? String(error))}</div>`;
+      }
+      const shown = keys.slice(0, 50).map((key) => all.find((task) => task.key === key)).filter((task) => task !== undefined);
+      const done = (task: ListedTask) => task.status.category === "done" || task.status.category === "cancelled";
+      inner =
+        shown.length === 0
+          ? note("tasks-empty")
+          : `<ul>${shown
+              .map((task) => {
+                const title = done(task) ? `<del>${escapeHtml(task.title)}</del>` : escapeHtml(task.title);
+                return `<li><a data-ref="${task.key}">${task.key}</a> ${title} <span data-macro="status">${escapeHtml(task.status.name)}</span></li>`;
+              })
+              .join("")}</ul>${keys.length > shown.length ? note("tasks-more", String(keys.length - shown.length)) : ""}`;
+    }
+    return `<div data-macro="${name}">${inner}</div>`;
   }
 
   /** The page a link in a text of `project` names: in that project, or `KEY:Page` in another. */
@@ -1524,6 +1601,7 @@ export class FakeWorkspace {
       ...(include.includes("files") ? { files: this.state.files.filter((file) => file.pageId === page.id && file.deletedAt === null).map((file) => this.attachment(file)) } : {}),
       ...(page.agentBrief === true ? { agent_brief: true } : {}),
       ...(page.home === true ? { home: true } : {}),
+      ...(page.template === true ? { template: true } : {}),
       created_at: page.createdAt,
       updated_at: page.updatedAt,
     };
@@ -2660,7 +2738,7 @@ export class FakeWorkspace {
       ];
       return { items, total: items.length };
     },
-    "wiki.update": ({ page: ref, project: projectRef, title, body, edits, parent: parentRef, clear, before, after, at, base_revision, agent_brief, home, message }) => {
+    "wiki.update": ({ page: ref, project: projectRef, title, body, edits, parent: parentRef, clear, before, after, at, base_revision, agent_brief, home, template, message }) => {
       const page = this.wikiPage(ref, projectRef);
       const project = this.wikiWritable(this.projectKeyOf(page));
       const pages = (this.state.wiki ??= []);
@@ -2708,6 +2786,10 @@ export class FakeWorkspace {
           }
         }
         fields.push("home");
+      }
+      if (template !== null && template !== undefined && template !== (page.template === true)) {
+        page.template = template;
+        fields.push("template");
       }
       let text = body ?? undefined;
       if (edits !== undefined && edits.length > 0) {
@@ -2841,8 +2923,16 @@ export class FakeWorkspace {
       this.state.wiki = pages.filter((candidate) => !gone.includes(candidate));
       return { output: { items: [entry], total: gone.length }, changes: gone.map((each) => ({ entity: "wiki_page", id: each.id, fields: ["trashed"], project: project.key })) };
     },
-    "wiki.create": ({ project: ref, title, body, parent: parentRef, before, after, at }) => {
+    "wiki.create": ({ project: ref, title, body: given, template, parent: parentRef, before, after, at }) => {
       const project = this.wikiWritable(ref);
+      if (template !== null && template !== undefined && given !== null && given !== undefined) {
+        fail("invalid", "Give either a text or a template to start from, not both.", { details: { path: "template", message_id: "wiki-template-and-body", args: {} } });
+      }
+      const source = template === null || template === undefined ? undefined : ((this.state.wiki ?? []).find((candidate) => candidate.id === template && candidate.projectId === project.id) ?? this.linkedPage(project, template));
+      if (template !== null && template !== undefined && source === undefined) {
+        fail("not_found", `There is no page “${template}” to start from.`, { details: { field: "template", message_id: "wiki-template-not-found", args: { page: template } } });
+      }
+      const body = source?.body ?? given;
       const pages = (this.state.wiki ??= []);
       const trimmed = title.trim();
       if (trimmed === "") {
@@ -3383,8 +3473,13 @@ export class FakeWorkspace {
           text = document.source ?? "";
           id = "preview";
         }
+        const page = document.page === null || document.page === undefined ? undefined : this.wikiPage(document.page, undefined);
+        if (page !== undefined && document.source === undefined && document.revision === undefined) {
+          text = page.body;
+          id = `wiki-${page.id}`;
+        }
         return {
-          html: renderFake(text, known),
+          html: page === undefined ? renderFake(text, known) : this.renderPage(text, page, known, [page.id]),
           checklist: publicChecklist(text),
           document_id: document.document_id ?? id,
           ...some("revision", revision),

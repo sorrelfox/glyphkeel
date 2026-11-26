@@ -129,8 +129,8 @@ describe("the description", () => {
     fireEvent.click(within(banner).getByRole("button", { name: "Resolve" }));
     const resolver = await within(section).findByRole("group", { name: "Conflict copy" });
     const diff = await within(resolver).findByRole("group", { name: "Differences between the description and the copy" });
-    expect(within(diff).getByText("Before the journey:").tagName).toBe("DEL");
-    expect(within(diff).getByText("Before we go:").tagName).toBe("INS");
+    expect(within(diff).getByText((_, element) => element?.tagName === "DEL" && element.textContent === "Before the journey:")).toBeTruthy();
+    expect(within(diff).getByText((_, element) => element?.tagName === "INS" && element.textContent === "Before we go:")).toBeTruthy();
     fireEvent.click(within(resolver).getByRole("button", { name: "Use the copy" }));
     await waitFor(async () => {
       expect(await stored(transport, task.key)).toContain("Before we go:");
@@ -213,8 +213,8 @@ describe("the description", () => {
     fireEvent.click(newer as HTMLElement);
     fireEvent.click(older as HTMLElement);
     const diff = await within(section).findByRole("group", { name: "Differences between the two revisions" });
-    expect(within(diff).getByText("- [x] Pack the bags").tagName).toBe("DEL");
-    expect(within(diff).getByText("- [x] Pack light").tagName).toBe("INS");
+    expect(within(diff).getByText((_, element) => element?.tagName === "DEL" && element.textContent === "- [x] Pack the bags")).toBeTruthy();
+    expect(within(diff).getByText((_, element) => element?.tagName === "INS" && element.textContent === "- [x] Pack light")).toBeTruthy();
   });
 
   it("keeps an unsaved draft when the editor closes with the panel", async () => {

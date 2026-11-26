@@ -30,6 +30,15 @@ wiki-home-set = Make this the home page
 wiki-home-unset = Stop using as the home page
 wiki-home-set-done = The wiki now opens on this page.
 wiki-home-unset-done = The wiki opens on its first page again.
+# A page marked as a template is offered when a new page is made.
+wiki-template = Template
+wiki-template-set = Use as a template
+wiki-template-unset = Stop using as a template
+wiki-template-set-done = New pages can now start from this page.
+wiki-template-unset-done = This page is no longer offered as a template.
+# The field of the new-page dialog that picks a template.
+wiki-template-field = Start from
+wiki-template-blank = A blank page
 wiki-export = Export…
 wiki-import = Import a folder of Markdown files…
 wiki-import-into = Import a folder into this page…

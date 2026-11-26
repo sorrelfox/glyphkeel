@@ -139,7 +139,10 @@ fn the_allowlists_are_the_documented_ones() {
             "data-wiki",
             "data-math",
             "data-lang",
-            "data-external-src"
+            "data-external-src",
+            "data-macro",
+            "data-macro-note",
+            "data-macro-arg"
         ]
     );
 }

@@ -276,6 +276,20 @@
   background: color-mix(in srgb, var(--danger) 14%, transparent);
 }
 
+/* The words that changed inside a changed line: a stronger tint of the line's colour. */
+.diffWord {
+  border-radius: var(--r-s);
+  color: inherit;
+}
+
+.add .diffWord {
+  background: color-mix(in srgb, var(--success) 34%, transparent);
+}
+
+.remove .diffWord {
+  background: color-mix(in srgb, var(--danger) 34%, transparent);
+}
+
 .hunk {
   color: var(--fg-faint);
 }

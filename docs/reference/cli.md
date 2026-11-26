@@ -102,8 +102,8 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel wiki import <path>` | `wiki.import` | Import a folder of Markdown files as wiki pages: sub-folders become pages inside pages, relative links between the files and `[[…]]` links become wiki links, and linked images and files are attached to their pages; one change that Undo takes back. |
 | `glyphkeel wiki list` | `wiki.list` | A project's wiki pages as a tree: titles, slugs, nesting and when each changed. |
 | `glyphkeel wiki move <page>` | `wiki.move` | Move a wiki page, with the pages inside it, into another parent page or to the top, and to a place among its siblings; refuses moves into itself; links to it keep working. |
-| `glyphkeel wiki new` | `wiki.create` | Create a wiki page with a title unique in its project, optionally inside another page and with its text. |
-| `glyphkeel wiki put <page>` | `wiki.update` | Change a wiki page: its text (whole, with a base revision, or by targeted edits), title, parent or place, whether it is the home page; or resolve a conflict copy. |
+| `glyphkeel wiki new` | `wiki.create` | Create a wiki page with a title unique in its project, optionally inside another page and with its text or a template's. |
+| `glyphkeel wiki put <page>` | `wiki.update` | Change a wiki page: its text (whole, with a base revision, or by targeted edits), title, parent or place, whether it is the home page or a template; or resolve a conflict copy. |
 | `glyphkeel wiki references <page>` | `wiki.references` | The pages and tasks a wiki page's text links to, in order, each resolved now; links that find nothing are marked. |
 | `glyphkeel wiki search <text>` | `wiki.search` | Find wiki pages by title, heading or text, for example to link one; `Page#Heading` lists a page's headings. |
 | `glyphkeel workspace` | `workspace.get` | The open workspace: its name and ID, the schema and program versions, who is asking with which rights, the settings, the limits on agents and a short guide. |

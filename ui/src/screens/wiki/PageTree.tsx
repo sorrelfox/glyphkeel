@@ -117,6 +117,7 @@ export function PageTree({ pages, current, writable, onOpen, onMove, onNew, onRe
                 </Tooltip>
               )}
               {page.agent_brief === true && <span className="chip hue-purple">{t("wiki-agent-brief")}</span>}
+              {page.template === true && <span className="chip hue-teal">{t("wiki-template")}</span>}
               {writable && (
                 <Button slot="drag" className={classes(styles.dragHandle)} aria-label={t("wiki-drag", { page: page.title })}>
                   <GripVertical className="ic s faint" />

@@ -220,6 +220,8 @@ export interface FakeWikiPage {
   agentBrief?: boolean;
   /** Whether it is its wiki's home page. */
   home?: boolean;
+  /** Whether it is a template for new pages. */
+  template?: boolean;
 }
 
 /** Tasks in the trash: one deletion, with the subtasks that went with it; or wiki pages, with the pages inside. */

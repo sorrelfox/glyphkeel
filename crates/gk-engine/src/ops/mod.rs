@@ -23,6 +23,7 @@ pub(crate) mod history;
 pub(crate) mod links;
 pub(crate) mod list_layout;
 pub(crate) mod lookup;
+pub(crate) mod macros;
 pub(crate) mod project;
 pub(crate) mod project_delete;
 pub(crate) mod query;

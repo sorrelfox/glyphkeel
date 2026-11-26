@@ -18,6 +18,9 @@
 //!   for backlinks.
 //! - [`plain_text`] extracts the words for the search index.
 //! - [`analyze`] does the last three jobs from a single parse.
+//! - [`macros`] finds a wiki page's macros (`{{toc}}`, `{{children}}`,
+//!   `{{include Page}}`, `{{tasks <query>}}`), which [`render`] expands when
+//!   given a [`MacroSource`].
 //!
 //! ```
 //! use gk_markdown::{RenderOptions, checklist, render, toggle};
@@ -48,7 +51,8 @@
 //!   `data-external-src`, for the reader to load on request.
 //!
 //! The attributes the reader acts on (`data-item`, `data-ref`, `data-wiki`,
-//! `data-math`, `data-lang`, `data-external-src` and `class`) are written
+//! `data-math`, `data-lang`, `data-external-src`, `data-macro`,
+//! `data-macro-note`, `data-macro-arg` and `class`) are written
 //! only by the renderer: each render marks its own with a fresh random value,
 //! and the sanitizer drops every such attribute without that mark. Raw HTML
 //! can't forge a checkbox, a task link or a diagram.
@@ -58,6 +62,7 @@
 mod checklist;
 mod headings;
 mod keys;
+mod macros;
 mod plain;
 mod raw_html;
 mod references;
@@ -67,6 +72,10 @@ mod text;
 
 pub use checklist::{ChecklistItem, ToggleError, checklist, set_checked, toggle};
 pub use headings::{Heading, headings};
+pub use macros::{
+    Included, MAX_INCLUDE_DEPTH, MAX_INCLUDES, Macro, MacroSource, Note, PageItem, TaskItem,
+    TaskList, macros,
+};
 pub use plain::plain_text;
 pub use references::{
     LinkSpan, References, WikiLink, WikiLinkSpan, link_spans, references, wiki_link_spans,

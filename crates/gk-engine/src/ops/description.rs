@@ -922,10 +922,28 @@ fn source_of(tx: &Transaction<'_>, i: usize, s: &RenderSource) -> Result<Source,
     .filter(|g| **g)
     .count();
     let field = format!("documents[{i}]");
-    if given != 1 {
+    // A page alone is its current text; with a text or a revision, it only
+    // says whose text that is.
+    let page_alone = s.page.is_some() && given == 0;
+    let with_page = s.source.is_some() || s.revision.is_some();
+    let valid = if page_alone {
+        true
+    } else {
+        given == 1 && (s.page.is_none() || with_page)
+    };
+    if !valid {
         return Err(messages::invalid(&field, "render-one-source", &[]));
     }
-    let mut out = if let Some(text) = &s.source {
+    let mut out = if page_alone {
+        let page = page_of(tx, &field, s.page.as_deref().unwrap_or_default())?;
+        let (text, rev) = current_text(tx, Owner::Wiki(page.id))?;
+        Source {
+            text,
+            document_id: format!("wiki-{}", page.id),
+            revision: rev.map(|r| r.to_string()),
+            version: None,
+        }
+    } else if let Some(text) = &s.source {
         Source {
             text: text.clone(),
             document_id: "preview".to_owned(),
@@ -986,6 +1004,18 @@ fn source_of(tx: &Transaction<'_>, i: usize, s: &RenderSource) -> Result<Source,
     Ok(out)
 }
 
+/// The live page a render names by ID.
+fn page_of(tx: &Transaction<'_>, field: &str, page: &str) -> Result<super::wiki::PageRow, Failure> {
+    let missing = || {
+        Failure::Op(
+            messages::not_found("wiki-page-id-not-found", &[("page", page.to_owned())])
+                .with_detail("field", format!("{field}.page")),
+        )
+    };
+    let id: Id = page.trim().parse().map_err(|_| missing())?;
+    super::wiki::by_id(tx, id)?.ok_or_else(missing)
+}
+
 fn render(q: &QueryCtx<'_>, input: RenderInput) -> Result<RenderOutput, Failure> {
     if input.documents.is_empty() || input.documents.len() > MAX_RENDER {
         return Err(messages::invalid(
@@ -1007,7 +1037,16 @@ fn render(q: &QueryCtx<'_>, input: RenderInput) -> Result<RenderOutput, Failure>
     let mut items = Vec::with_capacity(input.documents.len());
     for (i, s) in input.documents.iter().enumerate() {
         let source = source_of(q.tx, i, s)?;
-        let options = gk_markdown::RenderOptions::new(&source.document_id).with_task_keys(&exists);
+        let page = match &s.page {
+            Some(page) => Some(page_of(q.tx, &format!("documents[{i}]"), page)?),
+            None => None,
+        };
+        let macros = page.map(|p| super::macros::WikiMacros::new(q.tx, &q.env.zone, q.now, p));
+        let mut options =
+            gk_markdown::RenderOptions::new(&source.document_id).with_task_keys(&exists);
+        if let Some(macros) = &macros {
+            options = options.with_macros(macros);
+        }
         items.push(Rendered {
             html: gk_markdown::render(&source.text, &options),
             checklist: checklist_items(&source.text),

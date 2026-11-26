@@ -1564,8 +1564,8 @@ fn write(
             tx.prepare_cached(
                 "INSERT INTO wiki_pages (id, project_id, rank, title, title_fold, slug,
                    current_rev, is_agent_brief, created_at, updated_at, deleted_at, deleted_group,
-                   is_home)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                   is_home, is_template)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
             )?
             .execute(params![
                 b(plan.id(&page.id)),
@@ -1581,6 +1581,7 @@ fn write(
                 page.deleted_at,
                 plan.group(page.deleted_group.as_ref()),
                 page.is_home && page.deleted_at.is_none(),
+                page.is_template,
             ])?;
             for slug in &page.redirects {
                 tx.prepare_cached(

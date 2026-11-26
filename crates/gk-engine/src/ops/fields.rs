@@ -140,6 +140,7 @@ const SPECS: &[Spec] = &[
         Enc::Bool,
     ),
     spec(WIKI, "home", "wiki_pages", "is_home", Enc::Bool),
+    spec(WIKI, "template", "wiki_pages", "is_template", Enc::Bool),
 ];
 
 const PRIORITIES: [&str; 5] = ["none", "low", "normal", "high", "urgent"];

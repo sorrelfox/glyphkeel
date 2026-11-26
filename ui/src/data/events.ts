@@ -25,11 +25,12 @@ export const ENTITY_QUERIES: Readonly<Record<string, readonly OpId[]>> = {
   // Deleting, restoring and purging show in the trash.
   // Its description links to pages and tasks, and its key is a link's target.
   task: ["trash.list", "task.get", "board.get", "project.list", "markdown.render", "description.history", "description.revision", "time.report", "timer.get", "task.search", "today.get", "search.query", "schedule.get", "schedule.preview_move", ...LINKS],
-  // Statuses, types and labels show on every card and in the task panel.
+  // Statuses, types and labels show on every card and in the task panel;
+  // a wiki page's task lists (`{{tasks …}}`) show statuses and match by them.
   project: ["trash.list", "project.list", "project.get", "board.get", "task.get", "layout.get", "list.layout.get", "markdown.render", "time.report", "task.search", "query.parse", "view.list", "today.get", "search.query", "wiki.search", "wiki.get", "wiki.list", "schedule.get", "schedule.preview_move", "gantt.layout.get", ...LINKS],
-  status: ["project.get", "board.get", "task.get", "project.list", "task.search", "query.parse", "today.get", "search.query", "schedule.get"],
-  task_type: ["project.get", "board.get", "task.get", "task.search", "query.parse", "schedule.get"],
-  label: ["project.get", "board.get", "task.get", "task.search", "query.parse", "schedule.get"],
+  status: ["project.get", "board.get", "task.get", "project.list", "task.search", "query.parse", "today.get", "search.query", "schedule.get", "markdown.render"],
+  task_type: ["project.get", "board.get", "task.get", "task.search", "query.parse", "schedule.get", "markdown.render"],
+  label: ["project.get", "board.get", "task.get", "task.search", "query.parse", "schedule.get", "markdown.render"],
   // The board leaves out the cards of hidden columns.
   layout: ["layout.get", "board.get"],
   // The order and widths of the list's columns.

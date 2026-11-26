@@ -49,21 +49,34 @@ li.task-item{list-style:none}li.task-item input{margin-inline-end:.5em}\
 .markdown-alert-title{font-weight:600}\
 .contents ul{padding-inline-start:1.25em}";
 
-/// One exported page as a web page: `title`, the rendered `body` with its
-/// links rewritten by `page_link` (a wiki link's target, `Page#Heading`,
-/// to an address, or `None` when the page isn't exported) and `file_link`
-/// (an attachment to an address); `trail`, the exported pages above it
-/// (title, address), and `index`, the address of the list of pages.
+/// A page's text to export: the Markdown, the id its footnotes are made
+/// from, and what its macros show (without it they stay as written).
+pub(super) struct Body<'a> {
+    pub(super) text: &'a str,
+    pub(super) document_id: &'a str,
+    pub(super) macros: Option<&'a dyn gk_markdown::MacroSource>,
+}
+
+/// One exported page as a web page: `title`, the rendered `body` (its
+/// macros expanded, with their notes in English) with its links rewritten
+/// by `page_link` (a wiki link's target, `Page#Heading`, to an address, or
+/// `None` when the page isn't exported) and `file_link` (an attachment to
+/// an address); `trail`, the exported pages above it (title, address), and
+/// `index`, the address of the list of pages.
 pub(super) fn page(
     title: &str,
-    document_id: &str,
-    body: &str,
+    body: &Body<'_>,
     trail: &[(String, String)],
     index: Option<&str>,
     page_link: &dyn Fn(&str) -> Option<String>,
     file_link: &dyn Fn(Id) -> Option<String>,
 ) -> String {
-    let rendered = gk_markdown::render(body, &gk_markdown::RenderOptions::new(document_id));
+    let notes = |note: &gk_markdown::Note| macro_note(note);
+    let mut options = gk_markdown::RenderOptions::new(body.document_id).with_macro_notes(&notes);
+    if let Some(macros) = body.macros {
+        options = options.with_macros(macros);
+    }
+    let rendered = gk_markdown::render(body.text, &options);
     let content = rewrite(&rendered, page_link, file_link);
     let mut nav = String::new();
     if index.is_some() || !trail.is_empty() {
@@ -94,6 +107,35 @@ pub(super) fn page(
             escape(title)
         ),
     )
+}
+
+/// A macro's note in words: the engine's English text.
+pub(crate) fn macro_note(note: &gk_markdown::Note) -> String {
+    use gk_markdown::Note;
+    let value = note.value();
+    match note {
+        Note::NoHeadings => messages::text("wiki-macro-toc-empty", &[]),
+        Note::NoChildren => messages::text("wiki-macro-children-empty", &[]),
+        Note::IncludeMissing(_) => messages::text("wiki-macro-include-missing", &[("page", value)]),
+        Note::IncludeLoop(_) => messages::text("wiki-macro-include-loop", &[("page", value)]),
+        Note::IncludeTooDeep(_) => messages::text(
+            "wiki-macro-include-too-deep",
+            &[
+                ("page", value),
+                ("max", gk_markdown::MAX_INCLUDE_DEPTH.to_string()),
+            ],
+        ),
+        Note::IncludeTooMany(_) => messages::text(
+            "wiki-macro-include-too-many",
+            &[
+                ("page", value),
+                ("max", gk_markdown::MAX_INCLUDES.to_string()),
+            ],
+        ),
+        Note::NoTasks => messages::text("wiki-macro-tasks-empty", &[]),
+        Note::MoreTasks(_) => messages::text("wiki-macro-tasks-more", &[("count", value)]),
+        Note::TasksError(_) => messages::text("wiki-macro-tasks-error", &[("error", value)]),
+    }
 }
 
 /// The list of exported pages: `entries` are (depth, title, address), in
@@ -433,8 +475,11 @@ mod tests {
         );
         let html = page(
             "Home <1>",
-            "doc",
-            &body,
+            &Body {
+                text: &body,
+                document_id: "doc",
+                macros: None,
+            },
             &[("Top".to_owned(), "../top.html".to_owned())],
             Some("../index.html"),
             &|link| (link.starts_with("Plan")).then(|| "plan.html#dates--times".to_owned()),
@@ -467,8 +512,11 @@ mod tests {
     fn hostile_text_stays_text() {
         let html = page(
             "x",
-            "doc",
-            "<script>alert(1)</script><img src=x onerror=alert(1)> [a](javascript:alert(1))",
+            &Body {
+                text: "<script>alert(1)</script><img src=x onerror=alert(1)> [a](javascript:alert(1))",
+                document_id: "doc",
+                macros: None,
+            },
             &[],
             None,
             &none,

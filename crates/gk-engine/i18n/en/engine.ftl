@@ -522,10 +522,25 @@ wiki-export-what = Name a page to export, or a project to export its whole wiki.
 wiki-export-contents = Contents
 # The accessible name of the row of links above an exported web page's title.
 wiki-export-trail = Pages above this one
+# Lines a wiki macro shows in an exported web page in place of its result.
+wiki-macro-toc-empty = This page has no headings yet.
+wiki-macro-children-empty = This page has no subpages.
+wiki-macro-include-missing = There is no page “{ $page }” to include.
+wiki-macro-include-loop = “{ $page }” is not included again inside itself.
+wiki-macro-include-too-deep = “{ $page }” is not included: pages are included at most { $max } levels deep.
+wiki-macro-include-too-many = “{ $page }” is not included: a page includes at most { $max } pages.
+wiki-macro-tasks-empty = No tasks match.
+wiki-macro-tasks-more = { $count ->
+        [one] One more task matches.
+       *[other] { $count } more tasks match.
+    }
+wiki-macro-tasks-error = The task list can't be shown: { $error }
 wiki-import-nothing = The folder holds no Markdown files (`.md`).
 wiki-import-not-text = { $path } is not text in UTF-8.
 wiki-import-too-many = The folder makes { $count } pages; one import makes at most { $max }.
 wiki-import-too-deep = { $path } is nested too deep: pages nest at most { $max } levels.
+wiki-template-and-body = Give either a text or a template to start from, not both.
+wiki-template-not-found = There is no page “{ $page }” to start from.
 wiki-brief-agents = Agents can't choose or change the page that briefs them.
 wiki-brief-agents-hint = Ask the person to mark the page in the app or with `glyphkeel wiki put`.
 checklist-one-owner = Name one of a task (key), a comment or a wiki page.
@@ -549,7 +564,7 @@ conflict-page-changed = The page changed again since you read it; nothing was re
 conflict-description-changed = The description changed again since you read it; nothing was resolved.
 conflict-changed-hint = Read the description again and resolve the copy against it.
 conflict-use-text-needs-text = use_text needs the text to save.
-render-one-source = Give exactly one of source, task, comment, project and revision.
+render-one-source = Give exactly one of source, task, comment, project and revision, or a page alone or with a source or revision.
 render-count = Render 1 to { $max } texts at once.
 checklist-changed = The checklist changed; please tick it again. Item { $number } reads "{ $actual }", not "{ $expected }".
 checklist-changed-hint = Read the checklist again (get_task or get_wiki_page with include ["checklist"]).

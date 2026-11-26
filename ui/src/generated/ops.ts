@@ -1913,6 +1913,8 @@ export type RenderSource = {
   comment?: string | null;
   /** The id that keeps this text's footnote anchors apart from others on the page; default: the item's ID (`preview` for `source`). */
   document_id?: string | null;
+  /** A wiki page: its ID. Alone, its current text is rendered; with `source` or `revision`, that text is rendered as the page's. Either way the page's macros (`{{toc}}`, `{{children}}`, `{{include …}}`, `{{tasks …}}`) are expanded; in any other text they stay as written. */
+  page?: string | null;
   /** A project's description: its key or ID. */
   project?: string | null;
   /** A description revision: its ID. */
@@ -3419,6 +3421,8 @@ export type WikiCreateInput = {
   parent?: string | null;
   /** The project: its key or ID. */
   project: string;
+  /** Start from this page's text: a template (or any page) by title, slug, ID or `KEY:Page` for another project's; not with `body`. */
+  template?: string | null;
   /** The title, 1 to 200 characters, unique in the project ignoring case, without `[`, `]`, `#` or `|`. */
   title: string;
 };
@@ -3605,6 +3609,8 @@ export type WikiPage = {
   revision?: string;
   /** Its name in addresses, made from the title. */
   slug: string;
+  /** Whether it is a template, offered when a new page is made. */
+  template?: boolean;
   /** The page's title. */
   title: string;
   /** When it last changed. */
@@ -3639,6 +3645,8 @@ export type WikiPageSummary = {
   project: string;
   /** Its name in addresses, made from the title. */
   slug: string;
+  /** Whether it is a template, offered when a new page is made. */
+  template?: boolean;
   /** The page's title. */
   title: string;
   /** When it last changed (RFC 3339, UTC). */
@@ -3725,6 +3733,8 @@ export type WikiUpdateInput = {
   project?: string | null;
   /** Resolve a conflict copy of the text. */
   resolve_conflict?: ConflictResolution | null;
+  /** Mark it as a template (`true`), which the app offers when a new page is made, or unmark it (`false`). */
+  template?: boolean | null;
   /** A new title. The old slug keeps finding the page, so links by the old title still resolve until another page takes that name. */
   title?: string | null;
 };
@@ -4277,9 +4287,9 @@ export function makeOps(call: Call) {
       search: (input: OpMap["wiki.search"]["input"] = {}) => call("wiki.search", input),
       /** One wiki page with its text, revision, headings, place in the tree and, on request, what links to it; or an older revision of it. (read) */
       get: (input: OpMap["wiki.get"]["input"]) => call("wiki.get", input),
-      /** Create a wiki page with a title unique in its project, optionally inside another page and with its text. (write) */
+      /** Create a wiki page with a title unique in its project, optionally inside another page and with its text or a template's. (write) */
       create: (input: OpMap["wiki.create"]["input"]) => call("wiki.create", input),
-      /** Change a wiki page: its text (whole, with a base revision, or by targeted edits), title, parent or place, whether it is the home page; or resolve a conflict copy. (write) */
+      /** Change a wiki page: its text (whole, with a base revision, or by targeted edits), title, parent or place, whether it is the home page or a template; or resolve a conflict copy. (write) */
       update: (input: OpMap["wiki.update"]["input"]) => call("wiki.update", input),
       /** Move a wiki page, with the pages inside it, into another parent page or to the top, and to a place among its siblings; refuses moves into itself; links to it keep working. (write) */
       move: (input: OpMap["wiki.move"]["input"]) => call("wiki.move", input),

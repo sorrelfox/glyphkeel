@@ -14,7 +14,7 @@ import { drawMath, highlight, renderDiagram } from "./libraries";
 
 export interface DrawOptions {
   /** Translated texts of the drawn parts. */
-  text: (id: string, args?: Record<string, string>) => string;
+  text: (id: string, args?: Record<string, string | number>) => string;
   /** The address of an attached image, or null when it can't be shown. */
   imageSource: (attachment: string) => Promise<string | null>;
   /** Whether this drawing still counts; a newer one replaces it. */
@@ -164,9 +164,44 @@ function linkReferences(root: HTMLElement, options: DrawOptions): void {
   }
 }
 
+/**
+ * The lines a wiki macro leaves for the reader to word: the engine marks
+ * them with the note's kind and value only, so they show in the person's
+ * language. The count of more tasks is a number for the plural.
+ */
+const MACRO_NOTES: Record<string, string> = {
+  "toc-empty": "reader-macro-toc-empty",
+  "children-empty": "reader-macro-children-empty",
+  "include-missing": "reader-macro-include-missing",
+  "include-loop": "reader-macro-include-loop",
+  "include-too-deep": "reader-macro-include-too-deep",
+  "include-too-many": "reader-macro-include-too-many",
+  "tasks-empty": "reader-macro-tasks-empty",
+  "tasks-more": "reader-macro-tasks-more",
+  "tasks-error": "reader-macro-tasks-error",
+};
+
+/** How deep pages are included, and how many one page includes: the engine's limits. */
+const INCLUDE_DEPTH = 3;
+const INCLUDES = 20;
+
+/** Words the notes of wiki macros (`{{toc}}`, `{{children}}`, `{{include}}`, `{{tasks}}`). */
+function wordMacroNotes(root: HTMLElement, options: DrawOptions): void {
+  for (const note of root.querySelectorAll<HTMLElement>("p[data-macro-note]")) {
+    const id = MACRO_NOTES[note.dataset.macroNote ?? ""];
+    if (id === undefined) {
+      continue;
+    }
+    const value = note.dataset.macroArg ?? "";
+    const max = note.dataset.macroNote === "include-too-deep" ? INCLUDE_DEPTH : INCLUDES;
+    note.textContent = options.text(id, { page: value, count: Number(value) || 0, error: value, max });
+  }
+}
+
 /** Draws everything on the reader's HTML in `root`. Later steps check that the drawing is still current. */
 export async function drawReader(root: HTMLElement, options: DrawOptions): Promise<void> {
   linkReferences(root, options);
+  wordMacroNotes(root, options);
   const blocks = frameCode(root, options);
   await Promise.all([drawFormulas(root), drawDiagrams(root, options), drawCode(blocks, options), drawImages(root, options)]);
 }

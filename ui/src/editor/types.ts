@@ -55,6 +55,8 @@ export interface CompletionProviders {
    * `Page#Heading` asks for the headings of a page.
    */
   pages?: (query: string) => Promise<readonly (string | PageSuggestion)[]> | readonly (string | PageSuggestion)[];
+  /** Whether the text is a wiki page's, whose macros (`{{toc}}`, `{{tasks …}}`) are offered after `{{` at the start of a line. */
+  macros?: boolean;
 }
 
 /** The searches a toolbar button can open in the text. */
