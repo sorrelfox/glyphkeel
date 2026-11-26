@@ -202,6 +202,8 @@ pub enum Cond {
     Changed {
         /// The fields, as the history names them.
         keys: Vec<&'static str>,
+        /// Custom fields, by query name.
+        custom: Vec<String>,
         /// When.
         at: Vec<Bounds>,
     },
@@ -224,6 +226,14 @@ pub enum WasTest {
     Labels(Vec<NameRef>),
     /// Versions of these names.
     Versions(Vec<NameRef>),
+    /// A value of the custom field with this query name that passes the
+    /// test.
+    Custom {
+        /// The field's query name.
+        query_name: String,
+        /// What the value must be.
+        test: CustomTest,
+    },
 }
 
 /// A condition on a custom field: the task's own field of that query name
@@ -454,7 +464,7 @@ fn collect_names(f: &Filter, out: &mut Vec<NameUse>) {
                 WasTest::Types(n) => names(NameKind::Type, n, out),
                 WasTest::Labels(n) => names(NameKind::Label, n, out),
                 WasTest::Versions(n) => names(NameKind::Version, n, out),
-                WasTest::Categories(_) | WasTest::Priorities(_) => {}
+                WasTest::Categories(_) | WasTest::Priorities(_) | WasTest::Custom { .. } => {}
             },
             Cond::Projects(p) => out.extend(p.iter().map(|p| NameUse {
                 kind: NameKind::Project,
@@ -603,19 +613,7 @@ fn predicate(p: &Predicate, env: CheckEnv<'_>) -> Result<Filter, QueryError> {
     }
     let custom_names: Vec<String> = env.custom.iter().map(CustomField::written).collect();
     if prefixed {
-        let names = custom_names.iter().map(String::as_str);
-        return Err(match closest(&p.field, names) {
-            Some(s) => QueryError::new("query-unknown-custom-field", p.field_span)
-                .arg("field", p.field.clone())
-                .arg("suggestion", s),
-            None if custom_names.is_empty() => {
-                QueryError::new("query-no-custom-fields", p.field_span)
-                    .arg("field", p.field.clone())
-            }
-            None => QueryError::new("query-unknown-custom-field-plain", p.field_span)
-                .arg("field", p.field.clone())
-                .arg("choices", custom_names.join(", ")),
-        });
+        return Err(unknown_custom(&p.field, p.field_span, env));
     }
     let Some(field) = fields::find(&p.field) else {
         let mut names: Vec<&str> = fields::all_names().collect();
@@ -674,6 +672,23 @@ fn predicate(p: &Predicate, env: CheckEnv<'_>) -> Result<Filter, QueryError> {
     } else {
         cond
     })
+}
+
+/// The error for `cf.<name>` naming no custom field.
+fn unknown_custom(written: &str, span: Span, env: CheckEnv<'_>) -> QueryError {
+    let custom_names: Vec<String> = env.custom.iter().map(CustomField::written).collect();
+    let names = custom_names.iter().map(String::as_str);
+    match closest(written, names) {
+        Some(s) => QueryError::new("query-unknown-custom-field", span)
+            .arg("field", written)
+            .arg("suggestion", s),
+        None if custom_names.is_empty() => {
+            QueryError::new("query-no-custom-fields", span).arg("field", written)
+        }
+        None => QueryError::new("query-unknown-custom-field-plain", span)
+            .arg("field", written)
+            .arg("choices", custom_names.join(", ")),
+    }
 }
 
 fn custom_usage(field: &CustomField) -> String {
@@ -1253,8 +1268,17 @@ fn condition(
             return Err(QueryError::new("query-was-value", values[0].span));
         }
         FieldType::Changed => {
-            let mut keys = Vec::new();
+            let (mut keys, mut custom) = (Vec::new(), Vec::new());
             for v in values {
+                if let Some(field) = fields::find_custom(word(v), env.custom) {
+                    if !custom.contains(&field.query_name) {
+                        custom.push(field.query_name.clone());
+                    }
+                    continue;
+                }
+                if fields::strip_custom_prefix(word(v)).is_some() {
+                    return Err(unknown_custom(word(v), v.span, env));
+                }
                 let key = history_field(v.span, word(v), History::Changed)?;
                 if !keys.contains(&key.1) {
                     keys.push(key.1);
@@ -1262,6 +1286,7 @@ fn condition(
             }
             Cond::Changed {
                 keys,
+                custom,
                 at: Vec::new(),
             }
         }
@@ -1345,23 +1370,17 @@ fn history_predicate(
     env: CheckEnv<'_>,
 ) -> Result<Filter, QueryError> {
     let inner_span = Span::new(p.field_span.end - inner.len(), p.field_span.end);
+    if let Some(custom) = fields::find_custom(inner, env.custom) {
+        return custom_history_predicate(p, kind, custom, env);
+    }
+    if fields::strip_custom_prefix(inner).is_some() {
+        return Err(unknown_custom(inner, inner_span, env));
+    }
     let (field, key) = history_field(inner_span, inner, kind)?;
     let written = format!("{}:{}", kind.as_str(), field.name);
-    let ops: &[Op] = match kind {
-        History::Was => &[Op::Is, Op::Eq, Op::Ne],
-        History::Changed => &[Op::Is, Op::Eq, Op::Ne, Op::Lt, Op::Le, Op::Gt, Op::Ge],
-    };
+    let ops = history_ops(kind);
     if !ops.contains(&p.op) {
-        let usage = ops
-            .iter()
-            .filter(|op| **op != Op::Eq)
-            .map(|op| format!("{written}{}", op.as_str()))
-            .collect::<Vec<_>>()
-            .join(", ");
-        return Err(QueryError::new("query-operator", p.op_span)
-            .arg("op", p.op.as_str())
-            .arg("field", written)
-            .arg("usage", usage));
+        return Err(history_operator_error(p, ops, &written));
     }
     for v in &p.values {
         if is_none(v) {
@@ -1390,6 +1409,7 @@ fn history_predicate(
     let cond = match kind {
         History::Changed => Cond::Changed {
             keys: vec![key],
+            custom: Vec::new(),
             at: p
                 .values
                 .iter()
@@ -1440,6 +1460,93 @@ fn history_predicate(
                     .collect::<Result<_, _>>()?,
             ),
         }),
+    };
+    let cond = Filter::Cond(cond);
+    Ok(if negate {
+        Filter::Not(Box::new(cond))
+    } else {
+        cond
+    })
+}
+
+/// The operators a history condition takes.
+fn history_ops(kind: History) -> &'static [Op] {
+    match kind {
+        History::Was => &[Op::Is, Op::Eq, Op::Ne],
+        History::Changed => &[Op::Is, Op::Eq, Op::Ne, Op::Lt, Op::Le, Op::Gt, Op::Ge],
+    }
+}
+
+fn history_operator_error(p: &Predicate, ops: &[Op], written: &str) -> QueryError {
+    let usage = ops
+        .iter()
+        .filter(|op| **op != Op::Eq)
+        .map(|op| format!("{written}{}", op.as_str()))
+        .collect::<Vec<_>>()
+        .join(", ");
+    QueryError::new("query-operator", p.op_span)
+        .arg("op", p.op.as_str())
+        .arg("field", written)
+        .arg("usage", usage)
+}
+
+/// `was:cf.<name><op>values` or `changed:cf.<name><op>dates`: values are
+/// read as the field itself reads them (`:` finds words in a text, `=` the
+/// exact text), without ranges or `none`.
+fn custom_history_predicate(
+    p: &Predicate,
+    kind: History,
+    field: &CustomField,
+    env: CheckEnv<'_>,
+) -> Result<Filter, QueryError> {
+    let written = format!("{}:{}", kind.as_str(), field.written());
+    let ops = history_ops(kind);
+    if !ops.contains(&p.op) {
+        return Err(history_operator_error(p, ops, &written));
+    }
+    for v in &p.values {
+        if is_none(v) {
+            return Err(QueryError::new("query-history-none", v.span)
+                .arg("history", kind.as_str())
+                .arg("field", field.written()));
+        }
+        if let ValueKind::Range(..) = v.kind {
+            if kind == History::Was {
+                return Err(QueryError::new("query-no-range", v.span)
+                    .arg("field", written.clone())
+                    .arg("usage", format!("{written}:, {written}!=")));
+            }
+            if !matches!(p.op, Op::Is | Op::Eq) {
+                return Err(
+                    QueryError::new("query-range-operator", v.span).arg("field", written.clone())
+                );
+            }
+        }
+    }
+    let (op, negate) = match p.op {
+        Op::Ne => (Op::Is, true),
+        Op::Eq if kind == History::Changed => (Op::Is, false),
+        op => (op, false),
+    };
+    let cond = match kind {
+        History::Changed => Cond::Changed {
+            keys: Vec::new(),
+            custom: vec![field.query_name.clone()],
+            at: p
+                .values
+                .iter()
+                .map(|v| moment_bounds(op, v, env))
+                .collect::<Result<_, _>>()?,
+        },
+        History::Was => {
+            let values: Vec<&Value> = p.values.iter().collect();
+            let exact = op == Op::Eq;
+            let test = custom_test(field, Op::Is, exact, &values, env)?;
+            Cond::Was(WasTest::Custom {
+                query_name: field.query_name.clone(),
+                test,
+            })
+        }
     };
     let cond = Filter::Cond(cond);
     Ok(if negate {
@@ -1543,6 +1650,55 @@ mod tests {
         assert_eq!(err("sort:cf.nothing").id, "query-sort-unknown-plain");
     }
 
+    #[test]
+    fn history_conditions_take_custom_fields() {
+        let ok = |src: &str| run(src).unwrap_or_else(|e| panic!("{src}: {e:?}"));
+        assert_eq!(
+            ok("changed:status,cf.points,points").filter,
+            Some(Filter::Cond(Cond::Changed {
+                keys: vec!["status"],
+                custom: vec!["points".to_owned()],
+                at: Vec::new(),
+            }))
+        );
+        assert!(matches!(
+            ok("changed:cf.points>-7d").filter,
+            Some(Filter::Cond(Cond::Changed { keys, custom, at }))
+                if keys.is_empty() && custom == ["points"] && at.len() == 1
+        ));
+        assert_eq!(
+            ok("was:cf.ÁREA:\"back END\"").filter,
+            Some(Filter::Cond(Cond::Was(WasTest::Custom {
+                query_name: "área".to_owned(),
+                test: CustomTest::Options(vec!["Back end".to_owned()]),
+            })))
+        );
+        assert!(matches!(
+            ok("was:cf.points:3").filter,
+            Some(Filter::Cond(Cond::Was(WasTest::Custom {
+                test: CustomTest::Integer(_),
+                ..
+            })))
+        ));
+        assert!(matches!(
+            ok("was:cf.link=ABC-1").filter,
+            Some(Filter::Cond(Cond::Was(WasTest::Custom {
+                test: CustomTest::Exact(_),
+                ..
+            })))
+        ));
+        assert!(matches!(
+            ok("was:cf.área!=\"front end\"").filter,
+            Some(Filter::Not(_))
+        ));
+        assert_eq!(err("was:cf.points:none").id, "query-history-none");
+        assert_eq!(err("was:cf.points:1..3").id, "query-no-range");
+        assert_eq!(err("was:cf.points>3").id, "query-operator");
+        assert_eq!(err("was:cf.área:middle").id, "query-bad-choice");
+        assert_eq!(err("was:cf.pionts:3").id, "query-unknown-custom-field");
+        assert_eq!(err("changed:cf.pionts").id, "query-unknown-custom-field");
+    }
+
     fn err(src: &str) -> QueryError {
         run(src).expect_err(src)
     }
@@ -1642,6 +1798,7 @@ mod tests {
             checked.filter,
             Some(Filter::Cond(Cond::Changed {
                 keys: vec!["due_date"],
+                custom: Vec::new(),
                 at: vec![Bounds {
                     lo: Some(day("2026-11-17")),
                     hi: None
@@ -1653,6 +1810,7 @@ mod tests {
             checked.filter,
             Some(Filter::Cond(Cond::Changed {
                 keys: vec!["due_date", "labels"],
+                custom: Vec::new(),
                 at: Vec::new(),
             }))
         );

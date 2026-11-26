@@ -6,6 +6,8 @@
 //! `dry_run` is on unless turned off, and the real run must say how many
 //! tasks it expects, so it stops when the query now matches others.
 
+use std::collections::BTreeMap;
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -68,6 +70,11 @@ pub struct BulkChanges {
     /// Fields to clear.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub clear: Vec<TaskField>,
+    /// Custom field values to set, by field name, query name or ID, as for
+    /// `task.update`; `null` clears one. Each task's project must have the
+    /// field.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub fields: BTreeMap<String, serde_json::Value>,
     /// With `status`: when a task closes, close its open duplicates too
     /// (`true`) or leave them open without a warning (`false`), as
     /// `task.move` does.
@@ -153,7 +160,7 @@ op!(
 );
 
 pub(crate) const TASK_BULK_UPDATE: OpDescriptor = OpDescriptor::of::<TaskBulkUpdate>(Meta {
-    summary: "Make the same change to many tasks chosen by key or query (status, type, priority, labels, parent, dates set or shifted, estimate, project), previewed first, as one change for Undo and revert.",
+    summary: "Make the same change to many tasks chosen by key or query (status, type, priority, labels, parent, dates set or shifted, estimate, custom fields, project), previewed first, as one change for Undo and revert.",
     kind: OpKind::Command,
     safety: Safety::Write,
     exposure: Exposure::Data,

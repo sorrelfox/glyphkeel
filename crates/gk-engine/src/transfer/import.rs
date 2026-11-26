@@ -1542,6 +1542,9 @@ fn write(
                 .execute(params![b(tid), b(plan.id(l))])?;
             }
             super::custom_fields::write_values(tx, tid, &t.custom_values, &|t| plan.id(t))?;
+            if !t.custom_values.is_empty() {
+                crate::ops::custom_field::reindex(tx, tid)?;
+            }
             for alias in &t.key_aliases {
                 if let Ok(old) = alias.parse::<gk_core::TaskKey>() {
                     tx.prepare_cached(

@@ -9,6 +9,8 @@
 //! shows exactly what the change would do, errors included. The real run
 //! needs the preview's count and stops when the tasks now number otherwise.
 
+use std::collections::BTreeMap;
+
 use gk_api::OpError;
 use gk_api::Profile;
 use gk_api::ops::bulk::{
@@ -43,9 +45,11 @@ pub(super) fn register(r: &mut Registry) {
 fn parts(input: &Value) -> Vec<&'static str> {
     let changes = input.get("changes");
     let given = |k: &str| {
-        changes
-            .and_then(|c| c.get(k))
-            .is_some_and(|v| !v.is_null() && v != &Value::Array(Vec::new()))
+        changes.and_then(|c| c.get(k)).is_some_and(|v| {
+            !v.is_null()
+                && v != &Value::Array(Vec::new())
+                && v.as_object().is_none_or(|o| !o.is_empty())
+        })
     };
     let mut out = Vec::new();
     if given("status") || given("project") {
@@ -65,6 +69,7 @@ fn parts(input: &Value) -> Vec<&'static str> {
         "shift_due",
         "estimate",
         "clear",
+        "fields",
     ];
     if fields.iter().any(|k| given(k)) {
         out.push("task.update");
@@ -76,11 +81,17 @@ fn is_empty(c: &BulkChanges) -> bool {
     c == &BulkChanges::default()
 }
 
-/// A task's key, title, and the fields a bulk change can touch as text.
-type Summary = (String, String, Vec<(&'static str, Option<String>)>);
+/// A task's key, title, and the fields a bulk change can touch as text
+/// (custom fields as `cf.<query name>`).
+type Summary = (String, String, Vec<(String, Option<String>)>);
 
 /// The fields a bulk change can touch, as text, for the preview.
-fn summary(tx: &Transaction<'_>, id: Id, units: DurationUnits) -> Result<Summary, Failure> {
+fn summary(
+    tx: &Transaction<'_>,
+    id: Id,
+    units: DurationUnits,
+    custom: &[String],
+) -> Result<Summary, Failure> {
     let (key, title, project, status, ty, priority, parent, start, due, estimate) = tx.query_row(
         "SELECT p.key || '-' || t.number, t.title, p.key, s.name, y.name, t.priority,
                 t.parent_id, t.start_date, t.due_date, t.estimate_min
@@ -114,7 +125,7 @@ fn summary(tx: &Transaction<'_>, id: Id, units: DurationUnits) -> Result<Summary
     };
     let labels: Vec<String> = task_labels(tx, id)?.into_iter().map(|l| l.name).collect();
     let fix_version = super::version::of_task(tx, id)?.map(|v| v.name);
-    let fields = vec![
+    let fields: Vec<(&str, Option<String>)> = vec![
         ("project", Some(project)),
         ("status", Some(status)),
         ("type", Some(ty)),
@@ -129,7 +140,49 @@ fn summary(tx: &Transaction<'_>, id: Id, units: DurationUnits) -> Result<Summary
             estimate.map(|m| gk_core::format_duration(m, units)),
         ),
     ];
+    let mut fields: Vec<(String, Option<String>)> =
+        fields.into_iter().map(|(f, v)| (f.to_owned(), v)).collect();
+    if !custom.is_empty() {
+        let values = super::custom_field::task_values(tx, id)?;
+        for wanted in custom {
+            let written = format!("{}{wanted}", gk_query::fields::CUSTOM_PREFIX);
+            let value = values
+                .iter()
+                .find(|v| v.query_name == written)
+                .map(|v| value_text(&v.value));
+            fields.push((written, value));
+        }
+    }
     Ok((key, title, fields))
+}
+
+/// A custom field's value as text for the preview: a list's options joined.
+fn value_text(v: &Value) -> String {
+    match v {
+        Value::String(s) => s.clone(),
+        Value::Array(items) => items.iter().map(value_text).collect::<Vec<_>>().join(", "),
+        other => other.to_string(),
+    }
+}
+
+/// The query names of the custom fields a change names, for the preview:
+/// each of the fields the tasks see whose name, query name or ID is given.
+fn custom_names(tx: &Transaction<'_>, c: &BulkChanges) -> Result<Vec<String>, Failure> {
+    if c.fields.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut out = Vec::new();
+    for f in super::custom_field::rows(tx, None)? {
+        let named = c.fields.keys().any(|k| {
+            gk_core::fold(k) == gk_core::fold(&f.name)
+                || gk_core::fold(k) == f.query_name
+                || k.parse::<Id>().is_ok_and(|id| id == f.id)
+        });
+        if named && !out.contains(&f.query_name) {
+            out.push(f.query_name);
+        }
+    }
+    Ok(out)
 }
 
 /// A day moved by a signed offset in calendar units: `+2d`, `-1w`, `+1m`,
@@ -214,6 +267,12 @@ fn apply(
                 status: c.status.clone(),
                 project: c.project.clone(),
                 mapping: c.mapping.clone(),
+                // Values go with a move, to the subtasks too.
+                fields: if c.project.is_some() {
+                    c.fields.clone()
+                } else {
+                    BTreeMap::new()
+                },
                 close_duplicates: c.close_duplicates,
                 ..TaskMoveInput::default()
             },
@@ -249,6 +308,11 @@ fn apply(
         due_date,
         estimate: c.estimate.clone(),
         clear: c.clear.clone(),
+        fields: if c.project.is_some() {
+            BTreeMap::new()
+        } else {
+            c.fields.clone()
+        },
         ..TaskUpdateInput::default()
     };
     if input
@@ -340,9 +404,10 @@ fn bulk(w: &mut WriteCtx<'_>, input: BulkUpdateInput) -> Result<BulkResult, Fail
         }
     }
     let units = task::units(w.tx())?;
+    let custom = custom_names(w.tx(), &input.changes)?;
     let before = ids
         .iter()
-        .map(|id| summary(w.tx(), *id, units))
+        .map(|id| summary(w.tx(), *id, units, &custom))
         .collect::<Result<Vec<_>, _>>()?;
     let changes = input.changes.clone();
     let run = |w: &mut WriteCtx<'_>| -> Result<(Vec<BulkItem>, Vec<String>), Failure> {
@@ -350,13 +415,13 @@ fn bulk(w: &mut WriteCtx<'_>, input: BulkUpdateInput) -> Result<BulkResult, Fail
         let mut items = Vec::with_capacity(ids.len());
         for (id, (_, _, old)) in ids.iter().zip(&before) {
             apply(w, *id, &changes, &mut warnings)?;
-            let (key, title, new) = summary(w.tx(), *id, units)?;
+            let (key, title, new) = summary(w.tx(), *id, units, &custom)?;
             let changes = old
                 .iter()
                 .zip(&new)
                 .filter(|(a, b)| a.1 != b.1)
                 .map(|(a, b)| BulkFieldChange {
-                    field: a.0.to_owned(),
+                    field: a.0.clone(),
                     before: a.1.clone(),
                     after: b.1.clone(),
                 })
@@ -402,5 +467,10 @@ mod tests {
         assert_eq!(p(serde_json::json!({"status": "Done"})), ["task.move"]);
         assert_eq!(p(serde_json::json!({"add_labels": ["x"]})), ["task.update"]);
         assert!(p(serde_json::json!({"add_labels": []})).is_empty());
+        assert_eq!(
+            p(serde_json::json!({"fields": {"Points": 3}})),
+            ["task.update"]
+        );
+        assert!(p(serde_json::json!({"fields": {}})).is_empty());
     }
 }

@@ -10,11 +10,11 @@ import { classes } from "../../classes";
 import { type ListRows } from "../../data/list";
 import { useDurations } from "../../data/time";
 import { NUMBER_KINDS } from "../../data/fields";
-import { type CustomField, type ListedTask, type ListGroup, type ListGrouping } from "../../generated/ops";
+import { type CustomField, type ListedTask, type ListGroup } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { Cell } from "./cells";
 import { GroupName, useGroupText } from "./GroupName";
-import { columnWidth, COLUMNS, gridTemplate, isCustomColumn, MAX_WIDTH, MIN_WIDTH, NUMERIC_COLUMNS, sortKeyOf, sortState, type ColumnId, type ListLines, type Selection } from "./model";
+import { columnWidth, COLUMNS, gridTemplate, isCustomColumn, MAX_WIDTH, MIN_WIDTH, NUMERIC_COLUMNS, sortKeyOf, sortState, type ColumnId, type Grouping, type ListLines, type Selection } from "./model";
 import styles from "./List.module.css";
 
 const features = tableFeatures({ columnVisibilityFeature, columnOrderingFeature });
@@ -57,7 +57,7 @@ interface ListTableProps {
   onMove: (column: ColumnId, to: number) => void;
   /** The lines shown: rows and, when grouped, the groups' headers. */
   lines: ListLines;
-  grouping: ListGrouping | undefined;
+  grouping: Grouping | undefined;
   isCollapsed: (group: ListGroup) => boolean;
   onToggleGroup: (group: ListGroup) => void;
   /** Adds a task with the group's value (the line at the end of each open group); absent where a group's value can't be given. */
@@ -308,7 +308,7 @@ export function ListTable({ rows, columns, fields = [], widths, onResize, onMove
                     >
                       {collapsed ? <ChevronRight className="ic s muted" aria-hidden="true" /> : <ChevronDown className="ic s muted" aria-hidden="true" />}
                       {group.hue !== undefined && <span className={classes("dot", `hue-${group.hue}`)} aria-hidden="true" />}
-                      <GroupName grouping={grouping} group={group} />
+                      <GroupName grouping={grouping} group={group} fields={fields} />
                       <span className="count">{t("list-group-count", { count: group.count })}</span>
                     </button>
                   </span>
@@ -323,7 +323,7 @@ export function ListTable({ rows, columns, fields = [], widths, onResize, onMove
               return (
                 <div key={`add-${String(line.group)}`} className={classes("tr", styles.row, styles.groupRow, styles.addRow)} role="row" aria-rowindex={item.index + 2} style={position}>
                   <span role="gridcell" className={styles.groupCell}>
-                    <AddToGroup group={group} grouping={grouping} onAdd={onAddToGroup} />
+                    <AddToGroup group={group} grouping={grouping} fields={fields} onAdd={onAddToGroup} />
                   </span>
                 </div>
               );
@@ -489,7 +489,8 @@ function useColumnDrag(columns: readonly ColumnId[], onMove: (column: ColumnId, 
 
 interface AddToGroupProps {
   group: ListGroup;
-  grouping: ListGrouping | undefined;
+  grouping: Grouping | undefined;
+  fields: readonly CustomField[];
   onAdd: (group: ListGroup, title: string) => Promise<unknown>;
 }
 
@@ -498,11 +499,11 @@ interface AddToGroupProps {
  * adds a task with the group's value and keeps the field for the next one;
  * Escape, or leaving the field empty, closes it.
  */
-function AddToGroup({ group, grouping, onAdd }: AddToGroupProps) {
+function AddToGroup({ group, grouping, fields, onAdd }: AddToGroupProps) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
-  const groupText = useGroupText();
+  const groupText = useGroupText(fields);
   const name = grouping === undefined ? "" : groupText(grouping, group);
   if (!open) {
     return (

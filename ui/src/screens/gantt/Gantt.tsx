@@ -29,6 +29,7 @@ import { Button, Group, Input, Label, NumberField, useLocale } from "react-aria-
 
 import { classes } from "../../classes";
 import { Dialog } from "../../components/Dialog";
+import { useFieldSummary } from "../../data/fields";
 import { useMovePreview } from "../../data/schedule";
 import { type VersionMarker } from "../../data/versions";
 import { type GanttGrouping, type ReadOnlyReason, type Schedule, type ScheduleDependency, type SchedulePreviewInput, type ScheduleProblem, type ScheduledTask, type UnscheduledTask } from "../../generated/ops";
@@ -249,6 +250,8 @@ export const Gantt = memo(function Gantt({
   const { rows, index } = useMemo(() => buildRows(schedule.tasks, schedule.unscheduled, folded, groupBy, groupOrder), [schedule.tasks, schedule.unscheduled, folded, groupBy, groupOrder]);
   const problems = useMemo(() => problemsByTask(schedule.problems), [schedule.problems]);
   const byKey = useMemo(() => new Map(schedule.tasks.map((task) => [task.key, task])), [schedule.tasks]);
+  // Custom field values show on the title's tooltip; a chart may cover several projects.
+  const fieldSummary = useFieldSummary(undefined);
   const toggle = useCallback((key: string) => {
     setFolded((now) => {
       const next = new Set(now);
@@ -1114,6 +1117,7 @@ export const Gantt = memo(function Gantt({
                   onOpen={onOpen}
                   today={today}
                   readOnly={readOnly}
+                  fields={fieldSummary(row.task.fields)}
                 />
               );
             })}
@@ -1399,9 +1403,11 @@ interface TableRowProps {
   onOpen: (key: string) => void;
   today: Day;
   readOnly: boolean;
+  /** The task's custom field values, one "Name: value" a line, for the title's tooltip. */
+  fields: string;
 }
 
-const TableRow = memo(function TableRow({ id, row, at, focused, open, linking, editing, problems, fmt, problemText, onClick, onToggle, onEdit, onEditDone, onUnscheduledDown, onOpen, today, readOnly }: TableRowProps) {
+const TableRow = memo(function TableRow({ id, row, at, focused, open, linking, editing, problems, fmt, problemText, onClick, onToggle, onEdit, onEditDone, onUnscheduledDown, onOpen, today, readOnly, fields }: TableRowProps) {
   const t = useT();
   const task: ScheduledTask | UnscheduledTask = row.task;
   const scheduled = row.kind === "task" ? row.task : undefined;
@@ -1549,7 +1555,9 @@ const TableRow = memo(function TableRow({ id, row, at, focused, open, linking, e
         ) : (
           <span className={styles.twistySpace} aria-hidden="true" />
         )}
-        <span className={styles.titleText}>{task.title}</span>
+        <span className={styles.titleText} title={fields === "" ? undefined : fields} data-fields={fields === "" ? undefined : ""}>
+          {task.title}
+        </span>
         {warnings.length > 0 && (
           <span className={styles.warnSign} title={warnings.map(problemText).join("\n")} data-problems={warnings.map((problem) => problem.kind).join(" ")}>
             <TriangleAlert className="ic" aria-hidden="true" />

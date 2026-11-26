@@ -62,3 +62,5 @@ field-add-kind = Kind of the new field
 field-add-all-projects = For all projects
 field-changed = Field changed
 field-query-name = In queries: { $name }
+# One custom field in a tooltip; $field is its name (the person's own words), $value its value.
+field-summary-line = { $field }: { $value }

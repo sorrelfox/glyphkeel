@@ -165,6 +165,8 @@ list-group-by-parent = Parent
 list-group-by-due_week = Due week
 list-group-by-project = Project
 list-group-none-label = No label
+# Grouped by a custom field: the group of tasks without a value; $field is the field's name.
+list-group-none-field = No { $field }
 list-group-none-parent = No parent
 list-group-none-due_week = No due date
 # A parent task or a project: its key, then its title or name.
@@ -187,6 +189,12 @@ list-bulk-summary-status = Status: { $value }
 list-bulk-summary-priority = Priority: { $value }
 list-bulk-summary-add-label = Add label { $value }
 list-bulk-summary-remove-label = Remove label { $value }
+# A custom field: its name is the person's own words.
+list-bulk-field = Set a field…
+list-bulk-field-set = Preview
+list-bulk-field-clear = Clear it
+list-bulk-summary-field = { $field }: { $value }
+list-bulk-summary-field-clear = Clear { $field }
 list-bulk-preview = { $change } · { $count ->
     [one] { $count } of { $total } task changes
    *[other] { $count } of { $total } tasks change

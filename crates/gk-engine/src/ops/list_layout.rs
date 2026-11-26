@@ -173,7 +173,11 @@ fn update(w: &mut WriteCtx<'_>, input: ListLayoutUpdateInput) -> Result<ListLayo
     }
     for (grouping, values) in &input.collapsed {
         let path = format!("collapsed.{grouping}");
-        if serde_json::from_value::<ListGrouping>(Value::String(grouping.clone())).is_err() {
+        // A grouping, or a custom field (`cf.<name>`) a list is grouped by.
+        let custom = gk_query::fields::strip_custom_prefix(grouping).is_some_and(|n| !n.is_empty());
+        if !custom
+            && serde_json::from_value::<ListGrouping>(Value::String(grouping.clone())).is_err()
+        {
             return Err(messages::invalid(&path, "list-layout-grouping", &[]));
         }
         if values.len() > COLLAPSED_MAX || values.iter().any(|v| v.chars().count() > VALUE_MAX) {

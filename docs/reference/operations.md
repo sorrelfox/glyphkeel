@@ -405,7 +405,7 @@ Input: `TaskDeleteInput`. Output: `TrashChange`. Schemas: [catalog.schema.json](
 
 ## `task.bulk_update`
 
-Make the same change to many tasks chosen by key or query (status, type, priority, labels, parent, dates set or shifted, estimate, project), previewed first, as one change for Undo and revert.
+Make the same change to many tasks chosen by key or query (status, type, priority, labels, parent, dates set or shifted, estimate, custom fields, project), previewed first, as one change for Undo and revert.
 
 Input: `BulkUpdateInput`. Output: `BulkResult`. Schemas: [catalog.schema.json](catalog.schema.json).
 

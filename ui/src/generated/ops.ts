@@ -389,7 +389,7 @@ export type BoardGetInput = {
 
 /** The person's layout of one project's board. */
 export type BoardLayout = {
-  /** The fields shown on cards. */
+  /** The fields shown on cards; custom fields as `cf.<query name>`. */
   card_fields: string[];
   /** Collapsed columns, as status IDs. */
   collapsed: string[];
@@ -422,6 +422,8 @@ export type BulkChanges = {
   due_date?: string | null;
   /** The estimate, as a duration (`1d 4h`, `90m`). */
   estimate?: string | null;
+  /** Custom field values to set, by field name, query name or ID, as for `task.update`; `null` clears one. Each task's project must have the field. */
+  fields?: Record<string, unknown>;
   /** Plan them for the version of this name (in each task's project, or shared with it). */
   fix_version?: string | null;
   /** Replace the labels with these. */
@@ -526,6 +528,8 @@ export type Card = {
   due_date?: string;
   /** The estimate in minutes. */
   estimate_minutes?: number;
+  /** Its values of the custom fields the layout shows on cards, by query name (without `cf.`); left out when it has none of them. */
+  fields?: Record<string, unknown>;
   /** How many files are attached to it and to its comments. */
   file_count: number;
   /** The task's ID. */
@@ -1858,7 +1862,7 @@ export type LayoutGetInput = {
 
 /** Changes to a board layout; fields left out keep their value. */
 export type LayoutUpdateInput = {
-  /** The fields shown on cards. */
+  /** The fields shown on cards: `type`, `priority`, `due`, `start`, `labels`, `checklist`, `subtasks`, `estimate`, `days_in_column`, `updated`, `key`, and custom fields of the project as `cf.<query name>`. */
   card_fields?: string[] | null;
   /** Columns to collapse. */
   collapse?: string[];
@@ -1907,7 +1911,7 @@ export type ListGroup = {
   hue?: Hue;
   /** The parent's title or the project's name, for grouping by parent or by project. */
   title?: string;
-  /** What its tasks share: the status, label or project name, the priority (`urgent` … `none`), the parent's key, or the first day of the due week (`YYYY-MM-DD`); left out for the tasks without one. */
+  /** What its tasks share: the status, label or project name, the priority (`urgent` … `none`), the parent's key, the first day of the due week (`YYYY-MM-DD`), or a custom field's option or `yes` or `no`; left out for the tasks without one. */
   value?: string;
 };
 
@@ -2077,6 +2081,8 @@ export type MoveCheck = {
   labels: MoveMatch[];
   /** The target project's key. */
   project: string;
+  /** The target's required custom fields (shown for the type a task would have there) that moving tasks would have no value of. A field with a default gives it; without one the move is refused unless `fields` gives a value. */
+  required_fields?: MoveRequiredField[];
   /** The statuses the tasks have now. */
   statuses: MoveMatch[];
   /** Their types. */
@@ -2102,6 +2108,16 @@ export type MoveMatch = {
   /** The target's item of the same name; absent when it has none. */
   target?: string;
   /** How many of the moving tasks have it. */
+  tasks: number;
+};
+
+/** A required custom field of the target project that moving tasks would have no value of. */
+export type MoveRequiredField = {
+  /** Whether the field's default would fill it; otherwise the move needs a value for it. */
+  has_default: boolean;
+  /** The field's name. */
+  name: string;
+  /** How many of the moving tasks would lack it. */
   tasks: number;
 };
 
@@ -3061,6 +3077,8 @@ export type ScheduledTask = {
   depth: number;
   /** Its own due date. */
   due_date?: string;
+  /** Its custom field values by query name (without `cf.`); left out when it has none. */
+  fields?: Record<string, unknown>;
   /** The task's ID. */
   id: string;
   /** The task's key. */
@@ -3703,6 +3721,8 @@ export type TaskMoveInput = {
   close_duplicates?: boolean | null;
   /** Refuse the move unless the task still has this version. */
   expected_version?: number | null;
+  /** With `project`: custom field values the task and its subtasks get in that project (each where its type shows the field), by field name, query name or ID, as for `task.update`; for a required field they would otherwise have no value of. */
+  fields?: Record<string, unknown>;
   /** The task: its key or ID. */
   key: string;
   /** With `project`: which status, type or label of that project stands in for one it has no match for. */
@@ -3764,6 +3784,8 @@ export type TaskSearchInput = {
   cursor?: string | null;
   /** Groups the rows: they come group by group (each group sorted by the query's order), and the result names the groups with their counts. */
   group_by?: ListGrouping | null;
+  /** Groups the rows by a custom field instead (`cf.<name>`): a select field by its option, in the field's order (a multi-select by its first option), a yes/no field by `yes` and `no` (no value counts as no). Not with `group_by`. */
+  group_by_field?: string | null;
   /** With `project`: its sub-projects' tasks too. */
   include_subprojects?: boolean;
   /** Tasks per page, 1 to 200; default 50. */
@@ -4540,6 +4562,8 @@ export type UnscheduledTask = {
   claim?: Claim;
   /** Whether it is closed. */
   closed: boolean;
+  /** Its custom field values by query name (without `cf.`); left out when it has none. */
+  fields?: Record<string, unknown>;
   /** The task's ID. */
   id: string;
   /** The task's key. */
@@ -5834,7 +5858,7 @@ export function makeOps(call: Call) {
       moveCheck: (input: OpMap["task.move_check"]["input"]) => call("task.move_check", input),
       /** Move tasks to the trash, each with its subtasks; they can be restored from there. (trash) */
       delete: (input: OpMap["task.delete"]["input"]) => call("task.delete", input),
-      /** Make the same change to many tasks chosen by key or query (status, type, priority, labels, parent, dates set or shifted, estimate, project), previewed first, as one change for Undo and revert. (write) */
+      /** Make the same change to many tasks chosen by key or query (status, type, priority, labels, parent, dates set or shifted, estimate, custom fields, project), previewed first, as one change for Undo and revert. (write) */
       bulkUpdate: (input: OpMap["task.bulk_update"]["input"]) => call("task.bulk_update", input),
       /** Move a subtask to another place among its parent's subtasks (before or after another one, first or last); returns the parent with its subtasks in the new order. (write) */
       reorderSubtask: (input: OpMap["task.reorder_subtask"]["input"]) => call("task.reorder_subtask", input),

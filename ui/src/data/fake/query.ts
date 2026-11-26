@@ -994,6 +994,8 @@ export interface GroupInfo {
   titleOf: (key: string) => string | undefined;
   projectName: (key: string) => string | undefined;
   weekStart: (day: string) => string;
+  /** A custom field by its query name (without `cf.`): its kind and options. */
+  field?: (name: string) => { kind: string; options: readonly string[] } | undefined;
 }
 
 interface Grouped {
@@ -1007,9 +1009,22 @@ const PRIORITY_RANK = ["urgent", "high", "normal", "low", "none"];
  * Groups tasks found in order, as the engine does: groups in their order
  * (empty values last), each group's tasks in the order they were found.
  */
-function groupTasks(found: readonly ListedTask[], by: ListGrouping, statusOrder: (task: ListedTask) => number, info: GroupInfo): Grouped {
+function groupTasks(found: readonly ListedTask[], by: ListGrouping | `cf.${string}`, statusOrder: (task: ListedTask) => number, info: GroupInfo): Grouped {
   const keyOf = (task: ListedTask): { value: string | undefined; order: (string | number)[]; title?: string; hue?: Hue } => {
-    switch (by) {
+    if (by.startsWith("cf.")) {
+      // A custom field: options in the field's order, a multi-select by its first; yes before no.
+      const name = by.slice(3);
+      const field = info.field?.(name);
+      const value = task.fields?.[name];
+      if (field?.kind === "boolean") {
+        return value === true ? { value: "yes", order: [0] } : { value: "no", order: [1] };
+      }
+      const options = field?.options ?? [];
+      const values = (Array.isArray(value) ? value : value === undefined ? [] : [value]).map(String).sort((a, b) => options.indexOf(a) - options.indexOf(b));
+      const first = values[0];
+      return first === undefined ? { value: undefined, order: [] } : { value: first, order: [options.indexOf(first), first] };
+    }
+    switch (by as ListGrouping) {
       case "status":
         return { value: task.status.name, order: [statusOrder(task), task.status.name.toLowerCase()], ...some("hue", info.statusHue(task)) };
       case "priority":
@@ -1067,11 +1082,12 @@ export function searchTasks(
 ): TaskSearchResult {
   const text = input.query ?? "";
   // Pages of one query share its matches: long lists ask for many pages.
-  const cacheKey = JSON.stringify([text, input.sort ?? "", input.project ?? "", input.include_subprojects ?? false, input.group_by ?? ""]);
+  const cacheKey = JSON.stringify([text, input.sort ?? "", input.project ?? "", input.include_subprojects ?? false, input.group_by ?? "", input.group_by_field ?? ""]);
   let cached = options.cache?.get(cacheKey);
   if (!cached) {
     const plain = findTasks(all, input, names, options);
-    const grouped = input.group_by && options.groupInfo ? groupTasks(plain.found, input.group_by, options.statusOrder, options.groupInfo) : undefined;
+    const by = input.group_by ?? (input.group_by_field ? (`cf.${input.group_by_field.replace(/^cf\./i, "").toLowerCase()}` as const) : undefined);
+    const grouped = by && options.groupInfo ? groupTasks(plain.found, by, options.statusOrder, options.groupInfo) : undefined;
     cached = { found: grouped?.found ?? plain.found, order: plain.order, ...some("groups", grouped?.groups) };
   }
   options.cache?.set(cacheKey, cached);

@@ -590,6 +590,9 @@ fn actor(a: &AuthorRef, kind: &str, name: &str) -> Sql {
 /// before or after (its creation included). IDs are recorded as hyphenated
 /// text, compared here without the hyphens.
 fn was(test: &WasTest) -> Sql {
+    if let WasTest::Custom { query_name, test } = test {
+        return was_custom(query_name, test);
+    }
     // The IDs of the named items, as the history writes them.
     let ids = |table: &str, test: Sql| {
         let mut sql = Sql::default();
@@ -682,6 +685,7 @@ fn was(test: &WasTest) -> Sql {
             set.push(")");
             (now, "priority", set, false)
         }
+        WasTest::Custom { .. } => return Sql::default(),
     };
     let id_valued = !matches!(test, WasTest::Priorities(_));
     let mut sql = Sql::default();
@@ -715,6 +719,70 @@ fn was(test: &WasTest) -> Sql {
         }
     }
     sql.push("))");
+    sql
+}
+
+/// Whether `j.key`, a field of a history row, is the value of a custom
+/// field with one of these query names: `cf:<field ID>`, the ID hyphenated.
+fn custom_key_in(query_names: &[String]) -> Sql {
+    let mut sql = Sql::default();
+    sql.push(
+        "replace(j.key, '-', '') IN (SELECT 'cf:' || lower(hex(f.id)) FROM custom_fields f \
+         WHERE f.query_name IN (",
+    );
+    for (i, q) in query_names.iter().enumerate() {
+        if i > 0 {
+            sql.push(", ");
+        }
+        sql.str(q);
+    }
+    sql.push("))");
+    sql
+}
+
+/// `was:cf.<name>`: the task has a passing value now, or a recorded change
+/// of the field had one before or after. A multi-select's history holds a
+/// list; each of its options is tested.
+fn was_custom(query_name: &str, test: &CustomTest) -> Sql {
+    let now = custom(&CustomCond {
+        query_name: query_name.to_owned(),
+        test: test.clone(),
+        none: false,
+    });
+    let tests = match test {
+        CustomTest::Boolean(b) => vec![Sql {
+            text: format!("x.value = {}", i64::from(*b)),
+            params: Vec::new(),
+        }],
+        CustomTest::Anything => vec![Sql {
+            text: "x.value IS NOT NULL".to_owned(),
+            params: Vec::new(),
+        }],
+        CustomTest::Nothing => Vec::new(),
+        other => value_tests(other, "x.value").unwrap_or_default(),
+    };
+    let mut sql = Sql::default();
+    sql.push("(");
+    sql.append(now);
+    sql.push(") OR t.id IN (SELECT a.entity_id FROM activity a WHERE a.entity_kind = 'task' AND EXISTS (SELECT 1 FROM json_each(a.changes, '$.fields') j WHERE ");
+    sql.append(custom_key_in(std::slice::from_ref(&query_name.to_owned())));
+    sql.push(" AND (");
+    for (i, side) in ["before", "after"].iter().enumerate() {
+        if i > 0 {
+            sql.push(" OR ");
+        }
+        let _ = write!(
+            sql.text,
+            "EXISTS (SELECT 1 FROM json_each(j.value, '$.{side}') x WHERE "
+        );
+        if tests.is_empty() {
+            sql.push("0");
+        } else {
+            sql.append(any(tests.clone()));
+        }
+        sql.push(")");
+    }
+    sql.push(")))");
     sql
 }
 
@@ -760,7 +828,7 @@ fn cond(c: &Cond, today: Day, now: i64) -> Sql {
     match c {
         Cond::Custom(c) => sql.append(custom(c)),
         Cond::Was(test) => sql.append(was(test)),
-        Cond::Changed { keys, at } => {
+        Cond::Changed { keys, custom, at } => {
             sql.push(HISTORY);
             sql.push(" AND (");
             for (i, key) in keys.iter().enumerate() {
@@ -771,6 +839,14 @@ fn cond(c: &Cond, today: Day, now: i64) -> Sql {
                     sql.text,
                     "json_type(a.changes, '$.fields.{key}') IS NOT NULL"
                 );
+            }
+            if !custom.is_empty() {
+                if !keys.is_empty() {
+                    sql.push(" OR ");
+                }
+                sql.push("EXISTS (SELECT 1 FROM json_each(a.changes, '$.fields') j WHERE ");
+                sql.append(custom_key_in(custom));
+                sql.push(")");
             }
             sql.push(")");
             if !at.is_empty() {
@@ -1102,39 +1178,7 @@ fn custom(c: &CustomCond) -> Sql {
             parts.push(sql);
             None
         }
-        CustomTest::Boolean(true) => Some(vec![Sql {
-            text: "v.value = 1".to_owned(),
-            params: Vec::new(),
-        }]),
-        CustomTest::Contains(texts) => Some(
-            texts
-                .iter()
-                .map(|t| {
-                    let mut sql = Sql::default();
-                    sql.push("v.value LIKE ");
-                    sql.str(&like_pattern(t));
-                    sql.push(" ESCAPE '\\'");
-                    sql
-                })
-                .collect(),
-        ),
-        CustomTest::Exact(texts) | CustomTest::Options(texts) => {
-            let mut sql = Sql::default();
-            sql.push("lower(v.value) IN (");
-            for (i, t) in texts.iter().enumerate() {
-                if i > 0 {
-                    sql.push(", ");
-                }
-                sql.push("lower(");
-                sql.str(t);
-                sql.push(")");
-            }
-            sql.push(")");
-            Some(vec![sql])
-        }
-        CustomTest::Integer(b) => Some(bounds_on("v.value", b, false)),
-        CustomTest::Date(b) => Some(bounds_on("v.value", b, true)),
-        CustomTest::Decimal(b) => Some(b.iter().map(real_bounds).collect()),
+        other => value_tests(other, "v.value"),
     };
     if let Some(tests) = test {
         let mut sql = Sql::default();
@@ -1148,7 +1192,46 @@ fn custom(c: &CustomCond) -> Sql {
     any(parts)
 }
 
-fn real_bounds(b: &RealBounds) -> Sql {
+/// The tests a value in `col` passes for `test`; `None` for the tests that
+/// aren't about one value.
+fn value_tests(test: &CustomTest, col: &str) -> Option<Vec<Sql>> {
+    Some(match test {
+        CustomTest::Nothing | CustomTest::Anything | CustomTest::Boolean(false) => return None,
+        CustomTest::Boolean(true) => vec![Sql {
+            text: format!("{col} = 1"),
+            params: Vec::new(),
+        }],
+        CustomTest::Contains(texts) => texts
+            .iter()
+            .map(|t| {
+                let mut sql = Sql::default();
+                let _ = write!(sql.text, "{col} LIKE ");
+                sql.str(&like_pattern(t));
+                sql.push(" ESCAPE '\\'");
+                sql
+            })
+            .collect(),
+        CustomTest::Exact(texts) | CustomTest::Options(texts) => {
+            let mut sql = Sql::default();
+            let _ = write!(sql.text, "lower({col}) IN (");
+            for (i, t) in texts.iter().enumerate() {
+                if i > 0 {
+                    sql.push(", ");
+                }
+                sql.push("lower(");
+                sql.str(t);
+                sql.push(")");
+            }
+            sql.push(")");
+            vec![sql]
+        }
+        CustomTest::Integer(b) => bounds_on(col, b, false),
+        CustomTest::Date(b) => bounds_on(col, b, true),
+        CustomTest::Decimal(b) => b.iter().map(|b| real_bounds(b, col)).collect(),
+    })
+}
+
+fn real_bounds(b: &RealBounds, col: &str) -> Sql {
     let mut sql = Sql::default();
     let mut first = true;
     for (bound, below) in [(&b.lo, false), (&b.hi, true)] {
@@ -1163,7 +1246,7 @@ fn real_bounds(b: &RealBounds) -> Sql {
             (true, true) => "<=",
             (true, false) => "<",
         };
-        let _ = write!(sql.text, "v.value {op} CAST(");
+        let _ = write!(sql.text, "{col} {op} CAST(");
         sql.str(&bound.value);
         sql.push(" AS REAL)");
     }

@@ -15,6 +15,7 @@ import { Segmented } from "../../components/Segmented";
 import { Switch } from "../../components/Switch";
 import { useToasts } from "../../components/Toasts";
 import { useCreateTask } from "../../data/board";
+import { useFieldSummary } from "../../data/fields";
 import { useCalendarTasks } from "../../data/calendar";
 import { useCommand, useUndo } from "../../data/hooks";
 import { useListNames, useParsedQuery, useQueryFields } from "../../data/list";
@@ -442,6 +443,9 @@ export function CalendarView({ project, openTask, onOpen }: CalendarViewProps) {
   const problem = reading?.error;
   const tabDay = dayIsShown(focusedDay) ? focusedDay : from;
 
+  // Custom field values show on a bar's tooltip.
+  const fieldSummary = useFieldSummary(project);
+
   const taskLabel = (task: ListedTask) => {
     const span = spanOf(task);
     if (!span) {
@@ -473,6 +477,7 @@ export function CalendarView({ project, openTask, onOpen }: CalendarViewProps) {
         data-continues-after={bar.continuesAfter ? "" : undefined}
         data-dragging={drag?.moving === true && drag.task.key === task.key ? "" : undefined}
         aria-label={taskLabel(task)}
+        title={[task.title, fieldSummary(task.fields)].filter((line) => line !== "").join("\n")}
         onPointerDown={(event) => {
           startDrag(event, task);
         }}

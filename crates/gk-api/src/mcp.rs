@@ -534,7 +534,8 @@ logged time. The query language: `is:open`, `status:\"In progress\"`, `label:bug
 `-label:wontfix` (not; includes tasks without labels), `priority>=high`, `due<+7d`, \
 `updated>-3d`, `created:this-month`, `during:2026-12-01..2026-12-31` (start to due overlaps), \
 the history with `was:status:Review` (had that value at any time), `changed:due>-7d` (changed \
-in the last week) and `changed-by:agent`, \
+in the last week) and `changed-by:agent`, custom fields as `cf.story-points>3` (also in \
+`was:cf.area:Backend` and `changed:cf.area`), \
 `estimate:1h..4h`, `has:due`, `parent:TM-12`, \
 `project:TM/*` (with sub-projects), `(a OR b)`, words and \"phrases\" for full text, a bare key \
 `TM-41`, and `sort:due,-priority`. Dates: 2026-12-31, today, +7d, -1m, this-week, next-month. \
@@ -619,7 +620,9 @@ it gets a new key while the old one keeps finding it; its subtasks, comments, fi
 links come along. Statuses, types and labels are matched by name there; check_move first shows \
 which have no match, and `mapping` ({statuses, types, labels}: from the old name to the target's \
 name) says what takes their place. Custom field values go to the target's field of the same \
-name and kind; others are left off, with a warning. Entering a done or cancelled status closes the task; \
+name and kind; others are left off, with a warning. A required custom field of the target that the \
+task would lack takes its default, else the move is refused unless `fields` ({name: value}) gives \
+it. Entering a done or cancelled status closes the task; \
 `close_duplicates: true` closes the open tasks marked as its duplicates in the same change (left \
 out, a warning names them). \
 Example: move_task {\"key\": \"TM-41\", \"status\": \"In progress\", \"at\": \"top\"}",
@@ -635,7 +638,9 @@ Example: move_task {\"key\": \"TM-41\", \"status\": \"In progress\", \"at\": \"t
 the key each task (and subtask) would get, and for each of their statuses, types and labels the \
 target's item of the same name, or none. Pass what has no match as `mapping` to move_task. \
 `fields` lists their custom fields with the target's field that would keep the values (same \
-name and kind), or none when the values would be left off. \
+name and kind), or none when the values would be left off. `required_fields` lists the target's \
+required custom fields the tasks would lack: `has_default: false` means move_task needs a value \
+for them in `fields`. \
 Example: check_move {\"keys\": [\"TM-41\"], \"project\": \"OPS\"}",
         main: "task.move_check",
         covers: &["task.move_check"],
@@ -661,7 +666,7 @@ Example: delete_tasks {\"keys\": [\"TM-41\", \"TM-42\"]}",
         description: "Makes the same change to many tasks, chosen by `keys` or by a `query`: \
 `status`, `type`, `priority`, `labels` (replace), `add_labels`, `remove_labels`, `parent`, \
 `start_date` and `due_date` (also `fri`, `+3d`), `shift_start` and `shift_due` (`+2d`, `-1w`), \
-`estimate`, `project`, and `clear`. It is a preview unless `dry_run: false`: first call it to see \
+`estimate`, `project`, custom `fields` ({name: value}, `null` clears), and `clear`. It is a preview unless `dry_run: false`: first call it to see \
 every task and what would change, then call it again with `dry_run: false` and the preview's \
 `count` as `expected_count`; if the tasks now number otherwise it stops. At most 100 tasks in the \
 standard profile, 500 in full. The whole change is one history group, so one revert_changes \

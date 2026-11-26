@@ -16636,6 +16636,13 @@
             ],
             "description": "Groups the rows: they come group by group (each group sorted by the\nquery's order), and the result names the groups with their counts."
           },
+          "group_by_field": {
+            "description": "Groups the rows by a custom field instead (`cf.<name>`): a select\nfield by its option, in the field's order (a multi-select by its\nfirst option), a yes/no field by `yes` and `no` (no value counts as\nno). Not with `group_by`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "include_subprojects": {
             "default": false,
             "description": "With `project`: its sub-projects' tasks too.",
@@ -16912,7 +16919,7 @@
                 "type": "string"
               },
               "value": {
-                "description": "What its tasks share: the status, label or project name, the\npriority (`urgent` … `none`), the parent's key, or the first day of\nthe due week (`YYYY-MM-DD`); left out for the tasks without one.",
+                "description": "What its tasks share: the status, label or project name, the\npriority (`urgent` … `none`), the parent's key, the first day of\nthe due week (`YYYY-MM-DD`), or a custom field's option or `yes` or\n`no`; left out for the tasks without one.",
                 "type": "string"
               }
             },
@@ -23268,6 +23275,11 @@
               "null"
             ]
           },
+          "fields": {
+            "additionalProperties": true,
+            "description": "With `project`: custom field values the task and its subtasks get in\nthat project (each where its type shows the field), by field name,\nquery name or ID, as for `task.update`; for a required field they\nwould otherwise have no value of.",
+            "type": "object"
+          },
           "key": {
             "description": "The task: its key or ID.",
             "type": "string"
@@ -25151,6 +25163,32 @@
             ],
             "type": "object"
           },
+          "MoveRequiredField": {
+            "additionalProperties": false,
+            "description": "A required custom field of the target project that moving tasks would\nhave no value of.",
+            "properties": {
+              "has_default": {
+                "description": "Whether the field's default would fill it; otherwise the move needs\na value for it.",
+                "type": "boolean"
+              },
+              "name": {
+                "description": "The field's name.",
+                "type": "string"
+              },
+              "tasks": {
+                "description": "How many of the moving tasks would lack it.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "name",
+              "tasks",
+              "has_default"
+            ],
+            "type": "object"
+          },
           "MovedKey": {
             "additionalProperties": false,
             "description": "A key now and the one a move would give.",
@@ -25208,6 +25246,13 @@
           "project": {
             "description": "The target project's key.",
             "type": "string"
+          },
+          "required_fields": {
+            "description": "The target's required custom fields (shown for the type a task would\nhave there) that moving tasks would have no value of. A field with a\ndefault gives it; without one the move is refused unless `fields`\ngives a value.",
+            "items": {
+              "$ref": "#/$defs/MoveRequiredField"
+            },
+            "type": "array"
           },
           "statuses": {
             "description": "The statuses the tasks have now.",
@@ -25499,6 +25544,11 @@
                   "string",
                   "null"
                 ]
+              },
+              "fields": {
+                "additionalProperties": true,
+                "description": "Custom field values to set, by field name, query name or ID, as for\n`task.update`; `null` clears one. Each task's project must have the\nfield.",
+                "type": "object"
               },
               "fix_version": {
                 "description": "Plan them for the version of this name (in each task's project,\nor shared with it).",
@@ -25845,7 +25895,7 @@
       },
       "output_name": "BulkResult",
       "safety": "write",
-      "summary": "Make the same change to many tasks chosen by key or query (status, type, priority, labels, parent, dates set or shifted, estimate, project), previewed first, as one change for Undo and revert."
+      "summary": "Make the same change to many tasks chosen by key or query (status, type, priority, labels, parent, dates set or shifted, estimate, custom fields, project), previewed first, as one change for Undo and revert."
     },
     {
       "cli": "task reorder-subtask <key>",
@@ -52983,7 +53033,7 @@
             "description": "The person's layout of one project's board.",
             "properties": {
               "card_fields": {
-                "description": "The fields shown on cards.",
+                "description": "The fields shown on cards; custom fields as `cf.<query name>`.",
                 "items": {
                   "type": "string"
                 },
@@ -53078,6 +53128,11 @@
                 "description": "The estimate in minutes.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "fields": {
+                "additionalProperties": true,
+                "description": "Its values of the custom fields the layout shows on cards, by query\nname (without `cf.`); left out when it has none of them.",
+                "type": "object"
               },
               "file_count": {
                 "description": "How many files are attached to it and to its comments.",
@@ -53618,7 +53673,7 @@
             "description": "The person's layout of one project's board.",
             "properties": {
               "card_fields": {
-                "description": "The fields shown on cards.",
+                "description": "The fields shown on cards; custom fields as `cf.<query name>`.",
                 "items": {
                   "type": "string"
                 },
@@ -53770,7 +53825,7 @@
         "description": "Changes to a board layout; fields left out keep their value.",
         "properties": {
           "card_fields": {
-            "description": "The fields shown on cards.",
+            "description": "The fields shown on cards: `type`, `priority`, `due`, `start`,\n`labels`, `checklist`, `subtasks`, `estimate`, `days_in_column`,\n`updated`, `key`, and custom fields of the project as\n`cf.<query name>`.",
             "items": {
               "type": "string"
             },
@@ -53880,7 +53935,7 @@
             "description": "The person's layout of one project's board.",
             "properties": {
               "card_fields": {
-                "description": "The fields shown on cards.",
+                "description": "The fields shown on cards; custom fields as `cf.<query name>`.",
                 "items": {
                   "type": "string"
                 },
@@ -55778,6 +55833,11 @@
                 "description": "Its own due date.",
                 "type": "string"
               },
+              "fields": {
+                "additionalProperties": true,
+                "description": "Its custom field values by query name (without `cf.`); left out\nwhen it has none.",
+                "type": "object"
+              },
               "id": {
                 "description": "The task's ID.",
                 "type": "string"
@@ -55898,6 +55958,11 @@
               "closed": {
                 "description": "Whether it is closed.",
                 "type": "boolean"
+              },
+              "fields": {
+                "additionalProperties": true,
+                "description": "Its custom field values by query name (without `cf.`); left out\nwhen it has none.",
+                "type": "object"
               },
               "id": {
                 "description": "The task's ID.",

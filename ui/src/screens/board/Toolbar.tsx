@@ -9,6 +9,7 @@ import { classes } from "../../classes";
 import { MenuEntries, type MenuEntry } from "../../components/ContextMenu";
 import { cardsOf, type LayoutEdit } from "../../data/board";
 import { CARD_FIELDS, PRIORITIES, SORT_MODES, type Board, type BoardLayout, type CardSize, type Project } from "../../data/catalog";
+import { useCustomFields } from "../../data/fields";
 import { useT } from "../../i18n/I18n";
 import { DUE_FILTERS, type BoardView, type Filters } from "./model";
 import styles from "./Board.module.css";
@@ -98,6 +99,7 @@ function MenuButton({ label, children, entries, on = false, icon }: { label: str
  */
 export function Toolbar({ project, board, layout, view, filters, onFilters, onLayout, cardSize, onCardSize }: ToolbarProps) {
   const t = useT();
+  const customFields = useCustomFields(project.key);
   const cards = [...cardsOf(board).values()];
   const labelNames = [...new Set(cards.flatMap((card) => card.labels.map((label) => label.name)))].sort();
   const allLabels = new Map(cards.flatMap((card) => card.labels.map((label) => [label.name, label] as const)));
@@ -224,13 +226,17 @@ export function Toolbar({ project, board, layout, view, filters, onFilters, onLa
           {
             id: "fields",
             section: t("board-card-fields"),
-            items: CARD_FIELDS.map((field) => ({
-              id: `field-${field}`,
-              label: t(`card-field-${field}`),
-              checked: layout.card_fields.includes(field),
+            items: [
+              ...CARD_FIELDS.map((field) => ({ id: field, label: t(`card-field-${field}`) })),
+              // Custom fields: their names are the person's own words.
+              ...customFields.map((field) => ({ id: field.query_name, label: field.name })),
+            ].map(({ id, label }) => ({
+              id: `field-${id}`,
+              label,
+              checked: layout.card_fields.includes(id),
               run: () => {
                 onLayout({
-                  card_fields: layout.card_fields.includes(field) ? layout.card_fields.filter((other) => other !== field) : [...layout.card_fields, field],
+                  card_fields: layout.card_fields.includes(id) ? layout.card_fields.filter((other) => other !== id) : [...layout.card_fields, id],
                 });
               },
             })),

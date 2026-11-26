@@ -89,6 +89,28 @@ export function useFieldText(): (kind: CustomFieldKind, value: unknown) => strin
   };
 }
 
+/**
+ * A task's custom field values (by query name, without `cf.`) as the lines
+ * of a tooltip, "Name: value" in the fields' order; empty without any.
+ */
+export function useFieldSummary(project: string | undefined): (values: Readonly<Record<string, unknown>> | undefined) => string {
+  const t = useT();
+  const fields = useCustomFields(project);
+  const text = useFieldText();
+  const shown = [...new Map(fields.map((field) => [field.query_name, field] as const)).values()];
+  return (values) => {
+    if (values === undefined) {
+      return "";
+    }
+    return shown
+      .flatMap((field) => {
+        const value = values[field.query_name.slice(3)];
+        return value === undefined || value === null ? [] : [t("field-summary-line", { field: field.name, value: text(field.kind, value) })];
+      })
+      .join("\n");
+  };
+}
+
 /** A value for a CSV file: locale-neutral, as the engine writes it; options joined by "; ". */
 export function csvFieldText(value: unknown): string {
   if (value === undefined || value === null) {

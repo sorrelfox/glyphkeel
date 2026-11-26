@@ -45,8 +45,8 @@ export interface ListScope {
   query: string;
   /** The order when the query has no `sort:` (`due,-priority`). */
   sort?: string | undefined;
-  /** What the rows are grouped by; none for one plain list. */
-  groupBy?: ListGrouping | undefined;
+  /** What the rows are grouped by (a custom field as `cf.<name>`); none for one plain list. */
+  groupBy?: ListGrouping | `cf.${string}` | undefined;
 }
 
 /** The engine's input for one page of a list. */
@@ -57,7 +57,7 @@ export function searchInput(scope: ListScope, page: number, limit = LIST_PAGE): 
     ...(page > 0 ? { cursor: String(page * limit) } : {}),
     ...(scope.project !== undefined ? { project: scope.project, include_subprojects: scope.includeSubprojects } : {}),
     ...(scope.sort !== undefined && scope.sort !== "" ? { sort: scope.sort } : {}),
-    ...(scope.groupBy !== undefined ? { group_by: scope.groupBy } : {}),
+    ...(scope.groupBy === undefined ? {} : scope.groupBy.startsWith("cf.") ? { group_by_field: scope.groupBy } : { group_by: scope.groupBy as ListGrouping }),
   };
 }
 

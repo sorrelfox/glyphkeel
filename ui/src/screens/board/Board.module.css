@@ -170,6 +170,24 @@
   gap: 4px 12px;
 }
 
+/* A custom field on a card: its name, then its value. */
+.cardField {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  gap: 4px;
+}
+
+.cardField > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardFieldName {
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
 /* The slot a dragged card leaves: a dashed outline of the same height. */
 .ghost {
   background: transparent;

@@ -13,7 +13,7 @@ import { classes } from "../../classes";
 import { MenuEntries, type MenuEntry } from "../../components/ContextMenu";
 import { Select } from "../../components/Select";
 import { type Card } from "../../data/catalog";
-import { type TemplateSummary } from "../../generated/ops";
+import { type CustomField, type TemplateSummary } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { CardView } from "./CardView";
 import { keepMounted, type LaneData } from "./dnd";
@@ -26,6 +26,8 @@ export const VIRTUAL_OVER = 150;
 export interface CardHandlers {
   selected: string | null;
   fields: readonly string[];
+  /** The custom fields of the board's project. */
+  custom: readonly CustomField[];
   compact: boolean;
   today: string;
   onSelect: (key: string) => void;
@@ -61,6 +63,7 @@ function SortableCard({ card, handlers, sortable, dropDisabled }: SortableCardPr
       ref={setNodeRef}
       card={card}
       fields={handlers.fields}
+      custom={handlers.custom}
       compact={handlers.compact}
       today={handlers.today}
       selected={handlers.selected === card.key}

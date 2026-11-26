@@ -243,6 +243,12 @@ fn board(q: &QueryCtx<'_>, input: BoardGetInput) -> Result<Board, Failure> {
     let cutoff = (layout.hide_done_after_days > 0 && !input.show_older)
         .then(|| q.now - i64::from(layout.hide_done_after_days) * DAY_MS);
     let (mut hidden_columns, mut hidden_tasks) = (0, 0);
+    // The custom fields the cards show, by query name.
+    let custom: Vec<String> = layout
+        .card_fields
+        .iter()
+        .filter_map(|f| gk_query::fields::strip_custom_prefix(f).map(str::to_owned))
+        .collect();
     for column in &mut columns {
         column.hidden = layout.hidden.contains(&column.id);
         column.collapsed = layout.collapsed.contains(&column.id);
@@ -257,6 +263,11 @@ fn board(q: &QueryCtx<'_>, input: BoardGetInput) -> Result<Board, Failure> {
                 .parse()
                 .map_err(|_| Failure::Op(messages::storage("storage-status-id", &[])))?;
             cards.extend(cards_of(q.tx, status, q.now)?);
+        }
+        if !custom.is_empty() {
+            for (card, _) in &mut cards {
+                card_values(q.tx, card, &custom)?;
+            }
         }
         column.count = cards.len() as u64;
         column.over_limit = column
@@ -345,6 +356,7 @@ fn cards_of(
                     closed_at: closed.map(rfc3339),
                     version: r.get(18)?,
                     id: id_at(r, 0)?.to_string(),
+                    fields: BTreeMap::new(),
                 },
                 closed,
             ))
@@ -367,6 +379,72 @@ fn cards_of(
         out.push((card, closed));
     }
     Ok(out)
+}
+
+/// Gives `card` its values of the custom fields `shown` (query names).
+fn card_values(tx: &Transaction<'_>, card: &mut Card, shown: &[String]) -> Result<(), Failure> {
+    let id: Id = card
+        .id
+        .parse()
+        .map_err(|_| Failure::Op(messages::storage("storage-task-id", &[])))?;
+    card.fields = super::custom_field::listed_values(tx, id)?
+        .into_iter()
+        .filter(|(name, _)| shown.contains(name))
+        .collect();
+    Ok(())
+}
+
+/// After a custom field was renamed or deleted: the board layouts of
+/// `project` (of every project when `None`) that show it on cards show it
+/// under its new name, or no longer. `column` maps a `cf.<name>` entry as
+/// for a saved view's columns: `Some(Some(new))`, `Some(None)` to drop it,
+/// `None` to keep it.
+pub(crate) fn rewrite_card_fields(
+    w: &mut WriteCtx<'_>,
+    project: Option<Id>,
+    column: &dyn Fn(&str) -> Option<Option<String>>,
+) -> Result<(), Failure> {
+    let scopes: Vec<String> = {
+        let mut stmt = w.tx().prepare_cached(
+            "SELECT scope FROM view_settings WHERE view_kind = ?1 ORDER BY scope",
+        )?;
+        stmt.query_map([VIEW], |r| r.get(0))?
+            .collect::<Result<_, _>>()?
+    };
+    for scope in scopes {
+        let Ok(id) = scope.parse::<Id>() else {
+            continue;
+        };
+        if project.is_some_and(|p| p != id) {
+            continue;
+        }
+        let Some(before) = raw(w.tx(), id)? else {
+            continue;
+        };
+        let Some(fields) = before.get("card_fields").and_then(Value::as_array) else {
+            continue;
+        };
+        let mut touched = false;
+        let mut kept = Vec::with_capacity(fields.len());
+        for f in fields {
+            let Some(text) = f.as_str() else { continue };
+            match column(text) {
+                Some(Some(new)) => {
+                    kept.push(Value::String(new));
+                    touched = true;
+                }
+                Some(None) => touched = true,
+                None => kept.push(f.clone()),
+            }
+        }
+        if touched {
+            let mut after = before.clone();
+            after["card_fields"] = Value::Array(kept);
+            write_raw(w, id, Some(&after))?;
+            w.record_field(ENTITY, id, Some(id), "settings", Some(before), Some(after));
+        }
+    }
+    Ok(())
 }
 
 fn sort(cards: &mut [(Card, Option<i64>)], mode: SortMode) {
@@ -493,8 +571,33 @@ fn update(w: &mut WriteCtx<'_>, input: LayoutUpdateInput) -> Result<LayoutChange
         layout.hide_done_after_days = days;
     }
     if let Some(fields) = &input.card_fields {
+        let custom = super::custom_field::rows(w.tx(), Some(p.id))?;
         let mut chosen = Vec::new();
         for (i, f) in fields.iter().enumerate() {
+            if let Some(name) = gk_query::fields::strip_custom_prefix(f.trim()) {
+                let wanted = fold(name);
+                let Some(field) = custom
+                    .iter()
+                    .find(|c| c.query_name == wanted || fold(&c.name) == wanted)
+                else {
+                    let names: Vec<String> = custom
+                        .iter()
+                        .map(|c| format!("{}{}", gk_query::fields::CUSTOM_PREFIX, c.query_name))
+                        .collect();
+                    return Err(messages::invalid_at(
+                        &format!("card_fields[{i}]"),
+                        "board-card-custom-field",
+                        &[("field", f.trim().to_owned()), ("project", p.key.clone())],
+                    )
+                    .with_detail("choices", names)
+                    .into());
+                };
+                let written = format!("{}{}", gk_query::fields::CUSTOM_PREFIX, field.query_name);
+                if !chosen.contains(&written) {
+                    chosen.push(written);
+                }
+                continue;
+            }
             let f = f.trim().to_lowercase();
             if !CARD_FIELDS.contains(&f.as_str()) {
                 return Err(messages::invalid_at(

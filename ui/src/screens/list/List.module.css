@@ -109,6 +109,14 @@
   max-width: 200px;
 }
 
+/* The value a custom field gets on every selected task. */
+.bulkField {
+  display: flex;
+  flex: 1 1 12rem;
+  min-inline-size: 0;
+  max-inline-size: 28rem;
+}
+
 /* ---------- table ---------- */
 
 .scroll {

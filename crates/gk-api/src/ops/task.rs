@@ -574,6 +574,12 @@ pub struct TaskMoveInput {
     /// stay open and a warning names them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub close_duplicates: Option<bool>,
+    /// With `project`: custom field values the task and its subtasks get in
+    /// that project (each where its type shows the field), by field name,
+    /// query name or ID, as for `task.update`; for a required field they
+    /// would otherwise have no value of.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub fields: BTreeMap<String, serde_json::Value>,
 }
 
 /// What tasks moving to another project take there in place of the
@@ -640,6 +646,12 @@ pub struct MoveCheck {
     /// would take it off.
     #[serde(default)]
     pub versions: Vec<MoveMatch>,
+    /// The target's required custom fields (shown for the type a task would
+    /// have there) that moving tasks would have no value of. A field with a
+    /// default gives it; without one the move is refused unless `fields`
+    /// gives a value.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub required_fields: Vec<MoveRequiredField>,
     /// The target's status for those it has no match for: its first one.
     pub fallback_status: String,
     /// The target's type for those it has no match for: its default one.
@@ -668,6 +680,20 @@ pub struct MoveMatch {
     /// The target's item of the same name; absent when it has none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub target: Option<String>,
+}
+
+/// A required custom field of the target project that moving tasks would
+/// have no value of.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MoveRequiredField {
+    /// The field's name.
+    pub name: String,
+    /// How many of the moving tasks would lack it.
+    pub tasks: u64,
+    /// Whether the field's default would fill it; otherwise the move needs
+    /// a value for it.
+    pub has_default: bool,
 }
 
 /// Where to put a subtask among its parent's subtasks. Subtasks keep an

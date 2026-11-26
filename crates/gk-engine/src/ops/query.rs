@@ -19,7 +19,7 @@ use gk_api::ops::query::{
 };
 use gk_api::ops::settings::WeekStart;
 use gk_api::ops::task::{Checklist, StatusRef, TypeRef};
-use gk_core::{Day, Id, Weekday, fold};
+use gk_core::{Day, FieldKind, Id, Weekday, fold};
 use gk_query::check::{NameKind, NameUse};
 use gk_query::{
     Calendar, CheckEnv, Checked, ChipKind, Compiled, Param, Query, QueryError, Scope, Span, SqlEnv,
@@ -490,10 +490,23 @@ fn search(q: &QueryCtx<'_>, input: TaskSearchInput) -> Result<TaskSearchResult, 
         None => 0,
     };
     let (normal, mut compiled) = compile_search(q.tx, &q.env.zone, q.now, &input)?;
-    let groups = match input.group_by {
-        Some(by) => {
+    let by = match (input.group_by, &input.group_by_field) {
+        (Some(_), Some(_)) => {
+            return Err(messages::invalid(
+                "group_by_field",
+                "list-group-field-and-grouping",
+                &[],
+            ));
+        }
+        (Some(by), None) => {
             let week_start = super::settings::load(q.tx)?.week_start;
-            let g = grouping(by, week_start);
+            Some(grouping(by, week_start))
+        }
+        (None, Some(field)) => Some(field_grouping(q.tx, field)?),
+        (None, None) => None,
+    };
+    let groups = match by {
+        Some(g) => {
             compiled.group_first(&g.rows);
             let sql = compiled.groups(
                 &format!("{} AS g, {}, {}, {}", g.key, g.value, g.title, g.hue),
@@ -662,6 +675,77 @@ fn grouping(by: ListGrouping, week_start: WeekStart) -> GroupSql {
             order: text("g ASC"),
         },
     }
+}
+
+/// The kinds of custom fields a list can be grouped by.
+const GROUPING_KINDS: [FieldKind; 3] = [
+    FieldKind::Select,
+    FieldKind::MultiSelect,
+    FieldKind::Boolean,
+];
+
+/// The grouping by the custom field `written` (`cf.<name>` or its name): a
+/// select field's groups in the order of its options (those of every
+/// project's field of that query name, first found first), a yes/no
+/// field's `yes` then `no`.
+fn field_grouping(tx: &Transaction<'_>, written: &str) -> Result<GroupSql, Failure> {
+    let fields = super::custom_field::rows(tx, None)?;
+    let bare = gk_query::fields::strip_custom_prefix(written.trim()).unwrap_or(written.trim());
+    let wanted = gk_core::fold(bare);
+    let Some(field) = fields
+        .iter()
+        .find(|f| f.query_name == wanted || gk_core::fold(&f.name) == wanted)
+    else {
+        return Err(messages::not_found(
+            "list-group-field-unknown",
+            &[("field", written.to_owned())],
+        )
+        .with_detail("path", "group_by_field")
+        .into());
+    };
+    if !GROUPING_KINDS.contains(&field.kind) {
+        return Err(messages::invalid(
+            "group_by_field",
+            "list-group-field-kind",
+            &[("field", field.name.clone())],
+        ));
+    }
+    // A query name is letters, digits and hyphens; quoted all the same.
+    let name = format!("'{}'", field.query_name.replace('\'', "''"));
+    let values = format!(
+        "FROM custom_values v JOIN custom_fields f ON f.id = v.field_id \
+         WHERE v.task_id = t.id AND f.query_name = {name}"
+    );
+    if field.kind == FieldKind::Boolean {
+        let key = format!("coalesce((SELECT max(v.value) {values}), 0)");
+        return Ok(GroupSql {
+            rows: format!("{key} DESC"),
+            value: format!("CASE WHEN {key} = 1 THEN 'yes' ELSE 'no' END"),
+            title: "NULL".to_owned(),
+            hue: "NULL".to_owned(),
+            order: "g DESC".to_owned(),
+            key,
+        });
+    }
+    // An option's place in its field's list.
+    let place = |option: &str| {
+        format!(
+            "(SELECT min(f.rank || ':' || printf('%04d', j.key)) FROM custom_fields f, json_each(f.options) j \
+             WHERE f.query_name = {name} AND j.value = {option})"
+        )
+    };
+    let first = format!(
+        "(SELECT v.value {values} ORDER BY {} LIMIT 1)",
+        place("v.value")
+    );
+    Ok(GroupSql {
+        rows: format!("{} ASC NULLS LAST", place(&first)),
+        value: format!("min({first})"),
+        title: "NULL".to_owned(),
+        hue: "NULL".to_owned(),
+        order: format!("g IS NULL, min({}) ASC, g ASC", place(&first)),
+        key: first,
+    })
 }
 
 fn count(n: i64) -> u32 {

@@ -154,6 +154,7 @@ export function scheduleOf(tasks: readonly ListedTask[], links: readonly BlocksL
       ...(task.recurring === true ? { recurring: true } : {}),
       title: task.title,
       version: task.version,
+      ...(task.fields && Object.keys(task.fields).length > 0 ? { fields: task.fields } : {}),
     });
     for (const child of children) {
       add(child, depth + 1);
@@ -208,6 +209,7 @@ export function scheduleOf(tasks: readonly ListedTask[], links: readonly BlocksL
       status: task.status,
       title: task.title,
       version: task.version,
+      ...(task.fields && Object.keys(task.fields).length > 0 ? { fields: task.fields } : {}),
     }));
 
   let lo: string | undefined;
