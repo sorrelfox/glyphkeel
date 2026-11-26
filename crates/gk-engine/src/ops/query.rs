@@ -231,11 +231,13 @@ pub(crate) fn try_compile(
 ) -> Result<Result<(Query, Checked), QueryError>, Failure> {
     let cal = calendar(tx, zone, now)?;
     let units = super::task::units(tx)?;
+    let custom = super::custom_field::query_fields(tx)?;
     let compiled = gk_query::compile(
         src,
         CheckEnv {
             calendar: &cal,
             units,
+            custom: &custom,
         },
     );
     let (query, checked) = match compiled {
@@ -329,8 +331,10 @@ fn problem(e: &QueryError, src: &str) -> QueryProblem {
     }
 }
 
-fn registry() -> Vec<QueryField> {
-    gk_query::fields::FIELDS
+/// The fields of the query language: the built-in ones, then the
+/// workspace's custom fields as `cf.<name>`.
+fn registry(tx: &Transaction<'_>) -> Result<Vec<QueryField>, Failure> {
+    let mut out: Vec<QueryField> = gk_query::fields::FIELDS
         .iter()
         .map(|f| QueryField {
             name: f.name.to_owned(),
@@ -341,7 +345,22 @@ fn registry() -> Vec<QueryField> {
             values: f.values.to_owned(),
             choices: f.choices.iter().map(|c| (*c).to_owned()).collect(),
         })
-        .collect()
+        .collect();
+    for f in super::custom_field::query_fields(tx)? {
+        out.push(QueryField {
+            name: f.written(),
+            aliases: Vec::new(),
+            operators: f.ops().iter().map(|o| o.as_str().to_owned()).collect(),
+            ranges: f.ranges(),
+            sortable: true,
+            values: f.values().to_owned(),
+            choices: match f.kind {
+                gk_core::FieldKind::Boolean => vec!["yes".to_owned(), "no".to_owned()],
+                _ => f.options.clone(),
+            },
+        });
+    }
+    Ok(out)
 }
 
 fn parse_for_field(q: &QueryCtx<'_>, input: &QueryParseInput) -> Result<ParsedQuery, Failure> {
@@ -354,7 +373,11 @@ fn parse_for_field(q: &QueryCtx<'_>, input: &QueryParseInput) -> Result<ParsedQu
             range: range(src, t.span),
         })
         .collect();
-    let fields = input.fields.then(registry);
+    let fields = if input.fields {
+        Some(registry(q.tx)?)
+    } else {
+        None
+    };
     let query = match parsed {
         Ok(query) => query,
         Err(e) => {
@@ -674,6 +697,7 @@ pub(crate) fn listed(tx: &Transaction<'_>, id: Id, now: i64) -> Result<ListedTas
                 },
                 priority: parse_enum(priority_name(r.get(9)?)).unwrap_or(Priority::None),
                 labels: Vec::new(),
+                fields: BTreeMap::new(),
                 parent: None,
                 start_date: r.get(11)?,
                 due_date: r.get(12)?,
@@ -722,6 +746,7 @@ pub(crate) fn listed(tx: &Transaction<'_>, id: Id, now: i64) -> Result<ListedTas
             .optional()?;
     }
     task.labels = task_labels(tx, id)?;
+    task.fields = super::custom_field::listed_values(tx, id)?;
     task.progress_percent = super::rollup::progress(tx, id)?;
     Ok(task)
 }

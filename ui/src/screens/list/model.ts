@@ -26,7 +26,16 @@ export const COLUMNS = [
   "created",
   "updated",
 ] as const;
-export type ColumnId = (typeof COLUMNS)[number];
+/** A built-in column. */
+export type BuiltinColumn = (typeof COLUMNS)[number];
+/** A custom field's column: `cf.` and the field's query name. */
+export type CustomColumn = `cf.${string}`;
+export type ColumnId = BuiltinColumn | CustomColumn;
+
+/** Whether a column shows a custom field. */
+export function isCustomColumn(value: string): value is CustomColumn {
+  return value.startsWith("cf.") && value.length > 3;
+}
 
 /** The columns shown when a view names none. Title is always shown. */
 export const DEFAULT_COLUMNS: readonly ColumnId[] = ["key", "title", "status", "priority", "labels", "due", "estimate", "spent", "updated"];
@@ -38,7 +47,7 @@ export const DEFAULT_COLUMNS_ALL: readonly ColumnId[] = ["key", "title", "projec
 export const FIXED_COLUMNS: readonly ColumnId[] = ["title"];
 
 /** Widths in the grid; the title takes the rest. */
-export const COLUMN_WIDTH: Record<ColumnId, string> = {
+export const COLUMN_WIDTH: Record<BuiltinColumn, string> = {
   key: "76px",
   title: "minmax(240px, 1fr)",
   project: "84px",
@@ -56,11 +65,19 @@ export const COLUMN_WIDTH: Record<ColumnId, string> = {
   updated: "104px",
 };
 
+/** The width a custom field's column starts with. */
+const CUSTOM_WIDTH = "128px";
+
+/** A column's width in the grid before the person changes it. */
+export function defaultWidth(column: ColumnId): string {
+  return isCustomColumn(column) ? CUSTOM_WIDTH : COLUMN_WIDTH[column];
+}
+
 /** Columns whose numbers align at the end. */
 export const NUMERIC_COLUMNS: ReadonlySet<ColumnId> = new Set(["estimate", "spent", "remaining", "progress"]);
 
 /** The query field a column sorts by; columns without one don't sort. */
-export const SORT_KEY: Partial<Record<ColumnId, string>> = {
+export const SORT_KEY: Partial<Record<BuiltinColumn, string>> = {
   key: "key",
   title: "title",
   project: "project",
@@ -76,8 +93,13 @@ export const SORT_KEY: Partial<Record<ColumnId, string>> = {
   updated: "updated",
 };
 
+/** The query field a column sorts by: its own name for a custom field. */
+export function sortKeyOf(column: ColumnId): string | undefined {
+  return isCustomColumn(column) ? column : SORT_KEY[column];
+}
+
 export function isColumn(value: string): value is ColumnId {
-  return (COLUMNS as readonly string[]).includes(value);
+  return (COLUMNS as readonly string[]).includes(value) || isCustomColumn(value);
 }
 
 /**
@@ -98,7 +120,7 @@ export const MAX_WIDTH = 1200;
 
 /** A column's width in pixels: the person's own, else its default (the title's least). */
 export function columnWidth(column: ColumnId, widths: Readonly<Record<string, number>>): number {
-  return widths[column] ?? Number(/\d+/.exec(COLUMN_WIDTH[column])?.[0] ?? MIN_WIDTH);
+  return widths[column] ?? Number(/\d+/.exec(defaultWidth(column))?.[0] ?? MIN_WIDTH);
 }
 
 /**
@@ -106,7 +128,7 @@ export function columnWidth(column: ColumnId, widths: Readonly<Record<string, nu
  * the person chose is kept exactly; the title otherwise takes the rest.
  */
 export function gridTemplate(columns: readonly ColumnId[], widths: Readonly<Record<string, number>> = {}): string {
-  return ["28px", ...columns.map((column) => (widths[column] === undefined ? COLUMN_WIDTH[column] : `${String(widths[column])}px`))].join(" ");
+  return ["28px", ...columns.map((column) => (widths[column] === undefined ? defaultWidth(column) : `${String(widths[column])}px`))].join(" ");
 }
 
 /** Moves a column to another place among the shown ones. */
@@ -118,7 +140,7 @@ export function moveColumn(columns: readonly ColumnId[], column: ColumnId, to: n
 
 /** How a column is sorted now, and its place among the sort keys (1 for the first). */
 export function sortState(sort: readonly string[], column: ColumnId): { direction: "ascending" | "descending"; position: number } | null {
-  const key = SORT_KEY[column];
+  const key = sortKeyOf(column);
   if (key === undefined) {
     return null;
   }
@@ -136,7 +158,7 @@ export function sortState(sort: readonly string[], column: ColumnId): { directio
  * others. Returns the sort keys, empty for the default.
  */
 export function nextSort(sort: readonly string[], column: ColumnId, add = false): string[] {
-  const key = SORT_KEY[column];
+  const key = sortKeyOf(column);
   if (key === undefined) {
     return [...sort];
   }

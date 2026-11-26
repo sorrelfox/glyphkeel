@@ -287,6 +287,7 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
                     version: r.get(29)?,
                     subtask_rank: r.get(30)?,
                     key_aliases: Vec::new(),
+                    custom_values: Vec::new(),
                 },
                 description,
             ))
@@ -337,7 +338,14 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
             &tb,
             |r| r.get(0),
         )?;
+        t.custom_values = super::custom_fields::export_values(tx, &tb)?;
     }
+    let task_ids: Vec<Vec<u8>> = tasks
+        .iter()
+        .filter_map(|t| t.id.parse::<Id>().ok())
+        .map(|id| id.as_bytes().to_vec())
+        .collect();
+    let custom_fields = super::custom_fields::export_fields(tx, &pid, &task_ids)?;
 
     let mut comments = all(
         tx,
@@ -586,6 +594,7 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
             views,
             layouts,
             key_aliases,
+            custom_fields,
         },
         tasks,
         descriptions,

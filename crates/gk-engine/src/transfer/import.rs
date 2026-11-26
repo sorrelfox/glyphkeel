@@ -439,6 +439,7 @@ fn check(parsed: &mut Parsed) -> Result<(), Rejected> {
             rank_ok(&pj, 1, &v.rank)?;
         }
         let tp = format!("{dir}/tasks.jsonl");
+        super::custom_fields::check(&pj, &tp, &proj.file.custom_fields, &proj.tasks)?;
         let mut numbers = HashSet::new();
         let mut parents: HashMap<String, Option<String>> = HashMap::new();
         for (i, t) in proj.tasks.iter().enumerate() {
@@ -868,6 +869,14 @@ pub(crate) fn plan(
             replace("attachments", &a.id)?;
         }
     }
+    super::custom_fields::plan(
+        tx,
+        parsed
+            .projects
+            .iter()
+            .flat_map(|p| p.file.custom_fields.iter()),
+        &mut plan.ids,
+    )?;
     let mut groups: HashSet<String> = HashSet::new();
     for p in &parsed.projects {
         for a in &p.activity {
@@ -1273,6 +1282,7 @@ fn write(
                 l.rank
             ])?;
         }
+        super::custom_fields::write_fields(tx, &proj.file.custom_fields, id, &|t| plan.id(t), now)?;
         for v in &proj.file.views {
             let j = |v: &Option<Value>| v.as_ref().map(Value::to_string);
             tx.prepare_cached(
@@ -1425,6 +1435,7 @@ fn write(
                 )?
                 .execute(params![b(tid), b(plan.id(l))])?;
             }
+            super::custom_fields::write_values(tx, tid, &t.custom_values, &|t| plan.id(t))?;
             for alias in &t.key_aliases {
                 if let Ok(old) = alias.parse::<gk_core::TaskKey>() {
                     tx.prepare_cached(

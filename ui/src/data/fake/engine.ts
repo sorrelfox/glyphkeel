@@ -16,6 +16,7 @@ import {
   type BulkItem,
   type BulkResult,
   type BulkUpdateInput,
+  type CustomFieldChange,
   type ListedTask,
   type Attachment,
   type Board,
@@ -72,6 +73,7 @@ import {
 import { PROJECT_ICONS, suggestHue } from "../catalog";
 import { formatDuration, parseDuration } from "../duration";
 import { decodeBase64, materialize, recordedFields, sniff } from "./details";
+import { applyValues, createField, deleteField, fieldOut, fieldsFor, fieldsOf, findField, listedValues, placeField, queryFields, taskValues, updateField } from "./fields";
 import { checklistOf, escapeHtml, merge3, publicChecklist, renderFake, setChecked, unifiedDiff } from "./markdown";
 import { newProject, nextFileId, nextId, nextUuid, SAMPLE_AGENT } from "./seed";
 import { type FakeComment, type FakeFile, type FakeProject, type FakeRelation, type FakeReminder, type FakeRevision, type FakeState, type FakeTask, type FakeTimeEntry, type FakeWikiPage } from "./state";
@@ -595,6 +597,7 @@ export class FakeWorkspace {
       type: this.typeRef(task),
       priority: task.priority,
       labels: this.labelRefs(task),
+      ...(taskValues(this.state, task).length > 0 ? { fields: taskValues(this.state, task) } : {}),
       ...some("parent", parent && this.keyOf(parent)),
       ...some("start_date", task.startDate),
       ...some("due_date", task.dueDate),
@@ -1009,6 +1012,15 @@ export class FakeWorkspace {
     };
   }
 
+  private fieldChange(field: { id: string; projectId: string | null }, fields: string[], removed: number): Result<CustomFieldChange> {
+    const stored = fieldsOf(this.state).find((each) => each.id === field.id);
+    const project = this.state.projects.find((candidate) => candidate.id === field.projectId);
+    return {
+      output: { ...(stored ? { field: fieldOut(this.state, stored, this.state.projects) } : {}), ...(removed > 0 ? { values_removed: removed } : {}) },
+      changes: [{ entity: "custom_field", id: field.id, fields, ...(project ? { project: project.key } : {}) }],
+    };
+  }
+
   private projectChange(project: FakeProject, entity: string, fields: string[]): Result<ProjectChange> {
     return { output: { project: this.fullProject(project) }, changes: [{ entity, id: project.id, fields, project: project.key }] };
   }
@@ -1266,6 +1278,7 @@ export class FakeWorkspace {
       id: card.id,
       key: card.key,
       labels: card.labels,
+      ...some("fields", listedValues(this.state, task)),
       ...some("parent", card.parent),
       priority: card.priority,
       progress_percent: card.progress_percent,
@@ -1678,6 +1691,7 @@ export class FakeWorkspace {
         id: task.id,
         key: `${project.key}-${String(task.number)}`,
         labels: this.labelRefs(task),
+        ...some("fields", listedValues(this.state, task)),
         ...some("parent", parent && this.keyOf(parent)),
         priority: task.priority,
         progress_percent: progress(task),
@@ -1702,6 +1716,7 @@ export class FakeWorkspace {
   private queryNames(): QueryNames {
     const unique = (names: string[]) => [...new Set(names)];
     return {
+      custom: queryFields(this.state),
       statuses: unique(this.state.projects.flatMap((project) => project.statuses.map((status) => status.name))),
       types: unique(this.state.projects.flatMap((project) => project.types.map((type) => type.name))),
       labels: unique(this.state.projects.flatMap((project) => project.labels.map((label) => label.name))),
@@ -2163,6 +2178,33 @@ export class FakeWorkspace {
       }
       project.labels = project.labels.filter((candidate) => candidate !== label);
       return this.projectChange(project, "label", ["*"]);
+    },
+    "field.list": ({ project: ref }) => {
+      const project = ref === null || ref === undefined ? null : this.project(ref);
+      return { fields: fieldsFor(this.state, project?.id ?? null).map((field) => fieldOut(this.state, field, this.state.projects)) };
+    },
+    "field.create": (input) => {
+      const project = input.project === null || input.project === undefined ? null : this.writable(input.project);
+      const field = createField(this.state, { ...input, project }, nextId("cf"), fail);
+      placeField(this.state, field, input, fail);
+      return this.fieldChange(field, ["*"], 0);
+    },
+    "field.update": (input) => {
+      const project = input.project === null || input.project === undefined ? null : this.project(input.project);
+      const field = findField(fieldsFor(this.state, project?.id ?? null), input.field, fail);
+      const removed = updateField(this.state, field, input, fail);
+      placeField(this.state, field, input, fail);
+      return this.fieldChange(field, ["*"], removed);
+    },
+    "field.delete": (input) => {
+      const project = input.project === null || input.project === undefined ? null : this.project(input.project);
+      const field = findField(fieldsFor(this.state, project?.id ?? null), input.field, fail);
+      const count = this.state.tasks.filter((task) => task.fields?.[field.id] !== undefined).length;
+      if (input.expected_task_count !== null && input.expected_task_count !== undefined && input.expected_task_count !== count) {
+        fail("conflict", `"${field.name}" has a value on ${String(count)} tasks, not ${String(input.expected_task_count)}.`, { details: { message_id: "field-count-differs" } });
+      }
+      const removed = deleteField(this.state, field);
+      return this.fieldChange(field, ["deleted"], removed);
     },
     "board.get": ({ project, include_subprojects, show_older }) => this.board(project, include_subprojects, show_older === true),
     "layout.get": ({ project: ref }) => {
@@ -3171,7 +3213,7 @@ export class FakeWorkspace {
       }
       return { output: { reverted, skipped }, changes: [{ entity: "workspace", id: "w-1", fields: ["*"] }] };
     },
-    "task.create": ({ project: ref, title, status, description, priority, before, after, at, parent: parentKey, start_date, due_date }) => {
+    "task.create": ({ project: ref, title, status, description, priority, before, after, at, parent: parentKey, start_date, due_date, fields }) => {
       const project = this.writable(ref);
       const startDate = start_date === null || start_date === undefined ? null : this.dayInput(start_date, "start_date");
       const dueDate = due_date === null || due_date === undefined ? null : this.dayInput(due_date, "due_date");
@@ -3218,6 +3260,7 @@ export class FakeWorkspace {
         closedAt: isClosed(target.category) ? now : null,
         version: 1,
       };
+      applyValues(this.state, task, type.name, fields, true, fail);
       project.nextNumber += 1;
       this.state.tasks.push(task);
       if (task.description !== "") {
@@ -3296,6 +3339,9 @@ export class FakeWorkspace {
       if (clear.includes("estimate")) {
         task.estimateMin = null;
         fields.push("estimate");
+      }
+      if (input.fields !== undefined && applyValues(this.state, task, this.typeRef(task).name, input.fields, false, fail)) {
+        fields.push("fields");
       }
       if (fields.length === 0) {
         return { output: { task: this.fullTask(task), ...some("description_save", save) }, changes: [] };

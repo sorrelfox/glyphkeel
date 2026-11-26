@@ -177,6 +177,17 @@ describe("export", () => {
     expect(csv[3]).toBe("");
   });
 
+  it("adds the custom fields as columns of their own", () => {
+    const csv = toCsv(
+      [task({ fields: { points: 3, platforms: ["Linux", "macOS"], approved: true } }), task({ key: "TM-2", fields: { note: "=1+1" } })],
+      { hoursPerDay: 8, daysPerWeek: 5 },
+      ["cf.points", "cf.platforms", "cf.approved"],
+    ).split("\r\n");
+    expect(csv[0]?.endsWith(",closed,cf.points,cf.platforms,cf.approved,cf.note")).toBe(true);
+    expect(csv[1]?.endsWith(",3,Linux; macOS,true,")).toBe(true);
+    expect(csv[2]?.endsWith(",,,,'=1+1")).toBe(true);
+  });
+
   it("writes JSON with the query and the engine's records", () => {
     const json = JSON.parse(toJson([task({})], { query: "is:open", includeSubprojects: false, project: "TM" })) as { query: string; project: string; total: number; items: ListedTask[] };
     expect(json).toMatchObject({ query: "is:open", project: "TM", total: 1 });

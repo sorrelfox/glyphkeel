@@ -254,6 +254,7 @@ pub(crate) fn load(
                 },
                 priority: parse_enum(priority_name(r.get(10)?)).unwrap_or(Priority::None),
                 labels: Vec::new(),
+                fields: Vec::new(),
                 parent: None,
                 description: r.get(3)?,
                 description_revision: opt_id_at(r, 36)?.map(|id| id.to_string()),
@@ -323,6 +324,7 @@ pub(crate) fn load(
         task.parent = Some(lookup::task_key(tx, project, number)?);
     }
     task.labels = task_labels(tx, id)?;
+    task.fields = super::custom_field::task_values(tx, id)?;
     task.progress_percent = super::rollup::progress(tx, id)?;
     if task.subtask_count.total > 0 {
         task.totals = super::rollup::totals(tx, id)?;
@@ -953,6 +955,7 @@ fn create(w: &mut WriteCtx<'_>, input: TaskCreateInput) -> Result<TaskChange, Fa
             target,
         },
     )?;
+    super::custom_field::apply_input(w, id, &project, &input.fields, true)?;
     changed(w, id, Vec::new())
 }
 
@@ -1292,6 +1295,9 @@ pub(crate) fn update(w: &mut WriteCtx<'_>, input: TaskUpdateInput) -> Result<Tas
     if clears(TaskField::Progress) {
         fields::set(w, TASK, id, pid, "progress", None)?;
     }
+    if !input.fields.is_empty() {
+        super::custom_field::apply_input(w, id, &project, &input.fields, false)?;
+    }
     if text_changed {
         refresh_text(w, id)?;
     }
@@ -1512,6 +1518,7 @@ fn move_to_project(
             }
         }
         set_labels(w, id, to.id, &kept)?;
+        warnings.extend(super::custom_field::follow_move(w, id, to)?);
         if id == task.id && task.parent.is_some() {
             set_parent(w, id, to.id, None)?;
         }

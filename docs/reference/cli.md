@@ -27,6 +27,10 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel description history` | `description.history` | List the revisions of a task's or project's description, newest first, conflict copies included. |
 | `glyphkeel description show <revision>` | `description.revision` | One description revision with its text, and the differences from another revision on request. |
 | `glyphkeel export` | `transfer.export` | Export projects, or the whole workspace, to an archive of JSON and Markdown files with the attachments. |
+| `glyphkeel field add` | `field.create` | Add a custom field to a project, or to every project: text, Markdown, whole number, decimal, date, yes/no, select, multi-select or link; with options, a default, the task types it shows for, and whether it is required. |
+| `glyphkeel field delete` | `field.delete` | Delete a custom field with its values on every task; saved queries lose their conditions on it. Can't be undone. |
+| `glyphkeel field edit` | `field.update` | Rename a custom field, rename, add, reorder or remove its options, change its default, task types or whether it is required, or move it; saved queries keep up with renames. |
+| `glyphkeel field list` | `field.list` | The custom fields of a project (its own and those of every project) or of the whole workspace: name, query name, kind, options, default, task types, required, and how many tasks have a value. |
 | `glyphkeel file attach` | `file.attach` | Attach a local file, or Base64 data with a name, to a task, a comment or a wiki page. |
 | `glyphkeel file cat <attachment>` | `file.read` | An attached file's content: text for text files, Base64 for images, otherwise only its details. |
 | `glyphkeel file delete <attachment>` | `file.delete` | Move an attached file to the trash. |

@@ -9,6 +9,7 @@
 //! current time in where a rule needs it.
 
 pub mod actor;
+pub mod custom_field;
 pub mod day;
 pub mod duration;
 pub mod file;
@@ -28,6 +29,7 @@ pub mod wiki;
 pub mod worklog;
 
 pub use actor::{ActorKind, Via};
+pub use custom_field::{FieldError, FieldKind, Stored};
 pub use day::{Day, DayError, Weekday, check_date_range};
 pub use duration::{DurationError, DurationUnits, format_duration, format_minutes, parse_minutes};
 pub use file::{

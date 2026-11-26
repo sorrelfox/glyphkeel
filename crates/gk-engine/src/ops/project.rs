@@ -752,6 +752,9 @@ fn create(w: &mut WriteCtx<'_>, input: ProjectCreateInput) -> Result<ProjectChan
         ],
     )?;
     copy_configuration(w, id, parent_id)?;
+    if let Some(parent) = parent_id {
+        super::custom_field::copy_to_subproject(w, parent, id)?;
+    }
     super::description::initial(w, super::description::Owner::Project(id), &description)?;
     w.record_field(
         PROJECT,
@@ -1618,6 +1621,7 @@ fn apply_type(w: &mut WriteCtx<'_>, p: &ProjectRow, c: &TypeChange) -> Result<()
             super::view::rewrite_queries(w, Some(p.id), |q| {
                 gk_query::rename::rename(q, gk_query::NameKind::Type, &item.name, &name)
             })?;
+            super::custom_field::rename_type(w, p.id, &item.name, &name)?;
         }
     }
     if let Some(glyph) = c.glyph {

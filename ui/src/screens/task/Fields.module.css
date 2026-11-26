@@ -1,0 +1,66 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+   Copyright (C) 2026 Glyphkeel contributors */
+
+/* The task panel's custom fields. Names are the person's own and of any
+   length: the name column takes what the longest needs, up to a limit. */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  align-items: center;
+  gap: 4px 16px;
+}
+
+.row {
+  display: contents;
+}
+
+.name {
+  max-inline-size: 16em;
+  color: var(--fg-muted);
+  font-size: var(--fs-small);
+}
+
+.required {
+  margin-inline-start: 2px;
+  color: var(--danger);
+}
+
+.editor {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-inline-size: 0;
+}
+
+.grow {
+  flex: 1;
+  min-inline-size: 0;
+}
+
+.textarea {
+  inline-size: 100%;
+  resize: vertical;
+  font: inherit;
+}
+
+.select {
+  justify-self: start;
+}
+
+.options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-block: 3px;
+}
+
+.option {
+  cursor: pointer;
+}

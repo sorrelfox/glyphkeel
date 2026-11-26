@@ -796,6 +796,144 @@ export type ConflictResolution = {
   text?: string | null;
 };
 
+/** A custom field. */
+export type CustomField = {
+  /** The value new tasks get; left out when there is none. */
+  default?: unknown;
+  /** The field's ID. */
+  id: string;
+  /** What it holds. */
+  kind: CustomFieldKind;
+  /** Its name. */
+  name: string;
+  /** The options of a select or multi-select field, in order. */
+  options?: string[];
+  /** The project it belongs to (its key); left out for a field of every project. */
+  project?: string;
+  /** How queries name it: `cf.story-points`. */
+  query_name: string;
+  /** Whether tasks it is shown for must have a value. */
+  required: boolean;
+  /** Tasks with a value for it (not in the trash). */
+  tasks: number;
+  /** The task types it is shown for, by name; empty: every type. */
+  types?: string[];
+};
+
+/** A custom field changed, with the history group of the change. */
+export type CustomFieldChange = {
+  /** The field after the change; left out when it was deleted. */
+  field?: CustomField;
+  /** The history group, for revert and Undo; left out when nothing changed. */
+  group?: string;
+  /** How many tasks lost a value: of the deleted field, or of options taken off its list. */
+  values_removed?: number;
+  /** The saved views whose queries were rewritten because the field or one of its options was renamed or deleted, by name; left out when none was. */
+  views_rewritten?: string[];
+};
+
+/** A new custom field. */
+export type CustomFieldCreateInput = {
+  /** Place it after this field. */
+  after?: string | null;
+  /** Place it first or last; default: last. */
+  at?: Edge | null;
+  /** Place it before this field. */
+  before?: string | null;
+  /** The value new tasks get unless told otherwise. */
+  default?: unknown;
+  /** What it holds. */
+  kind: CustomFieldKind;
+  /** The name, 1 to 50 characters with at least one letter or digit; unique among the fields the project's tasks have, ignoring case. A field of the same name in another project must hold the same kind. */
+  name: string;
+  /** The options of a select or multi-select field, in order (1 to 200, each 1 to 100 characters, unique ignoring case). */
+  options?: string[];
+  /** The project: its key (current or old) or ID. Left out: a field of every project. A project's sub-projects created later get a copy of its own fields. */
+  project?: string | null;
+  /** Tasks it is shown for must have a value: a new task needs one (or the default), and a value can't be cleared. */
+  required?: boolean;
+  /** Show it only for tasks of these types, by name; default: every type. */
+  types?: string[];
+};
+
+/** A custom field to delete, with its values. */
+export type CustomFieldDeleteInput = {
+  /** The number of tasks you expect to have a value for it; the deletion stops if the number differs. */
+  expected_task_count?: number | null;
+  /** The field: its name or ID. Its values leave every task, and saved queries that use it lose those conditions. */
+  field: string;
+  /** The project whose fields to look in: its key (current or old) or ID; left out: the fields of every project. */
+  project?: string | null;
+};
+
+/** What a custom field holds. */
+export type CustomFieldKind = "text" | "markdown" | "integer" | "decimal" | "date" | "boolean" | "select" | "multi_select" | "url";
+
+/** The custom fields of a project, or of the whole workspace. */
+export type CustomFieldList = {
+  /** The fields in order: those of every project first, then the project's own. */
+  fields: CustomField[];
+};
+
+/** Which custom fields to list. */
+export type CustomFieldListInput = {
+  /** The project: its key (current or old) or ID. Lists the fields its tasks have: its own and those of every project. Left out: every field of the workspace. */
+  project?: string | null;
+};
+
+/** An option of a select field to rename. */
+export type CustomFieldOptionRename = {
+  /** The option's current name (any case). */
+  from: string;
+  /** Its new name. */
+  to: string;
+};
+
+/** A custom field setting that can be cleared. */
+export type CustomFieldSetting = "default" | "types";
+
+/** Changes to a custom field; settings left out keep their value. Its kind can't change. */
+export type CustomFieldUpdateInput = {
+  /** Move it after this field. */
+  after?: string | null;
+  /** Move it first or last. */
+  at?: Edge | null;
+  /** Move it before this field. */
+  before?: string | null;
+  /** Settings to clear. */
+  clear?: CustomFieldSetting[];
+  /** A new default value. */
+  default?: unknown;
+  /** The field: its name or ID. */
+  field: string;
+  /** A new name. Saved queries that use the field are rewritten. */
+  name?: string | null;
+  /** The whole list of options after the renames, in order. Options left out are taken off every task. */
+  options?: string[] | null;
+  /** The project whose fields to look in: its key (current or old) or ID; left out: the fields of every project. */
+  project?: string | null;
+  /** Options to rename; tasks and saved queries keep up. */
+  rename_options?: CustomFieldOptionRename[];
+  /** Whether tasks must have a value. */
+  required?: boolean | null;
+  /** Show it only for tasks of these types, by name. */
+  types?: string[] | null;
+};
+
+/** One custom field's value on a task. */
+export type CustomFieldValue = {
+  /** The field's ID. */
+  id: string;
+  /** What it holds. */
+  kind: CustomFieldKind;
+  /** Its name. */
+  name: string;
+  /** How queries name it: `cf.story-points`. */
+  query_name: string;
+  /** The value: a string, a number, `true`/`false`, or a list of options for a multi-select field. */
+  value: unknown;
+};
+
 /** A range of days, both included. */
 export type DayRange = {
   /** The last day (`YYYY-MM-DD`). */
@@ -1352,6 +1490,8 @@ export type ListedTask = {
   due_date?: string;
   /** The estimate in minutes. */
   estimate_minutes?: number;
+  /** Its custom field values by query name (`story-points`): a string, a number, `true`/`false`, or a list of options; fields without a value are left out. */
+  fields?: Record<string, unknown>;
   /** How many files are attached to it and to its comments. */
   file_count: number;
   /** The task's ID. */
@@ -2474,6 +2614,8 @@ export type Task = {
   estimate?: string;
   /** The estimate in minutes. */
   estimate_minutes?: number;
+  /** Its custom field values, in the fields' order; fields without a value are left out. */
+  fields?: CustomFieldValue[];
   /** How many files are attached to it and to its comments. */
   file_count: number;
   /** The files attached to it, when asked for with `include`. */
@@ -2576,6 +2718,8 @@ export type TaskCreateInput = {
   due_date?: string | null;
   /** The estimate, as a duration (`1d 4h`, `90m`, `1.5h`). */
   estimate?: string | null;
+  /** Custom field values, by field name, query name or ID (see `field.list`): a string, a number, `true`/`false`, or a list of options for a multi-select field. Fields with a default get it unless given here; a required field needs a value. */
+  fields?: Record<string, unknown>;
   /** Labels, by name or ID. */
   labels?: string[];
   /** The parent task, for a subtask (same project, at most 5 levels). */
@@ -2772,6 +2916,8 @@ export type TaskUpdateInput = {
   estimate?: string | null;
   /** Refuse the change unless the task still has this version. */
   expected_version?: number | null;
+  /** Custom field values to set, by field name, query name or ID: a string, a number, `true`/`false`, a list of options for a multi-select field, or `null` to clear the value. */
+  fields?: Record<string, unknown>;
   /** The task: its key or ID. */
   key: string;
   /** Replace the labels with these. */
@@ -3799,6 +3945,10 @@ export interface OpMap {
   "label.create": { input: LabelCreateInput; output: ProjectChange; safety: "write"; kind: "command" };
   "label.update": { input: LabelUpdateInput; output: ProjectChange; safety: "write"; kind: "command" };
   "label.delete": { input: LabelDeleteInput; output: ProjectChange; safety: "permanent"; kind: "command" };
+  "field.list": { input: CustomFieldListInput; output: CustomFieldList; safety: "read"; kind: "query" };
+  "field.create": { input: CustomFieldCreateInput; output: CustomFieldChange; safety: "write"; kind: "command" };
+  "field.update": { input: CustomFieldUpdateInput; output: CustomFieldChange; safety: "write"; kind: "command" };
+  "field.delete": { input: CustomFieldDeleteInput; output: CustomFieldChange; safety: "permanent"; kind: "command" };
   "task.search": { input: TaskSearchInput; output: TaskSearchResult; safety: "read"; kind: "query" };
   "task.get": { input: TaskGetInput; output: TaskList; safety: "read"; kind: "query" };
   "task.create": { input: TaskCreateInput; output: TaskChange; safety: "write"; kind: "command" };
@@ -3920,6 +4070,10 @@ export const OP_SAFETY = {
   "label.create": "write",
   "label.update": "write",
   "label.delete": "permanent",
+  "field.list": "read",
+  "field.create": "write",
+  "field.update": "write",
+  "field.delete": "permanent",
   "task.search": "read",
   "task.get": "read",
   "task.create": "write",
@@ -4073,6 +4227,16 @@ export function makeOps(call: Call) {
       save: (input: OpMap["draft.save"]["input"]) => call("draft.save", input),
       /** Forget the person's unsaved text of an editor. (app) */
       discard: (input: OpMap["draft.discard"]["input"]) => call("draft.discard", input),
+    },
+    field: {
+      /** The custom fields of a project (its own and those of every project) or of the whole workspace: name, query name, kind, options, default, task types, required, and how many tasks have a value. (read) */
+      list: (input: OpMap["field.list"]["input"] = {}) => call("field.list", input),
+      /** Add a custom field to a project, or to every project: text, Markdown, whole number, decimal, date, yes/no, select, multi-select or link; with options, a default, the task types it shows for, and whether it is required. (write) */
+      create: (input: OpMap["field.create"]["input"]) => call("field.create", input),
+      /** Rename a custom field, rename, add, reorder or remove its options, change its default, task types or whether it is required, or move it; saved queries keep up with renames. (write) */
+      update: (input: OpMap["field.update"]["input"]) => call("field.update", input),
+      /** Delete a custom field with its values on every task; saved queries lose their conditions on it. Can't be undone. (permanent) */
+      delete: (input: OpMap["field.delete"]["input"]) => call("field.delete", input),
     },
     file: {
       /** An attached file's name, type, size and owner. (read) */

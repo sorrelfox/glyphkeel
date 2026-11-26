@@ -13,10 +13,11 @@ import { PriorityGlyph, TypeGlyph, usePriorityName } from "../../components/Glyp
 import { PRIORITIES, type Priority } from "../../data/catalog";
 import { useProject } from "../../data/board";
 import { useDurations } from "../../data/time";
-import { type ListedTask } from "../../generated/ops";
+import { useFieldText } from "../../data/fields";
+import { type CustomField, type ListedTask } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { dueState } from "../board/model";
-import { type ColumnId } from "./model";
+import { isCustomColumn, type ColumnId } from "./model";
 import styles from "./List.module.css";
 
 /** What a cell can change, and which cell is being edited. */
@@ -327,8 +328,33 @@ function DueCell({ task }: { task: ListedTask }) {
   );
 }
 
+/** A custom field's value in its cell: numbers and dates in the person's locale, links as written. */
+function FieldCell({ column, task, field }: { column: ColumnId; task: ListedTask; field: CustomField | undefined }) {
+  const text = useFieldText();
+  const value = task.fields?.[column.slice(3)];
+  if (value === undefined || field === undefined) {
+    return <Empty />;
+  }
+  if (field.kind === "boolean") {
+    return value === true ? <Check className="ic s" aria-label={text("boolean", true)} /> : <span className="muted">{text("boolean", false)}</span>;
+  }
+  const shown = text(field.kind, value);
+  return (
+    <span className={classes("truncate", (field.kind === "integer" || field.kind === "decimal") && "num")} title={shown}>
+      {shown}
+    </span>
+  );
+}
+
 /** The content of one cell. */
-export function Cell({ column, task }: { column: ColumnId; task: ListedTask }) {
+export function Cell({ column, task, field }: { column: ColumnId; task: ListedTask; field?: CustomField | undefined }) {
+  if (isCustomColumn(column)) {
+    return <FieldCell column={column} task={task} field={field} />;
+  }
+  return <BuiltinCell column={column} task={task} />;
+}
+
+function BuiltinCell({ column, task }: { column: Exclude<ColumnId, `cf.${string}`>; task: ListedTask }) {
   const { format } = useDurations();
   const { locale } = useLocale();
   const day = useDayFormat();
