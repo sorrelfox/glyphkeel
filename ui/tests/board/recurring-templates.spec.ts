@@ -55,10 +55,13 @@ test("make a task repeat, close it for the next one, skip it and stop it", async
   await expect.poll(textOf(note)).toContain("this occurrence only");
   await expect(panel.getByRole("button", { name: named("Repeats: Every week on Monday and Thursday") })).toBeVisible();
 
-  // Closing it makes the next one.
+  // Closing it makes the next one. The key is read first: once it is closed,
+  // the next occurrence carries the same title.
+  const first = (await card.getAttribute("data-card")) ?? "";
+  expect(first).toMatch(/^PER-\d+$/);
   await panel.getByRole("button", { name: /^Status:/ }).click();
   await page.getByRole("menuitem", { name: "Done" }).click();
-  const first = (await card.getAttribute("data-card")) ?? "";
+  await expect(page.locator(`section[data-lane] [data-card="${first}"]`)).toHaveClass(/\bdone\b/);
   const next = page.locator("section[data-lane] [data-card]", { hasText: "Water the plants" }).and(page.locator(`:not([data-card="${first}"])`));
   await expect(next).toBeVisible();
   await next.dblclick();

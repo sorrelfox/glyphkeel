@@ -233,6 +233,12 @@ const BUILT_IN: readonly (FakeTemplate & { key: string })[] = [
 
 const builtInKey = (template: FakeTemplate) => BUILT_IN.find((each) => each.id === template.id)?.key;
 
+/** The `built_in` key of a template that comes with Glyphkeel, left out for the workspace's own. */
+function builtInField(template: FakeTemplate): { built_in?: string } {
+  const key = builtInKey(template);
+  return key === undefined ? {} : { built_in: key };
+}
+
 function refuseBuiltIn(host: FakeHost, template: FakeTemplate): void {
   if (builtInKey(template) !== undefined) {
     host.fail("invalid", `The template "${template.name}" comes with Glyphkeel and can't be changed or deleted.`, {
@@ -261,7 +267,7 @@ function output(host: FakeHost, template: FakeTemplate): Template {
     created_by: { kind: "user", name: builtInKey(template) === undefined ? "You" : "Glyphkeel" },
     created_at: template.createdAt,
     updated_at: template.updatedAt,
-    ...(builtInKey(template) === undefined ? {} : { built_in: builtInKey(template) }),
+    ...builtInField(template),
   };
 }
 
@@ -276,7 +282,7 @@ function summary(host: FakeHost, template: FakeTemplate): TemplateSummary {
     ...(template.description === "" ? {} : { description: template.description }),
     ...(template.task ? { title: template.task.title } : {}),
     items,
-    ...(builtInKey(template) === undefined ? {} : { built_in: builtInKey(template) }),
+    ...builtInField(template),
   };
 }
 

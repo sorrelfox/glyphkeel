@@ -114,7 +114,7 @@ function TaskContents({
   return (
     <>
       <Row label={t("template-task-title")}>{task.title}</Row>
-      {task.type !== undefined && (
+      {task.type !== undefined && task.type !== null && (
         <Row label={t("template-task-type")}>{task.type}</Row>
       )}
       {task.priority !== undefined && task.priority !== "none" && (
@@ -127,22 +127,22 @@ function TaskContents({
           {list.format(task.labels ?? [])}
         </Row>
       )}
-      {task.estimate_minutes !== undefined && (
+      {task.estimate_minutes !== undefined && task.estimate_minutes !== null && (
         <Row label={t("template-task-estimate")}>
           {duration(task.estimate_minutes)}
         </Row>
       )}
-      {task.start_in_days !== undefined && (
+      {task.start_in_days !== undefined && task.start_in_days !== null && (
         <Row label={t("template-task-start")}>
           {t("template-task-in-days", { days: task.start_in_days })}
         </Row>
       )}
-      {task.due_in_days !== undefined && (
+      {task.due_in_days !== undefined && task.due_in_days !== null && (
         <Row label={t("template-task-due")}>
           {t("template-task-in-days", { days: task.due_in_days })}
         </Row>
       )}
-      {task.fix_version !== undefined && (
+      {task.fix_version !== undefined && task.fix_version !== null && (
         <Row label={t("template-task-version")}>
           <span data-template-version>{task.fix_version}</span>
         </Row>
@@ -191,7 +191,7 @@ function SetupContents({ setup }: { setup: ProjectBlueprint }) {
                     aria-hidden="true"
                   />{" "}
                   {status.name}
-                  {status.wip_limit !== undefined && (
+                  {status.wip_limit !== undefined && status.wip_limit !== null && (
                     <span className="meta">
                       {" "}
                       {t("template-setup-wip", { limit: status.wip_limit })}

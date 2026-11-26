@@ -54,19 +54,20 @@ describe("the built-in Software project template", () => {
 describe("project templates", () => {
   it("keep the project's own custom fields and the rules that name them", () => {
     const ws = workspace();
-    const field = call<CustomFieldChange>(ws, "field.create", { project: "RT", name: "Area", kind: "select", options: ["UI", "API"], required: true });
-    ws.call("rules.update", { project: "RT", statuses: [{ status: "Done", rules: { required: [`cf:${field.field.id}`], stop_timer: true } }], agents: { read_only: ["title"] } });
+    const { field } = call<CustomFieldChange>(ws, "field.create", { project: "RT", name: "Area", kind: "select", options: ["UI", "API"], required: true });
+    if (field === undefined) throw new Error("field.create returned no field");
+    ws.call("rules.update", { project: "RT", statuses: [{ status: "Done", rules: { required: [`cf:${field.id}`], stop_timer: true } }], agents: { read_only: ["title"] } });
     const saved = call<TemplateChange>(ws, "template.create", { name: "Team setup", from_project: "RT" });
     const setup = saved.template.setup as { fields: { id: string; name: string; required?: boolean }[]; statuses: { name: string; rules?: { required?: string[] } }[]; agent_rules?: { read_only: string[] } };
-    expect(setup.fields).toMatchObject([{ id: field.field.id, name: "Area", required: true }]);
-    expect(setup.statuses.find((status) => status.name === "Done")?.rules?.required).toEqual([`cf:${field.field.id}`]);
+    expect(setup.fields).toMatchObject([{ id: field.id, name: "Area", required: true }]);
+    expect(setup.statuses.find((status) => status.name === "Done")?.rules?.required).toEqual([`cf:${field.id}`]);
     expect(setup.agent_rules?.read_only).toEqual(["title"]);
 
     const used = call<TemplateApplied>(ws, "template.apply", { template: "Team setup", name: "Copy", key: "CP" });
     const fields = call<CustomFieldList>(ws, "field.list", { project: "CP" }).fields.filter((each) => each.project === "CP");
     expect(fields.map((each) => each.name)).toEqual(["Area"]);
     const copy = fields[0]?.id ?? "";
-    expect(copy).not.toBe(field.field.id);
+    expect(copy).not.toBe(field.id);
     const done = used.project?.statuses.find((status) => status.name === "Done");
     expect(done?.rules).toMatchObject({ required: [`cf:${copy}`], stop_timer: true });
   });
