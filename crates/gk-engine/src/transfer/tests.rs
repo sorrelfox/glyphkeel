@@ -379,6 +379,7 @@ fn unsafe_paths_are_refused() {
         "../escape.txt",
         "/etc/escape.txt",
         "projects/../../escape.txt",
+        "projects\\..\\..\\escape.txt",
     ]
     .into_iter()
     .enumerate()
@@ -402,11 +403,16 @@ fn unsafe_paths_are_refused() {
         patch(&zip, harmless.as_bytes(), name.as_bytes());
         refused(&s, &zip, "transfer-bad-path");
     }
-    // A backslash in a folder archive's file name.
-    let folder = variant(&s, "backslash", |root| {
-        fs::write(root.join("a\\b.txt"), b"evil").unwrap();
-    });
-    refused(&s, &folder, "transfer-bad-path");
+    // A backslash in a folder archive's file name. Windows reads it as a
+    // folder separator, so such a file can only be made elsewhere; the zip
+    // case above covers the backslash there.
+    #[cfg(unix)]
+    {
+        let folder = variant(&s, "backslash", |root| {
+            fs::write(root.join("a\\b.txt"), b"evil").unwrap();
+        });
+        refused(&s, &folder, "transfer-bad-path");
+    }
     // A path in the manifest that leaves the archive.
     let folder = variant(&s, "manifest-path", |root| {
         let mut m = manifest(root);

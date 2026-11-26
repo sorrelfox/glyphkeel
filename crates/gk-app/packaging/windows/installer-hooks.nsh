@@ -267,6 +267,10 @@ FunctionEnd
   ${If} $UpdateMode <> 1
     Call un.GkRemoveFromPath
     Call un.GkUnregisterLinks
+    ; The bundler removes the app's value in the Run key; the app also
+    ; leaves one here when the person switched autostart off in Task
+    ; Manager.
+    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run" "${PRODUCTNAME}"
   ${EndIf}
 !macroend
 

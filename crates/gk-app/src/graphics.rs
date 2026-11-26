@@ -242,10 +242,6 @@ pub(crate) fn restart_args(
 /// (`memory_env::start_again`). Call when the app exits, after the single
 /// instance has been let go, or the new run would hand itself to this one.
 #[cfg(not(target_os = "linux"))]
-#[expect(
-    dead_code,
-    reason = "called when the app exits, once main wires the restart in"
-)]
 pub(crate) fn start_again() -> std::io::Result<()> {
     let exe = std::env::current_exe()?;
     std::process::Command::new(exe)
