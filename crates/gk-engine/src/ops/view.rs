@@ -418,6 +418,69 @@ pub(crate) fn rewrite_queries(
     Ok(changed)
 }
 
+/// Like [`rewrite_queries`], for a change that also touches the views'
+/// sort keys and columns: `query` rewrites the query and the sort keys
+/// (given as `sort:` text); `column` renames a column (`Some(Some(new))`)
+/// or takes it out (`Some(None)`). Returns how many views changed.
+pub(crate) fn rewrite_views(
+    w: &mut WriteCtx<'_>,
+    project: Option<Id>,
+    query: &dyn Fn(&str) -> Option<String>,
+    column: &dyn Fn(&str) -> Option<Option<String>>,
+) -> Result<usize, Failure> {
+    let views: Vec<(Id, Record)> = {
+        let (sql, arg) = match project {
+            Some(p) => (
+                format!(
+                    "SELECT {COLUMNS} FROM saved_views WHERE project_id = ?1 ORDER BY rank, id"
+                ),
+                Some(b(p)),
+            ),
+            None => (
+                format!("SELECT {COLUMNS} FROM saved_views WHERE ?1 IS NULL ORDER BY rank, id"),
+                None,
+            ),
+        };
+        let mut stmt = w.tx().prepare_cached(&sql)?;
+        stmt.query_map([arg], read_row)?
+            .collect::<Result<Vec<_>, _>>()?
+    };
+    let mut changed = 0;
+    for (id, mut record) in views {
+        let mut touched = false;
+        if let Some(q) = query(&record.query) {
+            record.query = q;
+            touched = true;
+        }
+        if let Some(sort) = record.sort.clone()
+            && let Some(new) = query(&format!("sort:{sort}"))
+        {
+            let new = new.trim();
+            let keys = new.strip_prefix("sort:").unwrap_or(new).trim();
+            record.sort = (!keys.is_empty()).then(|| keys.to_owned());
+            touched = true;
+        }
+        let mut columns = Vec::with_capacity(record.columns.len());
+        for c in &record.columns {
+            match column(c) {
+                Some(Some(new)) => {
+                    columns.push(new);
+                    touched = true;
+                }
+                Some(None) => touched = true,
+                None => columns.push(c.clone()),
+            }
+        }
+        record.columns = columns;
+        if touched {
+            record.updated_at = w.now();
+            set(w, id, Some(&record))?;
+            changed += 1;
+        }
+    }
+    Ok(changed)
+}
+
 /// The names of the saved views `ids` that still exist, in that order.
 pub(crate) fn names(tx: &Transaction<'_>, ids: &[Id]) -> Result<Vec<String>, Failure> {
     let mut seen = Vec::new();

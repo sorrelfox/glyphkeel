@@ -39,6 +39,7 @@ import { dueState } from "../board/model";
 import { ActivityTabs, Composer, useMomentFormat } from "./Activity";
 import { BacklinksSection } from "./Backlinks";
 import { DescriptionSection, type DescriptionView } from "./Description";
+import { FieldsSection } from "./FieldsSection";
 import { FilesSection, useFileDrop } from "./Files";
 import { LinksSection, SubtasksSection } from "./Sections";
 import { QuickLog, ReminderValue, TimerButton } from "./Time";
@@ -375,6 +376,8 @@ function Loaded({
             <ReminderValue task={task} readOnly={readOnly} />
           </Prop>
         </div>
+
+        <FieldsSection task={task} readOnly={readOnly} />
 
         <DescriptionSection task={task} readOnly={readOnly} view={descriptionView} onView={setDescriptionView} onOpenTask={onOpenTask} />
 

@@ -40,6 +40,7 @@ fn run_all(src: &str) {
                 CheckEnv {
                     calendar: &cal,
                     units: DurationUnits::default(),
+                    custom: &[],
                 },
             ) {
                 let _ = checked.names();

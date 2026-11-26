@@ -371,7 +371,8 @@ function shown(t: Translate, names: Names, field: string, value: unknown): strin
     case "parent":
       return names.keys.get(plainText(value)) ?? plainText(value);
     default:
-      return plainText(value);
+      // A custom field's options, listed.
+      return Array.isArray(value) ? new Intl.ListFormat(names.locale, { style: "long", type: "conjunction" }).format(value.map(plainText)) : plainText(value);
   }
 }
 
@@ -450,7 +451,8 @@ export function describeEntry(t: Translate, names: Names, entry: ActivityEntry):
         lines.push(t("history-subtask-moved"));
       }
     } else {
-      const name = fieldLabel(t, field);
+      // A custom field's value is recorded as `cf:<field ID>`; it is named by the field, as the person wrote it.
+      const name = field.startsWith("cf:") ? names.task.fields?.find((value) => `cf:${value.id}` === field)?.name : fieldLabel(t, field);
       if (name === undefined) {
         continue;
       }

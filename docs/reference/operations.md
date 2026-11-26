@@ -39,6 +39,10 @@ The safety class decides who may run an operation:
 | `label.create` | write | app, command line, MCP | `update_project` | `glyphkeel label add` |
 | `label.update` | write | app, command line, MCP | `update_project` | `glyphkeel label edit` |
 | `label.delete` | permanent | app, command line, MCP | `update_project` | `glyphkeel label delete` |
+| `field.list` | read | app, command line, MCP | `list_custom_fields` | `glyphkeel field list` |
+| `field.create` | write | app, command line, MCP | `create_custom_field` | `glyphkeel field add` |
+| `field.update` | write | app, command line, MCP | `update_custom_field` | `glyphkeel field edit` |
+| `field.delete` | permanent | app, command line, MCP | `delete_custom_field` | `glyphkeel field delete` |
 | `task.search` | read | app, command line, MCP | `search_tasks` | `glyphkeel task list` |
 | `task.get` | read | app, command line, MCP | `get_task` | `glyphkeel task show <keys>` |
 | `task.create` | write | app, command line, MCP | `create_task` | `glyphkeel task create` |
@@ -274,6 +278,30 @@ Input: `LabelUpdateInput`. Output: `ProjectChange`. Schemas: [catalog.schema.jso
 Delete a label and take it off every task. Can't be undone.
 
 Input: `LabelDeleteInput`. Output: `ProjectChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `field.list`
+
+The custom fields of a project (its own and those of every project) or of the whole workspace: name, query name, kind, options, default, task types, required, and how many tasks have a value.
+
+Input: `CustomFieldListInput`. Output: `CustomFieldList`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `field.create`
+
+Add a custom field to a project, or to every project: text, Markdown, whole number, decimal, date, yes/no, select, multi-select or link; with options, a default, the task types it shows for, and whether it is required.
+
+Input: `CustomFieldCreateInput`. Output: `CustomFieldChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `field.update`
+
+Rename a custom field, rename, add, reorder or remove its options, change its default, task types or whether it is required, or move it; saved queries keep up with renames.
+
+Input: `CustomFieldUpdateInput`. Output: `CustomFieldChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `field.delete`
+
+Delete a custom field with its values on every task; saved queries lose their conditions on it. Can't be undone.
+
+Input: `CustomFieldDeleteInput`. Output: `CustomFieldChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `task.search`
 

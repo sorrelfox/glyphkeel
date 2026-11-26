@@ -4,30 +4,36 @@
 import { columnOrderingFeature, columnVisibilityFeature, createColumnHelper, tableFeatures, useTable } from "@tanstack/react-table";
 import { type VirtualItem } from "@tanstack/react-virtual";
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Plus } from "lucide-react";
-import { useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent, type RefObject } from "react";
+import { useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent, type RefObject } from "react";
 
 import { classes } from "../../classes";
 import { type ListRows } from "../../data/list";
 import { useDurations } from "../../data/time";
-import { type ListedTask, type ListGroup, type ListGrouping } from "../../generated/ops";
+import { NUMBER_KINDS } from "../../data/fields";
+import { type CustomField, type ListedTask, type ListGroup, type ListGrouping } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { Cell } from "./cells";
 import { GroupName, useGroupText } from "./GroupName";
-import { columnWidth, COLUMNS, gridTemplate, MAX_WIDTH, MIN_WIDTH, NUMERIC_COLUMNS, SORT_KEY, sortState, type ColumnId, type ListLines, type Selection } from "./model";
+import { columnWidth, COLUMNS, gridTemplate, isCustomColumn, MAX_WIDTH, MIN_WIDTH, NUMERIC_COLUMNS, sortKeyOf, sortState, type ColumnId, type ListLines, type Selection } from "./model";
 import styles from "./List.module.css";
 
 const features = tableFeatures({ columnVisibilityFeature, columnOrderingFeature });
 const helper = createColumnHelper<typeof features, ListedTask>();
 
-/** Every column, as the table knows them; the list chooses which show, in which order. */
-const COLUMN_DEFS = helper.columns(
-  COLUMNS.map((id) =>
-    helper.display({
-      id,
-      cell: (info) => <Cell column={id} task={info.row.original} />,
-    }),
-  ),
-);
+/**
+ * Every column, as the table knows them: the built-in ones and those of the
+ * custom fields shown; the list chooses which show, in which order.
+ */
+function columnDefs(custom: readonly ColumnId[], fields: readonly CustomField[]) {
+  return helper.columns(
+    [...COLUMNS, ...custom].map((id) =>
+      helper.display({
+        id,
+        cell: (info) => <Cell column={id} task={info.row.original} field={fields.find((field) => field.query_name === id)} />,
+      }),
+    ),
+  );
+}
 
 /** How far the keyboard moves a column edge, in pixels. */
 const RESIZE_STEP = 16;
@@ -41,6 +47,8 @@ const CHECK_WIDTH = 28;
 interface ListTableProps {
   rows: ListRows;
   columns: readonly ColumnId[];
+  /** The custom fields of the tasks listed, for their columns' names and kinds. */
+  fields?: readonly CustomField[];
   /** The person's column widths, in pixels. */
   widths: Readonly<Record<string, number>>;
   /** A column edge was dragged (or moved with the keyboard) to a new width. */
@@ -83,7 +91,7 @@ interface ListTableProps {
  * totals row over every matching task. Rows not loaded yet show as empty
  * placeholders.
  */
-export function ListTable({ rows, columns, widths, onResize, onMove, lines, grouping, isCollapsed, onToggleGroup, onAddToGroup, sort, onSort, selection, onRowClick, onToggleAll, allSelected, onOpen, focused, onFocusRow, onKey, items, totalSize, scrollRef }: ListTableProps) {
+export function ListTable({ rows, columns, fields = [], widths, onResize, onMove, lines, grouping, isCollapsed, onToggleGroup, onAddToGroup, sort, onSort, selection, onRowClick, onToggleAll, allSelected, onOpen, focused, onFocusRow, onKey, items, totalSize, scrollRef }: ListTableProps) {
   const t = useT();
   const { format } = useDurations();
   // A column edge being dragged shows its width before it is kept.
@@ -99,14 +107,20 @@ export function ListTable({ rows, columns, widths, onResize, onMove, lines, grou
       return line?.kind === "row" ? rows.rowAt(line.row) : undefined;
     })
     .filter((task): task is ListedTask => task !== undefined);
+  const custom = columns.filter(isCustomColumn);
+  const customKey = custom.join(" ");
+  // The definitions change only when other custom columns show.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const defs = useMemo(() => columnDefs(custom, fields), [customKey, fields]);
+  const numeric = (column: ColumnId) => NUMERIC_COLUMNS.has(column) || fields.some((field) => field.query_name === column && NUMBER_KINDS.has(field.kind));
   const table = useTable({
     features,
-    columns: COLUMN_DEFS,
+    columns: defs,
     data: visible,
     getRowId: (task) => task.key,
     state: {
       columnOrder: [...columns],
-      columnVisibility: Object.fromEntries(COLUMNS.map((id) => [id, columns.includes(id)])),
+      columnVisibility: Object.fromEntries([...COLUMNS, ...custom].map((id) => [id, columns.includes(id)])),
     },
   });
   const rowById = new Map(table.getRowModel().rows.map((row) => [row.id, row]));
@@ -195,21 +209,22 @@ export function ListTable({ rows, columns, widths, onResize, onMove, lines, grou
           </span>
           {columns.map((column) => {
             const state = sortState(sort, column);
-            const label = t(`list-column-${column}`);
+            // A custom field's column is named by the field, as the person wrote it.
+            const label = isCustomColumn(column) ? (fields.find((field) => field.query_name === column)?.name ?? column) : t(`list-column-${column}`);
             const width = columnWidth(column, shownWidths);
             return (
               <span
                 key={column}
                 role="columnheader"
                 aria-sort={state?.position === 1 ? state.direction : "none"}
-                className={classes("th", styles.th, NUMERIC_COLUMNS.has(column) && styles.end, state !== null && "accent", reorder.dragging === column && styles.dragging, reorder.target === column && styles.dropBefore, reorder.target === "end" && column === columns.at(-1) && styles.dropAfter)}
+                className={classes("th", styles.th, numeric(column) && styles.end, state !== null && "accent", reorder.dragging === column && styles.dragging, reorder.target === column && styles.dropBefore, reorder.target === "end" && column === columns.at(-1) && styles.dropAfter)}
                 data-column={column}
                 onPointerDown={(event) => {
                   reorder.start(event, column);
                 }}
                 onClickCapture={reorder.swallowClick}
               >
-                {SORT_KEY[column] === undefined ? (
+                {sortKeyOf(column) === undefined ? (
                   <span
                     className={classes("truncate", styles.headLabel)}
                     tabIndex={0}
@@ -367,7 +382,7 @@ export function ListTable({ rows, columns, widths, onResize, onMove, lines, grou
                   />
                 </span>
                 {row?.getVisibleCells().map((cell) => (
-                  <span key={cell.id} role="gridcell" className={classes(styles.cell, NUMERIC_COLUMNS.has(cell.column.id as ColumnId) && styles.end)}>
+                  <span key={cell.id} role="gridcell" className={classes(styles.cell, numeric(cell.column.id as ColumnId) && styles.end)}>
                     <table.FlexRender cell={cell} />
                   </span>
                 ))}
@@ -379,7 +394,7 @@ export function ListTable({ rows, columns, widths, onResize, onMove, lines, grou
           <div className={classes("tr", styles.totals)} role="row" aria-rowindex={lines.count + 2} style={template} data-testid="list-totals">
             <span />
             {columns.map((column) => (
-              <span key={column} role="gridcell" className={classes(styles.cell, styles.totalCell, NUMERIC_COLUMNS.has(column) && styles.end)}>
+              <span key={column} role="gridcell" className={classes(styles.cell, styles.totalCell, numeric(column) && styles.end)}>
                 {column === "title" && <span className="muted">{t("list-totals", { count: totals.count, open: totals.open })}</span>}
                 {column === "estimate" && <span className="num">{format(totals.estimate_minutes)}</span>}
                 {column === "spent" && <span className="num">{format(totals.spent_minutes)}</span>}

@@ -27,6 +27,7 @@
 //! reading but can't be reverted, since their values may name items of the
 //! workspace they came from.
 
+mod custom_fields;
 mod export;
 mod import;
 mod model;

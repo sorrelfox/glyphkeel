@@ -625,9 +625,15 @@ fn field_and_op(text: &str) -> Option<(usize, Op, usize)> {
     if !first.is_ascii_alphabetic() {
         return None;
     }
+    // After `cf.`, a custom field's name may have any letters and digits.
+    let custom = crate::fields::strip_custom_prefix(text).is_some();
     let len = text
         .char_indices()
-        .find(|(_, c)| !(c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.')))
+        .find(|(_, c)| {
+            !(c.is_ascii_alphanumeric()
+                || matches!(c, '_' | '-' | '.')
+                || (custom && c.is_alphanumeric()))
+        })
         .map_or(text.len(), |(i, _)| i);
     let rest = &text[len..];
     Op::ALL
@@ -790,6 +796,16 @@ mod tests {
                 ("sort", "due"),
             ]
         );
+    }
+
+    #[test]
+    fn custom_field_names_may_have_any_letters_after_the_prefix() {
+        assert_eq!(shape("cf.área:x"), "(pred \"cf.área\" : [\"x\"])");
+        assert_eq!(
+            shape("cf.story-points>=3"),
+            "(pred \"cf.story-points\" >= [\"3\"])"
+        );
+        assert_eq!(shape("área:x"), "(text \"área:x\" false)");
     }
 
     #[test]
