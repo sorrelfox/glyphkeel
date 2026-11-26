@@ -24,6 +24,8 @@ interface ProjectTreeProps {
   onSettings: (key: string) => void;
   /** Opens the export dialog with this project chosen. */
   onExport: (key: string) => void;
+  /** Opens the CSV import into this project. */
+  onImportCsv: (key: string) => void;
   /** Asks before moving this project and everything under it to the trash. */
   onDelete: (key: string) => void;
 }
@@ -44,7 +46,7 @@ export function childrenByParent(projects: readonly ProjectSummary[]): Map<strin
  * remembered. Its count is its own open tasks; closed, the count covers
  * everything under it. Archived projects are listed apart, below.
  */
-export function ProjectTree({ current, onNewProject, onSettings, onExport, onDelete }: ProjectTreeProps) {
+export function ProjectTree({ current, onNewProject, onSettings, onExport, onImportCsv, onDelete }: ProjectTreeProps) {
   const t = useT();
   const navigate = useNavigate();
   const projects = useProjects();
@@ -75,6 +77,7 @@ export function ProjectTree({ current, onNewProject, onSettings, onExport, onDel
           "separator",
           { id: "archive", label: t("project-archive"), run: () => { archive.mutate({ project: project.key }); } },
           { id: "export", label: t("project-export"), run: () => { onExport(project.key); } },
+          { id: "import-csv", label: t("project-import-csv"), run: () => { onImportCsv(project.key); } },
           { id: "delete", label: t("project-delete"), run: () => { onDelete(project.key); } },
         ];
 

@@ -27,6 +27,7 @@
 //! reading but can't be reverted, since their values may name items of the
 //! workspace they came from.
 
+mod csv;
 mod custom_fields;
 mod export;
 mod import;
@@ -36,6 +37,8 @@ mod source;
 mod wiki_export;
 mod wiki_html;
 mod wiki_import;
+
+pub(crate) use csv::register as register_csv;
 
 #[cfg(test)]
 mod tests;

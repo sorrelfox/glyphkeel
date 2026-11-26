@@ -798,6 +798,270 @@ export type ConflictResolution = {
   text?: string | null;
 };
 
+/** One column of the file and where it goes. */
+export type CsvColumn = {
+  /** Its place, from 0. */
+  index: number;
+  /** Its name in the header row. */
+  name: string;
+  /** Its first few values that are not empty, shortened. */
+  samples?: string[];
+  /** Its target; left out when it is ignored. */
+  to?: string;
+  /** The unit of its durations. */
+  unit?: CsvUnit;
+};
+
+/** Where one column goes. */
+export type CsvColumnMapping = {
+  /** The column's name in the header row, ignoring case. Every column with this name goes to the same place; their values are taken together (Jira writes one `Labels` column per label). */
+  column: string;
+  /** The target: `title`, `description`, `status`, `type`, `priority`, `labels`, `start_date`, `due_date`, `estimate`, `spent` (time logged on the import day), `comment`, `key` (the row's key or ID in the other tool, for references), `parent` (a key or ID, of a row of the file or a task here), `blocks`, `blocked_by`, `relates`, `duplicates`, `duplicated_by`, `clones`, `cloned_by`, `relations` (Redmine's "Blocks #12, Related to #13"), `field.<name>` for a custom field, or `ignore`. */
+  to: string;
+  /** For `estimate` and `spent`: the unit of the numbers. */
+  unit?: CsvUnit | null;
+};
+
+/** How many of each. */
+export type CsvCounts = {
+  /** Comments. */
+  comments: number;
+  /** Tasks created, or that would be. */
+  created: number;
+  /** Links between tasks. */
+  links: number;
+  /** Tasks placed under a parent. */
+  parents: number;
+  /** Rows of data, the header left out. */
+  rows: number;
+  /** Rows left out. */
+  skipped: number;
+  /** Time entries. */
+  time_entries: number;
+  /** Rows with warnings. */
+  warnings: number;
+};
+
+/** The order of day, month and year in dates such as `03/04/2025`. */
+export type CsvDateOrder = "dmy" | "mdy" | "ymd";
+
+/** What was detected about the file, or given. */
+export type CsvDetected = {
+  /** Whether it began with a byte order mark. */
+  bom: boolean;
+  /** The order of numeric dates, when the file has any. */
+  date_order?: CsvDateOrder;
+  /** Whether numbers have a decimal comma. */
+  decimal_comma: boolean;
+  /** Its encoding. */
+  encoding: CsvEncoding;
+  /** The quote. */
+  quote: string;
+  /** The separator. */
+  separator: string;
+};
+
+/** A text encoding of a CSV file. */
+export type CsvEncoding = "utf8" | "utf16le" | "utf16be" | "windows1252" | "latin1";
+
+/** How to read the file; what is left out is detected. */
+export type CsvFormat = {
+  /** The order of day, month and year in numeric dates; detected from the dates themselves when left out. */
+  date_order?: CsvDateOrder | null;
+  /** Whether numbers use a comma before their fraction (`2,5`); detected from the separator when left out. */
+  decimal_comma?: boolean | null;
+  /** The text encoding. */
+  encoding?: CsvEncoding | null;
+  /** The character around quoted fields: `"` or `'`. */
+  quote?: string | null;
+  /** The separator between fields: one character, such as `,`, `;`, a tab or `|`. */
+  separator?: string | null;
+};
+
+/** What to import. */
+export type CsvImportInput = {
+  /** Where columns go, over the preset's choice for the same columns. */
+  columns?: CsvColumnMapping[];
+  /** Create the statuses, types and labels the file names that the project lacks (the default); otherwise such a value is a row's error. */
+  create_missing?: boolean | null;
+  /** Only check the file and report what each row would become. */
+  dry_run?: boolean;
+  /** How to read the file, where detection is not wanted. */
+  format?: CsvFormat | null;
+  /** List only the rows with problems, not every row. */
+  only_problems?: boolean;
+  /** The CSV file. Agents give the plain name of a file in the workspace's `exports` folder. */
+  path: string;
+  /** The preset to start from: `jira`, `redmine`, or the name of a saved one. Left out: detected from the header row, else columns are matched by their names. */
+  preset?: string | null;
+  /** The project the tasks go to (key or ID). */
+  project: string;
+  /** Import the other rows when some have errors, leaving those out. Without it, an error in any row stops the whole import. */
+  skip_invalid?: boolean;
+  /** How values become values here, over the preset's. */
+  values?: CsvValueMaps | null;
+};
+
+/** The result of a CSV import, or of checking one. */
+export type CsvImportResult = {
+  /** Whether the import would stop because of rows with errors (dry run without `skip_invalid`). */
+  blocked: boolean;
+  /** Its columns, in order, with where each goes. */
+  columns: CsvColumn[];
+  /** How many of each. */
+  counts: CsvCounts;
+  /** Whether this only checked the file. */
+  dry_run: boolean;
+  /** How the file was read. */
+  format: CsvDetected;
+  /** The history group of the tasks and what they hold, for revert and Undo (which moves the tasks to the trash); left out for a check. */
+  group?: string;
+  /** Labels created. */
+  new_labels?: string[];
+  /** Statuses created (or that would be). */
+  new_statuses?: string[];
+  /** Types created. */
+  new_types?: string[];
+  /** The preset used, if any. */
+  preset?: string;
+  /** The project's key. */
+  project: string;
+  /** The rows, in the file's order; only those with problems when asked. */
+  rows: CsvRow[];
+  /** The history group that created the statuses, types and labels, apart from `group`: the tasks in the trash still use them. Revert it after `group` once the tasks are deleted for good. */
+  setup_group?: string;
+};
+
+/** What became of a row. */
+export type CsvOutcome = "created" | "skipped";
+
+/** A saved or built-in mapping. */
+export type CsvPreset = {
+  /** Whether it is built in and can't be changed. */
+  built_in?: boolean;
+  /** Where columns go. */
+  columns?: CsvPresetColumn[];
+  /** How to read the file. */
+  format?: CsvPresetFormat;
+  /** Its name: `jira` and `redmine` are built in. */
+  name: string;
+  /** How values become values here. */
+  values?: CsvPresetValues;
+};
+
+/** The presets after a change. */
+export type CsvPresetChange = {
+  /** The history group, when something changed. */
+  group?: string;
+  /** The presets now. */
+  items: CsvPreset[];
+};
+
+/** A column of a preset: [`CsvColumnMapping`] as outputs carry it. */
+export type CsvPresetColumn = {
+  /** The column's name, ignoring case. */
+  column: string;
+  /** Its target. */
+  to: string;
+  /** The unit of its durations. */
+  unit?: CsvUnit;
+};
+
+/** A preset to delete. */
+export type CsvPresetDeleteInput = {
+  /** Its name. */
+  name: string;
+};
+
+/** How a preset reads files: [`CsvFormat`] as outputs carry it. */
+export type CsvPresetFormat = {
+  /** The order of numeric dates. */
+  date_order?: CsvDateOrder;
+  /** Whether numbers have a decimal comma. */
+  decimal_comma?: boolean;
+  /** The text encoding. */
+  encoding?: CsvEncoding;
+  /** The quote. */
+  quote?: string;
+  /** The separator. */
+  separator?: string;
+};
+
+/** The presets: built-in ones first, then the workspace's by name. */
+export type CsvPresetList = {
+  /** The presets. */
+  items: CsvPreset[];
+};
+
+/** No input. */
+export type CsvPresetListInput = Record<string, never>;
+
+/** A preset to save; one with the same name is replaced. */
+export type CsvPresetSaveInput = {
+  /** Where columns go. */
+  columns?: CsvColumnMapping[];
+  /** How to read the file. */
+  format?: CsvFormat | null;
+  /** Its name, at most 60 characters; not `jira` or `redmine`. */
+  name: string;
+  /** How values become values here. */
+  values?: CsvValueMaps | null;
+};
+
+/** A preset's value maps: [`CsvValueMaps`] as outputs carry them. */
+export type CsvPresetValues = {
+  /** Priority names. */
+  priorities?: Record<string, Priority>;
+  /** Status names. */
+  statuses?: Record<string, string>;
+  /** Type names. */
+  types?: Record<string, string>;
+};
+
+/** A problem with one row. */
+export type CsvProblem = {
+  /** A stable code, such as `bad_date`. */
+  code: string;
+  /** The column, when one is to blame. */
+  column?: string;
+  /** What is wrong, for people. */
+  message: string;
+  /** How bad it is. */
+  severity: CsvSeverity;
+};
+
+/** One row of the file. */
+export type CsvRow = {
+  /** The new task's key; in a dry run, the key it would get. */
+  key?: string;
+  /** The line of the file it starts on, from 1 (the header is line 1). */
+  line: number;
+  /** What became of it. */
+  outcome: CsvOutcome;
+  /** Its problems. */
+  problems?: CsvProblem[];
+  /** Its key or ID in the other tool. */
+  source_key?: string;
+  /** Its title. */
+  title: string;
+};
+
+/** How bad a row's problem is. */
+export type CsvSeverity = "error" | "warning";
+
+/** The unit of a column of durations. */
+export type CsvUnit = "seconds" | "minutes" | "hours" | "days" | "text";
+
+/** How values of the file become values here. Keys are the file's values; matching ignores case. */
+export type CsvValueMaps = {
+  /** Priority names to priorities; the usual names of Jira and Redmine are known without this. */
+  priorities?: Record<string, Priority>;
+  /** Status names: the file's to this project's. */
+  statuses?: Record<string, string>;
+  /** Type names: the file's (Jira's issue types, Redmine's trackers) to this project's. */
+  types?: Record<string, string>;
+};
+
 /** A custom field. */
 export type CustomField = {
   /** The value new tasks get; left out when there is none. */
@@ -4100,6 +4364,10 @@ export interface OpMap {
   "backup.folder.update": { input: BackupFolderPatch; output: SettingsChange; safety: "app"; kind: "command" };
   "transfer.export": { input: ExportInput; output: ExportResult; safety: "write"; kind: "command" };
   "transfer.import": { input: ImportInput; output: ImportResult; safety: "write"; kind: "command" };
+  "transfer.import_csv": { input: CsvImportInput; output: CsvImportResult; safety: "write"; kind: "command" };
+  "csv_preset.list": { input: CsvPresetListInput; output: CsvPresetList; safety: "read"; kind: "query" };
+  "csv_preset.save": { input: CsvPresetSaveInput; output: CsvPresetChange; safety: "write"; kind: "command" };
+  "csv_preset.delete": { input: CsvPresetDeleteInput; output: CsvPresetChange; safety: "write"; kind: "command" };
 }
 
 /** The name of an operation. */
@@ -4226,6 +4494,10 @@ export const OP_SAFETY = {
   "backup.folder.update": "app",
   "transfer.export": "write",
   "transfer.import": "write",
+  "transfer.import_csv": "write",
+  "csv_preset.list": "read",
+  "csv_preset.save": "write",
+  "csv_preset.delete": "write",
 } as const satisfies { [K in OpId]: OpMap[K]["safety"] };
 
 /** Sends one call; the transport (Tauri IPC or the development bridge) supplies it. */
@@ -4273,6 +4545,14 @@ export function makeOps(call: Call) {
       update: (input: OpMap["comment.update"]["input"]) => call("comment.update", input),
       /** Move a comment to the trash. (trash) */
       delete: (input: OpMap["comment.delete"]["input"]) => call("comment.delete", input),
+    },
+    csv_preset: {
+      /** List the CSV import presets: the built-in ones for Jira and Redmine, and the workspace's own. (read) */
+      list: (input: OpMap["csv_preset.list"]["input"] = {}) => call("csv_preset.list", input),
+      /** Save a CSV import mapping as a preset of the workspace, replacing one with the same name. (write) */
+      save: (input: OpMap["csv_preset.save"]["input"]) => call("csv_preset.save", input),
+      /** Delete a CSV import preset of the workspace. (write) */
+      delete: (input: OpMap["csv_preset.delete"]["input"]) => call("csv_preset.delete", input),
     },
     description: {
       /** List the revisions of a task's or project's description, newest first, conflict copies included. (read) */
@@ -4481,6 +4761,8 @@ export function makeOps(call: Call) {
       export: (input: OpMap["transfer.export"]["input"] = {}) => call("transfer.export", input),
       /** Import an archive as new projects; checks it completely first and never changes existing data. (write) */
       import: (input: OpMap["transfer.import"]["input"]) => call("transfer.import", input),
+      /** Import tasks from a CSV file into a project, with a column mapping or a preset (Jira and Redmine exports are built in); a dry run reports every row's outcome, and the import is one change that Undo takes back. (write) */
+      importCsv: (input: OpMap["transfer.import_csv"]["input"]) => call("transfer.import_csv", input),
     },
     trash: {
       /** The trash: deleted items with what went with them, who deleted them and when they will be purged, newest first. (read) */

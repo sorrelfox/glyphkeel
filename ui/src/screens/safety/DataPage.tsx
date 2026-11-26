@@ -59,6 +59,7 @@ export function DataPage() {
   const actions = useActions();
   const exportAction = actions.find((action) => action.id === "app.export");
   const importAction = actions.find((action) => action.id === "app.import");
+  const csvAction = actions.find((action) => action.id === "app.importCsv");
   return (
     <>
       <Group title={t("backups-title")} lead={<p className={classes("faint", styles.small)}>{t("backups-about")}</p>}>
@@ -92,6 +93,11 @@ export function DataPage() {
         <Row label={t("action-import")} about={t("transfer-import-about")}>
           <Button className="btn" isDisabled={importAction?.disabled ?? true} onPress={() => importAction?.run()}>
             {t("action-import")}
+          </Button>
+        </Row>
+        <Row label={t("csv-title")} about={t("csv-import-about")}>
+          <Button className="btn" isDisabled={csvAction?.disabled ?? true} onPress={() => csvAction?.run()}>
+            {t("csv-title")}
           </Button>
         </Row>
       </Group>

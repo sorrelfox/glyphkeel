@@ -702,6 +702,52 @@ reminder-ack-count = Acknowledge 1 to { $max } reminders at once.
 transfer-store-entry-failed = Can't store { $path }: { $error }.
 transfer-store-files-failed = Can't store the archive's files: { $error }.
 
+## Importing a CSV file
+
+csv-unreadable = The CSV file could not be read: { $detail }
+csv-not-a-file = This is not a file.
+csv-too-large = The CSV file is larger than { $max } MB.
+csv-bad-encoding = The file is not valid { $encoding } text (at byte { $offset }). Choose another encoding.
+csv-binary = The file holds NUL characters: it is not a text file, or its encoding is wrong.
+csv-empty = The file has no header row.
+csv-unterminated = A quoted field that begins on line { $line } never ends.
+csv-field-too-long = A field on line { $line } is longer than { $max } KB.
+csv-too-many-columns = Line { $line } has more than { $max } fields.
+csv-too-many-rows = The file has more than { $max } rows; import it in parts.
+csv-bad-header = A column name is longer than { $max } characters or holds control characters.
+csv-format-one-character = The separator and the quote are each one character, not "{ $text }".
+csv-format-same-character = The separator and the quote must differ.
+csv-unknown-column = The file has no column named "{ $column }".
+csv-unknown-target = "{ $target }" is not a place a column can go.
+csv-unknown-field = { $project } has no custom field "{ $field }".
+csv-rows-have-errors = { $count ->
+        [one] One row has errors; nothing was imported.
+       *[other] { $count } rows have errors; nothing was imported.
+    }
+csv-rows-have-errors-hint = Fix the rows, change the mapping, or import with the rows that have errors left out.
+csv-row-no-title = The row has no title.
+csv-row-control = The column { $column } holds control characters.
+csv-row-extra-fields = { $count ->
+        [one] The row has one field more than the header row; it is left out.
+       *[other] The row has { $count } fields more than the header row; they are left out.
+    }
+csv-row-unknown-priority = "{ $value }" is not a known priority; the task gets none.
+csv-row-bad-date = "{ $value }" is not a date; it is left out.
+csv-row-bad-duration = "{ $value }" is not a duration; it is left out.
+csv-row-bad-relation = "{ $value }" is not a link this program knows; it is left out.
+csv-row-start-after-due = The start date { $start } is after the due date { $due }; the start date is left out.
+csv-row-unknown-status = { $project } has no status "{ $value }".
+csv-row-unknown-type = { $project } has no task type "{ $value }".
+csv-row-unknown-label = { $project } has no label "{ $value }".
+csv-row-parent-not-found = The parent "{ $value }" is neither a row of the file nor a task here; the task stays at the top.
+csv-row-link-not-found = The linked task "{ $value }" is neither a row of the file nor a task here; the link is left out.
+csv-row-duplicate-key = The key "{ $value }" is also the key of the row on line { $line }; references go to that row.
+csv-preset-not-found = There is no CSV import preset named "{ $name }".
+csv-preset-name = A preset's name is 1 to { $max } characters, on one line.
+csv-preset-built-in = "{ $name }" is a built-in preset and can't be changed.
+csv-preset-too-many = A workspace keeps at most { $max } presets.
+csv-preset-too-many-columns = A preset maps at most { $max } columns.
+
 ## Thumbnails (reasons inside file-no-thumbnail)
 
 thumb-unsupported = no thumbnails are made for { $mime }

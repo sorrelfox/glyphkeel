@@ -27,6 +27,7 @@ pub mod board;
 pub mod bulk;
 pub mod comment;
 pub mod common;
+pub mod csv_import;
 pub mod description;
 pub mod draft;
 pub mod field;

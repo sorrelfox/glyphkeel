@@ -1,0 +1,85 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+   Copyright (C) 2026 Glyphkeel contributors */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  inline-size: 60rem;
+  max-inline-size: 100%;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap);
+}
+
+.settings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--gap);
+}
+
+.scroll {
+  max-block-size: 18rem;
+  overflow: auto;
+}
+
+.table {
+  inline-size: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  position: sticky;
+  inset-block-start: 0;
+  padding-block: 6px;
+  padding-inline: 8px;
+  border-block-end: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg-muted);
+  font-size: var(--fs-small);
+  font-weight: 600;
+  text-align: start;
+}
+
+.table td {
+  padding-block: 4px;
+  padding-inline: 8px;
+  border-block-end: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.samples {
+  max-inline-size: 24rem;
+  overflow-wrap: anywhere;
+}
+
+.number {
+  text-align: end;
+  white-space: nowrap;
+}
+
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.severity {
+  font-weight: 600;
+}
+
+.bad {
+  color: var(--danger);
+}
+
+.path {
+  overflow-wrap: anywhere;
+}

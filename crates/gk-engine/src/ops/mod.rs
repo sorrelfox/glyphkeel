@@ -44,7 +44,7 @@ pub(crate) mod wiki;
 pub(crate) mod workspace;
 
 /// The catalog's descriptor of `O`.
-fn desc<O: Operation>() -> &'static OpDescriptor {
+pub(crate) fn desc<O: Operation>() -> &'static OpDescriptor {
     descriptor(O::ID).unwrap_or_else(|| panic!("{} is not in the catalog", O::ID))
 }
 

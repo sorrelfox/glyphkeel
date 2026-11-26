@@ -75,6 +75,7 @@ import {
 } from "../../generated/ops";
 import { PROJECT_ICONS, suggestHue } from "../catalog";
 import { formatDuration, parseDuration } from "../duration";
+import { BUILT_IN_PRESETS, planCsv } from "./csv";
 import { decodeBase64, materialize, recordedFields, sniff } from "./details";
 import { applyValues, createField, deleteField, fieldOut, fieldsFor, fieldsOf, findField, listedValues, moveMatches, moveValues, placeField, queryFields, taskValues, updateField } from "./fields";
 import { checklistOf, escapeHtml, merge3, publicChecklist, renderFake, setChecked, unifiedDiff } from "./markdown";
@@ -3041,6 +3042,74 @@ export class FakeWorkspace {
       const pages = subpages === true ? subtree(this.state.wiki ?? [], page) : [page];
       const name = path ?? `${page.slug}.zip`;
       return { path: `exports/${name}`, format: format ?? "zip", pages: pages.length, attachments: 0, size: pages.reduce((sum, one) => sum + one.body.length, 0) };
+    },
+    "transfer.import_csv": (input) => {
+      const project = this.writable(input.project);
+      const plan = planCsv(input, [...BUILT_IN_PRESETS, ...(this.state.csvPresets ?? [])], (message) => fail("invalid", message, { details: { path: "path" } }));
+      const dryRun = input.dry_run === true;
+      const skipped = plan.rows.filter((one) => one.task === null).length;
+      if (!dryRun && skipped > 0 && input.skip_invalid !== true) {
+        fail("invalid", skipped === 1 ? "One row has errors; nothing was imported." : `${String(skipped)} rows have errors; nothing was imported.`);
+      }
+      const known = (names: readonly string[], wanted: string | undefined) => wanted === undefined || names.some((name) => fold(name) === fold(wanted));
+      const newStatuses = [...new Set(plan.rows.flatMap((one) => (one.task?.status !== undefined && !known(project.statuses.map((s) => s.name), one.task.status) ? [one.task.status] : [])))];
+      const saved = structuredClone(this.state);
+      const changes: EntityChange[] = [];
+      const rows = plan.rows.map((one) => one.row);
+      try {
+        plan.rows.forEach((one, i) => {
+          if (one.task === null) {
+            return;
+          }
+          const status = one.task.status !== undefined && known(project.statuses.map((s) => s.name), one.task.status) ? one.task.status : undefined;
+          const answer = this.handlers["task.create"]?.({ project: project.key, title: one.task.title, ...some("status", status), ...some("due_date", one.task.due_date) });
+          if (isResult(answer)) {
+            changes.push(...answer.changes);
+            const row = rows[i];
+            if (row) {
+              row.key = answer.output.task.key;
+            }
+          }
+        });
+      } finally {
+        if (dryRun) {
+          this.state = saved;
+        }
+      }
+      const output = {
+        blocked: dryRun && input.skip_invalid !== true && skipped > 0,
+        columns: plan.columns,
+        counts: { rows: rows.length, created: rows.length - skipped, skipped, warnings: rows.filter((row) => (row.problems ?? []).some((p) => p.severity === "warning")).length, parents: 0, links: 0, time_entries: 0, comments: 0 },
+        dry_run: dryRun,
+        format: { encoding: "utf8" as const, bom: false, separator: ",", quote: "\"", decimal_comma: false },
+        ...(newStatuses.length > 0 && input.create_missing !== false ? { new_statuses: newStatuses } : {}),
+        ...some("preset", plan.preset),
+        project: project.key,
+        rows: input.only_problems === true ? rows.filter((row) => (row.problems ?? []).length > 0) : rows,
+      };
+      return dryRun ? output : { output, changes };
+    },
+    "csv_preset.list": () => ({ items: [...BUILT_IN_PRESETS, ...(this.state.csvPresets ?? [])] }),
+    "csv_preset.save": ({ name, columns, format, values }) => {
+      const title = name.trim();
+      if (title === "" || title.length > 60 || ["jira", "redmine"].includes(fold(title))) {
+        fail("invalid", `"${title}" can't be a preset's name.`, { details: { path: "name" } });
+      }
+      const presets = (this.state.csvPresets ?? []).filter((preset) => fold(preset.name) !== fold(title));
+      const kept = (columns ?? []).map((choice) => ({ column: choice.column, to: choice.to, ...(choice.unit ? { unit: choice.unit } : {}) }));
+      const keptFormat = format ? Object.fromEntries(Object.entries(format).filter(([, value]) => value !== null)) : undefined;
+      presets.push({ name: title, ...(kept.length > 0 ? { columns: kept } : {}), ...(keptFormat ? { format: keptFormat } : {}), ...(values ? { values } : {}) });
+      presets.sort((a, b) => fold(a.name).localeCompare(fold(b.name)));
+      this.state.csvPresets = presets;
+      return { output: { items: [...BUILT_IN_PRESETS, ...presets] }, changes: [{ entity: "settings", id: "workspace", fields: ["csv_import_presets"] }] };
+    },
+    "csv_preset.delete": ({ name }) => {
+      const presets = (this.state.csvPresets ?? []).filter((preset) => fold(preset.name) !== fold(name));
+      if (presets.length === (this.state.csvPresets ?? []).length) {
+        fail("not_found", `There is no CSV import preset named "${name}".`);
+      }
+      this.state.csvPresets = presets;
+      return { output: { items: [...BUILT_IN_PRESETS, ...presets] }, changes: [{ entity: "settings", id: "workspace", fields: ["csv_import_presets"] }] };
     },
     "wiki.import": ({ project: ref, path, parent: parentRef, dry_run }) => {
       // The sample workspace reads no folders: it knows one, "notes", with two

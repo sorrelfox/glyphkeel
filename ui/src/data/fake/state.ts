@@ -12,6 +12,7 @@ import {
   type ListLayout,
   type Category,
   type CommentRevision,
+  type CsvPreset,
   type FileKind,
   type Glyph,
   type Hue,
@@ -269,6 +270,8 @@ export interface FakeState {
   backups?: Backup[];
   /** Custom fields, in order; none until one is made. */
   customFields?: FakeField[];
+  /** The workspace's own CSV import presets; none until one is saved. */
+  csvPresets?: CsvPreset[];
   workspaceName: string;
   seq: number;
 }

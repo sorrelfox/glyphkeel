@@ -1,0 +1,6 @@
+Summary,Issue key,Issue id,Parent id,Issue Type,Status,Priority,Assignee,Created,Due date,Labels,Labels,Original Estimate,Time Spent,Description,Comment,Outward issue link (Blocks),Inward issue link (Relates),Custom field (Story Points)
+Build the importer,SHOP-1,10001,,Story,In Progress,High,Alex,15/Jan/24 10:30 AM,02/Feb/24 12:00 AM,backend,csv,28800,3600,"Read the file, then ""map"" it.
+Second line.",15/Jan/24 11:00 AM;5b10ac8d82e05b22cc7d4ef5;Looks good; ship it,SHOP-3,,5
+Detect the encoding,SHOP-2,10002,10001,Sub-task,To Do,Medium,,16/Jan/24 9:00 AM,,backend,,7200,,,,,,
+Write the docs,SHOP-3,10003,,Task,Done,Lowest,,17/Jan/24 9:00 AM,30/Jan/24 12:00 AM,docs,,,,,,,SHOP-1,
+,SHOP-4,10004,,Bug,Won't Do,Blocker,,18/Jan/24 9:00 AM,,,,,,,,,,

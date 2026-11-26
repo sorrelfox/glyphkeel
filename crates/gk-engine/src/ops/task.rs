@@ -894,7 +894,7 @@ fn open_subtasks(tx: &Transaction<'_>, task: Id) -> Result<i64, Failure> {
 // ---------------------------------------------------------------------
 // Commands
 
-fn create(w: &mut WriteCtx<'_>, input: TaskCreateInput) -> Result<TaskChange, Failure> {
+pub(crate) fn create(w: &mut WriteCtx<'_>, input: TaskCreateInput) -> Result<TaskChange, Failure> {
     let project = lookup::project(w.tx(), "project", &input.project)?;
     lookup::ensure_active(&project)?;
     let title = gk_core::check_title(&input.title).map_err(|e| invalid("title", e))?;

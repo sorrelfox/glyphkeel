@@ -49,6 +49,7 @@ export function HeaderBar({ titleBar, title, subtitle, project, onProjectSetting
     SEPARATOR,
     useAction("app.backup"),
     useAction("app.import"),
+    useAction("app.importCsv"),
     useAction("app.export"),
     SEPARATOR,
     useAction("help.shortcuts"),
@@ -121,6 +122,7 @@ interface ProjectButtonProps {
 /** The project's colour and name (a sub-project with its path, parents muted), opening the project menu. */
 function ProjectButton({ project, onSettings, onNewSubproject }: ProjectButtonProps) {
   const t = useT();
+  const importCsv = useAction("app.importCsv");
   const projects = useProjects();
   const path: string[] = [];
   let parent = project.parent;
@@ -155,6 +157,7 @@ function ProjectButton({ project, onSettings, onNewSubproject }: ProjectButtonPr
                 run: () => onNewSubproject?.(project.key),
                 disabled: !onNewSubproject || project.state === "archived",
               },
+              { id: "import-csv", label: t("project-import-csv"), run: () => { importCsv.run(); }, disabled: project.state === "archived" },
             ]}
           />
         </Menu>

@@ -21,6 +21,7 @@ import { NewProjectDialog, type NewProjectRequest } from "../screens/project/New
 import { ProjectSettings } from "../screens/project/ProjectSettings";
 import { useBackUpNow } from "../screens/safety/DataPage";
 import { ExportDialog } from "../screens/safety/ExportDialog";
+import { CsvImportDialog } from "../screens/safety/CsvImportDialog";
 import { ImportDialog } from "../screens/safety/ImportDialog";
 import { type TitleBar } from "../start";
 import { ShellContext, type ShellHooks, type StatusInfo } from "./context";
@@ -107,6 +108,8 @@ export function Shell({ titleBar, openGallery, firstRun = false }: ShellProps) {
   // The projects an export starts with; null while the dialog is closed.
   const [exporting, setExporting] = useState<readonly string[] | null>(null);
   const [importing, setImporting] = useState(false);
+  // The CSV import: the project it goes to (undefined: chosen in the dialog); null while closed.
+  const [importingCsv, setImportingCsv] = useState<{ project: string | undefined } | null>(null);
   const backUp = useBackUpNow();
   const [newProject, setNewProject] = useState<NewProjectRequest | null>(null);
   const [settingsOf, setSettingsOf] = useState<string | null>(null);
@@ -184,6 +187,9 @@ export function Shell({ titleBar, openGallery, firstRun = false }: ShellProps) {
     importData: () => {
       setImporting(true);
     },
+    importCsv: () => {
+      setImportingCsv({ project: view === "project" ? projectKey : undefined });
+    },
     openGallery,
   });
   const actions = screenActions.length === 0 ? windowActions : [...windowActions, ...screenActions];
@@ -217,6 +223,9 @@ export function Shell({ titleBar, openGallery, firstRun = false }: ShellProps) {
                   setExporting([key]);
                 }}
                 onDeleteProject={setDeleting}
+                onImportCsv={(key) => {
+                  setImportingCsv({ project: key });
+                }}
               />
               <Splitter label={t("sidebar-resize")} value={sidebarWidth} min={SIDEBAR_WIDTH.min} max={SIDEBAR_WIDTH.max} onChange={setChosenWidth} />
             </>
@@ -265,6 +274,14 @@ export function Shell({ titleBar, openGallery, firstRun = false }: ShellProps) {
           />
         )}
         {importing && <ImportDialog isOpen onOpenChange={setImporting} />}
+        {importingCsv !== null && (
+          <CsvImportDialog
+            project={importingCsv.project}
+            onClose={() => {
+              setImportingCsv(null);
+            }}
+          />
+        )}
         {newProject && (
           <NewProjectDialog
             request={newProject}

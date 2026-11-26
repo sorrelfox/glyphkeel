@@ -48878,6 +48878,1776 @@
       "output_name": "ImportResult",
       "safety": "write",
       "summary": "Import an archive as new projects; checks it completely first and never changes existing data."
+    },
+    {
+      "cli": "import csv <path>",
+      "exposure": "data",
+      "id": "transfer.import_csv",
+      "input": {
+        "$defs": {
+          "CsvColumnMapping": {
+            "additionalProperties": false,
+            "description": "Where one column goes.",
+            "properties": {
+              "column": {
+                "description": "The column's name in the header row, ignoring case. Every column with this\nname goes to the same place; their values are taken together (Jira\nwrites one `Labels` column per label).",
+                "type": "string"
+              },
+              "to": {
+                "description": "The target: `title`, `description`, `status`, `type`, `priority`,\n`labels`, `start_date`, `due_date`, `estimate`, `spent` (time\nlogged on the import day), `comment`, `key` (the row's key or ID in\nthe other tool, for references), `parent` (a key or ID, of a row of\nthe file or a task here), `blocks`, `blocked_by`, `relates`,\n`duplicates`, `duplicated_by`, `clones`, `cloned_by`, `relations`\n(Redmine's \"Blocks #12, Related to #13\"), `field.<name>` for a custom\nfield, or `ignore`.",
+                "type": "string"
+              },
+              "unit": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/CsvUnit"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "For `estimate` and `spent`: the unit of the numbers."
+              }
+            },
+            "required": [
+              "column",
+              "to"
+            ],
+            "type": "object"
+          },
+          "CsvDateOrder": {
+            "description": "The order of day, month and year in dates such as `03/04/2025`.",
+            "oneOf": [
+              {
+                "const": "dmy",
+                "description": "Day, month, year: `31/12/2025`, `31.12.2025`.",
+                "type": "string"
+              },
+              {
+                "const": "mdy",
+                "description": "Month, day, year: `12/31/2025`.",
+                "type": "string"
+              },
+              {
+                "const": "ymd",
+                "description": "Year, month, day: `2025/12/31`.",
+                "type": "string"
+              }
+            ]
+          },
+          "CsvEncoding": {
+            "description": "A text encoding of a CSV file.",
+            "oneOf": [
+              {
+                "const": "utf8",
+                "description": "UTF-8, with or without a byte order mark.",
+                "type": "string"
+              },
+              {
+                "const": "utf16le",
+                "description": "UTF-16, little-endian.",
+                "type": "string"
+              },
+              {
+                "const": "utf16be",
+                "description": "UTF-16, big-endian.",
+                "type": "string"
+              },
+              {
+                "const": "windows1252",
+                "description": "Windows-1252, which Excel and Redmine write on Western systems.",
+                "type": "string"
+              },
+              {
+                "const": "latin1",
+                "description": "ISO-8859-1.",
+                "type": "string"
+              }
+            ]
+          },
+          "CsvFormat": {
+            "additionalProperties": false,
+            "description": "How to read the file; what is left out is detected.",
+            "properties": {
+              "date_order": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/CsvDateOrder"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The order of day, month and year in numeric dates; detected from the\ndates themselves when left out."
+              },
+              "decimal_comma": {
+                "description": "Whether numbers use a comma before their fraction (`2,5`); detected\nfrom the separator when left out.",
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
+              "encoding": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/CsvEncoding"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The text encoding."
+              },
+              "quote": {
+                "description": "The character around quoted fields: `\"` or `'`.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "separator": {
+                "description": "The separator between fields: one character, such as `,`, `;`, a\ntab or `|`.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "CsvUnit": {
+            "description": "The unit of a column of durations.",
+            "oneOf": [
+              {
+                "const": "seconds",
+                "description": "Seconds, as Jira exports estimates and time spent.",
+                "type": "string"
+              },
+              {
+                "const": "minutes",
+                "description": "Minutes.",
+                "type": "string"
+              },
+              {
+                "const": "hours",
+                "description": "Hours, with a fraction, as Redmine exports them.",
+                "type": "string"
+              },
+              {
+                "const": "days",
+                "description": "Days of the workspace's working day.",
+                "type": "string"
+              },
+              {
+                "const": "text",
+                "description": "Written durations such as `1h 30m` or `1:30`; plain numbers are\nhours.",
+                "type": "string"
+              }
+            ]
+          },
+          "CsvValueMaps": {
+            "additionalProperties": false,
+            "description": "How values of the file become values here. Keys are the file's values;\nmatching ignores case.",
+            "properties": {
+              "priorities": {
+                "additionalProperties": {
+                  "$ref": "#/$defs/Priority"
+                },
+                "description": "Priority names to priorities; the usual names of Jira and Redmine\nare known without this.",
+                "type": "object"
+              },
+              "statuses": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Status names: the file's to this project's.",
+                "type": "object"
+              },
+              "types": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Type names: the file's (Jira's issue types, Redmine's trackers) to\nthis project's.",
+                "type": "object"
+              }
+            },
+            "type": "object"
+          },
+          "Priority": {
+            "description": "A task's priority.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No priority (the default).",
+                "type": "string"
+              },
+              {
+                "const": "low",
+                "description": "Low.",
+                "type": "string"
+              },
+              {
+                "const": "normal",
+                "description": "Normal.",
+                "type": "string"
+              },
+              {
+                "const": "high",
+                "description": "High.",
+                "type": "string"
+              },
+              {
+                "const": "urgent",
+                "description": "Urgent.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "What to import.",
+        "properties": {
+          "columns": {
+            "description": "Where columns go, over the preset's choice for the same columns.",
+            "items": {
+              "$ref": "#/$defs/CsvColumnMapping"
+            },
+            "type": "array"
+          },
+          "create_missing": {
+            "description": "Create the statuses, types and labels the file names that the\nproject lacks (the default); otherwise such a value is a row's\nerror.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "dry_run": {
+            "default": false,
+            "description": "Only check the file and report what each row would become.",
+            "type": "boolean"
+          },
+          "format": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/CsvFormat"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How to read the file, where detection is not wanted."
+          },
+          "only_problems": {
+            "default": false,
+            "description": "List only the rows with problems, not every row.",
+            "type": "boolean"
+          },
+          "path": {
+            "description": "The CSV file. Agents give the plain name of a file in the\nworkspace's `exports` folder.",
+            "type": "string"
+          },
+          "preset": {
+            "description": "The preset to start from: `jira`, `redmine`, or the name of a saved\none. Left out: detected from the header row, else columns are\nmatched by their names.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "project": {
+            "description": "The project the tasks go to (key or ID).",
+            "type": "string"
+          },
+          "skip_invalid": {
+            "default": false,
+            "description": "Import the other rows when some have errors, leaving those out.\nWithout it, an error in any row stops the whole import.",
+            "type": "boolean"
+          },
+          "values": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/CsvValueMaps"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How values become values here, over the preset's."
+          }
+        },
+        "required": [
+          "project",
+          "path"
+        ],
+        "title": "CsvImportInput",
+        "type": "object"
+      },
+      "input_name": "CsvImportInput",
+      "kind": "command",
+      "mcp_tool": "import_csv",
+      "output": {
+        "$defs": {
+          "CsvColumn": {
+            "additionalProperties": false,
+            "description": "One column of the file and where it goes.",
+            "properties": {
+              "index": {
+                "description": "Its place, from 0.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "name": {
+                "description": "Its name in the header row.",
+                "type": "string"
+              },
+              "samples": {
+                "description": "Its first few values that are not empty, shortened.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "to": {
+                "description": "Its target; left out when it is ignored.",
+                "type": "string"
+              },
+              "unit": {
+                "$ref": "#/$defs/CsvUnit",
+                "description": "The unit of its durations."
+              }
+            },
+            "required": [
+              "index",
+              "name"
+            ],
+            "type": "object"
+          },
+          "CsvCounts": {
+            "additionalProperties": false,
+            "description": "How many of each.",
+            "properties": {
+              "comments": {
+                "description": "Comments.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "created": {
+                "description": "Tasks created, or that would be.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "links": {
+                "description": "Links between tasks.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "parents": {
+                "description": "Tasks placed under a parent.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "rows": {
+                "description": "Rows of data, the header left out.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "skipped": {
+                "description": "Rows left out.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "time_entries": {
+                "description": "Time entries.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "warnings": {
+                "description": "Rows with warnings.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "rows",
+              "created",
+              "skipped",
+              "warnings",
+              "parents",
+              "links",
+              "time_entries",
+              "comments"
+            ],
+            "type": "object"
+          },
+          "CsvDateOrder": {
+            "description": "The order of day, month and year in dates such as `03/04/2025`.",
+            "oneOf": [
+              {
+                "const": "dmy",
+                "description": "Day, month, year: `31/12/2025`, `31.12.2025`.",
+                "type": "string"
+              },
+              {
+                "const": "mdy",
+                "description": "Month, day, year: `12/31/2025`.",
+                "type": "string"
+              },
+              {
+                "const": "ymd",
+                "description": "Year, month, day: `2025/12/31`.",
+                "type": "string"
+              }
+            ]
+          },
+          "CsvDetected": {
+            "additionalProperties": false,
+            "description": "What was detected about the file, or given.",
+            "properties": {
+              "bom": {
+                "description": "Whether it began with a byte order mark.",
+                "type": "boolean"
+              },
+              "date_order": {
+                "$ref": "#/$defs/CsvDateOrder",
+                "description": "The order of numeric dates, when the file has any."
+              },
+              "decimal_comma": {
+                "description": "Whether numbers have a decimal comma.",
+                "type": "boolean"
+              },
+              "encoding": {
+                "$ref": "#/$defs/CsvEncoding",
+                "description": "Its encoding."
+              },
+              "quote": {
+                "description": "The quote.",
+                "type": "string"
+              },
+              "separator": {
+                "description": "The separator.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "encoding",
+              "bom",
+              "separator",
+              "quote",
+              "decimal_comma"
+            ],
+            "type": "object"
+          },
+          "CsvEncoding": {
+            "description": "A text encoding of a CSV file.",
+            "oneOf": [
+              {
+                "const": "utf8",
+                "description": "UTF-8, with or without a byte order mark.",
+                "type": "string"
+              },
+              {
+                "const": "utf16le",
+                "description": "UTF-16, little-endian.",
+                "type": "string"
+              },
+              {
+                "const": "utf16be",
+                "description": "UTF-16, big-endian.",
+                "type": "string"
+              },
+              {
+                "const": "windows1252",
+                "description": "Windows-1252, which Excel and Redmine write on Western systems.",
+                "type": "string"
+              },
+              {
+                "const": "latin1",
+                "description": "ISO-8859-1.",
+                "type": "string"
+              }
+            ]
+          },
+          "CsvOutcome": {
+            "description": "What became of a row.",
+            "oneOf": [
+              {
+                "const": "created",
+                "description": "A task was (or, in a dry run, would be) created.",
+                "type": "string"
+              },
+              {
+                "const": "skipped",
+                "description": "The row was left out because of its errors.",
+                "type": "string"
+              }
+            ]
+          },
+          "CsvProblem": {
+            "additionalProperties": false,
+            "description": "A problem with one row.",
+            "properties": {
+              "code": {
+                "description": "A stable code, such as `bad_date`.",
+                "type": "string"
+              },
+              "column": {
+                "description": "The column, when one is to blame.",
+                "type": "string"
+              },
+              "message": {
+                "description": "What is wrong, for people.",
+                "type": "string"
+              },
+              "severity": {
+                "$ref": "#/$defs/CsvSeverity",
+                "description": "How bad it is."
+              }
+            },
+            "required": [
+              "severity",
+              "code",
+              "message"
+            ],
+            "type": "object"
+          },
+          "CsvRow": {
+            "additionalProperties": false,
+            "description": "One row of the file.",
+            "properties": {
+              "key": {
+                "description": "The new task's key; in a dry run, the key it would get.",
+                "type": "string"
+              },
+              "line": {
+                "description": "The line of the file it starts on, from 1 (the header is line 1).",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "outcome": {
+                "$ref": "#/$defs/CsvOutcome",
+                "description": "What became of it."
+              },
+              "problems": {
+                "description": "Its problems.",
+                "items": {
+                  "$ref": "#/$defs/CsvProblem"
+                },
+                "type": "array"
+              },
+              "source_key": {
+                "description": "Its key or ID in the other tool.",
+                "type": "string"
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "line",
+              "outcome",
+              "title"
+            ],
+            "type": "object"
+          },
+          "CsvSeverity": {
+            "description": "How bad a row's problem is.",
+            "oneOf": [
+              {
+                "const": "error",
+                "description": "The row can't be imported.",
+                "type": "string"
+              },
+              {
+                "const": "warning",
+                "description": "The row is imported without this value.",
+                "type": "string"
+              }
+            ]
+          },
+          "CsvUnit": {
+            "description": "The unit of a column of durations.",
+            "oneOf": [
+              {
+                "const": "seconds",
+                "description": "Seconds, as Jira exports estimates and time spent.",
+                "type": "string"
+              },
+              {
+                "const": "minutes",
+                "description": "Minutes.",
+                "type": "string"
+              },
+              {
+                "const": "hours",
+                "description": "Hours, with a fraction, as Redmine exports them.",
+                "type": "string"
+              },
+              {
+                "const": "days",
+                "description": "Days of the workspace's working day.",
+                "type": "string"
+              },
+              {
+                "const": "text",
+                "description": "Written durations such as `1h 30m` or `1:30`; plain numbers are\nhours.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The result of a CSV import, or of checking one.",
+        "properties": {
+          "blocked": {
+            "description": "Whether the import would stop because of rows with errors (dry run\nwithout `skip_invalid`).",
+            "type": "boolean"
+          },
+          "columns": {
+            "description": "Its columns, in order, with where each goes.",
+            "items": {
+              "$ref": "#/$defs/CsvColumn"
+            },
+            "type": "array"
+          },
+          "counts": {
+            "$ref": "#/$defs/CsvCounts",
+            "description": "How many of each."
+          },
+          "dry_run": {
+            "description": "Whether this only checked the file.",
+            "type": "boolean"
+          },
+          "format": {
+            "$ref": "#/$defs/CsvDetected",
+            "description": "How the file was read."
+          },
+          "group": {
+            "description": "The history group of the tasks and what they hold, for revert and\nUndo (which moves the tasks to the trash); left out for a check.",
+            "type": "string"
+          },
+          "new_labels": {
+            "description": "Labels created.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "new_statuses": {
+            "description": "Statuses created (or that would be).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "new_types": {
+            "description": "Types created.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preset": {
+            "description": "The preset used, if any.",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project's key.",
+            "type": "string"
+          },
+          "rows": {
+            "description": "The rows, in the file's order; only those with problems when asked.",
+            "items": {
+              "$ref": "#/$defs/CsvRow"
+            },
+            "type": "array"
+          },
+          "setup_group": {
+            "description": "The history group that created the statuses, types and labels,\napart from `group`: the tasks in the trash still use them. Revert it\nafter `group` once the tasks are deleted for good.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dry_run",
+          "project",
+          "format",
+          "columns",
+          "counts",
+          "rows",
+          "blocked"
+        ],
+        "title": "CsvImportResult",
+        "type": "object"
+      },
+      "output_name": "CsvImportResult",
+      "safety": "write",
+      "summary": "Import tasks from a CSV file into a project, with a column mapping or a preset (Jira and Redmine exports are built in); a dry run reports every row's outcome, and the import is one change that Undo takes back."
+    },
+    {
+      "cli": "csv-preset list",
+      "exposure": "data",
+      "id": "csv_preset.list",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "No input.",
+        "title": "CsvPresetListInput",
+        "type": "object"
+      },
+      "input_name": "CsvPresetListInput",
+      "kind": "query",
+      "mcp_tool": "list_csv_presets",
+      "output": {
+        "$defs": {
+          "CsvDateOrder": {
+            "description": "The order of day, month and year in dates such as `03/04/2025`.",
+            "oneOf": [
+              {
+                "const": "dmy",
+                "description": "Day, month, year: `31/12/2025`, `31.12.2025`.",
+                "type": "string"
+              },
+              {
+                "const": "mdy",
+                "description": "Month, day, year: `12/31/2025`.",
+                "type": "string"
+              },
+              {
+                "const": "ymd",
+                "description": "Year, month, day: `2025/12/31`.",
+                "type": "string"
+              }
+            ]
+          },
+          "CsvEncoding": {
+            "description": "A text encoding of a CSV file.",
+            "oneOf": [
+              {
+                "const": "utf8",
+                "description": "UTF-8, with or without a byte order mark.",
+                "type": "string"
+              },
+              {
+                "const": "utf16le",
+                "description": "UTF-16, little-endian.",
+                "type": "string"
+              },
+              {
+                "const": "utf16be",
+                "description": "UTF-16, big-endian.",
+                "type": "string"
+              },
+              {
+                "const": "windows1252",
+                "description": "Windows-1252, which Excel and Redmine write on Western systems.",
+                "type": "string"
+              },
+              {
+                "const": "latin1",
+                "description": "ISO-8859-1.",
+                "type": "string"
+              }
+            ]
+          },
+          "CsvPreset": {
+            "additionalProperties": false,
+            "description": "A saved or built-in mapping.",
+            "properties": {
+              "built_in": {
+                "description": "Whether it is built in and can't be changed.",
+                "type": "boolean"
+              },
+              "columns": {
+                "description": "Where columns go.",
+                "items": {
+                  "$ref": "#/$defs/CsvPresetColumn"
+                },
+                "type": "array"
+              },
+              "format": {
+                "$ref": "#/$defs/CsvPresetFormat",
+                "description": "How to read the file."
+              },
+              "name": {
+                "description": "Its name: `jira` and `redmine` are built in.",
+                "type": "string"
+              },
+              "values": {
+                "$ref": "#/$defs/CsvPresetValues",
+                "description": "How values become values here."
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          },
+          "CsvPresetColumn": {
+            "additionalProperties": false,
+            "description": "A column of a preset: [`CsvColumnMapping`] as outputs carry it.",
+            "properties": {
+              "column": {
+                "description": "The column's name, ignoring case.",
+                "type": "string"
+              },
+              "to": {
+                "description": "Its target.",
+                "type": "string"
+              },
+              "unit": {
+                "$ref": "#/$defs/CsvUnit",
+                "description": "The unit of its durations."
+              }
+            },
+            "required": [
+              "column",
+              "to"
+            ],
+            "type": "object"
+          },
+          "CsvPresetFormat": {
+            "additionalProperties": false,
+            "description": "How a preset reads files: [`CsvFormat`] as outputs carry it.",
+            "properties": {
+              "date_order": {
+                "$ref": "#/$defs/CsvDateOrder",
+                "description": "The order of numeric dates."
+              },
+              "decimal_comma": {
+                "description": "Whether numbers have a decimal comma.",
+                "type": "boolean"
+              },
+              "encoding": {
+                "$ref": "#/$defs/CsvEncoding",
+                "description": "The text encoding."
+              },
+              "quote": {
+                "description": "The quote.",
+                "type": "string"
+              },
+              "separator": {
+                "description": "The separator.",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "CsvPresetValues": {
+            "additionalProperties": false,
+            "description": "A preset's value maps: [`CsvValueMaps`] as outputs carry them.",
+            "properties": {
+              "priorities": {
+                "additionalProperties": {
+                  "$ref": "#/$defs/Priority"
+                },
+                "description": "Priority names.",
+                "type": "object"
+              },
+              "statuses": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Status names.",
+                "type": "object"
+              },
+              "types": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Type names.",
+                "type": "object"
+              }
+            },
+            "type": "object"
+          },
+          "CsvUnit": {
+            "description": "The unit of a column of durations.",
+            "oneOf": [
+              {
+                "const": "seconds",
+                "description": "Seconds, as Jira exports estimates and time spent.",
+                "type": "string"
+              },
+              {
+                "const": "minutes",
+                "description": "Minutes.",
+                "type": "string"
+              },
+              {
+                "const": "hours",
+                "description": "Hours, with a fraction, as Redmine exports them.",
+                "type": "string"
+              },
+              {
+                "const": "days",
+                "description": "Days of the workspace's working day.",
+                "type": "string"
+              },
+              {
+                "const": "text",
+                "description": "Written durations such as `1h 30m` or `1:30`; plain numbers are\nhours.",
+                "type": "string"
+              }
+            ]
+          },
+          "Priority": {
+            "description": "A task's priority.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No priority (the default).",
+                "type": "string"
+              },
+              {
+                "const": "low",
+                "description": "Low.",
+                "type": "string"
+              },
+              {
+                "const": "normal",
+                "description": "Normal.",
+                "type": "string"
+              },
+              {
+                "const": "high",
+                "description": "High.",
+                "type": "string"
+              },
+              {
+                "const": "urgent",
+                "description": "Urgent.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The presets: built-in ones first, then the workspace's by name.",
+        "properties": {
+          "items": {
+            "description": "The presets.",
+            "items": {
+              "$ref": "#/$defs/CsvPreset"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "CsvPresetList",
+        "type": "object"
+      },
+      "output_name": "CsvPresetList",
+      "safety": "read",
+      "summary": "List the CSV import presets: the built-in ones for Jira and Redmine, and the workspace's own."
+    },
+    {
+      "cli": "csv-preset save <name>",
+      "exposure": "data",
+      "id": "csv_preset.save",
+      "input": {
+        "$defs": {
+          "CsvColumnMapping": {
+            "additionalProperties": false,
+            "description": "Where one column goes.",
+            "properties": {
+              "column": {
+                "description": "The column's name in the header row, ignoring case. Every column with this\nname goes to the same place; their values are taken together (Jira\nwrites one `Labels` column per label).",
+                "type": "string"
+              },
+              "to": {
+                "description": "The target: `title`, `description`, `status`, `type`, `priority`,\n`labels`, `start_date`, `due_date`, `estimate`, `spent` (time\nlogged on the import day), `comment`, `key` (the row's key or ID in\nthe other tool, for references), `parent` (a key or ID, of a row of\nthe file or a task here), `blocks`, `blocked_by`, `relates`,\n`duplicates`, `duplicated_by`, `clones`, `cloned_by`, `relations`\n(Redmine's \"Blocks #12, Related to #13\"), `field.<name>` for a custom\nfield, or `ignore`.",
+                "type": "string"
+              },
+              "unit": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/CsvUnit"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "For `estimate` and `spent`: the unit of the numbers."
+              }
+            },
+            "required": [
+              "column",
+              "to"
+            ],
+            "type": "object"
+          },
+          "CsvDateOrder": {
+            "description": "The order of day, month and year in dates such as `03/04/2025`.",
+            "oneOf": [
+              {
+                "const": "dmy",
+                "description": "Day, month, year: `31/12/2025`, `31.12.2025`.",
+                "type": "string"
+              },
+              {
+                "const": "mdy",
+                "description": "Month, day, year: `12/31/2025`.",
+                "type": "string"
+              },
+              {
+                "const": "ymd",
+                "description": "Year, month, day: `2025/12/31`.",
+                "type": "string"
+              }
+            ]
+          },
+          "CsvEncoding": {
+            "description": "A text encoding of a CSV file.",
+            "oneOf": [
+              {
+                "const": "utf8",
+                "description": "UTF-8, with or without a byte order mark.",
+                "type": "string"
+              },
+              {
+                "const": "utf16le",
+                "description": "UTF-16, little-endian.",
+                "type": "string"
+              },
+              {
+                "const": "utf16be",
+                "description": "UTF-16, big-endian.",
+                "type": "string"
+              },
+              {
+                "const": "windows1252",
+                "description": "Windows-1252, which Excel and Redmine write on Western systems.",
+                "type": "string"
+              },
+              {
+                "const": "latin1",
+                "description": "ISO-8859-1.",
+                "type": "string"
+              }
+            ]
+          },
+          "CsvFormat": {
+            "additionalProperties": false,
+            "description": "How to read the file; what is left out is detected.",
+            "properties": {
+              "date_order": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/CsvDateOrder"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The order of day, month and year in numeric dates; detected from the\ndates themselves when left out."
+              },
+              "decimal_comma": {
+                "description": "Whether numbers use a comma before their fraction (`2,5`); detected\nfrom the separator when left out.",
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
+              "encoding": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/CsvEncoding"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The text encoding."
+              },
+              "quote": {
+                "description": "The character around quoted fields: `\"` or `'`.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "separator": {
+                "description": "The separator between fields: one character, such as `,`, `;`, a\ntab or `|`.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "CsvUnit": {
+            "description": "The unit of a column of durations.",
+            "oneOf": [
+              {
+                "const": "seconds",
+                "description": "Seconds, as Jira exports estimates and time spent.",
+                "type": "string"
+              },
+              {
+                "const": "minutes",
+                "description": "Minutes.",
+                "type": "string"
+              },
+              {
+                "const": "hours",
+                "description": "Hours, with a fraction, as Redmine exports them.",
+                "type": "string"
+              },
+              {
+                "const": "days",
+                "description": "Days of the workspace's working day.",
+                "type": "string"
+              },
+              {
+                "const": "text",
+                "description": "Written durations such as `1h 30m` or `1:30`; plain numbers are\nhours.",
+                "type": "string"
+              }
+            ]
+          },
+          "CsvValueMaps": {
+            "additionalProperties": false,
+            "description": "How values of the file become values here. Keys are the file's values;\nmatching ignores case.",
+            "properties": {
+              "priorities": {
+                "additionalProperties": {
+                  "$ref": "#/$defs/Priority"
+                },
+                "description": "Priority names to priorities; the usual names of Jira and Redmine\nare known without this.",
+                "type": "object"
+              },
+              "statuses": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Status names: the file's to this project's.",
+                "type": "object"
+              },
+              "types": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Type names: the file's (Jira's issue types, Redmine's trackers) to\nthis project's.",
+                "type": "object"
+              }
+            },
+            "type": "object"
+          },
+          "Priority": {
+            "description": "A task's priority.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No priority (the default).",
+                "type": "string"
+              },
+              {
+                "const": "low",
+                "description": "Low.",
+                "type": "string"
+              },
+              {
+                "const": "normal",
+                "description": "Normal.",
+                "type": "string"
+              },
+              {
+                "const": "high",
+                "description": "High.",
+                "type": "string"
+              },
+              {
+                "const": "urgent",
+                "description": "Urgent.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A preset to save; one with the same name is replaced.",
+        "properties": {
+          "columns": {
+            "description": "Where columns go.",
+            "items": {
+              "$ref": "#/$defs/CsvColumnMapping"
+            },
+            "type": "array"
+          },
+          "format": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/CsvFormat"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How to read the file."
+          },
+          "name": {
+            "description": "Its name, at most 60 characters; not `jira` or `redmine`.",
+            "type": "string"
+          },
+          "values": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/CsvValueMaps"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How values become values here."
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CsvPresetSaveInput",
+        "type": "object"
+      },
+      "input_name": "CsvPresetSaveInput",
+      "kind": "command",
+      "mcp_tool": "save_csv_preset",
+      "output": {
+        "$defs": {
+          "CsvDateOrder": {
+            "description": "The order of day, month and year in dates such as `03/04/2025`.",
+            "oneOf": [
+              {
+                "const": "dmy",
+                "description": "Day, month, year: `31/12/2025`, `31.12.2025`.",
+                "type": "string"
+              },
+              {
+                "const": "mdy",
+                "description": "Month, day, year: `12/31/2025`.",
+                "type": "string"
+              },
+              {
+                "const": "ymd",
+                "description": "Year, month, day: `2025/12/31`.",
+                "type": "string"
+              }
+            ]
+          },
+          "CsvEncoding": {
+            "description": "A text encoding of a CSV file.",
+            "oneOf": [
+              {
+                "const": "utf8",
+                "description": "UTF-8, with or without a byte order mark.",
+                "type": "string"
+              },
+              {
+                "const": "utf16le",
+                "description": "UTF-16, little-endian.",
+                "type": "string"
+              },
+              {
+                "const": "utf16be",
+                "description": "UTF-16, big-endian.",
+                "type": "string"
+              },
+              {
+                "const": "windows1252",
+                "description": "Windows-1252, which Excel and Redmine write on Western systems.",
+                "type": "string"
+              },
+              {
+                "const": "latin1",
+                "description": "ISO-8859-1.",
+                "type": "string"
+              }
+            ]
+          },
+          "CsvPreset": {
+            "additionalProperties": false,
+            "description": "A saved or built-in mapping.",
+            "properties": {
+              "built_in": {
+                "description": "Whether it is built in and can't be changed.",
+                "type": "boolean"
+              },
+              "columns": {
+                "description": "Where columns go.",
+                "items": {
+                  "$ref": "#/$defs/CsvPresetColumn"
+                },
+                "type": "array"
+              },
+              "format": {
+                "$ref": "#/$defs/CsvPresetFormat",
+                "description": "How to read the file."
+              },
+              "name": {
+                "description": "Its name: `jira` and `redmine` are built in.",
+                "type": "string"
+              },
+              "values": {
+                "$ref": "#/$defs/CsvPresetValues",
+                "description": "How values become values here."
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          },
+          "CsvPresetColumn": {
+            "additionalProperties": false,
+            "description": "A column of a preset: [`CsvColumnMapping`] as outputs carry it.",
+            "properties": {
+              "column": {
+                "description": "The column's name, ignoring case.",
+                "type": "string"
+              },
+              "to": {
+                "description": "Its target.",
+                "type": "string"
+              },
+              "unit": {
+                "$ref": "#/$defs/CsvUnit",
+                "description": "The unit of its durations."
+              }
+            },
+            "required": [
+              "column",
+              "to"
+            ],
+            "type": "object"
+          },
+          "CsvPresetFormat": {
+            "additionalProperties": false,
+            "description": "How a preset reads files: [`CsvFormat`] as outputs carry it.",
+            "properties": {
+              "date_order": {
+                "$ref": "#/$defs/CsvDateOrder",
+                "description": "The order of numeric dates."
+              },
+              "decimal_comma": {
+                "description": "Whether numbers have a decimal comma.",
+                "type": "boolean"
+              },
+              "encoding": {
+                "$ref": "#/$defs/CsvEncoding",
+                "description": "The text encoding."
+              },
+              "quote": {
+                "description": "The quote.",
+                "type": "string"
+              },
+              "separator": {
+                "description": "The separator.",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "CsvPresetValues": {
+            "additionalProperties": false,
+            "description": "A preset's value maps: [`CsvValueMaps`] as outputs carry them.",
+            "properties": {
+              "priorities": {
+                "additionalProperties": {
+                  "$ref": "#/$defs/Priority"
+                },
+                "description": "Priority names.",
+                "type": "object"
+              },
+              "statuses": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Status names.",
+                "type": "object"
+              },
+              "types": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Type names.",
+                "type": "object"
+              }
+            },
+            "type": "object"
+          },
+          "CsvUnit": {
+            "description": "The unit of a column of durations.",
+            "oneOf": [
+              {
+                "const": "seconds",
+                "description": "Seconds, as Jira exports estimates and time spent.",
+                "type": "string"
+              },
+              {
+                "const": "minutes",
+                "description": "Minutes.",
+                "type": "string"
+              },
+              {
+                "const": "hours",
+                "description": "Hours, with a fraction, as Redmine exports them.",
+                "type": "string"
+              },
+              {
+                "const": "days",
+                "description": "Days of the workspace's working day.",
+                "type": "string"
+              },
+              {
+                "const": "text",
+                "description": "Written durations such as `1h 30m` or `1:30`; plain numbers are\nhours.",
+                "type": "string"
+              }
+            ]
+          },
+          "Priority": {
+            "description": "A task's priority.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No priority (the default).",
+                "type": "string"
+              },
+              {
+                "const": "low",
+                "description": "Low.",
+                "type": "string"
+              },
+              {
+                "const": "normal",
+                "description": "Normal.",
+                "type": "string"
+              },
+              {
+                "const": "high",
+                "description": "High.",
+                "type": "string"
+              },
+              {
+                "const": "urgent",
+                "description": "Urgent.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The presets after a change.",
+        "properties": {
+          "group": {
+            "description": "The history group, when something changed.",
+            "type": "string"
+          },
+          "items": {
+            "description": "The presets now.",
+            "items": {
+              "$ref": "#/$defs/CsvPreset"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "CsvPresetChange",
+        "type": "object"
+      },
+      "output_name": "CsvPresetChange",
+      "safety": "write",
+      "summary": "Save a CSV import mapping as a preset of the workspace, replacing one with the same name."
+    },
+    {
+      "cli": "csv-preset delete <name>",
+      "exposure": "data",
+      "id": "csv_preset.delete",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A preset to delete.",
+        "properties": {
+          "name": {
+            "description": "Its name.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CsvPresetDeleteInput",
+        "type": "object"
+      },
+      "input_name": "CsvPresetDeleteInput",
+      "kind": "command",
+      "mcp_tool": "delete_csv_preset",
+      "output": {
+        "$defs": {
+          "CsvDateOrder": {
+            "description": "The order of day, month and year in dates such as `03/04/2025`.",
+            "oneOf": [
+              {
+                "const": "dmy",
+                "description": "Day, month, year: `31/12/2025`, `31.12.2025`.",
+                "type": "string"
+              },
+              {
+                "const": "mdy",
+                "description": "Month, day, year: `12/31/2025`.",
+                "type": "string"
+              },
+              {
+                "const": "ymd",
+                "description": "Year, month, day: `2025/12/31`.",
+                "type": "string"
+              }
+            ]
+          },
+          "CsvEncoding": {
+            "description": "A text encoding of a CSV file.",
+            "oneOf": [
+              {
+                "const": "utf8",
+                "description": "UTF-8, with or without a byte order mark.",
+                "type": "string"
+              },
+              {
+                "const": "utf16le",
+                "description": "UTF-16, little-endian.",
+                "type": "string"
+              },
+              {
+                "const": "utf16be",
+                "description": "UTF-16, big-endian.",
+                "type": "string"
+              },
+              {
+                "const": "windows1252",
+                "description": "Windows-1252, which Excel and Redmine write on Western systems.",
+                "type": "string"
+              },
+              {
+                "const": "latin1",
+                "description": "ISO-8859-1.",
+                "type": "string"
+              }
+            ]
+          },
+          "CsvPreset": {
+            "additionalProperties": false,
+            "description": "A saved or built-in mapping.",
+            "properties": {
+              "built_in": {
+                "description": "Whether it is built in and can't be changed.",
+                "type": "boolean"
+              },
+              "columns": {
+                "description": "Where columns go.",
+                "items": {
+                  "$ref": "#/$defs/CsvPresetColumn"
+                },
+                "type": "array"
+              },
+              "format": {
+                "$ref": "#/$defs/CsvPresetFormat",
+                "description": "How to read the file."
+              },
+              "name": {
+                "description": "Its name: `jira` and `redmine` are built in.",
+                "type": "string"
+              },
+              "values": {
+                "$ref": "#/$defs/CsvPresetValues",
+                "description": "How values become values here."
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          },
+          "CsvPresetColumn": {
+            "additionalProperties": false,
+            "description": "A column of a preset: [`CsvColumnMapping`] as outputs carry it.",
+            "properties": {
+              "column": {
+                "description": "The column's name, ignoring case.",
+                "type": "string"
+              },
+              "to": {
+                "description": "Its target.",
+                "type": "string"
+              },
+              "unit": {
+                "$ref": "#/$defs/CsvUnit",
+                "description": "The unit of its durations."
+              }
+            },
+            "required": [
+              "column",
+              "to"
+            ],
+            "type": "object"
+          },
+          "CsvPresetFormat": {
+            "additionalProperties": false,
+            "description": "How a preset reads files: [`CsvFormat`] as outputs carry it.",
+            "properties": {
+              "date_order": {
+                "$ref": "#/$defs/CsvDateOrder",
+                "description": "The order of numeric dates."
+              },
+              "decimal_comma": {
+                "description": "Whether numbers have a decimal comma.",
+                "type": "boolean"
+              },
+              "encoding": {
+                "$ref": "#/$defs/CsvEncoding",
+                "description": "The text encoding."
+              },
+              "quote": {
+                "description": "The quote.",
+                "type": "string"
+              },
+              "separator": {
+                "description": "The separator.",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "CsvPresetValues": {
+            "additionalProperties": false,
+            "description": "A preset's value maps: [`CsvValueMaps`] as outputs carry them.",
+            "properties": {
+              "priorities": {
+                "additionalProperties": {
+                  "$ref": "#/$defs/Priority"
+                },
+                "description": "Priority names.",
+                "type": "object"
+              },
+              "statuses": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Status names.",
+                "type": "object"
+              },
+              "types": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Type names.",
+                "type": "object"
+              }
+            },
+            "type": "object"
+          },
+          "CsvUnit": {
+            "description": "The unit of a column of durations.",
+            "oneOf": [
+              {
+                "const": "seconds",
+                "description": "Seconds, as Jira exports estimates and time spent.",
+                "type": "string"
+              },
+              {
+                "const": "minutes",
+                "description": "Minutes.",
+                "type": "string"
+              },
+              {
+                "const": "hours",
+                "description": "Hours, with a fraction, as Redmine exports them.",
+                "type": "string"
+              },
+              {
+                "const": "days",
+                "description": "Days of the workspace's working day.",
+                "type": "string"
+              },
+              {
+                "const": "text",
+                "description": "Written durations such as `1h 30m` or `1:30`; plain numbers are\nhours.",
+                "type": "string"
+              }
+            ]
+          },
+          "Priority": {
+            "description": "A task's priority.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No priority (the default).",
+                "type": "string"
+              },
+              {
+                "const": "low",
+                "description": "Low.",
+                "type": "string"
+              },
+              {
+                "const": "normal",
+                "description": "Normal.",
+                "type": "string"
+              },
+              {
+                "const": "high",
+                "description": "High.",
+                "type": "string"
+              },
+              {
+                "const": "urgent",
+                "description": "Urgent.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The presets after a change.",
+        "properties": {
+          "group": {
+            "description": "The history group, when something changed.",
+            "type": "string"
+          },
+          "items": {
+            "description": "The presets now.",
+            "items": {
+              "$ref": "#/$defs/CsvPreset"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "CsvPresetChange",
+        "type": "object"
+      },
+      "output_name": "CsvPresetChange",
+      "safety": "write",
+      "summary": "Delete a CSV import preset of the workspace."
     }
   ]
 }

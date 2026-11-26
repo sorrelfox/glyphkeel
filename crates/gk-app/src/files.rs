@@ -707,6 +707,8 @@ pub(crate) enum Mode {
     BackupFolder,
     /// Choose a folder of Markdown files to import into the wiki.
     WikiFolder,
+    /// Choose a CSV file to import tasks from.
+    Csv,
 }
 
 /// What kind of chooser a [`Mode`] shows.
@@ -787,6 +789,7 @@ impl Mode {
                 "chooser-wiki-folder-title",
                 "chooser-import",
             ),
+            Mode::Csv => spec(Choose::File, "chooser-csv-title", "chooser-import"),
         }
     }
 }
@@ -1309,6 +1312,7 @@ mod tests {
             Mode::Import { folder: true },
             Mode::BackupFolder,
             Mode::WikiFolder,
+            Mode::Csv,
         ] {
             let spec = mode.spec();
             for id in [

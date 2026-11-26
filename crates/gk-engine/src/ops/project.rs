@@ -1332,7 +1332,11 @@ fn wip(limit: Option<u32>) -> Result<Option<Value>, Failure> {
     }
 }
 
-fn apply_status(w: &mut WriteCtx<'_>, p: &ProjectRow, c: &StatusChange) -> Result<(), Failure> {
+pub(crate) fn apply_status(
+    w: &mut WriteCtx<'_>,
+    p: &ProjectRow,
+    c: &StatusChange,
+) -> Result<(), Failure> {
     let pid = Some(p.id);
     let clears_wip = c.clear.contains(&StatusField::WipLimit);
     if clears_wip && c.wip_limit.is_some() {
@@ -1571,7 +1575,11 @@ fn record_removal(
     Ok(())
 }
 
-fn apply_type(w: &mut WriteCtx<'_>, p: &ProjectRow, c: &TypeChange) -> Result<(), Failure> {
+pub(crate) fn apply_type(
+    w: &mut WriteCtx<'_>,
+    p: &ProjectRow,
+    c: &TypeChange,
+) -> Result<(), Failure> {
     let pid = Some(p.id);
     let Some(which) = &c.task_type else {
         let Some(name) = &c.name else {
@@ -1720,7 +1728,11 @@ fn delete_type(
     Ok(())
 }
 
-fn apply_label(w: &mut WriteCtx<'_>, p: &ProjectRow, c: &LabelChange) -> Result<(), Failure> {
+pub(crate) fn apply_label(
+    w: &mut WriteCtx<'_>,
+    p: &ProjectRow,
+    c: &LabelChange,
+) -> Result<(), Failure> {
     let pid = Some(p.id);
     let Some(which) = &c.label else {
         let Some(name) = &c.name else {

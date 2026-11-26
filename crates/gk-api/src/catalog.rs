@@ -8,8 +8,9 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::ops::{
-    agent, backup, board, bulk, comment, description, draft, field, file, history, link, project,
-    query, schedule, search, settings, task, time, today, transfer, trash, view, wiki, workspace,
+    agent, backup, board, bulk, comment, csv_import, description, draft, field, file, history,
+    link, project, query, schedule, search, settings, task, time, today, transfer, trash, view,
+    wiki, workspace,
 };
 use crate::schema;
 
@@ -272,6 +273,10 @@ pub static CATALOG: &[OpDescriptor] = &[
     backup::BACKUP_FOLDER_UPDATE,
     transfer::TRANSFER_EXPORT,
     transfer::TRANSFER_IMPORT,
+    csv_import::TRANSFER_IMPORT_CSV,
+    csv_import::CSV_PRESET_LIST,
+    csv_import::CSV_PRESET_SAVE,
+    csv_import::CSV_PRESET_DELETE,
 ];
 
 /// The descriptor of the operation named `id`.
