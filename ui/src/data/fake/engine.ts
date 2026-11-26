@@ -73,11 +73,13 @@ import {
   type Reference,
 } from "../../generated/ops";
 import { PROJECT_ICONS, suggestHue } from "../catalog";
+import { isEmpty as isEmptyRules } from "../rules";
 import { formatDuration, parseDuration } from "../duration";
 import { decodeBase64, materialize, recordedFields, sniff } from "./details";
 import { checklistOf, escapeHtml, merge3, publicChecklist, renderFake, setChecked, unifiedDiff } from "./markdown";
 import { newProject, nextFileId, nextId, nextUuid, SAMPLE_AGENT } from "./seed";
 import { type FakeComment, type FakeFile, type FakeProject, type FakeRelation, type FakeReminder, type FakeRevision, type FakeState, type FakeTask, type FakeTimeEntry, type FakeWikiPage } from "./state";
+import { checkReadOnly, enter as enterRules } from "./rules";
 import { naturalDay, nextDay, searchAll, searchWiki, slugOf, headingsOf } from "./overview";
 import { moveDependents, scheduleOf } from "./schedule";
 
@@ -523,8 +525,10 @@ export class FakeWorkspace {
         category: status.category,
         hue: status.hue,
         ...some("wip_limit", status.wip_limit),
+        ...(status.rules === undefined || isEmptyRules(status.rules) ? {} : { rules: structuredClone(status.rules) }),
         tasks: tasks.filter((task) => task.statusId === status.id).length,
       })),
+      ...(project.agentRules !== undefined && (project.agentRules.read_only ?? []).length > 0 ? { agent_rules: structuredClone(project.agentRules) } : {}),
       types: project.types.map((type) => ({ ...type, tasks: tasks.filter((task) => task.typeId === type.id).length })),
       labels: project.labels.map((label) => ({ ...label, tasks: tasks.filter((task) => task.labelIds.includes(label.id)).length })),
       next_label_hue: suggestHue(project.labels.map((label) => label.hue)),
@@ -2014,7 +2018,8 @@ export class FakeWorkspace {
       project.icon = icon ?? undefined;
       if (parentProject) {
         // A sub-project starts with copies of its parent's statuses, types and labels.
-        project.statuses = parentProject.statuses.map((status) => ({ ...status, id: nextId("s") }));
+        project.statuses = parentProject.statuses.map((status) => ({ ...structuredClone(status), id: nextId("s") }));
+        project.agentRules = structuredClone(parentProject.agentRules);
         project.types = parentProject.types.map((type) => ({ ...type, id: nextId("ty") }));
         project.labels = parentProject.labels.map((label) => ({ ...label, id: nextId("l") }));
         project.modules = { ...parentProject.modules };
@@ -2184,6 +2189,17 @@ export class FakeWorkspace {
         fields.push("wip_limit");
       }
       return this.projectChange(project, "status", fields);
+    },
+    "rules.update": ({ project: ref, statuses, agents }) => {
+      const project = this.writable(ref);
+      for (const change of statuses ?? []) {
+        const status = this.statusIn(project, change.status);
+        status.rules = isEmptyRules(change.rules) ? undefined : structuredClone(change.rules);
+      }
+      if (agents !== null && agents !== undefined) {
+        project.agentRules = (agents.read_only ?? []).length > 0 ? structuredClone(agents) : undefined;
+      }
+      return this.projectChange(project, "status", ["rules"]);
     },
     "status.reorder": ({ project: ref, status: statusRef, before, after, at }) => {
       const project = this.writable(ref);
@@ -3367,6 +3383,13 @@ export class FakeWorkspace {
         });
       }
       const clear = input.clear ?? [];
+      const touched = [
+        ...clear,
+        ...(["title", "description", "type", "priority", "start_date", "due_date", "estimate", "progress", "labels", "parent"] as const).filter((field) => input[field] !== null && input[field] !== undefined),
+        ...((input.add_labels ?? []).length > 0 || (input.remove_labels ?? []).length > 0 ? ["labels"] : []),
+        ...((input.description_edits ?? []).length > 0 ? ["description"] : []),
+      ];
+      checkReadOnly(project, task, this.keyOf(task), touched, fail);
       const fields: string[] = [];
       if (input.title !== null && input.title !== undefined) {
         task.title = this.checkTitle(input.title);
@@ -3687,6 +3710,7 @@ export class FakeWorkspace {
       const project = to;
       const target = status === null || status === undefined ? this.statusIn(project, task.statusId) : this.statusIn(project, status);
       if (target.id !== task.statusId) {
+        fields.push(...enterRules(project, task, this.keyOf(task), target.id, localDay(this.today()), fail));
         this.enterStatus(task, target.id);
         fields.push("status");
       }

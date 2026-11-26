@@ -154,6 +154,9 @@ pub(crate) struct Project {
     pub(crate) updated_at: i64,
     pub(crate) deleted_at: Option<i64>,
     pub(crate) deleted_group: Option<String>,
+    /// The rules for agents; left out when there are none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) agent_rules: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -176,6 +179,9 @@ pub(crate) struct Status {
     pub(crate) hue: String,
     pub(crate) rank: String,
     pub(crate) wip_limit: Option<i64>,
+    /// The status's rules; left out when it has none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) rules: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

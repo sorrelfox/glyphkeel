@@ -19,7 +19,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 use crate::error::{Result, StoreError};
 
 /// The schema version this program is built for.
-pub const SCHEMA_VERSION: i64 = 10;
+pub const SCHEMA_VERSION: i64 = 13;
 
 /// One migration: the SQL that takes the schema from `version - 1` to
 /// `version`.
@@ -70,6 +70,18 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 10,
         sql: include_str!("../migrations/0010_wiki_templates.sql"),
+    },
+    Migration {
+        version: 11,
+        sql: include_str!("../migrations/0011_custom_fields.sql"),
+    },
+    Migration {
+        version: 12,
+        sql: include_str!("../migrations/0012_versions.sql"),
+    },
+    Migration {
+        version: 13,
+        sql: include_str!("../migrations/0013_status_and_agent_rules.sql"),
     },
 ];
 
@@ -557,7 +569,7 @@ mod tests {
                      'i', 'Plan', 'plan', 'plan', 0, 0);",
         )
         .unwrap();
-        migrate(&mut conn, MIGRATIONS, |_| Ok(())).unwrap();
+        migrate(&mut conn, &MIGRATIONS[..10], |_| Ok(())).unwrap();
         assert_eq!(user_version(&conn).unwrap(), 10);
         let marked: i64 = conn
             .query_row("SELECT sum(is_template) FROM wiki_pages", [], |r| r.get(0))
@@ -565,5 +577,44 @@ mod tests {
         assert_eq!(marked, 0);
         let bad = conn.execute("UPDATE wiki_pages SET is_template = 2", []);
         assert!(bad.is_err(), "the mark is 0 or 1");
+    }
+
+    #[test]
+    fn version_13_gives_statuses_and_projects_no_rules() {
+        let mut conn = memory();
+        migrate(&mut conn, &MIGRATIONS[..12], |_| Ok(())).unwrap();
+        conn.execute_batch(
+            "INSERT INTO projects (id, rank, key, name, name_fold, hue, modules, created_at,
+                                   updated_at)
+             VALUES (x'01010101010101010101010101010101', 'i', 'RU', 'RU', 'ru', 'blue', '{}',
+                     0, 0);
+             INSERT INTO statuses (id, project_id, name, name_fold, category, hue, rank)
+             VALUES (x'02020202020202020202020202020202', x'01010101010101010101010101010101',
+                     'Done', 'done', 'done', 'green', 'i');",
+        )
+        .unwrap();
+        migrate(&mut conn, &MIGRATIONS[..13], |_| Ok(())).unwrap();
+        assert_eq!(user_version(&conn).unwrap(), 13);
+        let none: i64 = conn
+            .query_row(
+                "SELECT (SELECT count(*) FROM statuses WHERE rules IS NULL)
+                      + (SELECT count(*) FROM projects WHERE agent_rules IS NULL)",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(none, 2);
+        conn.execute(
+            "UPDATE statuses SET rules = '{\"required\":[\"estimate\"]}'",
+            [],
+        )
+        .unwrap();
+        for bad in [
+            "UPDATE statuses SET rules = '[1]'",
+            "UPDATE statuses SET rules = 'not json'",
+            "UPDATE projects SET agent_rules = '\"text\"'",
+        ] {
+            assert!(conn.execute(bad, []).is_err(), "{bad} must be refused");
+        }
     }
 }

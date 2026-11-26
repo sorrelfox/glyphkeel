@@ -5,6 +5,7 @@
 
 import {
   type ActivityEntry,
+  type AgentRules,
   type Actor,
   type ProjectIcon,
   type BoardLayout,
@@ -18,6 +19,7 @@ import {
   type Modules,
   type Priority,
   type RevisionKind,
+  type StatusRules,
   type Backup,
   type SavedView,
   type Settings,
@@ -31,6 +33,8 @@ export interface FakeStatus {
   category: Category;
   hue: Hue;
   wip_limit: number | null;
+  /** Its rules for tasks entering it; none when left out. */
+  rules?: StatusRules | undefined;
 }
 
 export interface FakeType {
@@ -68,6 +72,8 @@ export interface FakeProject {
   nextNumber: number;
   /** Keys it had before a new key; they still find it and its tasks. */
   oldKeys?: string[];
+  /** The rules for agents; none when left out. */
+  agentRules?: AgentRules | undefined;
 }
 
 export interface FakeTask {

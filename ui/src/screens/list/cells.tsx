@@ -6,13 +6,15 @@
 
 import { Check } from "lucide-react";
 import { createContext, use, useRef, useState, type ReactNode } from "react";
-import { Menu, MenuItem, Popover, useLocale } from "react-aria-components";
+import { Menu, MenuItem, Popover, Text, useLocale } from "react-aria-components";
 
 import { classes } from "../../classes";
 import { PriorityGlyph, TypeGlyph, usePriorityName } from "../../components/Glyphs";
 import { PRIORITIES, type Priority } from "../../data/catalog";
 import { useProject } from "../../data/board";
+import { fieldsOfCard } from "../../data/rules";
 import { useDurations } from "../../data/time";
+import { useEntryReason } from "../../data/useRules";
 import { type ListedTask } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { dueState } from "../board/model";
@@ -190,11 +192,18 @@ function StatusMenu({ task, close }: { task: ListedTask; close: () => void }) {
   const actions = useCellActions();
   const project = useProject(task.project);
   const statuses = project.data?.statuses ?? [];
+  const entryReason = useEntryReason();
+  // The statuses whose rules keep the task out, with the reason under the name.
+  const reasons = new Map(statuses.flatMap((status) => {
+    const reason = status.id === task.status.id ? undefined : entryReason(project.data, status.id, fieldsOfCard(task));
+    return reason === undefined ? [] : [[status.id, reason] as const];
+  }));
   return (
     <Menu
       className="menu"
       aria-label={task.key}
       items={statuses}
+      disabledKeys={[...reasons.keys()]}
       autoFocus="first"
       onAction={(id) => {
         close();
@@ -206,7 +215,18 @@ function StatusMenu({ task, close }: { task: ListedTask; close: () => void }) {
       {(status) => (
         <MenuItem id={status.id} className="item" textValue={status.name}>
           <span className={`dot hue-${status.hue}`} />
-          <span className="grow truncate">{status.name}</span>
+          {reasons.has(status.id) ? (
+            <span className="grow menuText">
+              <Text slot="label" className="truncate">
+                {status.name}
+              </Text>
+              <Text slot="description" className="menuDetail">
+                {reasons.get(status.id)}
+              </Text>
+            </span>
+          ) : (
+            <span className="grow truncate">{status.name}</span>
+          )}
           {status.id === task.status.id && <Check className="ic s" aria-hidden="true" />}
         </MenuItem>
       )}

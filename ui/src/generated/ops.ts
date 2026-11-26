@@ -144,6 +144,12 @@ export type AgentPolicyPatch = {
   max_profile: Profile;
 };
 
+/** A project's rules for agents. Everything left out is no rule. */
+export type AgentRules = {
+  /** Task fields agents may not change in this project: `title`, `description`, `type`, `priority`, `start_date`, `due_date`, `estimate`, `progress`, `labels`, `parent`, or a custom field. */
+  read_only?: string[];
+};
+
 /** One run of `glyphkeel mcp`. */
 export type AgentSession = {
   /** The client's own ID (`claude-code`), when it sent one. */
@@ -1533,6 +1539,8 @@ export type Profile = "read-only" | "standard" | "full";
 
 /** One project with its configuration. */
 export type Project = {
+  /** The rules for agents; left out when there are none. */
+  agent_rules?: AgentRules;
   /** The sub-projects' keys, in order. */
   children: string[];
   /** When it was created (RFC 3339, UTC). */
@@ -2052,6 +2060,26 @@ export type RevisionList = {
   total: number;
 };
 
+/** One field a status sets when a task enters it. */
+export type RuleSet = {
+  /** The field: `start_date`, `due_date`, `progress`, `priority`, or a custom field as `cf:<id>`. */
+  field: string;
+  /** Only when the field has no value yet (a start date already set is kept). */
+  only_if_empty?: boolean;
+  /** The value as text: `today` for a date, 0 to 100 for progress, a priority's name (`high`), or a custom field's value as it is written. */
+  value: string;
+};
+
+/** New rules for a project's statuses and its agents. What is left out keeps its rules; everything is one change with one history group. */
+export type RulesUpdateInput = {
+  /** The rules for agents, replacing the ones the project had. */
+  agents?: AgentRules | null;
+  /** The project: its key (current or old) or ID. */
+  project: string;
+  /** Statuses whose rules to replace. */
+  statuses?: StatusRulesChange[];
+};
+
 /** What became of a description that was saved. */
 export type SaveOutcome = "saved" | "merged" | "conflict" | "unchanged";
 
@@ -2363,6 +2391,8 @@ export type Status = {
   id: string;
   /** Its name. */
   name: string;
+  /** Its rules for tasks entering it; left out when it has none. */
+  rules?: StatusRules;
   /** Tasks in this status. */
   tasks: number;
   /** Most tasks the column should hold; left out when there is no limit. */
@@ -2448,6 +2478,32 @@ export type StatusReorderInput = {
   before?: string | null;
   /** The project: its key (current or old) or ID. */
   project: string;
+  /** The status: its name or ID. */
+  status: string;
+};
+
+/** The rules of one status. Everything left out is no rule. */
+export type StatusRules = {
+  /** Agents may not move tasks into the status, nor create tasks in it (for example Done, so that a person reviews first). */
+  agents_may_not_enter?: boolean;
+  /** Fields cleared when a task enters the status: `start_date`, `due_date`, `estimate`, `progress`, or a custom field. */
+  clear?: string[];
+  /** Fields that can't change while a task is in the status: `title`, `description`, `type`, `priority`, `start_date`, `due_date`, `estimate`, `progress`, `labels`, `parent`, or a custom field. */
+  read_only?: string[];
+  /** Release an agent's claim when the task enters the status. */
+  release_claim?: boolean;
+  /** Fields that must have a value before a task enters the status: `description`, `priority`, `start_date`, `due_date`, `estimate`, `labels`, `parent`, or a custom field. */
+  required?: string[];
+  /** Fields set when a task enters the status. */
+  set?: RuleSet[];
+  /** Stop the timer when its task enters the status; the time is logged. */
+  stop_timer?: boolean;
+};
+
+/** New rules for one status inside [`RulesUpdateInput`]. */
+export type StatusRulesChange = {
+  /** Its rules, replacing the ones it had; empty removes them all. */
+  rules: StatusRules;
   /** The status: its name or ID. */
   status: string;
 };
@@ -3933,6 +3989,7 @@ export interface OpMap {
   "agent.sessions": { input: AgentSessionsInput; output: AgentSessionList; safety: "read"; kind: "query" };
   "agent.policy.update": { input: AgentPolicyPatch; output: SettingsChange; safety: "app"; kind: "command" };
   "agent.limits.update": { input: AgentLimitsPatch; output: SettingsChange; safety: "app"; kind: "command" };
+  "rules.update": { input: RulesUpdateInput; output: ProjectChange; safety: "app"; kind: "command" };
   "history.feed": { input: ActivityQuery; output: ActivityPage; safety: "read"; kind: "query" };
   "history.revert": { input: RevertInput; output: RevertResult; safety: "write"; kind: "command" };
   "history.undo": { input: UndoInput; output: UndoResult; safety: "app"; kind: "command" };
@@ -4055,6 +4112,7 @@ export const OP_SAFETY = {
   "agent.sessions": "read",
   "agent.policy.update": "app",
   "agent.limits.update": "app",
+  "rules.update": "app",
   "history.feed": "read",
   "history.revert": "write",
   "history.undo": "app",
@@ -4227,6 +4285,10 @@ export function makeOps(call: Call) {
       due: (input: OpMap["reminder.due"]["input"] = {}) => call("reminder.due", input),
       /** Acknowledge reminders that were shown, so they don't come due again. (write) */
       acknowledge: (input: OpMap["reminder.acknowledge"]["input"]) => call("reminder.acknowledge", input),
+    },
+    rules: {
+      /** Change a project's status rules (fields set, cleared or required when a task enters a status, fields read-only in it, the timer and claims) and its rules for agents (statuses they may not move tasks into, fields they may not change). (app) */
+      update: (input: OpMap["rules.update"]["input"]) => call("rules.update", input),
     },
     schedule: {
       /** The schedule of a project or a query for the Gantt chart: dated tasks as a tree with summary ranges for parents, milestones, the tasks without dates, blocks links as finish-to-start dependencies, and problems such as a task starting before its blocker ends. (read) */
