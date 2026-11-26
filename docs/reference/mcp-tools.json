@@ -9,8 +9,17 @@
       "get_project",
       "create_project",
       "update_project",
+      "list_custom_fields",
+      "create_custom_field",
+      "update_custom_field",
+      "delete_custom_field",
       "get_agent_brief",
       "delete_project",
+      "list_versions",
+      "get_version",
+      "create_version",
+      "update_version",
+      "delete_version",
       "search_tasks",
       "get_task",
       "create_task",
@@ -68,7 +77,10 @@
       "get_activity",
       "list_projects",
       "get_project",
+      "list_custom_fields",
       "get_agent_brief",
+      "list_versions",
+      "get_version",
       "search_tasks",
       "get_task",
       "check_move",
@@ -94,8 +106,16 @@
       "get_project",
       "create_project",
       "update_project",
+      "list_custom_fields",
+      "create_custom_field",
+      "update_custom_field",
       "get_agent_brief",
       "delete_project",
+      "list_versions",
+      "get_version",
+      "create_version",
+      "update_version",
+      "delete_version",
       "search_tasks",
       "get_task",
       "create_task",
@@ -1576,7 +1596,7 @@
             "description": "The rules for agents; left out when there are none.",
             "properties": {
               "read_only": {
-                "description": "Task fields agents may not change in this project: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, or a custom field.",
+                "description": "Task fields agents may not change in this project: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
                 "items": {
                   "type": "string"
                 },
@@ -2005,14 +2025,14 @@
                       "type": "boolean"
                     },
                     "clear": {
-                      "description": "Fields cleared when a task enters the status: `start_date`,\n`due_date`, `estimate`, `progress`, or a custom field.",
+                      "description": "Fields cleared when a task enters the status: `start_date`,\n`due_date`, `estimate`, `progress`, `fix_version`, or a custom field\nthat isn't required.",
                       "items": {
                         "type": "string"
                       },
                       "type": "array"
                     },
                     "read_only": {
-                      "description": "Fields that can't change while a task is in the status: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, or a custom field.",
+                      "description": "Fields that can't change while a task is in the status: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
                       "items": {
                         "type": "string"
                       },
@@ -2023,7 +2043,7 @@
                       "type": "boolean"
                     },
                     "required": {
-                      "description": "Fields that must have a value before a task enters the status:\n`description`, `priority`, `start_date`, `due_date`, `estimate`,\n`labels`, `parent`, or a custom field.",
+                      "description": "Fields that must have a value before a task enters the status:\n`description`, `priority`, `start_date`, `due_date`, `estimate`,\n`labels`, `parent`, `fix_version`, or a custom field.",
                       "items": {
                         "type": "string"
                       },
@@ -2044,7 +2064,7 @@
                             "type": "boolean"
                           },
                           "value": {
-                            "description": "The value as text: `today` for a date, 0 to 100 for progress, a\npriority's name (`high`), or a custom field's value as it is\nwritten.",
+                            "description": "The value as text: `today` for a date, 0 to 100 for progress, a\npriority's name (`high`), or a custom field's value as it is\nwritten (`today` for a date field, one option of a select field).",
                             "type": "string"
                           }
                         },
@@ -2389,7 +2409,7 @@
                 "description": "The rules for agents; left out when there are none.",
                 "properties": {
                   "read_only": {
-                    "description": "Task fields agents may not change in this project: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, or a custom field.",
+                    "description": "Task fields agents may not change in this project: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
                     "items": {
                       "type": "string"
                     },
@@ -2818,14 +2838,14 @@
                           "type": "boolean"
                         },
                         "clear": {
-                          "description": "Fields cleared when a task enters the status: `start_date`,\n`due_date`, `estimate`, `progress`, or a custom field.",
+                          "description": "Fields cleared when a task enters the status: `start_date`,\n`due_date`, `estimate`, `progress`, `fix_version`, or a custom field\nthat isn't required.",
                           "items": {
                             "type": "string"
                           },
                           "type": "array"
                         },
                         "read_only": {
-                          "description": "Fields that can't change while a task is in the status: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, or a custom field.",
+                          "description": "Fields that can't change while a task is in the status: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
                           "items": {
                             "type": "string"
                           },
@@ -2836,7 +2856,7 @@
                           "type": "boolean"
                         },
                         "required": {
-                          "description": "Fields that must have a value before a task enters the status:\n`description`, `priority`, `start_date`, `due_date`, `estimate`,\n`labels`, `parent`, or a custom field.",
+                          "description": "Fields that must have a value before a task enters the status:\n`description`, `priority`, `start_date`, `due_date`, `estimate`,\n`labels`, `parent`, `fix_version`, or a custom field.",
                           "items": {
                             "type": "string"
                           },
@@ -2857,7 +2877,7 @@
                                 "type": "boolean"
                               },
                               "value": {
-                                "description": "The value as text: `today` for a date, 0 to 100 for progress, a\npriority's name (`high`), or a custom field's value as it is\nwritten.",
+                                "description": "The value as text: `today` for a date, 0 to 100 for progress, a\npriority's name (`high`), or a custom field's value as it is\nwritten (`today` for a date field, one option of a select field).",
                                 "type": "string"
                               }
                             },
@@ -3656,7 +3676,7 @@
                 "description": "The rules for agents; left out when there are none.",
                 "properties": {
                   "read_only": {
-                    "description": "Task fields agents may not change in this project: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, or a custom field.",
+                    "description": "Task fields agents may not change in this project: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
                     "items": {
                       "type": "string"
                     },
@@ -4085,14 +4105,14 @@
                           "type": "boolean"
                         },
                         "clear": {
-                          "description": "Fields cleared when a task enters the status: `start_date`,\n`due_date`, `estimate`, `progress`, or a custom field.",
+                          "description": "Fields cleared when a task enters the status: `start_date`,\n`due_date`, `estimate`, `progress`, `fix_version`, or a custom field\nthat isn't required.",
                           "items": {
                             "type": "string"
                           },
                           "type": "array"
                         },
                         "read_only": {
-                          "description": "Fields that can't change while a task is in the status: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, or a custom field.",
+                          "description": "Fields that can't change while a task is in the status: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
                           "items": {
                             "type": "string"
                           },
@@ -4103,7 +4123,7 @@
                           "type": "boolean"
                         },
                         "required": {
-                          "description": "Fields that must have a value before a task enters the status:\n`description`, `priority`, `start_date`, `due_date`, `estimate`,\n`labels`, `parent`, or a custom field.",
+                          "description": "Fields that must have a value before a task enters the status:\n`description`, `priority`, `start_date`, `due_date`, `estimate`,\n`labels`, `parent`, `fix_version`, or a custom field.",
                           "items": {
                             "type": "string"
                           },
@@ -4124,7 +4144,7 @@
                                 "type": "boolean"
                               },
                               "value": {
-                                "description": "The value as text: `today` for a date, 0 to 100 for progress, a\npriority's name (`high`), or a custom field's value as it is\nwritten.",
+                                "description": "The value as text: `today` for a date, 0 to 100 for progress, a\npriority's name (`high`), or a custom field's value as it is\nwritten (`today` for a date field, one option of a select field).",
                                 "type": "string"
                               }
                             },
@@ -4330,6 +4350,845 @@
         "idempotentHint": true,
         "openWorldHint": false,
         "readOnlyHint": true,
+        "title": "List custom fields"
+      },
+      "covers": [
+        "field.list"
+      ],
+      "description": "Lists the custom fields of a project (its own and those of every project) or of the whole workspace: `name`, `query_name` for search_tasks (`cf.story-points>3`, `cf.area:\"Back end\"`, `sort:-cf.story-points`), `kind` (text, markdown, integer, decimal, date, boolean, select, multi_select, url), `options`, `default`, the task `types` it shows for and whether it is `required`. Set values with create_task or update_task `fields`. Example: list_custom_fields {\"project\": \"TM\"}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Which custom fields to list.",
+        "properties": {
+          "project": {
+            "description": "The project: its key (current or old) or ID. Lists the fields its\ntasks have: its own and those of every project. Left out: every\nfield of the workspace.",
+            "type": "string"
+          }
+        },
+        "title": "CustomFieldListInput",
+        "type": "object"
+      },
+      "name": "list_custom_fields",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "The custom fields of a project, or of the whole workspace.",
+        "properties": {
+          "fields": {
+            "description": "The fields in order: those of every project first, then the\nproject's own.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A custom field.",
+              "properties": {
+                "default": {
+                  "description": "The value new tasks get; left out when there is none."
+                },
+                "id": {
+                  "description": "The field's ID.",
+                  "type": "string"
+                },
+                "kind": {
+                  "description": "What it holds.",
+                  "oneOf": [
+                    {
+                      "const": "text",
+                      "description": "One line of text, up to 1000 characters.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "markdown",
+                      "description": "Formatted text (Markdown), up to 64 KB.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "integer",
+                      "description": "A whole number.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "decimal",
+                      "description": "A number with a fraction.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "date",
+                      "description": "A day, `YYYY-MM-DD`.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "boolean",
+                      "description": "Yes or no.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "select",
+                      "description": "One option of the field's list.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "multi_select",
+                      "description": "Any number of options of the field's list.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "url",
+                      "description": "A link with a scheme (`https://…`, `mailto:…`).",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "name": {
+                  "description": "Its name.",
+                  "type": "string"
+                },
+                "options": {
+                  "description": "The options of a select or multi-select field, in order.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "project": {
+                  "description": "The project it belongs to (its key); left out for a field of every\nproject.",
+                  "type": "string"
+                },
+                "query_name": {
+                  "description": "How queries name it: `cf.story-points`.",
+                  "type": "string"
+                },
+                "required": {
+                  "description": "Whether tasks it is shown for must have a value.",
+                  "type": "boolean"
+                },
+                "tasks": {
+                  "description": "Tasks with a value for it (not in the trash).",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "types": {
+                  "description": "The task types it is shown for, by name; empty: every type.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "query_name",
+                "kind",
+                "required",
+                "tasks"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "fields"
+        ],
+        "title": "CustomFieldList",
+        "type": "object"
+      },
+      "title": "List custom fields",
+      "toolset": "projects"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Create a custom field"
+      },
+      "covers": [
+        "field.create"
+      ],
+      "description": "Adds a custom field to a project, or to every project when `project` is left out. Give a `name` and a `kind`; select and multi_select fields need `options`. Optional: a `default` value, the task `types` it shows for, `required`, and a place (`before`/`after`/`at`). Only add fields the person asked for. Example: create_custom_field {\"project\": \"TM\", \"name\": \"Story points\", \"kind\": \"integer\"}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "A new custom field.",
+        "properties": {
+          "after": {
+            "description": "Place it after this field.",
+            "type": "string"
+          },
+          "at": {
+            "description": "Place it first or last; default: last.",
+            "oneOf": [
+              {
+                "const": "top",
+                "description": "First.",
+                "type": "string"
+              },
+              {
+                "const": "bottom",
+                "description": "Last.",
+                "type": "string"
+              }
+            ]
+          },
+          "before": {
+            "description": "Place it before this field.",
+            "type": "string"
+          },
+          "default": {
+            "description": "The value new tasks get unless told otherwise."
+          },
+          "kind": {
+            "description": "What it holds.",
+            "oneOf": [
+              {
+                "const": "text",
+                "description": "One line of text, up to 1000 characters.",
+                "type": "string"
+              },
+              {
+                "const": "markdown",
+                "description": "Formatted text (Markdown), up to 64 KB.",
+                "type": "string"
+              },
+              {
+                "const": "integer",
+                "description": "A whole number.",
+                "type": "string"
+              },
+              {
+                "const": "decimal",
+                "description": "A number with a fraction.",
+                "type": "string"
+              },
+              {
+                "const": "date",
+                "description": "A day, `YYYY-MM-DD`.",
+                "type": "string"
+              },
+              {
+                "const": "boolean",
+                "description": "Yes or no.",
+                "type": "string"
+              },
+              {
+                "const": "select",
+                "description": "One option of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "multi_select",
+                "description": "Any number of options of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "url",
+                "description": "A link with a scheme (`https://…`, `mailto:…`).",
+                "type": "string"
+              }
+            ]
+          },
+          "name": {
+            "description": "The name, 1 to 50 characters with at least one letter or digit;\nunique among the fields the project's tasks have, ignoring case. A\nfield of the same name in another project must hold the same kind.",
+            "type": "string"
+          },
+          "options": {
+            "description": "The options of a select or multi-select field, in order (1 to 200,\neach 1 to 100 characters, unique ignoring case).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "project": {
+            "description": "The project: its key (current or old) or ID. Left out: a field of\nevery project. A project's sub-projects created later get a copy of\nits own fields.",
+            "type": "string"
+          },
+          "required": {
+            "default": false,
+            "description": "Tasks it is shown for must have a value: a new task needs one (or\nthe default), and a value can't be cleared.",
+            "type": "boolean"
+          },
+          "types": {
+            "description": "Show it only for tasks of these types, by name; default: every type.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "kind"
+        ],
+        "title": "CustomFieldCreateInput",
+        "type": "object"
+      },
+      "name": "create_custom_field",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "A custom field changed, with the history group of the change.",
+        "properties": {
+          "field": {
+            "additionalProperties": false,
+            "description": "The field after the change; left out when it was deleted.",
+            "properties": {
+              "default": {
+                "description": "The value new tasks get; left out when there is none."
+              },
+              "id": {
+                "description": "The field's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "description": "What it holds.",
+                "oneOf": [
+                  {
+                    "const": "text",
+                    "description": "One line of text, up to 1000 characters.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "markdown",
+                    "description": "Formatted text (Markdown), up to 64 KB.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "integer",
+                    "description": "A whole number.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "decimal",
+                    "description": "A number with a fraction.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "date",
+                    "description": "A day, `YYYY-MM-DD`.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "boolean",
+                    "description": "Yes or no.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "select",
+                    "description": "One option of the field's list.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "multi_select",
+                    "description": "Any number of options of the field's list.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "url",
+                    "description": "A link with a scheme (`https://…`, `mailto:…`).",
+                    "type": "string"
+                  }
+                ]
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "options": {
+                "description": "The options of a select or multi-select field, in order.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "project": {
+                "description": "The project it belongs to (its key); left out for a field of every\nproject.",
+                "type": "string"
+              },
+              "query_name": {
+                "description": "How queries name it: `cf.story-points`.",
+                "type": "string"
+              },
+              "required": {
+                "description": "Whether tasks it is shown for must have a value.",
+                "type": "boolean"
+              },
+              "tasks": {
+                "description": "Tasks with a value for it (not in the trash).",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "types": {
+                "description": "The task types it is shown for, by name; empty: every type.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "query_name",
+              "kind",
+              "required",
+              "tasks"
+            ],
+            "type": "object"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "values_removed": {
+            "description": "How many tasks lost a value: of the deleted field, or of options\ntaken off its list.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "views_rewritten": {
+            "description": "The saved views whose queries were rewritten because the field or\none of its options was renamed or deleted, by name; left out when\nnone was.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "CustomFieldChange",
+        "type": "object"
+      },
+      "title": "Create a custom field",
+      "toolset": "projects"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Update a custom field"
+      },
+      "covers": [
+        "field.update"
+      ],
+      "description": "Changes a custom field: a new `name`, `rename_options` ([{from, to}]), the whole `options` list (options left out are taken off every task), `default`, `types`, `required`, or its place. Its kind can't change. Saved views that use the field or a renamed option are rewritten. To clear the default or the types, list them in `clear`. Example: update_custom_field {\"project\": \"TM\", \"field\": \"Area\", \"rename_options\": [{\"from\": \"UI\", \"to\": \"Front end\"}]}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Changes to a custom field; settings left out keep their value. Its kind\ncan't change.",
+        "properties": {
+          "after": {
+            "description": "Move it after this field.",
+            "type": "string"
+          },
+          "at": {
+            "description": "Move it first or last.",
+            "oneOf": [
+              {
+                "const": "top",
+                "description": "First.",
+                "type": "string"
+              },
+              {
+                "const": "bottom",
+                "description": "Last.",
+                "type": "string"
+              }
+            ]
+          },
+          "before": {
+            "description": "Move it before this field.",
+            "type": "string"
+          },
+          "clear": {
+            "description": "Settings to clear.",
+            "items": {
+              "description": "A custom field setting that can be cleared.",
+              "oneOf": [
+                {
+                  "const": "default",
+                  "description": "The default value.",
+                  "type": "string"
+                },
+                {
+                  "const": "types",
+                  "description": "The task types: it shows for every type again.",
+                  "type": "string"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "default": {
+            "description": "A new default value."
+          },
+          "field": {
+            "description": "The field: its name or ID.",
+            "type": "string"
+          },
+          "name": {
+            "description": "A new name. Saved queries that use the field are rewritten.",
+            "type": "string"
+          },
+          "options": {
+            "description": "The whole list of options after the renames, in order. Options left\nout are taken off every task.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "project": {
+            "description": "The project whose fields to look in: its key (current or old) or\nID; left out: the fields of every project.",
+            "type": "string"
+          },
+          "rename_options": {
+            "description": "Options to rename; tasks and saved queries keep up.",
+            "items": {
+              "additionalProperties": false,
+              "description": "An option of a select field to rename.",
+              "properties": {
+                "from": {
+                  "description": "The option's current name (any case).",
+                  "type": "string"
+                },
+                "to": {
+                  "description": "Its new name.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "from",
+                "to"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "required": {
+            "description": "Whether tasks must have a value.",
+            "type": "boolean"
+          },
+          "types": {
+            "description": "Show it only for tasks of these types, by name.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "field"
+        ],
+        "title": "CustomFieldUpdateInput",
+        "type": "object"
+      },
+      "name": "update_custom_field",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "A custom field changed, with the history group of the change.",
+        "properties": {
+          "field": {
+            "additionalProperties": false,
+            "description": "The field after the change; left out when it was deleted.",
+            "properties": {
+              "default": {
+                "description": "The value new tasks get; left out when there is none."
+              },
+              "id": {
+                "description": "The field's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "description": "What it holds.",
+                "oneOf": [
+                  {
+                    "const": "text",
+                    "description": "One line of text, up to 1000 characters.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "markdown",
+                    "description": "Formatted text (Markdown), up to 64 KB.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "integer",
+                    "description": "A whole number.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "decimal",
+                    "description": "A number with a fraction.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "date",
+                    "description": "A day, `YYYY-MM-DD`.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "boolean",
+                    "description": "Yes or no.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "select",
+                    "description": "One option of the field's list.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "multi_select",
+                    "description": "Any number of options of the field's list.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "url",
+                    "description": "A link with a scheme (`https://…`, `mailto:…`).",
+                    "type": "string"
+                  }
+                ]
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "options": {
+                "description": "The options of a select or multi-select field, in order.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "project": {
+                "description": "The project it belongs to (its key); left out for a field of every\nproject.",
+                "type": "string"
+              },
+              "query_name": {
+                "description": "How queries name it: `cf.story-points`.",
+                "type": "string"
+              },
+              "required": {
+                "description": "Whether tasks it is shown for must have a value.",
+                "type": "boolean"
+              },
+              "tasks": {
+                "description": "Tasks with a value for it (not in the trash).",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "types": {
+                "description": "The task types it is shown for, by name; empty: every type.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "query_name",
+              "kind",
+              "required",
+              "tasks"
+            ],
+            "type": "object"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "values_removed": {
+            "description": "How many tasks lost a value: of the deleted field, or of options\ntaken off its list.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "views_rewritten": {
+            "description": "The saved views whose queries were rewritten because the field or\none of its options was renamed or deleted, by name; left out when\nnone was.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "CustomFieldChange",
+        "type": "object"
+      },
+      "title": "Update a custom field",
+      "toolset": "projects"
+    },
+    {
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Delete a custom field"
+      },
+      "covers": [
+        "field.delete"
+      ],
+      "description": "Deletes a custom field and its value on every task; saved views lose their conditions on it. It can't be undone, needs the full profile, and should only be done when the person asked for it. Pass `expected_task_count` (the field's `tasks` from list_custom_fields). Example: delete_custom_field {\"project\": \"TM\", \"field\": \"Old estimate\", \"expected_task_count\": 4}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "A custom field to delete, with its values.",
+        "properties": {
+          "expected_task_count": {
+            "description": "The number of tasks you expect to have a value for it; the deletion\nstops if the number differs.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "field": {
+            "description": "The field: its name or ID. Its values leave every task, and saved\nqueries that use it lose those conditions.",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project whose fields to look in: its key (current or old) or\nID; left out: the fields of every project.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field"
+        ],
+        "title": "CustomFieldDeleteInput",
+        "type": "object"
+      },
+      "name": "delete_custom_field",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "A custom field changed, with the history group of the change.",
+        "properties": {
+          "field": {
+            "additionalProperties": false,
+            "description": "The field after the change; left out when it was deleted.",
+            "properties": {
+              "default": {
+                "description": "The value new tasks get; left out when there is none."
+              },
+              "id": {
+                "description": "The field's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "description": "What it holds.",
+                "oneOf": [
+                  {
+                    "const": "text",
+                    "description": "One line of text, up to 1000 characters.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "markdown",
+                    "description": "Formatted text (Markdown), up to 64 KB.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "integer",
+                    "description": "A whole number.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "decimal",
+                    "description": "A number with a fraction.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "date",
+                    "description": "A day, `YYYY-MM-DD`.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "boolean",
+                    "description": "Yes or no.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "select",
+                    "description": "One option of the field's list.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "multi_select",
+                    "description": "Any number of options of the field's list.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "url",
+                    "description": "A link with a scheme (`https://…`, `mailto:…`).",
+                    "type": "string"
+                  }
+                ]
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "options": {
+                "description": "The options of a select or multi-select field, in order.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "project": {
+                "description": "The project it belongs to (its key); left out for a field of every\nproject.",
+                "type": "string"
+              },
+              "query_name": {
+                "description": "How queries name it: `cf.story-points`.",
+                "type": "string"
+              },
+              "required": {
+                "description": "Whether tasks it is shown for must have a value.",
+                "type": "boolean"
+              },
+              "tasks": {
+                "description": "Tasks with a value for it (not in the trash).",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "types": {
+                "description": "The task types it is shown for, by name; empty: every type.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "query_name",
+              "kind",
+              "required",
+              "tasks"
+            ],
+            "type": "object"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "values_removed": {
+            "description": "How many tasks lost a value: of the deleted field, or of options\ntaken off its list.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "views_rewritten": {
+            "description": "The saved views whose queries were rewritten because the field or\none of its options was renamed or deleted, by name; left out when\nnone was.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "CustomFieldChange",
+        "type": "object"
+      },
+      "title": "Delete a custom field",
+      "toolset": "projects"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
         "title": "Get the agent brief"
       },
       "covers": [
@@ -4480,6 +5339,1597 @@
         "type": "object"
       },
       "title": "Delete a project",
+      "toolset": "projects"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "List versions"
+      },
+      "covers": [
+        "version.list"
+      ],
+      "description": "Lists the versions (releases) of a `project` and those its ancestors share with it (`inherited`), by due date: name, status (open, locked, closed), dates, sharing and progress (tasks closed of total, percent weighted by estimates). `include_tasks: true` adds each version's tasks, like the roadmap; `status` filters. Only open versions take new tasks. Example: list_versions {\"project\": \"TM\", \"status\": [\"open\"]}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Which versions to list.",
+        "properties": {
+          "include_tasks": {
+            "description": "Include each version's tasks, for the roadmap.",
+            "type": "boolean"
+          },
+          "own_only": {
+            "description": "Leave out the versions ancestors share with the project.",
+            "type": "boolean"
+          },
+          "project": {
+            "description": "The project (key or ID): its own versions and those its ancestors\nshare with it.",
+            "type": "string"
+          },
+          "status": {
+            "description": "Only versions with these statuses; default: all.",
+            "items": {
+              "description": "Where a version stands.",
+              "oneOf": [
+                {
+                  "const": "open",
+                  "description": "Tasks can be planned for it (the default).",
+                  "type": "string"
+                },
+                {
+                  "const": "locked",
+                  "description": "No new tasks; the tasks in it stay.",
+                  "type": "string"
+                },
+                {
+                  "const": "closed",
+                  "description": "Finished; no new tasks.",
+                  "type": "string"
+                }
+              ]
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "title": "VersionListInput",
+        "type": "object"
+      },
+      "name": "list_versions",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "Versions: by due date (those without one last), then by their order.",
+        "properties": {
+          "items": {
+            "description": "The versions.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A version.",
+              "properties": {
+                "created_at": {
+                  "description": "When it was created (RFC 3339, UTC).",
+                  "type": "string"
+                },
+                "description": {
+                  "description": "What it is for: plain text.",
+                  "type": "string"
+                },
+                "due_date": {
+                  "description": "When it is due (`YYYY-MM-DD`).",
+                  "type": "string"
+                },
+                "id": {
+                  "description": "Its ID.",
+                  "type": "string"
+                },
+                "inherited": {
+                  "description": "Whether it belongs to an ancestor project and is shared with this\none, when listed for a project.",
+                  "type": "boolean"
+                },
+                "name": {
+                  "description": "Its name, unique in its project (ignoring case).",
+                  "type": "string"
+                },
+                "progress": {
+                  "additionalProperties": false,
+                  "description": "Its progress.",
+                  "properties": {
+                    "closed": {
+                      "description": "How many of them are closed.",
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "estimate_minutes": {
+                      "description": "The tasks' estimates added up, in minutes.",
+                      "type": "integer"
+                    },
+                    "percent": {
+                      "description": "Done, in percent: each task's progress weighted by its estimate;\nclosed tasks count as 100 %, unestimated ones get the average weight.",
+                      "maximum": 255,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "spent_minutes": {
+                      "description": "The time logged on them, in minutes.",
+                      "type": "integer"
+                    },
+                    "total": {
+                      "description": "The tasks planned for it (not in the trash).",
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "total",
+                    "closed",
+                    "percent",
+                    "estimate_minutes",
+                    "spent_minutes"
+                  ],
+                  "type": "object"
+                },
+                "project": {
+                  "description": "The key of the project it belongs to.",
+                  "type": "string"
+                },
+                "rank": {
+                  "description": "Its place among the project's versions.",
+                  "type": "string"
+                },
+                "sharing": {
+                  "description": "Which projects can plan tasks for it.",
+                  "oneOf": [
+                    {
+                      "const": "none",
+                      "description": "Only its own project (the default).",
+                      "type": "string"
+                    },
+                    {
+                      "const": "descendants",
+                      "description": "Its project and every sub-project below it.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "start_date": {
+                  "description": "When work on it starts (`YYYY-MM-DD`).",
+                  "type": "string"
+                },
+                "status": {
+                  "description": "Where it stands.",
+                  "oneOf": [
+                    {
+                      "const": "open",
+                      "description": "Tasks can be planned for it (the default).",
+                      "type": "string"
+                    },
+                    {
+                      "const": "locked",
+                      "description": "No new tasks; the tasks in it stay.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "closed",
+                      "description": "Finished; no new tasks.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "tasks": {
+                  "description": "Its tasks, when asked for: top-level first by board order.",
+                  "items": {
+                    "additionalProperties": false,
+                    "description": "A task of a version, as the roadmap lists it.",
+                    "properties": {
+                      "closed": {
+                        "description": "Whether it is closed (done or cancelled).",
+                        "type": "boolean"
+                      },
+                      "id": {
+                        "description": "Its ID.",
+                        "type": "string"
+                      },
+                      "key": {
+                        "description": "Its key.",
+                        "type": "string"
+                      },
+                      "progress_percent": {
+                        "description": "Its progress in percent.",
+                        "maximum": 255,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "project": {
+                        "description": "Its project's key.",
+                        "type": "string"
+                      },
+                      "status": {
+                        "additionalProperties": false,
+                        "description": "Its status.",
+                        "properties": {
+                          "category": {
+                            "description": "Its category.",
+                            "oneOf": [
+                              {
+                                "const": "todo",
+                                "description": "Not started.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "in_progress",
+                                "description": "Being worked on.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "done",
+                                "description": "Finished; closes the task.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "cancelled",
+                                "description": "Dropped; closes the task.",
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "id": {
+                            "description": "The status's ID.",
+                            "type": "string"
+                          },
+                          "name": {
+                            "description": "Its name.",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "category"
+                        ],
+                        "type": "object"
+                      },
+                      "title": {
+                        "description": "Its title.",
+                        "type": "string"
+                      },
+                      "type": {
+                        "description": "Its type's name.",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "title",
+                      "project",
+                      "status",
+                      "closed",
+                      "type",
+                      "progress_percent",
+                      "id"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "updated_at": {
+                  "description": "When it last changed.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "project",
+                "status",
+                "sharing",
+                "progress",
+                "rank",
+                "created_at",
+                "updated_at",
+                "id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "total": {
+            "description": "How many.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "unplanned": {
+            "description": "With `include_tasks`: the project's open tasks planned for no\nversion.",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "VersionList",
+        "type": "object"
+      },
+      "title": "List versions",
+      "toolset": "projects"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Get a version"
+      },
+      "covers": [
+        "version.get"
+      ],
+      "description": "Returns one version with its progress and its tasks (key, title, status, type, progress), named by ID or by name with its `project`. Example: get_version {\"version\": \"1.2\", \"project\": \"TM\"}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "One version to read.",
+        "properties": {
+          "project": {
+            "description": "With a name: the project (key or ID); its own versions come first,\nthen those shared with it.",
+            "type": "string"
+          },
+          "version": {
+            "description": "The version: its ID, or its name.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "VersionGetInput",
+        "type": "object"
+      },
+      "name": "get_version",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "A version.",
+        "properties": {
+          "created_at": {
+            "description": "When it was created (RFC 3339, UTC).",
+            "type": "string"
+          },
+          "description": {
+            "description": "What it is for: plain text.",
+            "type": "string"
+          },
+          "due_date": {
+            "description": "When it is due (`YYYY-MM-DD`).",
+            "type": "string"
+          },
+          "id": {
+            "description": "Its ID.",
+            "type": "string"
+          },
+          "inherited": {
+            "description": "Whether it belongs to an ancestor project and is shared with this\none, when listed for a project.",
+            "type": "boolean"
+          },
+          "name": {
+            "description": "Its name, unique in its project (ignoring case).",
+            "type": "string"
+          },
+          "progress": {
+            "additionalProperties": false,
+            "description": "Its progress.",
+            "properties": {
+              "closed": {
+                "description": "How many of them are closed.",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "estimate_minutes": {
+                "description": "The tasks' estimates added up, in minutes.",
+                "type": "integer"
+              },
+              "percent": {
+                "description": "Done, in percent: each task's progress weighted by its estimate;\nclosed tasks count as 100 %, unestimated ones get the average weight.",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "spent_minutes": {
+                "description": "The time logged on them, in minutes.",
+                "type": "integer"
+              },
+              "total": {
+                "description": "The tasks planned for it (not in the trash).",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "total",
+              "closed",
+              "percent",
+              "estimate_minutes",
+              "spent_minutes"
+            ],
+            "type": "object"
+          },
+          "project": {
+            "description": "The key of the project it belongs to.",
+            "type": "string"
+          },
+          "rank": {
+            "description": "Its place among the project's versions.",
+            "type": "string"
+          },
+          "sharing": {
+            "description": "Which projects can plan tasks for it.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "Only its own project (the default).",
+                "type": "string"
+              },
+              {
+                "const": "descendants",
+                "description": "Its project and every sub-project below it.",
+                "type": "string"
+              }
+            ]
+          },
+          "start_date": {
+            "description": "When work on it starts (`YYYY-MM-DD`).",
+            "type": "string"
+          },
+          "status": {
+            "description": "Where it stands.",
+            "oneOf": [
+              {
+                "const": "open",
+                "description": "Tasks can be planned for it (the default).",
+                "type": "string"
+              },
+              {
+                "const": "locked",
+                "description": "No new tasks; the tasks in it stay.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Finished; no new tasks.",
+                "type": "string"
+              }
+            ]
+          },
+          "tasks": {
+            "description": "Its tasks, when asked for: top-level first by board order.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A task of a version, as the roadmap lists it.",
+              "properties": {
+                "closed": {
+                  "description": "Whether it is closed (done or cancelled).",
+                  "type": "boolean"
+                },
+                "id": {
+                  "description": "Its ID.",
+                  "type": "string"
+                },
+                "key": {
+                  "description": "Its key.",
+                  "type": "string"
+                },
+                "progress_percent": {
+                  "description": "Its progress in percent.",
+                  "maximum": 255,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "project": {
+                  "description": "Its project's key.",
+                  "type": "string"
+                },
+                "status": {
+                  "additionalProperties": false,
+                  "description": "Its status.",
+                  "properties": {
+                    "category": {
+                      "description": "Its category.",
+                      "oneOf": [
+                        {
+                          "const": "todo",
+                          "description": "Not started.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "in_progress",
+                          "description": "Being worked on.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "done",
+                          "description": "Finished; closes the task.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "cancelled",
+                          "description": "Dropped; closes the task.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "id": {
+                      "description": "The status's ID.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "category"
+                  ],
+                  "type": "object"
+                },
+                "title": {
+                  "description": "Its title.",
+                  "type": "string"
+                },
+                "type": {
+                  "description": "Its type's name.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "title",
+                "project",
+                "status",
+                "closed",
+                "type",
+                "progress_percent",
+                "id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "updated_at": {
+            "description": "When it last changed.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "project",
+          "status",
+          "sharing",
+          "progress",
+          "rank",
+          "created_at",
+          "updated_at",
+          "id"
+        ],
+        "title": "Version",
+        "type": "object"
+      },
+      "title": "Get a version",
+      "toolset": "projects"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Create a version"
+      },
+      "covers": [
+        "version.create"
+      ],
+      "description": "Creates a version (release) of a project: `name` (unique in the project), optional `description` (plain text), `status` (default open), `start_date`, `due_date` and `sharing` (`descendants` lets its sub-projects plan tasks for it). Plan tasks for it with update_task `fix_version`. Only create versions the person asked for. Example: create_version {\"project\": \"TM\", \"name\": \"1.2\", \"due_date\": \"2026-12-15\"}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "A new version.",
+        "properties": {
+          "description": {
+            "description": "What it is for: plain text, up to 4,000 characters.",
+            "type": "string"
+          },
+          "due_date": {
+            "description": "When it is due: `YYYY-MM-DD`, or `today`, `fri`, `+2w`, `dec 1`.",
+            "type": "string"
+          },
+          "name": {
+            "description": "Its name, up to 100 characters, unique in the project.",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project (key or ID).",
+            "type": "string"
+          },
+          "sharing": {
+            "description": "Which projects can plan tasks for it; default: only its own.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "Only its own project (the default).",
+                "type": "string"
+              },
+              {
+                "const": "descendants",
+                "description": "Its project and every sub-project below it.",
+                "type": "string"
+              }
+            ]
+          },
+          "start_date": {
+            "description": "When work starts: `YYYY-MM-DD`, or `today`, `fri`, `+2w`, `dec 1`.",
+            "type": "string"
+          },
+          "status": {
+            "description": "Where it stands; default: open.",
+            "oneOf": [
+              {
+                "const": "open",
+                "description": "Tasks can be planned for it (the default).",
+                "type": "string"
+              },
+              {
+                "const": "locked",
+                "description": "No new tasks; the tasks in it stay.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Finished; no new tasks.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "required": [
+          "project",
+          "name"
+        ],
+        "title": "VersionCreateInput",
+        "type": "object"
+      },
+      "name": "create_version",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "A version after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether it was deleted.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "tasks_changed": {
+            "description": "The keys of the tasks whose version changed with it: moved on when\nit closed, or cleared by a deletion or new sharing.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "version": {
+            "additionalProperties": false,
+            "description": "The version after the change (before it, for a deletion).",
+            "properties": {
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "description": {
+                "description": "What it is for: plain text.",
+                "type": "string"
+              },
+              "due_date": {
+                "description": "When it is due (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "inherited": {
+                "description": "Whether it belongs to an ancestor project and is shared with this\none, when listed for a project.",
+                "type": "boolean"
+              },
+              "name": {
+                "description": "Its name, unique in its project (ignoring case).",
+                "type": "string"
+              },
+              "progress": {
+                "additionalProperties": false,
+                "description": "Its progress.",
+                "properties": {
+                  "closed": {
+                    "description": "How many of them are closed.",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "estimate_minutes": {
+                    "description": "The tasks' estimates added up, in minutes.",
+                    "type": "integer"
+                  },
+                  "percent": {
+                    "description": "Done, in percent: each task's progress weighted by its estimate;\nclosed tasks count as 100 %, unestimated ones get the average weight.",
+                    "maximum": 255,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "spent_minutes": {
+                    "description": "The time logged on them, in minutes.",
+                    "type": "integer"
+                  },
+                  "total": {
+                    "description": "The tasks planned for it (not in the trash).",
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "total",
+                  "closed",
+                  "percent",
+                  "estimate_minutes",
+                  "spent_minutes"
+                ],
+                "type": "object"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place among the project's versions.",
+                "type": "string"
+              },
+              "sharing": {
+                "description": "Which projects can plan tasks for it.",
+                "oneOf": [
+                  {
+                    "const": "none",
+                    "description": "Only its own project (the default).",
+                    "type": "string"
+                  },
+                  {
+                    "const": "descendants",
+                    "description": "Its project and every sub-project below it.",
+                    "type": "string"
+                  }
+                ]
+              },
+              "start_date": {
+                "description": "When work on it starts (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "status": {
+                "description": "Where it stands.",
+                "oneOf": [
+                  {
+                    "const": "open",
+                    "description": "Tasks can be planned for it (the default).",
+                    "type": "string"
+                  },
+                  {
+                    "const": "locked",
+                    "description": "No new tasks; the tasks in it stay.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "closed",
+                    "description": "Finished; no new tasks.",
+                    "type": "string"
+                  }
+                ]
+              },
+              "tasks": {
+                "description": "Its tasks, when asked for: top-level first by board order.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "A task of a version, as the roadmap lists it.",
+                  "properties": {
+                    "closed": {
+                      "description": "Whether it is closed (done or cancelled).",
+                      "type": "boolean"
+                    },
+                    "id": {
+                      "description": "Its ID.",
+                      "type": "string"
+                    },
+                    "key": {
+                      "description": "Its key.",
+                      "type": "string"
+                    },
+                    "progress_percent": {
+                      "description": "Its progress in percent.",
+                      "maximum": 255,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "project": {
+                      "description": "Its project's key.",
+                      "type": "string"
+                    },
+                    "status": {
+                      "additionalProperties": false,
+                      "description": "Its status.",
+                      "properties": {
+                        "category": {
+                          "description": "Its category.",
+                          "oneOf": [
+                            {
+                              "const": "todo",
+                              "description": "Not started.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "in_progress",
+                              "description": "Being worked on.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "done",
+                              "description": "Finished; closes the task.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "cancelled",
+                              "description": "Dropped; closes the task.",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "id": {
+                          "description": "The status's ID.",
+                          "type": "string"
+                        },
+                        "name": {
+                          "description": "Its name.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "category"
+                      ],
+                      "type": "object"
+                    },
+                    "title": {
+                      "description": "Its title.",
+                      "type": "string"
+                    },
+                    "type": {
+                      "description": "Its type's name.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "title",
+                    "project",
+                    "status",
+                    "closed",
+                    "type",
+                    "progress_percent",
+                    "id"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "description": "When it last changed.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "status",
+              "sharing",
+              "progress",
+              "rank",
+              "created_at",
+              "updated_at",
+              "id"
+            ],
+            "type": "object"
+          },
+          "views_rewritten": {
+            "description": "The saved views whose query was rewritten because they named the\nversion (renamed or deleted), by name.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "VersionChange",
+        "type": "object"
+      },
+      "title": "Create a version",
+      "toolset": "projects"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Change a version"
+      },
+      "covers": [
+        "version.update"
+      ],
+      "description": "Renames a version (saved views follow) or changes its description, dates, `sharing` or `status`. Name it by ID, or by name with its `project`. Closing it with `move_open_tasks_to` (another open version, or `none`) moves its open tasks on in the same change; `tasks_changed` lists them. Tasks of projects that no longer see it after a sharing change lose it. `clear` empties fields. Example: update_version {\"version\": \"1.1\", \"project\": \"TM\", \"status\": \"closed\", \"move_open_tasks_to\": \"1.2\"}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Changes to a version; fields left out keep their value.",
+        "properties": {
+          "clear": {
+            "description": "Fields to clear.",
+            "items": {
+              "description": "A version field that can be cleared.",
+              "oneOf": [
+                {
+                  "const": "description",
+                  "description": "The description.",
+                  "type": "string"
+                },
+                {
+                  "const": "start_date",
+                  "description": "The start date.",
+                  "type": "string"
+                },
+                {
+                  "const": "due_date",
+                  "description": "The due date.",
+                  "type": "string"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "description": {
+            "description": "A new description.",
+            "type": "string"
+          },
+          "due_date": {
+            "description": "A new due date.",
+            "type": "string"
+          },
+          "move_open_tasks_to": {
+            "description": "When closing it: plan its open tasks for this other open version (its\nname or ID) instead, or `none` to plan them for no version. Left\nout, open tasks stay in the closed version.",
+            "type": "string"
+          },
+          "name": {
+            "description": "A new name; saved views that name the old one are rewritten.",
+            "type": "string"
+          },
+          "project": {
+            "description": "With a name: the version's project (key or ID).",
+            "type": "string"
+          },
+          "sharing": {
+            "description": "New sharing. Tasks of projects that no longer see the version lose\nit.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "Only its own project (the default).",
+                "type": "string"
+              },
+              {
+                "const": "descendants",
+                "description": "Its project and every sub-project below it.",
+                "type": "string"
+              }
+            ]
+          },
+          "start_date": {
+            "description": "A new start date.",
+            "type": "string"
+          },
+          "status": {
+            "description": "A new status.",
+            "oneOf": [
+              {
+                "const": "open",
+                "description": "Tasks can be planned for it (the default).",
+                "type": "string"
+              },
+              {
+                "const": "locked",
+                "description": "No new tasks; the tasks in it stay.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Finished; no new tasks.",
+                "type": "string"
+              }
+            ]
+          },
+          "version": {
+            "description": "The version: its ID, or its name.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "VersionUpdateInput",
+        "type": "object"
+      },
+      "name": "update_version",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "A version after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether it was deleted.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "tasks_changed": {
+            "description": "The keys of the tasks whose version changed with it: moved on when\nit closed, or cleared by a deletion or new sharing.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "version": {
+            "additionalProperties": false,
+            "description": "The version after the change (before it, for a deletion).",
+            "properties": {
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "description": {
+                "description": "What it is for: plain text.",
+                "type": "string"
+              },
+              "due_date": {
+                "description": "When it is due (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "inherited": {
+                "description": "Whether it belongs to an ancestor project and is shared with this\none, when listed for a project.",
+                "type": "boolean"
+              },
+              "name": {
+                "description": "Its name, unique in its project (ignoring case).",
+                "type": "string"
+              },
+              "progress": {
+                "additionalProperties": false,
+                "description": "Its progress.",
+                "properties": {
+                  "closed": {
+                    "description": "How many of them are closed.",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "estimate_minutes": {
+                    "description": "The tasks' estimates added up, in minutes.",
+                    "type": "integer"
+                  },
+                  "percent": {
+                    "description": "Done, in percent: each task's progress weighted by its estimate;\nclosed tasks count as 100 %, unestimated ones get the average weight.",
+                    "maximum": 255,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "spent_minutes": {
+                    "description": "The time logged on them, in minutes.",
+                    "type": "integer"
+                  },
+                  "total": {
+                    "description": "The tasks planned for it (not in the trash).",
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "total",
+                  "closed",
+                  "percent",
+                  "estimate_minutes",
+                  "spent_minutes"
+                ],
+                "type": "object"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place among the project's versions.",
+                "type": "string"
+              },
+              "sharing": {
+                "description": "Which projects can plan tasks for it.",
+                "oneOf": [
+                  {
+                    "const": "none",
+                    "description": "Only its own project (the default).",
+                    "type": "string"
+                  },
+                  {
+                    "const": "descendants",
+                    "description": "Its project and every sub-project below it.",
+                    "type": "string"
+                  }
+                ]
+              },
+              "start_date": {
+                "description": "When work on it starts (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "status": {
+                "description": "Where it stands.",
+                "oneOf": [
+                  {
+                    "const": "open",
+                    "description": "Tasks can be planned for it (the default).",
+                    "type": "string"
+                  },
+                  {
+                    "const": "locked",
+                    "description": "No new tasks; the tasks in it stay.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "closed",
+                    "description": "Finished; no new tasks.",
+                    "type": "string"
+                  }
+                ]
+              },
+              "tasks": {
+                "description": "Its tasks, when asked for: top-level first by board order.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "A task of a version, as the roadmap lists it.",
+                  "properties": {
+                    "closed": {
+                      "description": "Whether it is closed (done or cancelled).",
+                      "type": "boolean"
+                    },
+                    "id": {
+                      "description": "Its ID.",
+                      "type": "string"
+                    },
+                    "key": {
+                      "description": "Its key.",
+                      "type": "string"
+                    },
+                    "progress_percent": {
+                      "description": "Its progress in percent.",
+                      "maximum": 255,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "project": {
+                      "description": "Its project's key.",
+                      "type": "string"
+                    },
+                    "status": {
+                      "additionalProperties": false,
+                      "description": "Its status.",
+                      "properties": {
+                        "category": {
+                          "description": "Its category.",
+                          "oneOf": [
+                            {
+                              "const": "todo",
+                              "description": "Not started.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "in_progress",
+                              "description": "Being worked on.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "done",
+                              "description": "Finished; closes the task.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "cancelled",
+                              "description": "Dropped; closes the task.",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "id": {
+                          "description": "The status's ID.",
+                          "type": "string"
+                        },
+                        "name": {
+                          "description": "Its name.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "category"
+                      ],
+                      "type": "object"
+                    },
+                    "title": {
+                      "description": "Its title.",
+                      "type": "string"
+                    },
+                    "type": {
+                      "description": "Its type's name.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "title",
+                    "project",
+                    "status",
+                    "closed",
+                    "type",
+                    "progress_percent",
+                    "id"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "description": "When it last changed.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "status",
+              "sharing",
+              "progress",
+              "rank",
+              "created_at",
+              "updated_at",
+              "id"
+            ],
+            "type": "object"
+          },
+          "views_rewritten": {
+            "description": "The saved views whose query was rewritten because they named the\nversion (renamed or deleted), by name.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "VersionChange",
+        "type": "object"
+      },
+      "title": "Change a version",
+      "toolset": "projects"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Delete a version"
+      },
+      "covers": [
+        "version.delete"
+      ],
+      "description": "Deletes a version; its tasks are planned for no version, and saved views stop naming it. revert_changes brings both back. Prefer closing a finished version, which keeps its history on the roadmap. Example: delete_version {\"version\": \"1.1\", \"project\": \"TM\"}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Which version to delete.",
+        "properties": {
+          "project": {
+            "description": "With a name: the version's project (key or ID).",
+            "type": "string"
+          },
+          "version": {
+            "description": "The version: its ID, or its name.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "VersionDeleteInput",
+        "type": "object"
+      },
+      "name": "delete_version",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "A version after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether it was deleted.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "tasks_changed": {
+            "description": "The keys of the tasks whose version changed with it: moved on when\nit closed, or cleared by a deletion or new sharing.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "version": {
+            "additionalProperties": false,
+            "description": "The version after the change (before it, for a deletion).",
+            "properties": {
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "description": {
+                "description": "What it is for: plain text.",
+                "type": "string"
+              },
+              "due_date": {
+                "description": "When it is due (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "inherited": {
+                "description": "Whether it belongs to an ancestor project and is shared with this\none, when listed for a project.",
+                "type": "boolean"
+              },
+              "name": {
+                "description": "Its name, unique in its project (ignoring case).",
+                "type": "string"
+              },
+              "progress": {
+                "additionalProperties": false,
+                "description": "Its progress.",
+                "properties": {
+                  "closed": {
+                    "description": "How many of them are closed.",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "estimate_minutes": {
+                    "description": "The tasks' estimates added up, in minutes.",
+                    "type": "integer"
+                  },
+                  "percent": {
+                    "description": "Done, in percent: each task's progress weighted by its estimate;\nclosed tasks count as 100 %, unestimated ones get the average weight.",
+                    "maximum": 255,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "spent_minutes": {
+                    "description": "The time logged on them, in minutes.",
+                    "type": "integer"
+                  },
+                  "total": {
+                    "description": "The tasks planned for it (not in the trash).",
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "total",
+                  "closed",
+                  "percent",
+                  "estimate_minutes",
+                  "spent_minutes"
+                ],
+                "type": "object"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place among the project's versions.",
+                "type": "string"
+              },
+              "sharing": {
+                "description": "Which projects can plan tasks for it.",
+                "oneOf": [
+                  {
+                    "const": "none",
+                    "description": "Only its own project (the default).",
+                    "type": "string"
+                  },
+                  {
+                    "const": "descendants",
+                    "description": "Its project and every sub-project below it.",
+                    "type": "string"
+                  }
+                ]
+              },
+              "start_date": {
+                "description": "When work on it starts (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "status": {
+                "description": "Where it stands.",
+                "oneOf": [
+                  {
+                    "const": "open",
+                    "description": "Tasks can be planned for it (the default).",
+                    "type": "string"
+                  },
+                  {
+                    "const": "locked",
+                    "description": "No new tasks; the tasks in it stay.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "closed",
+                    "description": "Finished; no new tasks.",
+                    "type": "string"
+                  }
+                ]
+              },
+              "tasks": {
+                "description": "Its tasks, when asked for: top-level first by board order.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "A task of a version, as the roadmap lists it.",
+                  "properties": {
+                    "closed": {
+                      "description": "Whether it is closed (done or cancelled).",
+                      "type": "boolean"
+                    },
+                    "id": {
+                      "description": "Its ID.",
+                      "type": "string"
+                    },
+                    "key": {
+                      "description": "Its key.",
+                      "type": "string"
+                    },
+                    "progress_percent": {
+                      "description": "Its progress in percent.",
+                      "maximum": 255,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "project": {
+                      "description": "Its project's key.",
+                      "type": "string"
+                    },
+                    "status": {
+                      "additionalProperties": false,
+                      "description": "Its status.",
+                      "properties": {
+                        "category": {
+                          "description": "Its category.",
+                          "oneOf": [
+                            {
+                              "const": "todo",
+                              "description": "Not started.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "in_progress",
+                              "description": "Being worked on.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "done",
+                              "description": "Finished; closes the task.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "cancelled",
+                              "description": "Dropped; closes the task.",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "id": {
+                          "description": "The status's ID.",
+                          "type": "string"
+                        },
+                        "name": {
+                          "description": "Its name.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "category"
+                      ],
+                      "type": "object"
+                    },
+                    "title": {
+                      "description": "Its title.",
+                      "type": "string"
+                    },
+                    "type": {
+                      "description": "Its type's name.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "title",
+                    "project",
+                    "status",
+                    "closed",
+                    "type",
+                    "progress_percent",
+                    "id"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "description": "When it last changed.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "status",
+              "sharing",
+              "progress",
+              "rank",
+              "created_at",
+              "updated_at",
+              "id"
+            ],
+            "type": "object"
+          },
+          "views_rewritten": {
+            "description": "The saved views whose query was rewritten because they named the\nversion (renamed or deleted), by name.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "VersionChange",
+        "type": "object"
+      },
+      "title": "Delete a version",
       "toolset": "projects"
     },
     {
@@ -4752,10 +7202,64 @@
                   "description": "The estimate in minutes.",
                   "type": "integer"
                 },
+                "fields": {
+                  "additionalProperties": true,
+                  "description": "Its custom field values by query name (`story-points`): a string,\na number, `true`/`false`, or a list of options; fields without a\nvalue are left out.",
+                  "type": "object"
+                },
                 "file_count": {
                   "description": "How many files are attached to it and to its comments.",
                   "minimum": 0,
                   "type": "integer"
+                },
+                "fix_version": {
+                  "additionalProperties": false,
+                  "description": "The version it is planned for.",
+                  "properties": {
+                    "due_date": {
+                      "description": "Its due date (`YYYY-MM-DD`).",
+                      "type": "string"
+                    },
+                    "id": {
+                      "description": "Its ID.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    },
+                    "project": {
+                      "description": "The key of the project it belongs to.",
+                      "type": "string"
+                    },
+                    "status": {
+                      "description": "Where it stands.",
+                      "oneOf": [
+                        {
+                          "const": "open",
+                          "description": "Tasks can be planned for it (the default).",
+                          "type": "string"
+                        },
+                        {
+                          "const": "locked",
+                          "description": "No new tasks; the tasks in it stay.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "closed",
+                          "description": "Finished; no new tasks.",
+                          "type": "string"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "project",
+                    "status",
+                    "id"
+                  ],
+                  "type": "object"
                 },
                 "id": {
                   "description": "The task's ID.",
@@ -5724,6 +8228,89 @@
                   "description": "The estimate in minutes.",
                   "type": "integer"
                 },
+                "fields": {
+                  "description": "Its custom field values, in the fields' order; fields without a\nvalue are left out.",
+                  "items": {
+                    "additionalProperties": false,
+                    "description": "One custom field's value on a task.",
+                    "properties": {
+                      "id": {
+                        "description": "The field's ID.",
+                        "type": "string"
+                      },
+                      "kind": {
+                        "description": "What it holds.",
+                        "oneOf": [
+                          {
+                            "const": "text",
+                            "description": "One line of text, up to 1000 characters.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "markdown",
+                            "description": "Formatted text (Markdown), up to 64 KB.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "integer",
+                            "description": "A whole number.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "decimal",
+                            "description": "A number with a fraction.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "date",
+                            "description": "A day, `YYYY-MM-DD`.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "boolean",
+                            "description": "Yes or no.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "select",
+                            "description": "One option of the field's list.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "multi_select",
+                            "description": "Any number of options of the field's list.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "url",
+                            "description": "A link with a scheme (`https://…`, `mailto:…`).",
+                            "type": "string"
+                          }
+                        ]
+                      },
+                      "name": {
+                        "description": "Its name.",
+                        "type": "string"
+                      },
+                      "query_name": {
+                        "description": "How queries name it: `cf.story-points`.",
+                        "type": "string"
+                      },
+                      "value": {
+                        "description": "The value: a string, a number, `true`/`false`, or a list of options\nfor a multi-select field."
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "query_name",
+                      "kind",
+                      "value"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
                 "file_count": {
                   "description": "How many files are attached to it and to its comments.",
                   "minimum": 0,
@@ -5856,6 +8443,55 @@
                     "type": "object"
                   },
                   "type": "array"
+                },
+                "fix_version": {
+                  "additionalProperties": false,
+                  "description": "The version (release) it is planned for.",
+                  "properties": {
+                    "due_date": {
+                      "description": "Its due date (`YYYY-MM-DD`).",
+                      "type": "string"
+                    },
+                    "id": {
+                      "description": "Its ID.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    },
+                    "project": {
+                      "description": "The key of the project it belongs to.",
+                      "type": "string"
+                    },
+                    "status": {
+                      "description": "Where it stands.",
+                      "oneOf": [
+                        {
+                          "const": "open",
+                          "description": "Tasks can be planned for it (the default).",
+                          "type": "string"
+                        },
+                        {
+                          "const": "locked",
+                          "description": "No new tasks; the tasks in it stay.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "closed",
+                          "description": "Finished; no new tasks.",
+                          "type": "string"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "project",
+                    "status",
+                    "id"
+                  ],
+                  "type": "object"
                 },
                 "id": {
                   "description": "The task's ID.",
@@ -6786,7 +9422,7 @@
       "covers": [
         "task.create"
       ],
-      "description": "Creates a task in a project from a title alone, or with `description`, `status`, `type`, `priority` (none, low, normal, high, urgent), `labels`, `parent`, `start_date`, `due_date` (YYYY-MM-DD) and `estimate` (`1d 4h`, `90m`). It lands in the first to-do status at the bottom unless told otherwise, and gets the project's next key. Pass `client_request_id` so a retry doesn't create a second task. Example: create_task {\"project\": \"TM\", \"title\": \"Write the release notes\", \"due_date\": \"2026-12-01\"}",
+      "description": "Creates a task in a project from a title alone, or with `description`, `status`, `type`, `priority` (none, low, normal, high, urgent), `labels`, `fix_version`, `parent`, `start_date`, `due_date` (YYYY-MM-DD), `estimate` (`1d 4h`, `90m`) and custom `fields` by name (see list_custom_fields; a required field needs a value). It lands in the first to-do status at the bottom unless told otherwise, and gets the project's next key. Pass `client_request_id` so a retry doesn't create a second task. Example: create_task {\"project\": \"TM\", \"title\": \"Write the release notes\", \"due_date\": \"2026-12-01\"}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "A new task. Only the project and the title are needed.",
@@ -6828,6 +9464,15 @@
           },
           "estimate": {
             "description": "The estimate, as a duration (`1d 4h`, `90m`, `1.5h`).",
+            "type": "string"
+          },
+          "fields": {
+            "additionalProperties": true,
+            "description": "Custom field values, by field name, query name or ID (see\n`field.list`): a string, a number, `true`/`false`, or a list of\noptions for a multi-select field. Fields with a default get it\nunless given here; a required field needs a value.",
+            "type": "object"
+          },
+          "fix_version": {
+            "description": "The version it is planned for (name or ID): an open version of the\nproject or one shared with it.",
             "type": "string"
           },
           "labels": {
@@ -7492,6 +10137,89 @@
                 "description": "The estimate in minutes.",
                 "type": "integer"
               },
+              "fields": {
+                "description": "Its custom field values, in the fields' order; fields without a\nvalue are left out.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "One custom field's value on a task.",
+                  "properties": {
+                    "id": {
+                      "description": "The field's ID.",
+                      "type": "string"
+                    },
+                    "kind": {
+                      "description": "What it holds.",
+                      "oneOf": [
+                        {
+                          "const": "text",
+                          "description": "One line of text, up to 1000 characters.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "markdown",
+                          "description": "Formatted text (Markdown), up to 64 KB.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "integer",
+                          "description": "A whole number.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "decimal",
+                          "description": "A number with a fraction.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "date",
+                          "description": "A day, `YYYY-MM-DD`.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "boolean",
+                          "description": "Yes or no.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "select",
+                          "description": "One option of the field's list.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "multi_select",
+                          "description": "Any number of options of the field's list.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "url",
+                          "description": "A link with a scheme (`https://…`, `mailto:…`).",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    },
+                    "query_name": {
+                      "description": "How queries name it: `cf.story-points`.",
+                      "type": "string"
+                    },
+                    "value": {
+                      "description": "The value: a string, a number, `true`/`false`, or a list of options\nfor a multi-select field."
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "query_name",
+                    "kind",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
               "file_count": {
                 "description": "How many files are attached to it and to its comments.",
                 "minimum": 0,
@@ -7624,6 +10352,55 @@
                   "type": "object"
                 },
                 "type": "array"
+              },
+              "fix_version": {
+                "additionalProperties": false,
+                "description": "The version (release) it is planned for.",
+                "properties": {
+                  "due_date": {
+                    "description": "Its due date (`YYYY-MM-DD`).",
+                    "type": "string"
+                  },
+                  "id": {
+                    "description": "Its ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  },
+                  "project": {
+                    "description": "The key of the project it belongs to.",
+                    "type": "string"
+                  },
+                  "status": {
+                    "description": "Where it stands.",
+                    "oneOf": [
+                      {
+                        "const": "open",
+                        "description": "Tasks can be planned for it (the default).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "locked",
+                        "description": "No new tasks; the tasks in it stay.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "closed",
+                        "description": "Finished; no new tasks.",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "project",
+                  "status",
+                  "id"
+                ],
+                "type": "object"
               },
               "id": {
                 "description": "The task's ID.",
@@ -8554,7 +11331,7 @@
         "task.update",
         "task.resolve_conflict"
       ],
-      "description": "Changes the given fields of a task only: `title`, `type`, `priority`, `labels` (replace) or `add_labels`/`remove_labels`, `parent`, `start_date`, `due_date`, `estimate`, `progress`, and the description. With new dates, `move_dependents: true` also moves the tasks that depend on this one (blocks links, and theirs in turn) later, as far as each must to begin after its blocker ends, in the same change; `moved` lists them. Prefer `description_edits` ([{old_text, new_text}], each old_text found exactly once) for changes to part of the description; a whole new `description` needs `base_revision` (the `description_revision` from get_task): if someone saved in between, edits to different lines are merged, and edits to the same lines are kept as a conflict copy for the person while the description stays as it was (`description_save` says which). `resolve_conflict` resolves a conflict copy. To clear a field, list it in `clear`. Status and position change with move_task; checklist ticks with update_checklist. Example: update_task {\"key\": \"TM-41\", \"description_edits\": [{\"old_text\": \"Draft\", \"new_text\": \"Final\"}]}",
+      "description": "Changes the given fields of a task only: `title`, `type`, `priority`, `labels` (replace) or `add_labels`/`remove_labels`, `fix_version` (an open version, see list_versions), `parent`, `start_date`, `due_date`, `estimate`, `progress`, custom `fields` ({\"Story points\": 3}; null clears one), and the description. With new dates, `move_dependents: true` also moves the tasks that depend on this one (blocks links, and theirs in turn) later, as far as each must to begin after its blocker ends, in the same change; `moved` lists them. Prefer `description_edits` ([{old_text, new_text}], each old_text found exactly once) for changes to part of the description; a whole new `description` needs `base_revision` (the `description_revision` from get_task): if someone saved in between, edits to different lines are merged, and edits to the same lines are kept as a conflict copy for the person while the description stays as it was (`description_save` says which). `resolve_conflict` resolves a conflict copy. To clear a field, list it in `clear`. Status and position change with move_task; checklist ticks with update_checklist. Example: update_task {\"key\": \"TM-41\", \"description_edits\": [{\"old_text\": \"Draft\", \"new_text\": \"Final\"}]}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "Changes to a task; fields left out keep their value. Status and\nposition change with `task.move`.",
@@ -8609,6 +11386,11 @@
                   "const": "labels",
                   "description": "Every label.",
                   "type": "string"
+                },
+                {
+                  "const": "fix_version",
+                  "description": "The version it is planned for.",
+                  "type": "string"
                 }
               ]
             },
@@ -8652,6 +11434,15 @@
           "expected_version": {
             "description": "Refuse the change unless the task still has this version.",
             "type": "integer"
+          },
+          "fields": {
+            "additionalProperties": true,
+            "description": "Custom field values to set, by field name, query name or ID: a\nstring, a number, `true`/`false`, a list of options for a\nmulti-select field, or `null` to clear the value.",
+            "type": "object"
+          },
+          "fix_version": {
+            "description": "Plan it for this version (name or ID): an open version of the\nproject or one shared with it.",
+            "type": "string"
           },
           "key": {
             "description": "The task: its key or ID.",
@@ -9372,6 +12163,89 @@
                 "description": "The estimate in minutes.",
                 "type": "integer"
               },
+              "fields": {
+                "description": "Its custom field values, in the fields' order; fields without a\nvalue are left out.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "One custom field's value on a task.",
+                  "properties": {
+                    "id": {
+                      "description": "The field's ID.",
+                      "type": "string"
+                    },
+                    "kind": {
+                      "description": "What it holds.",
+                      "oneOf": [
+                        {
+                          "const": "text",
+                          "description": "One line of text, up to 1000 characters.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "markdown",
+                          "description": "Formatted text (Markdown), up to 64 KB.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "integer",
+                          "description": "A whole number.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "decimal",
+                          "description": "A number with a fraction.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "date",
+                          "description": "A day, `YYYY-MM-DD`.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "boolean",
+                          "description": "Yes or no.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "select",
+                          "description": "One option of the field's list.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "multi_select",
+                          "description": "Any number of options of the field's list.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "url",
+                          "description": "A link with a scheme (`https://…`, `mailto:…`).",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    },
+                    "query_name": {
+                      "description": "How queries name it: `cf.story-points`.",
+                      "type": "string"
+                    },
+                    "value": {
+                      "description": "The value: a string, a number, `true`/`false`, or a list of options\nfor a multi-select field."
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "query_name",
+                    "kind",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
               "file_count": {
                 "description": "How many files are attached to it and to its comments.",
                 "minimum": 0,
@@ -9504,6 +12378,55 @@
                   "type": "object"
                 },
                 "type": "array"
+              },
+              "fix_version": {
+                "additionalProperties": false,
+                "description": "The version (release) it is planned for.",
+                "properties": {
+                  "due_date": {
+                    "description": "Its due date (`YYYY-MM-DD`).",
+                    "type": "string"
+                  },
+                  "id": {
+                    "description": "Its ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  },
+                  "project": {
+                    "description": "The key of the project it belongs to.",
+                    "type": "string"
+                  },
+                  "status": {
+                    "description": "Where it stands.",
+                    "oneOf": [
+                      {
+                        "const": "open",
+                        "description": "Tasks can be planned for it (the default).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "locked",
+                        "description": "No new tasks; the tasks in it stay.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "closed",
+                        "description": "Finished; no new tasks.",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "project",
+                  "status",
+                  "id"
+                ],
+                "type": "object"
               },
               "id": {
                 "description": "The task's ID.",
@@ -10433,7 +13356,7 @@
       "covers": [
         "task.move"
       ],
-      "description": "Moves a task to another `status` (by name), to a place in its column (`before` or `after` another task's key, or `at`: top or bottom), or to another `project`, where it gets a new key while the old one keeps finding it; its subtasks, comments, files, time and links come along. Statuses, types and labels are matched by name there; check_move first shows which have no match, and `mapping` ({statuses, types, labels}: from the old name to the target's name) says what takes their place. Entering a done or cancelled status closes the task. Example: move_task {\"key\": \"TM-41\", \"status\": \"In progress\", \"at\": \"top\"}",
+      "description": "Moves a task to another `status` (by name), to a place in its column (`before` or `after` another task's key, or `at`: top or bottom), or to another `project`, where it gets a new key while the old one keeps finding it; its subtasks, comments, files, time and links come along. Statuses, types and labels are matched by name there; check_move first shows which have no match, and `mapping` ({statuses, types, labels}: from the old name to the target's name) says what takes their place. Custom field values go to the target's field of the same name and kind; others are left off, with a warning. Entering a done or cancelled status closes the task. Example: move_task {\"key\": \"TM-41\", \"status\": \"In progress\", \"at\": \"top\"}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "Where to move a task: another status, another place in its column, or\nanother project.",
@@ -11110,6 +14033,89 @@
                 "description": "The estimate in minutes.",
                 "type": "integer"
               },
+              "fields": {
+                "description": "Its custom field values, in the fields' order; fields without a\nvalue are left out.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "One custom field's value on a task.",
+                  "properties": {
+                    "id": {
+                      "description": "The field's ID.",
+                      "type": "string"
+                    },
+                    "kind": {
+                      "description": "What it holds.",
+                      "oneOf": [
+                        {
+                          "const": "text",
+                          "description": "One line of text, up to 1000 characters.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "markdown",
+                          "description": "Formatted text (Markdown), up to 64 KB.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "integer",
+                          "description": "A whole number.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "decimal",
+                          "description": "A number with a fraction.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "date",
+                          "description": "A day, `YYYY-MM-DD`.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "boolean",
+                          "description": "Yes or no.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "select",
+                          "description": "One option of the field's list.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "multi_select",
+                          "description": "Any number of options of the field's list.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "url",
+                          "description": "A link with a scheme (`https://…`, `mailto:…`).",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    },
+                    "query_name": {
+                      "description": "How queries name it: `cf.story-points`.",
+                      "type": "string"
+                    },
+                    "value": {
+                      "description": "The value: a string, a number, `true`/`false`, or a list of options\nfor a multi-select field."
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "query_name",
+                    "kind",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
               "file_count": {
                 "description": "How many files are attached to it and to its comments.",
                 "minimum": 0,
@@ -11242,6 +14248,55 @@
                   "type": "object"
                 },
                 "type": "array"
+              },
+              "fix_version": {
+                "additionalProperties": false,
+                "description": "The version (release) it is planned for.",
+                "properties": {
+                  "due_date": {
+                    "description": "Its due date (`YYYY-MM-DD`).",
+                    "type": "string"
+                  },
+                  "id": {
+                    "description": "Its ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  },
+                  "project": {
+                    "description": "The key of the project it belongs to.",
+                    "type": "string"
+                  },
+                  "status": {
+                    "description": "Where it stands.",
+                    "oneOf": [
+                      {
+                        "const": "open",
+                        "description": "Tasks can be planned for it (the default).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "locked",
+                        "description": "No new tasks; the tasks in it stay.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "closed",
+                        "description": "Finished; no new tasks.",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "project",
+                  "status",
+                  "id"
+                ],
+                "type": "object"
               },
               "id": {
                 "description": "The task's ID.",
@@ -12171,7 +15226,7 @@
       "covers": [
         "task.move_check"
       ],
-      "description": "Shows what moving tasks to another project would do, without moving them: the key each task (and subtask) would get, and for each of their statuses, types and labels the target's item of the same name, or none. Pass what has no match as `mapping` to move_task. Example: check_move {\"keys\": [\"TM-41\"], \"project\": \"OPS\"}",
+      "description": "Shows what moving tasks to another project would do, without moving them: the key each task (and subtask) would get, and for each of their statuses, types and labels the target's item of the same name, or none. Pass what has no match as `mapping` to move_task. `fields` lists their custom fields with the target's field that would keep the values (same name and kind), or none when the values would be left off. Example: check_move {\"keys\": [\"TM-41\"], \"project\": \"OPS\"}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "Tasks that might move to another project, to see first what the move\nwould do.",
@@ -12208,6 +15263,35 @@
             "description": "The target's type for those it has no match for: its default one.",
             "type": "string"
           },
+          "fields": {
+            "default": [],
+            "description": "The custom fields they have values of. The target is the target's\nfield that would hold the values; absent when they would be left off.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A status, type, label or custom field of the moving tasks, and its match\nin the target project.",
+              "properties": {
+                "name": {
+                  "description": "Its name.",
+                  "type": "string"
+                },
+                "target": {
+                  "description": "The target's item of the same name; absent when it has none.",
+                  "type": "string"
+                },
+                "tasks": {
+                  "description": "How many of the moving tasks have it.",
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "name",
+                "tasks"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
           "keys": {
             "description": "Every task that would move, subtasks included, with its key now and\nthe key it would get.",
             "items": {
@@ -12235,7 +15319,7 @@
             "description": "Their labels.",
             "items": {
               "additionalProperties": false,
-              "description": "A status, type or label of the moving tasks, and its match in the target\nproject.",
+              "description": "A status, type, label or custom field of the moving tasks, and its match\nin the target project.",
               "properties": {
                 "name": {
                   "description": "Its name.",
@@ -12267,7 +15351,7 @@
             "description": "The statuses the tasks have now.",
             "items": {
               "additionalProperties": false,
-              "description": "A status, type or label of the moving tasks, and its match in the target\nproject.",
+              "description": "A status, type, label or custom field of the moving tasks, and its match\nin the target project.",
               "properties": {
                 "name": {
                   "description": "Its name.",
@@ -12295,7 +15379,36 @@
             "description": "Their types.",
             "items": {
               "additionalProperties": false,
-              "description": "A status, type or label of the moving tasks, and its match in the target\nproject.",
+              "description": "A status, type, label or custom field of the moving tasks, and its match\nin the target project.",
+              "properties": {
+                "name": {
+                  "description": "Its name.",
+                  "type": "string"
+                },
+                "target": {
+                  "description": "The target's item of the same name; absent when it has none.",
+                  "type": "string"
+                },
+                "tasks": {
+                  "description": "How many of the moving tasks have it.",
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "name",
+                "tasks"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "versions": {
+            "default": [],
+            "description": "The versions they are planned for. The target is the same version\nwhen the target project can plan tasks for it; absent when the move\nwould take it off.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A status, type, label or custom field of the moving tasks, and its match\nin the target project.",
               "properties": {
                 "name": {
                   "description": "Its name.",
@@ -12326,6 +15439,8 @@
           "statuses",
           "types",
           "labels",
+          "fields",
+          "versions",
           "fallback_status",
           "fallback_type"
         ],
@@ -12590,6 +15705,11 @@
                       "const": "labels",
                       "description": "Every label.",
                       "type": "string"
+                    },
+                    {
+                      "const": "fix_version",
+                      "description": "The version it is planned for.",
+                      "type": "string"
                     }
                   ]
                 },
@@ -12601,6 +15721,10 @@
               },
               "estimate": {
                 "description": "The estimate, as a duration (`1d 4h`, `90m`).",
+                "type": "string"
+              },
+              "fix_version": {
+                "description": "Plan them for the version of this name (in each task's project,\nor shared with it).",
                 "type": "string"
               },
               "labels": {
@@ -13478,6 +16602,89 @@
                 "description": "The estimate in minutes.",
                 "type": "integer"
               },
+              "fields": {
+                "description": "Its custom field values, in the fields' order; fields without a\nvalue are left out.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "One custom field's value on a task.",
+                  "properties": {
+                    "id": {
+                      "description": "The field's ID.",
+                      "type": "string"
+                    },
+                    "kind": {
+                      "description": "What it holds.",
+                      "oneOf": [
+                        {
+                          "const": "text",
+                          "description": "One line of text, up to 1000 characters.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "markdown",
+                          "description": "Formatted text (Markdown), up to 64 KB.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "integer",
+                          "description": "A whole number.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "decimal",
+                          "description": "A number with a fraction.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "date",
+                          "description": "A day, `YYYY-MM-DD`.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "boolean",
+                          "description": "Yes or no.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "select",
+                          "description": "One option of the field's list.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "multi_select",
+                          "description": "Any number of options of the field's list.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "url",
+                          "description": "A link with a scheme (`https://…`, `mailto:…`).",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    },
+                    "query_name": {
+                      "description": "How queries name it: `cf.story-points`.",
+                      "type": "string"
+                    },
+                    "value": {
+                      "description": "The value: a string, a number, `true`/`false`, or a list of options\nfor a multi-select field."
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "query_name",
+                    "kind",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
               "file_count": {
                 "description": "How many files are attached to it and to its comments.",
                 "minimum": 0,
@@ -13610,6 +16817,55 @@
                   "type": "object"
                 },
                 "type": "array"
+              },
+              "fix_version": {
+                "additionalProperties": false,
+                "description": "The version (release) it is planned for.",
+                "properties": {
+                  "due_date": {
+                    "description": "Its due date (`YYYY-MM-DD`).",
+                    "type": "string"
+                  },
+                  "id": {
+                    "description": "Its ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  },
+                  "project": {
+                    "description": "The key of the project it belongs to.",
+                    "type": "string"
+                  },
+                  "status": {
+                    "description": "Where it stands.",
+                    "oneOf": [
+                      {
+                        "const": "open",
+                        "description": "Tasks can be planned for it (the default).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "locked",
+                        "description": "No new tasks; the tasks in it stay.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "closed",
+                        "description": "Finished; no new tasks.",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "project",
+                  "status",
+                  "id"
+                ],
+                "type": "object"
               },
               "id": {
                 "description": "The task's ID.",
@@ -15582,6 +18838,89 @@
                 "description": "The estimate in minutes.",
                 "type": "integer"
               },
+              "fields": {
+                "description": "Its custom field values, in the fields' order; fields without a\nvalue are left out.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "One custom field's value on a task.",
+                  "properties": {
+                    "id": {
+                      "description": "The field's ID.",
+                      "type": "string"
+                    },
+                    "kind": {
+                      "description": "What it holds.",
+                      "oneOf": [
+                        {
+                          "const": "text",
+                          "description": "One line of text, up to 1000 characters.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "markdown",
+                          "description": "Formatted text (Markdown), up to 64 KB.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "integer",
+                          "description": "A whole number.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "decimal",
+                          "description": "A number with a fraction.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "date",
+                          "description": "A day, `YYYY-MM-DD`.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "boolean",
+                          "description": "Yes or no.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "select",
+                          "description": "One option of the field's list.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "multi_select",
+                          "description": "Any number of options of the field's list.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "url",
+                          "description": "A link with a scheme (`https://…`, `mailto:…`).",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    },
+                    "query_name": {
+                      "description": "How queries name it: `cf.story-points`.",
+                      "type": "string"
+                    },
+                    "value": {
+                      "description": "The value: a string, a number, `true`/`false`, or a list of options\nfor a multi-select field."
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "query_name",
+                    "kind",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
               "file_count": {
                 "description": "How many files are attached to it and to its comments.",
                 "minimum": 0,
@@ -15714,6 +19053,55 @@
                   "type": "object"
                 },
                 "type": "array"
+              },
+              "fix_version": {
+                "additionalProperties": false,
+                "description": "The version (release) it is planned for.",
+                "properties": {
+                  "due_date": {
+                    "description": "Its due date (`YYYY-MM-DD`).",
+                    "type": "string"
+                  },
+                  "id": {
+                    "description": "Its ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  },
+                  "project": {
+                    "description": "The key of the project it belongs to.",
+                    "type": "string"
+                  },
+                  "status": {
+                    "description": "Where it stands.",
+                    "oneOf": [
+                      {
+                        "const": "open",
+                        "description": "Tasks can be planned for it (the default).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "locked",
+                        "description": "No new tasks; the tasks in it stay.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "closed",
+                        "description": "Finished; no new tasks.",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "project",
+                  "status",
+                  "id"
+                ],
+                "type": "object"
               },
               "id": {
                 "description": "The task's ID.",
@@ -17308,6 +20696,89 @@
                 "description": "The estimate in minutes.",
                 "type": "integer"
               },
+              "fields": {
+                "description": "Its custom field values, in the fields' order; fields without a\nvalue are left out.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "One custom field's value on a task.",
+                  "properties": {
+                    "id": {
+                      "description": "The field's ID.",
+                      "type": "string"
+                    },
+                    "kind": {
+                      "description": "What it holds.",
+                      "oneOf": [
+                        {
+                          "const": "text",
+                          "description": "One line of text, up to 1000 characters.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "markdown",
+                          "description": "Formatted text (Markdown), up to 64 KB.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "integer",
+                          "description": "A whole number.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "decimal",
+                          "description": "A number with a fraction.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "date",
+                          "description": "A day, `YYYY-MM-DD`.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "boolean",
+                          "description": "Yes or no.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "select",
+                          "description": "One option of the field's list.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "multi_select",
+                          "description": "Any number of options of the field's list.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "url",
+                          "description": "A link with a scheme (`https://…`, `mailto:…`).",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    },
+                    "query_name": {
+                      "description": "How queries name it: `cf.story-points`.",
+                      "type": "string"
+                    },
+                    "value": {
+                      "description": "The value: a string, a number, `true`/`false`, or a list of options\nfor a multi-select field."
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "query_name",
+                    "kind",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
               "file_count": {
                 "description": "How many files are attached to it and to its comments.",
                 "minimum": 0,
@@ -17440,6 +20911,55 @@
                   "type": "object"
                 },
                 "type": "array"
+              },
+              "fix_version": {
+                "additionalProperties": false,
+                "description": "The version (release) it is planned for.",
+                "properties": {
+                  "due_date": {
+                    "description": "Its due date (`YYYY-MM-DD`).",
+                    "type": "string"
+                  },
+                  "id": {
+                    "description": "Its ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  },
+                  "project": {
+                    "description": "The key of the project it belongs to.",
+                    "type": "string"
+                  },
+                  "status": {
+                    "description": "Where it stands.",
+                    "oneOf": [
+                      {
+                        "const": "open",
+                        "description": "Tasks can be planned for it (the default).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "locked",
+                        "description": "No new tasks; the tasks in it stay.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "closed",
+                        "description": "Finished; no new tasks.",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "project",
+                  "status",
+                  "id"
+                ],
+                "type": "object"
               },
               "id": {
                 "description": "The task's ID.",
@@ -18995,6 +22515,89 @@
                 "description": "The estimate in minutes.",
                 "type": "integer"
               },
+              "fields": {
+                "description": "Its custom field values, in the fields' order; fields without a\nvalue are left out.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "One custom field's value on a task.",
+                  "properties": {
+                    "id": {
+                      "description": "The field's ID.",
+                      "type": "string"
+                    },
+                    "kind": {
+                      "description": "What it holds.",
+                      "oneOf": [
+                        {
+                          "const": "text",
+                          "description": "One line of text, up to 1000 characters.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "markdown",
+                          "description": "Formatted text (Markdown), up to 64 KB.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "integer",
+                          "description": "A whole number.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "decimal",
+                          "description": "A number with a fraction.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "date",
+                          "description": "A day, `YYYY-MM-DD`.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "boolean",
+                          "description": "Yes or no.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "select",
+                          "description": "One option of the field's list.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "multi_select",
+                          "description": "Any number of options of the field's list.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "url",
+                          "description": "A link with a scheme (`https://…`, `mailto:…`).",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    },
+                    "query_name": {
+                      "description": "How queries name it: `cf.story-points`.",
+                      "type": "string"
+                    },
+                    "value": {
+                      "description": "The value: a string, a number, `true`/`false`, or a list of options\nfor a multi-select field."
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "query_name",
+                    "kind",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
               "file_count": {
                 "description": "How many files are attached to it and to its comments.",
                 "minimum": 0,
@@ -19127,6 +22730,55 @@
                   "type": "object"
                 },
                 "type": "array"
+              },
+              "fix_version": {
+                "additionalProperties": false,
+                "description": "The version (release) it is planned for.",
+                "properties": {
+                  "due_date": {
+                    "description": "Its due date (`YYYY-MM-DD`).",
+                    "type": "string"
+                  },
+                  "id": {
+                    "description": "Its ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  },
+                  "project": {
+                    "description": "The key of the project it belongs to.",
+                    "type": "string"
+                  },
+                  "status": {
+                    "description": "Where it stands.",
+                    "oneOf": [
+                      {
+                        "const": "open",
+                        "description": "Tasks can be planned for it (the default).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "locked",
+                        "description": "No new tasks; the tasks in it stay.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "closed",
+                        "description": "Finished; no new tasks.",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "project",
+                  "status",
+                  "id"
+                ],
+                "type": "object"
               },
               "id": {
                 "description": "The task's ID.",
@@ -20684,6 +24336,89 @@
                 "description": "The estimate in minutes.",
                 "type": "integer"
               },
+              "fields": {
+                "description": "Its custom field values, in the fields' order; fields without a\nvalue are left out.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "One custom field's value on a task.",
+                  "properties": {
+                    "id": {
+                      "description": "The field's ID.",
+                      "type": "string"
+                    },
+                    "kind": {
+                      "description": "What it holds.",
+                      "oneOf": [
+                        {
+                          "const": "text",
+                          "description": "One line of text, up to 1000 characters.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "markdown",
+                          "description": "Formatted text (Markdown), up to 64 KB.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "integer",
+                          "description": "A whole number.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "decimal",
+                          "description": "A number with a fraction.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "date",
+                          "description": "A day, `YYYY-MM-DD`.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "boolean",
+                          "description": "Yes or no.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "select",
+                          "description": "One option of the field's list.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "multi_select",
+                          "description": "Any number of options of the field's list.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "url",
+                          "description": "A link with a scheme (`https://…`, `mailto:…`).",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    },
+                    "query_name": {
+                      "description": "How queries name it: `cf.story-points`.",
+                      "type": "string"
+                    },
+                    "value": {
+                      "description": "The value: a string, a number, `true`/`false`, or a list of options\nfor a multi-select field."
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "query_name",
+                    "kind",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
               "file_count": {
                 "description": "How many files are attached to it and to its comments.",
                 "minimum": 0,
@@ -20816,6 +24551,55 @@
                   "type": "object"
                 },
                 "type": "array"
+              },
+              "fix_version": {
+                "additionalProperties": false,
+                "description": "The version (release) it is planned for.",
+                "properties": {
+                  "due_date": {
+                    "description": "Its due date (`YYYY-MM-DD`).",
+                    "type": "string"
+                  },
+                  "id": {
+                    "description": "Its ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  },
+                  "project": {
+                    "description": "The key of the project it belongs to.",
+                    "type": "string"
+                  },
+                  "status": {
+                    "description": "Where it stands.",
+                    "oneOf": [
+                      {
+                        "const": "open",
+                        "description": "Tasks can be planned for it (the default).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "locked",
+                        "description": "No new tasks; the tasks in it stay.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "closed",
+                        "description": "Finished; no new tasks.",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "project",
+                  "status",
+                  "id"
+                ],
+                "type": "object"
               },
               "id": {
                 "description": "The task's ID.",
@@ -22367,6 +26151,89 @@
                 "description": "The estimate in minutes.",
                 "type": "integer"
               },
+              "fields": {
+                "description": "Its custom field values, in the fields' order; fields without a\nvalue are left out.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "One custom field's value on a task.",
+                  "properties": {
+                    "id": {
+                      "description": "The field's ID.",
+                      "type": "string"
+                    },
+                    "kind": {
+                      "description": "What it holds.",
+                      "oneOf": [
+                        {
+                          "const": "text",
+                          "description": "One line of text, up to 1000 characters.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "markdown",
+                          "description": "Formatted text (Markdown), up to 64 KB.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "integer",
+                          "description": "A whole number.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "decimal",
+                          "description": "A number with a fraction.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "date",
+                          "description": "A day, `YYYY-MM-DD`.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "boolean",
+                          "description": "Yes or no.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "select",
+                          "description": "One option of the field's list.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "multi_select",
+                          "description": "Any number of options of the field's list.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "url",
+                          "description": "A link with a scheme (`https://…`, `mailto:…`).",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    },
+                    "query_name": {
+                      "description": "How queries name it: `cf.story-points`.",
+                      "type": "string"
+                    },
+                    "value": {
+                      "description": "The value: a string, a number, `true`/`false`, or a list of options\nfor a multi-select field."
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "query_name",
+                    "kind",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
               "file_count": {
                 "description": "How many files are attached to it and to its comments.",
                 "minimum": 0,
@@ -22499,6 +26366,55 @@
                   "type": "object"
                 },
                 "type": "array"
+              },
+              "fix_version": {
+                "additionalProperties": false,
+                "description": "The version (release) it is planned for.",
+                "properties": {
+                  "due_date": {
+                    "description": "Its due date (`YYYY-MM-DD`).",
+                    "type": "string"
+                  },
+                  "id": {
+                    "description": "Its ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  },
+                  "project": {
+                    "description": "The key of the project it belongs to.",
+                    "type": "string"
+                  },
+                  "status": {
+                    "description": "Where it stands.",
+                    "oneOf": [
+                      {
+                        "const": "open",
+                        "description": "Tasks can be planned for it (the default).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "locked",
+                        "description": "No new tasks; the tasks in it stay.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "closed",
+                        "description": "Finished; no new tasks.",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "project",
+                  "status",
+                  "id"
+                ],
+                "type": "object"
               },
               "id": {
                 "description": "The task's ID.",
@@ -26776,10 +30692,64 @@
                   "description": "The estimate in minutes.",
                   "type": "integer"
                 },
+                "fields": {
+                  "additionalProperties": true,
+                  "description": "Its custom field values by query name (`story-points`): a string,\na number, `true`/`false`, or a list of options; fields without a\nvalue are left out.",
+                  "type": "object"
+                },
                 "file_count": {
                   "description": "How many files are attached to it and to its comments.",
                   "minimum": 0,
                   "type": "integer"
+                },
+                "fix_version": {
+                  "additionalProperties": false,
+                  "description": "The version it is planned for.",
+                  "properties": {
+                    "due_date": {
+                      "description": "Its due date (`YYYY-MM-DD`).",
+                      "type": "string"
+                    },
+                    "id": {
+                      "description": "Its ID.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    },
+                    "project": {
+                      "description": "The key of the project it belongs to.",
+                      "type": "string"
+                    },
+                    "status": {
+                      "description": "Where it stands.",
+                      "oneOf": [
+                        {
+                          "const": "open",
+                          "description": "Tasks can be planned for it (the default).",
+                          "type": "string"
+                        },
+                        {
+                          "const": "locked",
+                          "description": "No new tasks; the tasks in it stay.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "closed",
+                          "description": "Finished; no new tasks.",
+                          "type": "string"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "project",
+                    "status",
+                    "id"
+                  ],
+                  "type": "object"
                 },
                 "id": {
                   "description": "The task's ID.",
@@ -27240,10 +31210,64 @@
                   "description": "The estimate in minutes.",
                   "type": "integer"
                 },
+                "fields": {
+                  "additionalProperties": true,
+                  "description": "Its custom field values by query name (`story-points`): a string,\na number, `true`/`false`, or a list of options; fields without a\nvalue are left out.",
+                  "type": "object"
+                },
                 "file_count": {
                   "description": "How many files are attached to it and to its comments.",
                   "minimum": 0,
                   "type": "integer"
+                },
+                "fix_version": {
+                  "additionalProperties": false,
+                  "description": "The version it is planned for.",
+                  "properties": {
+                    "due_date": {
+                      "description": "Its due date (`YYYY-MM-DD`).",
+                      "type": "string"
+                    },
+                    "id": {
+                      "description": "Its ID.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    },
+                    "project": {
+                      "description": "The key of the project it belongs to.",
+                      "type": "string"
+                    },
+                    "status": {
+                      "description": "Where it stands.",
+                      "oneOf": [
+                        {
+                          "const": "open",
+                          "description": "Tasks can be planned for it (the default).",
+                          "type": "string"
+                        },
+                        {
+                          "const": "locked",
+                          "description": "No new tasks; the tasks in it stay.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "closed",
+                          "description": "Finished; no new tasks.",
+                          "type": "string"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "project",
+                    "status",
+                    "id"
+                  ],
+                  "type": "object"
                 },
                 "id": {
                   "description": "The task's ID.",
@@ -27643,10 +31667,64 @@
                   "description": "The estimate in minutes.",
                   "type": "integer"
                 },
+                "fields": {
+                  "additionalProperties": true,
+                  "description": "Its custom field values by query name (`story-points`): a string,\na number, `true`/`false`, or a list of options; fields without a\nvalue are left out.",
+                  "type": "object"
+                },
                 "file_count": {
                   "description": "How many files are attached to it and to its comments.",
                   "minimum": 0,
                   "type": "integer"
+                },
+                "fix_version": {
+                  "additionalProperties": false,
+                  "description": "The version it is planned for.",
+                  "properties": {
+                    "due_date": {
+                      "description": "Its due date (`YYYY-MM-DD`).",
+                      "type": "string"
+                    },
+                    "id": {
+                      "description": "Its ID.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    },
+                    "project": {
+                      "description": "The key of the project it belongs to.",
+                      "type": "string"
+                    },
+                    "status": {
+                      "description": "Where it stands.",
+                      "oneOf": [
+                        {
+                          "const": "open",
+                          "description": "Tasks can be planned for it (the default).",
+                          "type": "string"
+                        },
+                        {
+                          "const": "locked",
+                          "description": "No new tasks; the tasks in it stay.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "closed",
+                          "description": "Finished; no new tasks.",
+                          "type": "string"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "project",
+                    "status",
+                    "id"
+                  ],
+                  "type": "object"
                 },
                 "id": {
                   "description": "The task's ID.",
@@ -28046,10 +32124,64 @@
                   "description": "The estimate in minutes.",
                   "type": "integer"
                 },
+                "fields": {
+                  "additionalProperties": true,
+                  "description": "Its custom field values by query name (`story-points`): a string,\na number, `true`/`false`, or a list of options; fields without a\nvalue are left out.",
+                  "type": "object"
+                },
                 "file_count": {
                   "description": "How many files are attached to it and to its comments.",
                   "minimum": 0,
                   "type": "integer"
+                },
+                "fix_version": {
+                  "additionalProperties": false,
+                  "description": "The version it is planned for.",
+                  "properties": {
+                    "due_date": {
+                      "description": "Its due date (`YYYY-MM-DD`).",
+                      "type": "string"
+                    },
+                    "id": {
+                      "description": "Its ID.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    },
+                    "project": {
+                      "description": "The key of the project it belongs to.",
+                      "type": "string"
+                    },
+                    "status": {
+                      "description": "Where it stands.",
+                      "oneOf": [
+                        {
+                          "const": "open",
+                          "description": "Tasks can be planned for it (the default).",
+                          "type": "string"
+                        },
+                        {
+                          "const": "locked",
+                          "description": "No new tasks; the tasks in it stay.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "closed",
+                          "description": "Finished; no new tasks.",
+                          "type": "string"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "project",
+                    "status",
+                    "id"
+                  ],
+                  "type": "object"
                 },
                 "id": {
                   "description": "The task's ID.",
@@ -28487,10 +32619,64 @@
                       "description": "The estimate in minutes.",
                       "type": "integer"
                     },
+                    "fields": {
+                      "additionalProperties": true,
+                      "description": "Its custom field values by query name (`story-points`): a string,\na number, `true`/`false`, or a list of options; fields without a\nvalue are left out.",
+                      "type": "object"
+                    },
                     "file_count": {
                       "description": "How many files are attached to it and to its comments.",
                       "minimum": 0,
                       "type": "integer"
+                    },
+                    "fix_version": {
+                      "additionalProperties": false,
+                      "description": "The version it is planned for.",
+                      "properties": {
+                        "due_date": {
+                          "description": "Its due date (`YYYY-MM-DD`).",
+                          "type": "string"
+                        },
+                        "id": {
+                          "description": "Its ID.",
+                          "type": "string"
+                        },
+                        "name": {
+                          "description": "Its name.",
+                          "type": "string"
+                        },
+                        "project": {
+                          "description": "The key of the project it belongs to.",
+                          "type": "string"
+                        },
+                        "status": {
+                          "description": "Where it stands.",
+                          "oneOf": [
+                            {
+                              "const": "open",
+                              "description": "Tasks can be planned for it (the default).",
+                              "type": "string"
+                            },
+                            {
+                              "const": "locked",
+                              "description": "No new tasks; the tasks in it stay.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "closed",
+                              "description": "Finished; no new tasks.",
+                              "type": "string"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "project",
+                        "status",
+                        "id"
+                      ],
+                      "type": "object"
                     },
                     "id": {
                       "description": "The task's ID.",

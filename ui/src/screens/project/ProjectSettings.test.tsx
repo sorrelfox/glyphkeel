@@ -45,6 +45,26 @@ describe("project settings", () => {
     });
   });
 
+  it("offers the project's custom fields in a status's rules", async () => {
+    const transport = fakeTransport();
+    await transport.call("field.create", { project: "PER", name: "Area", kind: "select", options: ["Front end", "Back end"] });
+    render(<App start={{ titleBar: "app", locale: "en-US" }} client={createClient(transport)} path="/projects/PER" />);
+    await screen.findByRole("group", { name: /Board of/ });
+    fireEvent.click(screen.getByRole("button", { name: /project menu/ }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Project settings/ }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("tab", { name: "Rules" }));
+    const done = await within(dialog).findByTestId("rules-Done");
+    fireEvent.click(within(done).getByRole("button", { name: /Done/ }));
+    const readOnly = within(done).getByRole("group", { name: /Can't change while/ });
+    fireEvent.click(await within(readOnly).findByRole("checkbox", { name: "Area" }));
+    await waitFor(() => {
+      expect(within(readOnly).getByRole<HTMLInputElement>("checkbox", { name: "Area" }).checked).toBe(true);
+    });
+    expect(within(readOnly).getByRole("checkbox", { name: "Version" })).toBeDefined();
+    expect(within(done).getAllByText(/Leave .*Area.* as it is/).length).toBeGreaterThan(0);
+  });
+
   it("sets a WIP limit that the board's column shows", async () => {
     await renderApp();
     fireEvent.click(screen.getByRole("button", { name: /project menu/ }));

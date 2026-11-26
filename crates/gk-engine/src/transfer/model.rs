@@ -99,11 +99,51 @@ pub(crate) struct ProjectFile {
     pub(crate) statuses: Vec<Status>,
     pub(crate) types: Vec<TaskType>,
     pub(crate) labels: Vec<Label>,
+    /// The project's versions (releases).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) versions: Vec<Version>,
     pub(crate) views: Vec<SavedView>,
     pub(crate) layouts: Vec<Layout>,
     /// Earlier keys of the project, which still find it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) key_aliases: Vec<String>,
+    /// The project's own custom fields, and the fields of every project
+    /// that its tasks have values of (`shared`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) custom_fields: Vec<CustomField>,
+}
+
+/// A custom field, in `project.json`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct CustomField {
+    pub(crate) id: String,
+    pub(crate) name: String,
+    /// `text`, `markdown`, `integer`, `decimal`, `date`, `boolean`,
+    /// `select`, `multi_select` or `url`.
+    pub(crate) kind: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) options: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) default: Option<serde_json::Value>,
+    /// The task types it shows for, by name; empty: every type.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) types: Vec<String>,
+    pub(crate) required: bool,
+    pub(crate) rank: String,
+    /// A field of every project rather than the project's own.
+    #[serde(default)]
+    pub(crate) shared: bool,
+    pub(crate) created_at: i64,
+}
+
+/// One stored value of a custom field on a task: text, or a number (a
+/// whole number for whole numbers and yes/no).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct CustomValue {
+    pub(crate) field_id: String,
+    pub(crate) value: serde_json::Value,
 }
 
 /// A saved view of the project.
@@ -205,6 +245,25 @@ pub(crate) struct Label {
     pub(crate) rank: String,
 }
 
+/// A version (release) of the project.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct Version {
+    pub(crate) id: String,
+    pub(crate) name: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub(crate) description: String,
+    /// `open`, `locked` or `closed`.
+    pub(crate) status: String,
+    pub(crate) start_date: Option<String>,
+    pub(crate) due_date: Option<String>,
+    /// `none` or `descendants`.
+    pub(crate) sharing: String,
+    pub(crate) rank: String,
+    pub(crate) created_at: i64,
+    pub(crate) updated_at: i64,
+}
+
 /// One line of `projects/<KEY>/tasks.jsonl`. The description itself is in
 /// `projects/<KEY>/tasks/<KEY>-<number>.md` (absent when empty) and in
 /// `revisions.jsonl`.
@@ -250,6 +309,13 @@ pub(crate) struct Task {
     /// Earlier keys of the task (after moves), which still find it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) key_aliases: Vec<String>,
+    /// The version it is planned for: one of its project's or one an
+    /// ancestor shares.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) fix_version_id: Option<String>,
+    /// Its custom field values, one per stored value.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) custom_values: Vec<CustomValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

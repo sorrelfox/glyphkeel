@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { changedFrom, clickRow, columnWidth, exportName, gridTemplate, groupTaskInput, listLines, moveColumn, nextSort, NO_SELECTION, removeRanges, sortState, viewColumns, withSort } from "./model";
+import { changedFrom, clickRow, columnWidth, exportName, gridTemplate, groupTaskInput, isColumn, isCustomColumn, listLines, moveColumn, nextSort, NO_SELECTION, removeRanges, sortKeyOf, sortState, viewColumns, withSort } from "./model";
 
 describe("sorting by a column header", () => {
   it("goes ascending, descending, then back to the default order", () => {
@@ -173,5 +173,19 @@ describe("selection", () => {
     expect([...selection.keys]).toEqual(["A-2"]);
     selection = clickRow(clickRow(NO_SELECTION, 0, "A-1", { toggle: false, range: false }, keyAt), 2, "A-3", { toggle: false, range: true }, keyAt);
     expect([...selection.keys]).toEqual(["A-1", "A-2", "A-3"]);
+  });
+});
+
+describe("custom field columns", () => {
+  it("are columns of their own that sort by the field", () => {
+    expect(isColumn("cf.story-points")).toBe(true);
+    expect(isColumn("cf.")).toBe(false);
+    expect(isCustomColumn("due")).toBe(false);
+    expect(sortKeyOf("cf.story-points")).toBe("cf.story-points");
+    expect(nextSort(["due"], "cf.story-points")).toEqual(["cf.story-points"]);
+    expect(nextSort(["cf.story-points"], "cf.story-points")).toEqual(["-cf.story-points"]);
+    expect(viewColumns({ columns: ["key", "cf.points", "bogus"] }, false)).toEqual(["title", "key", "cf.points"]);
+    expect(gridTemplate(["title", "cf.points"], { "cf.points": 200 })).toBe("28px minmax(240px, 1fr) 200px");
+    expect(gridTemplate(["cf.points"])).toBe("28px 128px");
   });
 });

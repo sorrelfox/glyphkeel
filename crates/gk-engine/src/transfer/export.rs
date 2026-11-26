@@ -18,7 +18,7 @@ use serde_json::Value;
 use super::model::{
     Activity, AgentSession, Attachment, Claim, Comment, CommentRevision, Counts, Label, Layout,
     Manifest, ManifestProject, Modules, Project, ProjectFile, Relation, Revision, SavedView,
-    Status, Task, TaskType, TimeEntry, WikiPage,
+    Status, Task, TaskType, TimeEntry, Version, WikiPage,
 };
 use super::sink::Sink;
 use super::{FORMAT_NAME, FORMAT_VERSION, Progress, project_dir, report};
@@ -184,6 +184,27 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
             })
         },
     )?;
+    let versions = all(
+        tx,
+        "SELECT id, name, description, status, start_date, due_date, sharing, rank,
+                created_at, updated_at
+           FROM versions WHERE project_id = ?1 ORDER BY rank, id",
+        &pid,
+        |r| {
+            Ok(Version {
+                id: text_id(r, 0)?,
+                name: r.get(1)?,
+                description: r.get(2)?,
+                status: r.get(3)?,
+                start_date: r.get(4)?,
+                due_date: r.get(5)?,
+                sharing: r.get(6)?,
+                rank: r.get(7)?,
+                created_at: r.get(8)?,
+                updated_at: r.get(9)?,
+            })
+        },
+    )?;
     let views = all(
         tx,
         "SELECT id, view_kind, name, description, query, columns, sort, group_by, totals,
@@ -240,7 +261,8 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
                 t.due_date, t.estimate_min, t.progress_override, t.checklist_done,
                 t.checklist_total, t.spent_min, t.claim_session, t.claim_name, t.claim_until,
                 t.created_at, t.created_by_kind, t.created_by_name, t.edited_at, t.updated_at,
-                t.closed_at, t.deleted_at, t.deleted_group, t.version, t.subtask_rank
+                t.closed_at, t.deleted_at, t.deleted_group, t.version, t.subtask_rank,
+                t.fix_version_id
            FROM tasks t WHERE t.project_id = ?1 ORDER BY t.number",
         &pid,
         |r| {
@@ -289,6 +311,8 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
                     version: r.get(29)?,
                     subtask_rank: r.get(30)?,
                     key_aliases: Vec::new(),
+                    fix_version_id: opt_id(r, 31)?,
+                    custom_values: Vec::new(),
                 },
                 description,
             ))
@@ -339,7 +363,14 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
             &tb,
             |r| r.get(0),
         )?;
+        t.custom_values = super::custom_fields::export_values(tx, &tb)?;
     }
+    let task_ids: Vec<Vec<u8>> = tasks
+        .iter()
+        .filter_map(|t| t.id.parse::<Id>().ok())
+        .map(|id| id.as_bytes().to_vec())
+        .collect();
+    let custom_fields = super::custom_fields::export_fields(tx, &pid, &task_ids)?;
 
     let mut comments = all(
         tx,
@@ -597,9 +628,11 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
             statuses,
             types,
             labels,
+            versions,
             views,
             layouts,
             key_aliases,
+            custom_fields,
         },
         tasks,
         descriptions,

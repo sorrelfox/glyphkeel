@@ -31,7 +31,8 @@ import { errorToast, useCall, useCommand } from "../../data/hooks";
 import { useTrashTasks } from "../../data/safety";
 import { useTaskDetails } from "../../data/task";
 import { useT } from "../../i18n/I18n";
-import { fieldsOfTask, readOnlyFields } from "../../data/rules";
+import { useCustomFields } from "../../data/fields";
+import { customFieldId, fieldsOfTask, readOnlyFields } from "../../data/rules";
 import { useEntryReason } from "../../data/useRules";
 import { openTaskWindow } from "../../ipc/taskWindow";
 import { useDayFormat } from "../board/CardView";
@@ -41,9 +42,11 @@ import { dueState } from "../board/model";
 import { ActivityTabs, Composer, useMomentFormat } from "./Activity";
 import { BacklinksSection } from "./Backlinks";
 import { DescriptionSection, type DescriptionView } from "./Description";
+import { FieldsSection } from "./FieldsSection";
 import { FilesSection, useFileDrop } from "./Files";
 import { LinksSection, SubtasksSection } from "./Sections";
 import { QuickLog, ReminderValue, TimerButton } from "./Time";
+import { VersionPicker } from "./VersionPicker";
 import styles from "./TaskPanel.module.css";
 
 interface TaskPanelProps {
@@ -364,6 +367,9 @@ function Loaded({
               )}
             </span>
           </Prop>
+          <Prop label={t("prop-version")}>
+            <VersionPicker task={task} readOnly={lockedOr("fix_version")} onChange={(version) => { setOrClear("fix_version", version); }} />
+          </Prop>
           <Prop label={t("prop-labels")} wide>
             <Labels task={task} project={project} readOnly={lockedOr("labels")} onChange={(labels) => { setOrClear("labels", labels.length === 0 ? null : labels); }} />
           </Prop>
@@ -386,7 +392,9 @@ function Loaded({
           </Prop>
         </div>
 
-        <LockedNote locked={locked} status={task.status.name} />
+        <LockedNote locked={locked} status={task.status.name} project={task.project} />
+
+        <FieldsSection task={task} readOnly={readOnly} locked={locked} />
 
         <DescriptionSection task={task} readOnly={lockedOr("description")} view={descriptionView} onView={setDescriptionView} onOpenTask={onOpenTask} />
 
@@ -410,17 +418,25 @@ function Loaded({
 }
 
 /** Says which fields the task's status keeps from changing, so a disabled field never goes unexplained. */
-function LockedNote({ locked, status }: { locked: ReadonlySet<string>; status: string }) {
+function LockedNote({ locked, status, project }: { locked: ReadonlySet<string>; status: string; project: string }) {
   const t = useT();
   const { locale } = useLocale();
-  const fields = [...locked].filter((field) => !field.startsWith("cf:"));
-  if (fields.length === 0) {
+  const custom = useCustomFields(project);
+  const names = [...locked].flatMap((field) => {
+    const id = customFieldId(field);
+    if (id === undefined) {
+      return [t(`rule-field-${field}`)];
+    }
+    const name = custom.find((each) => each.id === id)?.name;
+    return name === undefined ? [] : [name];
+  });
+  if (names.length === 0) {
     return null;
   }
-  const list = new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(fields.map((field) => t(`rule-field-${field}`)));
+  const list = new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(names);
   return (
     <p className={classes("meta", styles.ruleNote)} role="note">
-      {t("panel-rule-read-only", { status, fields: list, count: fields.length })}
+      {t("panel-rule-read-only", { status, fields: list, count: names.length })}
     </p>
   );
 }

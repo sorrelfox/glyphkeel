@@ -28,6 +28,12 @@ rules-priority-keep = Leave the priority as it is
 rules-priority-to = Set the priority to { $value }
 rules-stop-timer = Stop the timer and log its time
 rules-release-claim = Release an agent's claim on the task
+# $name is the name of a custom field.
+rules-custom-set = { $name } on entering
+rules-custom-keep = Leave { $name } as it is
+# $value is an option of the field, or Yes or No.
+rules-custom-set-to = Set { $name } to { $value }
+rules-custom-today = Set { $name } to today, if it has none
 rules-clear = Clear on entering
 rules-required = Must be filled in before a task can enter
 rules-read-only = Can't change while a task is in this status
@@ -49,6 +55,7 @@ rule-field-estimate = Estimate
 rule-field-progress = Progress
 rule-field-labels = Labels
 rule-field-parent = Parent task
+rule-field-fix_version = Version
 rule-field-custom = A custom field
 
 ## The board, the list and the task panel

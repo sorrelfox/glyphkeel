@@ -385,3 +385,307 @@ fn rules_are_checked_copied_to_sub_projects_and_exported() {
         json!(["estimate"])
     );
 }
+
+fn field(e: &Engine, input: Value) -> String {
+    call(e, &app(), "field.create", input)["field"]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned()
+}
+
+fn value_of(task: &Value, id: &str) -> Value {
+    task["fields"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|v| v["id"] == id)
+        .map_or(Value::Null, |v| v["value"].clone())
+}
+
+#[test]
+fn custom_fields_are_required_set_cleared_and_locked_by_a_status() {
+    let dir = TempDir::new().unwrap();
+    let e = open(&dir, "Personal");
+    setup(&e);
+    let points = field(
+        &e,
+        json!({ "project": "RU", "name": "Points", "kind": "integer" }),
+    );
+    let area = field(
+        &e,
+        json!({ "project": "RU", "name": "Area", "kind": "select",
+                "options": ["Front end", "Back end"] }),
+    );
+    let review = field(
+        &e,
+        json!({ "project": "RU", "name": "Review on", "kind": "date" }),
+    );
+    let team = field(
+        &e,
+        json!({ "project": "RU", "name": "Team", "kind": "text", "required": true,
+                "default": "Core" }),
+    );
+    let cf = |id: &str| format!("cf:{id}");
+    for (rules_in, message) in [
+        (json!({ "clear": [cf(&team)] }), "rule-clear-required-field"),
+        (
+            json!({ "set": [{ "field": cf(&area), "value": "Middle" }] }),
+            "value-field-option",
+        ),
+        (
+            json!({ "set": [{ "field": cf(&area), "value": "Back end" }], "clear": [cf(&area)] }),
+            "rule-set-and-cleared",
+        ),
+    ] {
+        let err = fails(
+            &e,
+            &app(),
+            "rules.update",
+            json!({ "project": "RU", "statuses": [{ "status": "Done", "rules": rules_in }] }),
+        );
+        assert_eq!(err.code, ErrorCode::Invalid, "{err:?}");
+        assert_eq!(err.details["message_id"], message, "{err:?}");
+        assert!(
+            err.details["path"]
+                .as_str()
+                .unwrap()
+                .starts_with("statuses[0].rules"),
+            "{err:?}"
+        );
+    }
+    rules(
+        &e,
+        json!({
+            "project": "RU",
+            "statuses": [
+                { "status": "In progress", "rules": {
+                    "required": [cf(&points)],
+                    "set": [
+                        { "field": cf(&area), "value": "Back end" },
+                        { "field": cf(&review), "value": "today", "only_if_empty": true },
+                    ],
+                } },
+                { "status": "Done", "rules": {
+                    "clear": [cf(&area)],
+                    "read_only": [cf(&points)],
+                } },
+            ],
+        }),
+    );
+    let key = task(&e, &app(), "Estimate the work");
+    let err = fails(
+        &e,
+        &app(),
+        "task.move",
+        json!({ "key": key, "status": "In progress" }),
+    );
+    assert_eq!(err.details["message_id"], "rule-required", "{err:?}");
+    assert!(err.message.contains("\"Points\""), "{}", err.message);
+    call(
+        &e,
+        &app(),
+        "task.update",
+        json!({ "key": key, "fields": { "Points": 3 } }),
+    );
+    call(
+        &e,
+        &app(),
+        "task.move",
+        json!({ "key": key, "status": "In progress" }),
+    );
+    let t = get(&e, &key);
+    assert_eq!(value_of(&t, &area), "Back end", "{t}");
+    assert!(value_of(&t, &review).is_string(), "{t}");
+
+    call(
+        &e,
+        &app(),
+        "task.move",
+        json!({ "key": key, "status": "Done" }),
+    );
+    let t = get(&e, &key);
+    assert!(value_of(&t, &area).is_null(), "{t}");
+    assert_eq!(value_of(&t, &team), "Core", "a required field is kept");
+    let err = fails(
+        &e,
+        &app(),
+        "task.update",
+        json!({ "key": key, "fields": { "Points": 5 } }),
+    );
+    assert_eq!(err.code, ErrorCode::Forbidden);
+    assert_eq!(err.details["message_id"], "rule-read-only");
+    assert!(err.message.contains("\"Points\""), "{}", err.message);
+}
+
+#[test]
+fn a_status_can_require_lock_and_clear_the_version() {
+    let dir = TempDir::new().unwrap();
+    let e = open(&dir, "Personal");
+    setup(&e);
+    call(
+        &e,
+        &app(),
+        "version.create",
+        json!({ "project": "RU", "name": "1.0" }),
+    );
+    rules(
+        &e,
+        json!({
+            "project": "RU",
+            "statuses": [
+                { "status": "In progress", "rules": { "required": ["fix_version"] } },
+                { "status": "Done", "rules": { "read_only": ["fix_version"] } },
+                { "status": "Backlog", "rules": { "clear": ["fix_version"] } },
+            ],
+        }),
+    );
+    let key = task(&e, &app(), "Ship it");
+    let err = fails(
+        &e,
+        &app(),
+        "task.move",
+        json!({ "key": key, "status": "In progress" }),
+    );
+    assert_eq!(err.details["missing"], json!(["fix_version"]), "{err:?}");
+    assert!(err.message.contains("needs a version"), "{}", err.message);
+    call(
+        &e,
+        &app(),
+        "task.update",
+        json!({ "key": key, "fix_version": "1.0" }),
+    );
+    call(
+        &e,
+        &app(),
+        "task.move",
+        json!({ "key": key, "status": "In progress" }),
+    );
+    call(
+        &e,
+        &app(),
+        "task.move",
+        json!({ "key": key, "status": "Done" }),
+    );
+    let err = fails(
+        &e,
+        &app(),
+        "task.update",
+        json!({ "key": key, "clear": ["fix_version"] }),
+    );
+    assert_eq!(err.details["message_id"], "rule-read-only", "{err:?}");
+    call(
+        &e,
+        &app(),
+        "task.move",
+        json!({ "key": key, "status": "Backlog" }),
+    );
+    assert!(get(&e, &key).get("fix_version").is_none_or(Value::is_null));
+}
+
+#[test]
+fn rules_name_the_copied_fields_of_sub_projects_and_imports() {
+    let dir = TempDir::new().unwrap();
+    let e = open(&dir, "Personal");
+    setup(&e);
+    let own = field(
+        &e,
+        json!({ "project": "RU", "name": "Points", "kind": "integer" }),
+    );
+    let shared = field(&e, json!({ "name": "Risk", "kind": "text" }));
+    let cf = |id: &str| format!("cf:{id}");
+    rules(
+        &e,
+        json!({
+            "project": "RU",
+            "statuses": [{ "status": "Done", "rules": {
+                "required": [cf(&own.to_uppercase()), cf(&shared)],
+                "set": [{ "field": cf(&own), "value": "1", "only_if_empty": true }],
+            } }],
+            "agents": { "read_only": [cf(&own)] },
+        }),
+    );
+    // A custom field's ID is kept in its usual form, however it was typed.
+    let stored = call(&e, &app(), "project.get", json!({ "project": "RU" }));
+    assert_eq!(
+        status_of(&stored, "Done")["rules"]["required"][0],
+        json!(cf(&own))
+    );
+
+    let sub = call(
+        &e,
+        &app(),
+        "project.create",
+        json!({ "name": "Sub", "key": "RUS", "parent": "RU" }),
+    )["project"]
+        .clone();
+    let fields = call(&e, &app(), "field.list", json!({ "project": "RUS" }));
+    let copy = fields["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["name"] == "Points")
+        .unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert_ne!(copy, own);
+    let done = status_of(&sub, "Done");
+    assert_eq!(
+        done["rules"]["required"],
+        json!([cf(&copy), cf(&shared)]),
+        "the copy, and the field of every project as it was"
+    );
+    assert_eq!(done["rules"]["set"][0]["field"], json!(cf(&copy)));
+    assert_eq!(sub["agent_rules"]["read_only"], json!([cf(&copy)]));
+    // The sub-project's rule holds for its own field.
+    let key = call(
+        &e,
+        &app(),
+        "task.create",
+        json!({ "project": "RUS", "title": "Sub task", "fields": { "Risk": "Low" } }),
+    )["task"]["key"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    call(
+        &e,
+        &app(),
+        "task.move",
+        json!({ "key": key, "status": "Done" }),
+    );
+    assert_eq!(value_of(&get(&e, &key), &copy), 1);
+
+    // Imported again under another key, the project's own field gets a new
+    // ID, and the rules follow it.
+    let archive = dir.path().join("out.zip");
+    call(
+        &e,
+        &app(),
+        "transfer.export",
+        json!({ "path": archive.to_str().unwrap(), "projects": ["RU"] }),
+    );
+    call(
+        &e,
+        &app(),
+        "transfer.import",
+        json!({ "path": archive.to_str().unwrap(),
+                "keys": [{ "from": "RU", "to": "RV" }, { "from": "RUS", "to": "RVS" }] }),
+    );
+    let fields = call(&e, &app(), "field.list", json!({ "project": "RV" }));
+    let imported = fields["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["name"] == "Points")
+        .unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert_ne!(imported, own);
+    let back = call(&e, &app(), "project.get", json!({ "project": "RV" }));
+    assert_eq!(
+        status_of(&back, "Done")["rules"]["required"],
+        json!([cf(&imported), cf(&shared)])
+    );
+    assert_eq!(back["agent_rules"]["read_only"], json!([cf(&imported)]));
+}

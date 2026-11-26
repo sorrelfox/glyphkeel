@@ -5,8 +5,8 @@ import { describe, expect, it } from "vitest";
 
 import { FakeError, FakeWorkspace } from "./fake/engine";
 import { seed } from "./fake/seed";
-import type { Project, ProjectChange, TaskChange, TaskList } from "../generated/ops";
-import { fieldsOfCard, isEmpty, missingFields, readOnlyFields, rulesOf } from "./rules";
+import type { CustomFieldChange, Project, ProjectChange, TaskChange, TaskList } from "../generated/ops";
+import { customFieldId, customRuleField, fieldsOfCard, isEmpty, missingFields, readOnlyFields, rulesOf } from "./rules";
 
 const TODAY = new Date(2026, 10, 23, 9, 0);
 
@@ -18,6 +18,16 @@ describe("status rules as the page reads them", () => {
     expect(missingFields(rules, fields)).toEqual(["estimate", "labels"]);
     expect(missingFields(rules, { ...fields, estimate_minutes: 30, labels: ["x"], description: " " })).toEqual(["description"]);
     expect(missingFields({}, fields)).toEqual([]);
+  });
+
+  it("knows a task's version, and names custom fields by their ID", () => {
+    const rules = { required: ["fix_version", customRuleField("f1")] };
+    // A card doesn't tell its version; the engine decides then.
+    expect(missingFields(rules, fieldsOfCard({ priority: "none", labels: [] }))).toEqual([]);
+    expect(missingFields(rules, { fix_version: null })).toEqual(["fix_version"]);
+    expect(missingFields(rules, { fix_version: { id: "v", name: "1.0" } })).toEqual([]);
+    expect(customFieldId("cf:f1")).toBe("f1");
+    expect(customFieldId("estimate")).toBeUndefined();
   });
 
   it("reads a status's rules from its project", () => {
@@ -64,5 +74,33 @@ describe("status rules in the sample workspace", () => {
     expect(task?.start_date).toBe("2026-11-23");
     expect(failure(() => ws.call("task.update", { key, title: "Renamed" })).details?.message_id).toBe("rule-read-only");
     call(ws, "task.update", { key, priority: "high" });
+  });
+
+  it("sets, clears and requires custom fields and the version on entering a status", () => {
+    const ws = new FakeWorkspace(seed(TODAY), () => TODAY);
+    const points = call<CustomFieldChange>(ws, "field.create", { project: "PER", name: "Points", kind: "integer" }).field;
+    const area = call<CustomFieldChange>(ws, "field.create", { project: "PER", name: "Area", kind: "select", options: ["Front end", "Back end"] }).field;
+    if (points === undefined || area === undefined) {
+      throw new Error("the fields were not created");
+    }
+    call(ws, "rules.update", {
+      project: "PER",
+      statuses: [
+        { status: "Done", rules: { required: [customRuleField(points.id)], set: [{ field: customRuleField(area.id), value: "back end" }], read_only: [customRuleField(points.id), "fix_version"] } },
+        { status: "To do", rules: { clear: [customRuleField(area.id)] } },
+      ],
+    });
+    const key = call<TaskChange>(ws, "task.create", { project: "PER", title: "Fields" }).task.key;
+    const refused = failure(() => ws.call("task.move", { key, status: "Done" }));
+    expect(refused.details?.message_id).toBe("rule-required");
+    expect(refused.details?.args).toMatchObject({ field: "custom", name: "Points" });
+    call(ws, "task.update", { key, fields: { Points: 3 } });
+    call(ws, "task.move", { key, status: "Done" });
+    const done = call<TaskList>(ws, "task.get", { keys: [key] }).items[0];
+    expect(done?.fields?.find((value) => value.id === area.id)?.value).toBe("Back end");
+    expect(failure(() => ws.call("task.update", { key, fields: { Points: 5 } })).details?.message_id).toBe("rule-read-only");
+    call(ws, "task.move", { key, status: "To do" });
+    const back = call<TaskList>(ws, "task.get", { keys: [key] }).items[0];
+    expect(back?.fields?.find((value) => value.id === area.id)).toBeUndefined();
   });
 });

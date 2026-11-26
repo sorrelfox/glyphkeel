@@ -22,6 +22,7 @@ import { useT, type Translate } from "../../i18n/I18n";
 import { MarkdownReader } from "../../markdown/Reader";
 import { formatDuration, type DurationUnits } from "../../data/duration";
 import { useDurationUnits } from "../../data/time";
+import { useVersions } from "../../data/versions";
 import { useTimeZone } from "../../data/zone";
 import { FileRow, useAttach } from "./Files";
 import { MarkdownField } from "./MarkdownField";
@@ -314,7 +315,7 @@ function CommentsList({ task, readOnly, onOpenTask }: { task: Task; readOnly: bo
 const LABELLED_FIELDS = new Set([
   "title", "description", "status", "type", "priority", "labels", "parent", "start_date", "due_date", "estimate", "progress", "rank", "project",
   "claim", "reminder", "name", "hue", "icon", "modules", "key", "state", "category", "wip_limit", "glyph", "is_default", "slug", "body",
-  "date", "minutes", "note", "agent_brief", "home", "template", "rules", "agent_rules",
+  "date", "minutes", "note", "agent_brief", "home", "template", "fix_version", "rules", "agent_rules",
 ]);
 
 /** A recorded field's name as people read it; nothing for a field that isn't shown. */
@@ -331,6 +332,8 @@ interface Names {
   units?: DurationUnits;
   /** The locale, for lists of names; the browser's when left out. */
   locale?: string;
+  /** Version names by ID, as far as the panel knows them. */
+  versions?: ReadonlyMap<string, string>;
 }
 
 /** How long a text value of a list may be before the engine cuts it, in characters. */
@@ -370,8 +373,11 @@ function shown(t: Translate, names: Names, field: string, value: unknown): strin
       return typeof value === "number" ? formatDuration(value, names.units) : plainText(value);
     case "parent":
       return names.keys.get(plainText(value)) ?? plainText(value);
+    case "fix_version":
+      return names.versions?.get(plainText(value)) ?? (names.task.fix_version?.id === value ? names.task.fix_version.name : t("history-version-gone"));
     default:
-      return plainText(value);
+      // A custom field's options, listed.
+      return Array.isArray(value) ? new Intl.ListFormat(names.locale, { style: "long", type: "conjunction" }).format(value.map(plainText)) : plainText(value);
   }
 }
 
@@ -450,7 +456,8 @@ export function describeEntry(t: Translate, names: Names, entry: ActivityEntry):
         lines.push(t("history-subtask-moved"));
       }
     } else {
-      const name = fieldLabel(t, field);
+      // A custom field's value is recorded as `cf:<field ID>`; it is named by the field, as the person wrote it.
+      const name = field.startsWith("cf:") ? names.task.fields?.find((value) => `cf:${value.id}` === field)?.name : fieldLabel(t, field);
       if (name === undefined) {
         continue;
       }
@@ -487,6 +494,8 @@ function HistoryList({
   const units = useDurationUnits();
   const { locale } = useLocale();
   const keys = new Map<string, string>([[task.id, task.key]]);
+  const versionList = useVersions(task.project);
+  const versions = new Map((versionList.data?.items ?? []).map((version) => [version.id, version.name]));
   for (const link of task.links ?? []) {
     keys.set(link.task.id, link.task.key);
   }
@@ -539,7 +548,7 @@ function HistoryList({
     {who}
     <ol className={styles.history} aria-label={t("history-title")}>
       {entries.map((entry) => {
-        const lines = describeEntry(t, { task, project, keys, units, locale }, entry);
+        const lines = describeEntry(t, { task, project, keys, units, locale, versions }, entry);
         if (lines.length === 0) {
           return null;
         }

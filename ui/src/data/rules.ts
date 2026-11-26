@@ -12,13 +12,13 @@ import type { AgentRules, Card, Priority, Project, StatusRules, Task } from "../
 export const CUSTOM_FIELD_PREFIX = "cf:";
 
 /** The fields a status may require before a task enters it. */
-export const REQUIRABLE_FIELDS = ["description", "priority", "start_date", "due_date", "estimate", "labels", "parent"] as const;
+export const REQUIRABLE_FIELDS = ["description", "priority", "start_date", "due_date", "estimate", "labels", "parent", "fix_version"] as const;
 
 /** The fields a status may make read-only, and agents may be kept from. */
-export const LOCKABLE_FIELDS = ["title", "description", "type", "priority", "start_date", "due_date", "estimate", "progress", "labels", "parent"] as const;
+export const LOCKABLE_FIELDS = ["title", "description", "type", "priority", "start_date", "due_date", "estimate", "progress", "labels", "parent", "fix_version"] as const;
 
 /** The fields a status may clear when a task enters it. */
-export const CLEARABLE_FIELDS = ["start_date", "due_date", "estimate", "progress"] as const;
+export const CLEARABLE_FIELDS = ["start_date", "due_date", "estimate", "progress", "fix_version"] as const;
 
 /** A built-in field a rule can name. */
 export type RuleField = (typeof LOCKABLE_FIELDS)[number];
@@ -58,6 +58,7 @@ export interface KnownFields {
   estimate_minutes?: number | null | undefined;
   labels?: readonly unknown[] | undefined;
   parent?: string | null | undefined;
+  fix_version?: unknown;
 }
 
 /**
@@ -97,6 +98,8 @@ function presence(field: string, task: KnownFields): boolean | undefined {
       return task.labels === undefined ? undefined : task.labels.length > 0;
     case "parent":
       return task.parent === undefined ? undefined : task.parent !== null;
+    case "fix_version":
+      return task.fix_version === undefined ? undefined : task.fix_version !== null;
     default:
       return undefined;
   }
@@ -124,6 +127,7 @@ export function fieldsOfTask(task: Task): KnownFields {
     estimate_minutes: task.estimate_minutes ?? null,
     labels: task.labels,
     parent: task.parent ?? null,
+    fix_version: task.fix_version ?? null,
   };
 }
 
@@ -135,4 +139,14 @@ export function readOnlyFields(project: Project | undefined, statusId: string): 
 /** Whether `field` is a custom field. */
 export function isCustom(field: string): boolean {
   return field.startsWith(CUSTOM_FIELD_PREFIX);
+}
+
+/** How a rule names custom field `id`. */
+export function customRuleField(id: string): string {
+  return `${CUSTOM_FIELD_PREFIX}${id}`;
+}
+
+/** The ID of the custom field a rule names; none for a built-in field. */
+export function customFieldId(field: string): string | undefined {
+  return isCustom(field) ? field.slice(CUSTOM_FIELD_PREFIX.length) : undefined;
 }

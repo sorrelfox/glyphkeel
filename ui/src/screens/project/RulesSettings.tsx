@@ -9,9 +9,10 @@ import { classes } from "../../classes";
 import { Select } from "../../components/Select";
 import { Switch } from "../../components/Switch";
 import { PRIORITIES, type Project, type Status } from "../../data/catalog";
+import { useCustomFields } from "../../data/fields";
 import { useCommand } from "../../data/hooks";
-import { CLEARABLE_FIELDS, LOCKABLE_FIELDS, REQUIRABLE_FIELDS, isCustom, isEmpty } from "../../data/rules";
-import type { Priority, RuleSet, StatusRules } from "../../generated/ops";
+import { CLEARABLE_FIELDS, LOCKABLE_FIELDS, REQUIRABLE_FIELDS, customRuleField, isCustom, isEmpty } from "../../data/rules";
+import type { CustomField, Priority, RuleSet, StatusRules } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import styles from "./Rules.module.css";
 
@@ -28,6 +29,8 @@ export function RulesSettings({ project }: { project: Project }) {
   const update = useCommand("rules.update", { undoable: t("toast-rules-changed") });
   const readOnly = project.state === "archived";
   const agentFields = project.agent_rules?.read_only ?? [];
+  // The fields this project's tasks have: its own and those of every project.
+  const custom = useCustomFields(project.key);
   const setStatusRules = (status: Status, rules: StatusRules) => {
     update.mutate({ project: project.key, statuses: [{ status: status.id, rules }] });
   };
@@ -35,7 +38,7 @@ export function RulesSettings({ project }: { project: Project }) {
     <div className={styles.rules}>
       <p className="muted">{t("rules-intro")}</p>
       {project.statuses.map((status) => (
-        <StatusRulesCard key={status.id} status={status} readOnly={readOnly} onChange={(rules) => { setStatusRules(status, rules); }} />
+        <StatusRulesCard key={status.id} status={status} custom={custom} readOnly={readOnly} onChange={(rules) => { setStatusRules(status, rules); }} />
       ))}
       <section className={styles.card} aria-labelledby="rules-agents">
         <h3 id="rules-agents" className={styles.heading}>
@@ -45,6 +48,7 @@ export function RulesSettings({ project }: { project: Project }) {
         <FieldChecks
           legend={t("rules-agents-read-only")}
           fields={LOCKABLE_FIELDS}
+          custom={custom}
           chosen={agentFields}
           readOnly={readOnly}
           onChange={(read_only) => {
@@ -56,7 +60,7 @@ export function RulesSettings({ project }: { project: Project }) {
   );
 }
 
-function StatusRulesCard({ status, readOnly, onChange }: { status: Status; readOnly: boolean; onChange: (rules: StatusRules) => void }) {
+function StatusRulesCard({ status, custom, readOnly, onChange }: { status: Status; custom: readonly CustomField[]; readOnly: boolean; onChange: (rules: StatusRules) => void }) {
   const t = useT();
   const { locale } = useLocale();
   const rules = status.rules ?? {};
@@ -150,12 +154,33 @@ function StatusRulesCard({ status, readOnly, onChange }: { status: Status; readO
               />
               {t("rules-release-claim")}
             </label>
+            {custom.length > 0 && (
+              <div className={styles.choice}>
+                {custom
+                  .filter((field) => field.kind !== "markdown")
+                  .map((field) => {
+                    const rule = customRuleField(field.id);
+                    return (
+                      <CustomSetRule
+                        key={field.id}
+                        field={field}
+                        entry={setOf(rule)}
+                        readOnly={readOnly || (rules.clear ?? []).includes(rule)}
+                        onChange={(entry) => {
+                          onChange(withSet(rule, entry));
+                        }}
+                      />
+                    );
+                  })}
+              </div>
+            )}
           </fieldset>
           <FieldChecks
             legend={t("rules-clear")}
             fields={CLEARABLE_FIELDS}
+            custom={custom.filter((field) => !field.required)}
             chosen={rules.clear ?? []}
-            disabledFields={rules.required ?? []}
+            disabledFields={[...(rules.required ?? []), ...set.map((entry) => entry.field)]}
             readOnly={readOnly}
             onChange={(clear) => {
               onChange({ ...rules, clear });
@@ -164,6 +189,7 @@ function StatusRulesCard({ status, readOnly, onChange }: { status: Status; readO
           <FieldChecks
             legend={t("rules-required")}
             fields={REQUIRABLE_FIELDS}
+            custom={custom}
             chosen={rules.required ?? []}
             disabledFields={rules.clear ?? []}
             readOnly={readOnly}
@@ -174,6 +200,7 @@ function StatusRulesCard({ status, readOnly, onChange }: { status: Status; readO
           <FieldChecks
             legend={t("rules-read-only")}
             fields={LOCKABLE_FIELDS}
+            custom={custom}
             chosen={rules.read_only ?? []}
             readOnly={readOnly}
             onChange={(read_only) => {
@@ -195,13 +222,93 @@ function StatusRulesCard({ status, readOnly, onChange }: { status: Status; readO
   );
 }
 
+/** Keeps a custom field as it is on entering the status. */
+const KEEP = "\u0000keep";
+
 /**
- * A group of checkboxes, one per field. Custom fields already chosen (set
- * from the command line, say) stay chosen: the list keeps them.
+ * What a status sets in one custom field on entry: an option, yes or no,
+ * today for a date, or a value typed as it would be in the task panel.
+ */
+function CustomSetRule({ field, entry, readOnly, onChange }: { field: CustomField; entry: RuleSet | undefined; readOnly: boolean; onChange: (entry: RuleSet | null) => void }) {
+  const t = useT();
+  const rule = customRuleField(field.id);
+  const choose = (value: string) => {
+    onChange(value === KEEP ? null : { field: rule, value });
+  };
+  switch (field.kind) {
+    case "select":
+    case "multi_select":
+    case "boolean": {
+      const options = field.kind === "boolean" ? [{ id: "true", label: t("field-yes") }, { id: "false", label: t("field-no") }] : (field.options ?? []).map((option) => ({ id: option, label: option }));
+      return (
+        <Select<string>
+          label={t("rules-custom-set", { name: field.name })}
+          value={entry?.value ?? KEEP}
+          isDisabled={readOnly}
+          onChange={choose}
+          options={[{ id: KEEP, label: t("rules-custom-keep", { name: field.name }) }, ...options.map((option) => ({ id: option.id, label: t("rules-custom-set-to", { name: field.name, value: option.label }) }))]}
+        />
+      );
+    }
+    case "date":
+      return (
+        <label className={styles.check}>
+          <input
+            type="checkbox"
+            className="check"
+            checked={entry?.value === "today"}
+            disabled={readOnly}
+            onChange={(event) => {
+              onChange(event.target.checked ? { field: rule, value: "today", only_if_empty: true } : null);
+            }}
+          />
+          {t("rules-custom-today", { name: field.name })}
+        </label>
+      );
+    default:
+      return <CustomSetText key={entry?.value ?? ""} field={field} value={entry?.value ?? ""} readOnly={readOnly} onSave={(value) => { choose(value.trim() === "" ? KEEP : value.trim()); }} />;
+  }
+}
+
+/** A typed value a status sets in a custom field; saved when it loses the focus or on Enter. */
+function CustomSetText({ field, value, readOnly, onSave }: { field: CustomField; value: string; readOnly: boolean; onSave: (value: string) => void }) {
+  const t = useT();
+  const [text, setText] = useState(value);
+  const save = () => {
+    if (text.trim() !== value) {
+      onSave(text);
+    }
+  };
+  return (
+    <label className={styles.check}>
+      {t("rules-custom-set", { name: field.name })}
+      <input
+        value={text}
+        disabled={readOnly}
+        placeholder={t("rules-custom-keep", { name: field.name })}
+        onChange={(event) => {
+          setText(event.target.value);
+        }}
+        onBlur={save}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            save();
+          }
+        }}
+      />
+    </label>
+  );
+}
+
+/**
+ * A group of checkboxes, one per field, then one per custom field.
+ * Custom fields chosen but no longer known here (deleted, say) stay
+ * chosen until unticked.
  */
 function FieldChecks({
   legend,
   fields,
+  custom = [],
   chosen,
   disabledFields = [],
   readOnly,
@@ -209,6 +316,7 @@ function FieldChecks({
 }: {
   legend: string;
   fields: readonly string[];
+  custom?: readonly CustomField[];
   chosen: readonly string[];
   disabledFields?: readonly string[];
   readOnly: boolean;
@@ -234,7 +342,25 @@ function FieldChecks({
             {t(`rule-field-${field}`)}
           </label>
         ))}
-        {chosen.filter(isCustom).map((field) => (
+        {custom.map((field) => {
+          const rule = customRuleField(field.id);
+          return (
+            <label key={rule} className={styles.check}>
+              <input
+                type="checkbox"
+                className="check"
+                checked={chosen.includes(rule)}
+                disabled={disabledFields.includes(rule)}
+                onChange={(event) => {
+                  const kept = chosen.filter((candidate) => candidate !== rule);
+                  onChange(event.target.checked ? [...kept, rule] : kept);
+                }}
+              />
+              {field.name}
+            </label>
+          );
+        })}
+        {chosen.filter((field) => isCustom(field) && !custom.some((each) => customRuleField(each.id) === field)).map((field) => (
           <label key={field} className={styles.check}>
             <input
               type="checkbox"

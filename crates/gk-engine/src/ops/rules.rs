@@ -28,9 +28,12 @@
 //!
 //! Custom fields are named `cf:<id>`, which is also how history records a
 //! task's custom field values, so read-only fields and the rules for agents
-//! cover them as they cover built-in fields. Requiring one reads
-//! `custom_values`; setting or clearing one on entering a status is not
-//! offered yet.
+//! cover them as they cover built-in fields. A status can also require,
+//! set or clear one; a field shown only for some task types is set or
+//! cleared only on tasks of those types, and a required custom field is
+//! never cleared. A new sub-project's rules name the sub-project's copies
+//! of its parent's fields ([`map_custom_fields`]), and so do the rules of
+//! a project imported with new field IDs.
 
 use std::collections::BTreeMap;
 
@@ -107,11 +110,19 @@ fn update(w: &mut WriteCtx<'_>, input: RulesUpdateInput) -> Result<ProjectChange
         let at = |e: Failure| at_path(e, &format!("statuses[{i}]"));
         let status =
             lookup::named(w.tx(), List::Statuses, &p, "status", &change.status).map_err(at)?;
-        check_status_rules(w.tx(), &p, &change.rules).map_err(at)?;
-        let value = stored(&change.rules, change.rules.is_empty())?;
+        let rules = canonical(&change.rules);
+        check_status_rules(w.tx(), &p, &rules).map_err(at)?;
+        let value = stored(&rules, rules.is_empty())?;
         fields::set(w, STATUS, status.id, pid, "rules", value)?;
     }
     if let Some(agents) = &input.agents {
+        let agents = &AgentRules {
+            read_only: agents
+                .read_only
+                .iter()
+                .map(|f| canonical_field(f))
+                .collect(),
+        };
         check_list(
             w.tx(),
             &p,
@@ -124,6 +135,37 @@ fn update(w: &mut WriteCtx<'_>, input: RulesUpdateInput) -> Result<ProjectChange
         fields::set(w, PROJECT, p.id, pid, "agent_rules", value)?;
     }
     super::project::changed(w, p.id)
+}
+
+/// A rule's field as it is kept: a custom field's ID written the way
+/// history names the field (`cf:` and the ID in its usual form).
+fn canonical_field(field: &str) -> String {
+    match field
+        .strip_prefix(CUSTOM_FIELD_PREFIX)
+        .and_then(|id| id.parse::<Id>().ok())
+    {
+        Some(id) => format!("{CUSTOM_FIELD_PREFIX}{id}"),
+        None => field.to_owned(),
+    }
+}
+
+/// `rules` with their custom fields written as they are kept.
+fn canonical(rules: &StatusRules) -> StatusRules {
+    let list = |l: &[String]| l.iter().map(|f| canonical_field(f)).collect();
+    StatusRules {
+        set: rules
+            .set
+            .iter()
+            .map(|s| RuleSet {
+                field: canonical_field(&s.field),
+                ..s.clone()
+            })
+            .collect(),
+        clear: list(&rules.clear),
+        required: list(&rules.required),
+        read_only: list(&rules.read_only),
+        ..rules.clone()
+    }
 }
 
 /// `rules` as stored: no value when there are none.
@@ -176,16 +218,39 @@ fn check_status_rules(
         &rules.read_only,
         |f| LOCKABLE_FIELDS.contains(&f),
     )?;
-    // Custom fields can't be set or cleared on entering a status yet.
     check_list(tx, p, "rules.clear", "clear", &rules.clear, |f| {
         CLEARABLE_FIELDS.contains(&f)
     })?;
+    for (i, f) in rules.clear.iter().enumerate() {
+        if let Some(id) = f.strip_prefix(CUSTOM_FIELD_PREFIX)
+            && let Some(field) = super::custom_field::of_project(tx, p.id, id)?
+            && field.required
+        {
+            return Err(messages::invalid(
+                &format!("rules.clear[{i}]"),
+                "rule-clear-required-field",
+                &[("name", field.name)],
+            ));
+        }
+    }
     let set: Vec<String> = rules.set.iter().map(|s| s.field.clone()).collect();
     check_list(tx, p, "rules.set", "set", &set, |f| {
         SETTABLE_FIELDS.contains(&f)
     })?;
     for (i, s) in rules.set.iter().enumerate() {
-        check_value(s).map_err(|e| at_path(e, &format!("rules.set[{i}]")))?;
+        let at = format!("rules.set[{i}]");
+        match s.field.strip_prefix(CUSTOM_FIELD_PREFIX) {
+            Some(id) => {
+                if let Some(field) = super::custom_field::of_project(tx, p.id, id)? {
+                    super::custom_field::check_rule_value(
+                        &field,
+                        &s.value,
+                        &format!("{at}.value"),
+                    )?;
+                }
+            }
+            None => check_value(s).map_err(|e| at_path(e, &at))?,
+        }
         if rules.clear.contains(&s.field) {
             return Err(messages::invalid(
                 &format!("rules.set[{i}].field"),
@@ -233,15 +298,7 @@ fn check_list(
             ));
         }
         if let Some(id) = field.strip_prefix(CUSTOM_FIELD_PREFIX) {
-            let settable = matches!(rule, "required" | "read_only" | "agents");
-            if !settable {
-                return Err(messages::invalid(
-                    &at,
-                    "rule-field-not-allowed",
-                    &[("rule", rule.to_owned()), ("field", field.clone())],
-                ));
-            }
-            if custom_field_name(tx, p.id, id)?.is_none() {
+            if super::custom_field::of_project(tx, p.id, id)?.is_none() {
                 return Err(messages::invalid(
                     &at,
                     "rule-custom-field-unknown",
@@ -282,51 +339,13 @@ fn check_value(s: &RuleSet) -> Result<(), Failure> {
 // ---------------------------------------------------------------------
 // Custom fields
 
-/// Whether the workspace has the custom field tables.
-fn has_custom_fields(tx: &Transaction<'_>) -> Result<bool, Failure> {
-    let n: i64 = tx.query_row(
-        "SELECT count(*) FROM sqlite_schema WHERE type = 'table'
-            AND name IN ('custom_fields', 'custom_values')",
-        [],
-        |r| r.get(0),
-    )?;
-    Ok(n == 2)
-}
-
-/// The name of custom field `id`, when it exists for project `project`
-/// (its own, an ancestor's, or one for every project).
-fn custom_field_name(
-    tx: &Transaction<'_>,
-    project: Id,
-    id: &str,
-) -> Result<Option<String>, Failure> {
-    let Ok(id) = id.parse::<Id>() else {
-        return Ok(None);
-    };
-    if !has_custom_fields(tx)? {
-        return Ok(None);
-    }
-    Ok(tx
-        .query_row(
-            "WITH RECURSIVE up(id) AS (
-                 SELECT ?2 UNION ALL
-                 SELECT p.parent_id FROM projects p JOIN up ON p.id = up.id
-                  WHERE p.parent_id IS NOT NULL)
-             SELECT name FROM custom_fields
-              WHERE id = ?1 AND (project_id IS NULL OR project_id IN (SELECT id FROM up))",
-            params![b(id), b(project)],
-            |r| r.get(0),
-        )
-        .optional()?)
-}
-
 /// A message's arguments naming `field`: `field` is the built-in field, or
 /// `custom` with the custom field's `name`.
 fn field_args(tx: &Transaction<'_>, field: &str) -> Result<Vec<(&'static str, String)>, Failure> {
     Ok(match field.strip_prefix(CUSTOM_FIELD_PREFIX) {
         Some(id) => {
             let name = match id.parse::<Id>() {
-                Ok(parsed) if has_custom_fields(tx)? => tx
+                Ok(parsed) => tx
                     .query_row(
                         "SELECT name FROM custom_fields WHERE id = ?1",
                         [b(parsed)],
@@ -334,12 +353,88 @@ fn field_args(tx: &Transaction<'_>, field: &str) -> Result<Vec<(&'static str, St
                     )
                     .optional()?
                     .unwrap_or_else(|| id.to_owned()),
-                _ => id.to_owned(),
+                Err(_) => id.to_owned(),
             };
             vec![("field", "custom".to_owned()), ("name", name)]
         }
         None => vec![("field", field.to_owned()), ("name", field.to_owned())],
     })
+}
+
+/// Rewrites the custom fields that stored rules `rules` (a status's or
+/// the rules for agents) name: `map` gives a field's new ID, or none to
+/// keep it.
+pub(crate) fn map_custom_fields(rules: &mut Value, map: &dyn Fn(Id) -> Option<Id>) {
+    let one = |v: &mut Value| {
+        if let Some(id) = v
+            .as_str()
+            .and_then(|f| f.strip_prefix(CUSTOM_FIELD_PREFIX))
+            .and_then(|id| id.parse::<Id>().ok())
+            .and_then(map)
+        {
+            *v = Value::String(format!("{CUSTOM_FIELD_PREFIX}{id}"));
+        }
+    };
+    let Some(object) = rules.as_object_mut() else {
+        return;
+    };
+    for list in ["required", "read_only", "clear"] {
+        if let Some(Value::Array(items)) = object.get_mut(list) {
+            items.iter_mut().for_each(one);
+        }
+    }
+    if let Some(Value::Array(items)) = object.get_mut("set") {
+        for item in items {
+            if let Some(field) = item.get_mut("field") {
+                one(field);
+            }
+        }
+    }
+}
+
+/// Makes the rules of project `project` (its statuses' and those for
+/// agents) name the copies `copies` gives of custom fields.
+pub(crate) fn map_project_fields(
+    tx: &Transaction<'_>,
+    project: Id,
+    copies: &BTreeMap<Id, Id>,
+) -> Result<(), Failure> {
+    if copies.is_empty() {
+        return Ok(());
+    }
+    let rewrite = |text: String| -> Option<String> {
+        let mut v: Value = serde_json::from_str(&text).ok()?;
+        map_custom_fields(&mut v, &|id| copies.get(&id).copied());
+        let out = v.to_string();
+        (out != text).then_some(out)
+    };
+    let statuses: Vec<(Vec<u8>, String)> = tx
+        .prepare("SELECT id, rules FROM statuses WHERE project_id = ?1 AND rules IS NOT NULL")?
+        .query_map([b(project)], |r| Ok((r.get(0)?, r.get(1)?)))?
+        .collect::<Result<_, _>>()?;
+    for (id, text) in statuses {
+        if let Some(out) = rewrite(text) {
+            tx.execute(
+                "UPDATE statuses SET rules = ?2 WHERE id = ?1",
+                params![id, out],
+            )?;
+        }
+    }
+    let agents: Option<String> = tx
+        .query_row(
+            "SELECT agent_rules FROM projects WHERE id = ?1",
+            [b(project)],
+            |r| r.get(0),
+        )
+        .optional()?
+        .flatten();
+    if let Some(out) = agents.and_then(rewrite) {
+        tx.execute(
+            "UPDATE projects SET agent_rules = ?2 WHERE id = ?1",
+            params![b(project), out],
+        )?;
+    }
+    Ok(())
 }
 
 // ---------------------------------------------------------------------
@@ -348,7 +443,7 @@ fn field_args(tx: &Transaction<'_>, field: &str) -> Result<Vec<(&'static str, St
 /// Whether command `op` is held to the rules. Commands that change the
 /// configuration or bring back earlier states are not.
 pub(crate) fn applies_to(op: &str) -> bool {
-    const FREE: [&str; 13] = [
+    const FREE: [&str; 14] = [
         "history.",
         "transfer.",
         "backup.",
@@ -358,7 +453,8 @@ pub(crate) fn applies_to(op: &str) -> bool {
         "type.",
         "label.",
         "rules.",
-        "custom_field.",
+        "field.",
+        "version.",
         "workspace.",
         "settings.",
         "agent.",
@@ -504,12 +600,32 @@ fn enter(w: &mut WriteCtx<'_>, task: Id, now: &TaskFacts, agent: bool) -> Result
         return Err(messages::hint(error, "rule-agent-hint", &[]).into());
     }
     let pid = Some(now.project);
+    let today = w.zone().day_of(w.now()).to_string();
     for field in &rules.clear {
-        if fields::is_column(TASK, field) {
+        if let Some(id) = field.strip_prefix(CUSTOM_FIELD_PREFIX) {
+            if let Some(f) = super::custom_field::of_project(w.tx(), now.project, id)? {
+                super::custom_field::apply_rule(w, task, now.project, &f, None, false, &today)?;
+            }
+        } else if fields::is_column(TASK, field) {
             fields::set(w, TASK, task, pid, field, None)?;
         }
     }
     for s in &rules.set {
+        if let Some(id) = s.field.strip_prefix(CUSTOM_FIELD_PREFIX) {
+            if let Some(f) = super::custom_field::of_project(w.tx(), now.project, id)? {
+                let value = Some(s.value.as_str());
+                super::custom_field::apply_rule(
+                    w,
+                    task,
+                    now.project,
+                    &f,
+                    value,
+                    s.only_if_empty,
+                    &today,
+                )?;
+            }
+            continue;
+        }
         let current = fields::read(w.tx(), TASK, task, &s.field)?;
         let empty = match &current {
             None => true,
@@ -521,11 +637,10 @@ fn enter(w: &mut WriteCtx<'_>, task: Id, now: &TaskFacts, agent: bool) -> Result
         }
         let value = match s.field.as_str() {
             "start_date" | "due_date" => {
-                let today = w.zone().day_of(w.now()).to_string();
                 if !dates_allow(w.tx(), task, &s.field, &today)? {
                     continue;
                 }
-                text(today)
+                text(today.clone())
             }
             "progress" => s.value.parse::<u8>().ok().map(Value::from),
             "priority" => text(s.value.clone()),
@@ -580,6 +695,7 @@ fn missing(tx: &Transaction<'_>, task: Id, required: &[String]) -> Result<Vec<St
             "due_date" => "due_date IS NOT NULL",
             "estimate" => "estimate_min IS NOT NULL",
             "parent" => "parent_id IS NOT NULL",
+            "fix_version" => "fix_version_id IS NOT NULL",
             "labels" => "EXISTS (SELECT 1 FROM task_labels l WHERE l.task_id = tasks.id)",
             _ => "",
         };
@@ -607,9 +723,6 @@ fn custom_value_present(tx: &Transaction<'_>, task: Id, id: &str) -> Result<bool
     let Ok(id) = id.parse::<Id>() else {
         return Ok(true);
     };
-    if !has_custom_fields(tx)? {
-        return Ok(true);
-    }
     let exists: bool = tx.query_row(
         "SELECT EXISTS (SELECT 1 FROM custom_fields WHERE id = ?1)",
         [b(id)],

@@ -6,6 +6,7 @@
 //! in the engine's message file; an error's `Display` stays English for
 //! logs and tests.
 
+use crate::custom_field::FieldError;
 use crate::day::DayError;
 use crate::duration::DurationError;
 use crate::file::FileError;
@@ -175,6 +176,45 @@ impl Message for RankError {
         match self {
             Self::Malformed(text) => vec![arg("text", text), arg("max", MAX_LEN)],
             Self::NoRoom { lower, upper } => vec![arg("lower", lower), arg("upper", upper)],
+        }
+    }
+}
+
+impl Message for FieldError {
+    fn message_id(&self) -> &'static str {
+        match self {
+            Self::UnknownKind(_) => "value-field-kind",
+            Self::NoQueryName(_) => "value-field-query-name",
+            Self::NotInteger(_) => "value-field-integer",
+            Self::NotNumber(_) => "value-field-number",
+            Self::NotDate(_) => "value-field-date",
+            Self::NotBoolean(_) => "value-field-boolean",
+            Self::NotUrl(_) => "value-field-url",
+            Self::NotAnOption { .. } => "value-field-option",
+            Self::TooLong { .. } => "value-field-too-long",
+            Self::Empty => "value-field-empty",
+        }
+    }
+    fn message_args(&self) -> Vec<(&'static str, String)> {
+        match self {
+            Self::UnknownKind(text)
+            | Self::NoQueryName(text)
+            | Self::NotInteger(text)
+            | Self::NotNumber(text)
+            | Self::NotDate(text)
+            | Self::NotBoolean(text)
+            | Self::NotUrl(text) => vec![arg("text", text)],
+            Self::NotAnOption {
+                value,
+                field,
+                choices,
+            } => vec![
+                arg("text", value),
+                arg("field", field),
+                arg("choices", choices),
+            ],
+            Self::TooLong { len, max } => vec![arg("length", len), arg("max", max)],
+            Self::Empty => vec![],
         }
     }
 }

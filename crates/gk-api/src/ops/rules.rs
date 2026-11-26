@@ -32,6 +32,7 @@ pub const REQUIRABLE_FIELDS: &[&str] = &[
     "estimate",
     "labels",
     "parent",
+    "fix_version",
 ];
 
 /// The task fields a status may make read-only, and agents may be kept
@@ -47,13 +48,20 @@ pub const LOCKABLE_FIELDS: &[&str] = &[
     "progress",
     "labels",
     "parent",
+    "fix_version",
 ];
 
 /// The task fields a status may set when a task enters it.
 pub const SETTABLE_FIELDS: &[&str] = &["start_date", "due_date", "progress", "priority"];
 
 /// The task fields a status may clear when a task enters it.
-pub const CLEARABLE_FIELDS: &[&str] = &["start_date", "due_date", "estimate", "progress"];
+pub const CLEARABLE_FIELDS: &[&str] = &[
+    "start_date",
+    "due_date",
+    "estimate",
+    "progress",
+    "fix_version",
+];
 
 /// At most a list of fields in a rule holds.
 pub const RULE_FIELDS_MAX: usize = 50;
@@ -71,7 +79,7 @@ pub struct RuleSet {
     pub field: String,
     /// The value as text: `today` for a date, 0 to 100 for progress, a
     /// priority's name (`high`), or a custom field's value as it is
-    /// written.
+    /// written (`today` for a date field, one option of a select field).
     pub value: String,
     /// Only when the field has no value yet (a start date already set is
     /// kept).
@@ -87,7 +95,8 @@ pub struct StatusRules {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub set: Vec<RuleSet>,
     /// Fields cleared when a task enters the status: `start_date`,
-    /// `due_date`, `estimate`, `progress`, or a custom field.
+    /// `due_date`, `estimate`, `progress`, `fix_version`, or a custom field
+    /// that isn't required.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub clear: Vec<String>,
     /// Stop the timer when its task enters the status; the time is logged.
@@ -98,12 +107,13 @@ pub struct StatusRules {
     pub release_claim: bool,
     /// Fields that must have a value before a task enters the status:
     /// `description`, `priority`, `start_date`, `due_date`, `estimate`,
-    /// `labels`, `parent`, or a custom field.
+    /// `labels`, `parent`, `fix_version`, or a custom field.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub required: Vec<String>,
     /// Fields that can't change while a task is in the status: `title`,
     /// `description`, `type`, `priority`, `start_date`, `due_date`,
-    /// `estimate`, `progress`, `labels`, `parent`, or a custom field.
+    /// `estimate`, `progress`, `labels`, `parent`, `fix_version`, or a
+    /// custom field.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub read_only: Vec<String>,
     /// Agents may not move tasks into the status, nor create tasks in it
@@ -126,7 +136,8 @@ impl StatusRules {
 pub struct AgentRules {
     /// Task fields agents may not change in this project: `title`,
     /// `description`, `type`, `priority`, `start_date`, `due_date`,
-    /// `estimate`, `progress`, `labels`, `parent`, or a custom field.
+    /// `estimate`, `progress`, `labels`, `parent`, `fix_version`, or a
+    /// custom field.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub read_only: Vec<String>,
 }

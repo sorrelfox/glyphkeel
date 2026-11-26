@@ -8,6 +8,7 @@
 // engine's message IDs, and every range is in UTF-16 units, as the engine's.
 
 import {
+  type CustomFieldKind,
   type Hue,
   type ListedTask,
   type ListGroup,
@@ -41,11 +42,20 @@ export interface QueryNames {
   types: readonly string[];
   labels: readonly string[];
   projects: readonly string[];
+  /** The custom fields, one per query name; none when the workspace has none. */
+  custom?: readonly CustomQueryField[];
   /** Today, `YYYY-MM-DD`. */
   today: string;
 }
 
-type FieldType = "key" | "project" | "text" | "status" | "category" | "type" | "priority" | "label" | "parent" | "date" | "span" | "duration" | "number" | "is";
+/** A custom field as queries see it. */
+export interface CustomQueryField {
+  queryName: string;
+  kind: CustomFieldKind;
+  options: readonly string[];
+}
+
+type FieldType = "custom" | "key" | "project" | "text" | "status" | "category" | "type" | "priority" | "label" | "version" | "parent" | "date" | "span" | "duration" | "number" | "is";
 
 interface FieldSpec {
   name: string;
@@ -55,6 +65,7 @@ interface FieldSpec {
   sortable: boolean;
   values: string;
   choices?: string[];
+  custom?: CustomQueryField;
 }
 
 const NAME_OPS = [":", "!="];
@@ -73,6 +84,7 @@ export const FAKE_FIELDS: readonly FieldSpec[] = [
   { name: "type", aliases: [], type: "type", operators: NAME_OPS, sortable: true, values: "task type names" },
   { name: "priority", aliases: ["prio"], type: "priority", operators: ORDERED_OPS, sortable: true, values: "none < low < normal < high < urgent", choices: PRIORITIES },
   { name: "label", aliases: ["labels"], type: "label", operators: NAME_OPS, sortable: false, values: "label names" },
+  { name: "version", aliases: ["fix-version"], type: "version", operators: NAME_OPS, sortable: true, values: "version names, or none" },
   { name: "parent", aliases: [], type: "parent", operators: NAME_OPS, sortable: true, values: "a task key, or none" },
   { name: "start", aliases: [], type: "date", operators: ORDERED_OPS, sortable: true, values: "a date, today, +7d, or none" },
   { name: "due", aliases: [], type: "date", operators: ORDERED_OPS, sortable: true, values: "a date, today, +7d, or none" },
@@ -85,14 +97,34 @@ export const FAKE_FIELDS: readonly FieldSpec[] = [
   { name: "is", aliases: [], type: "is", operators: [":"], sortable: false, values: "open, closed, blocked", choices: ["open", "closed", "blocked"] },
 ];
 
-function findField(name: string): FieldSpec | undefined {
+function findField(name: string, names?: QueryNames): FieldSpec | undefined {
   const lower = name.toLowerCase();
-  return FAKE_FIELDS.find((field) => field.name === lower || field.aliases.includes(lower));
+  const prefixed = lower.startsWith("cf.");
+  const builtin = prefixed ? undefined : FAKE_FIELDS.find((field) => field.name === lower || field.aliases.includes(lower));
+  if (builtin) {
+    return builtin;
+  }
+  const custom = names?.custom?.find((field) => field.queryName === (prefixed ? lower.slice(3) : lower));
+  return custom ? customSpec(custom) : undefined;
+}
+
+function customSpec(custom: CustomQueryField): FieldSpec {
+  const ordered = ["integer", "decimal", "date"].includes(custom.kind);
+  return {
+    name: `cf.${custom.queryName}`,
+    aliases: [],
+    type: "custom",
+    operators: ordered ? ORDERED_OPS : NAME_OPS,
+    sortable: true,
+    values: custom.kind,
+    ...(custom.options.length > 0 ? { choices: [...custom.options] } : custom.kind === "boolean" ? { choices: ["yes", "no"] } : {}),
+    custom,
+  };
 }
 
 /** The registry as `query.parse` returns it. */
-export function fieldRegistry(): QueryField[] {
-  return FAKE_FIELDS.map((field) => ({
+export function fieldRegistry(names?: QueryNames): QueryField[] {
+  return [...FAKE_FIELDS, ...(names?.custom ?? []).map(customSpec)].map((field) => ({
     name: field.name,
     ...(field.aliases.length > 0 ? { aliases: field.aliases } : {}),
     ...(field.choices ? { choices: field.choices } : {}),
@@ -214,7 +246,7 @@ function condition(piece: Piece, tokens: QueryToken[], names: QueryNames): Node 
   if (negated) {
     token(tokens, "negation", piece.from, start);
   }
-  const fieldMatch = /^([a-zA-Z][a-zA-Z-]*)(?=!=|<=|>=|:|<|>|=)/.exec(body);
+  const fieldMatch = /^([cC][fF]\.[\p{L}\p{N}_-]+|[a-zA-Z][a-zA-Z-]*)(?=!=|<=|>=|:|<|>|=)/u.exec(body);
   if (piece.kind === "word" && fieldMatch) {
     const name = fieldMatch[1] ?? "";
     const rest = body.slice(name.length);
@@ -229,15 +261,15 @@ function condition(piece: Piece, tokens: QueryToken[], names: QueryNames): Node 
       }
       const keys = valueText.split(",");
       for (const key of keys) {
-        const field = findField(key.replace(/^-/, ""));
+        const field = findField(key.replace(/^-/, ""), names);
         if (!field?.sortable) {
           const sortable = FAKE_FIELDS.filter((candidate) => candidate.sortable).map((candidate) => candidate.name);
           throw new QueryFailure("query-sort-unknown-plain", `Can't sort by "${key}". Sortable fields: ${sortable.join(", ")}.`, { from: valueStart, to: piece.to }, { field: key, choices: sortable.join(", ") });
         }
       }
-      return { sort: keys.map((key) => (key.startsWith("-") ? `-${findField(key.slice(1))?.name ?? key}` : (findField(key)?.name ?? key))) };
+      return { sort: keys.map((key) => (key.startsWith("-") ? `-${findField(key.slice(1), names)?.name ?? key}` : (findField(key, names)?.name ?? key))) };
     }
-    const field = findField(name);
+    const field = findField(name, names);
     if (!field) {
       token(tokens, "error", start, fieldEnd);
       const suggestion = closest(name, FAKE_FIELDS.map((candidate) => candidate.name));
@@ -356,6 +388,20 @@ function checkValue(field: FieldSpec, value: string, range: TextRange, names: Qu
       return;
     case "text":
       return;
+    case "custom": {
+      const kind = field.custom?.kind;
+      if (value.toLowerCase() === "none") {
+        return;
+      }
+      if ((kind === "select" || kind === "multi_select" || kind === "boolean") && !(field.choices ?? []).some((choice) => choice.toLowerCase() === value.toLowerCase())) {
+        const choices = field.choices ?? [];
+        throw new QueryFailure("query-bad-choice", `"${value}" is not a value of ${field.name}. Use one of: ${choices.join(", ")}.`, range, { value, field: field.name, choices: choices.join(", ") });
+      }
+      if ((kind === "integer" || kind === "decimal") && !Number.isFinite(Number(value.split("..")[0]))) {
+        throw new QueryFailure("query-bad-number", `"${value}" is not a whole number.`, range, { value });
+      }
+      return;
+    }
   }
 }
 
@@ -505,7 +551,7 @@ function chipsOf(root: Node | null): QueryChip[] {
 /** `query.parse`, as the engine answers it. */
 export function parseQuery(text: string, names: QueryNames, withFields = false): ParsedQuery {
   const tokens: QueryToken[] = [];
-  const fields = withFields ? { fields: fieldRegistry() } : {};
+  const fields = withFields ? { fields: fieldRegistry(names) } : {};
   try {
     const reading = read(text, names, tokens);
     return {
@@ -574,6 +620,11 @@ function compare(op: string, a: number | string, b: number | string): boolean {
 const isClosed = (task: ListedTask) => task.status.category === "done" || task.status.category === "cancelled";
 
 function valueOf(task: ListedTask, field: string): number | string | null {
+  if (field.startsWith("cf.")) {
+    const value: unknown = task.fields?.[field.slice(3)];
+    const first: unknown = Array.isArray(value) ? (value as unknown[])[0] : value;
+    return typeof first === "boolean" ? Number(first) : typeof first === "number" || typeof first === "string" ? first : null;
+  }
   switch (field) {
     case "key":
       return task.key;
@@ -617,6 +668,8 @@ function matchesValue(task: ListedTask, field: FieldSpec, op: string, value: str
       return lower === "open" ? !isClosed(task) : lower === "closed" ? isClosed(task) : task.blocked;
     case "label":
       return lower === "none" ? task.labels.length === 0 : task.labels.some((label) => label.name.toLowerCase() === lower);
+    case "version":
+      return lower === "none" ? task.fix_version === undefined : task.fix_version?.name.toLowerCase() === lower;
     case "category":
       return lower === "open" ? !isClosed(task) : lower === "closed" ? isClosed(task) : task.status.category === lower;
     case "text": {
@@ -634,6 +687,32 @@ function matchesValue(task: ListedTask, field: FieldSpec, op: string, value: str
     }
     case "project":
       return lower.endsWith("/*") ? task.project.toLowerCase() === lower.slice(0, -2) || task.project.toLowerCase().startsWith(lower.slice(0, -2)) : task.project.toLowerCase() === lower;
+    case "custom": {
+      const raw = task.fields?.[field.name.slice(3)];
+      if (lower === "none") {
+        return raw === undefined;
+      }
+      const kind = field.custom?.kind;
+      if (kind === "boolean") {
+        return (raw === true) === ["yes", "true", "1", "on"].includes(lower);
+      }
+      if (raw === undefined) {
+        return false;
+      }
+      const list = (Array.isArray(raw) ? raw : [raw]).map((each) => String(each).toLowerCase());
+      if (kind === "integer" || kind === "decimal") {
+        const [from = lower, to] = lower.split("..");
+        const actual = Number(list[0]);
+        return to === undefined ? compare(op === ":" ? "=" : op, actual, Number(from)) : actual >= Number(from) && actual <= Number(to);
+      }
+      if (kind === "date") {
+        return compare(op === ":" ? "=" : op, list[0] ?? "", dayOf(lower, today) ?? lower);
+      }
+      if (kind === "select" || kind === "multi_select") {
+        return list.includes(lower);
+      }
+      return list.some((each) => each.includes(lower));
+    }
     default: {
       const actual = valueOf(task, field.name);
       if (lower === "none") {
@@ -700,6 +779,9 @@ function namesProject(node: Node | null): boolean {
 function sortValue(task: ListedTask, key: string, statusOrder: (task: ListedTask) => number): number | string | null {
   if (key === "status") {
     return statusOrder(task);
+  }
+  if (key === "version") {
+    return task.fix_version?.name.toLowerCase() ?? null;
   }
   if (key === "key") {
     return `${task.project}-${task.key.slice(task.key.indexOf("-") + 1).padStart(8, "0")}`;

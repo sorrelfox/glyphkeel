@@ -26,6 +26,8 @@ import {
   type TrashEntry,
   type Via,
 } from "../../generated/ops";
+import { type FakeVersion } from "./versions";
+import { type FakeField, type FieldValue } from "./fields";
 
 export interface FakeStatus {
   id: string;
@@ -108,6 +110,10 @@ export interface FakeTask {
   updatedBy: { kind: "user" | "agent"; name: string };
   closedAt: string | null;
   version: number;
+  /** The version (release) it is planned for. */
+  fixVersionId?: string | null;
+  /** Custom field values by field ID; none until one is set. */
+  fields?: Record<string, FieldValue>;
 }
 
 /** A link between two tasks, stored the way it reads from `from`. */
@@ -270,6 +276,10 @@ export interface FakeState {
   trash?: FakeTrashed[];
   /** Backups, newest first; none until one is made. */
   backups?: Backup[];
+  /** Versions (releases) of the projects; none until one is made. */
+  versions?: FakeVersion[];
+  /** Custom fields, in order; none until one is made. */
+  customFields?: FakeField[];
   workspaceName: string;
   seq: number;
 }
