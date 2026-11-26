@@ -29,8 +29,8 @@ use serde_json::{Map, Value};
 
 use super::description::{self, Owner};
 use super::{
-    agent, board, claim, comment, desc, fields, file, gantt_layout, list_layout, lookup, project,
-    relation, reminder, settings, task, time, trash, view, wiki,
+    agent, board, claim, comment, custom_field, desc, fields, file, gantt_layout, list_layout,
+    lookup, project, relation, reminder, settings, task, time, trash, version, view, wiki,
 };
 use super::{recurrence, template};
 use crate::failure::Failure;
@@ -398,6 +398,11 @@ fn current(
     id: Id,
     field: &str,
 ) -> Result<Option<Option<Value>>, StoreError> {
+    if entity == custom_field::ENTITY
+        || (entity == fields::TASK && field.starts_with(custom_field::VALUE_PREFIX))
+    {
+        return custom_field::current(tx, entity, id, field);
+    }
     Ok(Some(match (entity, field) {
         (settings::ENTITY, _) => settings::raw(tx, field)?,
         (board::ENTITY, "settings") => board::raw(tx, id)?,
@@ -406,6 +411,7 @@ fn current(
         (view::ENTITY, view::RECORD) => view::raw(tx, id)?,
         (template::ENTITY, template::RECORD) => template::raw(tx, id)?,
         (recurrence::ENTITY, recurrence::RECORD) => recurrence::raw(tx, id)?,
+        (version::ENTITY, version::RECORD) => version::raw(tx, id)?,
         (_, "deleted" | trash::PURGED) => return Ok(None),
         (fields::PROJECT | fields::TASK | fields::WIKI, trash::TRASHED) => {
             trash::raw_trashed(tx, entity, id)?
@@ -479,6 +485,11 @@ fn apply(
     field: &str,
     value: Option<Value>,
 ) -> Result<(), Failure> {
+    if entity == custom_field::ENTITY
+        || (entity == fields::TASK && field.starts_with(custom_field::VALUE_PREFIX))
+    {
+        return custom_field::apply(w, entity, id, project, field, value);
+    }
     match (entity, field) {
         (settings::ENTITY, _) => settings::write_raw(w, field, value),
         (board::ENTITY, "settings") => {
@@ -514,6 +525,12 @@ fn apply(
         (recurrence::ENTITY, recurrence::RECORD) => {
             let before = recurrence::raw(w.tx(), id)?;
             recurrence::write_raw(w, id, value.as_ref())?;
+            w.record_field(entity, id, project, field, before, value);
+            Ok(())
+        }
+        (version::ENTITY, version::RECORD) => {
+            let before = version::raw(w.tx(), id)?;
+            version::write_raw(w, id, value.as_ref())?;
             w.record_field(entity, id, project, field, before, value);
             Ok(())
         }

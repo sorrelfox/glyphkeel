@@ -4,7 +4,10 @@
 //! The field registry: every field a query can filter or sort by, with its
 //! aliases, type, operators and values. The query field's autocomplete,
 //! the condition builder and the reference documentation are made from
-//! this one list.
+//! this one list. Custom fields come from the workspace and are listed
+//! next to it ([`CustomField`]), as `cf.<name>`.
+
+use gk_core::{FieldKind, fold};
 
 use crate::syntax::Op;
 
@@ -29,6 +32,8 @@ pub enum FieldType {
     Priority,
     /// Label names; `:` any of them.
     Label,
+    /// The names of versions (releases), or `none`.
+    Version,
     /// The parent task, or `none`.
     Parent,
     /// Any ancestor task.
@@ -181,6 +186,7 @@ pub const HAS_PARTS: &[&str] = &[
     "estimate",
     "description",
     "labels",
+    "version",
     "files",
     "comments",
     "subtasks",
@@ -322,6 +328,15 @@ pub static FIELDS: &[Field] = &[
         false,
         false,
         "label names",
+    ),
+    field(
+        "version",
+        &["fix-version"],
+        FieldType::Version,
+        NAME_OPS,
+        false,
+        true,
+        "version names, or none",
     ),
     field(
         "parent",
@@ -567,6 +582,87 @@ pub fn sort_keys() -> impl Iterator<Item = &'static str> {
         .chain(EXTRA_SORT_KEYS.iter().copied())
 }
 
+/// What custom fields are written with in queries: `cf.points>3`.
+pub const CUSTOM_PREFIX: &str = "cf.";
+
+/// A custom field as queries see it. Fields of several projects that have
+/// the same query name are one field here: a condition on it looks at each
+/// task's own field of that name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CustomField {
+    /// Its name, as people wrote it.
+    pub name: String,
+    /// Its name in queries, after `cf.` (`story-points`).
+    pub query_name: String,
+    /// What it holds.
+    pub kind: FieldKind,
+    /// The options of a select field, of every project's field of this
+    /// name.
+    pub options: Vec<String>,
+}
+
+impl CustomField {
+    /// How the field is written in queries: `cf.story-points`.
+    #[must_use]
+    pub fn written(&self) -> String {
+        format!("{CUSTOM_PREFIX}{}", self.query_name)
+    }
+
+    /// The operators it takes.
+    #[must_use]
+    pub const fn ops(&self) -> &'static [Op] {
+        match self.kind {
+            FieldKind::Integer | FieldKind::Decimal | FieldKind::Date => ORDERED_OPS,
+            FieldKind::Text | FieldKind::Markdown | FieldKind::Url => TITLE_OPS,
+            FieldKind::Boolean | FieldKind::Select | FieldKind::MultiSelect => NAME_OPS,
+        }
+    }
+
+    /// Whether `a..b` ranges work.
+    #[must_use]
+    pub const fn ranges(&self) -> bool {
+        self.kind.is_ordered()
+    }
+
+    /// The values it takes, for people (English, as for built-in fields).
+    #[must_use]
+    pub const fn values(&self) -> &'static str {
+        match self.kind {
+            FieldKind::Text | FieldKind::Markdown => "words in the text; = the exact text; none",
+            FieldKind::Url => "part of the link; = the exact link; none",
+            FieldKind::Integer => "a whole number, a range such as 1..5, or none",
+            FieldKind::Decimal => "a number such as 2.5, a range, or none",
+            FieldKind::Date => "a date, today, +7d, this-week, or none",
+            FieldKind::Boolean => "yes or no",
+            FieldKind::Select | FieldKind::MultiSelect => "option names, or none",
+        }
+    }
+}
+
+/// The custom field a condition names: `cf.<query name>` (any case), or the
+/// bare query name when no built-in field has it.
+#[must_use]
+pub fn find_custom<'a>(written: &str, custom: &'a [CustomField]) -> Option<&'a CustomField> {
+    let (name, prefixed) = match strip_custom_prefix(written) {
+        Some(rest) => (rest, true),
+        None => (written, false),
+    };
+    if !prefixed && find(written).is_some() {
+        return None;
+    }
+    let wanted = fold(name);
+    custom.iter().find(|f| f.query_name == wanted)
+}
+
+/// The text after `cf.` (any case), if `written` starts with it.
+#[must_use]
+pub fn strip_custom_prefix(written: &str) -> Option<&str> {
+    written
+        .get(..CUSTOM_PREFIX.len())
+        .filter(|p| p.eq_ignore_ascii_case(CUSTOM_PREFIX))
+        .and_then(|_| written.get(CUSTOM_PREFIX.len()..))
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
@@ -585,6 +681,38 @@ mod tests {
                 "{name}"
             );
         }
+    }
+
+    #[test]
+    fn custom_fields_are_found_with_or_without_the_prefix() {
+        let custom = vec![
+            CustomField {
+                name: "Story points".to_owned(),
+                query_name: "story-points".to_owned(),
+                kind: FieldKind::Integer,
+                options: Vec::new(),
+            },
+            CustomField {
+                name: "Due".to_owned(),
+                query_name: "due".to_owned(),
+                kind: FieldKind::Text,
+                options: Vec::new(),
+            },
+        ];
+        assert_eq!(
+            find_custom("CF.Story-Points", &custom).map(|f| f.name.as_str()),
+            Some("Story points")
+        );
+        assert_eq!(
+            find_custom("story-points", &custom).map(|f| f.name.as_str()),
+            Some("Story points")
+        );
+        assert_eq!(find_custom("due", &custom), None, "a built-in field first");
+        assert_eq!(
+            find_custom("cf.due", &custom).map(|f| f.name.as_str()),
+            Some("Due")
+        );
+        assert_eq!(find_custom("cf.nothing", &custom), None);
     }
 
     #[test]

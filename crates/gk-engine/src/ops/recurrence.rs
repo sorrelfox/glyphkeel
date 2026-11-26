@@ -1029,14 +1029,43 @@ fn make_occurrence(
         return Ok(None);
     }
     let mut left_out = Vec::new();
-    let (task, _) =
-        super::template::make_task(w, &p, &r.pattern, None, day, parent, None, &mut left_out)?;
+    let (task, _) = super::template::make_task(
+        w,
+        &p,
+        &r.pattern,
+        None,
+        day,
+        parent,
+        None,
+        super::template::Making::Anyway,
+        &mut left_out,
+    )?;
     fields::set(w, TASK, task, Some(p.id), "series", id_value(id))?;
+    for made in super::task::descendants(w.tx(), task)? {
+        w.made_automatically(made);
+    }
     r.project = p.id.to_string();
     r.current = Some(task.to_string());
     r.made += 1;
     r.updated_at = w.now();
     Ok(Some(task))
+}
+
+/// After task `task` moved to project `to`: when it is the current
+/// occurrence of a series, the series moves with it, and its next
+/// occurrences are made there. The details they start from name
+/// statuses, types, labels, custom fields and versions by name, so they
+/// take what `to` has by those names.
+pub(crate) fn follow_move(w: &mut WriteCtx<'_>, task: Id, to: Id) -> Result<(), Failure> {
+    let Some((id, mut r)) = live(w.tx(), task)? else {
+        return Ok(());
+    };
+    if r.project_id() == Some(to) {
+        return Ok(());
+    }
+    r.project = to.to_string();
+    r.updated_at = w.now();
+    save(w, id, Some(&r))
 }
 
 /// After a command: for every task it closed that is the current

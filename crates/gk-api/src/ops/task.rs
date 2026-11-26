@@ -88,9 +88,16 @@ pub struct Task {
     pub priority: Priority,
     /// Its labels, in the project's order.
     pub labels: Vec<LabelRef>,
+    /// Its custom field values, in the fields' order; fields without a
+    /// value are left out.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fields: Vec<crate::ops::field::CustomFieldValue>,
     /// The parent task's key, for a subtask.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,
+    /// The version (release) it is planned for.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fix_version: Option<crate::ops::version::VersionRef>,
     /// Its description (Markdown).
     pub description: String,
     /// The description's revision; pass it as `base_revision` when you save
@@ -368,6 +375,10 @@ pub struct TaskCreateInput {
     /// Labels, by name or ID.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub labels: Vec<String>,
+    /// The version it is planned for (name or ID): an open version of the
+    /// project or one shared with it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fix_version: Option<String>,
     /// The parent task, for a subtask (same project, at most 5 levels).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,
@@ -391,6 +402,12 @@ pub struct TaskCreateInput {
     /// Place it first or last in its status; default: last.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub at: Option<Edge>,
+    /// Custom field values, by field name, query name or ID (see
+    /// `field.list`): a string, a number, `true`/`false`, or a list of
+    /// options for a multi-select field. Fields with a default get it
+    /// unless given here; a required field needs a value.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub fields: BTreeMap<String, serde_json::Value>,
     /// Your own ID for this request; repeating it within 24 hours returns
     /// the first answer instead of creating a second task.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -415,6 +432,8 @@ pub enum TaskField {
     Progress,
     /// Every label.
     Labels,
+    /// The version it is planned for.
+    FixVersion,
 }
 
 /// Changes to a task; fields left out keep their value. Status and
@@ -461,6 +480,10 @@ pub struct TaskUpdateInput {
     /// Labels to take off.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub remove_labels: Vec<String>,
+    /// Plan it for this version (name or ID): an open version of the
+    /// project or one shared with it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fix_version: Option<String>,
     /// A new parent task (same project, at most 5 levels, no loops).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,
@@ -478,6 +501,11 @@ pub struct TaskUpdateInput {
     /// Progress set by hand, 0 to 100.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub progress: Option<u8>,
+    /// Custom field values to set, by field name, query name or ID: a
+    /// string, a number, `true`/`false`, a list of options for a
+    /// multi-select field, or `null` to clear the value.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub fields: BTreeMap<String, serde_json::Value>,
     /// Fields to clear.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub clear: Vec<TaskField>,
@@ -585,6 +613,15 @@ pub struct MoveCheck {
     pub types: Vec<MoveMatch>,
     /// Their labels.
     pub labels: Vec<MoveMatch>,
+    /// The custom fields they have values of. The target is the target's
+    /// field that would hold the values; absent when they would be left off.
+    #[serde(default)]
+    pub fields: Vec<MoveMatch>,
+    /// The versions they are planned for. The target is the same version
+    /// when the target project can plan tasks for it; absent when the move
+    /// would take it off.
+    #[serde(default)]
+    pub versions: Vec<MoveMatch>,
     /// The target's status for those it has no match for: its first one.
     pub fallback_status: String,
     /// The target's type for those it has no match for: its default one.
@@ -601,8 +638,8 @@ pub struct MovedKey {
     pub to: String,
 }
 
-/// A status, type or label of the moving tasks, and its match in the target
-/// project.
+/// A status, type, label or custom field of the moving tasks, and its match
+/// in the target project.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct MoveMatch {

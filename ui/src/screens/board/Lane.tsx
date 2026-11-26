@@ -99,6 +99,8 @@ interface LaneProps {
   active: string | null;
   /** The dragged card can't land here. */
   closed: boolean;
+  /** Why the status's rules keep the dragged card out, shown while it is dragged. */
+  reason?: string | undefined;
   /** The dragged card is over this lane. */
   hot: boolean;
   adding: boolean;
@@ -115,7 +117,7 @@ interface LaneProps {
 }
 
 /** One board column: its header with the count and WIP limit, its cards, and the inline Add task field. */
-export function Lane({ lane, keys, cards, handlers, active, closed, hot, adding, menu, templates = [], onAdd, onCreate, onStopAdding, onShowOlder, onScroller }: LaneProps) {
+export function Lane({ lane, keys, cards, handlers, active, closed, reason, hot, adding, menu, templates = [], onAdd, onCreate, onStopAdding, onShowOlder, onScroller }: LaneProps) {
   const t = useT();
   const { column } = lane;
   const limit = column.wip_limit;
@@ -156,6 +158,11 @@ export function Lane({ lane, keys, cards, handlers, active, closed, hot, adding,
           </Popover>
         </MenuTrigger>
       </header>
+      {reason !== undefined && active !== null && (
+        <p className={styles.laneRule} role="note" aria-label={t("lane-rule-closed", { name: column.name, reason })}>
+          {reason}
+        </p>
+      )}
       <SortableContext id={column.id} items={[...keys]} strategy={verticalListSortingStrategy}>
         {body ? (
           <VirtualBody keys={keys} cards={cards} handlers={handlers} active={active} sortable={lane.sort === "manual"} closed={closed} setDroppable={setNodeRef} onScroller={setScrollTo}>

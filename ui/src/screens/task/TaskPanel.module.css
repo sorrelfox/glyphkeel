@@ -633,3 +633,8 @@
   align-items: center;
   gap: 8px;
 }
+
+/* Which fields the task's status keeps from changing. */
+.ruleNote {
+  margin: 0;
+}

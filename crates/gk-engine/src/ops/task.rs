@@ -260,7 +260,9 @@ pub(crate) fn load(
                 },
                 priority: parse_enum(priority_name(r.get(10)?)).unwrap_or(Priority::None),
                 labels: Vec::new(),
+                fields: Vec::new(),
                 parent: None,
+                fix_version: None,
                 description: r.get(3)?,
                 description_revision: opt_id_at(r, 36)?.map(|id| id.to_string()),
                 conflict_copies: count(r.get(37)?),
@@ -331,6 +333,8 @@ pub(crate) fn load(
     }
     task.labels = task_labels(tx, id)?;
     task.recurrence = super::recurrence::of_task(tx, id)?;
+    task.fix_version = super::version::of_task(tx, id)?;
+    task.fields = super::custom_field::task_values(tx, id)?;
     task.progress_percent = super::rollup::progress(tx, id)?;
     if task.subtask_count.total > 0 {
         task.totals = super::rollup::totals(tx, id)?;
@@ -909,6 +913,11 @@ fn create(w: &mut WriteCtx<'_>, input: TaskCreateInput) -> Result<TaskChange, Fa
         None => default_type(w.tx(), &project)?,
     };
     let labels = resolve_labels(w.tx(), &project, "labels", &input.labels)?;
+    let fix_version = input
+        .fix_version
+        .as_deref()
+        .map(|v| super::version::resolve_for_task(w.tx(), &project, "fix_version", v))
+        .transpose()?;
     let parent = match &input.parent {
         Some(p) => {
             let parent = lookup::task(w.tx(), "parent", p)?;
@@ -965,6 +974,10 @@ fn create(w: &mut WriteCtx<'_>, input: TaskCreateInput) -> Result<TaskChange, Fa
             target,
         },
     )?;
+    if fix_version.is_some() {
+        super::version::set_task(w, id, project.id, fix_version)?;
+    }
+    super::custom_field::apply_input(w, id, &project, &input.fields, true)?;
     changed(w, id, Vec::new())
 }
 
@@ -1168,6 +1181,11 @@ pub(crate) fn update(w: &mut WriteCtx<'_>, input: TaskUpdateInput) -> Result<Tas
             TaskField::Labels,
             "labels",
         ),
+        (
+            input.fix_version.is_some(),
+            TaskField::FixVersion,
+            "fix_version",
+        ),
     ] {
         if given && clears(field) {
             return Err(messages::invalid(
@@ -1275,6 +1293,16 @@ pub(crate) fn update(w: &mut WriteCtx<'_>, input: TaskUpdateInput) -> Result<Tas
         ids.retain(|l| !remove.contains(l));
         set_labels(w, id, project.id, &ids)?;
     }
+    if let Some(v) = &input.fix_version {
+        let current = fields::read(w.tx(), TASK, id, super::version::TASK_FIELD)?;
+        let version = super::version::resolve_for_task(w.tx(), &project, "fix_version", v)?;
+        if current != id_value(version) {
+            super::version::set_task(w, id, project.id, Some(version))?;
+        }
+    }
+    if clears(TaskField::FixVersion) {
+        super::version::set_task(w, id, project.id, None)?;
+    }
     if let Some(p) = &input.parent {
         let parent = lookup::task(w.tx(), "parent", p)?;
         check_parent(w.tx(), Some(id), project.id, &parent, Some(&input.key))?;
@@ -1335,6 +1363,9 @@ pub(crate) fn update(w: &mut WriteCtx<'_>, input: TaskUpdateInput) -> Result<Tas
     }
     if clears(TaskField::Progress) {
         fields::set(w, TASK, id, pid, "progress", None)?;
+    }
+    if !input.fields.is_empty() {
+        super::custom_field::apply_input(w, id, &project, &input.fields, false)?;
     }
     if text_changed {
         refresh_text(w, id)?;
@@ -1623,6 +1654,16 @@ fn move_to_project(
             }
         }
         set_labels(w, id, to.id, &kept)?;
+        if let Some(key) = super::version::drop_unreachable_task(w, id, to.id)? {
+            warn(messages::text(
+                "task-version-left-off",
+                &[("version", key), ("project", to.key.clone())],
+            ));
+        }
+        for warning in super::custom_field::follow_move(w, id, to)? {
+            warn(warning);
+        }
+        super::recurrence::follow_move(w, id, to.id)?;
         if id == task.id && task.parent.is_some() {
             set_parent(w, id, to.id, None)?;
         }
@@ -1698,6 +1739,8 @@ fn move_check(tx: &Transaction<'_>, input: &TaskMoveCheckInput) -> Result<MoveCh
     let mut seen = std::collections::HashSet::new();
     let mut keys = Vec::new();
     let (mut statuses, mut types, mut labels) = (Vec::new(), Vec::new(), Vec::new());
+    let mut fields: Vec<MoveMatch> = Vec::new();
+    let mut versions: Vec<MoveMatch> = Vec::new();
     fn count(list: &mut Vec<MoveMatch>, target: &[lookup::Named], name: &str) {
         let folded = fold(name);
         match list.iter_mut().find(|m| fold(&m.name) == folded) {
@@ -1739,6 +1782,37 @@ fn move_check(tx: &Transaction<'_>, input: &TaskMoveCheckInput) -> Result<MoveCh
             for label in task_labels(tx, id)? {
                 count(&mut labels, &to_labels, &label.name);
             }
+            if let Some((name, kept)) = super::version::move_match(tx, id, to.id)? {
+                match versions.iter_mut().find(|m| m.name == name) {
+                    Some(m) => m.tasks += 1,
+                    None => versions.push(MoveMatch {
+                        target: kept.then(|| name.clone()),
+                        name,
+                        tasks: 1,
+                    }),
+                }
+            }
+            for (name, target) in super::custom_field::move_matches(tx, id, &to)? {
+                let folded = fold(&name);
+                match fields
+                    .iter_mut()
+                    .find(|m: &&mut MoveMatch| fold(&m.name) == folded)
+                {
+                    Some(m) => {
+                        m.tasks += 1;
+                        // One that some tasks keep and others don't is
+                        // shown as left off.
+                        if target.is_none() {
+                            m.target = None;
+                        }
+                    }
+                    None => fields.push(MoveMatch {
+                        name,
+                        tasks: 1,
+                        target,
+                    }),
+                }
+            }
         }
     }
     let name_of = |items: &[lookup::Named], id: Id| {
@@ -1754,6 +1828,8 @@ fn move_check(tx: &Transaction<'_>, input: &TaskMoveCheckInput) -> Result<MoveCh
         statuses,
         types,
         labels,
+        fields,
+        versions,
         fallback_status: name_of(&to_statuses, first_status(tx, &to)?),
         fallback_type: name_of(&to_types, default_type(tx, &to)?),
     })

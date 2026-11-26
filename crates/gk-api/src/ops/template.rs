@@ -10,17 +10,26 @@
 //! statuses, types (with their default due dates), labels, modules,
 //! description, wiki pages, tasks and task templates.
 //!
-//! Templates name statuses, types and labels by name. Using a task
-//! template in another project takes what that project has by those names
-//! and leaves out the rest. Templates are named by their name (ignoring
+//! A template's tasks also keep their custom field values (by field name)
+//! and the version they are planned for (by name, only while it is open).
+//! A project template keeps the project's own custom fields and the rules
+//! of its statuses and for agents; it keeps no versions.
+//!
+//! Templates name statuses, types, labels, custom fields and versions by
+//! name. Using a task template in another project takes what that project
+//! has by those names and leaves out the rest. Templates are named by their name (ignoring
 //! case) or ID; a task template's name is looked up in `project`.
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::catalog::{Exposure, Meta, OpDescriptor, OpKind, Safety};
+use std::collections::BTreeMap;
+
 use crate::ops::common::{Actor, Category, Glyph, Hue, Priority};
+use crate::ops::field::CustomFieldKind;
 use crate::ops::project::{Modules, Project};
+use crate::ops::rules::{AgentRules, StatusRules};
 use crate::ops::task::Task;
 
 #[allow(clippy::trivially_copy_pass_by_ref)]
@@ -67,6 +76,14 @@ pub struct TaskBlueprint {
     /// The due date: this many days after the day the template is used.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub due_in_days: Option<i32>,
+    /// Custom field values by field name, as `task.create` takes them.
+    /// Fields the project doesn't have are left out.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub fields: BTreeMap<String, serde_json::Value>,
+    /// The version it is planned for, by name; left out when the project
+    /// has no open version by that name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fix_version: Option<String>,
     /// Its subtasks at every level, each after the one it sits under, in
     /// order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -100,6 +117,12 @@ pub struct SubtaskBlueprint {
     /// The due date: days after the day the template is used.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub due_in_days: Option<i32>,
+    /// Custom field values by field name.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub fields: BTreeMap<String, serde_json::Value>,
+    /// The version it is planned for, by name, while it is open.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fix_version: Option<String>,
     /// The subtask it sits under: its place in `subtasks` (from 0), an
     /// earlier one; left out for a subtask of the task itself.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -119,6 +142,10 @@ pub struct StatusBlueprint {
     /// Most tasks the column should hold.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wip_limit: Option<u32>,
+    /// Its rules; custom fields are named as `cf:` and the ID their
+    /// [`FieldBlueprint`] has in the template.
+    #[serde(default, skip_serializing_if = "StatusRules::is_empty")]
+    pub rules: StatusRules,
 }
 
 /// A task type of a project template.
@@ -137,6 +164,31 @@ pub struct TypeBlueprint {
     /// New tasks of this type are due this many days after they are made.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub due_offset_days: Option<u32>,
+}
+
+/// A custom field of a project template: one of the project's own.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct FieldBlueprint {
+    /// Its ID in the template, which the rules name; the new project's
+    /// field gets a new one.
+    pub id: String,
+    /// Its name.
+    pub name: String,
+    /// What it holds.
+    pub kind: CustomFieldKind,
+    /// The options of a select field, in order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub options: Vec<String>,
+    /// The value new tasks get.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default: Option<serde_json::Value>,
+    /// The task types it shows for, by name; empty: every type.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub types: Vec<String>,
+    /// Whether new tasks need a value.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub required: bool,
 }
 
 /// A label of a project template.
@@ -206,6 +258,12 @@ pub struct ProjectBlueprint {
     /// Task templates the new project gets.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub task_templates: Vec<NamedBlueprint>,
+    /// The project's own custom fields, in order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fields: Vec<FieldBlueprint>,
+    /// The rules for agents.
+    #[serde(default, skip_serializing_if = "AgentRules::is_empty")]
+    pub agent_rules: AgentRules,
 }
 
 /// A template.

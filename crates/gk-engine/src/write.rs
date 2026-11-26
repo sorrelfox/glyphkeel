@@ -36,6 +36,9 @@ pub struct WriteCtx<'a> {
     tx: &'a Transaction<'a>,
     meta: &'a CommandMeta,
     changes: Vec<PendingChange>,
+    /// Tasks the engine made on its own in this command (occurrences of
+    /// recurring tasks), which status rules don't refuse.
+    automatic: Vec<Id>,
 }
 
 #[derive(Debug, Clone)]
@@ -59,7 +62,20 @@ impl<'a> WriteCtx<'a> {
             tx,
             meta,
             changes: Vec::new(),
+            automatic: Vec::new(),
         }
+    }
+
+    /// Notes that the engine made task `task` on its own, not the caller.
+    pub(crate) fn made_automatically(&mut self, task: Id) {
+        if !self.automatic.contains(&task) {
+            self.automatic.push(task);
+        }
+    }
+
+    /// Whether the engine made task `task` on its own in this command.
+    pub(crate) fn is_automatic(&self, task: Id) -> bool {
+        self.automatic.contains(&task)
     }
 
     /// The items of `entity` this command has changed so far, in order.
@@ -84,6 +100,19 @@ impl<'a> WriteCtx<'a> {
                 })
             })
             .map(|c| c.id)
+            .collect()
+    }
+
+    /// The items of `entity` this command has changed so far, in order,
+    /// each with its project and its changed fields.
+    pub(crate) fn changes_of(
+        &self,
+        entity: &str,
+    ) -> Vec<(Id, Option<Id>, BTreeMap<String, FieldChange>)> {
+        self.changes
+            .iter()
+            .filter(|c| c.entity == entity)
+            .map(|c| (c.id, c.project, c.fields.clone()))
             .collect()
     }
 

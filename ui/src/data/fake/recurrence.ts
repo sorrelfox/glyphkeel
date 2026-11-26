@@ -8,7 +8,7 @@
 
 import { type EntityChange, type OpMap, type Recurrence, type RecurrenceChange, type RecurrenceRule, type RecurrenceSetInput, type RulePreviewInput, type TaskBlueprint } from "../../generated/ops";
 import { type Answer, type FakeHost } from "./host";
-import { buildRule, dayNumber, firstDay, nextAfter, nextOccurrence, plusDays, previewDates, RuleProblem, summaryOf, toCore } from "./rules";
+import { buildRule, dayNumber, firstDay, nextAfter, nextOccurrence, plusDays, previewDates, RuleProblem, summaryOf, toCore } from "./recurrenceRules";
 import { nextId } from "./seed";
 import { type FakeSeries, type FakeTask } from "./state";
 import { blueprintOf, makeTask } from "./templates";

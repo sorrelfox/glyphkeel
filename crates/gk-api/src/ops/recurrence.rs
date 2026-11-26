@@ -5,10 +5,19 @@
 //!
 //! A recurring task belongs to a series: a rule, and the details each new
 //! occurrence starts from (title, description with its checklist unticked,
-//! type, priority, labels, estimate, subtasks and dates relative to the
-//! occurrence's date). The open occurrence is an ordinary task; changing it
-//! changes that occurrence only. `recurrence.set` with `update_details`
-//! makes its current details those of the occurrences still to come.
+//! type, priority, labels, estimate, custom field values, the version
+//! while it is open, subtasks and dates relative to the occurrence's date).
+//! The open occurrence is an ordinary task; changing it changes that
+//! occurrence only. `recurrence.set` with `update_details` makes its
+//! current details those of the occurrences still to come.
+//!
+//! The engine makes occurrences on its own, so it makes them even where a
+//! task made by hand would be refused: a required custom field without a
+//! value or a status's required fields stay empty for the person to fill
+//! in, and rules for agents don't stop them. What a status does to tasks
+//! entering it (setting or clearing fields) applies. Moving the current
+//! occurrence to another project takes the series along; the next ones are
+//! made there, with what that project has by the same names.
 //!
 //! The next occurrence is made when the current one is closed (done or
 //! cancelled), or, with `create: ahead`, on its date (`days_ahead` days

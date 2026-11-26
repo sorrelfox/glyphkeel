@@ -141,6 +141,12 @@ pub struct Status {
     /// Most tasks the column should hold; left out when there is no limit.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wip_limit: Option<u32>,
+    /// Its rules for tasks entering it; left out when it has none.
+    #[serde(
+        default,
+        skip_serializing_if = "crate::ops::rules::StatusRules::is_empty"
+    )]
+    pub rules: crate::ops::rules::StatusRules,
     /// Tasks in this status.
     pub tasks: u64,
 }
@@ -219,6 +225,12 @@ pub struct Project {
     pub types: Vec<TaskType>,
     /// The labels, in order.
     pub labels: Vec<Label>,
+    /// The rules for agents; left out when there are none.
+    #[serde(
+        default,
+        skip_serializing_if = "crate::ops::rules::AgentRules::is_empty"
+    )]
+    pub agent_rules: crate::ops::rules::AgentRules,
     /// The colour a new label gets when none is given: the first palette
     /// colour no label uses yet, else the least-used one.
     pub next_label_hue: Hue,

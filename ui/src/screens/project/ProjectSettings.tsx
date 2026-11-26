@@ -20,7 +20,9 @@ import { type TemplateSummary } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { HuePicker } from "./HuePicker";
 import { DeleteQuestion } from "./DeleteProject";
+import { FieldsSettings } from "./FieldsSettings";
 import { IconPicker } from "./IconPicker";
+import { RulesSettings } from "./RulesSettings";
 import styles from "./Project.module.css";
 
 interface ProjectSettingsProps {
@@ -29,8 +31,8 @@ interface ProjectSettingsProps {
 }
 
 /**
- * Project settings: general, statuses (with WIP limits), task types and
- * labels. Every change applies at once, as in Preferences.
+ * Project settings: general, statuses (with WIP limits), task types,
+ * labels and custom fields. Every change applies at once, as in Preferences.
  */
 export function ProjectSettings({ projectKey, onClose }: ProjectSettingsProps) {
   const t = useT();
@@ -61,6 +63,12 @@ export function ProjectSettings({ projectKey, onClose }: ProjectSettingsProps) {
               <Tab id="labels" className={({ isSelected }) => (isSelected ? "tab on" : "tab")}>
                 {t("project-settings-labels")}
               </Tab>
+              <Tab id="fields" className={({ isSelected }) => (isSelected ? "tab on" : "tab")}>
+                {t("project-settings-fields")}
+              </Tab>
+              <Tab id="rules" className={({ isSelected }) => (isSelected ? "tab on" : "tab")}>
+                {t("project-settings-rules")}
+              </Tab>
               <Tab id="templates" className={({ isSelected }) => (isSelected ? "tab on" : "tab")}>
                 {t("project-settings-templates")}
               </Tab>
@@ -76,6 +84,12 @@ export function ProjectSettings({ projectKey, onClose }: ProjectSettingsProps) {
             </TabPanel>
             <TabPanel id="labels" className={classes(styles.panel)}>
               <Labels project={project.data} />
+            </TabPanel>
+            <TabPanel id="fields" className={classes(styles.panel)}>
+              <FieldsSettings project={project.data} />
+            </TabPanel>
+            <TabPanel id="rules" className={classes(styles.panel)}>
+              <RulesSettings project={project.data} />
             </TabPanel>
             <TabPanel id="templates" className={classes(styles.panel)}>
               <Templates project={project.data} />

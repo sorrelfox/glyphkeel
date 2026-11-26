@@ -186,3 +186,13 @@
   box-shadow: 0 0 0 1px var(--border), var(--shadow-pop);
   cursor: grabbing;
 }
+
+/* Why a status's rules keep the dragged card out of a lane. */
+.laneRule {
+  margin: 0 8px 6px;
+  padding: 4px 8px;
+  border-radius: var(--r-s);
+  background: var(--sunken);
+  font-size: var(--fs-small);
+  color: var(--fg-muted);
+}

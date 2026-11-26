@@ -827,6 +827,10 @@ fn settings_can_be_set_back_to_their_default() {
 const BACK_TO_3: &str = "
     DROP TABLE templates; DROP INDEX tasks_series; ALTER TABLE tasks DROP COLUMN series_id;
     DROP TABLE task_series; ALTER TABLE task_types DROP COLUMN due_offset_days;
+    ALTER TABLE statuses DROP COLUMN rules; ALTER TABLE projects DROP COLUMN agent_rules;
+    DROP INDEX tasks_fix_version; ALTER TABLE tasks DROP COLUMN fix_version_id;
+    DROP TABLE versions;
+    DROP TABLE custom_values; DROP TABLE custom_fields;
     ALTER TABLE wiki_pages DROP COLUMN is_template;
     DROP INDEX wiki_pages_one_home; ALTER TABLE wiki_pages DROP COLUMN is_home;
     DROP TABLE text_links;

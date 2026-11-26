@@ -1,5 +1,0 @@
--- SPDX-License-Identifier: GPL-3.0-or-later
--- Copyright (C) 2026 Glyphkeel contributors
---
--- Schema version 13: placeholder, intentionally empty. The real migration
--- replaces this file.

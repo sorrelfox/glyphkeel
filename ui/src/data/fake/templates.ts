@@ -3,8 +3,9 @@
 
 // Task templates and project templates in the in-memory engine, with the
 // engine's rules: names unique per project (or among project templates),
-// statuses, types and labels named by name and left out where a project
-// lacks them, checklists unticked, dates as days after the day of use.
+// statuses, types, labels, custom fields and versions named by name and
+// left out where a project lacks them (a version also when it is no longer
+// open), checklists unticked, dates as days after the day of use.
 
 import {
   type EntityChange,
@@ -19,8 +20,9 @@ import {
   type TemplateList,
   type TemplateSummary,
 } from "../../generated/ops";
+import { fieldsFor, parseValue, shownFor, taskValues, type FieldValue } from "./fields";
 import { type Answer, type FakeHost } from "./host";
-import { dayNumber, plusDays } from "./rules";
+import { dayNumber, plusDays } from "./recurrenceRules";
 import { nextId } from "./seed";
 import { type FakeProject, type FakeTask, type FakeTemplate } from "./state";
 import { localDay } from "./time";
@@ -42,6 +44,8 @@ function plainOf(host: FakeHost, task: FakeTask, anchor: string): Omit<TaskBluep
   const labels = project.labels.filter((label) => task.labelIds.includes(label.id)).map((label) => label.name);
   const start = offset(task.startDate, anchor);
   const due = offset(task.dueDate, anchor);
+  const values = taskValues(host.state(), task);
+  const version = (host.state().versions ?? []).find((candidate) => candidate.id === task.fixVersionId && candidate.status === "open");
   return {
     title: task.title,
     ...(task.description === "" ? {} : { description: untick(task.description) }),
@@ -51,7 +55,54 @@ function plainOf(host: FakeHost, task: FakeTask, anchor: string): Omit<TaskBluep
     ...(task.estimateMin === null ? {} : { estimate_minutes: task.estimateMin }),
     ...(start === undefined ? {} : { start_in_days: start }),
     ...(due === undefined ? {} : { due_in_days: due }),
+    ...(values.length > 0 ? { fields: Object.fromEntries(values.map((value) => [value.name, value.value])) } : {}),
+    ...(version ? { fix_version: version.name } : {}),
   };
+}
+
+/** Gives a task made from a blueprint its version and custom field values; what the project lacks goes to `leftOut`. */
+function carry(host: FakeHost, project: FakeProject, task: FakeTask, typeName: string, t: Omit<TaskBlueprint, "subtasks">, leftOut: string[]): void {
+  const leave = (name: string) => {
+    if (!leftOut.includes(name)) {
+      leftOut.push(name);
+    }
+  };
+  if (t.fix_version !== null && t.fix_version !== undefined) {
+    const wanted = fold(t.fix_version);
+    const version = (host.state().versions ?? []).find((candidate) => candidate.projectId === project.id && fold(candidate.name) === wanted);
+    if (version?.status === "open") {
+      task.fixVersionId = version.id;
+    } else {
+      leave(t.fix_version);
+    }
+  }
+  const fields = fieldsFor(host.state(), project.id);
+  const values: Record<string, FieldValue> = {};
+  const refuse = (): never => {
+    throw new Error("left out");
+  };
+  for (const [name, raw] of Object.entries(t.fields ?? {})) {
+    const field = fields.find((candidate) => fold(candidate.name) === fold(name));
+    let value: FieldValue | undefined;
+    try {
+      value = field && shownFor(field, typeName) ? parseValue(field, raw, "fields", refuse) : undefined;
+    } catch {
+      value = undefined;
+    }
+    if (field && value !== undefined && values[field.id] === undefined) {
+      values[field.id] = value;
+    } else {
+      leave(name);
+    }
+  }
+  for (const field of fields) {
+    if (values[field.id] === undefined && field.default !== undefined && shownFor(field, typeName)) {
+      values[field.id] = field.default;
+    }
+  }
+  if (Object.keys(values).length > 0) {
+    task.fields = values;
+  }
 }
 
 /** Task `task` with its subtasks as a blueprint, dates as days after `anchor`. */
@@ -99,7 +150,7 @@ function writeOne(host: FakeHost, project: FakeProject, t: Omit<TaskBlueprint, "
   if (start !== null && due !== null && start > due) {
     start = null;
   }
-  return host.insertTask(project, {
+  const task = host.insertTask(project, {
     title: t.title,
     description: t.description ?? "",
     statusId,
@@ -111,6 +162,8 @@ function writeOne(host: FakeHost, project: FakeProject, t: Omit<TaskBlueprint, "
     dueDate: due,
     estimateMin: t.estimate_minutes === null || t.estimate_minutes === undefined || t.estimate_minutes < 0 ? null : t.estimate_minutes,
   });
+  carry(host, project, task, type.name, t, leftOut);
+  return task;
 }
 
 /** Makes the task `bp` describes with its subtasks; returns it and every task made. */

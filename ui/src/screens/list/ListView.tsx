@@ -20,7 +20,7 @@ import { keysOf } from "../../actions/actions";
 import { errorToast, useCall, useCommand } from "../../data/hooks";
 import { allRows, defaultView, LIST_PAGE, toCsv, toJson, useListLayout, useListNames, useListRows, useParsedQuery, useQueryFields, useSavedViews, useUnfilteredCount, type ListScope } from "../../data/list";
 import { useDurationUnits } from "../../data/time";
-import { type ListedTask, type ListGroup, type ListGrouping, type ListLayout, type QueryProblem, type SavedView } from "../../generated/ops";
+import { type CustomField, type ListedTask, type ListGroup, type ListGrouping, type ListLayout, type QueryProblem, type SavedView } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { saveExport } from "../../ipc/exportFile";
 import { useStatus, useTimerTask } from "../../shell/context";
@@ -30,7 +30,8 @@ import { CellContext, type CellActions } from "./cells";
 import { Chips } from "./Chips";
 import { SaveControls, useViewCommands, ViewPicker } from "./ViewMenu";
 import { ListTable } from "./ListTable";
-import { changedFrom, clickRow, COLUMNS, exportName, FIXED_COLUMNS, GROUPINGS, groupTaskInput, isGrouping, listLines, moveColumn, nextSort, NO_SELECTION, removeRanges, viewColumns, withSort, type ColumnId, type Selection } from "./model";
+import { changedFrom, clickRow, COLUMNS, exportName, FIXED_COLUMNS, GROUPINGS, groupTaskInput, isCustomColumn, isGrouping, listLines, moveColumn, nextSort, NO_SELECTION, removeRanges, viewColumns, withSort, type ColumnId, type Selection } from "./model";
+import { useCustomFields } from "../../data/fields";
 import styles from "./List.module.css";
 
 /** How long typing pauses before the query runs. */
@@ -89,6 +90,7 @@ function LoadedList({ project, views, layout, openTask, onOpen }: LoadedListProp
   const problemText = useProblemText();
   const workspaceWide = project === undefined;
   const initial = defaultView(views, project);
+  const customFields = useCustomFields(project);
 
   // What the list shows.
   const [activeId, setActiveId] = useState<string | undefined>(initial?.id);
@@ -299,7 +301,7 @@ function LoadedList({ project, views, layout, openTask, onOpen }: LoadedListProp
   const exportAs = (format: "csv" | "json") => {
     allRows(call, scope)
       .then((tasks: ListedTask[]) => {
-        const contents = format === "csv" ? toCsv(tasks, units) : toJson(tasks, scope);
+        const contents = format === "csv" ? toCsv(tasks, units, customFields.map((field) => field.query_name)) : toJson(tasks, scope);
         return saveExport(exportName(active?.name, isoDay(new Date()), format), contents, format === "csv" ? "text/csv" : "application/json").then((done) => {
           if (done) {
             toasts.show({ tone: "info", text: t("list-exported", { count: tasks.length }) });
@@ -472,7 +474,7 @@ function LoadedList({ project, views, layout, openTask, onOpen }: LoadedListProp
             </div>
           )}
           <GroupMenu value={groupBy} withProject={workspaceWide || includeSubprojects} onChange={group} />
-          <ColumnMenu columns={columns} onChange={changeColumns} />
+          <ColumnMenu columns={columns} fields={customFields} onChange={changeColumns} />
           <MenuTrigger>
             <Button className="btn flat">
               <Download className="ic" aria-hidden="true" />
@@ -546,6 +548,7 @@ function LoadedList({ project, views, layout, openTask, onOpen }: LoadedListProp
           <ListTable
             rows={rows}
             columns={columns}
+            fields={customFields}
             widths={widths}
             onResize={resize}
             onMove={(column, to) => {
@@ -614,9 +617,13 @@ function GroupMenu({ value, withProject, onChange }: { value: ListGrouping | und
   );
 }
 
-/** Which columns show, and in which order: the chooser's checkboxes. */
-function ColumnMenu({ columns, onChange }: { columns: readonly ColumnId[]; onChange: (columns: ColumnId[]) => void }) {
+/** Which columns show, and in which order: the chooser's checkboxes, the custom fields' after the built-in ones. */
+function ColumnMenu({ columns, fields, onChange }: { columns: readonly ColumnId[]; fields: readonly CustomField[]; onChange: (columns: ColumnId[]) => void }) {
   const t = useT();
+  // Fields of several projects may share a query name: one column each.
+  const custom = [...new Map(fields.map((field) => [field.query_name, field] as const)).values()];
+  const all: ColumnId[] = [...COLUMNS, ...custom.map((field) => field.query_name as ColumnId)];
+  const label = (column: ColumnId) => (isCustomColumn(column) ? (custom.find((field) => field.query_name === column)?.name ?? column) : t(`list-column-${column}`));
   return (
     <MenuTrigger>
       <Button className="btn flat">
@@ -632,20 +639,20 @@ function ColumnMenu({ columns, onChange }: { columns: readonly ColumnId[]; onCha
           disabledKeys={FIXED_COLUMNS}
           onSelectionChange={(keys) => {
             if (keys === "all") {
-              onChange([...COLUMNS]);
+              onChange([...all]);
               return;
             }
-            const chosen = COLUMNS.filter((column) => keys.has(column) || FIXED_COLUMNS.includes(column));
+            const chosen = all.filter((column) => keys.has(column) || FIXED_COLUMNS.includes(column));
             // Columns keep their places; new ones go where the full list has them.
             onChange([...columns.filter((column) => chosen.includes(column)), ...chosen.filter((column) => !columns.includes(column))]);
           }}
         >
-          {COLUMNS.map((column) => (
-            <MenuItem key={column} id={column} className="item" textValue={t(`list-column-${column}`)}>
+          {all.map((column) => (
+            <MenuItem key={column} id={column} className="item" textValue={label(column)}>
               {({ isSelected }) => (
                 <>
                   <input type="checkbox" className={styles.check} checked={isSelected} readOnly tabIndex={-1} aria-hidden="true" />
-                  <span className="grow">{t(`list-column-${column}`)}</span>
+                  <span className="grow">{label(column)}</span>
                 </>
               )}
             </MenuItem>

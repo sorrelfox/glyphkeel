@@ -16,6 +16,7 @@ import {
   type BulkItem,
   type BulkResult,
   type BulkUpdateInput,
+  type CustomFieldChange,
   type ListedTask,
   type Attachment,
   type Board,
@@ -73,11 +74,14 @@ import {
   type Reference,
 } from "../../generated/ops";
 import { PROJECT_ICONS, suggestHue } from "../catalog";
+import { customRuleField, isEmpty as isEmptyRules } from "../rules";
 import { formatDuration, parseDuration } from "../duration";
 import { decodeBase64, materialize, recordedFields, sniff } from "./details";
+import { applyValues, createField, deleteField, fieldOut, fieldsFor, fieldsOf, findField, listedValues, moveMatches, moveValues, placeField, queryFields, taskValues, updateField } from "./fields";
 import { checklistOf, escapeHtml, merge3, publicChecklist, renderFake, setChecked, unifiedDiff } from "./markdown";
 import { newProject, nextFileId, nextId, nextUuid, SAMPLE_AGENT } from "./seed";
 import { type FakeComment, type FakeFile, type FakeProject, type FakeRelation, type FakeReminder, type FakeRevision, type FakeState, type FakeTask, type FakeTimeEntry, type FakeWikiPage } from "./state";
+import { checkReadOnly, enter as enterRules } from "./rules";
 import { naturalDay, nextDay, searchAll, searchWiki, slugOf, headingsOf } from "./overview";
 import { moveDependents, scheduleOf } from "./schedule";
 import { type FakeHost, type NewTask } from "./host";
@@ -87,6 +91,7 @@ import { templateHandlers } from "./templates";
 /** The Gantt chart's layout until the person changes it. */
 const DEFAULT_GANTT_LAYOUT: GanttLayout = { zoom: "day", widths: {}, group_by: "parent", move_dependents: false };
 import { linksIn, placePage, subtree, type TextLink } from "./wiki";
+import { createVersion, deleteVersion, getVersion, listVersions, updateVersion, versionForTask, versionRef, visibleVersions, type VersionHost } from "./versions";
 import { createView, deleteView, listViews, matchingKeys, parseQuery, queryError, searchTasks, updateView, type GroupInfo, type QueryNames } from "./query";
 import { addDays, csvOf, localDay, MAX_ENTRY_MINUTES, momentOf, reminderAt, reminderOut, sortDue, timeEntryOut, timerElapsedMs, timerOut, unitsOf, weekStart, workDay } from "./time";
 
@@ -531,8 +536,10 @@ export class FakeWorkspace {
         category: status.category,
         hue: status.hue,
         ...some("wip_limit", status.wip_limit),
+        ...(status.rules === undefined || isEmptyRules(status.rules) ? {} : { rules: structuredClone(status.rules) }),
         tasks: tasks.filter((task) => task.statusId === status.id).length,
       })),
+      ...(project.agentRules !== undefined && (project.agentRules.read_only ?? []).length > 0 ? { agent_rules: structuredClone(project.agentRules) } : {}),
       types: project.types.map((type) => ({ ...type, tasks: tasks.filter((task) => task.typeId === type.id).length })),
       labels: project.labels.map((label) => ({ ...label, tasks: tasks.filter((task) => task.labelIds.includes(label.id)).length })),
       next_label_hue: suggestHue(project.labels.map((label) => label.hue)),
@@ -620,7 +627,9 @@ export class FakeWorkspace {
       type: this.typeRef(task),
       priority: task.priority,
       labels: this.labelRefs(task),
+      ...(taskValues(this.state, task).length > 0 ? { fields: taskValues(this.state, task) } : {}),
       ...some("parent", parent && this.keyOf(parent)),
+      ...some("fix_version", versionRef(this.versionHost, task)),
       ...some("start_date", task.startDate),
       ...some("due_date", task.dueDate),
       ...some("estimate_minutes", task.estimateMin),
@@ -1038,6 +1047,14 @@ export class FakeWorkspace {
       const type = from.types.find((candidate) => candidate.id === one.typeId);
       const labels = from.labels.filter((label) => one.labelIds.includes(label.id));
       one.oldKeys = [...(one.oldKeys ?? []).filter((key) => key !== oldKey), oldKey];
+      for (const field of moveValues(this.state, one, to.id)) {
+        warn(`The custom field "${field}" doesn't exist in ${to.key}; its value was left off.`);
+      }
+      const planned = versionRef(this.versionHost, one);
+      if (planned !== undefined && !visibleVersions(this.versionHost, to).some((each) => each.version.id === one.fixVersionId)) {
+        one.fixVersionId = null;
+        warn(`Version "${planned.name}" isn't available in ${to.key} and was taken off.`);
+      }
       one.projectId = to.id;
       one.number = to.nextNumber;
       to.nextNumber += 1;
@@ -1114,6 +1131,15 @@ export class FakeWorkspace {
     return {
       output: { task: this.fullTask(task) },
       changes: [{ entity: "task", id: task.id, fields, project: this.projectOf(task).key }],
+    };
+  }
+
+  private fieldChange(field: { id: string; projectId: string | null }, fields: string[], removed: number): Result<CustomFieldChange> {
+    const stored = fieldsOf(this.state).find((each) => each.id === field.id);
+    const project = this.state.projects.find((candidate) => candidate.id === field.projectId);
+    return {
+      output: { ...(stored ? { field: fieldOut(this.state, stored, this.state.projects) } : {}), ...(removed > 0 ? { values_removed: removed } : {}) },
+      changes: [{ entity: "custom_field", id: field.id, fields, ...(project ? { project: project.key } : {}) }],
     };
   }
 
@@ -1374,6 +1400,8 @@ export class FakeWorkspace {
       id: card.id,
       key: card.key,
       labels: card.labels,
+      ...some("fields", listedValues(this.state, task)),
+      ...some("fix_version", versionRef(this.versionHost, task)),
       ...some("parent", card.parent),
       priority: card.priority,
       progress_percent: card.progress_percent,
@@ -1787,6 +1815,7 @@ export class FakeWorkspace {
         id: task.id,
         key: `${project.key}-${String(task.number)}`,
         labels: this.labelRefs(task),
+        ...some("fields", listedValues(this.state, task)),
         ...some("parent", parent && this.keyOf(parent)),
         priority: task.priority,
         progress_percent: progress(task),
@@ -1812,6 +1841,7 @@ export class FakeWorkspace {
   private queryNames(): QueryNames {
     const unique = (names: string[]) => [...new Set(names)];
     return {
+      custom: queryFields(this.state),
       statuses: unique(this.state.projects.flatMap((project) => project.statuses.map((status) => status.name))),
       types: unique(this.state.projects.flatMap((project) => project.types.map((type) => type.name))),
       labels: unique(this.state.projects.flatMap((project) => project.labels.map((label) => label.name))),
@@ -1912,12 +1942,37 @@ export class FakeWorkspace {
   }
 
   /** The change event of a saved view. */
+  /** What the versions need of this workspace. */
+  private readonly versionHost: VersionHost = {
+    versions: () => (this.state.versions ??= []),
+    tasks: () => this.state.tasks,
+    projects: () => this.state.projects,
+    project: (ref) => this.project(ref),
+    writable: (ref) => this.writable(ref),
+    keyOf: (task) => this.keyOf(task),
+    statusOf: (task) => {
+      const status = this.statusIn(this.projectOf(task), task.statusId);
+      return { id: status.id, name: status.name, category: status.category };
+    },
+    typeName: (task) => this.typeRef(task).name,
+    progress: (task) => this.progress(task),
+    touch: (task) => {
+      this.touch(task);
+    },
+    now: () => this.today().toISOString(),
+    newId: () => nextUuid(),
+    fail: (code, message, path) => fail(code, message, path === undefined ? {} : { details: { path } }),
+  };
+
   private viewChange(view: SavedView, fields: string[]): EntityChange[] {
     return [{ entity: "view", id: view.id, fields, ...some("project", view.project) }];
   }
 
-  /** Writes a new task at its place in its status (default: the project's first to-do status). */
-  private insertTask(project: FakeProject, fields: NewTask, place: Place = {}): FakeTask {
+  /**
+   * Writes a new task at its place in its status (default: the project's first to-do status);
+   * `fill` sets what else it starts with before it is stored, and may refuse.
+   */
+  private insertTask(project: FakeProject, fields: NewTask, place: Place = {}, fill?: (task: FakeTask) => void): FakeTask {
     const target = fields.statusId !== null ? this.statusIn(project, fields.statusId) : (project.statuses.find((candidate) => candidate.category === "todo") ?? project.statuses[0]);
     if (!target) {
       fail("invalid", `Project ${project.key} has no statuses or task types.`);
@@ -1950,6 +2005,7 @@ export class FakeWorkspace {
       closedAt: isClosed(target.category) ? now : null,
       version: 1,
     };
+    fill?.(task);
     project.nextNumber += 1;
     this.state.tasks.push(task);
     if (task.description !== "") {
@@ -2104,7 +2160,8 @@ export class FakeWorkspace {
       project.icon = icon ?? undefined;
       if (parentProject) {
         // A sub-project starts with copies of its parent's statuses, types and labels.
-        project.statuses = parentProject.statuses.map((status) => ({ ...status, id: nextId("s") }));
+        project.statuses = parentProject.statuses.map((status) => ({ ...structuredClone(status), id: nextId("s") }));
+        project.agentRules = structuredClone(parentProject.agentRules);
         project.types = parentProject.types.map((type) => ({ ...type, id: nextId("ty") }));
         project.labels = parentProject.labels.map((label) => ({ ...label, id: nextId("l") }));
         project.modules = { ...parentProject.modules };
@@ -2275,6 +2332,17 @@ export class FakeWorkspace {
       }
       return this.projectChange(project, "status", fields);
     },
+    "rules.update": ({ project: ref, statuses, agents }) => {
+      const project = this.writable(ref);
+      for (const change of statuses ?? []) {
+        const status = this.statusIn(project, change.status);
+        status.rules = isEmptyRules(change.rules) ? undefined : structuredClone(change.rules);
+      }
+      if (agents !== null && agents !== undefined) {
+        project.agentRules = (agents.read_only ?? []).length > 0 ? structuredClone(agents) : undefined;
+      }
+      return this.projectChange(project, "status", ["rules"]);
+    },
     "status.reorder": ({ project: ref, status: statusRef, before, after, at }) => {
       const project = this.writable(ref);
       const status = this.statusIn(project, statusRef);
@@ -2393,6 +2461,33 @@ export class FakeWorkspace {
       }
       project.labels = project.labels.filter((candidate) => candidate !== label);
       return this.projectChange(project, "label", ["*"]);
+    },
+    "field.list": ({ project: ref }) => {
+      const project = ref === null || ref === undefined ? null : this.project(ref);
+      return { fields: fieldsFor(this.state, project?.id ?? null).map((field) => fieldOut(this.state, field, this.state.projects)) };
+    },
+    "field.create": (input) => {
+      const project = input.project === null || input.project === undefined ? null : this.writable(input.project);
+      const field = createField(this.state, { ...input, project }, nextId("cf"), fail);
+      placeField(this.state, field, input, fail);
+      return this.fieldChange(field, ["*"], 0);
+    },
+    "field.update": (input) => {
+      const project = input.project === null || input.project === undefined ? null : this.project(input.project);
+      const field = findField(fieldsFor(this.state, project?.id ?? null), input.field, fail);
+      const removed = updateField(this.state, field, input, fail);
+      placeField(this.state, field, input, fail);
+      return this.fieldChange(field, ["*"], removed);
+    },
+    "field.delete": (input) => {
+      const project = input.project === null || input.project === undefined ? null : this.project(input.project);
+      const field = findField(fieldsFor(this.state, project?.id ?? null), input.field, fail);
+      const count = this.state.tasks.filter((task) => task.fields?.[field.id] !== undefined).length;
+      if (input.expected_task_count !== null && input.expected_task_count !== undefined && input.expected_task_count !== count) {
+        fail("conflict", `"${field.name}" has a value on ${String(count)} tasks, not ${String(input.expected_task_count)}.`, { details: { message_id: "field-count-differs" } });
+      }
+      const removed = deleteField(this.state, field);
+      return this.fieldChange(field, ["deleted"], removed);
     },
     "board.get": ({ project, include_subprojects, show_older }) => this.board(project, include_subprojects, show_older === true),
     "layout.get": ({ project: ref }) => {
@@ -3355,6 +3450,11 @@ export class FakeWorkspace {
       const items = listViews(this.state.views ?? [], { ...input, ...some("project", input.project && this.project(input.project).key) });
       return { items: structuredClone(items), total: items.length };
     },
+    "version.list": (input) => listVersions(this.versionHost, input),
+    "version.get": (input) => getVersion(this.versionHost, input),
+    "version.create": (input) => createVersion(this.versionHost, input),
+    "version.update": (input) => updateVersion(this.versionHost, input),
+    "version.delete": (input) => deleteVersion(this.versionHost, input),
     "view.create": (input) => {
       if (input.query.trim() !== "") {
         this.runQuery(() => searchTasks([], { query: input.query }, this.queryNames(), { archived: new Set(), scoped: false, statusOrder: () => 0 }));
@@ -3401,8 +3501,9 @@ export class FakeWorkspace {
       }
       return { output: { reverted, skipped }, changes: [{ entity: "workspace", id: "w-1", fields: ["*"] }] };
     },
-    "task.create": ({ project: ref, title, status, description, priority, before, after, at, parent: parentKey, start_date, due_date, type: typeName, labels, estimate }) => {
+    "task.create": ({ project: ref, title, status, description, priority, before, after, at, parent: parentKey, start_date, due_date, type: typeName, labels, estimate, fix_version, fields }) => {
       const project = this.writable(ref);
+      const fixVersion = fix_version === null || fix_version === undefined ? null : versionForTask(this.versionHost, project, fix_version).id;
       const startDate = start_date === null || start_date === undefined ? null : this.dayInput(start_date, "start_date");
       let dueDate = due_date === null || due_date === undefined ? null : this.dayInput(due_date, "due_date");
       if (startDate !== null && dueDate !== null && startDate > dueDate) {
@@ -3435,7 +3536,12 @@ export class FakeWorkspace {
         startDate,
         dueDate,
         estimateMin,
-      }, { before, after, at });
+      }, { before, after, at }, (made) => {
+        if (fixVersion !== null) {
+          made.fixVersionId = fixVersion;
+        }
+        applyValues(this.state, made, type.name, fields, true, fail);
+      });
       return this.taskChange(task, ["*"]);
     },
     "task.update": (input) => {
@@ -3448,6 +3554,15 @@ export class FakeWorkspace {
         });
       }
       const clear = input.clear ?? [];
+      const touched = [
+        ...clear,
+        ...(["title", "description", "type", "priority", "start_date", "due_date", "estimate", "progress", "labels", "parent"] as const).filter((field) => input[field] !== null && input[field] !== undefined),
+        ...((input.add_labels ?? []).length > 0 || (input.remove_labels ?? []).length > 0 ? ["labels"] : []),
+        ...((input.description_edits ?? []).length > 0 ? ["description"] : []),
+        ...(input.fix_version !== null && input.fix_version !== undefined ? ["fix_version"] : []),
+        ...Object.keys(input.fields ?? {}).map((ref) => customRuleField(findField(fieldsFor(this.state, project.id), ref, fail, `fields.${ref}`).id)),
+      ];
+      checkReadOnly(project, task, this.keyOf(task), touched, fail);
       const fields: string[] = [];
       if (input.title !== null && input.title !== undefined) {
         task.title = this.checkTitle(input.title);
@@ -3484,6 +3599,17 @@ export class FakeWorkspace {
         task.labelIds = labels.filter((id) => !removed.includes(id));
         fields.push("labels");
       }
+      if (input.fix_version !== null && input.fix_version !== undefined) {
+        const version = versionForTask(this.versionHost, project, input.fix_version).id;
+        if (version !== task.fixVersionId) {
+          task.fixVersionId = version;
+          fields.push("fix_version");
+        }
+      }
+      if (clear.includes("fix_version") && (task.fixVersionId ?? null) !== null) {
+        task.fixVersionId = null;
+        fields.push("fix_version");
+      }
       const typed = (text: string | null | undefined, path: string) => (text === null || text === undefined ? null : this.dayInput(text, path));
       const start = clear.includes("start_date") ? null : (typed(input.start_date, "start_date") ?? task.startDate);
       const due = clear.includes("due_date") ? null : (typed(input.due_date, "due_date") ?? task.dueDate);
@@ -3509,6 +3635,9 @@ export class FakeWorkspace {
       if (clear.includes("estimate")) {
         task.estimateMin = null;
         fields.push("estimate");
+      }
+      if (input.fields !== undefined && applyValues(this.state, task, this.typeRef(task).name, input.fields, false, fail)) {
+        fields.push("fields");
       }
       if (fields.length === 0) {
         return { output: { task: this.fullTask(task), ...some("description_save", save) }, changes: [] };
@@ -3768,6 +3897,7 @@ export class FakeWorkspace {
       const project = to;
       const target = status === null || status === undefined ? this.statusIn(project, task.statusId) : this.statusIn(project, status);
       if (target.id !== task.statusId) {
+        fields.push(...enterRules(project, task, this.keyOf(task), target.id, localDay(this.today()), fail, fieldsFor(this.state, project.id), this.typeRef(task).name));
         this.enterStatus(task, target.id);
         fields.push("status");
       }
@@ -3794,6 +3924,8 @@ export class FakeWorkspace {
         statuses: [],
         types: [],
         labels: [],
+        fields: [],
+        versions: [],
         fallback_status: this.fallbackStatus(to).name,
         fallback_type: this.fallbackType(to).name,
       };
@@ -3825,6 +3957,27 @@ export class FakeWorkspace {
           count(check.types, to.types, this.typeRef(one).name);
           for (const label of this.labelRefs(one)) {
             count(check.labels, to.labels, label.name);
+          }
+          const planned = versionRef(this.versionHost, one);
+          if (planned !== undefined) {
+            const kept = visibleVersions(this.versionHost, to).some((each) => each.version.id === one.fixVersionId);
+            const found = check.versions.find((each) => each.name === planned.name);
+            if (found === undefined) {
+              check.versions.push({ name: planned.name, tasks: 1, ...some("target", kept ? planned.name : undefined) });
+            } else {
+              found.tasks += 1;
+            }
+          }
+          for (const match of moveMatches(this.state, one, to.id)) {
+            const found = check.fields.find((each) => fold(each.name) === fold(match.name));
+            if (found === undefined) {
+              check.fields.push({ ...match, tasks: 1 });
+            } else {
+              found.tasks += 1;
+              if (match.target === undefined) {
+                delete found.target;
+              }
+            }
           }
         }
       }

@@ -604,3 +604,272 @@ fn templates_and_series_travel_in_export_archives() {
     other.close("TM-1");
     assert_eq!(other.task("TM-2")["due_date"], "2026-11-28");
 }
+
+fn field_values(task: &Value) -> Vec<(String, Value)> {
+    task.get("fields")
+        .and_then(Value::as_array)
+        .map(|a| {
+            a.iter()
+                .map(|f| (f["name"].as_str().unwrap().to_owned(), f["value"].clone()))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn version_name(task: &Value) -> Option<String> {
+    task.get("fix_version")
+        .and_then(|v| v["name"].as_str())
+        .map(str::to_owned)
+}
+
+/// A project with a number field, a required select field and version 1.0,
+/// and a task in it that has values and the version.
+fn with_fields_and_version(ws: &Ws) {
+    ws.call(
+        "field.create",
+        json!({ "project": "TM", "name": "Points", "kind": "integer" }),
+    );
+    ws.call(
+        "field.create",
+        json!({ "project": "TM", "name": "Area", "kind": "select",
+                "options": ["Front end", "Back end"], "required": true }),
+    );
+    ws.call("version.create", json!({ "project": "TM", "name": "1.0" }));
+    ws.call(
+        "task.create",
+        json!({ "project": "TM", "title": "Weekly review", "fix_version": "1.0",
+                "fields": { "Points": 3, "Area": "Back end" } }),
+    );
+}
+
+#[test]
+fn occurrences_keep_fields_and_open_versions_and_are_made_despite_status_rules() {
+    let ws = open("UTC", NOW);
+    with_fields_and_version(&ws);
+    ws.call(
+        "recurrence.set",
+        json!({ "key": "TM-1", "text": "every monday" }),
+    );
+    // New tasks start in Backlog, which now needs an estimate and sets a
+    // priority on the way in.
+    ws.call(
+        "rules.update",
+        json!({ "project": "TM", "statuses": [{ "status": "Backlog", "rules": {
+            "required": ["estimate"],
+            "set": [{ "field": "priority", "value": "high" }],
+        } }] }),
+    );
+    let err = ws.fails(
+        "task.create",
+        json!({ "project": "TM", "title": "By hand", "fields": { "Area": "Front end" } }),
+    );
+    assert_eq!(err.details["message_id"], "rule-required", "{err:?}");
+
+    ws.close("TM-1");
+    let next = ws.task("TM-2");
+    assert_eq!(next["title"], "Weekly review");
+    assert_eq!(next["recurrence"]["made"], 2);
+    assert_eq!(
+        field_values(&next),
+        [
+            ("Points".to_owned(), json!(3)),
+            ("Area".to_owned(), json!("Back end"))
+        ]
+    );
+    assert_eq!(version_name(&next).as_deref(), Some("1.0"));
+    assert_eq!(next["priority"], "high", "the status's action applies");
+    assert!(next["estimate"].is_null(), "made without the estimate");
+
+    // A version that is no longer open isn't given to the next one.
+    ws.call(
+        "version.update",
+        json!({ "version": "1.0", "project": "TM", "status": "locked" }),
+    );
+    ws.close("TM-2");
+    let third = ws.task("TM-3");
+    assert_eq!(third["recurrence"]["made"], 3);
+    assert_eq!(version_name(&third), None);
+    assert_eq!(field_values(&third).len(), 2);
+}
+
+#[test]
+fn task_templates_keep_fields_and_versions_and_follow_the_rules_when_used() {
+    let ws = open("UTC", NOW);
+    with_fields_and_version(&ws);
+    let made = ws.call(
+        "template.create",
+        json!({ "name": "Review", "from_task": "TM-1" }),
+    );
+    let task = &made["template"]["task"];
+    assert_eq!(task["fields"], json!({ "Area": "Back end", "Points": 3 }));
+    assert_eq!(task["fix_version"], "1.0");
+
+    let used = ws.call(
+        "template.apply",
+        json!({ "template": "Review", "project": "TM" }),
+    );
+    assert_eq!(field_values(&used["task"]).len(), 2);
+    assert_eq!(version_name(&used["task"]).as_deref(), Some("1.0"));
+    assert!(used.get("left_out").is_none(), "{used}");
+
+    // Using a template is creating a task: the status's rules hold.
+    ws.call(
+        "rules.update",
+        json!({ "project": "TM", "statuses": [{ "status": "Backlog",
+                "rules": { "required": ["estimate"] } }] }),
+    );
+    let err = ws.fails(
+        "template.apply",
+        json!({ "template": "Review", "project": "TM" }),
+    );
+    assert_eq!(err.details["message_id"], "rule-required", "{err:?}");
+    ws.call(
+        "rules.update",
+        json!({ "project": "TM", "statuses": [{ "status": "Backlog", "rules": {} }] }),
+    );
+
+    // A required field the template has no value for is refused, as by hand.
+    ws.call(
+        "template.create",
+        json!({ "name": "Bare", "project": "TM", "task": { "title": "Bare" } }),
+    );
+    let err = ws.fails(
+        "template.apply",
+        json!({ "template": "Bare", "project": "TM" }),
+    );
+    assert_eq!(err.details["message_id"], "field-required", "{err:?}");
+
+    // A version no longer open, and fields the project lacks, are left out.
+    ws.call(
+        "version.update",
+        json!({ "version": "1.0", "project": "TM", "status": "closed" }),
+    );
+    ws.call("project.create", json!({ "name": "Other", "key": "OT" }));
+    let elsewhere = ws.call(
+        "template.apply",
+        json!({ "template": made["template"]["id"], "project": "OT" }),
+    );
+    let left: Vec<&str> = elsewhere["left_out"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
+    assert_eq!(left, ["1.0", "Area", "Points"], "{elsewhere}");
+    let here = ws.call(
+        "template.apply",
+        json!({ "template": "Review", "project": "TM" }),
+    );
+    assert_eq!(version_name(&here["task"]), None);
+    assert_eq!(here["left_out"], json!(["1.0"]));
+}
+
+#[test]
+fn a_moved_occurrence_takes_its_series_along() {
+    let ws = open("UTC", NOW);
+    ws.call("project.create", json!({ "name": "Other", "key": "OT" }));
+    ws.call(
+        "task.create",
+        json!({ "project": "TM", "title": "Pay the rent" }),
+    );
+    ws.call(
+        "recurrence.set",
+        json!({ "key": "TM-1", "text": "every week" }),
+    );
+    let moved = ws.call("task.move", json!({ "key": "TM-1", "project": "OT" }));
+    let key = moved["task"]["key"].as_str().unwrap().to_owned();
+    assert_eq!(key, "OT-1");
+    assert_eq!(ws.task(&key)["recurrence"]["made"], 1);
+    ws.close(&key);
+    let next = ws.task("OT-2");
+    assert_eq!(next["title"], "Pay the rent");
+    assert_eq!(next["recurrence"]["made"], 2);
+    let in_tm = keys(&ws.call("task.search", json!({ "query": "project:TM" })));
+    assert!(in_tm.is_empty(), "{in_tm:?}");
+}
+
+#[test]
+fn project_templates_keep_custom_fields_and_rules_but_no_versions() {
+    let ws = open("UTC", NOW);
+    let points = ws.call(
+        "field.create",
+        json!({ "project": "TM", "name": "Points", "kind": "integer", "default": 1 }),
+    )["field"]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let cf = format!("cf:{points}");
+    ws.call("version.create", json!({ "project": "TM", "name": "1.0" }));
+    ws.call(
+        "rules.update",
+        json!({ "project": "TM",
+                "statuses": [{ "status": "In progress", "rules": { "required": [cf] } }],
+                "agents": { "read_only": [cf, "title"] } }),
+    );
+    let made = ws.call(
+        "template.create",
+        json!({ "name": "Team set-up", "from_project": "TM" }),
+    );
+    let setup = &made["template"]["setup"];
+    assert_eq!(setup["fields"][0]["name"], "Points");
+    assert_eq!(setup["fields"][0]["default"], 1);
+    assert!(setup.get("versions").is_none());
+
+    let used = ws.call(
+        "template.apply",
+        json!({ "template": "Team set-up", "name": "App", "key": "APP" }),
+    );
+    let fields = ws.call("field.list", json!({ "project": "APP" }));
+    let copy = fields["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["name"] == "Points")
+        .unwrap();
+    let new_id = copy["id"].as_str().unwrap();
+    assert_ne!(new_id, points, "a field of its own");
+    assert_eq!(copy["default"], 1);
+    let p = &used["project"];
+    let in_progress = p["statuses"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["name"] == "In progress")
+        .unwrap();
+    assert_eq!(
+        in_progress["rules"]["required"],
+        json!([format!("cf:{new_id}")])
+    );
+    assert_eq!(
+        p["agent_rules"]["read_only"],
+        json!([format!("cf:{new_id}"), "title"])
+    );
+    let versions = ws.call("version.list", json!({ "project": "APP" }));
+    assert_eq!(versions["total"], 0, "{versions}");
+    let task = ws.call("task.create", json!({ "project": "APP", "title": "First" }));
+    assert_eq!(
+        field_values(&task["task"]),
+        [("Points".to_owned(), json!(1))]
+    );
+
+    // Rules naming a field the template doesn't have are refused when it
+    // is used, and nothing is made.
+    ws.call(
+        "template.create",
+        json!({ "name": "Broken", "setup": {
+            "statuses": [{ "name": "Open", "category": "todo", "hue": "grey",
+                           "rules": { "required": ["cf:0190e5c4a2b37c3d8e9f0a1b2c3d4e5f"] } }]
+        } }),
+    );
+    let err = ws.fails(
+        "template.apply",
+        json!({ "template": "Broken", "name": "Nope", "key": "NO" }),
+    );
+    assert_eq!(
+        err.details["message_id"], "rule-custom-field-unknown",
+        "{err:?}"
+    );
+    assert_eq!(err.details["path"], "setup.statuses[0].rules.required[0]");
+    let projects = ws.call("project.list", json!({}));
+    assert!(!projects.to_string().contains("\"NO\""), "{projects}");
+}

@@ -1,0 +1,31 @@
+---
+source: crates/gk-query/tests/sql.rs
+expression: "golden(&[\"cf.points>=3 cf.cost<2.5\", \"points:1..5,none sort:-cf.points\",\n\"cf.review-on:this-week -cf.approved:yes\", \"cf.approved:no\",\n\"cf.area:\\\"front END\\\" cf.platforms!=linux\",\n\"cf.ticket:abc cf.ticket=\\\"ABC-1\\\" sort:cf.area\", \"cf.platforms:none\",],\nNone,)"
+---
+-- cf.points>=3 cf.cost<2.5
+SELECT t.id FROM tasks t JOIN projects p ON p.id = t.project_id JOIN statuses s ON s.id = t.status_id JOIN task_types y ON y.id = t.type_id WHERE t.deleted_at IS NULL AND p.deleted_at IS NULL AND p.state = 'active' AND (coalesce((EXISTS (SELECT 1 FROM custom_values v JOIN custom_fields f ON f.id = v.field_id WHERE v.task_id = t.id AND f.query_name = ? AND (v.value >= ?))), 0) AND coalesce((EXISTS (SELECT 1 FROM custom_values v JOIN custom_fields f ON f.id = v.field_id WHERE v.task_id = t.id AND f.query_name = ? AND (v.value < CAST(? AS REAL)))), 0)) ORDER BY s.rank ASC NULLS LAST, t.rank ASC NULLS LAST, p.key ASC, t.number ASC LIMIT ? OFFSET ?
+-- params: "points", 3, "cost", "2.5", 50, 0
+
+-- points:1..5,none sort:-cf.points
+SELECT t.id FROM tasks t JOIN projects p ON p.id = t.project_id JOIN statuses s ON s.id = t.status_id JOIN task_types y ON y.id = t.type_id WHERE t.deleted_at IS NULL AND p.deleted_at IS NULL AND p.state = 'active' AND coalesce((NOT EXISTS (SELECT 1 FROM custom_values v JOIN custom_fields f ON f.id = v.field_id WHERE v.task_id = t.id AND f.query_name = ?) OR EXISTS (SELECT 1 FROM custom_values v JOIN custom_fields f ON f.id = v.field_id WHERE v.task_id = t.id AND f.query_name = ? AND (v.value BETWEEN ? AND ?))), 0) ORDER BY (SELECT min(v.value) FROM custom_values v JOIN custom_fields f ON f.id = v.field_id WHERE v.task_id = t.id AND f.query_name = ?) DESC NULLS LAST, p.key ASC, t.number ASC LIMIT ? OFFSET ?
+-- params: "points", "points", 1, 5, "points", 50, 0
+
+-- cf.review-on:this-week -cf.approved:yes
+SELECT t.id FROM tasks t JOIN projects p ON p.id = t.project_id JOIN statuses s ON s.id = t.status_id JOIN task_types y ON y.id = t.type_id WHERE t.deleted_at IS NULL AND p.deleted_at IS NULL AND p.state = 'active' AND (coalesce((EXISTS (SELECT 1 FROM custom_values v JOIN custom_fields f ON f.id = v.field_id WHERE v.task_id = t.id AND f.query_name = ? AND (v.value BETWEEN ? AND ?))), 0) AND NOT coalesce((EXISTS (SELECT 1 FROM custom_values v JOIN custom_fields f ON f.id = v.field_id WHERE v.task_id = t.id AND f.query_name = ? AND (v.value = 1))), 0)) ORDER BY s.rank ASC NULLS LAST, t.rank ASC NULLS LAST, p.key ASC, t.number ASC LIMIT ? OFFSET ?
+-- params: "review-on", "2026-11-23", "2026-11-29", "approved", 50, 0
+
+-- cf.approved:no
+SELECT t.id FROM tasks t JOIN projects p ON p.id = t.project_id JOIN statuses s ON s.id = t.status_id JOIN task_types y ON y.id = t.type_id WHERE t.deleted_at IS NULL AND p.deleted_at IS NULL AND p.state = 'active' AND coalesce((NOT EXISTS (SELECT 1 FROM custom_values v JOIN custom_fields f ON f.id = v.field_id WHERE v.task_id = t.id AND f.query_name = ? AND v.value = 1)), 0) ORDER BY s.rank ASC NULLS LAST, t.rank ASC NULLS LAST, p.key ASC, t.number ASC LIMIT ? OFFSET ?
+-- params: "approved", 50, 0
+
+-- cf.area:"front END" cf.platforms!=linux
+SELECT t.id FROM tasks t JOIN projects p ON p.id = t.project_id JOIN statuses s ON s.id = t.status_id JOIN task_types y ON y.id = t.type_id WHERE t.deleted_at IS NULL AND p.deleted_at IS NULL AND p.state = 'active' AND (coalesce((EXISTS (SELECT 1 FROM custom_values v JOIN custom_fields f ON f.id = v.field_id WHERE v.task_id = t.id AND f.query_name = ? AND (lower(v.value) IN (lower(?))))), 0) AND NOT coalesce((EXISTS (SELECT 1 FROM custom_values v JOIN custom_fields f ON f.id = v.field_id WHERE v.task_id = t.id AND f.query_name = ? AND (lower(v.value) IN (lower(?))))), 0)) ORDER BY s.rank ASC NULLS LAST, t.rank ASC NULLS LAST, p.key ASC, t.number ASC LIMIT ? OFFSET ?
+-- params: "area", "Front end", "platforms", "Linux", 50, 0
+
+-- cf.ticket:abc cf.ticket="ABC-1" sort:cf.area
+SELECT t.id FROM tasks t JOIN projects p ON p.id = t.project_id JOIN statuses s ON s.id = t.status_id JOIN task_types y ON y.id = t.type_id WHERE t.deleted_at IS NULL AND p.deleted_at IS NULL AND p.state = 'active' AND (coalesce((EXISTS (SELECT 1 FROM custom_values v JOIN custom_fields f ON f.id = v.field_id WHERE v.task_id = t.id AND f.query_name = ? AND (v.value LIKE ? ESCAPE '\'))), 0) AND coalesce((EXISTS (SELECT 1 FROM custom_values v JOIN custom_fields f ON f.id = v.field_id WHERE v.task_id = t.id AND f.query_name = ? AND (lower(v.value) IN (lower(?))))), 0)) ORDER BY (SELECT min(v.value) FROM custom_values v JOIN custom_fields f ON f.id = v.field_id WHERE v.task_id = t.id AND f.query_name = ?) ASC NULLS LAST, p.key ASC, t.number ASC LIMIT ? OFFSET ?
+-- params: "ticket", "%abc%", "ticket", "ABC-1", "area", 50, 0
+
+-- cf.platforms:none
+SELECT t.id FROM tasks t JOIN projects p ON p.id = t.project_id JOIN statuses s ON s.id = t.status_id JOIN task_types y ON y.id = t.type_id WHERE t.deleted_at IS NULL AND p.deleted_at IS NULL AND p.state = 'active' AND coalesce((NOT EXISTS (SELECT 1 FROM custom_values v JOIN custom_fields f ON f.id = v.field_id WHERE v.task_id = t.id AND f.query_name = ?)), 0) ORDER BY s.rank ASC NULLS LAST, t.rank ASC NULLS LAST, p.key ASC, t.number ASC LIMIT ? OFFSET ?
+-- params: "platforms", 50, 0

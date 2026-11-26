@@ -6,6 +6,7 @@
 
 import { type Category as StatusCategory, type Glyph, type Hue, type Priority } from "../../generated/ops";
 import { type FakeProject, type FakeState, type FakeTask } from "./state";
+import { type FakeVersion } from "./versions";
 
 /** A small deterministic random generator (mulberry32). */
 export function random(seed: number): () => number {
@@ -271,10 +272,44 @@ export function seed(today: Date, seedNumber = 7): FakeState {
     relations.push({ id: nextId("r"), from: first.id, to: second.id, kind: "relates" });
   }
 
+  // Versions of Task Manager: one released, one on its way (shared with the
+  // sub-projects), one later; some of its tasks are planned for them.
+  const version = (name: string, status: FakeVersion["status"], dueDays: number | null, sharing: FakeVersion["sharing"], description: string): FakeVersion => ({
+    id: nextId("v"),
+    projectId: tm.id,
+    name,
+    description,
+    status,
+    startDate: null,
+    dueDate: dueDays === null ? null : dayOffset(today, dueDays),
+    sharing,
+    rank: 0,
+    createdAt: new Date(now - 60 * 86_400_000).toISOString(),
+    updatedAt: new Date(now - 60 * 86_400_000).toISOString(),
+  });
+  const versions = [
+    version("0.9", "closed", -12, "none", "The first preview."),
+    version("1.0", "open", 10, "descendants", "Board, list and the task panel, ready for daily use."),
+    version("1.1", "open", null, "none", ""),
+  ];
+  versions.forEach((each, index) => {
+    each.rank = index + 1;
+  });
+  const [released, next, later] = versions;
+  tasks
+    .filter((task) => task.projectId === tm.id && task.parentId === null)
+    .forEach((task, index) => {
+      const planned = task.closedAt !== null && index % 3 === 0 ? released : index % 4 === 1 ? next : index % 9 === 2 ? later : undefined;
+      if (planned) {
+        task.fixVersionId = planned.id;
+      }
+    });
+
   return {
     projects,
     tasks,
     relations,
+    versions,
     comments: [],
     files: [],
     claims: [],

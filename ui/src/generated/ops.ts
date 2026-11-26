@@ -144,6 +144,12 @@ export type AgentPolicyPatch = {
   max_profile: Profile;
 };
 
+/** A project's rules for agents. Everything left out is no rule. */
+export type AgentRules = {
+  /** Task fields agents may not change in this project: `title`, `description`, `type`, `priority`, `start_date`, `due_date`, `estimate`, `progress`, `labels`, `parent`, `fix_version`, or a custom field. */
+  read_only?: string[];
+};
+
 /** One run of `glyphkeel mcp`. */
 export type AgentSession = {
   /** The client's own ID (`claude-code`), when it sent one. */
@@ -414,6 +420,8 @@ export type BulkChanges = {
   due_date?: string | null;
   /** The estimate, as a duration (`1d 4h`, `90m`). */
   estimate?: string | null;
+  /** Plan them for the version of this name (in each task's project, or shared with it). */
+  fix_version?: string | null;
   /** Replace the labels with these. */
   labels?: string[] | null;
   /** With `project`: which status, type or label of that project stands in for one it has no match for. */
@@ -801,6 +809,144 @@ export type ConflictResolution = {
 /** When the next occurrence is made. */
 export type CreateWhen = "on_close" | "ahead";
 
+/** A custom field. */
+export type CustomField = {
+  /** The value new tasks get; left out when there is none. */
+  default?: unknown;
+  /** The field's ID. */
+  id: string;
+  /** What it holds. */
+  kind: CustomFieldKind;
+  /** Its name. */
+  name: string;
+  /** The options of a select or multi-select field, in order. */
+  options?: string[];
+  /** The project it belongs to (its key); left out for a field of every project. */
+  project?: string;
+  /** How queries name it: `cf.story-points`. */
+  query_name: string;
+  /** Whether tasks it is shown for must have a value. */
+  required: boolean;
+  /** Tasks with a value for it (not in the trash). */
+  tasks: number;
+  /** The task types it is shown for, by name; empty: every type. */
+  types?: string[];
+};
+
+/** A custom field changed, with the history group of the change. */
+export type CustomFieldChange = {
+  /** The field after the change; left out when it was deleted. */
+  field?: CustomField;
+  /** The history group, for revert and Undo; left out when nothing changed. */
+  group?: string;
+  /** How many tasks lost a value: of the deleted field, or of options taken off its list. */
+  values_removed?: number;
+  /** The saved views whose queries were rewritten because the field or one of its options was renamed or deleted, by name; left out when none was. */
+  views_rewritten?: string[];
+};
+
+/** A new custom field. */
+export type CustomFieldCreateInput = {
+  /** Place it after this field. */
+  after?: string | null;
+  /** Place it first or last; default: last. */
+  at?: Edge | null;
+  /** Place it before this field. */
+  before?: string | null;
+  /** The value new tasks get unless told otherwise. */
+  default?: unknown;
+  /** What it holds. */
+  kind: CustomFieldKind;
+  /** The name, 1 to 50 characters with at least one letter or digit; unique among the fields the project's tasks have, ignoring case. A field of the same name in another project must hold the same kind. */
+  name: string;
+  /** The options of a select or multi-select field, in order (1 to 200, each 1 to 100 characters, unique ignoring case). */
+  options?: string[];
+  /** The project: its key (current or old) or ID. Left out: a field of every project. A project's sub-projects created later get a copy of its own fields. */
+  project?: string | null;
+  /** Tasks it is shown for must have a value: a new task needs one (or the default), and a value can't be cleared. */
+  required?: boolean;
+  /** Show it only for tasks of these types, by name; default: every type. */
+  types?: string[];
+};
+
+/** A custom field to delete, with its values. */
+export type CustomFieldDeleteInput = {
+  /** The number of tasks you expect to have a value for it; the deletion stops if the number differs. */
+  expected_task_count?: number | null;
+  /** The field: its name or ID. Its values leave every task, and saved queries that use it lose those conditions. */
+  field: string;
+  /** The project whose fields to look in: its key (current or old) or ID; left out: the fields of every project. */
+  project?: string | null;
+};
+
+/** What a custom field holds. */
+export type CustomFieldKind = "text" | "markdown" | "integer" | "decimal" | "date" | "boolean" | "select" | "multi_select" | "url";
+
+/** The custom fields of a project, or of the whole workspace. */
+export type CustomFieldList = {
+  /** The fields in order: those of every project first, then the project's own. */
+  fields: CustomField[];
+};
+
+/** Which custom fields to list. */
+export type CustomFieldListInput = {
+  /** The project: its key (current or old) or ID. Lists the fields its tasks have: its own and those of every project. Left out: every field of the workspace. */
+  project?: string | null;
+};
+
+/** An option of a select field to rename. */
+export type CustomFieldOptionRename = {
+  /** The option's current name (any case). */
+  from: string;
+  /** Its new name. */
+  to: string;
+};
+
+/** A custom field setting that can be cleared. */
+export type CustomFieldSetting = "default" | "types";
+
+/** Changes to a custom field; settings left out keep their value. Its kind can't change. */
+export type CustomFieldUpdateInput = {
+  /** Move it after this field. */
+  after?: string | null;
+  /** Move it first or last. */
+  at?: Edge | null;
+  /** Move it before this field. */
+  before?: string | null;
+  /** Settings to clear. */
+  clear?: CustomFieldSetting[];
+  /** A new default value. */
+  default?: unknown;
+  /** The field: its name or ID. */
+  field: string;
+  /** A new name. Saved queries that use the field are rewritten. */
+  name?: string | null;
+  /** The whole list of options after the renames, in order. Options left out are taken off every task. */
+  options?: string[] | null;
+  /** The project whose fields to look in: its key (current or old) or ID; left out: the fields of every project. */
+  project?: string | null;
+  /** Options to rename; tasks and saved queries keep up. */
+  rename_options?: CustomFieldOptionRename[];
+  /** Whether tasks must have a value. */
+  required?: boolean | null;
+  /** Show it only for tasks of these types, by name. */
+  types?: string[] | null;
+};
+
+/** One custom field's value on a task. */
+export type CustomFieldValue = {
+  /** The field's ID. */
+  id: string;
+  /** What it holds. */
+  kind: CustomFieldKind;
+  /** Its name. */
+  name: string;
+  /** How queries name it: `cf.story-points`. */
+  query_name: string;
+  /** The value: a string, a number, `true`/`false`, or a list of options for a multi-select field. */
+  value: unknown;
+};
+
 /** A range of days, both included. */
 export type DayRange = {
   /** The last day (`YYYY-MM-DD`). */
@@ -972,6 +1118,24 @@ export type ExportResult = {
   projects: string[];
   /** Its size in bytes. */
   size: number;
+};
+
+/** A custom field of a project template: one of the project's own. */
+export type FieldBlueprint = {
+  /** The value new tasks get. */
+  default?: unknown;
+  /** Its ID in the template, which the rules name; the new project's field gets a new one. */
+  id: string;
+  /** What it holds. */
+  kind: CustomFieldKind;
+  /** Its name. */
+  name: string;
+  /** The options of a select field, in order. */
+  options?: string[];
+  /** Whether new tasks need a value. */
+  required?: boolean;
+  /** The task types it shows for, by name; empty: every type. */
+  types?: string[];
 };
 
 /** One field's change. A side is left out when the field had no value. */
@@ -1368,8 +1532,12 @@ export type ListedTask = {
   due_date?: string;
   /** The estimate in minutes. */
   estimate_minutes?: number;
+  /** Its custom field values by query name (`story-points`): a string, a number, `true`/`false`, or a list of options; fields without a value are left out. */
+  fields?: Record<string, unknown>;
   /** How many files are attached to it and to its comments. */
   file_count: number;
+  /** The version it is planned for. */
+  fix_version?: VersionRef;
   /** The task's ID. */
   id: string;
   /** The task's key. */
@@ -1445,6 +1613,8 @@ export type MoveCheck = {
   fallback_status: string;
   /** The target's type for those it has no match for: its default one. */
   fallback_type: string;
+  /** The custom fields they have values of. The target is the target's field that would hold the values; absent when they would be left off. */
+  fields: MoveMatch[];
   /** Every task that would move, subtasks included, with its key now and the key it would get. */
   keys: MovedKey[];
   /** Their labels. */
@@ -1455,6 +1625,8 @@ export type MoveCheck = {
   statuses: MoveMatch[];
   /** Their types. */
   types: MoveMatch[];
+  /** The versions they are planned for. The target is the same version when the target project can plan tasks for it; absent when the move would take it off. */
+  versions: MoveMatch[];
 };
 
 /** What tasks moving to another project take there in place of the statuses, types and labels of their own project. Each map goes from a name in the task's project to a name in the target project (any case). A name left out keeps the target's item of the same name; without one, a status becomes the target's first status, a type its default type, and a label is left off. Every change says which. */
@@ -1467,7 +1639,7 @@ export type MoveMapping = {
   types?: Record<string, string>;
 };
 
-/** A status, type or label of the moving tasks, and its match in the target project. */
+/** A status, type, label or custom field of the moving tasks, and its match in the target project. */
 export type MoveMatch = {
   /** Its name. */
   name: string;
@@ -1569,6 +1741,8 @@ export type Profile = "read-only" | "standard" | "full";
 
 /** One project with its configuration. */
 export type Project = {
+  /** The rules for agents; left out when there are none. */
+  agent_rules?: AgentRules;
   /** The sub-projects' keys, in order. */
   children: string[];
   /** When it was created (RFC 3339, UTC). */
@@ -1613,8 +1787,12 @@ export type Project = {
 
 /** A project's set-up. */
 export type ProjectBlueprint = {
+  /** The rules for agents. */
+  agent_rules?: AgentRules;
   /** The project's description (Markdown). */
   description?: string;
+  /** The project's own custom fields, in order. */
+  fields?: FieldBlueprint[];
   /** The labels, in order. */
   labels?: LabelBlueprint[];
   /** Which parts are switched on; default all. */
@@ -2272,6 +2450,26 @@ export type RulePreviewInput = {
   weekdays?: Weekday[];
 };
 
+/** One field a status sets when a task enters it. */
+export type RuleSet = {
+  /** The field: `start_date`, `due_date`, `progress`, `priority`, or a custom field as `cf:<id>`. */
+  field: string;
+  /** Only when the field has no value yet (a start date already set is kept). */
+  only_if_empty?: boolean;
+  /** The value as text: `today` for a date, 0 to 100 for progress, a priority's name (`high`), or a custom field's value as it is written (`today` for a date field, one option of a select field). */
+  value: string;
+};
+
+/** New rules for a project's statuses and its agents. What is left out keeps its rules; everything is one change with one history group. */
+export type RulesUpdateInput = {
+  /** The rules for agents, replacing the ones the project had. */
+  agents?: AgentRules | null;
+  /** The project: its key (current or old) or ID. */
+  project: string;
+  /** Statuses whose rules to replace. */
+  statuses?: StatusRulesChange[];
+};
+
 /** What became of a description that was saved. */
 export type SaveOutcome = "saved" | "merged" | "conflict" | "unchanged";
 
@@ -2585,6 +2783,8 @@ export type Status = {
   id: string;
   /** Its name. */
   name: string;
+  /** Its rules for tasks entering it; left out when it has none. */
+  rules?: StatusRules;
   /** Tasks in this status. */
   tasks: number;
   /** Most tasks the column should hold; left out when there is no limit. */
@@ -2599,6 +2799,8 @@ export type StatusBlueprint = {
   hue: Hue;
   /** Its name. */
   name: string;
+  /** Its rules; custom fields are named as `cf:` and the ID their [`FieldBlueprint`] has in the template. */
+  rules?: StatusRules;
   /** Most tasks the column should hold. */
   wip_limit?: number | null;
 };
@@ -2686,6 +2888,32 @@ export type StatusReorderInput = {
   status: string;
 };
 
+/** The rules of one status. Everything left out is no rule. */
+export type StatusRules = {
+  /** Agents may not move tasks into the status, nor create tasks in it (for example Done, so that a person reviews first). */
+  agents_may_not_enter?: boolean;
+  /** Fields cleared when a task enters the status: `start_date`, `due_date`, `estimate`, `progress`, `fix_version`, or a custom field that isn't required. */
+  clear?: string[];
+  /** Fields that can't change while a task is in the status: `title`, `description`, `type`, `priority`, `start_date`, `due_date`, `estimate`, `progress`, `labels`, `parent`, `fix_version`, or a custom field. */
+  read_only?: string[];
+  /** Release an agent's claim when the task enters the status. */
+  release_claim?: boolean;
+  /** Fields that must have a value before a task enters the status: `description`, `priority`, `start_date`, `due_date`, `estimate`, `labels`, `parent`, `fix_version`, or a custom field. */
+  required?: string[];
+  /** Fields set when a task enters the status. */
+  set?: RuleSet[];
+  /** Stop the timer when its task enters the status; the time is logged. */
+  stop_timer?: boolean;
+};
+
+/** New rules for one status inside [`RulesUpdateInput`]. */
+export type StatusRulesChange = {
+  /** Its rules, replacing the ones it had; empty removes them all. */
+  rules: StatusRules;
+  /** The status: its name or ID. */
+  status: string;
+};
+
 /** Changes to a status; fields left out keep their value. */
 export type StatusUpdateInput = {
   /** A new category. Tasks in it close or reopen with it. */
@@ -2712,6 +2940,10 @@ export type SubtaskBlueprint = {
   due_in_days?: number | null;
   /** The estimate, in minutes. */
   estimate_minutes?: number | null;
+  /** Custom field values by field name. */
+  fields?: Record<string, unknown>;
+  /** The version it is planned for, by name, while it is open. */
+  fix_version?: string | null;
   /** Labels, by name. */
   labels?: string[];
   /** The priority; left out for none. */
@@ -2778,10 +3010,14 @@ export type Task = {
   estimate?: string;
   /** The estimate in minutes. */
   estimate_minutes?: number;
+  /** Its custom field values, in the fields' order; fields without a value are left out. */
+  fields?: CustomFieldValue[];
   /** How many files are attached to it and to its comments. */
   file_count: number;
   /** The files attached to it, when asked for with `include`. */
   files?: Attachment[];
+  /** The version (release) it is planned for. */
+  fix_version?: VersionRef;
   /** The task's ID. */
   id: string;
   /** The task's key (`TM-41`). */
@@ -2846,6 +3082,10 @@ export type TaskBlueprint = {
   due_in_days?: number | null;
   /** The estimate, in minutes. */
   estimate_minutes?: number | null;
+  /** Custom field values by field name, as `task.create` takes them. Fields the project doesn't have are left out. */
+  fields?: Record<string, unknown>;
+  /** The version it is planned for, by name; left out when the project has no open version by that name. */
+  fix_version?: string | null;
   /** Labels, by name. */
   labels?: string[];
   /** The priority; left out for none. */
@@ -2904,6 +3144,10 @@ export type TaskCreateInput = {
   due_date?: string | null;
   /** The estimate, as a duration (`1d 4h`, `90m`, `1.5h`). */
   estimate?: string | null;
+  /** Custom field values, by field name, query name or ID (see `field.list`): a string, a number, `true`/`false`, or a list of options for a multi-select field. Fields with a default get it unless given here; a required field needs a value. */
+  fields?: Record<string, unknown>;
+  /** The version it is planned for (name or ID): an open version of the project or one shared with it. */
+  fix_version?: string | null;
   /** Labels, by name or ID. */
   labels?: string[];
   /** The parent task, for a subtask (same project, at most 5 levels). */
@@ -2943,7 +3187,7 @@ export type TaskDuplicateInput = {
 };
 
 /** A task field that can be cleared. */
-export type TaskField = "description" | "parent" | "start_date" | "due_date" | "estimate" | "progress" | "labels";
+export type TaskField = "description" | "parent" | "start_date" | "due_date" | "estimate" | "progress" | "labels" | "fix_version";
 
 /** Which tasks to read. */
 export type TaskGetInput = {
@@ -3112,6 +3356,10 @@ export type TaskUpdateInput = {
   estimate?: string | null;
   /** Refuse the change unless the task still has this version. */
   expected_version?: number | null;
+  /** Custom field values to set, by field name, query name or ID: a string, a number, `true`/`false`, a list of options for a multi-select field, or `null` to clear the value. */
+  fields?: Record<string, unknown>;
+  /** Plan it for this version (name or ID): an open version of the project or one shared with it. */
+  fix_version?: string | null;
   /** The task: its key or ID. */
   key: string;
   /** Replace the labels with these. */
@@ -3818,6 +4066,189 @@ export type UnscheduledTask = {
   version: number;
 };
 
+/** A version. */
+export type Version = {
+  /** When it was created (RFC 3339, UTC). */
+  created_at: string;
+  /** What it is for: plain text. */
+  description?: string;
+  /** When it is due (`YYYY-MM-DD`). */
+  due_date?: string;
+  /** Its ID. */
+  id: string;
+  /** Whether it belongs to an ancestor project and is shared with this one, when listed for a project. */
+  inherited?: boolean;
+  /** Its name, unique in its project (ignoring case). */
+  name: string;
+  /** Its progress. */
+  progress: VersionProgress;
+  /** The key of the project it belongs to. */
+  project: string;
+  /** Its place among the project's versions. */
+  rank: string;
+  /** Which projects can plan tasks for it. */
+  sharing: VersionSharing;
+  /** When work on it starts (`YYYY-MM-DD`). */
+  start_date?: string;
+  /** Where it stands. */
+  status: VersionStatus;
+  /** Its tasks, when asked for: top-level first by board order. */
+  tasks?: VersionTask[];
+  /** When it last changed. */
+  updated_at: string;
+};
+
+/** A version after a change. */
+export type VersionChange = {
+  /** Whether it was deleted. */
+  deleted?: boolean;
+  /** The history group, for revert and Undo; left out when nothing changed. */
+  group?: string;
+  /** The keys of the tasks whose version changed with it: moved on when it closed, or cleared by a deletion or new sharing. */
+  tasks_changed?: string[];
+  /** The version after the change (before it, for a deletion). */
+  version: Version;
+  /** The saved views whose query was rewritten because they named the version (renamed or deleted), by name. */
+  views_rewritten?: string[];
+};
+
+/** A new version. */
+export type VersionCreateInput = {
+  /** What it is for: plain text, up to 4,000 characters. */
+  description?: string | null;
+  /** When it is due: `YYYY-MM-DD`, or `today`, `fri`, `+2w`, `dec 1`. */
+  due_date?: string | null;
+  /** Its name, up to 100 characters, unique in the project. */
+  name: string;
+  /** The project (key or ID). */
+  project: string;
+  /** Which projects can plan tasks for it; default: only its own. */
+  sharing?: VersionSharing | null;
+  /** When work starts: `YYYY-MM-DD`, or `today`, `fri`, `+2w`, `dec 1`. */
+  start_date?: string | null;
+  /** Where it stands; default: open. */
+  status?: VersionStatus | null;
+};
+
+/** Which version to delete. */
+export type VersionDeleteInput = {
+  /** With a name: the version's project (key or ID). */
+  project?: string | null;
+  /** The version: its ID, or its name. */
+  version: string;
+};
+
+/** A version field that can be cleared. */
+export type VersionField = "description" | "start_date" | "due_date";
+
+/** One version to read. */
+export type VersionGetInput = {
+  /** With a name: the project (key or ID); its own versions come first, then those shared with it. */
+  project?: string | null;
+  /** The version: its ID, or its name. */
+  version: string;
+};
+
+/** Versions: by due date (those without one last), then by their order. */
+export type VersionList = {
+  /** The versions. */
+  items: Version[];
+  /** How many. */
+  total: number;
+  /** With `include_tasks`: the project's open tasks planned for no version. */
+  unplanned?: number;
+};
+
+/** Which versions to list. */
+export type VersionListInput = {
+  /** Include each version's tasks, for the roadmap. */
+  include_tasks?: boolean;
+  /** Leave out the versions ancestors share with the project. */
+  own_only?: boolean;
+  /** The project (key or ID): its own versions and those its ancestors share with it. */
+  project: string;
+  /** Only versions with these statuses; default: all. */
+  status?: VersionStatus[];
+};
+
+/** How far a version has come. */
+export type VersionProgress = {
+  /** How many of them are closed. */
+  closed: number;
+  /** The tasks' estimates added up, in minutes. */
+  estimate_minutes: number;
+  /** Done, in percent: each task's progress weighted by its estimate; closed tasks count as 100 %, unestimated ones get the average weight. */
+  percent: number;
+  /** The time logged on them, in minutes. */
+  spent_minutes: number;
+  /** The tasks planned for it (not in the trash). */
+  total: number;
+};
+
+/** A version as a task shows it. */
+export type VersionRef = {
+  /** Its due date (`YYYY-MM-DD`). */
+  due_date?: string;
+  /** Its ID. */
+  id: string;
+  /** Its name. */
+  name: string;
+  /** The key of the project it belongs to. */
+  project: string;
+  /** Where it stands. */
+  status: VersionStatus;
+};
+
+/** Which projects can plan tasks for a version. */
+export type VersionSharing = "none" | "descendants";
+
+/** Where a version stands. */
+export type VersionStatus = "open" | "locked" | "closed";
+
+/** A task of a version, as the roadmap lists it. */
+export type VersionTask = {
+  /** Whether it is closed (done or cancelled). */
+  closed: boolean;
+  /** Its ID. */
+  id: string;
+  /** Its key. */
+  key: string;
+  /** Its progress in percent. */
+  progress_percent: number;
+  /** Its project's key. */
+  project: string;
+  /** Its status. */
+  status: StatusRef;
+  /** Its title. */
+  title: string;
+  /** Its type's name. */
+  type: string;
+};
+
+/** Changes to a version; fields left out keep their value. */
+export type VersionUpdateInput = {
+  /** Fields to clear. */
+  clear?: VersionField[];
+  /** A new description. */
+  description?: string | null;
+  /** A new due date. */
+  due_date?: string | null;
+  /** When closing it: plan its open tasks for this other open version (its name or ID) instead, or `none` to plan them for no version. Left out, open tasks stay in the closed version. */
+  move_open_tasks_to?: string | null;
+  /** A new name; saved views that name the old one are rewritten. */
+  name?: string | null;
+  /** With a name: the version's project (key or ID). */
+  project?: string | null;
+  /** New sharing. Tasks of projects that no longer see the version lose it. */
+  sharing?: VersionSharing | null;
+  /** A new start date. */
+  start_date?: string | null;
+  /** A new status. */
+  status?: VersionStatus | null;
+  /** The version: its ID, or its name. */
+  version: string;
+};
+
 /** The program a change came through. */
 export type Via = "app" | "cli" | "mcp";
 
@@ -4325,6 +4756,15 @@ export interface OpMap {
   "label.create": { input: LabelCreateInput; output: ProjectChange; safety: "write"; kind: "command" };
   "label.update": { input: LabelUpdateInput; output: ProjectChange; safety: "write"; kind: "command" };
   "label.delete": { input: LabelDeleteInput; output: ProjectChange; safety: "permanent"; kind: "command" };
+  "version.list": { input: VersionListInput; output: VersionList; safety: "read"; kind: "query" };
+  "version.get": { input: VersionGetInput; output: Version; safety: "read"; kind: "query" };
+  "version.create": { input: VersionCreateInput; output: VersionChange; safety: "write"; kind: "command" };
+  "version.update": { input: VersionUpdateInput; output: VersionChange; safety: "write"; kind: "command" };
+  "version.delete": { input: VersionDeleteInput; output: VersionChange; safety: "write"; kind: "command" };
+  "field.list": { input: CustomFieldListInput; output: CustomFieldList; safety: "read"; kind: "query" };
+  "field.create": { input: CustomFieldCreateInput; output: CustomFieldChange; safety: "write"; kind: "command" };
+  "field.update": { input: CustomFieldUpdateInput; output: CustomFieldChange; safety: "write"; kind: "command" };
+  "field.delete": { input: CustomFieldDeleteInput; output: CustomFieldChange; safety: "permanent"; kind: "command" };
   "task.search": { input: TaskSearchInput; output: TaskSearchResult; safety: "read"; kind: "query" };
   "task.get": { input: TaskGetInput; output: TaskList; safety: "read"; kind: "query" };
   "task.create": { input: TaskCreateInput; output: TaskChange; safety: "write"; kind: "command" };
@@ -4412,6 +4852,7 @@ export interface OpMap {
   "agent.sessions": { input: AgentSessionsInput; output: AgentSessionList; safety: "read"; kind: "query" };
   "agent.policy.update": { input: AgentPolicyPatch; output: SettingsChange; safety: "app"; kind: "command" };
   "agent.limits.update": { input: AgentLimitsPatch; output: SettingsChange; safety: "app"; kind: "command" };
+  "rules.update": { input: RulesUpdateInput; output: ProjectChange; safety: "app"; kind: "command" };
   "history.feed": { input: ActivityQuery; output: ActivityPage; safety: "read"; kind: "query" };
   "history.revert": { input: RevertInput; output: RevertResult; safety: "write"; kind: "command" };
   "history.undo": { input: UndoInput; output: UndoResult; safety: "app"; kind: "command" };
@@ -4458,6 +4899,15 @@ export const OP_SAFETY = {
   "label.create": "write",
   "label.update": "write",
   "label.delete": "permanent",
+  "version.list": "read",
+  "version.get": "read",
+  "version.create": "write",
+  "version.update": "write",
+  "version.delete": "write",
+  "field.list": "read",
+  "field.create": "write",
+  "field.update": "write",
+  "field.delete": "permanent",
   "task.search": "read",
   "task.get": "read",
   "task.create": "write",
@@ -4545,6 +4995,7 @@ export const OP_SAFETY = {
   "agent.sessions": "read",
   "agent.policy.update": "app",
   "agent.limits.update": "app",
+  "rules.update": "app",
   "history.feed": "read",
   "history.revert": "write",
   "history.undo": "app",
@@ -4623,6 +5074,16 @@ export function makeOps(call: Call) {
       save: (input: OpMap["draft.save"]["input"]) => call("draft.save", input),
       /** Forget the person's unsaved text of an editor. (app) */
       discard: (input: OpMap["draft.discard"]["input"]) => call("draft.discard", input),
+    },
+    field: {
+      /** The custom fields of a project (its own and those of every project) or of the whole workspace: name, query name, kind, options, default, task types, required, and how many tasks have a value. (read) */
+      list: (input: OpMap["field.list"]["input"] = {}) => call("field.list", input),
+      /** Add a custom field to a project, or to every project: text, Markdown, whole number, decimal, date, yes/no, select, multi-select or link; with options, a default, the task types it shows for, and whether it is required. (write) */
+      create: (input: OpMap["field.create"]["input"]) => call("field.create", input),
+      /** Rename a custom field, rename, add, reorder or remove its options, change its default, task types or whether it is required, or move it; saved queries keep up with renames. (write) */
+      update: (input: OpMap["field.update"]["input"]) => call("field.update", input),
+      /** Delete a custom field with its values on every task; saved queries lose their conditions on it. Can't be undone. (permanent) */
+      delete: (input: OpMap["field.delete"]["input"]) => call("field.delete", input),
     },
     file: {
       /** An attached file's name, type, size and owner. (read) */
@@ -4729,6 +5190,10 @@ export function makeOps(call: Call) {
       due: (input: OpMap["reminder.due"]["input"] = {}) => call("reminder.due", input),
       /** Acknowledge reminders that were shown, so they don't come due again. (write) */
       acknowledge: (input: OpMap["reminder.acknowledge"]["input"]) => call("reminder.acknowledge", input),
+    },
+    rules: {
+      /** Change a project's status rules (fields set, cleared or required when a task enters a status, fields read-only in it, the timer and claims) and its rules for agents (statuses they may not move tasks into, fields they may not change). (app) */
+      update: (input: OpMap["rules.update"]["input"]) => call("rules.update", input),
     },
     schedule: {
       /** The schedule of a project or a query for the Gantt chart: dated tasks as a tree with summary ranges for parents, milestones, the tasks without dates, blocks links as finish-to-start dependencies, and problems such as a task starting before its blocker ends. (read) */
@@ -4847,6 +5312,18 @@ export function makeOps(call: Call) {
       update: (input: OpMap["type.update"]["input"]) => call("type.update", input),
       /** Delete a task type; its tasks get another type. Can't be undone. (permanent) */
       delete: (input: OpMap["type.delete"]["input"]) => call("type.delete", input),
+    },
+    version: {
+      /** The versions of a project and those its ancestors share with it, with status, dates and progress; with their tasks for the roadmap. (read) */
+      list: (input: OpMap["version.list"]["input"]) => call("version.list", input),
+      /** One version with its progress and its tasks. (read) */
+      get: (input: OpMap["version.get"]["input"]) => call("version.get", input),
+      /** Create a version of a project: name, description, status, start and due dates, and whether its sub-projects can use it. (write) */
+      create: (input: OpMap["version.create"]["input"]) => call("version.create", input),
+      /** Rename a version, change its description, dates, sharing or status, or close it and move its open tasks to another version. (write) */
+      update: (input: OpMap["version.update"]["input"]) => call("version.update", input),
+      /** Delete a version; its tasks are planned for no version. Revert brings both back. (write) */
+      delete: (input: OpMap["version.delete"]["input"]) => call("version.delete", input),
     },
     view: {
       /** The saved views of a project or of the whole workspace: name, query, columns, order, grouping, totals and which is the default. (read) */

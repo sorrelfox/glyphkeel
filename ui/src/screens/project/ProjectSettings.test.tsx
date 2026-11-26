@@ -22,6 +22,49 @@ async function renderApp() {
 }
 
 describe("project settings", () => {
+  it("sets a status's rules and the rules for agents on the Rules tab", async () => {
+    await renderApp();
+    fireEvent.click(screen.getByRole("button", { name: /project menu/ }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Project settings/ }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("tab", { name: "Rules" }));
+    const done = await within(dialog).findByTestId("rules-Done");
+    fireEvent.click(within(done).getByRole("button", { name: /Done/ }));
+    const required = within(done).getByRole("group", { name: /Must be filled in/ });
+    fireEvent.click(within(required).getByRole("checkbox", { name: "Estimate" }));
+    await waitFor(() => {
+      expect(plain(within(done).getByRole("button", { name: /Done/ }).textContent)).toContain("One rule");
+    });
+    // Required and cleared at once is not offered.
+    const cleared = within(done).getByRole("group", { name: /Clear on entering/ });
+    expect(within(cleared).getByRole<HTMLInputElement>("checkbox", { name: "Estimate" }).disabled).toBe(true);
+    const agents = within(dialog).getByRole("group", { name: /Fields agents may not change/ });
+    fireEvent.click(within(agents).getByRole("checkbox", { name: "Due date" }));
+    await waitFor(() => {
+      expect(within(agents).getByRole<HTMLInputElement>("checkbox", { name: "Due date" }).checked).toBe(true);
+    });
+  });
+
+  it("offers the project's custom fields in a status's rules", async () => {
+    const transport = fakeTransport();
+    await transport.call("field.create", { project: "PER", name: "Area", kind: "select", options: ["Front end", "Back end"] });
+    render(<App start={{ titleBar: "app", locale: "en-US" }} client={createClient(transport)} path="/projects/PER" />);
+    await screen.findByRole("group", { name: /Board of/ });
+    fireEvent.click(screen.getByRole("button", { name: /project menu/ }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Project settings/ }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("tab", { name: "Rules" }));
+    const done = await within(dialog).findByTestId("rules-Done");
+    fireEvent.click(within(done).getByRole("button", { name: /Done/ }));
+    const readOnly = within(done).getByRole("group", { name: /Can't change while/ });
+    fireEvent.click(await within(readOnly).findByRole("checkbox", { name: "Area" }));
+    await waitFor(() => {
+      expect(within(readOnly).getByRole<HTMLInputElement>("checkbox", { name: "Area" }).checked).toBe(true);
+    });
+    expect(within(readOnly).getByRole("checkbox", { name: "Version" })).toBeDefined();
+    expect(within(done).getAllByText(/Leave .*Area.* as it is/).length).toBeGreaterThan(0);
+  });
+
   it("sets a WIP limit that the board's column shows", async () => {
     await renderApp();
     fireEvent.click(screen.getByRole("button", { name: /project menu/ }));

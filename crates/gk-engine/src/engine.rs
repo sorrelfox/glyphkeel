@@ -692,6 +692,7 @@ impl Engine {
             let mut w = WriteCtx::new(tx, &in_tx);
             let output = f(&mut w, input.clone())?;
             crate::ops::recurrence::after_command(&mut w)?;
+            crate::ops::rules::enforce(&mut w)?;
             let finished = w.finish()?;
             if !safety_backup {
                 let items = finished.items();

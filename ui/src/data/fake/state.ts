@@ -5,6 +5,7 @@
 
 import {
   type ActivityEntry,
+  type AgentRules,
   type Actor,
   type ProjectIcon,
   type BoardLayout,
@@ -22,12 +23,15 @@ import {
   type RevisionKind,
   type TaskBlueprint,
   type TemplateKind,
+  type StatusRules,
   type Backup,
   type SavedView,
   type Settings,
   type TrashEntry,
   type Via,
 } from "../../generated/ops";
+import { type FakeVersion } from "./versions";
+import { type FakeField, type FieldValue } from "./fields";
 
 export interface FakeStatus {
   id: string;
@@ -35,6 +39,8 @@ export interface FakeStatus {
   category: Category;
   hue: Hue;
   wip_limit: number | null;
+  /** Its rules for tasks entering it; none when left out. */
+  rules?: StatusRules | undefined;
 }
 
 export interface FakeType {
@@ -74,6 +80,8 @@ export interface FakeProject {
   nextNumber: number;
   /** Keys it had before a new key; they still find it and its tasks. */
   oldKeys?: string[];
+  /** The rules for agents; none when left out. */
+  agentRules?: AgentRules | undefined;
 }
 
 export interface FakeTask {
@@ -108,6 +116,10 @@ export interface FakeTask {
   updatedBy: { kind: "user" | "agent"; name: string };
   closedAt: string | null;
   version: number;
+  /** The version (release) it is planned for. */
+  fixVersionId?: string | null;
+  /** Custom field values by field ID; none until one is set. */
+  fields?: Record<string, FieldValue>;
   /** The recurring series it is an occurrence of. */
   seriesId?: string;
 }
@@ -306,6 +318,10 @@ export interface FakeState {
   templates?: FakeTemplate[];
   /** Backups, newest first; none until one is made. */
   backups?: Backup[];
+  /** Versions (releases) of the projects; none until one is made. */
+  versions?: FakeVersion[];
+  /** Custom fields, in order; none until one is made. */
+  customFields?: FakeField[];
   workspaceName: string;
   seq: number;
 }

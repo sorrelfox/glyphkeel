@@ -6,14 +6,18 @@
 //!
 //! A template is kept whole in history (one `record` field), so creating,
 //! changing and deleting one can be undone and reverted. Its content names
-//! statuses, types and labels by name; what a project lacks is left out
-//! and reported. Using a template is an ordinary creation: Undo removes
-//! what it made.
+//! statuses, types, labels, custom fields and versions by name; what a
+//! project lacks is left out and reported, and so is a version that is no
+//! longer open. Using a template is an ordinary creation: Undo removes
+//! what it made, and it is held to the same checks as creating the tasks
+//! by hand (required custom fields, status rules). Occurrences of a
+//! recurring task are made from the same blueprint by the engine itself,
+//! and are made anyway: see `recurrence`.
 //!
 //! Templates belong to the workspace's data, not to a person; the table
 //! records who made each one, so it can take an owner later.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use gk_api::OpError;
 use gk_api::ops::common::{Category, Glyph, Hue, Priority};
@@ -448,6 +452,8 @@ pub(crate) fn blueprint_of(
     let mut index: HashMap<Id, u32> = HashMap::new();
     let root = task_fields(tx, id)?;
     let mut bp = TaskBlueprint {
+        fields: super::custom_field::blueprint_values(tx, id)?,
+        fix_version: open_version(tx, id)?,
         title: root.title,
         description: untick(&root.description),
         task_type: Some(root.type_name),
@@ -467,6 +473,8 @@ pub(crate) fn blueprint_of(
         let under = parent.and_then(|p| index.get(&p).copied());
         index.insert(sub, u32::try_from(bp.subtasks.len()).unwrap_or(u32::MAX));
         bp.subtasks.push(SubtaskBlueprint {
+            fields: super::custom_field::blueprint_values(tx, sub)?,
+            fix_version: open_version(tx, sub)?,
             title: f.title,
             description: untick(&f.description),
             task_type: Some(f.type_name),
@@ -479,6 +487,13 @@ pub(crate) fn blueprint_of(
         });
     }
     Ok(bp)
+}
+
+/// The name of the version task `id` is planned for, while it is open.
+fn open_version(tx: &Transaction<'_>, id: Id) -> Result<Option<String>, Failure> {
+    Ok(super::version::of_task(tx, id)?
+        .filter(|v| v.status == gk_api::ops::version::VersionStatus::Open)
+        .map(|v| v.name))
 }
 
 fn created_day(
@@ -505,7 +520,7 @@ fn setup_of(w: &WriteCtx<'_>, p: &ProjectRow, tasks: bool) -> Result<ProjectBlue
         |r| Ok((r.get(0)?, r.get(1)?)),
     )?;
     let mut stmt = tx.prepare(
-        "SELECT name, category, hue, wip_limit FROM statuses WHERE project_id = ?1
+        "SELECT name, category, hue, wip_limit, rules FROM statuses WHERE project_id = ?1
           ORDER BY rank, id",
     )?;
     let statuses = stmt
@@ -517,6 +532,7 @@ fn setup_of(w: &WriteCtx<'_>, p: &ProjectRow, tasks: bool) -> Result<ProjectBlue
                 wip_limit: r
                     .get::<_, Option<i64>>(3)?
                     .and_then(|n| u32::try_from(n).ok()),
+                rules: super::rules::parse(r.get::<_, Option<String>>(4)?.as_deref()),
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -608,6 +624,8 @@ fn setup_of(w: &WriteCtx<'_>, p: &ProjectRow, tasks: bool) -> Result<ProjectBlue
         wiki,
         tasks: blueprints,
         task_templates,
+        fields: super::custom_field::own_blueprints(tx, p.id)?,
+        agent_rules: super::rules::agent_rules(tx, p.id)?,
     })
 }
 
@@ -699,6 +717,7 @@ fn check_setup(s: &ProjectBlueprint) -> Result<(), Failure> {
     )?;
     unique(s.types.iter().map(|x| x.name.as_str()).collect(), "types")?;
     unique(s.labels.iter().map(|x| x.name.as_str()).collect(), "labels")?;
+    super::custom_field::check_blueprints(&s.fields, "setup.fields")?;
     if !s.statuses.is_empty() && !s.statuses.iter().any(|x| x.category == Category::Todo) {
         return Err(messages::invalid(
             "setup.statuses",
@@ -936,8 +955,20 @@ struct Plain<'a> {
     estimate: Option<i64>,
     start: Option<i32>,
     due: Option<i32>,
+    fields: &'a BTreeMap<String, Value>,
+    fix_version: Option<&'a String>,
 }
 
+/// How a blueprint's tasks are made: as when someone creates them
+/// (`Checked`: a required custom field without a value is refused), or by
+/// the engine on its own for a recurring task (`Anyway`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Making {
+    Checked,
+    Anyway,
+}
+
+#[allow(clippy::too_many_arguments)]
 fn write_one(
     w: &mut WriteCtx<'_>,
     project: &ProjectRow,
@@ -945,6 +976,7 @@ fn write_one(
     anchor: Day,
     parent: Option<Id>,
     status: Id,
+    making: Making,
     left_out: &mut Vec<String>,
 ) -> Result<Id, Failure> {
     let types = lookup::all(w.tx(), List::Types, project.id)?;
@@ -983,7 +1015,7 @@ fn write_one(
         (Some(s), Some(d)) if s > d => (None, Some(d)),
         other => other,
     };
-    super::task::insert(
+    let id = super::task::insert(
         w,
         NewTask {
             project: project.id,
@@ -1001,7 +1033,29 @@ fn write_one(
             labels,
             target: Target::Bottom,
         },
-    )
+    )?;
+    if let Some(name) = t.fix_version {
+        match super::version::resolve_for_task(w.tx(), project, "fix_version", name) {
+            Ok(version) => {
+                super::version::set_task(w, id, project.id, Some(version))?;
+            }
+            Err(Failure::Op(_)) => {
+                if !left_out.contains(name) {
+                    left_out.push(name.clone());
+                }
+            }
+            Err(other) => return Err(other),
+        }
+    }
+    super::custom_field::apply_carried(
+        w,
+        id,
+        project,
+        t.fields,
+        making == Making::Checked,
+        left_out,
+    )?;
+    Ok(id)
 }
 
 /// Makes the task `bp` describes, with its subtasks, in `project`; dates
@@ -1016,6 +1070,7 @@ pub(crate) fn make_task(
     anchor: Day,
     parent: Option<Id>,
     status: Option<Id>,
+    making: Making,
     left_out: &mut Vec<String>,
 ) -> Result<(Id, u32), Failure> {
     let fresh = first_status(w.tx(), project)?;
@@ -1031,10 +1086,13 @@ pub(crate) fn make_task(
             estimate: bp.estimate_minutes,
             start: bp.start_in_days,
             due: bp.due_in_days,
+            fields: &bp.fields,
+            fix_version: bp.fix_version.as_ref(),
         },
         anchor,
         parent,
         status.unwrap_or(fresh),
+        making,
         left_out,
     )?;
     let mut made: Vec<Id> = Vec::with_capacity(bp.subtasks.len());
@@ -1056,10 +1114,13 @@ pub(crate) fn make_task(
                 estimate: s.estimate_minutes,
                 start: s.start_in_days,
                 due: s.due_in_days,
+                fields: &s.fields,
+                fix_version: s.fix_version.as_ref(),
             },
             anchor,
             Some(under),
             fresh,
+            making,
             left_out,
         )?;
         made.push(id);
@@ -1148,6 +1209,7 @@ fn apply(w: &mut WriteCtx<'_>, input: TemplateApplyInput) -> Result<TemplateAppl
                 anchor,
                 parent,
                 status,
+                Making::Checked,
                 &mut left_out,
             )?;
             let task = super::task::changed(w, id, Vec::new())?.task;
@@ -1187,7 +1249,7 @@ fn apply(w: &mut WriteCtx<'_>, input: TemplateApplyInput) -> Result<TemplateAppl
                 .map_err(|_| Failure::Op(messages::storage("template-unreadable", &[])))?;
             let project = lookup::project_by_id(w.tx(), pid)?
                 .ok_or_else(|| Failure::Op(messages::storage("template-unreadable", &[])))?;
-            set_up(w, pid, &setup)?;
+            set_up(w, &project, &setup)?;
             let mut tasks = 0;
             if setup.modules.is_none_or(|m| m.wiki) {
                 for page in &setup.wiki {
@@ -1214,7 +1276,17 @@ fn apply(w: &mut WriteCtx<'_>, input: TemplateApplyInput) -> Result<TemplateAppl
                 )?;
             }
             for bp in &setup.tasks {
-                let (_, n) = make_task(w, &project, bp, None, anchor, None, None, &mut left_out)?;
+                let (_, n) = make_task(
+                    w,
+                    &project,
+                    bp,
+                    None,
+                    anchor,
+                    None,
+                    None,
+                    Making::Checked,
+                    &mut left_out,
+                )?;
                 tasks += n;
             }
             Ok(TemplateApplied {
@@ -1228,23 +1300,27 @@ fn apply(w: &mut WriteCtx<'_>, input: TemplateApplyInput) -> Result<TemplateAppl
     }
 }
 
-/// Gives the new project `id` the statuses, types, labels and modules of
-/// `setup`, in place of those it was made with. The project has no tasks
-/// yet; its creation in history covers these rows.
-fn set_up(w: &WriteCtx<'_>, id: Id, setup: &ProjectBlueprint) -> Result<(), Failure> {
+/// Gives the new project `p` the statuses, types, labels, modules, custom
+/// fields and rules of `setup`, in place of those it was made with. The
+/// project has no tasks yet; its creation in history covers these rows.
+fn set_up(w: &WriteCtx<'_>, p: &ProjectRow, setup: &ProjectBlueprint) -> Result<(), Failure> {
     let tx = w.tx();
+    let id = p.id;
+    let mut status_ids = Vec::with_capacity(setup.statuses.len());
     let new_id = || Id::generate_at(u64::try_from(w.now()).unwrap_or(0));
     if !setup.statuses.is_empty() {
         tx.execute("DELETE FROM statuses WHERE project_id = ?1", [b(id)])?;
         let ranks = Rank::spread(setup.statuses.len());
         for (s, rank) in setup.statuses.iter().zip(&ranks) {
             let name = gk_core::clean_line(&s.name);
+            let status = new_id();
+            status_ids.push(status);
             tx.execute(
                 "INSERT INTO statuses (id, project_id, name, name_fold, category, hue, rank,
                                        wip_limit)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
                 params![
-                    b(new_id()),
+                    b(status),
                     b(id),
                     name,
                     fold(&name),
@@ -1314,6 +1390,23 @@ fn set_up(w: &WriteCtx<'_>, id: Id, setup: &ProjectBlueprint) -> Result<(), Fail
         tx.execute(
             "UPDATE projects SET modules = ?2 WHERE id = ?1",
             params![b(id), modules_text(m)],
+        )?;
+    }
+    // Fields after the types they show for; rules after the fields they name.
+    let copies = super::custom_field::insert_blueprints(w, p, &setup.fields)?;
+    for (i, (s, status)) in setup.statuses.iter().zip(&status_ids).enumerate() {
+        let path = format!("setup.statuses[{i}]");
+        if let Some(text) = super::rules::from_template(tx, p, &s.rules, &copies, &path)? {
+            tx.execute(
+                "UPDATE statuses SET rules = ?2 WHERE id = ?1",
+                params![b(*status), text],
+            )?;
+        }
+    }
+    if let Some(text) = super::rules::agents_from_template(tx, p, &setup.agent_rules, &copies)? {
+        tx.execute(
+            "UPDATE projects SET agent_rules = ?2 WHERE id = ?1",
+            params![b(id), text],
         )?;
     }
     Ok(())

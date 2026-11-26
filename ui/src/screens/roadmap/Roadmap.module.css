@@ -1,0 +1,174 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+   Copyright (C) 2026 Glyphkeel contributors
+
+   The roadmap: a column of version cards, each with its progress and its
+   tasks. Tokens only, logical properties only; nothing is sized for one
+   language's words. */
+
+.layout {
+  display: flex;
+  flex: 1 1 0;
+  min-block-size: 0;
+}
+
+.screen {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 16px;
+  min-inline-size: 0;
+  padding-block: 16px;
+  padding-inline: 20px;
+  overflow: auto;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.note {
+  margin: 0;
+  color: var(--fg-muted);
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-block: 48px;
+  color: var(--fg-muted);
+  text-align: center;
+}
+
+.versions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-inline-size: 60rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-block: 12px;
+  padding-inline: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-m);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.cardHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.name {
+  margin: 0;
+  font-size: var(--fs-title);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.dates {
+  margin-inline-start: auto;
+}
+
+.description {
+  margin: 0;
+  color: var(--fg-muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.progress > :first-child {
+  flex: 1 1 8rem;
+}
+
+.tasks {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.task {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-block: 4px;
+  padding-inline: 4px;
+  border-radius: var(--r-s);
+}
+
+.task.open {
+  background: var(--selected);
+}
+
+.taskLink {
+  display: inline-flex;
+  flex: 1 1 12rem;
+  gap: 8px;
+  min-inline-size: 0;
+  text-align: start;
+}
+
+.task.closed .taskLink {
+  color: var(--fg-muted);
+  text-decoration: line-through;
+}
+
+.key {
+  flex: none;
+}
+
+.bullet {
+  display: inline-block;
+  inline-size: 6px;
+  block-size: 6px;
+  margin-inline: 4px;
+  border-radius: 50%;
+  background: var(--fg-faint);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  inline-size: min(36rem, 80vw);
+}
+
+.formRow {
+  display: grid;
+  grid-template-columns: minmax(max-content, 10rem) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.formLabel {
+  color: var(--fg-muted);
+}
+
+.error {
+  margin: 0;
+  color: var(--danger);
+}

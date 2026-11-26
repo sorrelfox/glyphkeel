@@ -99,17 +99,57 @@ pub(crate) struct ProjectFile {
     pub(crate) statuses: Vec<Status>,
     pub(crate) types: Vec<TaskType>,
     pub(crate) labels: Vec<Label>,
+    /// The project's versions (releases).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) versions: Vec<Version>,
     pub(crate) views: Vec<SavedView>,
     pub(crate) layouts: Vec<Layout>,
     /// Earlier keys of the project, which still find it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) key_aliases: Vec<String>,
+    /// The project's own custom fields, and the fields of every project
+    /// that its tasks have values of (`shared`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) custom_fields: Vec<CustomField>,
     /// The project's task templates.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) templates: Vec<TemplateLine>,
     /// The project's recurring task series.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) series: Vec<SeriesLine>,
+}
+
+/// A custom field, in `project.json`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct CustomField {
+    pub(crate) id: String,
+    pub(crate) name: String,
+    /// `text`, `markdown`, `integer`, `decimal`, `date`, `boolean`,
+    /// `select`, `multi_select` or `url`.
+    pub(crate) kind: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) options: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) default: Option<serde_json::Value>,
+    /// The task types it shows for, by name; empty: every type.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) types: Vec<String>,
+    pub(crate) required: bool,
+    pub(crate) rank: String,
+    /// A field of every project rather than the project's own.
+    #[serde(default)]
+    pub(crate) shared: bool,
+    pub(crate) created_at: i64,
+}
+
+/// One stored value of a custom field on a task: text, or a number (a
+/// whole number for whole numbers and yes/no).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct CustomValue {
+    pub(crate) field_id: String,
+    pub(crate) value: serde_json::Value,
 }
 
 /// A template: a task template in `project.json`, a project template in
@@ -198,6 +238,9 @@ pub(crate) struct Project {
     pub(crate) updated_at: i64,
     pub(crate) deleted_at: Option<i64>,
     pub(crate) deleted_group: Option<String>,
+    /// The rules for agents; left out when there are none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) agent_rules: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -220,6 +263,9 @@ pub(crate) struct Status {
     pub(crate) hue: String,
     pub(crate) rank: String,
     pub(crate) wip_limit: Option<i64>,
+    /// The status's rules; left out when it has none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) rules: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -244,6 +290,25 @@ pub(crate) struct Label {
     pub(crate) name: String,
     pub(crate) hue: String,
     pub(crate) rank: String,
+}
+
+/// A version (release) of the project.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct Version {
+    pub(crate) id: String,
+    pub(crate) name: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub(crate) description: String,
+    /// `open`, `locked` or `closed`.
+    pub(crate) status: String,
+    pub(crate) start_date: Option<String>,
+    pub(crate) due_date: Option<String>,
+    /// `none` or `descendants`.
+    pub(crate) sharing: String,
+    pub(crate) rank: String,
+    pub(crate) created_at: i64,
+    pub(crate) updated_at: i64,
 }
 
 /// One line of `projects/<KEY>/tasks.jsonl`. The description itself is in
@@ -294,6 +359,13 @@ pub(crate) struct Task {
     /// The recurring series the task is an occurrence of.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) series_id: Option<String>,
+    /// The version it is planned for: one of its project's or one an
+    /// ancestor shares.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) fix_version_id: Option<String>,
+    /// Its custom field values, one per stored value.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) custom_values: Vec<CustomValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

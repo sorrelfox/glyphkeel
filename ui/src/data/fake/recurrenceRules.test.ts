@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 
 import { type RulePreviewInput } from "../../generated/ops";
-import { afterCompletion, buildRule, firstDay, nextAfter, parseRule, previewDates, RuleProblem, summaryOf, toCore, upcoming, type Core } from "./rules";
+import { afterCompletion, buildRule, firstDay, nextAfter, parseRule, previewDates, RuleProblem, summaryOf, toCore, upcoming, type Core } from "./recurrenceRules";
 
 // 2026-11-26 is a Thursday.
 const START = "2026-11-26";
