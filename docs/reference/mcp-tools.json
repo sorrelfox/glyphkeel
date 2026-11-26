@@ -54,6 +54,7 @@
       "update_wiki_page",
       "delete_wiki_page",
       "get_wiki_history",
+      "get_schedule",
       "attach_file",
       "read_attachment",
       "delete_attachment"
@@ -77,6 +78,7 @@
       "search_wiki_pages",
       "get_wiki_page",
       "get_wiki_history",
+      "get_schedule",
       "read_attachment"
     ],
     "standard": [
@@ -133,6 +135,7 @@
       "update_wiki_page",
       "delete_wiki_page",
       "get_wiki_history",
+      "get_schedule",
       "attach_file",
       "read_attachment",
       "delete_attachment"
@@ -6524,6 +6527,42 @@
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
             "type": "string"
           },
+          "moved": {
+            "description": "The tasks \"also move dependents\" moved, blockers first.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A task that \"also move dependents\" moved.",
+              "properties": {
+                "days": {
+                  "description": "How many days later it now is.",
+                  "type": "integer"
+                },
+                "due_date": {
+                  "description": "Its new due date.",
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The task's ID.",
+                  "type": "string"
+                },
+                "key": {
+                  "description": "The task's key.",
+                  "type": "string"
+                },
+                "start_date": {
+                  "description": "Its new start date.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "days",
+                "id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
           "task": {
             "additionalProperties": false,
             "description": "The task after the change.",
@@ -7933,7 +7972,7 @@
         "task.update",
         "task.resolve_conflict"
       ],
-      "description": "Changes the given fields of a task only: `title`, `type`, `priority`, `labels` (replace) or `add_labels`/`remove_labels`, `parent`, `start_date`, `due_date`, `estimate`, `progress`, and the description. Prefer `description_edits` ([{old_text, new_text}], each old_text found exactly once) for changes to part of the description; a whole new `description` needs `base_revision` (the `description_revision` from get_task): if someone saved in between, edits to different lines are merged, and edits to the same lines are kept as a conflict copy for the person while the description stays as it was (`description_save` says which). `resolve_conflict` resolves a conflict copy. To clear a field, list it in `clear`. Status and position change with move_task; checklist ticks with update_checklist. Example: update_task {\"key\": \"TM-41\", \"description_edits\": [{\"old_text\": \"Draft\", \"new_text\": \"Final\"}]}",
+      "description": "Changes the given fields of a task only: `title`, `type`, `priority`, `labels` (replace) or `add_labels`/`remove_labels`, `parent`, `start_date`, `due_date`, `estimate`, `progress`, and the description. With new dates, `move_dependents: true` also moves the tasks that depend on this one (blocks links, and theirs in turn) later, as far as each must to begin after its blocker ends, in the same change; `moved` lists them. Prefer `description_edits` ([{old_text, new_text}], each old_text found exactly once) for changes to part of the description; a whole new `description` needs `base_revision` (the `description_revision` from get_task): if someone saved in between, edits to different lines are merged, and edits to the same lines are kept as a conflict copy for the person while the description stays as it was (`description_save` says which). `resolve_conflict` resolves a conflict copy. To clear a field, list it in `clear`. Status and position change with move_task; checklist ticks with update_checklist. Example: update_task {\"key\": \"TM-41\", \"description_edits\": [{\"old_text\": \"Draft\", \"new_text\": \"Final\"}]}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "Changes to a task; fields left out keep their value. Status and\nposition change with `task.move`.",
@@ -8042,6 +8081,11 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "move_dependents": {
+            "default": false,
+            "description": "When the dates change, also move the tasks that depend on this one\n(through `blocks` links, and theirs in turn) later, as far as each\nmust to begin after its blockers end. Their lengths stay, nothing\nmoves earlier, and closed tasks stay where they are. One change in\nhistory with this one.",
+            "type": "boolean"
           },
           "override_claim": {
             "default": false,
@@ -8204,6 +8248,42 @@
           "group": {
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
             "type": "string"
+          },
+          "moved": {
+            "description": "The tasks \"also move dependents\" moved, blockers first.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A task that \"also move dependents\" moved.",
+              "properties": {
+                "days": {
+                  "description": "How many days later it now is.",
+                  "type": "integer"
+                },
+                "due_date": {
+                  "description": "Its new due date.",
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The task's ID.",
+                  "type": "string"
+                },
+                "key": {
+                  "description": "The task's key.",
+                  "type": "string"
+                },
+                "start_date": {
+                  "description": "Its new start date.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "days",
+                "id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
           },
           "task": {
             "additionalProperties": false,
@@ -9720,6 +9800,42 @@
           "group": {
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
             "type": "string"
+          },
+          "moved": {
+            "description": "The tasks \"also move dependents\" moved, blockers first.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A task that \"also move dependents\" moved.",
+              "properties": {
+                "days": {
+                  "description": "How many days later it now is.",
+                  "type": "integer"
+                },
+                "due_date": {
+                  "description": "Its new due date.",
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The task's ID.",
+                  "type": "string"
+                },
+                "key": {
+                  "description": "The task's key.",
+                  "type": "string"
+                },
+                "start_date": {
+                  "description": "Its new start date.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "days",
+                "id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
           },
           "task": {
             "additionalProperties": false,
@@ -11692,6 +11808,42 @@
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
             "type": "string"
           },
+          "moved": {
+            "description": "The tasks \"also move dependents\" moved, blockers first.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A task that \"also move dependents\" moved.",
+              "properties": {
+                "days": {
+                  "description": "How many days later it now is.",
+                  "type": "integer"
+                },
+                "due_date": {
+                  "description": "Its new due date.",
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The task's ID.",
+                  "type": "string"
+                },
+                "key": {
+                  "description": "The task's key.",
+                  "type": "string"
+                },
+                "start_date": {
+                  "description": "Its new start date.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "days",
+                "id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
           "task": {
             "additionalProperties": false,
             "description": "The task after the change.",
@@ -13590,6 +13742,42 @@
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
             "type": "string"
           },
+          "moved": {
+            "description": "The tasks \"also move dependents\" moved, blockers first.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A task that \"also move dependents\" moved.",
+              "properties": {
+                "days": {
+                  "description": "How many days later it now is.",
+                  "type": "integer"
+                },
+                "due_date": {
+                  "description": "Its new due date.",
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The task's ID.",
+                  "type": "string"
+                },
+                "key": {
+                  "description": "The task's key.",
+                  "type": "string"
+                },
+                "start_date": {
+                  "description": "Its new start date.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "days",
+                "id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
           "task": {
             "additionalProperties": false,
             "description": "The task after the change.",
@@ -15122,6 +15310,42 @@
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
             "type": "string"
           },
+          "moved": {
+            "description": "The tasks \"also move dependents\" moved, blockers first.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A task that \"also move dependents\" moved.",
+              "properties": {
+                "days": {
+                  "description": "How many days later it now is.",
+                  "type": "integer"
+                },
+                "due_date": {
+                  "description": "Its new due date.",
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The task's ID.",
+                  "type": "string"
+                },
+                "key": {
+                  "description": "The task's key.",
+                  "type": "string"
+                },
+                "start_date": {
+                  "description": "Its new start date.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "days",
+                "id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
           "task": {
             "additionalProperties": false,
             "description": "The task after the change.",
@@ -16614,6 +16838,42 @@
           "group": {
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
             "type": "string"
+          },
+          "moved": {
+            "description": "The tasks \"also move dependents\" moved, blockers first.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A task that \"also move dependents\" moved.",
+              "properties": {
+                "days": {
+                  "description": "How many days later it now is.",
+                  "type": "integer"
+                },
+                "due_date": {
+                  "description": "Its new due date.",
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The task's ID.",
+                  "type": "string"
+                },
+                "key": {
+                  "description": "The task's key.",
+                  "type": "string"
+                },
+                "start_date": {
+                  "description": "Its new start date.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "days",
+                "id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
           },
           "task": {
             "additionalProperties": false,
@@ -18110,6 +18370,42 @@
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
             "type": "string"
           },
+          "moved": {
+            "description": "The tasks \"also move dependents\" moved, blockers first.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A task that \"also move dependents\" moved.",
+              "properties": {
+                "days": {
+                  "description": "How many days later it now is.",
+                  "type": "integer"
+                },
+                "due_date": {
+                  "description": "Its new due date.",
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The task's ID.",
+                  "type": "string"
+                },
+                "key": {
+                  "description": "The task's key.",
+                  "type": "string"
+                },
+                "start_date": {
+                  "description": "Its new start date.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "days",
+                "id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
           "task": {
             "additionalProperties": false,
             "description": "The task after the change.",
@@ -19598,6 +19894,42 @@
           "group": {
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
             "type": "string"
+          },
+          "moved": {
+            "description": "The tasks \"also move dependents\" moved, blockers first.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A task that \"also move dependents\" moved.",
+              "properties": {
+                "days": {
+                  "description": "How many days later it now is.",
+                  "type": "integer"
+                },
+                "due_date": {
+                  "description": "Its new due date.",
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The task's ID.",
+                  "type": "string"
+                },
+                "key": {
+                  "description": "The task's key.",
+                  "type": "string"
+                },
+                "start_date": {
+                  "description": "Its new start date.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "days",
+                "id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
           },
           "task": {
             "additionalProperties": false,
@@ -30058,6 +30390,482 @@
       },
       "title": "Wiki page history",
       "toolset": "wiki"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Get the schedule"
+      },
+      "covers": [
+        "schedule.get"
+      ],
+      "description": "The Gantt chart's data for a `project` (add `include_subprojects: true` for its sub-projects) or a `query`, or both: dated tasks as a tree with `depth`, each parent's `summary` range (earliest start to latest due date of it and its subtasks), milestones, `unscheduled` tasks without dates, `dependencies` (blocks links, finish-to-start: a blocked task may begin the day after its blocker's due date), how many tasks depend on each, and `problems`: starts before its blocker ends, a loop of blocking tasks, a subtask outside its parent's dates, overdue, a start without a due date. `from` and `to` leave out tasks entirely before or after those days. Dates are changed with update_task (`move_dependents: true` also moves the tasks that depend on it later, as far as they must) or bulk_update_tasks; links with link_tasks. Example: get_schedule {\"project\": \"TM\", \"query\": \"is:open\", \"from\": \"today\"}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Which tasks to schedule.",
+        "properties": {
+          "from": {
+            "description": "Leave out tasks that end before this day: `YYYY-MM-DD` or a natural\ndate such as `today` or `-2w`.",
+            "type": "string"
+          },
+          "include_subprojects": {
+            "default": false,
+            "description": "With `project`: its sub-projects' tasks too. Off unless asked.",
+            "type": "boolean"
+          },
+          "project": {
+            "description": "The project (key or ID). Give this, `query`, or both.",
+            "type": "string"
+          },
+          "query": {
+            "description": "Only the tasks matching this query (`is:open label:release`); with\n`project`, inside that project. Its `sort:` orders the top-level\nrows; by default they go by start date, then due date.",
+            "type": "string"
+          },
+          "to": {
+            "description": "Leave out tasks that begin after this day, written as for `from`.",
+            "type": "string"
+          }
+        },
+        "title": "ScheduleInput",
+        "type": "object"
+      },
+      "name": "get_schedule",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "The schedule of a project or a query.",
+        "properties": {
+          "dependencies": {
+            "description": "The `blocks` links between the tasks shown.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A finish-to-start dependency: a `blocks` link between two shown tasks.",
+              "properties": {
+                "from": {
+                  "description": "The blocking task's key.",
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The link's ID, for `unlink_tasks`.",
+                  "type": "string"
+                },
+                "lag_days": {
+                  "description": "Extra days between the two; left out when there are none.",
+                  "type": "integer"
+                },
+                "to": {
+                  "description": "The blocked task's key.",
+                  "type": "string"
+                },
+                "violated": {
+                  "description": "The blocked task begins before its blocker ends.",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "from",
+                "to",
+                "violated",
+                "id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "problems": {
+            "description": "What is wrong with the schedule of the tasks shown, task by task.",
+            "items": {
+              "additionalProperties": false,
+              "description": "Something wrong with the schedule.",
+              "properties": {
+                "args": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "description": "The message's arguments, by name.",
+                  "type": "object"
+                },
+                "kind": {
+                  "description": "What kind of problem.",
+                  "oneOf": [
+                    {
+                      "const": "starts_before_blocker_ends",
+                      "description": "The task begins before a task that blocks it ends (`other`).",
+                      "type": "string"
+                    },
+                    {
+                      "const": "dependency_loop",
+                      "description": "The task is in a loop of tasks that block each other; `others`\nnames the rest of the loop.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "outside_parent",
+                      "description": "The subtask begins before its parent (`other`) starts, or ends\nafter the parent is due.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "overdue",
+                      "description": "The task is open and its due date has passed.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "no_due_date",
+                      "description": "The task has a start date but no due date.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "message": {
+                  "description": "The problem in English.",
+                  "type": "string"
+                },
+                "message_id": {
+                  "description": "The message's ID in the message files, for translation.",
+                  "type": "string"
+                },
+                "other": {
+                  "description": "The other task: the blocker, or the parent.",
+                  "type": "string"
+                },
+                "others": {
+                  "description": "For a loop, the other tasks in it.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "task": {
+                  "description": "The task it is about.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "task",
+                "message",
+                "message_id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "range": {
+            "additionalProperties": false,
+            "description": "From the earliest to the latest day of the tasks shown; left out\nwhen none has a date.",
+            "properties": {
+              "end": {
+                "description": "The last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "start": {
+                "description": "The first day (`YYYY-MM-DD`).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "start",
+              "end"
+            ],
+            "type": "object"
+          },
+          "tasks": {
+            "description": "The tasks with dates, and the tasks with subtasks that have dates,\nas the chart's rows: a tree in order, each task followed by its\nsubtasks.",
+            "items": {
+              "additionalProperties": false,
+              "description": "One row of the chart.",
+              "properties": {
+                "blocked": {
+                  "description": "A task that blocks it is still open.",
+                  "type": "boolean"
+                },
+                "closed": {
+                  "description": "Whether it is closed (done or cancelled).",
+                  "type": "boolean"
+                },
+                "dependents": {
+                  "description": "How many tasks depend on it, directly or through others: the tasks\n\"also move dependents\" may move.",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "depth": {
+                  "description": "How deep it is in the chart's tree: 0 for a top-level row. A task\nwhose parent isn't shown is a top-level row.",
+                  "maximum": 255,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "due_date": {
+                  "description": "Its own due date.",
+                  "type": "string"
+                },
+                "id": {
+                  "description": "The task's ID.",
+                  "type": "string"
+                },
+                "key": {
+                  "description": "The task's key.",
+                  "type": "string"
+                },
+                "overdue": {
+                  "description": "Open and due before today.",
+                  "type": "boolean"
+                },
+                "parent": {
+                  "description": "The parent task's key, for a subtask.",
+                  "type": "string"
+                },
+                "progress_percent": {
+                  "description": "Its progress in percent.",
+                  "maximum": 255,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "project": {
+                  "description": "Its project's key.",
+                  "type": "string"
+                },
+                "shape": {
+                  "description": "How the chart draws it.",
+                  "oneOf": [
+                    {
+                      "const": "bar",
+                      "description": "A bar from the start to the due date.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "deadline",
+                      "description": "Only a due date: a deadline marker.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "no_deadline",
+                      "description": "Only a start date: a one-day bar with a \"no deadline\" warning.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "milestone",
+                      "description": "A task of a milestone type: a diamond on its due date (or start).",
+                      "type": "string"
+                    },
+                    {
+                      "const": "summary",
+                      "description": "A task with subtasks: a summary bar over `summary`, calculated from\nthe subtasks. It is not dragged as a whole.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "start_date": {
+                  "description": "Its own start date.",
+                  "type": "string"
+                },
+                "status": {
+                  "additionalProperties": false,
+                  "description": "Its status.",
+                  "properties": {
+                    "category": {
+                      "description": "Its category.",
+                      "oneOf": [
+                        {
+                          "const": "todo",
+                          "description": "Not started.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "in_progress",
+                          "description": "Being worked on.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "done",
+                          "description": "Finished; closes the task.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "cancelled",
+                          "description": "Dropped; closes the task.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "id": {
+                      "description": "The status's ID.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "category"
+                  ],
+                  "type": "object"
+                },
+                "summary": {
+                  "additionalProperties": false,
+                  "description": "For a task with subtasks: from the earliest start to the latest due\ndate among it and all its subtasks, at every level.",
+                  "properties": {
+                    "end": {
+                      "description": "The last day (`YYYY-MM-DD`).",
+                      "type": "string"
+                    },
+                    "start": {
+                      "description": "The first day (`YYYY-MM-DD`).",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "start",
+                    "end"
+                  ],
+                  "type": "object"
+                },
+                "title": {
+                  "description": "Its title.",
+                  "type": "string"
+                },
+                "version": {
+                  "description": "Its version, for `expected_version`.",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "key",
+                "title",
+                "project",
+                "depth",
+                "status",
+                "closed",
+                "shape",
+                "progress_percent",
+                "overdue",
+                "blocked",
+                "dependents",
+                "version",
+                "id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "today": {
+            "description": "Today in the workspace's time zone (`YYYY-MM-DD`), for the today\nline.",
+            "type": "string"
+          },
+          "unscheduled": {
+            "description": "The tasks without dates, for the Unscheduled lane.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A task without dates, for the Unscheduled lane.",
+              "properties": {
+                "closed": {
+                  "description": "Whether it is closed.",
+                  "type": "boolean"
+                },
+                "id": {
+                  "description": "The task's ID.",
+                  "type": "string"
+                },
+                "key": {
+                  "description": "The task's key.",
+                  "type": "string"
+                },
+                "milestone": {
+                  "description": "A task of a milestone type.",
+                  "type": "boolean"
+                },
+                "parent": {
+                  "description": "The parent task's key, for a subtask.",
+                  "type": "string"
+                },
+                "project": {
+                  "description": "Its project's key.",
+                  "type": "string"
+                },
+                "status": {
+                  "additionalProperties": false,
+                  "description": "Its status.",
+                  "properties": {
+                    "category": {
+                      "description": "Its category.",
+                      "oneOf": [
+                        {
+                          "const": "todo",
+                          "description": "Not started.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "in_progress",
+                          "description": "Being worked on.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "done",
+                          "description": "Finished; closes the task.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "cancelled",
+                          "description": "Dropped; closes the task.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "id": {
+                      "description": "The status's ID.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "category"
+                  ],
+                  "type": "object"
+                },
+                "title": {
+                  "description": "Its title.",
+                  "type": "string"
+                },
+                "version": {
+                  "description": "Its version, for `expected_version`.",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "key",
+                "title",
+                "project",
+                "status",
+                "closed",
+                "milestone",
+                "version",
+                "id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "today",
+          "tasks",
+          "unscheduled",
+          "dependencies",
+          "problems"
+        ],
+        "title": "Schedule",
+        "type": "object"
+      },
+      "title": "Get the schedule",
+      "toolset": "schedule"
     },
     {
       "annotations": {

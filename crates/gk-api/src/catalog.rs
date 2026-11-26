@@ -8,8 +8,8 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::ops::{
-    agent, backup, board, bulk, comment, description, draft, file, history, project, query, search,
-    settings, task, time, today, transfer, trash, view, wiki, workspace,
+    agent, backup, board, bulk, comment, description, draft, file, history, project, query,
+    schedule, search, settings, task, time, today, transfer, trash, view, wiki, workspace,
 };
 use crate::schema;
 
@@ -226,6 +226,7 @@ pub static CATALOG: &[OpDescriptor] = &[
     view::LIST_LAYOUT_GET,
     view::LIST_LAYOUT_UPDATE,
     query::QUERY_PARSE,
+    schedule::SCHEDULE_GET,
     wiki::WIKI_LIST,
     wiki::WIKI_SEARCH,
     wiki::WIKI_GET,
