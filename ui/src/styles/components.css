@@ -70,6 +70,7 @@ body { margin: 0; }
 .field input::placeholder { color: var(--fg-faint); opacity: 1; }
 .field:focus-within { box-shadow: inset 0 0 0 2px var(--focus); }
 .field.quiet { background: var(--hover); box-shadow: none; }
+.field.quiet:focus-within { box-shadow: inset 0 0 0 2px var(--focus); }
 .kbd { display: inline-flex; align-items: center; height: 18px; padding: 0 5px; border-radius: var(--r-s); font-size: var(--fs-micro); font-weight: 500; color: var(--fg-muted); box-shadow: inset 0 0 0 1px var(--border-strong); white-space: nowrap; flex: none; }
 
 input.check { appearance: none; -webkit-appearance: none; flex: none; width: 16px; height: 16px; margin: 0; border-radius: var(--r-s); background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--border-strong); }
@@ -181,3 +182,24 @@ input.radio:checked { box-shadow: inset 0 0 0 5px var(--accent); }
 .md ul.tasklist input { margin-top: 3px; }
 .callout { display: flex; gap: 10px; padding: 10px 12px; margin: 0 0 12px; border-radius: var(--r-m); background: color-mix(in srgb, var(--h, var(--info)) 9%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--h, var(--info)) 34%, transparent); }
 .kw { color: var(--syn-keyword); } .str { color: var(--syn-string); } .nu { color: var(--syn-number); } .fn { color: var(--syn-func); } .com { color: var(--syn-comment); font-style: italic; }
+
+/* ---------- forced colours ----------
+   With a forced palette (Windows high contrast, or a browser that forces its
+   own colours) backgrounds and box shadows are dropped, so outlines and
+   borders in system colours carry what they carried: field edges, focus
+   rings, the selection, checked boxes and switches, and progress. The
+   html[data-theme] prefix outweighs the screens' own rules. */
+@media (forced-colors: active) {
+  html[data-theme] :focus-visible { outline: var(--focus-w) solid Highlight; }
+  html[data-theme] .field, html[data-theme] .chip.outline, html[data-theme] .kbd, html[data-theme] .card, html[data-theme] .lane, html[data-theme] .pop { border: 1px solid CanvasText; }
+  html[data-theme] .field:focus-within { outline: var(--focus-w) solid Highlight; outline-offset: -1px; }
+  html[data-theme] .btn.on, html[data-theme] .nav.on, html[data-theme] .item.on, html[data-theme] .tr.on, html[data-theme] .seg > .on, html[data-theme] .card.sel, html[data-theme] [aria-selected="true"], html[data-theme] [aria-current="page"], html[data-theme] [aria-current="date"] { outline: 2px solid Highlight; outline-offset: -2px; }
+  html[data-theme] .tab.on { border-bottom-color: Highlight; }
+  html[data-theme] input.check, html[data-theme] input.radio, html[data-theme] .switch { border: 1px solid CanvasText; }
+  html[data-theme] input.check:checked, html[data-theme] input.radio:checked, html[data-theme] .switch.on, html[data-theme] .meter > i { forced-color-adjust: none; background: Highlight; }
+  html[data-theme] input.check:checked::after { border-color: HighlightText; }
+  html[data-theme] .switch::after { forced-color-adjust: none; background: CanvasText; }
+  html[data-theme] .switch.on::after { background: HighlightText; }
+  html[data-theme] .meter { border: 1px solid CanvasText; }
+}
+

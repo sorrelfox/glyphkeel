@@ -174,21 +174,22 @@ function TodaySection({ section, openTask, onOpen }: { section: Section; openTas
                 className={styles.row}
                 data-today-row={row.key}
                 data-open={row.key === openTask ? "" : undefined}
-                aria-label={row.recurring === true ? t("recurring-label", { label: t("today-open-task", { key: row.key, title: row.title }) }) : t("today-open-task", { key: row.key, title: row.title })}
                 onClick={() => {
                   onOpen(row.key);
                 }}
               >
-                <span className="key">{row.key}</span>
-                <span className={styles.title}>{row.title}</span>
-                {row.recurring === true && <RecurringMark />}
-                {row.detail}
+                {/* Named by its text, all of it, so that the name holds what is on
+                    screen; the spaces keep the parts apart in the name. */}
+                <span className="key">{row.key}</span>{" "}
+                <span className={styles.title}>{row.title}</span>{" "}
+                {row.recurring === true && <RecurringMark />}{" "}
+                {row.detail}{" "}
                 {project && (
                   <span className={classes("meta", styles.project)} title={project.path}>
                     <ProjectMark hue={project.hue} icon={project.icon} />
                     {project.path}
                   </span>
-                )}
+                )}{" "}
                 <span className={classes("meta", styles.due, state === "overdue" && "overdue", (state === "today" || state === "soon") && "soon")}>
                   {row.due === undefined ? "" : state === "today" ? t("today-due-today") : day(row.due)}
                 </span>

@@ -153,8 +153,10 @@
 
 .tableHandle {
   position: absolute;
-  inset-block: 0;
-  inset-inline-end: -4px;
+  inset-block-start: 0;
+  inset-inline-start: calc(var(--gantt-table) - 4px);
+  z-index: 5;
+  block-size: var(--gantt-head);
   inline-size: 8px;
   cursor: col-resize;
   touch-action: none;
@@ -162,6 +164,7 @@
 }
 
 .columnHandle:hover,
+.columnHandle:focus-visible,
 .tableHandle:hover,
 .tableHandle:focus-visible {
   background: var(--accent);

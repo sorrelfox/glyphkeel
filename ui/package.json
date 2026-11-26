@@ -34,6 +34,7 @@
     "test:windows": "playwright test --config playwright.windows.config.ts",
     "test:reports": "playwright test --config playwright.reports.config.ts",
     "test:depth": "playwright test --config playwright.depth.config.ts",
+    "test:a11y": "playwright test --config playwright.a11y.config.ts",
     "tauri": "TAURI_APP_PATH=../crates/gk-app TAURI_FRONTEND_PATH=. tauri"
   },
   "dependencies": {
@@ -69,6 +70,7 @@
     "turndown-plugin-gfm": "1.0.2"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
     "@babel/core": "7.29.13",
     "@eslint/js": "10.0.1",
     "@playwright/test": "1.65.1",

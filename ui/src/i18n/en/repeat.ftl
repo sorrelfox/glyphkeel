@@ -188,6 +188,9 @@ template-built-in-mark = Comes with Glyphkeel
 template-contents = Contents of { $name }
 template-show-contents = Show what it holds
 template-hide-contents = Hide what it holds
+# The same button's accessible name: its text, then the template's name.
+template-show-contents-of = Show what it holds: { $name }
+template-hide-contents-of = Hide what it holds: { $name }
 template-contents-loading = Loading…
 template-task-title = Title
 template-task-type = Type

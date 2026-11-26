@@ -36,10 +36,10 @@ calendar-more =
     { $count ->
        *[other] +{ $count } more
     }
+# Begins with the button's text, calendar-more, so that the name holds what is on screen.
 calendar-more-label =
     { $count ->
-        [one] One more task on { $date }: show the week
-       *[other] { $count } more tasks on { $date }: show the week
+       *[other] +{ $count } more on { $date }: show the week
     }
 # A task's accessible name: one day, or the days it runs.
 calendar-task-day = { $key } { $title }, { $date }

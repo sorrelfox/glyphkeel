@@ -496,7 +496,7 @@ export function CalendarView({ project, openTask, onOpen }: CalendarViewProps) {
         }}
       >
         <span className={`dot hue-${hue}`} aria-hidden="true" />
-        <span className={styles.barKey}>{task.key}</span>
+        <span className={styles.barKey}>{task.key}</span>{" "}
         <span className={styles.barTitle}>{task.title}</span>
         {task.recurring === true && <RecurringMark />}
       </button>

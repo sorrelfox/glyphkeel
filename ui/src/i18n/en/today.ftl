@@ -19,7 +19,6 @@ today-more = { $count ->
 
 ## Rows
 
-today-open-task = { $key } { $title }
 today-due-today = Today
 today-reminder-note = { $time }: { $note }
 today-claimed-by = { $agent }, until { $time }

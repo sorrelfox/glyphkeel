@@ -600,7 +600,7 @@ function GroupMenu({ value, withProject, fields, onChange }: { value: Grouping |
   return (
     <MenuTrigger>
       <Button className="btn flat" aria-label={t("list-group-button", { grouping: name(value) })}>
-        <span className="muted hide-narrow">{t("list-group")}</span>
+        <span className="muted hide-narrow">{t("list-group")}</span>{" "}
         <span>{name(value)}</span>
         <ChevronDown className="ic s muted" aria-hidden="true" />
       </Button>

@@ -121,7 +121,7 @@ function Snippet({ text, label }: { text: string; label: string }) {
   const toasts = useToasts();
   return (
     <div className={styles.snippet}>
-      <pre className={classes("selectable", styles.snippetText)} aria-label={label}>
+      <pre className={classes("selectable", styles.snippetText)} role="group" aria-label={label}>
         {text}
       </pre>
       <Button

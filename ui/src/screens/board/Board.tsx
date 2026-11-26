@@ -21,6 +21,7 @@ import { useState, type KeyboardEvent } from "react";
 
 import { keysOf, type Action } from "../../actions/actions";
 import { ActionsProvider } from "../../actions/ActionsProvider";
+import { motionReduced } from "../../appearance/appearance";
 import { isMenuKey, useContextMenu, type MenuEntry } from "../../components/ContextMenu";
 import { useTrashTasks } from "../../data/safety";
 import { useToasts } from "../../components/Toasts";
@@ -615,7 +616,7 @@ function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowO
               ),
             )}
           </div>
-          <DragOverlay dropAnimation={{ duration: 160 }}>
+          <DragOverlay dropAnimation={motionReduced() ? null : { duration: 160 }}>
             {activeCard ? <CardView card={activeCard} fields={layout.card_fields} custom={customFields} compact={cardSize === "compact"} today={today} lifted /> : null}
           </DragOverlay>
         </DndContext>

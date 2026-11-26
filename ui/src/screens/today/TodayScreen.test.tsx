@@ -25,7 +25,7 @@ describe("Today", () => {
     render(<App start={{ titleBar: "app", locale: "en-US" }} client={createClient(transport)} />);
 
     const overdue = await screen.findByRole("list", { name: "Overdue" });
-    const row = within(overdue).getByRole("button", { name: (name) => plain(name) === `${task.key} Renew the passport` });
+    const row = within(overdue).getByRole("button", { name: (name) => plain(name).startsWith(`${task.key} Renew the passport`) });
     const sidebar = screen.getByRole("navigation", { name: "Workspace" });
     await waitFor(() => {
       expect(sidebar.querySelector("[data-count=today]")?.textContent).toBe(String(today.counts.today));

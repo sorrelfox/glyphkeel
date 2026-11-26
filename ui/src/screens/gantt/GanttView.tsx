@@ -486,7 +486,7 @@ function GroupMenu({ value, onChange }: { value: GanttGrouping; onChange: (group
   return (
     <MenuTrigger>
       <Button className="btn flat" aria-label={t("gantt-group-button", { grouping: name(value) })}>
-        <span className="muted hide-narrow">{t("gantt-group")}</span>
+        <span className="muted hide-narrow">{t("gantt-group")}</span>{" "}
         <span>{name(value)}</span>
         <ChevronDown className="ic s muted" aria-hidden="true" />
       </Button>

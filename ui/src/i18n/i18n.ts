@@ -76,3 +76,48 @@ export function createBundle(language: string): FluentBundle {
   }
   return bundle;
 }
+
+/** Languages written right to left, for engines without `Intl.Locale` text info. */
+const RTL_LANGUAGES = new Set(["ar", "arc", "ckb", "dv", "fa", "he", "iw", "ks", "ku-arab", "mzn", "nqo", "pnb", "ps", "sd", "syr", "ug", "ur", "yi"]);
+/** Scripts written right to left. */
+const RTL_SCRIPTS = new Set(["adlm", "arab", "hebr", "mand", "mend", "nkoo", "rohg", "samr", "syrc", "thaa"]);
+
+interface TextInfo {
+  direction?: string;
+}
+
+/**
+ * The writing direction of a BCP 47 locale: what `Intl.Locale` says where it
+ * knows (`getTextInfo()`, or the older `textInfo`), else the script, else the
+ * language.
+ */
+export function textDirection(locale: string): "ltr" | "rtl" {
+  let tag: Intl.Locale;
+  try {
+    tag = new Intl.Locale(locale);
+  } catch {
+    return "ltr";
+  }
+  const withInfo = tag as Intl.Locale & { getTextInfo?: () => TextInfo; textInfo?: TextInfo };
+  const info = typeof withInfo.getTextInfo === "function" ? withInfo.getTextInfo() : withInfo.textInfo;
+  if (info?.direction === "rtl" || info?.direction === "ltr") {
+    return info.direction;
+  }
+  const script = (tag.script ?? tag.maximize().script)?.toLowerCase();
+  if (script !== undefined) {
+    return RTL_SCRIPTS.has(script) ? "rtl" : "ltr";
+  }
+  const language = tag.language.toLowerCase();
+  return RTL_LANGUAGES.has(language) ? "rtl" : "ltr";
+}
+
+/**
+ * Writes the page's language and direction onto `<html>`: the language of
+ * the messages shown, and the direction of the active locale (the language
+ * chosen in Preferences, else the system's), so that the layout and every
+ * part that follows the root's direction mirror together.
+ */
+export function applyLanguage(activeLocale: string, root: HTMLElement): void {
+  root.lang = messageLanguage(activeLocale);
+  root.dir = textDirection(activeLocale);
+}

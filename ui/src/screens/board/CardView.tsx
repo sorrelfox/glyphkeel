@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Glyphkeel contributors
 
 import { Bot, CalendarClock, CalendarDays, Check, Clock, Hourglass, MessageSquare, Paperclip, SquareCheck, Timer, Workflow } from "lucide-react";
-import { forwardRef, type CSSProperties, type HTMLAttributes } from "react";
+import { forwardRef, Fragment, type CSSProperties, type HTMLAttributes } from "react";
 import { useLocale } from "react-aria-components";
 
 import { classes } from "../../classes";
@@ -140,14 +140,15 @@ export const CardView = forwardRef<HTMLElement, CardViewProps>(function CardView
       ref={ref}
       className={classes("card", styles.card, selected && "sel", closed && "done", ghost && styles.ghost, lifted && styles.lifted, className)}
       data-card={card.key}
-      aria-label={t("card-label", { key: card.key, title: card.title })}
       {...rest}
     >
+      {/* Named by its text, all of it, so that the name holds what is on the
+          card; the spaces keep the parts apart in the name. */}
       <div className={styles.cardTop}>
-        <TypeGlyph glyph={card.type.glyph} label={card.type.name} />
-        <span className="key">{card.key}</span>
-        {card.recurring === true && <RecurringMark />}
-        {card.blocked && !closed && <span className="chip hue-red">{t("card-blocked")}</span>}
+        <TypeGlyph glyph={card.type.glyph} label={card.type.name} />{" "}
+        <span className="key">{card.key}</span>{" "}
+        {card.recurring === true && <RecurringMark />}{" "}
+        {card.blocked && !closed && <span className="chip hue-red">{t("card-blocked")}</span>}{" "}
         <div className="grow" />
         {card.claim && (
           <span className="meta" role="img" aria-label={t("card-claimed-label", { agent: card.claim.agent })}>
@@ -155,18 +156,26 @@ export const CardView = forwardRef<HTMLElement, CardViewProps>(function CardView
           </span>
         )}
         <PriorityGlyph priority={card.priority} label={t(`priority-${card.priority}`)} />
-      </div>
-      <div className={classes("card-title", styles.cardTitle, compact && styles.compactTitle)}>{card.title}</div>
+      </div>{" "}
+      <div className={classes("card-title", styles.cardTitle, compact && styles.compactTitle)}>{card.title}</div>{" "}
       {labels.length > 0 && (
         <div className={styles.cardLabels}>
           {labels.map((label) => (
-            <span key={label.id} className={`chip hue-${label.hue}`}>
-              {label.name}
-            </span>
+            <Fragment key={label.id}>
+              <span className={`chip hue-${label.hue}`}>{label.name}</span>{" "}
+            </Fragment>
+          ))}
+        </div>
+      )}{" "}
+      {meta.length > 0 && (
+        <div className={styles.cardMeta}>
+          {meta.map((item, at) => (
+            <Fragment key={at}>
+              {item}{" "}
+            </Fragment>
           ))}
         </div>
       )}
-      {meta.length > 0 && <div className={styles.cardMeta}>{meta}</div>}
     </article>
   );
 });

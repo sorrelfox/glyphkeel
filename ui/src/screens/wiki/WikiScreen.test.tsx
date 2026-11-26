@@ -226,7 +226,7 @@ describe("a wiki window", () => {
     });
     const file = new File(["hello"], "notes.txt", { type: "text/plain" });
     fireEvent.change(field, { target: { files: [file] } });
-    expect(await within(view).findByRole("button", { name: (name) => plain(name).startsWith("Open notes.txt") })).toBeDefined();
+    expect(await within(view).findByRole("button", { name: (name) => plain(name).startsWith("notes.txt ") })).toBeDefined();
     const saved = (await transport.call("wiki.get", { project: "TM", page: "Storage", include: ["files"] })) as WikiPage;
     expect(saved.files?.map((one) => one.name)).toEqual(["notes.txt"]);
     expect(saved.files?.[0]?.page).toBe(saved.id);

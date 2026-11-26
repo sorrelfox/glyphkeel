@@ -137,13 +137,13 @@ function SubtaskRow({
       />
       <Button
         className={classes(styles.rowMain)}
-        aria-label={t("subtasks-open", { key: sub.key, title: sub.title })}
         onPress={() => {
           onOpenTask(sub.key);
         }}
       >
-        <span className="key">{sub.key}</span>
-        <span className={classes("truncate grow", sub.closed && styles.closedTitle)}>{sub.title}</span>
+        {/* Named by its text; the spaces keep the parts apart in the name. */}
+        <span className="key">{sub.key}</span>{" "}
+        <span className={classes("truncate grow", sub.closed && styles.closedTitle)}>{sub.title}</span>{" "}
         <StatusPill task={sub} project={project} />
       </Button>
       <MenuTrigger>
@@ -414,14 +414,14 @@ export function LinksSection({
         <div key={`${link.id}-${link.kind}`} className={classes("item", styles.row)} data-link={`${link.kind} ${link.task.key}`}>
           <Button
             className={classes(styles.rowMain)}
-            aria-label={t("links-open", { kind: label(link.kind), key: link.task.key, title: link.task.title })}
             onPress={() => {
               onOpenTask(link.task.key);
             }}
           >
-            <span className={classes("muted", styles.linkKind)}>{label(link.kind)}</span>
-            <span className="key">{link.task.key}</span>
-            <span className={classes("truncate grow", link.task.closed && styles.closedTitle)}>{link.task.title}</span>
+            {/* Named by its text; the spaces keep the parts apart in the name. */}
+            <span className={classes("muted", styles.linkKind)}>{label(link.kind)}</span>{" "}
+            <span className="key">{link.task.key}</span>{" "}
+            <span className={classes("truncate grow", link.task.closed && styles.closedTitle)}>{link.task.title}</span>{" "}
             <StatusPill task={link.task} project={link.task.key.startsWith(`${project.key}-`) ? project : undefined} />
           </Button>
           {(link.kind === "blocks" || link.kind === "blocked_by") && <LagButton task={task} link={link} readOnly={readOnly} />}
