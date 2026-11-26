@@ -14,11 +14,15 @@
 //! the agent's profile (capped by the workspace setting) and the toolsets.
 //! Results carry `structuredContent` and a short Markdown text; errors are
 //! `isError` results with text only.
+//!
+//! The prompts come from the catalog crate's prompt list, filtered the
+//! same way: a prompt is listed when every tool it uses is listed.
 
 mod errors;
 mod guard;
 mod messages;
 mod options;
+mod prompts;
 mod render;
 mod server;
 mod session;
@@ -143,6 +147,9 @@ where
                         // short cache time.
                         if peer.peer_info().is_some() && handle.tool_list_changed() {
                             let _ = peer.notify_tool_list_changed().await;
+                        }
+                        if peer.peer_info().is_some() && handle.prompt_list_changed() {
+                            let _ = peer.notify_prompt_list_changed().await;
                         }
                         if handle.engine().must_exit()
                             && let Some(token) = token.take()

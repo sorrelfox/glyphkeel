@@ -7,8 +7,10 @@
 //!   Schemas, the error type and the change event;
 //! - `docs/reference/mcp-tools.json`: the golden MCP tool list, as agents
 //!   see it, and which tools each profile gets;
-//! - `docs/reference/operations.md` and `docs/reference/cli.md`: the
-//!   reference pages;
+//! - `docs/reference/mcp-prompts.json`: the golden MCP prompt list, and
+//!   which prompts each profile gets;
+//! - `docs/reference/operations.md`, `docs/reference/cli.md` and
+//!   `docs/reference/mcp-prompts.md`: the reference pages;
 //! - `ui/src/generated/ops.ts`: the TypeScript client.
 //!
 //! `--check` writes nothing and fails when a file differs from what the
@@ -40,6 +42,14 @@ pub(crate) fn outputs() -> Result<Vec<Output>> {
         Output {
             path: "docs/reference/mcp-tools.json",
             content: json_file(&gk_api::mcp::golden_document())?,
+        },
+        Output {
+            path: "docs/reference/mcp-prompts.json",
+            content: json_file(&gk_api::prompts::golden_document())?,
+        },
+        Output {
+            path: "docs/reference/mcp-prompts.md",
+            content: docs::prompts(),
         },
         Output {
             path: "docs/reference/operations.md",

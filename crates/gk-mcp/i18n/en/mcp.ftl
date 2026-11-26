@@ -28,3 +28,12 @@ mcp-no-data-folder = No data folder found: HOME is not set.
 mcp-no-data-folder-hint = Set HOME or XDG_DATA_HOME, or pass --workspace with a path.
 mcp-unknown-toolset = unknown toolset "{ $toolset }"; use { $toolsets }
 mcp-unknown-log-level = unknown log level "{ $level }"; use off, error, warn, info, debug or trace
+
+## Prompts
+
+mcp-no-such-prompt = There is no prompt "{ $prompt }".
+mcp-no-such-prompt-hint = Use one of the listed prompts.
+mcp-prompt-not-allowed = Your profile ({ $profile }) doesn't allow the prompt { $prompt }, or its tools are switched off: it uses tools that aren't listed for you.
+mcp-prompt-not-allowed-hint = Ask the person to allow more in Preferences › Agents, or to start the server with a higher --profile or more --toolsets.
+mcp-prompt-missing-argument = The prompt { $prompt } needs the argument "{ $argument }".
+mcp-prompt-unknown-argument = The prompt { $prompt } has no argument "{ $argument }".

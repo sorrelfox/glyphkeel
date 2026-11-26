@@ -32,6 +32,7 @@ pub mod event;
 pub mod mcp;
 pub mod ops;
 pub mod profile;
+pub mod prompts;
 pub mod schema;
 
 pub use catalog::{CATALOG, Exposure, OpDescriptor, OpKind, Operation, Safety, descriptor};

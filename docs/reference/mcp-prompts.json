@@ -1,0 +1,214 @@
+{
+  "profiles": {
+    "full": [
+      "plan_my_day",
+      "weekly_review",
+      "triage_new_tasks",
+      "break_down_task",
+      "write_status_update",
+      "write_release_notes",
+      "review_schedule",
+      "summarise_task_history"
+    ],
+    "read-only": [
+      "plan_my_day",
+      "weekly_review",
+      "write_status_update",
+      "write_release_notes",
+      "review_schedule",
+      "summarise_task_history"
+    ],
+    "standard": [
+      "plan_my_day",
+      "weekly_review",
+      "triage_new_tasks",
+      "break_down_task",
+      "write_status_update",
+      "write_release_notes",
+      "review_schedule",
+      "summarise_task_history"
+    ]
+  },
+  "prompts": [
+    {
+      "arguments": [
+        {
+          "description": "Only this project and its sub-projects, by key (TM). Leave it out for every project.",
+          "name": "project",
+          "required": false,
+          "title": "Project"
+        }
+      ],
+      "completions": {
+        "project": "project"
+      },
+      "description": "Looks at what needs attention today and proposes a plan for the day, in order, without changing anything.",
+      "name": "plan_my_day",
+      "title": "Plan my day",
+      "tools": [
+        "get_workspace",
+        "get_today",
+        "search_tasks",
+        "get_task"
+      ]
+    },
+    {
+      "arguments": [
+        {
+          "description": "Only this project and its sub-projects, by key (TM). Leave it out for every project.",
+          "name": "project",
+          "required": false,
+          "title": "Project"
+        }
+      ],
+      "completions": {
+        "project": "project"
+      },
+      "description": "Reviews the last seven days: what was finished, what changed, what is stuck and what comes next, with the time logged.",
+      "name": "weekly_review",
+      "title": "Weekly review",
+      "tools": [
+        "get_workspace",
+        "search_tasks",
+        "get_activity",
+        "get_time_report"
+      ]
+    },
+    {
+      "arguments": [
+        {
+          "description": "Only this project and its sub-projects, by key (TM). Leave it out for every project.",
+          "name": "project",
+          "required": false,
+          "title": "Project"
+        }
+      ],
+      "completions": {
+        "project": "project"
+      },
+      "description": "Finds recent open tasks without a priority or labels, proposes a type, priority, labels and version for each, and applies them after the person agrees.",
+      "name": "triage_new_tasks",
+      "title": "Triage new tasks",
+      "tools": [
+        "search_tasks",
+        "get_task",
+        "get_project",
+        "list_versions",
+        "update_task"
+      ]
+    },
+    {
+      "arguments": [
+        {
+          "description": "The task to break down, by key (TM-41).",
+          "name": "task",
+          "required": true,
+          "title": "Task"
+        }
+      ],
+      "completions": {
+        "task": "task"
+      },
+      "description": "Splits a task into subtasks that can each be finished in a day or less, and creates them after the person agrees.",
+      "name": "break_down_task",
+      "title": "Break down a task",
+      "tools": [
+        "get_task",
+        "get_project",
+        "get_agent_brief",
+        "create_task",
+        "link_tasks"
+      ]
+    },
+    {
+      "arguments": [
+        {
+          "description": "The project, by key (TM). Its sub-projects are included.",
+          "name": "project",
+          "required": true,
+          "title": "Project"
+        }
+      ],
+      "completions": {
+        "project": "project"
+      },
+      "description": "Writes a short status update for a project and its sub-projects: overall state, what was done, what comes next, risks and the versions in progress.",
+      "name": "write_status_update",
+      "title": "Write a status update",
+      "tools": [
+        "get_workspace",
+        "get_project",
+        "list_versions",
+        "search_tasks",
+        "get_activity"
+      ]
+    },
+    {
+      "arguments": [
+        {
+          "description": "The project, by key (TM).",
+          "name": "project",
+          "required": true,
+          "title": "Project"
+        },
+        {
+          "description": "The version (release), by name (1.2), of that project or shared with it.",
+          "name": "version",
+          "required": true,
+          "title": "Version"
+        }
+      ],
+      "completions": {
+        "project": "project",
+        "version": "version"
+      },
+      "description": "Writes release notes for a version of a project from the tasks planned for it.",
+      "name": "write_release_notes",
+      "title": "Write release notes",
+      "tools": [
+        "get_version",
+        "get_task"
+      ]
+    },
+    {
+      "arguments": [
+        {
+          "description": "The project, by key (TM). Its sub-projects are included.",
+          "name": "project",
+          "required": true,
+          "title": "Project"
+        }
+      ],
+      "completions": {
+        "project": "project"
+      },
+      "description": "Goes through the schedule problems of a project (tasks that start before their blocker ends, blocking loops, subtasks outside their parent's dates, overdue tasks, starts without a due date) and proposes the smallest fix for each.",
+      "name": "review_schedule",
+      "title": "Review the schedule",
+      "tools": [
+        "get_schedule",
+        "get_task"
+      ]
+    },
+    {
+      "arguments": [
+        {
+          "description": "The task, by key (TM-41).",
+          "name": "task",
+          "required": true,
+          "title": "Task"
+        }
+      ],
+      "completions": {
+        "task": "task"
+      },
+      "description": "Summarises how a task came to where it is: its changes, discussion, time logged and what is left open.",
+      "name": "summarise_task_history",
+      "title": "Summarise a task's history",
+      "tools": [
+        "get_task",
+        "get_activity"
+      ]
+    }
+  ]
+}

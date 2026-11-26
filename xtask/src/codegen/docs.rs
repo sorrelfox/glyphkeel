@@ -116,3 +116,112 @@ commands, agents and the app's next start use it |\n";
     s += "| 4 | Workspace or storage problem (`busy`, `workspace_upgraded`, `workspace_too_new`, `storage`) |\n";
     s
 }
+
+/// `docs/reference/mcp-prompts.md`.
+pub(super) fn prompts() -> String {
+    use gk_api::prompts::{ArgumentKind, prompts};
+    use gk_api::{Profile, Toolset};
+
+    let mut s = String::from(HEADER);
+    s += "# MCP prompts\n\n";
+    s += "The MCP server offers prompts: ready-made requests that an agent's client shows the \
+person, often as slash commands. Each one tells the agent which tools to use and what to \
+deliver; none calls a model itself, and the ones that change something ask the person first.\n\n";
+    s += "A prompt is listed only when every tool it uses is listed for the agent, so it follows \
+the profile, the workspace's cap and the toolsets. When the cap changes while the server runs, \
+clients of the `initialize` era get `notifications/prompts/list_changed`; newer clients see the \
+list's short cache time. In a session limited to a project (`--project`), a `project` argument \
+left out means that project, and other projects can't be named.\n\n";
+    s += "Arguments complete with `completion/complete`: projects by key, versions by name \
+(within the `project` argument), and tasks by key or by words of the title. \
+[mcp-prompts.json](mcp-prompts.json) is the golden list.\n\n";
+    let defaults = Toolset::defaults();
+    s += "| Prompt | Arguments | Tools | Profiles |\n|---|---|---|---|\n";
+    for p in prompts() {
+        let arguments: Vec<String> = p
+            .arguments
+            .iter()
+            .map(|a| {
+                if a.required {
+                    format!("`{}`", a.name)
+                } else {
+                    format!("`{}` (optional)", a.name)
+                }
+            })
+            .collect();
+        let tools: Vec<String> = p.tools.iter().map(|t| format!("`{t}`")).collect();
+        let profiles: Vec<&str> = Profile::ALL
+            .iter()
+            .filter(|profile| {
+                gk_api::prompts::listed(**profile, &defaults).any(|q| q.name == p.name)
+            })
+            .map(|profile| profile.as_str())
+            .collect();
+        let _ = writeln!(
+            s,
+            "| `{}` | {} | {} | {} |",
+            p.name,
+            if arguments.is_empty() {
+                "—".to_owned()
+            } else {
+                arguments.join(", ")
+            },
+            tools.join(", "),
+            profiles.join(", ")
+        );
+    }
+    s += "\n";
+    for p in prompts() {
+        let _ = writeln!(
+            s,
+            "## `{}`: {}\n\n{}\n",
+            p.name,
+            p.title,
+            cell(&p.description)
+        );
+        for a in &p.arguments {
+            let complete = a.complete.map_or("", |k| match k {
+                ArgumentKind::Project => " Completes project keys.",
+                ArgumentKind::Version => " Completes the project's version names.",
+                ArgumentKind::Task => " Completes task keys.",
+            });
+            let _ = writeln!(
+                s,
+                "- `{}`{}: {}{complete}",
+                a.name,
+                if a.required { "" } else { " (optional)" },
+                a.description
+            );
+        }
+        let example: std::collections::BTreeMap<String, String> = p
+            .arguments
+            .iter()
+            .filter(|a| a.required)
+            .map(|a| {
+                let v = match a.complete {
+                    Some(ArgumentKind::Task) => "TM-41",
+                    Some(ArgumentKind::Version) => "1.2",
+                    _ => "TM",
+                };
+                (a.name.clone(), v.to_owned())
+            })
+            .collect();
+        let shown: Vec<String> = example
+            .iter()
+            .map(|(k, v)| format!("`{k}` = `{v}`"))
+            .collect();
+        if shown.is_empty() {
+            s += "\nThe text the agent receives:\n\n";
+        } else {
+            let _ = writeln!(
+                s,
+                "\nThe text the agent receives, with {}:\n",
+                shown.join(", ")
+            );
+        }
+        s += "```text\n";
+        s += &p.render(&example);
+        s += "\n```\n\n";
+    }
+    s
+}
