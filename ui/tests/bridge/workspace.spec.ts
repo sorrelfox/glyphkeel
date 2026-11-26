@@ -466,7 +466,7 @@ test("time on the engine: log, edit and delete time, run the timer in two window
   const entries = panel.getByRole("list", { name: "Time entries" });
   await expect(entries.getByRole("listitem")).toHaveCount(1);
   await expect(entries).toContainText("1h 30m");
-  await panel.getByRole("button", { name: "Log 30 minutes for today" }).click();
+  await panel.getByRole("button", { name: /log 30 minutes for today$/ }).click();
   await expect(entries.getByRole("listitem")).toHaveCount(2);
   await expect(panel.locator("[data-time-total]")).toHaveText("2h");
   // The card shows the time spent.

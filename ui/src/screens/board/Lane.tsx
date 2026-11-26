@@ -11,6 +11,7 @@ import { Button, Menu, MenuTrigger, Popover } from "react-aria-components";
 
 import { classes } from "../../classes";
 import { MenuEntries, type MenuEntry } from "../../components/ContextMenu";
+import { motionReduced } from "../../appearance/appearance";
 import { Select } from "../../components/Select";
 import { type Card } from "../../data/catalog";
 import { type CustomField, type TemplateSummary } from "../../generated/ops";
@@ -51,6 +52,8 @@ function SortableCard({ card, handlers, sortable, dropDisabled }: SortableCardPr
     id: card.key,
     data: { kind: "card" },
     disabled: { draggable: false, droppable: dropDisabled || !sortable },
+    // Cards make way for the dragged one without sliding when motion is off.
+    ...(motionReduced() ? { transition: null } : {}),
   });
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (handlers.onKey(card.key, event)) {

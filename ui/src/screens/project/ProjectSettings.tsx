@@ -702,7 +702,7 @@ function TemplateList({ title, empty, items, fields }: { title: string; empty: s
             </span>
           )}
           <span className="meta">{t(template.kind === "task" ? "template-items-task" : "template-items-project", { count: template.items })}</span>
-          <Button className="btn flat sm" aria-expanded={open.has(template.id)} aria-label={t("template-contents", { name: text.name(template) })} onPress={() => { toggle(template.id); }}>
+          <Button className="btn flat sm" aria-expanded={open.has(template.id)} aria-label={t(open.has(template.id) ? "template-hide-contents-of" : "template-show-contents-of", { name: text.name(template) })} onPress={() => { toggle(template.id); }}>
             {open.has(template.id) ? <ChevronUp className="ic s" /> : <ChevronDown className="ic s" />}
             {t(open.has(template.id) ? "template-hide-contents" : "template-show-contents")}
           </Button>

@@ -65,7 +65,7 @@ describe("time in the task panel", () => {
 
   it("logs 30 minutes for today with +30m", async () => {
     const { panel, transport, task } = await renderPanel();
-    fireEvent.click(within(panel).getByRole("button", { name: "Log 30 minutes for today" }));
+    fireEvent.click(within(panel).getByRole("button", { name: named(/log 30 minutes for today$/) }));
     await waitFor(async () => {
       expect((await entries(transport, task.key)).map((entry) => entry.minutes)).toEqual([30]);
     });

@@ -3,11 +3,11 @@
 
 import { type FluentVariable } from "@fluent/bundle";
 import { LocalizationProvider, ReactLocalization, useLocalization } from "@fluent/react";
-import { createContext, use, useMemo, useState, type ReactNode } from "react";
+import { createContext, use, useLayoutEffect, useMemo, useState, type ReactNode } from "react";
 import { I18nProvider } from "react-aria-components";
 
 import { readPref, writePref } from "../prefs/store";
-import { choosableLanguages, createBundle, messageLanguage, SOURCE_LANGUAGE } from "./i18n";
+import { applyLanguage, choosableLanguages, createBundle, messageLanguage, SOURCE_LANGUAGE } from "./i18n";
 
 /**
  * A missing or broken message is a bug: tests fail on it, development builds
@@ -62,7 +62,12 @@ interface I18nProps {
  */
 export function I18n({ locale, children }: I18nProps) {
   const [language, setLanguage] = useState(loadLanguage);
-  const l10n = useMemo(() => localization(language === SYSTEM_LANGUAGE ? locale : language), [language, locale]);
+  const active = language === SYSTEM_LANGUAGE ? locale : language;
+  const l10n = useMemo(() => localization(active), [active]);
+  // Before the first paint, so the first frame already reads the right way.
+  useLayoutEffect(() => {
+    applyLanguage(active, document.documentElement);
+  }, [active]);
   const choice = useMemo<LanguageChoice>(
     () => ({
       language,

@@ -280,9 +280,10 @@ export function FileRow({ file, readOnly }: { file: Attachment; readOnly: boolea
   return (
     <div className={styles.fileBlock} data-file={file.name}>
       <div className={classes("item", styles.row)}>
-        <Button className={classes(styles.rowMain)} aria-label={t("files-open-named", { name: file.name })} onPress={open}>
+        <Button className={classes(styles.rowMain)} onPress={open}>
+          {/* Named by its text; the spaces keep the parts apart in the name. */}
           {image ? <Thumbnail file={file} /> : <KindIcon kind={file.kind} />}
-          <span className="truncate grow">{file.name}</span>
+          <span className="truncate grow">{file.name}</span>{" "}
           <span className={classes("num faint", styles.small)}>{size(file.size)}</span>
         </Button>
         <MenuTrigger>

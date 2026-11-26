@@ -95,6 +95,15 @@ export function apply(resolved: Resolved, root: HTMLElement): void {
   }
 }
 
+/**
+ * Whether motion is off: the setting or the desktop asks for it. For motion
+ * that scripts run themselves (drag and drop); CSS follows the duration
+ * tokens. It reads the root's own style, which `apply` writes, so it is cheap.
+ */
+export function motionReduced(root: HTMLElement = document.documentElement): boolean {
+  return root.style.getPropertyValue("--dur") === "0ms";
+}
+
 const QUERIES = {
   dark: "(prefers-color-scheme: dark)",
   highContrast: "(prefers-contrast: more)",

@@ -6,6 +6,7 @@ import { type ReactNode } from "react";
 import { Button, ListBox, ListBoxItem, Popover, Select as AriaSelect } from "react-aria-components";
 
 import { classes } from "../classes";
+import { useT } from "../i18n/I18n";
 import styles from "./Select.module.css";
 
 export interface SelectOption<T extends string> {
@@ -33,6 +34,7 @@ interface SelectProps<T extends string> {
  * Home and End work as in any list box.
  */
 export function Select<T extends string>({ label, options, value, onChange, className, isDisabled }: SelectProps<T>) {
+  const t = useT();
   const current = options.find((option) => option.id === value);
   return (
     <AriaSelect
@@ -47,7 +49,14 @@ export function Select<T extends string>({ label, options, value, onChange, clas
         }
       }}
     >
-      <Button className={({ isFocusVisible }) => classes("field", styles.trigger, isFocusVisible && styles.focus)}>
+      <Button
+        className={({ isFocusVisible }) => classes("field", styles.trigger, isFocusVisible && styles.focus)}
+        // The field's name and its value, so that the name holds the text on
+        // screen: speech input names a control by what it shows. A name is
+        // read, never drawn, so it goes without the marks that isolate
+        // placeables for drawing, and still begins with the field's name.
+        aria-label={current === undefined ? label : t("select-name", { label, value: current.label }).replace(/[\u2068\u2069]/g, "")}
+      >
         {current?.icon}
         <span className={classes("truncate", styles.value)}>{current?.label}</span>
         <ChevronDown className={classes("ic s", styles.chevron)} aria-hidden="true" />

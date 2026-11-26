@@ -5,6 +5,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { I18n } from "../i18n/I18n";
 import { Select } from "./Select";
 
 afterEach(cleanup);
@@ -19,15 +20,17 @@ type Fruit = (typeof FRUIT)[number]["id"];
 function Fruits({ onChange }: { onChange?: (fruit: Fruit) => void }) {
   const [value, setValue] = useState<Fruit>("banana");
   return (
-    <Select
-      label="Fruit"
-      options={FRUIT}
-      value={value}
-      onChange={(fruit) => {
-        setValue(fruit);
-        onChange?.(fruit);
-      }}
-    />
+    <I18n locale="en-US">
+      <Select
+        label="Fruit"
+        options={FRUIT}
+        value={value}
+        onChange={(fruit) => {
+          setValue(fruit);
+          onChange?.(fruit);
+        }}
+      />
+    </I18n>
   );
 }
 
@@ -41,6 +44,8 @@ describe("Select", () => {
     expect(document.querySelector("select:not([aria-hidden] select, [aria-hidden=true] select)")).toBeNull();
     expect(trigger().textContent).toContain("Banana");
     expect(trigger().getAttribute("aria-haspopup")).toBe("listbox");
+    // The name holds the text on screen, after the field's own name.
+    expect(trigger().getAttribute("aria-label")).toBe("Fruit: Banana");
   });
 
   it("opens the design's popover with every option and a check at the chosen one", async () => {

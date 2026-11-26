@@ -9,8 +9,10 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 // - in the pseudo-locale, no English is left in their text, labels,
 //   placeholders and titles, apart from the sample data's own words;
 // - right to left, every control's box is the mirror image of where it is
-//   left to right. No language with right-to-left text ships yet, so the
-//   page is switched the way one would switch it, with `dir` on the root.
+//   left to right. No language with right-to-left text ships yet, but the
+//   page takes its direction from the locale: the same screen opens once in
+//   English and once in Hebrew (with English text), and the page itself
+//   sets `dir` on the root.
 //
 // Navigation goes by structure, never by the interface's own words, so the
 // same steps work in every locale.
@@ -135,12 +137,14 @@ function english(container: Locator, data: string[]): Promise<string[]> {
   }, data);
 }
 
-/**
- * Controls whose box doesn't mirror when the page turns right to left: the
- * distance from the container's left edge, left to right, must be the
- * distance from its right edge, right to left.
- */
-function unmirrored(container: Locator): Promise<string[]> {
+interface Box {
+  name: string;
+  start: number;
+  end: number;
+}
+
+/** The boxes of the container's controls, from its two edges, in the direction the page has. */
+function boxes(container: Locator): Promise<Box[]> {
   return container.evaluate((root) => {
     const shown = (element: Element) => {
       const box = element.getBoundingClientRect();
@@ -155,31 +159,34 @@ function unmirrored(container: Locator): Promise<string[]> {
       return true;
     };
     const elements = [...root.querySelectorAll("button, input, textarea, h1, h2, h3, h4, label, legend, th, p, [role=tab], [role=checkbox], [role=switch], [role=progressbar]")].filter(shown);
-    const measure = () => {
-      const frame = root.getBoundingClientRect();
-      return elements.map((element) => {
-        const box = element.getBoundingClientRect();
-        return { start: box.left - frame.left, end: frame.right - box.right };
-      });
-    };
-    const html = document.documentElement;
-    const before = html.dir;
-    html.dir = "ltr";
-    const ltr = measure();
-    html.dir = "rtl";
-    const rtl = measure();
-    html.dir = before;
-    const off: string[] = [];
-    elements.forEach((element, at) => {
-      const a = ltr[at];
-      const b = rtl[at];
-      if (a && b && Math.abs(a.start - b.end) > 4) {
-        const name = element.getAttribute("aria-label") ?? element.textContent;
-        off.push(`${element.tagName.toLowerCase()} "${name.trim().slice(0, 40)}": ${a.start.toFixed(0)} from the left, ${b.end.toFixed(0)} from the right`);
-      }
+    const frame = root.getBoundingClientRect();
+    return elements.map((element) => {
+      const box = element.getBoundingClientRect();
+      const name = element.getAttribute("aria-label") ?? element.textContent;
+      return { name: `${element.tagName.toLowerCase()} "${name.trim().slice(0, 40)}"`, start: box.left - frame.left, end: frame.right - box.right };
     });
-    return elements.length === 0 ? ["no controls found"] : off;
   });
+}
+
+/**
+ * Controls whose box doesn't mirror: the distance from the container's left
+ * edge, left to right, must be the distance from its right edge, right to left.
+ */
+function unmirrored(ltr: Box[], rtl: Box[]): string[] {
+  if (ltr.length === 0) {
+    return ["no controls found"];
+  }
+  if (ltr.length !== rtl.length) {
+    return [`${String(ltr.length)} controls left to right, ${String(rtl.length)} right to left`];
+  }
+  const off: string[] = [];
+  ltr.forEach((a, at) => {
+    const b = rtl[at];
+    if (b && Math.abs(a.start - b.end) > 4) {
+      off.push(`${a.name}: ${a.start.toFixed(0)} from the left, ${b.end.toFixed(0)} from the right`);
+    }
+  });
+  return off;
 }
 
 test.describe("in the pseudo-locale", () => {
@@ -196,12 +203,22 @@ test.describe("in the pseudo-locale", () => {
 });
 
 test.describe("right to left", () => {
-  test.use({ locale: "en-US" });
-
   for (const screen of SCREENS) {
-    test(`the ${screen.name} mirrors`, async ({ page }) => {
-      const container = await screen.open(page);
-      expect(await unmirrored(container)).toEqual([]);
+    test(`the ${screen.name} mirrors`, async ({ browser }, info) => {
+      const { baseURL, viewport } = info.project.use;
+      const measure = async (locale: string, dir: "ltr" | "rtl") => {
+        const context = await browser.newContext({ baseURL, viewport, locale });
+        const page = await context.newPage();
+        const container = await screen.open(page);
+        // The page's own direction, from the locale: nothing here sets it.
+        await expect(page.locator("html")).toHaveAttribute("dir", dir);
+        const found = await boxes(container);
+        await context.close();
+        return found;
+      };
+      const ltr = await measure("en-US", "ltr");
+      const rtl = await measure("he-IL", "rtl");
+      expect(unmirrored(ltr, rtl)).toEqual([]);
     });
   }
 });

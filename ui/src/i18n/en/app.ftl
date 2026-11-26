@@ -562,7 +562,6 @@ lane-collapsed =
        *[other] { $name }, { $count } tasks, collapsed. Expand column
     }
 
-card-label = { $key }: { $title }
 card-checklist = { $done } of { $total } checklist items done
 card-subtasks = { $done } of { $total } subtasks done
 card-start = Starts { $day }
@@ -737,7 +736,6 @@ subtasks-title = Subtasks
 subtasks-add = Add subtask
 subtasks-new = New subtask
 subtasks-new-placeholder = Title of the subtask
-subtasks-open = Open { $key }: { $title }
 subtasks-close = Close { $key }
 subtasks-reopen = Reopen { $key }
 subtasks-menu = Subtask { $key }
@@ -750,7 +748,6 @@ links-none = No links.
 links-kind = Kind of link
 links-other = Task key
 links-other-placeholder = Key, e.g. TM-12
-links-open = { $kind } { $key }: { $title }
 links-remove = Remove link: { $kind } { $key }
 links-removed = Link removed
 links-lag =
@@ -762,9 +759,9 @@ links-lag-none = No lag
 links-lag-label = Lag in days
 links-lag-edit =
     { $days ->
-        [0] Lag of the link to { $key }: none. Change it
-        [one] Lag of the link to { $key }: 1 day. Change it
-       *[other] Lag of the link to { $key }: { $days } days. Change it
+        [0] No lag on the link to { $key }. Change it
+        [one] +1 day of lag on the link to { $key }. Change it
+       *[other] +{ $days } days of lag on the link to { $key }. Change it
     }
 links-lag-changed = Lag changed
 relation-blocks = Blocks
@@ -788,7 +785,6 @@ files-attached =
 files-attach-failed = { $name } wasn't attached
 files-drop-here = Drop to attach to { $key }
 files-open = Open
-files-open-named = Open { $name }
 files-save = Save a copy…
 files-remove = Remove
 files-removed = Removed { $name }
@@ -931,7 +927,8 @@ time-edit-label = Edit the entry of { $day }
 time-delete = Delete
 time-deleted = Time entry deleted
 time-quick = +30m
-time-quick-label = Log 30 minutes for today
+# Begins with the button's text, so that the name holds what is on screen.
+time-quick-label = { time-quick }: log 30 minutes for today
 time-logged-quick = 30 minutes logged on { $key }
 timer-start = Start timer
 timer-stop = Stop the timer and log the time
@@ -1029,3 +1026,8 @@ report-share = Share of the time
 report-total = Total
 report-none = No time logged in these days.
 report-table = Time logged from { $from } to { $to }
+
+## Choices
+
+# A choice field's accessible name: its own name, then the value it shows.
+select-name = { $label }: { $value }

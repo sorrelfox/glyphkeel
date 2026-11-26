@@ -155,7 +155,7 @@ list-edit-due-value = Due date of { $key }: { $value }. Change
 
 ## Groups
 
-list-group = Group
+list-group = Group by
 list-group-button = Group by: { $grouping }. Change
 list-group-by-none = None
 list-group-by-status = Status

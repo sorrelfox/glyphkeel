@@ -126,7 +126,7 @@ describe("the task panel's sections", () => {
       expect(order()).toEqual([first.key, second.key]);
     });
     const row = subtasks.querySelector<HTMLElement>(`[data-subtask="${first.key}"]`);
-    fireEvent.keyDown(within(row as HTMLElement).getByRole("button", { name: named(/^Open /) }), { key: "ArrowDown", altKey: true });
+    fireEvent.keyDown(within(row as HTMLElement).getByRole("button", { name: named(new RegExp(`^${first.key} `)) }), { key: "ArrowDown", altKey: true });
     await waitFor(() => {
       expect(order()).toEqual([second.key, first.key]);
     });
@@ -147,7 +147,7 @@ describe("the task panel's sections", () => {
     fireEvent.change(field, { target: { value: other.key.toLowerCase() } });
     fireEvent.keyDown(field, { key: "Enter" });
     const links = section(panel, "Links");
-    await within(links).findByRole("button", { name: named(new RegExp(`^Blocked by ${other.key}: Book the train`)) });
+    await within(links).findByRole("button", { name: named(new RegExp(`^Blocked by ${other.key} Book the train`)) });
     expect(await within(panel).findByRole("note", { name: named(new RegExp(`Blocked by ${other.key}`)) })).toBeDefined();
     fireEvent.click(within(links).getByRole("button", { name: named(/^Remove link: Blocked by/) }));
     await waitFor(() => {
@@ -166,7 +166,7 @@ describe("the task panel's sections", () => {
     const png = new File([Uint8Array.from(atob(PNG), (char) => char.charCodeAt(0))], "dot.png", { type: "image/png" });
     const text = new File(["hello"], "notes.txt", { type: "text/plain" });
     fireEvent.change(input, { target: { files: [png, text] } });
-    await within(files).findByRole("button", { name: named(/^Open notes\.txt$/) });
+    await within(files).findByRole("button", { name: named(/^notes\.txt /) });
     const image = await within(files).findByRole("img", { name: "dot.png" });
     await waitFor(() => {
       expect(image.getAttribute("src")).toMatch(/^data:image\/png;base64,/);
@@ -176,7 +176,7 @@ describe("the task panel's sections", () => {
     fireEvent.click(within(files).getByRole("button", { name: named(/^File notes\.txt$/) }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "Remove" }));
     await waitFor(() => {
-      expect(within(files).queryByRole("button", { name: named(/^Open notes\.txt$/) })).toBeNull();
+      expect(within(files).queryByRole("button", { name: named(/^notes\.txt /) })).toBeNull();
     });
   });
 });
@@ -293,7 +293,7 @@ describe("comments and history", () => {
     await waitFor(() => {
       expect(editorText(composer)).toMatch(/^!\[shot \\\[1\\\]\.png\]\(gk-file:\/\/[^)]+\)$/);
     });
-    await within(section(panel, "Files")).findByRole("button", { name: named(/^Open shot \[1\]\.png$/) });
+    await within(section(panel, "Files")).findByRole("button", { name: named(/^shot \[1\]\.png /) });
   });
 
   it("lists the task's changes and reverts the latest", async () => {

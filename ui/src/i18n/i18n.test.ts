@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 
 import { ACCENTS, DENSITIES, THEMES } from "../appearance/appearance";
-import { createBundle, MESSAGES, messageLanguage } from "./i18n";
+import { applyLanguage, createBundle, MESSAGES, messageLanguage, textDirection } from "./i18n";
 
 /** The app's source files, as text, without the tests. */
 const SOURCES = Object.entries(import.meta.glob<string>("../**/*.{ts,tsx}", { query: "?raw", import: "default", eager: true }))
@@ -56,5 +56,29 @@ describe("messages", () => {
   it("fall back to English for languages without messages", () => {
     expect(messageLanguage("de-DE")).toBe("en");
     expect(messageLanguage("en-GB")).toBe("en");
+  });
+});
+
+describe("the writing direction", () => {
+  it("is right to left for the languages and scripts written that way", () => {
+    for (const locale of ["ar", "ar-EG", "he-IL", "fa", "ur-PK", "yi", "ckb", "ks-Arab", "pa-Arab-PK"]) {
+      expect(textDirection(locale), locale).toBe("rtl");
+    }
+  });
+
+  it("is left to right for the others, the pseudo-locale and tags it can't read", () => {
+    for (const locale of ["en", "en-US", "de-CH", "ja", "zh-Hant-TW", "pa-IN", "en-XA", "not a tag"]) {
+      expect(textDirection(locale), locale).toBe("ltr");
+    }
+  });
+
+  it("goes onto the root with the language of the messages", () => {
+    const root = document.createElement("html");
+    applyLanguage("he-IL", root);
+    // No Hebrew messages yet: the text is English, laid out right to left.
+    expect(root.lang).toBe("en");
+    expect(root.dir).toBe("rtl");
+    applyLanguage("en-GB", root);
+    expect(root.dir).toBe("ltr");
   });
 });

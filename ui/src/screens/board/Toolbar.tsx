@@ -157,7 +157,8 @@ export function Toolbar({ project, board, layout, view, filters, onFilters, onLa
         type="button"
         className={classes("btn", filters.recentlyUpdated ? "on" : "flat")}
         aria-pressed={filters.recentlyUpdated}
-        aria-label={t("filter-recent")}
+        // Named by its text; the full name is the tooltip, and the name when the text is hidden.
+        title={t("filter-recent")}
         onClick={() => {
           onFilters({ ...filters, recentlyUpdated: !filters.recentlyUpdated });
         }}

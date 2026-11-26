@@ -223,7 +223,7 @@ test("the wiki opens on its home page, a page takes files, and a folder imports 
 
   // A file chosen for the page is attached to it and listed beside it.
   await view.locator("input[data-attach-field]").setInputFiles({ name: "layout.txt", mimeType: "text/plain", buffer: Buffer.from("pages and files") });
-  await expect(view.getByRole("button", { name: /Open\W+layout\.txt/ })).toBeVisible();
+  await expect(view.getByRole("button", { name: /^\W*layout\.txt\b/ })).toBeVisible();
   await shot(page, "wiki-page-files");
 
   await page.getByRole("complementary", { name: "Pages" }).getByRole("button", { name: "Import a folder of Markdown files…" }).click();

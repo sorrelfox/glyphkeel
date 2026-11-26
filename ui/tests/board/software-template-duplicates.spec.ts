@@ -80,7 +80,7 @@ test("a project made from the built-in Software project template has epics, stor
   const builtIn = templates.locator('[data-template="Software project"]');
   await expect(builtIn).toContainText("Comes with Glyphkeel");
   await expect(builtIn.getByRole("button", { name: /^Delete/ })).toHaveCount(0);
-  await builtIn.getByRole("button", { name: /^Contents of \W*Software project/ }).click();
+  await builtIn.getByRole("button", { name: /^Show what it holds: \W*Software project/ }).click();
   const contents = templates.locator('[data-template-contents="Software project"]');
   await expect(contents.locator("[data-template-status]")).toHaveText([/Backlog/, /To do/, /In progress/, /In review/, /Done/, /Won't do/]);
   await expect(contents.locator('[data-template-status="Done"] [data-template-rules]')).toHaveText(/3\W* rules/);
@@ -88,7 +88,7 @@ test("a project made from the built-in Software project template has epics, stor
 
   // A task template of the new project shows its contents too.
   const own = settings.getByRole("region", { name: "Task templates of this project" });
-  await own.getByRole("button", { name: /^Contents of \W*Bug report/ }).click();
+  await own.getByRole("button", { name: /^Show what it holds: \W*Bug report/ }).click();
   await expect(own.locator('[data-template-contents="Bug report"]')).toContainText("High");
 });
 

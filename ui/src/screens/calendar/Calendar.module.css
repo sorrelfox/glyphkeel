@@ -308,8 +308,9 @@
   text-overflow: ellipsis;
 }
 
+/* Muted, not faint: a bar's fill is the selection colour, and faint text on it is too pale. */
 .closed {
-  color: var(--fg-faint);
+  color: var(--fg-muted);
 }
 
 .closed .barTitle {

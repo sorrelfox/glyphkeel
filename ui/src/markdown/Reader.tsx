@@ -182,6 +182,8 @@ export function MarkdownReader({ html, onToggle, onOpenTask, references, onOpenP
       <div
         ref={root}
         className={classes("md selectable", styles.reader, compact && styles.compact, className)}
+        // A name needs a role to carry it: a group, not a landmark, as there may be many.
+        role={label === undefined ? undefined : "group"}
         aria-label={label}
         onClick={(event) => {
           const target = event.target as HTMLElement;

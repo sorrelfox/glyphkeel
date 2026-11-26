@@ -47,7 +47,7 @@ describe("the board", () => {
 
   it("filters with a quick filter and shows the banner until cleared", async () => {
     await renderBoard();
-    fireEvent.click(screen.getByRole("button", { name: "Recently updated" }));
+    fireEvent.click(screen.getByRole("button", { name: "Recent" }));
     const banner = await screen.findByText(/Filtered:/);
     expect(plain(banner.textContent)).toMatch(/Filtered: \d+ of 80 tasks/);
     fireEvent.click(screen.getByRole("button", { name: "Clear filter" }));

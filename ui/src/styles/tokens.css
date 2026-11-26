@@ -116,13 +116,13 @@
   --popover: #36363b;
   --raised: rgba(255, 255, 255, .14);
   --fg: #ededf0;
-  --fg-muted: #b0b0ba;
-  --fg-faint: #9a9aa6;
+  --fg-muted: #bcbcc6;       /* 4.5:1 on every surface and on --selected */
+  --fg-faint: #a2a2ae;       /* 4.5:1 on bg, surface, sunken and popover */
   --border: #3b3b41;
   --border-strong: #55555e;
   --hover: rgba(255, 255, 255, .07);
   --pressed: rgba(255, 255, 255, .12);
-  --accent-fg: color-mix(in srgb, var(--accent) 55%, #fff);
+  --accent-fg: color-mix(in srgb, var(--accent) 45%, #fff);   /* 4.5:1 on --selected, for every accent */
   --selected: color-mix(in srgb, var(--accent) 34%, transparent);
   --focus: var(--accent-fg);   /* the accent fill is too dark for a 3:1 ring on dark surfaces */
   --scrim: rgba(0, 0, 0, .5);
@@ -141,13 +141,13 @@
   --popover: #333a47;
   --raised: rgba(210, 225, 255, .14);
   --fg: #e6e9ef;
-  --fg-muted: #aab3c2;
-  --fg-faint: #939dae;
+  --fg-muted: #b8c0cf;       /* 4.5:1 on every surface and on --selected */
+  --fg-faint: #9ca6b7;       /* 4.5:1 on bg, surface, sunken and popover */
   --border: #363d4a;
   --border-strong: #515b6d;
   --hover: rgba(200, 215, 255, .07);
   --pressed: rgba(200, 215, 255, .13);
-  --accent-fg: color-mix(in srgb, var(--accent) 55%, #fff);
+  --accent-fg: color-mix(in srgb, var(--accent) 40%, #fff);   /* 4.5:1 on --selected, for every accent */
   --selected: color-mix(in srgb, var(--accent) 36%, transparent);
   --focus: var(--accent-fg);
   --scrim: rgba(8, 10, 14, .55);
@@ -230,3 +230,14 @@
 [data-accent="pink"]   { --accent: #c2437d; }
 [data-accent="purple"] { --accent: #8a46b0; }
 [data-accent="slate"]  { --accent: #5c6f82; }
+
+/* ---------- 5. Motion ----------
+   The app writes 0ms onto the root when the setting or the desktop asks for
+   less motion; this covers the desktop's wish before any script has run. */
+@media (prefers-reduced-motion: reduce) {
+  [data-theme] {
+    --dur-fast: 0ms;
+    --dur: 0ms;
+  }
+}
+

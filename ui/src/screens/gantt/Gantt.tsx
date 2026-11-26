@@ -990,6 +990,23 @@ export const Gantt = memo(function Gantt({
       <p id={hintId} className={styles.hidden}>
         {t("gantt-keys-hint")}
       </p>
+      {/* Outside the chart's grid, which may hold only rows: drawn over the table's edge. */}
+      <div
+        className={styles.tableHandle}
+        role="separator"
+        tabIndex={0}
+        aria-orientation="vertical"
+        aria-label={t("gantt-resize-table")}
+        aria-valuenow={tableW}
+        aria-valuemin={TABLE_MIN}
+        aria-valuemax={TABLE_MAX}
+        onPointerDown={(event) => {
+          startResize(event, "table");
+        }}
+        onKeyDown={(event) => {
+          resizeByKey(event, "table");
+        }}
+      />
       <div
         ref={scroller}
         className={styles.scroll}
@@ -1040,22 +1057,6 @@ export const Gantt = memo(function Gantt({
               {t("gantt-col-progress")}
               <ResizeHandle column="progress" label={t("gantt-resize-column", { column: t("gantt-col-progress-label") })} value={widths.progress} onDown={startResize} onKey={resizeByKey} />
             </span>
-            <div
-              className={styles.tableHandle}
-              role="separator"
-              tabIndex={0}
-              aria-orientation="vertical"
-              aria-label={t("gantt-resize-table")}
-              aria-valuenow={tableW}
-              aria-valuemin={TABLE_MIN}
-              aria-valuemax={TABLE_MAX}
-              onPointerDown={(event) => {
-                startResize(event, "table");
-              }}
-              onKeyDown={(event) => {
-                resizeByKey(event, "table");
-              }}
-            />
           </div>
 
           <div className={styles.head} aria-hidden="true" style={{ inlineSize: width }}>
@@ -1363,14 +1364,33 @@ function ResizeHandle({
   onDown: (event: ReactPointerEvent<HTMLElement>, column: Column) => void;
   onKey: (event: KeyboardEvent<HTMLElement>, column: Column) => void;
 }) {
+  // A column without a width of its own has the design's; the handle reports
+  // the width the column has on screen, as a separator that can be moved must.
+  const ref = useRef<HTMLSpanElement>(null);
+  const [measured, setMeasured] = useState<number>();
+  useEffect(() => {
+    const cell = ref.current?.parentElement;
+    if (!cell || typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const observer = new ResizeObserver(() => {
+      setMeasured(Math.round(cell.getBoundingClientRect().width));
+    });
+    observer.observe(cell);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
   return (
     <span
+      ref={ref}
       className={styles.columnHandle}
       role="separator"
-      tabIndex={-1}
+      // In the tab order, like the list's column edges: the arrow keys resize.
+      tabIndex={0}
       aria-orientation="vertical"
       aria-label={label}
-      aria-valuenow={value}
+      aria-valuenow={value ?? measured ?? COLUMN_MIN}
       aria-valuemin={COLUMN_MIN}
       aria-valuemax={COLUMN_MAX}
       data-column={column}
@@ -1497,7 +1517,8 @@ const TableRow = memo(function TableRow({ id, row, at, focused, open, linking, e
         tabIndex={-1}
         className={styles.dateButton}
         disabled={!editable}
-        aria-label={t(field === "start" ? "gantt-edit-start-value" : "gantt-edit-due-value", { key: task.key, value: value === undefined ? t("gantt-none") : fmt.full.format(asDate(value)) })}
+        // The date as the cell shows it, so that the name holds the text on screen.
+        aria-label={t(field === "start" ? "gantt-edit-start-value" : "gantt-edit-due-value", { key: task.key, value: text === "" ? t("gantt-none") : text })}
         onClick={(event) => {
           event.stopPropagation();
           onEdit(task, field);
