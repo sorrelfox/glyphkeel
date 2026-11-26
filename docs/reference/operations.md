@@ -154,6 +154,10 @@ The safety class decides who may run an operation:
 | `backup.folder.update` | app | app | — | — |
 | `transfer.export` | write | app, command line, MCP | `export_data` | `glyphkeel export` |
 | `transfer.import` | write | app, command line, MCP | `import_data` | `glyphkeel import <path>` |
+| `transfer.import_csv` | write | app, command line, MCP | `import_csv` | `glyphkeel import csv <path>` |
+| `csv_preset.list` | read | app, command line, MCP | `list_csv_presets` | `glyphkeel csv-preset list` |
+| `csv_preset.save` | write | app, command line, MCP | `save_csv_preset` | `glyphkeel csv-preset save <name>` |
+| `csv_preset.delete` | write | app, command line, MCP | `delete_csv_preset` | `glyphkeel csv-preset delete <name>` |
 
 ## `workspace.get`
 
@@ -1030,3 +1034,27 @@ Input: `ExportInput`. Output: `ExportResult`. Schemas: [catalog.schema.json](cat
 Import an archive as new projects; checks it completely first and never changes existing data.
 
 Input: `ImportInput`. Output: `ImportResult`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `transfer.import_csv`
+
+Import tasks from a CSV file into a project, with a column mapping or a preset (Jira and Redmine exports are built in); a dry run reports every row's outcome, and the import is one change that Undo takes back. Status rules hold for each task as for task.create; repeating tasks are not imported.
+
+Input: `CsvImportInput`. Output: `CsvImportResult`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `csv_preset.list`
+
+List the CSV import presets: the built-in ones for Jira and Redmine, and the workspace's own.
+
+Input: `CsvPresetListInput`. Output: `CsvPresetList`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `csv_preset.save`
+
+Save a CSV import mapping as a preset of the workspace, replacing one with the same name.
+
+Input: `CsvPresetSaveInput`. Output: `CsvPresetChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `csv_preset.delete`
+
+Delete a CSV import preset of the workspace.
+
+Input: `CsvPresetDeleteInput`. Output: `CsvPresetChange`. Schemas: [catalog.schema.json](catalog.schema.json).

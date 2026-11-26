@@ -22,6 +22,8 @@ fn main() {
         "choose_wiki_folder",
         "import_wiki_folder",
         "import_archive",
+        "choose_csv",
+        "import_csv",
         "choose_backup_folder",
         "open_link",
         "watch_open_links",

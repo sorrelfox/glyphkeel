@@ -312,7 +312,7 @@ fn set_parent(
     super::task::set_parent(w, child.id, child.project, parent.map(|p| p.id))
 }
 
-fn add(w: &mut WriteCtx<'_>, input: RelationInput) -> Result<TaskChange, Failure> {
+pub(crate) fn add(w: &mut WriteCtx<'_>, input: RelationInput) -> Result<TaskChange, Failure> {
     let task = active_task(w, "key", &input.key)?;
     let other = active_task(w, "other", &input.other)?;
     if task.id == other.id {

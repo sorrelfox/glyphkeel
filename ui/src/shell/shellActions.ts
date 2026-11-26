@@ -29,6 +29,8 @@ export interface ShellCommands {
   exportData: () => void;
   /** Opens the import dialog. */
   importData: () => void;
+  /** Opens the dialog that imports tasks from a CSV file, into the open project when there is one. */
+  importCsv: () => void;
   /** Opens the development gallery; absent in release builds. */
   openGallery?: (() => void) | undefined;
 }
@@ -67,6 +69,7 @@ export function shellActions(commands: ShellCommands): Action[] {
     action("app.redo", "action-redo", "app", commands.redo, { inText: false }),
     action("app.backup", "action-backup", "app", commands.backUp),
     action("app.import", "action-import", "app", commands.importData),
+    action("app.importCsv", "action-import-csv", "app", commands.importCsv),
     action("app.export", "action-export", "app", commands.exportData),
     action("help.shortcuts", "action-shortcuts", "app", commands.showShortcuts),
     action("app.preferences", "action-preferences", "app", commands.openPreferences),

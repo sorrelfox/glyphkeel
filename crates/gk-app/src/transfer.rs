@@ -76,7 +76,11 @@ pub(crate) fn page_may_run(op: &str, input: &Value) -> Result<(), OpError> {
     let names = |field: &str| input.get(field).is_some_and(|value| !value.is_null());
     if matches!(
         op,
-        "transfer.export" | "transfer.import" | "wiki.export" | "wiki.import"
+        "transfer.export"
+            | "transfer.import"
+            | "transfer.import_csv"
+            | "wiki.export"
+            | "wiki.import"
     ) && names("path")
     {
         return Err(OpError::forbidden(format!(
@@ -258,6 +262,52 @@ pub(crate) async fn choose_backup_folder(
     .await
 }
 
+/// Lets the person choose a CSV file to import tasks from. Returns its
+/// token for [`import_csv`] and its name, or `null` when the person
+/// cancelled.
+#[tauri::command]
+pub(crate) async fn choose_csv(
+    window: WebviewWindow,
+    choices: State<'_, Arc<ImportChoices>>,
+) -> Result<Option<ChosenArchive>, OpError> {
+    let Some(path) = dialog::choose(&window, dialog::Mode::Csv)
+        .await?
+        .into_iter()
+        .next()
+    else {
+        return Ok(None);
+    };
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    Ok(Some(ChosenArchive {
+        token: choices.keep(path),
+        name,
+    }))
+}
+
+/// Checks (when `input.dry_run`) or runs a CSV import of the file chosen
+/// under `token`; `input` is the operation's input without its path.
+#[tauri::command]
+pub(crate) async fn import_csv(
+    workspace: State<'_, Arc<Workspace>>,
+    choices: State<'_, Arc<ImportChoices>>,
+    token: String,
+    input: Value,
+) -> Result<Value, OpError> {
+    let path = choices.path(&token)?;
+    let Value::Object(mut input) = input else {
+        return Err(OpError::invalid(crate::messages::text(
+            "csv-input-not-an-object",
+            &[],
+        )));
+    };
+    input.insert("path".to_owned(), json!(path.to_string_lossy()));
+    let workspace = Arc::clone(&workspace);
+    blocking(move || workspace.call("transfer.import_csv", Value::Object(input), None)).await
+}
+
 /// Checks (`dry_run`) or imports the archive chosen under `token`, with new
 /// keys for projects whose key is taken.
 #[tauri::command]
@@ -304,6 +354,13 @@ mod tests {
         );
         assert!(page_may_run("wiki.export", &json!({ "page": "Home" })).is_ok());
         assert!(page_may_run("wiki.import", &json!({ "project": "TM", "path": "/home" })).is_err());
+        assert!(
+            page_may_run(
+                "transfer.import_csv",
+                &json!({ "project": "TM", "path": "/etc/passwd" })
+            )
+            .is_err()
+        );
         assert!(page_may_run("transfer.export", &json!({ "projects": [] })).is_ok());
         assert!(page_may_run("transfer.export", &json!({ "path": null })).is_ok());
         assert!(page_may_run("task.create", &json!({ "path": "x" })).is_ok());

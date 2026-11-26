@@ -18,4 +18,5 @@ pub(super) fn register(r: &mut Registry) {
     r.engine_op::<TransferImport, _>(desc::<TransferImport>(), |engine, ctx, input| {
         engine.import_archive(ctx, &input, &no_progress())
     });
+    crate::transfer::register_csv(r);
 }

@@ -28,6 +28,8 @@ interface SidebarProps {
   onProjectSettings: (key: string) => void;
   onExportProject: (key: string) => void;
   onDeleteProject: (key: string) => void;
+  /** Opens the CSV import into this project. */
+  onImportCsv: (key: string) => void;
 }
 
 /**
@@ -37,7 +39,7 @@ interface SidebarProps {
  * tasks with their counts, the time report, the activity, the project tree, the
  * timer chip while a timer runs, then Trash and Preferences.
  */
-export function Sidebar({ view, project, width, titleBar = "app", onNewProject, onProjectSettings, onExportProject, onDeleteProject }: SidebarProps) {
+export function Sidebar({ view, project, width, titleBar = "app", onNewProject, onProjectSettings, onExportProject, onDeleteProject, onImportCsv }: SidebarProps) {
   const t = useT();
   const today = useAction("nav.today");
   const allTasks = useAction("nav.allTasks");
@@ -104,7 +106,7 @@ export function Sidebar({ view, project, width, titleBar = "app", onNewProject, 
         </button>
       </div>
       <div className={styles.projectTree}>
-        <ProjectTree current={project} onNewProject={onNewProject} onSettings={onProjectSettings} onExport={onExportProject} onDelete={onDeleteProject} />
+        <ProjectTree current={project} onNewProject={onNewProject} onSettings={onProjectSettings} onExport={onExportProject} onImportCsv={onImportCsv} onDelete={onDeleteProject} />
       </div>
 
       <TimerChip />

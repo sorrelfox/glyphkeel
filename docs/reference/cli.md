@@ -24,6 +24,9 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel comment delete <comment>` | `comment.delete` | Move a comment to the trash. |
 | `glyphkeel comment edit <comment>` | `comment.update` | Change a comment's text; the earlier text is kept and can be viewed. |
 | `glyphkeel comment list <key>` | `comment.list` | A task's comments, oldest first, optionally with their earlier texts. |
+| `glyphkeel csv-preset delete <name>` | `csv_preset.delete` | Delete a CSV import preset of the workspace. |
+| `glyphkeel csv-preset list` | `csv_preset.list` | List the CSV import presets: the built-in ones for Jira and Redmine, and the workspace's own. |
+| `glyphkeel csv-preset save <name>` | `csv_preset.save` | Save a CSV import mapping as a preset of the workspace, replacing one with the same name. |
 | `glyphkeel description history` | `description.history` | List the revisions of a task's or project's description, newest first, conflict copies included. |
 | `glyphkeel description show <revision>` | `description.revision` | One description revision with its text, and the differences from another revision on request. |
 | `glyphkeel export` | `transfer.export` | Export projects, or the whole workspace, to an archive of JSON and Markdown files with the attachments. |
@@ -36,6 +39,7 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel file delete <attachment>` | `file.delete` | Move an attached file to the trash. |
 | `glyphkeel file show <attachment>` | `file.get` | An attached file's name, type, size and owner. |
 | `glyphkeel import <path>` | `transfer.import` | Import an archive as new projects; checks it completely first and never changes existing data. |
+| `glyphkeel import csv <path>` | `transfer.import_csv` | Import tasks from a CSV file into a project, with a column mapping or a preset (Jira and Redmine exports are built in); a dry run reports every row's outcome, and the import is one change that Undo takes back. Status rules hold for each task as for task.create; repeating tasks are not imported. |
 | `glyphkeel label add` | `label.create` | Add a label to a project; without a colour it gets the first palette colour the project's labels don't use yet. |
 | `glyphkeel label delete` | `label.delete` | Delete a label and take it off every task. Can't be undone. |
 | `glyphkeel label edit` | `label.update` | Rename or recolour a label. |

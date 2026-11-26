@@ -36,9 +36,27 @@ pub struct WriteCtx<'a> {
     tx: &'a Transaction<'a>,
     meta: &'a CommandMeta,
     changes: Vec<PendingChange>,
+    /// While [`WriteCtx::attempt`] runs: how to take back each change to
+    /// the record, newest last.
+    journal: Option<Vec<Undo>>,
     /// Tasks the engine made on its own in this command (occurrences of
     /// recurring tasks), which status rules don't refuse.
     automatic: Vec<Id>,
+}
+
+/// One step back in the record of changes.
+#[derive(Debug)]
+enum Undo {
+    /// An item was added at the end.
+    Pushed,
+    /// A field of the item at `index` was set; `old` is what it held.
+    Field {
+        index: usize,
+        field: String,
+        old: Option<FieldChange>,
+    },
+    /// The item at `index` was taken out.
+    Removed { index: usize, change: PendingChange },
 }
 
 #[derive(Debug, Clone)]
@@ -62,6 +80,7 @@ impl<'a> WriteCtx<'a> {
             tx,
             meta,
             changes: Vec::new(),
+            journal: None,
             automatic: Vec::new(),
         }
     }
@@ -211,10 +230,20 @@ impl<'a> WriteCtx<'a> {
                     project,
                     fields: BTreeMap::new(),
                 });
+                if let Some(j) = &mut self.journal {
+                    j.push(Undo::Pushed);
+                }
                 self.changes.len() - 1
             }
         };
         let change = &mut self.changes[index];
+        if let Some(j) = &mut self.journal {
+            j.push(Undo::Field {
+                index,
+                field: field.to_owned(),
+                old: change.fields.get(field).cloned(),
+            });
+        }
         let first_before = change
             .fields
             .get(field)
@@ -232,7 +261,13 @@ impl<'a> WriteCtx<'a> {
             );
         }
         if change.fields.is_empty() {
-            self.changes.remove(index);
+            let removed = self.changes.remove(index);
+            if let Some(j) = &mut self.journal {
+                j.push(Undo::Removed {
+                    index,
+                    change: removed,
+                });
+            }
         }
     }
 
@@ -251,6 +286,54 @@ impl<'a> WriteCtx<'a> {
             .execute_batch("ROLLBACK TO preview; RELEASE preview");
         self.changes = recorded;
         undone?;
+        result
+    }
+
+    /// Runs `f` and keeps what it wrote when it succeeds; when it fails,
+    /// the transaction returns to where it was before `f` and the changes
+    /// `f` recorded are forgotten, so the command can go on without them.
+    pub(crate) fn attempt<T>(
+        &mut self,
+        f: impl FnOnce(&mut Self) -> Result<T, Failure>,
+    ) -> Result<T, Failure> {
+        let outer = self.journal.replace(Vec::new());
+        self.tx.execute_batch("SAVEPOINT attempt")?;
+        let result = f(self);
+        let journal = std::mem::replace(&mut self.journal, outer).unwrap_or_default();
+        match &result {
+            Ok(_) => {
+                self.tx.execute_batch("RELEASE attempt")?;
+                if let Some(o) = &mut self.journal {
+                    o.extend(journal);
+                }
+            }
+            Err(_) => {
+                self.tx
+                    .execute_batch("ROLLBACK TO attempt; RELEASE attempt")?;
+                for step in journal.into_iter().rev() {
+                    match step {
+                        Undo::Pushed => {
+                            self.changes.pop();
+                        }
+                        Undo::Field { index, field, old } => {
+                            if let Some(c) = self.changes.get_mut(index) {
+                                match old {
+                                    Some(v) => {
+                                        c.fields.insert(field, v);
+                                    }
+                                    None => {
+                                        c.fields.remove(&field);
+                                    }
+                                }
+                            }
+                        }
+                        Undo::Removed { index, change } => {
+                            self.changes.insert(index, change);
+                        }
+                    }
+                }
+            }
+        }
         result
     }
 

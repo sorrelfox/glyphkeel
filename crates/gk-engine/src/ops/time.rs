@@ -246,7 +246,7 @@ fn work_day(w: &WriteCtx<'_>, field: &str, text: Option<&str>) -> Result<Day, Fa
     }
 }
 
-fn log(w: &mut WriteCtx<'_>, input: TimeLogInput) -> Result<TimeEntryChange, Failure> {
+pub(crate) fn log(w: &mut WriteCtx<'_>, input: TimeLogInput) -> Result<TimeEntryChange, Failure> {
     let task = lookup::task(w.tx(), "key", &input.key)?;
     ensure_active(w.tx(), task.project)?;
     let units = units(w.tx())?;

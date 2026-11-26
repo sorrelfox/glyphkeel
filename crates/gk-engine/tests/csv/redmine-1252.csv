@@ -1,0 +1,3 @@
+"#","Project","Tracker","Parent task","Status","Priority","Subject","Author","Category","Start date","Due date","Estimated time","Spent time","Related issues","Description"
+"12","Café","Feature","","New","Normal","Menü überarbeiten","Zoë","UI","01/15/2024","02/20/2024","2.50","1.00","Blocks #13, Related to #99","Die Kosten: 5 € – „heute“"
+"13","Café","Bug","12","In Progress","Immediate","Fix the – dash","Zoë","","01/16/2024","","","","Blocked by #12",""

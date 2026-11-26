@@ -12,3 +12,7 @@
 
 # Test corpora whose exact bytes matter (line endings included)
 ui/src/editor/corpus/** -text
+
+# CSV files the import is tested with: their encodings and line endings
+# (CRLF, Windows-1252) are what the tests are about.
+crates/gk-engine/tests/csv/** -text

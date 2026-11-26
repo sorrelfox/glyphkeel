@@ -607,6 +607,17 @@ pub(crate) fn enforce(w: &mut WriteCtx<'_>) -> Result<(), Failure> {
     Ok(())
 }
 
+/// Holds a task that command `w` just created to the rules of its status,
+/// as if `task.create` had made it, for commands the rules don't otherwise
+/// apply to: an import holds each of its rows to them.
+pub(crate) fn enforce_created(w: &mut WriteCtx<'_>, task: Id) -> Result<(), Failure> {
+    let Some(now) = facts(w.tx(), task)? else {
+        return Ok(());
+    };
+    let agent = w.caller().is_agent();
+    enter(w, task, &now, agent, false)
+}
+
 /// Refuses changes to fields that are read-only in the status the task was
 /// in, and, for agents, to fields the project keeps from them.
 fn check_unchanged(

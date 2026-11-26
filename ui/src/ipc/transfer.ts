@@ -10,7 +10,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import { OpFailure, toCallError } from "../data/transport";
-import { type Call, type ExportResult, type ImportResult, type KeyChange, type WikiExportResult, type WikiImportResult } from "../generated/ops";
+import { type Call, type CsvImportInput, type CsvImportResult, type ExportResult, type ImportResult, type KeyChange, type WikiExportResult, type WikiImportResult } from "../generated/ops";
 import { inApp } from "./files";
 
 /** Runs an app command; its refusals become failures like the engine's. */
@@ -93,6 +93,22 @@ export function importArchive(call: Call, source: ImportSource, dryRun: boolean,
     return command<ImportResult>("import_archive", { token: source.token, dryRun, keys: [...keys] });
   }
   return call("transfer.import", { path: source.path, dry_run: dryRun, keys: [...keys] });
+}
+
+/** Lets the person choose a CSV file to import tasks from; null when they cancelled. Only in the app. */
+export function chooseCsv(): Promise<ImportSource | null> {
+  return command<{ token: string; name: string } | null>("choose_csv", {});
+}
+
+/** What a CSV import takes, without the file: that comes from the chosen source. */
+export type CsvImportRequest = Omit<CsvImportInput, "path">;
+
+/** Checks (`dry_run`) or runs a CSV import of a chosen file. */
+export function importCsv(call: Call, source: ImportSource, request: CsvImportRequest): Promise<CsvImportResult> {
+  if ("token" in source) {
+    return command<CsvImportResult>("import_csv", { token: source.token, input: request });
+  }
+  return call("transfer.import_csv", { ...request, path: source.path });
 }
 
 /** Lets the person choose the backup folder in the native chooser; false when they cancelled. Only in the app. */
