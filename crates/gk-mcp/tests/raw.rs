@@ -49,6 +49,22 @@ impl Raw {
         }
     }
 
+    /// Like [`Raw::start`], over the transport `glyphkeel mcp` uses on
+    /// standard input and output, with its limit on message size.
+    fn start_limited(options: &Options) -> Self {
+        let server = gk_mcp::open(options).unwrap();
+        let (client_io, server_io) = tokio::io::duplex(1 << 20);
+        let (read, write) = tokio::io::split(server_io);
+        let transport = gk_mcp::limited_transport(read, write);
+        let server = tokio::spawn(gk_mcp::serve(server, transport));
+        let (reader, writer) = tokio::io::split(client_io);
+        Self {
+            reader: BufReader::new(reader),
+            writer,
+            server,
+        }
+    }
+
     async fn close(self) {
         drop(self.writer);
         drop(self.reader);
@@ -157,6 +173,30 @@ async fn legacy_results_carry_no_result_type() {
     assert_eq!(
         r["result"]["structuredContent"]["caller"]["actor"]["name"],
         "Claude Code"
+    );
+    raw.close().await;
+}
+
+/// A message over the size limit is dropped without being kept in memory,
+/// and the server goes on answering the next one.
+#[tokio::test]
+async fn a_message_over_the_size_limit_is_dropped_and_the_session_goes_on() {
+    let (_dir, options) = workspace();
+    let mut raw = Raw::start_limited(&options);
+    let mut huge =
+        String::from(r#"{"jsonrpc":"2.0","id":99,"method":"tools/list","params":{"x":""#);
+    huge.push_str(&"a".repeat(gk_mcp::MAX_MESSAGE_BYTES));
+    huge.push_str("\"}}\n");
+    raw.writer.write_all(huge.as_bytes()).await.unwrap();
+    let r = raw
+        .request(json!({"jsonrpc": "2.0", "id": 1, "method": "tools/list",
+                        "params": {"_meta": meta("2026-07-28", None)}}))
+        .await;
+    assert!(
+        r["result"]["tools"]
+            .as_array()
+            .is_some_and(|t| !t.is_empty()),
+        "{r}"
     );
     raw.close().await;
 }

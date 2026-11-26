@@ -6,7 +6,8 @@
 #     cargo +nightly fuzz run query_parse -- -max_total_time=60
 #
 # Kept out of the main workspace: it needs nightly and libFuzzer, and nothing
-# that ships depends on it.
+# that ships depends on it. `fuzz/run.sh` runs every target for a bounded
+# time, in a container of the CI image.
 
 [package]
 name = "gk-fuzz"
@@ -19,12 +20,57 @@ publish = false
 cargo-fuzz = true
 
 [dependencies]
+arbitrary = { version = "1.4.2", features = ["derive"] }
+gk-api = { path = "../crates/gk-api" }
+gk-engine = { path = "../crates/gk-engine" }
+gk-markdown = { path = "../crates/gk-markdown" }
+gk-mcp = { path = "../crates/gk-mcp" }
 gk-query = { path = "../crates/gk-query" }
+gk-store = { path = "../crates/gk-store" }
 libfuzzer-sys = "0.4.12"
+serde_json = "1.0.154"
+tempfile = "3.27.0"
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "io-util", "macros"] }
+zip = { version = "9.8.1", default-features = false, features = ["deflate-flate2"] }
 
 [[bin]]
 name = "query_parse"
 path = "fuzz_targets/query_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "markdown_render"
+path = "fuzz_targets/markdown_render.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "csv_import"
+path = "fuzz_targets/csv_import.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "archive_import"
+path = "fuzz_targets/archive_import.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "wiki_import"
+path = "fuzz_targets/wiki_import.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "mcp_message"
+path = "fuzz_targets/mcp_message.rs"
 test = false
 doc = false
 bench = false

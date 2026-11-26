@@ -36,6 +36,7 @@ use gk_api::OpError;
 use gk_engine::{Engine, EngineConfig, Role};
 use rmcp::ServiceExt;
 use rmcp::transport::IntoTransport;
+use rmcp::transport::async_rw::AsyncRwTransport;
 
 pub use errors::error_text;
 pub use guard::WRITES_PER_MINUTE;
@@ -80,7 +81,7 @@ pub fn run_stdio(args: &[OsString]) -> ExitCode {
     };
     let result = runtime.block_on(async {
         let server = open(&options)?;
-        serve(server, rmcp::transport::stdio()).await;
+        serve(server, stdio_transport()).await;
         Ok::<(), OpError>(())
     });
     match result {
@@ -90,6 +91,28 @@ pub fn run_stdio(args: &[OsString]) -> ExitCode {
             ExitCode::from(e.code.exit_code())
         }
     }
+}
+
+/// The largest message a client may send: one line of JSON-RPC. A longer
+/// line is dropped unread (the client gets no answer to it) instead of
+/// growing the read buffer until memory runs out. It leaves room for an
+/// attachment of about 12 MB sent as Base64; larger files are attached by
+/// path.
+pub const MAX_MESSAGE_BYTES: usize = 16 * 1024 * 1024;
+
+/// Standard input and output as the server's transport.
+fn stdio_transport() -> AsyncRwTransport<rmcp::RoleServer, tokio::io::Stdin, tokio::io::Stdout> {
+    limited_transport(tokio::io::stdin(), tokio::io::stdout())
+}
+
+/// A transport over `read` and `write`, one JSON-RPC message a line, with
+/// [`MAX_MESSAGE_BYTES`] as the limit on each incoming message.
+pub fn limited_transport<R, W>(read: R, write: W) -> AsyncRwTransport<rmcp::RoleServer, R, W>
+where
+    R: Send + tokio::io::AsyncRead + Unpin,
+    W: Send + tokio::io::AsyncWrite + Unpin + 'static,
+{
+    AsyncRwTransport::new_server(read, write).with_max_line_length(MAX_MESSAGE_BYTES)
 }
 
 /// Opens the workspace the options name and builds the handler.

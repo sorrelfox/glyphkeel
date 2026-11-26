@@ -164,7 +164,7 @@ mod tests {
         let label = label("TM-41");
         assert_eq!(label, "task-TM-41");
         let capability: serde_json::Value =
-            serde_json::from_str(include_str!("../capabilities/main.json")).unwrap();
+            serde_json::from_str(include_str!("../capabilities/item-windows.json")).unwrap();
         assert!(
             capability["windows"]
                 .as_array()

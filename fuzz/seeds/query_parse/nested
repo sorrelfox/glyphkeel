@@ -1,0 +1,1 @@
+assignee = me and (label in (bug, ui) or priority >= high) order by due desc

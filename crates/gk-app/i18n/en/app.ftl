@@ -47,6 +47,8 @@ legal-text-missing = { $file } did not come with this copy of the app. It is als
 ## File choosers
 
 chooser-cancel = _Cancel
+# The page asked for an operation with a file or folder it named itself; only the system's chooser may name one.
+page-path-refused = { $op } takes its { $field } from the system's chooser, not from the page.
 chooser-attach-title = Attach files
 chooser-attach = _Attach
 chooser-save-title = Save a copy

@@ -8,6 +8,7 @@
 /fuzz/corpus/
 /fuzz/artifacts/
 /fuzz/coverage/
+/fuzz/logs/
 **/*.rs.bk
 rustc-ice-*.txt
 

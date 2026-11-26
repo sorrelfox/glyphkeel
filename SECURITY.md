@@ -38,7 +38,9 @@ ask you to file it as a regular issue.
 
 ## Scope
 
-Glyphkeel keeps your data on your computer and never goes online. Task text,
+Glyphkeel keeps your data on your computer and never goes online.
+[docs/security.md](docs/security.md) explains what it protects against and
+what it doesn't. Task text,
 comments, wiki pages and attachments may come from untrusted sources: pasted
 in, imported, or written by an agent through MCP. In scope are, among others:
 

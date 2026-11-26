@@ -103,7 +103,7 @@ mod tests {
         let label = label("01A1EE56-5E01-7406-9F8B-E8C1FE48B90B");
         assert_eq!(label, "wiki-01a1ee56-5e01-7406-9f8b-e8c1fe48b90b");
         let capability: serde_json::Value =
-            serde_json::from_str(include_str!("../capabilities/main.json")).unwrap();
+            serde_json::from_str(include_str!("../capabilities/item-windows.json")).unwrap();
         let windows = capability["windows"].as_array().unwrap();
         assert!(windows.iter().any(|w| w == "wiki-*"));
         let permissions = capability["permissions"].as_array().unwrap();

@@ -30,6 +30,10 @@ fuzz_target!(|data: &[u8]| {
         let printed = gk_query::print(&query);
         let again = gk_query::parse(&printed)
             .unwrap_or_else(|e| panic!("{printed:?} does not parse back: {e:?}"));
-        assert_eq!(query.shape(), again.shape(), "{text:?} printed as {printed:?}");
+        assert_eq!(
+            query.shape(),
+            again.shape(),
+            "{text:?} printed as {printed:?}"
+        );
     }
 });

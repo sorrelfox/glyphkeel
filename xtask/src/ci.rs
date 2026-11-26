@@ -119,6 +119,8 @@ pub(crate) enum Suite {
     App,
     /// Licences, advisories, bans and sources of the crates (cargo-deny).
     Deny,
+    /// Known vulnerabilities in the npm packages the UI ships (pnpm audit).
+    Audit,
     /// The deb and rpm packages, built by the Tauri bundler with the
     /// release profile `dist`, and the check of the UI they embed.
     Package,
@@ -140,12 +142,13 @@ pub(crate) enum Suite {
 }
 
 impl Suite {
-    const ALL: [Self; 12] = [
+    const ALL: [Self; 13] = [
         Self::Static,
         Self::Rust,
         Self::Ui,
         Self::App,
         Self::Deny,
+        Self::Audit,
         Self::Package,
         Self::TestData,
         Self::Pseudo,
@@ -163,6 +166,7 @@ impl Suite {
             Self::Ui => "ui",
             Self::App => "app",
             Self::Deny => "deny",
+            Self::Audit => "audit",
             Self::Package => "package",
             Self::TestData => "testdata",
             Self::Pseudo => "pseudo",
@@ -186,6 +190,10 @@ impl Suite {
             }
             Self::App => "the desktop app with the UI embedded",
             Self::Deny => "cargo-deny: licences, advisories, bans, sources",
+            Self::Audit => {
+                "pnpm audit of the UI's production dependencies (high and critical \
+                 advisories fail; needs the network)"
+            }
             Self::Package => {
                 "deb and rpm packages with the app and the command line (`dist` profile), \
                  and the UI they embed checked for remote addresses"
@@ -281,6 +289,9 @@ impl Suite {
                 ]),
             ],
             Self::Deny => vec![Step::cargo(&["deny", "--locked", "check"])],
+            // Only what ships: development tools never reach users. The same
+            // command as the pre-release workflow's.
+            Self::Audit => vec![Step::pnpm(&AUDIT_ARGS)],
             // The packages hold both programs: the command line is built
             // first and added to /usr/bin next to the app, where it looks
             // for the app, with its shell completions and man page, which it
@@ -1199,6 +1210,9 @@ impl Pins {
 /// The workflow whose `tool: cargo-deny@<version>` pins cargo-deny.
 const PRERELEASE_WORKFLOW: &str = ".github/workflows/prerelease.yml";
 
+/// The `pnpm` arguments of the `audit` suite.
+const AUDIT_ARGS: [&str; 4] = ["audit", "--prod", "--audit-level", "high"];
+
 fn read(root: &Path, file: &str) -> Result<String> {
     fs::read_to_string(root.join(file)).with_context(|| format!("cannot read {file}"))
 }
@@ -1448,8 +1462,8 @@ mod tests {
     use std::path::PathBuf;
 
     use super::{
-        CLI_FILES, CLI_FILES_DIR, Distro, Engine, FLOW_ENV_CLEARED, Flow, Options, Pins, Step,
-        Suite, cache_volumes, copy_script, package_config,
+        AUDIT_ARGS, CLI_FILES, CLI_FILES_DIR, Distro, Engine, FLOW_ENV_CLEARED, Flow, Options,
+        Pins, Step, Suite, cache_volumes, copy_script, package_config,
     };
 
     fn parse(args: &[&str]) -> anyhow::Result<Options> {
@@ -1620,10 +1634,20 @@ mod tests {
         assert!(parse(&["--suite", "package", "--package-release"]).is_err());
     }
 
+    /// The local `audit` suite checks what the pre-release workflow checks.
+    #[test]
+    fn the_audit_suite_matches_the_prerelease_workflow() {
+        let workflow = include_str!("../../.github/workflows/prerelease.yml");
+        let command = format!("pnpm {}", AUDIT_ARGS.join(" "));
+        assert!(workflow.contains(&command), "{command}");
+    }
+
     #[test]
     fn packaging_is_opt_in() {
         assert!(!Suite::DEFAULT.contains(&Suite::Package));
         assert!(!Suite::DEFAULT.contains(&Suite::Deny));
+        assert!(!Suite::DEFAULT.contains(&Suite::Audit));
+        assert!(!Suite::Audit.needs_node_modules());
         let options = parse(&["--suite", "package", "--cache-dir", "ci-cache"]).unwrap();
         assert_eq!(options.suites, [Suite::Package]);
         assert_eq!(options.cache_dir, Some(PathBuf::from("ci-cache")));
