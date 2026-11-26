@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { addDays, addMonths, daysBetween, firstDayOfWeek, hiddenPerDay, layoutWeek, rangeQuery, shifted, spanOf, startOfWeek, step, tasksOn, weeksOf, weekday } from "./model";
+import { addDays, addMonths, daysBetween, firstDayOfWeek, hiddenPerDay, layoutWeek, rangeQuery, shifted, spanOf, splitSort, startOfWeek, step, tasksOn, weeksOf, weekday } from "./model";
 
 describe("days", () => {
   it("adds days across months, years and clock changes", () => {
@@ -142,9 +142,15 @@ describe("the bars of a week", () => {
 });
 
 describe("the query for the days on screen", () => {
-  it("adds the days to the person's query as a group, without its sort", () => {
-    const days = "((start>=2026-11-01 start<=2026-11-30) OR (due>=2026-11-01 due<=2026-11-30) OR (start<2026-11-01 due>2026-11-30))";
-    expect(rangeQuery("", "2026-11-01", "2026-11-30")).toBe(days);
-    expect(rangeQuery("label:bug OR is:blocked sort:due", "2026-11-01", "2026-11-30")).toBe(`(label:bug OR is:blocked) ${days}`);
+  it("adds the days to the person's query as a group, keeping its sort outside", () => {
+    expect(rangeQuery("", "2026-11-01", "2026-11-30")).toBe("during:2026-11-01..2026-11-30");
+    expect(rangeQuery("label:bug OR is:blocked sort:due", "2026-11-01", "2026-11-30")).toBe("(label:bug OR is:blocked) during:2026-11-01..2026-11-30 sort:due");
+    expect(rangeQuery("sort:-priority", "2026-11-01", "2026-11-07")).toBe("during:2026-11-01..2026-11-07 sort:-priority");
+  });
+
+  it("moves only a sort outside quotes and parentheses", () => {
+    expect(splitSort('"sort:me" is:open SORT:due')).toEqual({ rest: '"sort:me" is:open', sort: ["SORT:due"] });
+    expect(splitSort("(a sort:due) b")).toEqual({ rest: "(a sort:due) b", sort: [] });
+    expect(splitSort("resort:x")).toEqual({ rest: "resort:x", sort: [] });
   });
 });

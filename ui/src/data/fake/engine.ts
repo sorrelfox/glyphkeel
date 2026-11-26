@@ -77,7 +77,7 @@ import { type FakeComment, type FakeFile, type FakeProject, type FakeRelation, t
 import { naturalDay, nextDay, searchAll, searchWiki, slugOf, headingsOf } from "./overview";
 import { linksIn, placePage, subtree, type TextLink } from "./wiki";
 import { createView, deleteView, listViews, matchingKeys, parseQuery, queryError, searchTasks, updateView, type GroupInfo, type QueryNames } from "./query";
-import { addDays, localDay, MAX_ENTRY_MINUTES, momentOf, reminderAt, reminderOut, sortDue, timeEntryOut, timerElapsedMs, timerOut, unitsOf, weekStart, workDay } from "./time";
+import { addDays, csvOf, localDay, MAX_ENTRY_MINUTES, momentOf, reminderAt, reminderOut, sortDue, timeEntryOut, timerElapsedMs, timerOut, unitsOf, weekStart, workDay } from "./time";
 
 /** An operation failed: the engine's error, as the transports deliver it. */
 export class FakeError extends Error {
@@ -3297,49 +3297,76 @@ export class FakeWorkspace {
       task.updatedAt = entry.deletedAt;
       return this.entryChange(entry, ["trashed"]);
     },
-    "time.report": ({ from, to, group_by, project, task: taskRef, entries }) => {
+    "time.report": ({ from, to, group_by, project, include_subprojects, task: taskRef, person, entries, csv }) => {
       const now = this.today();
-      const first = from === null || from === undefined ? weekStart(localDay(now), this.state.settings.week_start) : (workDay(from, now) ?? fail("invalid", `"${from}" isn't a day.`, { details: { path: "from" } }));
+      const weekFirst = (day: string) => weekStart(day, this.state.settings.week_start);
+      const first = from === null || from === undefined ? weekFirst(localDay(now)) : (workDay(from, now) ?? fail("invalid", `"${from}" isn't a day.`, { details: { path: "from" } }));
       const last = to === null || to === undefined ? addDays(first, 6) : (workDay(to, now) ?? fail("invalid", `"${to}" isn't a day.`, { details: { path: "to" } }));
       if (last < first) {
         fail("invalid", "The last day comes before the first.", { details: { path: "to" } });
       }
-      const projects = project === null || project === undefined ? null : new Set([this.project(project), ...this.descendants(this.project(project))].map((each) => each.id));
+      const scope = project === null || project === undefined ? null : this.project(project);
+      const projects = scope === null ? null : new Set([scope, ...(include_subprojects === false ? [] : this.descendants(scope))].map((each) => each.id));
       const root = taskRef === null || taskRef === undefined ? null : this.task(taskRef);
       const within = (task: FakeTask): boolean => root === null || task === root || this.isAncestor(root, task);
+      const who = person?.trim().toLowerCase();
+      if (who === "") {
+        fail("invalid", "Name a person: me, agent, or a name.", { details: { path: "person" } });
+      }
+      const loggedBy = (entry: FakeTimeEntry): boolean =>
+        who === undefined || (who === "me" ? entry.author.kind === "user" : who === "agent" ? entry.author.kind === "agent" : entry.author.name.toLowerCase() === who);
       const units = unitsOf(this.state.settings);
       const chosen = this.state.timeEntries
-        .filter((entry) => entry.deletedAt === null && entry.date >= first && entry.date <= last)
+        .filter((entry) => entry.deletedAt === null && entry.date >= first && entry.date <= last && loggedBy(entry))
         .flatMap((entry) => {
           const task = this.state.tasks.find((candidate) => candidate.id === entry.taskId);
           return task && (projects === null || projects.has(task.projectId)) && within(task) ? [{ entry, task }] : [];
         })
         .sort((a, b) => a.entry.date.localeCompare(b.entry.date) || a.entry.createdAt.localeCompare(b.entry.createdAt));
       const grouping = group_by ?? "task";
-      const groups = new Map<string, { key: string; title: string; minutes: number; count: number }>();
+      const groups = new Map<string, { key: string; title: string; person?: Actor; minutes: number; count: number }>();
       for (const { entry, task } of chosen) {
         const project = this.projectOf(task);
+        const week = weekFirst(entry.date);
         const [key, title] =
           grouping === "day"
             ? [entry.date, new Date(`${entry.date}T12:00:00`).toLocaleDateString("en", { weekday: "long" })]
-            : grouping === "project"
-              ? [project.key, project.name]
-              : [this.keyOf(task), task.title];
-        const group = groups.get(key) ?? { key, title, minutes: 0, count: 0 };
+            : grouping === "week"
+              ? [week, `${week}..${addDays(week, 6)}`]
+              : grouping === "month"
+                ? [entry.date.slice(0, 7), entry.date.slice(0, 7)]
+                : grouping === "person"
+                  ? [`${entry.author.kind}:${entry.author.name}`, entry.author.name]
+                  : grouping === "project"
+                    ? [project.key, project.name]
+                    : [this.keyOf(task), task.title];
+        const group = groups.get(key) ?? { key, title, ...(grouping === "person" ? { person: entry.author } : {}), minutes: 0, count: 0 };
         group.minutes += entry.minutes;
         group.count += 1;
         groups.set(key, group);
       }
       const rows = [...groups.values()];
-      rows.sort(grouping === "day" ? (a, b) => a.key.localeCompare(b.key) : (a, b) => b.minutes - a.minutes || a.key.localeCompare(b.key));
+      const inOrder = grouping === "day" || grouping === "week" || grouping === "month";
+      rows.sort(inOrder ? (a, b) => a.key.localeCompare(b.key) : (a, b) => b.minutes - a.minutes || a.key.localeCompare(b.key));
       const total = chosen.reduce((sum, { entry }) => sum + entry.minutes, 0);
+      const items = rows.map((row) => ({ duration: formatDuration(row.minutes, units), entry_count: row.count, key: row.key, minutes: row.minutes, ...(row.person ? { person: row.person } : {}), title: row.title }));
+      const csvText =
+        csv === "groups"
+          ? csvOf([grouping, "title", "minutes", "duration", "entry_count"], items.map((row) => [row.key, row.title, String(row.minutes), row.duration, String(row.entry_count)]))
+          : csv === "entries"
+            ? csvOf(
+                ["date", "person_kind", "person", "project", "task", "title", "minutes", "duration", "note"],
+                chosen.map(({ entry, task }) => [entry.date, entry.author.kind, entry.author.name, this.projectOf(task).key, this.keyOf(task), task.title, String(entry.minutes), formatDuration(entry.minutes, units), entry.note]),
+              )
+            : undefined;
       return {
+        ...(csvText === undefined ? {} : { csv: csvText }),
         days_per_week: units.daysPerWeek,
         ...(entries === true ? { entries: chosen.map(({ entry, task }) => timeEntryOut(entry, this.keyOf(task), units)) } : {}),
         from: first,
         group_by: grouping,
         hours_per_day: units.hoursPerDay,
-        items: rows.map((row) => ({ duration: formatDuration(row.minutes, units), entry_count: row.count, key: row.key, minutes: row.minutes, title: row.title })),
+        items,
         to: last,
         total_duration: formatDuration(total, units),
         total_minutes: total,

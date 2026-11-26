@@ -3,6 +3,8 @@
 
 import { createContext, use, useEffect, useRef } from "react";
 
+import { type Action } from "../actions/actions";
+
 /** What the screen in the window tells the status bar. */
 export interface StatusInfo {
   /** Counts for the view: "42 tasks · 24 open". */
@@ -19,9 +21,11 @@ export interface ShellHooks {
   setNewTask: (run: (() => void) | null) => void;
   /** The task `T` starts or stops the timer on: the open or selected one; null for none. */
   setTimerTask: (key: string | null) => void;
+  /** The screen's own actions, in the keymap and the command palette while it is on screen. */
+  setScreenActions: (actions: readonly Action[]) => void;
 }
 
-export const ShellContext = createContext<ShellHooks>({ setStatus: () => undefined, setNewTask: () => undefined, setTimerTask: () => undefined });
+export const ShellContext = createContext<ShellHooks>({ setStatus: () => undefined, setNewTask: () => undefined, setTimerTask: () => undefined, setScreenActions: () => undefined });
 
 /** Shows the screen's counts and selection in the status bar while it is on screen. */
 export function useStatus(info: StatusInfo): void {
@@ -61,4 +65,32 @@ export function useTimerTask(key: string | null): void {
   useEffect(() => () => {
     setTimerTask(null);
   }, [setTimerTask]);
+}
+
+/**
+ * Adds the screen's own actions to the window's while the screen is on
+ * screen: the keymap runs them and the command palette lists them. They
+ * are registered again only when their IDs or availability change; a run
+ * always calls the latest `run`.
+ */
+export function useScreenActions(actions: readonly Action[]): void {
+  const { setScreenActions } = use(ShellContext);
+  const latest = useRef(actions);
+  useEffect(() => {
+    latest.current = actions;
+  });
+  const signature = actions.map((action) => `${action.id}${action.disabled === true ? "-" : "+"}`).join(" ");
+  useEffect(() => {
+    setScreenActions(
+      latest.current.map((action) => ({
+        ...action,
+        run: () => {
+          latest.current.find((candidate) => candidate.id === action.id)?.run();
+        },
+      })),
+    );
+  }, [setScreenActions, signature]);
+  useEffect(() => () => {
+    setScreenActions([]);
+  }, [setScreenActions]);
 }

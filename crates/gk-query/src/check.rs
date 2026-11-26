@@ -151,6 +151,10 @@ pub enum Cond {
         /// Empty matches.
         none: bool,
     },
+    /// The days from the start date to the due date (either one when only
+    /// one is set) overlap any of the bounds (days since 1970). Tasks
+    /// without dates never match.
+    Span(Vec<Bounds>),
     /// A moment column within any of the bounds (milliseconds), or empty.
     Moment {
         /// The column.
@@ -828,6 +832,21 @@ fn condition(
                 none,
             }
         }
+        FieldType::Span => {
+            if let Some(v) = values.iter().find(|v| is_none(v)) {
+                return Err(QueryError::new("query-during-none", v.span));
+            }
+            Cond::Span(
+                values
+                    .iter()
+                    .map(|v| {
+                        days_of(v, env).map(|(first, last)| {
+                            bounds(op, first.days_since_epoch(), last.days_since_epoch())
+                        })
+                    })
+                    .collect::<Result<_, _>>()?,
+            )
+        }
         FieldType::Moment(column) => {
             let none = values.iter().any(is_none);
             let mut b = Vec::new();
@@ -1004,6 +1023,31 @@ mod tests {
                 none: false
             }))
         );
+    }
+
+    #[test]
+    fn during_takes_days_periods_and_ranges() {
+        let c = run("during:2026-11-01..2026-11-30").expect("query");
+        let day = |s: &str| s.parse::<Day>().expect("day").days_since_epoch();
+        assert_eq!(
+            c.filter,
+            Some(Filter::Cond(Cond::Span(vec![Bounds {
+                lo: Some(day("2026-11-01")),
+                hi: Some(day("2026-11-30")),
+            }])))
+        );
+        let c = run("during:this-week").expect("query");
+        assert_eq!(
+            c.filter,
+            Some(Filter::Cond(Cond::Span(vec![Bounds {
+                lo: Some(day("2026-11-23")),
+                hi: Some(day("2026-11-29")),
+            }])))
+        );
+        assert_eq!(err("during:none").id, "query-during-none");
+        assert_eq!(err("during<today").id, "query-operator");
+        assert_eq!(err("during:soon").id, "query-bad-date");
+        assert!(err("sort:during").id.starts_with("query-sort-unknown"));
     }
 
     #[test]

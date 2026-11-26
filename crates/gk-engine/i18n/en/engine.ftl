@@ -606,6 +606,7 @@ time-entry-version = The time entry changed since you read it: it has version { 
 time-entry-version-hint = Read the entry again and repeat the change.
 storage-field-unreadable = A recorded { $field } can't be read.
 time-report-too-long = A report covers at most { $max } days.
+time-report-no-person = Name a person: me, agent, or a name.
 timer-unreadable = A recorded timer can't be read.
 timer-task-trashed = The timer's task is in the trash.
 timer-task-trashed-hint = Stop the timer with `discard` to throw its time away.

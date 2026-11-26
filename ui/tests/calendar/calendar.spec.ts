@@ -189,3 +189,45 @@ test("the query field and sub-projects choose the tasks", async ({ page }) => {
   await page.keyboard.press("Escape");
   await expect.poll(() => grid.locator("[data-task-bar]").evaluateAll((bars) => [...new Set(bars.map((each) => (each as HTMLElement).dataset.taskBar))])).toEqual([key]);
 });
+
+test("calendar actions: the palette opens it, keys page and go back to today, the query keeps its sort", async ({ page }) => {
+  await page.clock.setFixedTime(new Date(`${TODAY}T10:00:00`));
+  await page.goto("/");
+  await page.getByRole("row", { name: /Task Manager/ }).click();
+  await expect(page.getByRole("group", { name: /Board of/ })).toBeVisible();
+  await page.keyboard.press("Control+k");
+  const palette = page.getByRole("dialog", { name: "Command palette" });
+  await expect(palette).toBeVisible();
+  await page.keyboard.type("as a calendar");
+  await expect(palette.getByRole("option", { name: /Show the project as a calendar/ })).toBeVisible();
+  await page.keyboard.press("Enter");
+  const grid = page.getByRole("grid", { name: /^Calendar/ });
+  await expect(grid).toBeVisible();
+  await expect(page.getByTestId("calendar-title")).toHaveText("November 2026");
+
+  await page.keyboard.press("Alt+PageDown");
+  await expect(page.getByTestId("calendar-title")).toHaveText("December 2026");
+  await page.keyboard.press("Alt+PageUp");
+  await page.keyboard.press("Alt+PageUp");
+  await expect(page.getByTestId("calendar-title")).toHaveText("October 2026");
+  await page.keyboard.press("Alt+Home");
+  await expect(page.getByTestId("calendar-title")).toHaveText("November 2026");
+
+  // The period actions are in the palette while the calendar is on screen.
+  await page.keyboard.press("Control+k");
+  await page.keyboard.type("next period");
+  await expect(palette.getByRole("option", { name: /Next period/ })).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("calendar-title")).toHaveText("December 2026");
+  await page.keyboard.press("Alt+Home");
+
+  // A sort in the query is no mistake: the tasks stay.
+  const field = page.getByRole("textbox", { name: "Filter query" });
+  await field.click();
+  await page.keyboard.type("sort:-priority");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(600);
+  await expect(grid.locator("[data-task-bar]").first()).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(field).not.toHaveAttribute("aria-invalid", "true");
+});

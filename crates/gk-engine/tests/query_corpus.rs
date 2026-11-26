@@ -232,7 +232,7 @@ fn every_field_of_the_registry_filters_data_set_s() {
             FieldType::Label => format!("{name}:frontend"),
             FieldType::Parent | FieldType::Under => format!("{name}:{parent}"),
             FieldType::Link(_) => format!("{name}:any"),
-            FieldType::Date(_) | FieldType::Moment(_) => {
+            FieldType::Date(_) | FieldType::Moment(_) | FieldType::Span => {
                 format!("{name}:2026-03-01..2026-04-30")
             }
             FieldType::Duration(_) => format!("{name}>2h"),

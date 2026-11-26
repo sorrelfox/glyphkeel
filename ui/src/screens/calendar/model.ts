@@ -216,13 +216,49 @@ export function shifted(task: Dated, days: number): { start_date?: Day; due_date
 }
 
 /**
+ * The query's `sort:` clauses outside quotes and parentheses, apart from
+ * the rest of it. Only there is a `sort:` allowed, so only those move.
+ */
+export function splitSort(query: string): { rest: string; sort: string[] } {
+  const sort: string[] = [];
+  let rest = "";
+  let depth = 0;
+  let i = 0;
+  while (i < query.length) {
+    const char = query.charAt(i);
+    if (char === '"') {
+      const close = query.indexOf('"', i + 1);
+      const end = close === -1 ? query.length : close + 1;
+      rest += query.slice(i, end);
+      i = end;
+      continue;
+    }
+    if (char === "(") {
+      depth += 1;
+    } else if (char === ")") {
+      depth = Math.max(0, depth - 1);
+    }
+    const startsWord = i === 0 || /\s/.test(query.charAt(i - 1));
+    if (depth === 0 && startsWord && query.slice(i, i + 5).toLowerCase() === "sort:") {
+      const match = /^\S*/.exec(query.slice(i));
+      const word = match?.[0] ?? "";
+      sort.push(word);
+      i += word.length;
+      continue;
+    }
+    rest += char;
+    i += 1;
+  }
+  return { rest: rest.replace(/\s+/g, " ").trim(), sort };
+}
+
+/**
  * The query that reads the tasks of the days on screen: the person's query,
- * as a group, and a task that starts, ends or runs within the days. A
- * `sort:` doesn't matter to a calendar and may not stand in a group, so it
- * is left out.
+ * as a group, and the tasks whose days, from start to due, overlap the
+ * days on screen. The person's `sort:` stays, outside the group.
  */
 export function rangeQuery(query: string, from: Day, to: Day): string {
-  const within = `((start>=${from} start<=${to}) OR (due>=${from} due<=${to}) OR (start<${from} due>${to}))`;
-  const own = query.replace(/(^|\s)sort:\S*/g, " ").trim();
-  return own === "" ? within : `(${own}) ${within}`;
+  const { rest, sort } = splitSort(query);
+  const within = `during:${from}..${to}`;
+  return [rest === "" ? within : `(${rest}) ${within}`, ...sort].join(" ");
 }

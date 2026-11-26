@@ -4239,7 +4239,7 @@
       "covers": [
         "task.search"
       ],
-      "description": "Lists the tasks matching a query, a page at a time, with totals of estimates and logged time. The query language: `is:open`, `status:\"In progress\"`, `label:bug,crash` (any of), `-label:wontfix` (not; includes tasks without labels), `priority>=high`, `due<+7d`, `updated>-3d`, `created:this-month`, `estimate:1h..4h`, `has:due`, `parent:TM-12`, `project:TM/*` (with sub-projects), `(a OR b)`, words and \"phrases\" for full text, a bare key `TM-41`, and `sort:due,-priority`. Dates: 2026-12-31, today, +7d, -1m, this-week, next-month. A mistake comes back as `invalid` with the place and a suggestion. Use the `query` it echoes when you need the normal form; page with `cursor`. Example: search_tasks {\"query\": \"is:open label:bug due<+7d sort:due\", \"limit\": 20}",
+      "description": "Lists the tasks matching a query, a page at a time, with totals of estimates and logged time. The query language: `is:open`, `status:\"In progress\"`, `label:bug,crash` (any of), `-label:wontfix` (not; includes tasks without labels), `priority>=high`, `due<+7d`, `updated>-3d`, `created:this-month`, `during:2026-12-01..2026-12-31` (start to due overlaps), `estimate:1h..4h`, `has:due`, `parent:TM-12`, `project:TM/*` (with sub-projects), `(a OR b)`, words and \"phrases\" for full text, a bare key `TM-41`, and `sort:due,-priority`. Dates: 2026-12-31, today, +7d, -1m, this-week, next-month. A mistake comes back as `invalid` with the place and a suggestion. Use the `query` it echoes when you need the normal form; page with `cursor`. Example: search_tasks {\"query\": \"is:open label:bug due<+7d sort:due\", \"limit\": 20}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "Which tasks to list.",
@@ -24224,11 +24224,26 @@
       "covers": [
         "time.report"
       ],
-      "description": "Sums the time logged from `from` to `to` (days, both included; default the current week), grouped by `day`, `task` (default) or `project`, with totals in the workspace's units (`1w 2d 4h`). Narrow it to a `project` (with its sub-projects) or a `task` (with its subtasks); add `entries: true` to list the entries too. Example: get_time_report {\"from\": \"2026-11-01\", \"to\": \"2026-11-30\", \"group_by\": \"project\"}",
+      "description": "Sums the time logged from `from` to `to` (days, both included; default the current week), grouped by `day`, `week`, `month`, `task` (default), `project` or `person`, with totals in the workspace's units (`1w 2d 4h`). Narrow it to a `project` (with its sub-projects unless `include_subprojects: false`), a `task` (with its subtasks) or a `person` (`me`, `agent` or a name); add `entries: true` to list the entries too, or `csv: \"groups\"` or `\"entries\"` for CSV text. Example: get_time_report {\"from\": \"2026-11-01\", \"to\": \"2026-11-30\", \"group_by\": \"project\"}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "Which time to report.",
         "properties": {
+          "csv": {
+            "description": "Also return the report as CSV text: `groups` or `entries`.",
+            "oneOf": [
+              {
+                "const": "groups",
+                "description": "One line per group, as `items`.",
+                "type": "string"
+              },
+              {
+                "const": "entries",
+                "description": "One line per entry, oldest first.",
+                "type": "string"
+              }
+            ]
+          },
           "entries": {
             "default": false,
             "description": "Also list the entries, oldest first.",
@@ -24239,11 +24254,21 @@
             "type": "string"
           },
           "group_by": {
-            "description": "How to group: `day`, `task` (default) or `project`.",
+            "description": "How to group: `day`, `week`, `month`, `task` (default), `project`\nor `person`.",
             "oneOf": [
               {
                 "const": "day",
                 "description": "By the day of the work.",
+                "type": "string"
+              },
+              {
+                "const": "week",
+                "description": "By the week of the work; weeks start on the workspace's first day\nof the week.",
+                "type": "string"
+              },
+              {
+                "const": "month",
+                "description": "By the calendar month of the work.",
                 "type": "string"
               },
               {
@@ -24255,11 +24280,24 @@
                 "const": "project",
                 "description": "By project.",
                 "type": "string"
+              },
+              {
+                "const": "person",
+                "description": "By the person or agent who logged the time.",
+                "type": "string"
               }
             ]
           },
+          "include_subprojects": {
+            "description": "With `project`: its sub-projects' time too; default true.",
+            "type": "boolean"
+          },
+          "person": {
+            "description": "Only the time logged by `me` (the local user), `agent` (any agent)\nor the person or agent of that name.",
+            "type": "string"
+          },
           "project": {
-            "description": "Only this project and its sub-projects: a key or ID.",
+            "description": "Only this project: a key or ID.",
             "type": "string"
           },
           "task": {
@@ -24279,6 +24317,10 @@
         "additionalProperties": false,
         "description": "Logged time over a range of days, grouped, with the total.",
         "properties": {
+          "csv": {
+            "description": "The report as CSV text (comma-separated, a header line, CRLF line\nends), when asked for.",
+            "type": "string"
+          },
           "days_per_week": {
             "description": "The working week the units use, in days.",
             "minimum": 0,
@@ -24384,6 +24426,16 @@
                 "type": "string"
               },
               {
+                "const": "week",
+                "description": "By the week of the work; weeks start on the workspace's first day\nof the week.",
+                "type": "string"
+              },
+              {
+                "const": "month",
+                "description": "By the calendar month of the work.",
+                "type": "string"
+              },
+              {
                 "const": "task",
                 "description": "By task.",
                 "type": "string"
@@ -24391,6 +24443,11 @@
               {
                 "const": "project",
                 "description": "By project.",
+                "type": "string"
+              },
+              {
+                "const": "person",
+                "description": "By the person or agent who logged the time.",
                 "type": "string"
               }
             ]
@@ -24401,7 +24458,7 @@
             "type": "integer"
           },
           "items": {
-            "description": "The groups: days in order; tasks and projects by most time first.",
+            "description": "The groups: days, weeks and months in order; tasks, projects and\npeople by most time first.",
             "items": {
               "additionalProperties": false,
               "description": "One group of the time report.",
@@ -24416,15 +24473,45 @@
                   "type": "integer"
                 },
                 "key": {
-                  "description": "The day, the task's key or the project's key.",
+                  "description": "The day; the week's first day; the month (`YYYY-MM`); the task's\nor the project's key; or the person (`user:Name`, `agent:Name`).",
                   "type": "string"
                 },
                 "minutes": {
                   "description": "The time in minutes.",
                   "type": "integer"
                 },
+                "person": {
+                  "additionalProperties": false,
+                  "description": "The person or agent, when grouped by person.",
+                  "properties": {
+                    "kind": {
+                      "description": "Person or agent.",
+                      "oneOf": [
+                        {
+                          "const": "user",
+                          "description": "The person who owns the workspace.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "agent",
+                          "description": "An agent working through MCP.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "name": {
+                      "description": "The display name (\"You\", \"Claude Code\").",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "name"
+                  ],
+                  "type": "object"
+                },
                 "title": {
-                  "description": "The weekday, the task's title or the project's name.",
+                  "description": "The weekday; the week's days (`2026-11-23..2026-11-29`); the month;\nthe task's title; the project's name; or the person's name.",
                   "type": "string"
                 }
               },

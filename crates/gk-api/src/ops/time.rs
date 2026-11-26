@@ -130,11 +130,28 @@ pub struct TimeEntryChange {
 pub enum TimeGroupBy {
     /// By the day of the work.
     Day,
+    /// By the week of the work; weeks start on the workspace's first day
+    /// of the week.
+    Week,
+    /// By the calendar month of the work.
+    Month,
     /// By task.
     #[default]
     Task,
     /// By project.
     Project,
+    /// By the person or agent who logged the time.
+    Person,
+}
+
+/// What the time report also returns as CSV text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TimeReportCsv {
+    /// One line per group, as `items`.
+    Groups,
+    /// One line per entry, oldest first.
+    Entries,
 }
 
 /// Which time to report.
@@ -149,28 +166,44 @@ pub struct TimeReportInput {
     /// days after `from`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub to: Option<String>,
-    /// Only this project and its sub-projects: a key or ID.
+    /// Only this project: a key or ID.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub project: Option<String>,
+    /// With `project`: its sub-projects' time too; default true.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub include_subprojects: Option<bool>,
     /// Only this task and its subtasks: a key or ID.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub task: Option<String>,
-    /// How to group: `day`, `task` (default) or `project`.
+    /// Only the time logged by `me` (the local user), `agent` (any agent)
+    /// or the person or agent of that name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub person: Option<String>,
+    /// How to group: `day`, `week`, `month`, `task` (default), `project`
+    /// or `person`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group_by: Option<TimeGroupBy>,
     /// Also list the entries, oldest first.
     #[serde(default)]
     pub entries: bool,
+    /// Also return the report as CSV text: `groups` or `entries`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub csv: Option<TimeReportCsv>,
 }
 
 /// One group of the time report.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct TimeReportRow {
-    /// The day, the task's key or the project's key.
+    /// The day; the week's first day; the month (`YYYY-MM`); the task's
+    /// or the project's key; or the person (`user:Name`, `agent:Name`).
     pub key: String,
-    /// The weekday, the task's title or the project's name.
+    /// The weekday; the week's days (`2026-11-23..2026-11-29`); the month;
+    /// the task's title; the project's name; or the person's name.
     pub title: String,
+    /// The person or agent, when grouped by person.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub person: Option<Actor>,
     /// The time in minutes.
     pub minutes: i64,
     /// The time in the workspace's units.
@@ -189,7 +222,8 @@ pub struct TimeReport {
     pub to: String,
     /// How the rows are grouped.
     pub group_by: TimeGroupBy,
-    /// The groups: days in order; tasks and projects by most time first.
+    /// The groups: days, weeks and months in order; tasks, projects and
+    /// people by most time first.
     pub items: Vec<TimeReportRow>,
     /// The total in minutes.
     pub total_minutes: i64,
@@ -202,6 +236,10 @@ pub struct TimeReport {
     /// The entries, oldest first, when asked for.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub entries: Option<Vec<TimeEntry>>,
+    /// The report as CSV text (comma-separated, a header line, CRLF line
+    /// ends), when asked for.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub csv: Option<String>,
 }
 
 // ---------------------------------------------------------------------
@@ -600,7 +638,7 @@ pub(crate) const TIME_DELETE: OpDescriptor = OpDescriptor::of::<TimeDelete>(Meta
 });
 
 pub(crate) const TIME_REPORT: OpDescriptor = OpDescriptor::of::<TimeReportOp>(Meta {
-    summary: "Logged time over a range of days, grouped by day, task or project, with totals in the workspace's units.",
+    summary: "Logged time over a range of days, grouped by day, week, month, task, project or person, with totals in the workspace's units and optional CSV.",
     kind: OpKind::Query,
     safety: Safety::Read,
     exposure: Exposure::Data,

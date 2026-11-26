@@ -339,7 +339,8 @@ Example: delete_project {\"project\": \"OLD\", \"expected_task_count\": 12}",
         description: "Lists the tasks matching a query, a page at a time, with totals of estimates and \
 logged time. The query language: `is:open`, `status:\"In progress\"`, `label:bug,crash` (any of), \
 `-label:wontfix` (not; includes tasks without labels), `priority>=high`, `due<+7d`, \
-`updated>-3d`, `created:this-month`, `estimate:1h..4h`, `has:due`, `parent:TM-12`, \
+`updated>-3d`, `created:this-month`, `during:2026-12-01..2026-12-31` (start to due overlaps), \
+`estimate:1h..4h`, `has:due`, `parent:TM-12`, \
 `project:TM/*` (with sub-projects), `(a OR b)`, words and \"phrases\" for full text, a bare key \
 `TM-41`, and `sort:due,-priority`. Dates: 2026-12-31, today, +7d, -1m, this-week, next-month. \
 A mistake comes back as `invalid` with the place and a suggestion. Use the `query` it echoes when \
@@ -637,9 +638,11 @@ Example: delete_time_entry {\"entry\": \"0193b2a4-5c6d-7e8f-9a0b-1c2d3e4f5a6b\"}
         toolset: Toolset::Time,
         title: "Time report",
         description: "Sums the time logged from `from` to `to` (days, both included; default the \
-current week), grouped by `day`, `task` (default) or `project`, with totals in the workspace's \
-units (`1w 2d 4h`). Narrow it to a `project` (with its sub-projects) or a `task` (with its \
-subtasks); add `entries: true` to list the entries too. \
+current week), grouped by `day`, `week`, `month`, `task` (default), `project` or `person`, with \
+totals in the workspace's units (`1w 2d 4h`). Narrow it to a `project` (with its sub-projects \
+unless `include_subprojects: false`), a `task` (with its subtasks) or a `person` (`me`, `agent` \
+or a name); add `entries: true` to list the entries too, or `csv: \"groups\"` or `\"entries\"` \
+for CSV text. \
 Example: get_time_report {\"from\": \"2026-11-01\", \"to\": \"2026-11-30\", \"group_by\": \"project\"}",
         main: "time.report",
         covers: &["time.report"],

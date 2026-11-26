@@ -19,7 +19,7 @@ import { useListNames, useParsedQuery, useQueryFields } from "../../data/list";
 import { useToday } from "../../data/zone";
 import { type ListedTask, type QueryProblem } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
-import { useStatus, useTimerTask } from "../../shell/context";
+import { useScreenActions, useStatus, useTimerTask } from "../../shell/context";
 import {
   addDays,
   asDate,
@@ -129,6 +129,18 @@ export function CalendarView({ project, openTask, onOpen }: CalendarViewProps) {
 
   useStatus({ summary: t("calendar-status", { count: data.tasks.length }) });
   useTimerTask(openTask ?? null);
+  const goToday = () => {
+    setAnchor(today);
+    setFocusedDay(today);
+  };
+  const page = (by: 1 | -1) => {
+    setAnchor(step(anchor, mode, by));
+  };
+  useScreenActions([
+    { id: "view.previousPeriod", label: "action-previous-period", group: "navigation", keys: keysOf("view.previousPeriod"), run: () => { page(-1); } },
+    { id: "view.nextPeriod", label: "action-next-period", group: "navigation", keys: keysOf("view.nextPeriod"), run: () => { page(1); } },
+    { id: "view.today", label: "action-go-to-today", group: "navigation", keys: keysOf("view.today"), run: goToday },
+  ]);
 
   // Formats, in the person's language; days are dates without a time, read in UTC.
   const format = (options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat(locale, { ...options, timeZone: "UTC" });
@@ -450,22 +462,16 @@ export function CalendarView({ project, openTask, onOpen }: CalendarViewProps) {
     <div className={styles.screen} data-calendar={project} data-mode={mode}>
       <div className={classes("toolbar", styles.toolbar)}>
         <div className={styles.toolbarItem}>
-          <Button
-            className="btn"
-            onPress={() => {
-              setAnchor(today);
-              setFocusedDay(today);
-            }}
-          >
+          <Button className="btn" onPress={goToday}>
             {t("calendar-today")}
           </Button>
           <Button className={classes("btn flat icon", styles.flip)} aria-label={previous} onPress={() => {
-              setAnchor(step(anchor, mode, -1));
+              page(-1);
             }}>
             <ChevronLeft className="ic" aria-hidden="true" />
           </Button>
           <Button className={classes("btn flat icon", styles.flip)} aria-label={next} onPress={() => {
-              setAnchor(step(anchor, mode, 1));
+              page(1);
             }}>
             <ChevronRight className="ic" aria-hidden="true" />
           </Button>

@@ -143,6 +143,10 @@ fn run(ops: &[OpCommand], matches: &ArgMatches, out: Out) -> Result<(), OpError>
             }
             let text = if out.json {
                 output::json(&value)
+            } else if let Some(csv) = value.get("csv").and_then(serde_json::Value::as_str) {
+                // An operation asked for CSV text prints just that, ready to
+                // save or pipe.
+                csv.to_owned()
             } else {
                 output::human(&value)
             };

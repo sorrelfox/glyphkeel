@@ -455,7 +455,7 @@ Input: `TimeEntryRef`. Output: `TimeEntryChange`. Schemas: [catalog.schema.json]
 
 ## `time.report`
 
-Logged time over a range of days, grouped by day, task or project, with totals in the workspace's units.
+Logged time over a range of days, grouped by day, week, month, task, project or person, with totals in the workspace's units and optional CSV.
 
 Input: `TimeReportInput`. Output: `TimeReport`. Schemas: [catalog.schema.json](catalog.schema.json).
 

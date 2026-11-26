@@ -3,7 +3,7 @@
 
 import { defineConfig, devices } from "@playwright/test";
 
-// The calendar on the sample data: a production build in the fake mode,
+// The calendar and the time report on the sample data: a production build in the fake mode,
 // served on a port of its own.
 const PORT = Number(process.env.GK_CALENDAR_PORT ?? 5321);
 const DIST = "node_modules/.cache/calendar-fake-dist";

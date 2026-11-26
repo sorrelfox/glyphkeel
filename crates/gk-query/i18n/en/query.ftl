@@ -41,6 +41,7 @@ query-bad-key = "{ $value }" is not a task key such as TM-41.
 query-bad-project = "{ $value }" is not a project key such as TM, or TM/* with its sub-projects.
 query-bad-choice = "{ $value }" is not a value of { $field }. Use one of: { $choices }.
 query-bad-choice-suggest = "{ $value }" is not a value of { $field }. Did you mean "{ $suggestion }"?
+query-during-none = during: needs dates. For tasks without dates, use is:unscheduled.
 query-empty-value = { $field } needs a value that is not empty.
 
 ## Sorting

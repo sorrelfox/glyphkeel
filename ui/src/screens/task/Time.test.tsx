@@ -130,7 +130,8 @@ describe("the time report", () => {
     const row = await screen.findByRole("row", { name: named(new RegExp(task.key)) });
     expect(plain(row.textContent)).toContain("2h");
     expect(within(row).getByRole("button", { name: named(new RegExp(task.key)) })).toBeDefined();
-    fireEvent.click(screen.getByRole("radio", { name: "Day" }));
+    fireEvent.click(screen.getByRole("button", { name: /Group by/ }));
+    fireEvent.click(within(await screen.findByRole("listbox")).getByRole("option", { name: "Day" }));
     await screen.findByRole("columnheader", { name: "Day" });
   });
 });
