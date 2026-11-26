@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Button } from "react-aria-components";
 
 import { Dialog } from "../../components/Dialog";
-import { errorToast, useCall } from "../../data/hooks";
+import { Select } from "../../components/Select";
+import { errorToast, useCall, useOp } from "../../data/hooks";
 import { type WikiPage } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import styles from "./Wiki.module.css";
@@ -28,10 +29,12 @@ interface TitleDialogProps {
   onClose: () => void;
   /** A line under the field, such as where the page goes. */
   note?: string | undefined;
+  /** More fields, under the title. */
+  children?: ReactNode;
 }
 
 /** A dialog with one title field, for a new page and a rename. */
-function TitleDialog({ title, initial, action, run, onClose, note }: TitleDialogProps) {
+function TitleDialog({ title, initial, action, run, onClose, note, children }: TitleDialogProps) {
   const t = useT();
   const [text, setText] = useState(initial);
   const [error, setError] = useState<string | null>(null);
@@ -93,6 +96,7 @@ function TitleDialog({ title, initial, action, run, onClose, note }: TitleDialog
             />
           </span>
         </label>
+        {children}
         {note !== undefined && <p className="faint">{note}</p>}
         {error !== null && (
           <p className={styles.error} role="alert">
@@ -105,11 +109,17 @@ function TitleDialog({ title, initial, action, run, onClose, note }: TitleDialog
   );
 }
 
-/** Makes a page, inside another or at the top; answers with the new page's ID. */
+/** The choice of "a blank page" in the template field. */
+const BLANK = "";
+
+/** Makes a page, inside another or at the top, blank or from one of the project's templates; answers with the new page's ID. */
 export function NewPageDialog({ request, onClose }: { request: NewPageRequest; onClose: (created?: string) => void }) {
   const t = useT();
   const call = useCall();
   const created = useRef<string | undefined>(undefined);
+  const pages = useOp("wiki.list", { project: request.project });
+  const templates = (pages.data?.items ?? []).filter((page) => page.template === true);
+  const [template, setTemplate] = useState<string>(BLANK);
   return (
     <TitleDialog
       title={request.parent ? t("wiki-new-child-title", { parent: request.parent.title }) : t("wiki-new-page")}
@@ -117,13 +127,30 @@ export function NewPageDialog({ request, onClose }: { request: NewPageRequest; o
       action={t("wiki-create")}
       note={request.parent ? t("wiki-new-in", { parent: request.parent.title }) : t("wiki-new-at-top")}
       run={async (title) => {
-        const change = await call("wiki.create", { project: request.project, title, ...(request.parent ? { parent: request.parent.id } : {}) });
+        const change = await call("wiki.create", {
+          project: request.project,
+          title,
+          ...(request.parent ? { parent: request.parent.id } : {}),
+          ...(template === BLANK ? {} : { template }),
+        });
         created.current = change.page.id;
       }}
       onClose={() => {
         onClose(created.current);
       }}
-    />
+    >
+      {templates.length > 0 && (
+        <div className={styles.formRow}>
+          <span className={styles.formLabel}>{t("wiki-template-field")}</span>
+          <Select
+            label={t("wiki-template-field")}
+            value={template}
+            options={[{ id: BLANK, label: t("wiki-template-blank") }, ...templates.map((page) => ({ id: page.id, label: page.title }))]}
+            onChange={setTemplate}
+          />
+        </div>
+      )}
+    </TitleDialog>
   );
 }
 

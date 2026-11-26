@@ -697,6 +697,8 @@ history-field-date = Day
 history-field-minutes = Duration
 history-field-note = Note
 history-field-agent_brief = Agent brief
+history-field-home = Home page
+history-field-template = Template
 
 ## Preferences: appearance
 

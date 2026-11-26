@@ -77,6 +77,9 @@ pub mod allowlist {
         "data-math",
         "data-lang",
         "data-external-src",
+        "data-macro",
+        "data-macro-note",
+        "data-macro-arg",
     ];
 
     /// Schemes a link (`<a href>`) may use. Links to a fragment (`#fn-…`) are
@@ -117,15 +120,17 @@ pub mod allowlist {
                 "rel",
             ],
             "img" => &["src", "alt", "width", "height", "data-external-src"],
-            "input" => &["type", "checked", "data-item"],
+            "input" => &["type", "checked", "disabled", "data-item"],
             "li" => &["id", "class"],
+            "ul" => &["data-macro"],
             "ol" => &["start"],
             "th" | "td" => &["align"],
             "sup" => &["class"],
             "section" => &["class", "data-footnotes"],
-            "span" => &["data-math"],
+            "span" => &["data-math", "data-macro"],
             "pre" => &["data-lang"],
-            "div" | "p" => &["class"],
+            "div" => &["class", "data-macro"],
+            "p" => &["class", "data-macro-note", "data-macro-arg"],
             "details" => &["open"],
             _ => &[],
         }
@@ -224,6 +229,7 @@ fn filter_attribute(
         }
         ("img", "src") => has_scheme(value.trim(), IMAGE_SCHEME).then(|| value.to_owned()),
         ("input", "type") => Some("checkbox".to_owned()),
+        ("input", "disabled") => Some(String::new()),
         (_, "id") => {
             // Only this document's footnote ids, so raw HTML can't take the
             // id of anything else on the page.

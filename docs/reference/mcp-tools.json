@@ -30345,7 +30345,7 @@
       "covers": [
         "wiki.list"
       ],
-      "description": "Lists a project's wiki pages as a tree: each page's title, slug, parent, depth, number of child pages, when it changed and whether it is the agent brief or the home page. Pages are named by title (any case), slug or ID in the other wiki tools. Example: list_wiki_pages {\"project\": \"TM\"}",
+      "description": "Lists a project's wiki pages as a tree: each page's title, slug, parent, depth, number of child pages, when it changed and whether it is the agent brief, the home page or a template. Pages are named by title (any case), slug or ID in the other wiki tools. Example: list_wiki_pages {\"project\": \"TM\"}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "A project's pages.",
@@ -30405,6 +30405,10 @@
                 "slug": {
                   "description": "Its name in addresses, made from the title.",
                   "type": "string"
+                },
+                "template": {
+                  "description": "Whether it is a template, offered when a new page is made.",
+                  "type": "boolean"
                 },
                 "title": {
                   "description": "The page's title.",
@@ -30603,6 +30607,10 @@
                     "slug": {
                       "description": "Its name in addresses, made from the title.",
                       "type": "string"
+                    },
+                    "template": {
+                      "description": "Whether it is a template, offered when a new page is made.",
+                      "type": "boolean"
                     },
                     "title": {
                       "description": "The page's title.",
@@ -31231,6 +31239,10 @@
             "description": "Its name in addresses, made from the title.",
             "type": "string"
           },
+          "template": {
+            "description": "Whether it is a template, offered when a new page is made.",
+            "type": "boolean"
+          },
           "title": {
             "description": "The page's title.",
             "type": "string"
@@ -31268,7 +31280,7 @@
       "covers": [
         "wiki.create"
       ],
-      "description": "Creates a wiki page in a project, optionally inside a `parent` page and with its Markdown `body`. Titles are unique in a project ignoring case and can't contain `[`, `]`, `#` or `|`, because links name pages by title (`[[Release plan#Dates]]`). Pass `client_request_id` so a retry doesn't create a second page. Example: create_wiki_page {\"project\": \"TM\", \"title\": \"Release plan\", \"body\": \"# Dates\\n\"}",
+      "description": "Creates a wiki page in a project, optionally inside a `parent` page and with its Markdown `body`, or starting from a `template` page's text (any page; list_wiki_pages marks the templates). Titles are unique in a project ignoring case and can't contain `[`, `]`, `#` or `|`, because links name pages by title (`[[Release plan#Dates]]`). A page's text may hold macros on lines of their own (`{{toc}}`, `{{children}}`, `{{include Page}}`, `{{tasks <query>}}`), which the app expands when it shows the page. Pass `client_request_id` so a retry doesn't create a second page. Example: create_wiki_page {\"project\": \"TM\", \"title\": \"Release plan\", \"body\": \"# Dates\\n\"}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "A new page.",
@@ -31314,6 +31326,10 @@
           },
           "project": {
             "description": "The project: its key or ID.",
+            "type": "string"
+          },
+          "template": {
+            "description": "Start from this page's text: a template (or any page) by title,\nslug, ID or `KEY:Page` for another project's; not with `body`.",
             "type": "string"
           },
           "title": {
@@ -31798,6 +31814,10 @@
                 "description": "Its name in addresses, made from the title.",
                 "type": "string"
               },
+              "template": {
+                "description": "Whether it is a template, offered when a new page is made.",
+                "type": "boolean"
+              },
               "title": {
                 "description": "The page's title.",
                 "type": "string"
@@ -31885,7 +31905,7 @@
         "wiki.update",
         "wiki.move"
       ],
-      "description": "Changes a wiki page: prefer `edits` ([{old_text, new_text}], each old_text occurring exactly once) for small changes; a whole new `body` needs the `base_revision` you read, and an edit that clashes with one saved since is kept as a conflict copy instead of overwriting it. Also `title` (the old slug keeps finding the page), `parent` (or `clear: [\"parent\"]`) to move it with the pages inside it, place (`before`/`after`/`at`), a revision `message`, `home: true` to make it the page the wiki opens on, and `resolve_conflict`. Example: update_wiki_page {\"project\": \"TM\", \"page\": \"Release plan\", \"edits\": [{\"old_text\": \"Dec 1\", \"new_text\": \"Dec 8\"}]}",
+      "description": "Changes a wiki page: prefer `edits` ([{old_text, new_text}], each old_text occurring exactly once) for small changes; a whole new `body` needs the `base_revision` you read, and an edit that clashes with one saved since is kept as a conflict copy instead of overwriting it. Also `title` (the old slug keeps finding the page), `parent` (or `clear: [\"parent\"]`) to move it with the pages inside it, place (`before`/`after`/`at`), a revision `message`, `home: true` to make it the page the wiki opens on, `template: true` to mark it as a template, and `resolve_conflict`. Example: update_wiki_page {\"project\": \"TM\", \"page\": \"Release plan\", \"edits\": [{\"old_text\": \"Dec 1\", \"new_text\": \"Dec 8\"}]}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "Changes to a page; fields left out keep their value.",
@@ -32020,6 +32040,10 @@
               "action"
             ],
             "type": "object"
+          },
+          "template": {
+            "description": "Mark it as a template (`true`), which the app offers when a new page\nis made, or unmark it (`false`).",
+            "type": "boolean"
           },
           "title": {
             "description": "A new title. The old slug keeps finding the page, so links by the\nold title still resolve until another page takes that name.",
@@ -32501,6 +32525,10 @@
               "slug": {
                 "description": "Its name in addresses, made from the title.",
                 "type": "string"
+              },
+              "template": {
+                "description": "Whether it is a template, offered when a new page is made.",
+                "type": "boolean"
               },
               "title": {
                 "description": "The page's title.",

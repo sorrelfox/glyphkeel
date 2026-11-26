@@ -3,13 +3,16 @@
 
 //! The reader's HTML.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
+use std::fmt::Write as _;
 
 use comrak::nodes::{AstNode, NodeLink, NodeValue};
 use comrak::{Arena, parse_document};
 
+use crate::macros::{Lines, MAX_INCLUDE_DEPTH, MAX_INCLUDES, Macro, MacroSource, Note};
 use crate::references::inside_link;
+use crate::text::{collapse_whitespace, push_attribute, push_inline_text};
 use crate::{keys, sanitize};
 
 /// How to render a document.
@@ -17,6 +20,8 @@ use crate::{keys, sanitize};
 pub struct RenderOptions<'a> {
     document_id: &'a str,
     task_keys: Option<&'a dyn Fn(&str) -> bool>,
+    macros: Option<&'a dyn MacroSource>,
+    notes: Option<&'a dyn Fn(&Note) -> String>,
 }
 
 impl<'a> RenderOptions<'a> {
@@ -33,6 +38,8 @@ impl<'a> RenderOptions<'a> {
         Self {
             document_id,
             task_keys: None,
+            macros: None,
+            notes: None,
         }
     }
 
@@ -44,6 +51,30 @@ impl<'a> RenderOptions<'a> {
         self.task_keys = Some(exists);
         self
     }
+
+    /// Expands the wiki macros (`{{toc}}`, `{{children}}`, `{{include …}}`,
+    /// `{{tasks …}}`) with what `source` finds. Without it they stay text.
+    ///
+    /// Each macro becomes an element with `data-macro` (`toc`, `children`,
+    /// `include`, `tasks`); a line that stands for a macro's result, such as
+    /// "no tasks match", is a `<p data-macro-note="…">` with the note's
+    /// value in `data-macro-arg` and no text, for the reader to word in the
+    /// person's language (see [`with_macro_notes`](Self::with_macro_notes)).
+    /// Checkboxes of an included page are shown but carry no number and
+    /// can't be ticked here.
+    #[must_use]
+    pub fn with_macros(mut self, source: &'a dyn MacroSource) -> Self {
+        self.macros = Some(source);
+        self
+    }
+
+    /// Writes each macro note's text with `text`, for HTML that is read
+    /// outside the app (an export).
+    #[must_use]
+    pub fn with_macro_notes(mut self, text: &'a dyn Fn(&Note) -> String) -> Self {
+        self.notes = Some(text);
+        self
+    }
 }
 
 impl fmt::Debug for RenderOptions<'_> {
@@ -51,7 +82,8 @@ impl fmt::Debug for RenderOptions<'_> {
         f.debug_struct("RenderOptions")
             .field("document_id", &self.document_id)
             .field("task_keys", &self.task_keys.is_some())
-            .finish()
+            .field("macros", &self.macros.is_some())
+            .finish_non_exhaustive()
     }
 }
 
@@ -85,28 +117,261 @@ impl fmt::Debug for RenderOptions<'_> {
 /// ```
 #[must_use]
 pub fn render(source: &str, options: &RenderOptions<'_>) -> String {
-    let arena = Arena::new();
-    let parse_options = crate::options();
-    let root = parse_document(&arena, source, &parse_options);
-    let key_links = match options.task_keys {
-        Some(exists) => link_task_keys(&arena, root, exists),
-        None => HashSet::new(),
-    };
     let footnote_prefix = footnote_prefix(options.document_id);
-    prefix_footnotes(root, &footnote_prefix);
-    let mark = new_mark();
-    let mut html = String::with_capacity(source.len() * 2);
-    let state = State {
-        mark: mark.clone(),
-        items: 0,
-        key_links,
+    let mut run = Run {
+        options,
+        mark: new_mark(),
+        includes: Vec::new(),
+        included: 0,
     };
-    // Writing to a String can't fail, and the formatter adds no errors of
-    // its own.
-    if HtmlFormatter::format_document(root, &parse_options, &mut html, state).is_err() {
-        html.clear();
+    let html = run.document(source, None, &footnote_prefix);
+    sanitize::clean(&html, &run.mark, &footnote_prefix)
+}
+
+/// One render: the text and the pages it includes.
+struct Run<'o, 'a> {
+    options: &'o RenderOptions<'a>,
+    mark: String,
+    /// The IDs of the pages being included, outermost first.
+    includes: Vec<String>,
+    /// Pages included so far.
+    included: usize,
+}
+
+impl Run<'_, '_> {
+    /// The HTML of one text, not yet sanitized: the document itself
+    /// (`page` `None`) or an included page.
+    fn document(&mut self, source: &str, page: Option<&str>, footnotes: &str) -> String {
+        let arena = Arena::new();
+        let parse_options = crate::options();
+        let root = parse_document(&arena, source, &parse_options);
+        let key_links = match self.options.task_keys {
+            Some(exists) => link_task_keys(&arena, root, exists),
+            None => HashSet::new(),
+        };
+        prefix_footnotes(root, footnotes);
+        let macros = match self.options.macros {
+            Some(from) => self.expand(root, source, page, from, footnotes),
+            None => HashMap::new(),
+        };
+        let mut html = String::with_capacity(source.len() * 2);
+        let state = State {
+            mark: self.mark.clone(),
+            items: 0,
+            key_links,
+            macros,
+            included: page.is_some(),
+        };
+        // Writing to a String can't fail, and the formatter adds no errors of
+        // its own.
+        if HtmlFormatter::format_document(root, &parse_options, &mut html, state).is_err() {
+            html.clear();
+        }
+        html
     }
-    sanitize::clean(&html, &mark, &footnote_prefix)
+
+    /// The HTML of each macro paragraph of the text, by [`node_address`].
+    fn expand<'a>(
+        &mut self,
+        root: &'a AstNode<'a>,
+        source: &str,
+        page: Option<&str>,
+        from: &dyn MacroSource,
+        footnotes: &str,
+    ) -> HashMap<usize, String> {
+        let lines = Lines::new(source);
+        let found: Vec<(usize, Macro)> = root
+            .descendants()
+            .filter(|n| matches!(n.data().value, NodeValue::Paragraph))
+            .filter_map(|n| {
+                lines
+                    .paragraph_macro(n.data().sourcepos)
+                    .map(|m| (node_address(n), m))
+            })
+            .collect();
+        let mut out = HashMap::with_capacity(found.len());
+        for (address, call) in found {
+            let html = match &call {
+                Macro::Toc => self.toc(root),
+                Macro::Children => self.children(from, page),
+                Macro::Include(name) => self.include(from, page, name, footnotes),
+                Macro::Tasks(query) => self.tasks(from, page, query),
+            };
+            out.insert(address, html);
+        }
+        out
+    }
+
+    fn attribute(&self, value: &str) -> String {
+        marked(&self.mark, value)
+    }
+
+    /// `<p data-macro-note="…">`, with the note's text when the render
+    /// words it.
+    fn note(&self, note: &Note) -> String {
+        let mut out = format!("<p data-macro-note={}", self.attribute(note.kind()));
+        let value = note.value();
+        if !value.is_empty() {
+            let _ = write!(out, " data-macro-arg={}", self.attribute(&value));
+        }
+        out.push('>');
+        if let Some(text) = self.options.notes {
+            push_text(&text(note), &mut out);
+        }
+        out.push_str("</p>\n");
+        out
+    }
+
+    /// A link to a wiki page, as the renderer writes `[[target]]`.
+    fn wiki_link(&self, target: &str, label: &str, out: &mut String) {
+        let _ = write!(out, "<a data-wiki={}>", self.attribute(target));
+        push_text(label, out);
+        out.push_str("</a>");
+    }
+
+    fn toc<'a>(&self, root: &'a AstNode<'a>) -> String {
+        let headings: Vec<(u8, String)> = root
+            .descendants()
+            .filter_map(|n| match n.data().value {
+                NodeValue::Heading(h) => {
+                    let mut text = String::new();
+                    push_inline_text(n, &mut text);
+                    let text = collapse_whitespace(&text);
+                    (!text.is_empty()).then_some((h.level, text))
+                }
+                _ => None,
+            })
+            .collect();
+        let mut out = format!("<div data-macro={}>", self.attribute("toc"));
+        if headings.is_empty() {
+            out.push_str(&self.note(&Note::NoHeadings));
+            out.push_str("</div>\n");
+            return out;
+        }
+        // Nested lists by level: a deeper heading opens a list inside the
+        // one before it, however many levels deeper it is.
+        let mut open: Vec<u8> = Vec::new();
+        for (level, text) in &headings {
+            let level = *level;
+            while open.len() > 1 && open.last().is_some_and(|&l| l > level) {
+                out.push_str("</li></ul>");
+                open.pop();
+            }
+            match open.last() {
+                Some(&last) if last >= level => out.push_str("</li><li>"),
+                _ => {
+                    out.push_str("<ul><li>");
+                    open.push(level);
+                }
+            }
+            self.wiki_link(&format!("#{text}"), text, &mut out);
+        }
+        for _ in &open {
+            out.push_str("</li></ul>");
+        }
+        out.push_str("</div>\n");
+        out
+    }
+
+    fn children(&self, from: &dyn MacroSource, page: Option<&str>) -> String {
+        let pages = from.children(page);
+        let mut out = format!("<div data-macro={}>", self.attribute("children"));
+        if pages.is_empty() {
+            out.push_str(&self.note(&Note::NoChildren));
+        } else {
+            out.push_str("<ul>");
+            for item in &pages {
+                out.push_str("<li>");
+                self.wiki_link(&item.target, &item.title, &mut out);
+                out.push_str("</li>");
+            }
+            out.push_str("</ul>");
+        }
+        out.push_str("</div>\n");
+        out
+    }
+
+    fn include(
+        &mut self,
+        from: &dyn MacroSource,
+        page: Option<&str>,
+        name: &str,
+        footnotes: &str,
+    ) -> String {
+        let mut out = format!("<div data-macro={}>", self.attribute("include"));
+        let refused = if self.includes.len() >= MAX_INCLUDE_DEPTH {
+            Some(Note::IncludeTooDeep(name.to_owned()))
+        } else if self.included >= MAX_INCLUDES {
+            Some(Note::IncludeTooMany(name.to_owned()))
+        } else {
+            None
+        };
+        if let Some(note) = refused {
+            out.push_str(&self.note(&note));
+            out.push_str("</div>\n");
+            return out;
+        }
+        match from.include(page, name) {
+            None => out.push_str(&self.note(&Note::IncludeMissing(name.to_owned()))),
+            Some(found)
+                if self.includes.contains(&found.id)
+                    || from.page().is_some_and(|own| own == found.id) =>
+            {
+                out.push_str(&self.note(&Note::IncludeLoop(name.to_owned())));
+            }
+            Some(found) => {
+                self.included += 1;
+                let footnotes = format!("{footnotes}-i{}", self.included);
+                self.includes.push(found.id.clone());
+                let html = self.document(&found.text, Some(&found.id), &footnotes);
+                self.includes.pop();
+                out.push_str(&html);
+            }
+        }
+        out.push_str("</div>\n");
+        out
+    }
+
+    fn tasks(&self, from: &dyn MacroSource, page: Option<&str>, query: &str) -> String {
+        let mut out = format!("<div data-macro={}>", self.attribute("tasks"));
+        match from.tasks(page, query) {
+            Err(error) => out.push_str(&self.note(&Note::TasksError(error))),
+            Ok(list) if list.items.is_empty() => out.push_str(&self.note(&Note::NoTasks)),
+            Ok(list) => {
+                out.push_str("<ul>");
+                for task in &list.items {
+                    let _ = write!(out, "<li><a data-ref={}>", self.attribute(&task.key));
+                    push_text(&task.key, &mut out);
+                    out.push_str("</a> ");
+                    if task.done {
+                        out.push_str("<del>");
+                        push_text(&task.title, &mut out);
+                        out.push_str("</del>");
+                    } else {
+                        push_text(&task.title, &mut out);
+                    }
+                    if !task.status.is_empty() {
+                        let _ = write!(out, " <span data-macro={}>", self.attribute("status"));
+                        push_text(&task.status, &mut out);
+                        out.push_str("</span>");
+                    }
+                    out.push_str("</li>");
+                }
+                out.push_str("</ul>");
+                let more = list.total.saturating_sub(list.items.len());
+                if more > 0 {
+                    out.push_str(&self.note(&Note::MoreTasks(more)));
+                }
+            }
+        }
+        out.push_str("</div>\n");
+        out
+    }
+}
+
+/// Appends `text` escaped for HTML text.
+fn push_text(text: &str, out: &mut String) {
+    push_attribute(text, out);
 }
 
 /// Replaces the task keys in text nodes with links, except in code, links,
@@ -227,6 +492,11 @@ struct State {
     items: usize,
     /// The task-key links added to the document, by [`node_address`].
     key_links: HashSet<usize>,
+    /// The HTML of each macro paragraph, by [`node_address`].
+    macros: HashMap<usize, String>,
+    /// Whether this is a page included in another: its checkboxes can't
+    /// be ticked here, so they get no number.
+    included: bool,
 }
 
 /// Appends `"<mark>:<value>"` (escaped, in quotes) to the output.
@@ -268,20 +538,35 @@ mod formatter {
     use crate::text::push_inline_text;
 
     create_formatter!(HtmlFormatter<State>, {
+        NodeValue::Paragraph => |context, node, entering| {
+            let Some(html) = context.user.macros.get(&node_address(node)) else {
+                return format_node_default(context, node, entering);
+            };
+            if entering {
+                let html = html.clone();
+                context.cr()?;
+                context.write_str(&html)?;
+            }
+            return Ok(ChildRendering::Skip);
+        },
         NodeValue::TaskItem(ref task) => |context, node, entering| {
             let in_list = node
                 .parent()
                 .is_some_and(|p| matches!(p.data().value, NodeValue::List(_)));
             if entering {
-                context.user.items += 1;
-                let number = context.user.items.to_string();
                 let item_class = marked(&context.user.mark, "task-item");
-                let data_item = marked(&context.user.mark, &number);
                 context.cr()?;
                 if in_list {
                     write!(context, "<li class={item_class}>")?;
                 }
-                write!(context, "<input type=\"checkbox\" data-item={data_item}")?;
+                if context.user.included {
+                    context.write_str("<input type=\"checkbox\" disabled=\"\"")?;
+                } else {
+                    context.user.items += 1;
+                    let number = context.user.items.to_string();
+                    let data_item = marked(&context.user.mark, &number);
+                    write!(context, "<input type=\"checkbox\" data-item={data_item}")?;
+                }
                 if task.symbol.is_some() {
                     context.write_str(" checked=\"\"")?;
                 }

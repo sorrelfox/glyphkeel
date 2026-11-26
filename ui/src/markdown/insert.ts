@@ -21,8 +21,8 @@ const READER_TAGS = [
 
 /** Their attributes, all tags together (the engine allows each on fewer tags). */
 const READER_ATTRIBUTES = [
-  "title", "href", "id", "class", "rel", "src", "alt", "width", "height", "type", "checked", "start", "align", "open",
-  "data-item", "data-ref", "data-comment", "data-wiki", "data-math", "data-lang", "data-external-src", "data-footnotes", "data-footnote-ref",
+  "title", "href", "id", "class", "rel", "src", "alt", "width", "height", "type", "checked", "disabled", "start", "align", "open",
+  "data-item", "data-macro", "data-macro-note", "data-macro-arg", "data-ref", "data-comment", "data-wiki", "data-math", "data-lang", "data-external-src", "data-footnotes", "data-footnote-ref",
   "data-footnote-backref",
 ];
 

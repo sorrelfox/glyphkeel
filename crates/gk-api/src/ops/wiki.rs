@@ -48,6 +48,9 @@ pub struct WikiPageSummary {
     /// Whether it is the wiki's home page, the page the wiki opens on.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub home: bool,
+    /// Whether it is a template, offered when a new page is made.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub template: bool,
     /// When it last changed (RFC 3339, UTC).
     pub updated_at: String,
     /// The page's ID.
@@ -235,6 +238,9 @@ pub struct WikiPage {
     /// Whether it is the wiki's home page, the page the wiki opens on.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub home: bool,
+    /// Whether it is a template, offered when a new page is made.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub template: bool,
     /// What links to it, when asked for with `include`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub backlinks: Option<Vec<Backlink>>,
@@ -268,6 +274,10 @@ pub struct WikiCreateInput {
     /// The text (Markdown).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub body: Option<String>,
+    /// Start from this page's text: a template (or any page) by title,
+    /// slug, ID or `KEY:Page` for another project's; not with `body`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub template: Option<String>,
     /// The page to put it in (title, slug or ID); default: at the top.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,
@@ -350,6 +360,10 @@ pub struct WikiUpdateInput {
     /// (`false`). Without a home page the wiki opens on its first page.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub home: Option<bool>,
+    /// Mark it as a template (`true`), which the app offers when a new page
+    /// is made, or unmark it (`false`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub template: Option<bool>,
     /// Fields to clear.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub clear: Vec<WikiField>,
@@ -473,12 +487,12 @@ pub(crate) const WIKI_GET: OpDescriptor = OpDescriptor::of::<WikiGet>(read(
     "WikiPage",
 ));
 pub(crate) const WIKI_CREATE: OpDescriptor = OpDescriptor::of::<WikiCreate>(write(
-    "Create a wiki page with a title unique in its project, optionally inside another page and with its text.",
+    "Create a wiki page with a title unique in its project, optionally inside another page and with its text or a template's.",
     "wiki new",
     "WikiCreateInput",
 ));
 pub(crate) const WIKI_UPDATE: OpDescriptor = OpDescriptor::of::<WikiUpdate>(write(
-    "Change a wiki page: its text (whole, with a base revision, or by targeted edits), title, parent or place, whether it is the home page; or resolve a conflict copy.",
+    "Change a wiki page: its text (whole, with a base revision, or by targeted edits), title, parent or place, whether it is the home page or a template; or resolve a conflict copy.",
     "wiki put <page>",
     "WikiUpdateInput",
 ));

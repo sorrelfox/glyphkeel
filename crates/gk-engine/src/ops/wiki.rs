@@ -19,6 +19,9 @@
 //! - At most one page per project is the home page, which the wiki opens
 //!   on. A page in the trash keeps the mark (only live pages show it), so
 //!   it is the home page again when it comes back.
+//! - Any number of pages are templates (`template`, recorded for Undo). A
+//!   new page can start from any page's text (`wiki.create` with
+//!   `template`); the app offers the pages marked as templates.
 
 use std::collections::HashMap;
 
@@ -90,12 +93,13 @@ pub(crate) struct PageRow {
     rank: String,
     agent_brief: bool,
     home: bool,
+    template: bool,
     created_at: i64,
     updated_at: i64,
 }
 
 const PAGE_COLUMNS: &str = "id, project_id, parent_id, title, slug, rank, is_agent_brief,
-    created_at, updated_at, is_home";
+    created_at, updated_at, is_home, is_template";
 
 fn page_row(r: &Row<'_>) -> gk_store::rusqlite::Result<PageRow> {
     Ok(PageRow {
@@ -109,6 +113,7 @@ fn page_row(r: &Row<'_>) -> gk_store::rusqlite::Result<PageRow> {
         created_at: r.get(7)?,
         updated_at: r.get(8)?,
         home: r.get(9)?,
+        template: r.get(10)?,
     })
 }
 
@@ -366,6 +371,7 @@ fn summary(p: &PageRow, project: &str, depth: u32, children: u32) -> WikiPageSum
         children,
         agent_brief: p.agent_brief,
         home: p.home,
+        template: p.template,
         updated_at: rfc3339(p.updated_at),
         id: p.id.to_string(),
     }
@@ -527,6 +533,7 @@ fn page_out(
         conflict_copies: u32::try_from(conflicts).unwrap_or(0),
         agent_brief: p.agent_brief,
         home: p.home,
+        template: p.template,
         backlinks: if include.contains(&WikiPart::Backlinks) {
             Some(super::links::page_backlinks(tx, p)?)
         } else {
@@ -562,7 +569,7 @@ fn get(q: &QueryCtx<'_>, input: WikiGetInput) -> Result<WikiPage, Failure> {
 fn pages_in(tx: &Transaction<'_>, project: Option<&ProjectRow>) -> Result<Vec<PageRow>, Failure> {
     let sql = format!(
         "SELECT w.id, w.project_id, w.parent_id, w.title, w.slug, w.rank, w.is_agent_brief,
-                w.created_at, w.updated_at, w.is_home
+                w.created_at, w.updated_at, w.is_home, w.is_template
            FROM wiki_pages w JOIN projects p ON p.id = w.project_id
           WHERE w.deleted_at IS NULL AND p.deleted_at IS NULL AND {}
           ORDER BY w.updated_at DESC, w.id",
@@ -956,7 +963,25 @@ pub(crate) fn create_page(
         .as_deref()
         .map(|p| parent_for(w.tx(), &project, p, None))
         .transpose()?;
-    let body = input.body.unwrap_or_default();
+    let body = match (&input.template, input.body) {
+        (Some(_), Some(_)) => {
+            return Err(messages::invalid("template", "wiki-template-and-body", &[]));
+        }
+        (Some(template), None) => {
+            let source =
+                super::links::resolve_page(w.tx(), project.id, template)?.ok_or_else(|| {
+                    Failure::Op(
+                        messages::not_found(
+                            "wiki-template-not-found",
+                            &[("page", template.trim().to_owned())],
+                        )
+                        .with_detail("field", "template"),
+                    )
+                })?;
+            description::current_text(w.tx(), Owner::Wiki(source.id))?.0
+        }
+        (None, body) => body.unwrap_or_default(),
+    };
     gk_core::check_markdown("body", &body).map_err(|e| super::task::invalid("body", e))?;
     let siblings = children(w.tx(), project.id, parent.as_ref().map(|p| p.id))?;
     let target = target(
@@ -1075,6 +1100,16 @@ fn update(w: &mut WriteCtx<'_>, input: WikiUpdateInput) -> Result<WikiChange, Fa
     }
     if let Some(home) = input.home {
         set_home(w, &project, &page, home)?;
+    }
+    if let Some(template) = input.template.filter(|t| *t != page.template) {
+        fields::set(
+            w,
+            WIKI,
+            page.id,
+            Some(project.id),
+            "template",
+            Some(Value::Bool(template)),
+        )?;
     }
 
     let mut save = None;

@@ -35,7 +35,7 @@ export default function WikiPageDialog({ page, heading, onClose, onOpenTask }: W
   const found = useWikiPage(page);
   const wiki = found.data ?? null;
   const name = "id" in page ? (wiki?.title ?? "") : page.title;
-  const rendered = useOp("markdown.render", { documents: [{ source: wiki?.body ?? "", document_id: `wiki-${wiki?.id ?? ""}` }] }, { enabled: wiki !== null });
+  const rendered = useOp("markdown.render", { documents: [{ source: wiki?.body ?? "", page: wiki?.id ?? "", document_id: `wiki-${wiki?.id ?? ""}` }] }, { enabled: wiki !== null });
   const html = rendered.data?.items[0]?.html;
   const moment = useMomentFormat();
   const body = useRef<HTMLDivElement>(null);

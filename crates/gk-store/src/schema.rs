@@ -19,7 +19,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 use crate::error::{Result, StoreError};
 
 /// The schema version this program is built for.
-pub const SCHEMA_VERSION: i64 = 9;
+pub const SCHEMA_VERSION: i64 = 10;
 
 /// One migration: the SQL that takes the schema from `version - 1` to
 /// `version`.
@@ -66,6 +66,10 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 9,
         sql: include_str!("../migrations/0009_wiki_home.sql"),
+    },
+    Migration {
+        version: 10,
+        sql: include_str!("../migrations/0010_wiki_templates.sql"),
     },
 ];
 
@@ -526,7 +530,7 @@ mod tests {
                      'j', 'Home', 'home', 'home', 0, 0);",
         )
         .unwrap();
-        migrate(&mut conn, MIGRATIONS, |_| Ok(())).unwrap();
+        migrate(&mut conn, &MIGRATIONS[..9], |_| Ok(())).unwrap();
         assert_eq!(user_version(&conn).unwrap(), 9);
         let homes: i64 = conn
             .query_row("SELECT sum(is_home) FROM wiki_pages", [], |r| r.get(0))
@@ -536,5 +540,30 @@ mod tests {
             .unwrap();
         let second = conn.execute("UPDATE wiki_pages SET is_home = 1 WHERE slug = 'plan'", []);
         assert!(second.is_err(), "two home pages in one project");
+    }
+
+    #[test]
+    fn version_10_marks_no_page_as_a_template() {
+        let mut conn = memory();
+        migrate(&mut conn, &MIGRATIONS[..9], |_| Ok(())).unwrap();
+        conn.execute_batch(
+            "INSERT INTO projects (id, rank, key, name, name_fold, hue, modules, created_at,
+                                   updated_at)
+             VALUES (x'01010101010101010101010101010101', 'i', 'WK', 'WK', 'wk', 'blue', '{}',
+                     0, 0);
+             INSERT INTO wiki_pages (id, project_id, rank, title, title_fold, slug, created_at,
+                                     updated_at)
+             VALUES (x'02020202020202020202020202020202', x'01010101010101010101010101010101',
+                     'i', 'Plan', 'plan', 'plan', 0, 0);",
+        )
+        .unwrap();
+        migrate(&mut conn, MIGRATIONS, |_| Ok(())).unwrap();
+        assert_eq!(user_version(&conn).unwrap(), 10);
+        let marked: i64 = conn
+            .query_row("SELECT sum(is_template) FROM wiki_pages", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(marked, 0);
+        let bad = conn.execute("UPDATE wiki_pages SET is_template = 2", []);
+        assert!(bad.is_err(), "the mark is 0 or 1");
     }
 }

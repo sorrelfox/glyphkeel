@@ -331,6 +331,12 @@ pub struct RenderSource {
     /// A description revision: its ID.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub revision: Option<String>,
+    /// A wiki page: its ID. Alone, its current text is rendered; with
+    /// `source` or `revision`, that text is rendered as the page's. Either
+    /// way the page's macros (`{{toc}}`, `{{children}}`, `{{include …}}`,
+    /// `{{tasks …}}`) are expanded; in any other text they stay as written.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub page: Option<String>,
     /// The id that keeps this text's footnote anchors apart from others on
     /// the page; default: the item's ID (`preview` for `source`).
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -634,13 +634,13 @@ Input: `WikiGetInput`. Output: `WikiPage`. Schemas: [catalog.schema.json](catalo
 
 ## `wiki.create`
 
-Create a wiki page with a title unique in its project, optionally inside another page and with its text.
+Create a wiki page with a title unique in its project, optionally inside another page and with its text or a template's.
 
 Input: `WikiCreateInput`. Output: `WikiChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `wiki.update`
 
-Change a wiki page: its text (whole, with a base revision, or by targeted edits), title, parent or place, whether it is the home page; or resolve a conflict copy.
+Change a wiki page: its text (whole, with a base revision, or by targeted edits), title, parent or place, whether it is the home page or a template; or resolve a conflict copy.
 
 Input: `WikiUpdateInput`. Output: `WikiChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 

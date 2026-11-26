@@ -90,7 +90,7 @@ export function setChecked(text: string, item: FakeChecklistItem, checked: boole
 
 // ---------------------------------------------------------------- rendering
 
-const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
+export const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
 
 // A key may name one of the task's comments: `TM-41#c-1a2b3c4d`.
 const TASK_KEY = /(^|[^A-Za-z0-9_-])([A-Z][A-Z0-9]{1,9}-\d+)(?:#c-([0-9a-f]{8}))?(?![A-Za-z0-9_-])/g;

@@ -1552,3 +1552,207 @@ fn a_hostile_folder_is_refused_before_anything_is_written() {
     }
     assert!(ws.titles().is_empty());
 }
+
+#[test]
+fn macros_show_subpages_included_pages_and_live_task_lists() {
+    let ws = open();
+    ws.call("project.create", json!({ "name": "Other", "key": "OT" }));
+    ws.call(
+        "task.create",
+        json!({ "project": "TM", "title": "Write notes" }),
+    );
+    ws.call(
+        "task.create",
+        json!({ "project": "TM", "title": "Tag the release" }),
+    );
+    ws.call(
+        "task.create",
+        json!({ "project": "OT", "title": "Elsewhere" }),
+    );
+    let home = ws.page(
+        "Home",
+        "# Plan\n\n{{toc}}\n\n{{children}}\n\n{{include Shared}}\n\n{{tasks title:notes}}\n\n{{tasks project:OT}}\n\n{{tasks status:nothing}}\n\n{{include Home}}\n",
+    );
+    ws.child("Child", "Home");
+    ws.page("Shared", "Shared text TM-2.\n\n- [ ] not mine\n");
+    let render = |ctx: &Context| {
+        ws.engine
+            .call(
+                ctx,
+                "markdown.render",
+                json!({ "documents": [{ "page": home["id"] }] }),
+            )
+            .unwrap()["items"][0]
+            .clone()
+    };
+    let item = render(&me());
+    let html = item["html"].as_str().unwrap();
+    assert!(html.contains("<a data-wiki=\"#Plan\""), "{html}");
+    assert!(html.contains("<a data-wiki=\"Child\""), "{html}");
+    assert!(html.contains("Shared text <a data-ref=\"TM-2\""), "{html}");
+    assert!(
+        html.contains("<input type=\"checkbox\" disabled=\"\""),
+        "{html}"
+    );
+    assert!(html.contains("<a data-ref=\"TM-1\""), "{html}");
+    assert!(html.contains("Write notes"), "{html}");
+    assert!(
+        !html.contains("Tag the release"),
+        "the query filters: {html}"
+    );
+    assert!(html.contains("<a data-ref=\"OT-1\""), "{html}");
+    assert!(
+        html.contains("data-macro-note=\"tasks-error\""),
+        "an unknown status is an error: {html}"
+    );
+    assert!(html.contains("data-macro-note=\"include-loop\""), "{html}");
+    // The page's own checklist doesn't count the included page's.
+    assert_eq!(item["checklist"].as_array().unwrap().len(), 0);
+
+    // The list is live: a new task shows on the next render.
+    ws.call(
+        "task.create",
+        json!({ "project": "TM", "title": "More notes" }),
+    );
+    assert!(
+        render(&me())["html"]
+            .as_str()
+            .unwrap()
+            .contains("More notes")
+    );
+
+    // A caller limited to TM doesn't see OT's tasks through a macro.
+    let limited = me().within_project("TM");
+    let html = render(&limited)["html"].as_str().unwrap().to_owned();
+    assert!(!html.contains("OT-1"), "{html}");
+
+    // A text rendered as the page's (the editor's preview) expands them too;
+    // the same text alone doesn't.
+    let preview = ws.call(
+        "markdown.render",
+        json!({ "documents": [
+            { "page": home["id"], "source": "{{children}}\n" },
+            { "source": "{{children}}\n" },
+        ] }),
+    );
+    assert!(
+        preview["items"][0]["html"]
+            .as_str()
+            .unwrap()
+            .contains("data-wiki=\"Child\"")
+    );
+    assert_eq!(preview["items"][1]["html"], "<p>{{children}}</p>\n");
+    let err = ws.fails(
+        "markdown.render",
+        json!({ "documents": [{ "page": home["id"], "task": "TM-1" }] }),
+    );
+    assert_eq!(err.code, ErrorCode::Invalid);
+
+    // The web export expands them with their notes in words; the Markdown
+    // export keeps them as written.
+    let out = ws._dir.path().join("macros");
+    ws.call(
+        "wiki.export",
+        json!({
+            "project": "TM", "page": "Home", "text_format": "html",
+            "path": out.to_string_lossy(), "format": "folder",
+        }),
+    );
+    let page = std::fs::read_to_string(out.join("home.html")).unwrap();
+    assert!(page.contains("href=\"#plan\""), "{page}");
+    assert!(page.contains("Write notes"), "{page}");
+    assert!(page.contains("Shared text"), "{page}");
+    assert!(
+        page.contains("is not included again inside itself"),
+        "{page}"
+    );
+    let md = ws._dir.path().join("macros-md");
+    ws.call(
+        "wiki.export",
+        json!({
+            "project": "TM", "page": "Home",
+            "path": md.to_string_lossy(), "format": "folder",
+        }),
+    );
+    let text = std::fs::read_to_string(md.join("home.md")).unwrap();
+    assert!(text.contains("{{tasks title:notes}}"), "{text}");
+}
+
+#[test]
+fn pages_are_marked_as_templates_and_new_pages_start_from_them() {
+    let ws = open();
+    let text = "## Agenda\n\n- [ ] item\n\n{{tasks status:open}}\n";
+    ws.page("Meeting notes", text);
+    let marked = ws.call(
+        "wiki.update",
+        json!({ "project": "TM", "page": "Meeting notes", "template": true }),
+    );
+    assert_eq!(marked["page"]["template"], true, "{marked}");
+    let list = ws.call("wiki.list", json!({ "project": "TM" }));
+    assert_eq!(list["items"][0]["template"], true, "{list}");
+
+    // Undo takes the mark back; redo by marking again.
+    ws.call("history.undo", json!({}));
+    assert_eq!(ws.get("Meeting notes").get("template"), None);
+    ws.call(
+        "wiki.update",
+        json!({ "project": "TM", "page": "Meeting notes", "template": true }),
+    );
+
+    // A new page starts from the template's text, and is not a template.
+    let made = ws.call(
+        "wiki.create",
+        json!({ "project": "TM", "title": "Meeting 3 March", "template": "meeting-notes" }),
+    )["page"]
+        .clone();
+    assert_eq!(made["template"], Value::Null, "{made}");
+    assert_eq!(ws.get("Meeting 3 March")["body"], text);
+    // Changing the new page leaves the template alone.
+    ws.call(
+        "wiki.update",
+        json!({ "project": "TM", "page": "Meeting 3 March", "body": "changed\n" }),
+    );
+    assert_eq!(ws.get("Meeting notes")["body"], text);
+
+    // Another project's page by KEY:Page.
+    ws.call("project.create", json!({ "name": "Other", "key": "OT" }));
+    ws.call(
+        "wiki.create",
+        json!({ "project": "OT", "title": "Notes", "template": "TM:Meeting notes" }),
+    );
+    let other = ws.call("wiki.get", json!({ "project": "OT", "page": "Notes" }));
+    assert_eq!(other["body"], text);
+
+    let err = ws.fails(
+        "wiki.create",
+        json!({ "project": "TM", "title": "X", "template": "Meeting notes", "body": "x" }),
+    );
+    assert_eq!(err.code, ErrorCode::Invalid);
+    let err = ws.fails(
+        "wiki.create",
+        json!({ "project": "TM", "title": "X", "template": "Nowhere" }),
+    );
+    assert_eq!(err.code, ErrorCode::NotFound);
+    assert_eq!(err.details["field"], "template", "{err:?}");
+
+    // An agent limited to OT can't start from TM's template.
+    let agent = agent_of(&ws.engine, "helper").within_project("OT");
+    let err = ws
+        .engine
+        .call(
+            &agent,
+            "wiki.create",
+            json!({ "project": "OT", "title": "Y", "template": "TM:Meeting notes" }),
+        )
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::NotFound, "{err:?}");
+
+    // The mark survives the trash.
+    let deleted = ws.call(
+        "wiki.delete",
+        json!({ "project": "TM", "page": "Meeting notes" }),
+    );
+    let entry = deleted["items"][0]["id"].clone();
+    ws.call("trash.restore", json!({ "items": [entry] }));
+    assert_eq!(ws.get("Meeting notes")["template"], true);
+}

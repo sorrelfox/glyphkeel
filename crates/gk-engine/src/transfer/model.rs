@@ -357,6 +357,9 @@ pub(crate) struct WikiPage {
     /// Whether it is the wiki's home page; left out when not.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub(crate) is_home: bool,
+    /// Whether it is a template; left out when not.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) is_template: bool,
     pub(crate) created_at: i64,
     pub(crate) updated_at: i64,
     pub(crate) deleted_at: Option<i64>,

@@ -4,8 +4,10 @@
 /**
  * Completion: tasks after "#" (by a word of the title or by key; the key
  * replaces the search), task keys ("TM-4" → "TM-41", or a word of the
- * title), wiki pages and their headings after "[[", and slash commands that
- * insert blocks. Every inserted text gets the document's own line break.
+ * title), wiki pages and their headings after "[[", wiki macros after "{{"
+ * at the start of a line of a wiki page (and pages after "{{include "), and
+ * slash commands that insert blocks. Every inserted text gets the
+ * document's own line break.
  */
 
 import { insertCompletionText, startCompletion, type Completion, type CompletionContext, type CompletionResult } from "@codemirror/autocomplete";
@@ -116,6 +118,69 @@ async function wikiPages(context: CompletionContext): Promise<CompletionResult |
   };
 }
 
+/** The wiki macros: name, message ID of their description, and whether they take an argument. */
+export const MACROS: readonly { name: string; message: string; argument: boolean }[] = [
+  { name: "toc", message: "editor-macro-toc", argument: false },
+  { name: "children", message: "editor-macro-children", argument: false },
+  { name: "include", message: "editor-macro-include", argument: true },
+  { name: "tasks", message: "editor-macro-tasks", argument: true },
+];
+
+/** Inserts `{{name}}`, or `{{name }}` with the cursor before the closing braces. */
+function insertMacro(name: string, argument: boolean) {
+  return (view: EditorView, _completion: Completion, from: number, to: number): void => {
+    const closed = view.state.sliceDoc(to, to + 2) === "}}";
+    const text = argument ? `{{${name} ` : `{{${name}}}`;
+    const end = closed ? to + 2 : to;
+    const insert = argument ? `${text}}}` : text;
+    view.dispatch({ changes: { from, to: end, insert }, selection: { anchor: from + text.length }, userEvent: "input.complete" });
+    if (argument && name === "include") {
+      startCompletion(view);
+    }
+  };
+}
+
+async function wikiMacros(context: CompletionContext): Promise<CompletionResult | null> {
+  const providers = context.state.facet(completionProviders)();
+  if (providers.macros !== true || inCode(context.state, context.pos)) {
+    return null;
+  }
+  const include = context.matchBefore(/^\s*\{\{include [^}\r\n]*/);
+  if (include) {
+    if (!providers.pages) {
+      return null;
+    }
+    const query = include.text.slice(include.text.indexOf("include ") + "include ".length);
+    const found = await providers.pages(query);
+    if (context.aborted) {
+      return null;
+    }
+    return {
+      from: context.pos - query.length,
+      options: found
+        .map((page) => (typeof page === "string" ? { target: page, detail: undefined } : page))
+        .filter((page) => !page.target.includes("#"))
+        .map((page) => ({ label: page.target, ...(page.detail === undefined ? {} : { detail: page.detail }), type: "text" })),
+      filter: false,
+    };
+  }
+  const match = context.matchBefore(/^\s*\{\{[a-z]*/i);
+  if (!match) {
+    return null;
+  }
+  const text = context.state.facet(editorText);
+  return {
+    from: match.from + match.text.indexOf("{{"),
+    options: MACROS.map((macro) => ({
+      label: `{{${macro.name}${macro.argument ? " …" : ""}}}`,
+      detail: text(macro.message),
+      type: "function",
+      apply: insertMacro(macro.name, macro.argument),
+    })),
+    filter: false,
+  };
+}
+
 /** The slash commands: name, message ID of their description, and the Markdown they insert. */
 export const SLASH_COMMANDS: readonly { name: string; message: string; text: string }[] = [
   { name: "table", message: "editor-slash-table", text: "| Column | Column |\n| --- | --- |\n|  |  |" },
@@ -146,7 +211,7 @@ function slashCommands(context: CompletionContext): CompletionResult | null {
   };
 }
 
-export const completionSources = [taskSearch, taskKeys, wikiPages, slashCommands];
+export const completionSources = [taskSearch, taskKeys, wikiPages, wikiMacros, slashCommands];
 
 /**
  * What the toolbar's "Link task" and "Link wiki page" do: type the trigger

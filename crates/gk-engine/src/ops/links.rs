@@ -416,7 +416,7 @@ fn seen(tx: &Transaction<'_>, source: Source) -> Result<Option<Seen>, Failure> {
 }
 
 /// The page a link written `target` in a text of `project` names.
-fn resolve_page(
+pub(crate) fn resolve_page(
     tx: &Transaction<'_>,
     project: Id,
     target: &str,

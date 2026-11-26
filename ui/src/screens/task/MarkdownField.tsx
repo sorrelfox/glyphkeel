@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { Suspense, useEffect, useRef, type Ref } from "react";
+import { Suspense, useEffect, useMemo, useRef, type Ref } from "react";
 import { createPortal } from "react-dom";
 
 import { classes } from "../../classes";
@@ -96,7 +96,10 @@ export function MarkdownField({ label, value, onChange, onSubmit, onCancel, mode
   };
   const renderBlock = useBlockRenderer();
   // Wiki links point at pages of the task's own project (or the page's).
-  const completion = useLinkCompletion(project ?? (typeof attachTo === "string" ? attachTo.slice(0, attachTo.lastIndexOf("-")) || undefined : undefined));
+  const links = useLinkCompletion(project ?? (typeof attachTo === "string" ? attachTo.slice(0, attachTo.lastIndexOf("-")) || undefined : undefined));
+  // A wiki page's text also offers its macros.
+  const wikiPage = typeof attachTo === "object";
+  const completion = useMemo(() => (wikiPage ? { ...links, macros: true } : links), [links, wikiPage]);
   const box = useRef<HTMLDivElement>(null);
   const editor = useRef<MarkdownEditorHandle | null>(null);
   const takesFiles = attachTo !== undefined && !readOnly;

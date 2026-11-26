@@ -21,6 +21,11 @@ editor-slash-math = Math block
 editor-slash-mermaid = Mermaid diagram
 editor-slash-callout = Callout
 editor-slash-heading = Heading
+# The wiki macros offered after "{{" at the start of a line of a wiki page.
+editor-macro-toc = The page's headings
+editor-macro-children = The pages inside this one
+editor-macro-include = Another page's text
+editor-macro-tasks = A live list of tasks from a query
 
 ## The development page
 

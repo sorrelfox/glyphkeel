@@ -120,7 +120,7 @@ describe("the wiki screen", () => {
     });
     // The latest change: the old line removed, the new one added.
     const diff = await within(view).findByRole("group", { name: "Differences between the two revisions" });
-    expect(within(diff).getByText("One SQLite file per workspace.").tagName).toBe("DEL");
+    expect(within(diff).getByText((_, element) => element?.tagName === "DEL" && element.textContent === "One SQLite file per workspace.")).toBeTruthy();
     // Choose the older revision alone: restore it.
     fireEvent.click(within(revisions).getAllByRole("checkbox")[1] as HTMLElement);
     fireEvent.click(await within(view).findByRole("button", { name: "Restore this revision" }));

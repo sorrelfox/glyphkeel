@@ -229,3 +229,54 @@
   color: var(--fg);
   font-weight: 600;
 }
+
+/* Wiki macros: an included page sits in a quiet frame, the lists keep the
+   text's rhythm, and the notes they leave read as asides. */
+.reader [data-macro="include"] {
+  margin-block: 0 12px;
+  padding-block: 8px;
+  padding-inline: 12px;
+  border-inline-start: 3px solid var(--border-strong);
+  border-radius: var(--r-s);
+  background: var(--sunken);
+}
+
+.reader [data-macro="include"] > :last-child {
+  margin-block-end: 0;
+}
+
+.reader [data-macro="toc"] ul,
+.reader [data-macro="children"] ul {
+  margin-block: 0 10px;
+}
+
+.reader [data-macro="tasks"] ul {
+  margin-block: 0 10px;
+  padding-inline-start: 0;
+}
+
+.reader [data-macro="toc"] ul ul {
+  margin-block-end: 0;
+}
+
+.reader [data-macro="tasks"] li {
+  list-style: none;
+}
+
+.reader [data-macro="tasks"] a[data-ref] {
+  margin-inline-end: 6px;
+}
+
+.reader span[data-macro="status"] {
+  margin-inline-start: 6px;
+  padding-inline: 6px;
+  border-radius: var(--r-s);
+  background: var(--sunken);
+  color: var(--fg-muted);
+  font-size: var(--fs-small);
+}
+
+.reader p[data-macro-note] {
+  color: var(--fg-muted);
+  font-style: italic;
+}

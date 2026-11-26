@@ -11,7 +11,7 @@ import { Kbd } from "../../components/Kbd";
 import { Tooltip } from "../../components/Tooltip";
 import { useToasts } from "../../components/Toasts";
 import { useDraft, type Draft } from "../../data/drafts";
-import { useCall, useCommand, useOp } from "../../data/hooks";
+import { errorToast, useCall, useCommand, useOp } from "../../data/hooks";
 import { toggleChecklist } from "../../data/markdown";
 import { splitBacklinks } from "../../data/wiki";
 import { type Backlink, type Reference, type RevisionInfo, type WikiHeading, type WikiPage } from "../../generated/ops";
@@ -82,6 +82,7 @@ export function PageView(props: PageViewProps) {
   const [exporting, setExporting] = useState(false);
   const update = useCommand("wiki.update");
   const toasts = useToasts();
+  const lookup = useCall();
   // Files dropped on the page are attached to it.
   const owner = { page: pageId };
   const drop = useFileDrop(owner, writable && found.data !== undefined);
@@ -128,11 +129,26 @@ export function PageView(props: PageViewProps) {
   }
 
   const openLink = (target: string, at: string | undefined) => {
+    // A link to a heading of this page, such as one of {{toc}}'s.
+    if (target.trim() === "") {
+      onNavigate(page.id, at);
+      return;
+    }
     const reference = references.data?.items.find((item) => item.kind === "page" && item.target.trim().toLocaleLowerCase() === target.trim().toLocaleLowerCase());
     if (reference?.page) {
       onNavigate(reference.page.id, at);
     } else if (reference && !reference.found) {
       onCreateMissing(target);
+    } else if (!reference) {
+      // A link a macro wrote ({{children}}, an included page's) isn't among the text's own links: look the page up.
+      lookup("wiki.get", { project: page.project, page: target }).then(
+        (found) => {
+          onNavigate(found.id, at);
+        },
+        (error: unknown) => {
+          toasts.show(errorToast(t, error));
+        },
+      );
     }
   };
 
@@ -156,6 +172,15 @@ export function PageView(props: PageViewProps) {
       run: () => {
         const home = !page.home;
         update.mutate({ page: page.id, home }, { onSuccess: () => { toasts.show({ tone: "info", text: t(home ? "wiki-home-set-done" : "wiki-home-unset-done") }); } });
+      },
+    },
+    {
+      id: "template",
+      label: t(page.template ? "wiki-template-unset" : "wiki-template-set"),
+      disabled: !writable,
+      run: () => {
+        const template = !page.template;
+        update.mutate({ page: page.id, template }, { onSuccess: () => { toasts.show({ tone: "info", text: t(template ? "wiki-template-set-done" : "wiki-template-unset-done") }); } });
       },
     },
     "separator",
@@ -190,6 +215,7 @@ export function PageView(props: PageViewProps) {
             </span>
           )}
           {page.agent_brief && <span className="chip hue-purple">{t("wiki-agent-brief")}</span>}
+          {page.template && <span className="chip hue-teal">{t("wiki-template")}</span>}
         </nav>
         {editing && <div ref={setToolbarSlot} className={styles.toolbarSlot} data-toolbar-slot="" />}
         <span className="grow" />
@@ -293,7 +319,8 @@ interface PageReaderProps {
 function PageReader({ page, writable, heading, references, onOpenLink, onNavigate, onOpenTask }: PageReaderProps) {
   const t = useT();
   const call = useCall();
-  const rendered = useOp("markdown.render", { documents: [{ source: page.body, document_id: `wiki-${page.id}` }] });
+  // Rendered as this page's text, so that its macros ({{children}}, {{tasks …}}) are expanded.
+  const rendered = useOp("markdown.render", { documents: [{ source: page.body, page: page.id, document_id: `wiki-${page.id}` }] });
   const html = rendered.data?.items[0]?.html;
   const checklist = rendered.data?.items[0]?.checklist ?? [];
   const scroller = useRef<HTMLDivElement>(null);

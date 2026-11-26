@@ -825,6 +825,8 @@ fn settings_can_be_set_back_to_their_default() {
 /// Takes a workspace back from schema version 4 to 3: the timer without
 /// pausing, reminders as version 3 had them.
 const BACK_TO_3: &str = "
+    ALTER TABLE wiki_pages DROP COLUMN is_template;
+    DROP INDEX wiki_pages_one_home; ALTER TABLE wiki_pages DROP COLUMN is_home;
     DROP TABLE text_links;
     ALTER TABLE wiki_revisions DROP COLUMN resolved_at;
     ALTER TABLE timer DROP COLUMN running_since; ALTER TABLE timer DROP COLUMN elapsed_ms;

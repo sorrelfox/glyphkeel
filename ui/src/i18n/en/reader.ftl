@@ -10,6 +10,20 @@ reader-external-image = External image: { $name }. Open in browser
 reader-wiki-link = Wiki page { $page }
 reader-wiki-missing = There is no page “{ $page }” yet.
 reader-checkbox = Checklist item
+# Lines wiki macros show in a page in place of their result.
+reader-macro-toc-empty = This page has no headings yet.
+reader-macro-children-empty = This page has no subpages.
+reader-macro-include-missing = There is no page “{ $page }” to include.
+reader-macro-include-loop = “{ $page }” is not included again inside itself.
+reader-macro-include-too-deep = “{ $page }” is not included: pages are included at most { $max } levels deep.
+reader-macro-include-too-many = “{ $page }” is not included: a page includes at most { $max } pages.
+reader-macro-tasks-empty = No tasks match.
+reader-macro-tasks-more =
+    { $count ->
+        [one] One more task matches.
+       *[other] { $count } more tasks match.
+    }
+reader-macro-tasks-error = The task list can't be shown: { $error }
 
 ## Descriptions: editing, conflict copies and history
 

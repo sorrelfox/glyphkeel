@@ -73,11 +73,12 @@ impl Engine {
             Some(p) if !p.ends_with(".zip") && !ctx.is_agent() => ArchiveFormat::Folder,
             _ => ArchiveFormat::Zip,
         });
+        let now = self.now_ms();
         let (pages, files, slug) = self
             .store()
             .read(|tx| {
                 let _scope = crate::scope::enter(tx, ctx)?;
-                read(tx, input)
+                read(tx, input, &self.env.zone, now)
             })
             .map_err(OpError::from)?;
         let target = match &input.path {
@@ -158,6 +159,8 @@ fn write(
 fn read(
     tx: &Transaction<'_>,
     input: &WikiExportInput,
+    zone: &crate::time::Zone,
+    now: i64,
 ) -> Result<(Vec<Page>, Vec<File>, String), Failure> {
     let html = input.text_format == Some(WikiTextFormat::Html);
     let ext = if html { ".html" } else { ".md" };
@@ -288,10 +291,17 @@ fn read(
                 .collect();
             let index = several.then(|| encode(&relative(&path, super::wiki_html::INDEX)));
             let title = titles.get(&id).cloned().unwrap_or_default();
+            let macros = page_row
+                .cloned()
+                .map(|p| crate::ops::macros::WikiMacros::new(tx, zone, now, p));
+            let document_id = id.to_string();
             let text = super::wiki_html::page(
                 &title,
-                &id.to_string(),
-                &body,
+                &super::wiki_html::Body {
+                    text: &body,
+                    document_id: &document_id,
+                    macros: macros.as_ref().map(|m| m as &dyn gk_markdown::MacroSource),
+                },
                 &trail,
                 index.as_deref(),
                 &resolve_page,

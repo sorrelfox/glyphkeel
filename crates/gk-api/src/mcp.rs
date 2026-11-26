@@ -829,8 +829,8 @@ Example: delete_view {\"view\": \"Due this week\", \"project\": \"TM\"}",
         toolset: Toolset::Wiki,
         title: "List wiki pages",
         description: "Lists a project's wiki pages as a tree: each page's title, slug, parent, depth, \
-number of child pages, when it changed and whether it is the agent brief or the home page. \
-Pages are named by \
+number of child pages, when it changed and whether it is the agent brief, the home page or a \
+template. Pages are named by \
 title (any case), slug or ID in the other wiki tools. \
 Example: list_wiki_pages {\"project\": \"TM\"}",
         main: "wiki.list",
@@ -870,8 +870,11 @@ Example: get_wiki_page {\"project\": \"TM\", \"page\": \"Release plan\"}",
         toolset: Toolset::Wiki,
         title: "Create a wiki page",
         description: "Creates a wiki page in a project, optionally inside a `parent` page and with \
-its Markdown `body`. Titles are unique in a project ignoring case and can't contain `[`, `]`, \
-`#` or `|`, because links name pages by title (`[[Release plan#Dates]]`). Pass \
+its Markdown `body`, or starting from a `template` page's text (any page; list_wiki_pages marks \
+the templates). Titles are unique in a project ignoring case and can't contain `[`, `]`, \
+`#` or `|`, because links name pages by title (`[[Release plan#Dates]]`). A page's text may hold \
+macros on lines of their own (`{{toc}}`, `{{children}}`, `{{include Page}}`, \
+`{{tasks <query>}}`), which the app expands when it shows the page. Pass \
 `client_request_id` so a retry doesn't create a second page. \
 Example: create_wiki_page {\"project\": \"TM\", \"title\": \"Release plan\", \"body\": \"# Dates\\n\"}",
         main: "wiki.create",
@@ -887,7 +890,8 @@ occurring exactly once) for small changes; a whole new `body` needs the `base_re
 and an edit that clashes with one saved since is kept as a conflict copy instead of overwriting \
 it. Also `title` (the old slug keeps finding the page), `parent` (or `clear: [\"parent\"]`) to \
 move it with the pages inside it, place (`before`/`after`/`at`), a revision `message`, \
-`home: true` to make it the page the wiki opens on, and `resolve_conflict`. \
+`home: true` to make it the page the wiki opens on, `template: true` to mark it as a template, \
+and `resolve_conflict`. \
 Example: update_wiki_page {\"project\": \"TM\", \"page\": \"Release plan\", \"edits\": \
 [{\"old_text\": \"Dec 1\", \"new_text\": \"Dec 8\"}]}",
         main: "wiki.update",
