@@ -23,12 +23,13 @@ export interface Reading {
   error?: QueryProblem | undefined;
 }
 
-/** Names that complete values: the workspace's statuses, types, labels and projects. */
+/** Names that complete values: the workspace's statuses, types, labels, projects and versions. */
 export interface QueryNames {
   statuses: readonly string[];
   types: readonly string[];
   labels: readonly string[];
   projects: readonly string[];
+  versions?: readonly string[] | undefined;
 }
 
 /** What completion reads while the field runs. */
@@ -126,6 +127,8 @@ function valuesFor(field: QueryField, names: QueryNames, fields: readonly QueryF
       return [...names.labels, "none"];
     case "project":
       return [...names.projects];
+    case "version":
+      return [...(names.versions ?? []), "none"];
     case "start":
     case "due":
     case "created":
@@ -175,7 +178,8 @@ export function queryCompletions(environment: CompletionEnvironment) {
         ? null
         : { from: context.pos - partial.length, options: values.map((value) => ({ label: quoteValue(value), type: "constant" })), validFor: /^"?[^\s,"()]*$/ };
     }
-    const word = /(?:^|[\s(])(-?)([a-zA-Z][a-zA-Z-]*)?((?:!=|<=|>=|:|<|>|=)(?:"[^"]*"|[^\s,"()]*,)*)?("?[^\s,"()]*)$/.exec(before);
+    // A custom field is written `cf.<name>`: `cf.story-points:`.
+    const word = /(?:^|[\s(])(-?)([a-zA-Z][a-zA-Z-]*(?:\.[\p{L}\p{N}_-]+)?)?((?:!=|<=|>=|:|<|>|=)(?:"[^"]*"|[^\s,"()]*,)*)?("?[^\s,"()]*)$/u.exec(before);
     if (!word) {
       return null;
     }

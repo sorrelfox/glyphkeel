@@ -10,6 +10,7 @@ use crate::registry::Registry;
 pub(crate) mod agent;
 pub(crate) mod backup;
 pub(crate) mod board;
+pub(crate) mod builtin_templates;
 pub(crate) mod bulk;
 pub(crate) mod claim;
 pub(crate) mod comment;

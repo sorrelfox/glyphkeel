@@ -1068,14 +1068,23 @@ pub(crate) fn follow_move(w: &mut WriteCtx<'_>, task: Id, to: Id) -> Result<(), 
     save(w, id, Some(&r))
 }
 
+/// What closing an occurrence did to its series: the task closed, and the
+/// next occurrence made, if one was.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Followed {
+    pub(crate) closed: Id,
+    pub(crate) next: Option<Id>,
+}
+
 /// After a command: for every task it closed that is the current
 /// occurrence of a series made on closing, makes the next occurrence in
 /// the same change. Undo, revert and imports replay recorded changes and
 /// make nothing.
-pub(crate) fn after_command(w: &mut WriteCtx<'_>) -> Result<(), Failure> {
+pub(crate) fn after_command(w: &mut WriteCtx<'_>) -> Result<Vec<Followed>, Failure> {
+    let mut followed = Vec::new();
     let op = w.op();
     if op.starts_with("history.") || op.starts_with("transfer.") || op == "backup.restore" {
-        return Ok(());
+        return Ok(followed);
     }
     for task in w.newly_closed() {
         let Some((id, mut r)) = live(w.tx(), task)? else {
@@ -1113,6 +1122,10 @@ pub(crate) fn after_command(w: &mut WriteCtx<'_>) -> Result<(), Failure> {
             r.ended_at = Some(w.now());
             r.updated_at = w.now();
             save(w, id, Some(&r))?;
+            followed.push(Followed {
+                closed: task,
+                next: None,
+            });
             continue;
         };
         let (project, parent): (Id, Option<Id>) = w.tx().query_row(
@@ -1122,9 +1135,58 @@ pub(crate) fn after_command(w: &mut WriteCtx<'_>) -> Result<(), Failure> {
             [b(task)],
             |row| Ok((id_at(row, 0)?, opt_id_at(row, 1)?)),
         )?;
-        if make_occurrence(w, id, &mut r, next, parent, project)?.is_some() {
+        if let Some(made) = make_occurrence(w, id, &mut r, next, parent, project)? {
             save(w, id, Some(&r))?;
+            followed.push(Followed {
+                closed: task,
+                next: Some(made),
+            });
         }
+    }
+    Ok(followed)
+}
+
+/// Brings a command's `output` up to date with what [`after_command`] did:
+/// a task in it (`task`) that closed an occurrence carries the series as a
+/// later read shows it, and `next_occurrence` names the task made next.
+pub(crate) fn update_output(
+    tx: &Transaction<'_>,
+    output: &mut Value,
+    followed: &[Followed],
+) -> Result<(), Failure> {
+    let Some(task) = output.get_mut("task").and_then(Value::as_object_mut) else {
+        return Ok(());
+    };
+    let Some(id) = task
+        .get("id")
+        .and_then(Value::as_str)
+        .and_then(|t| t.parse::<Id>().ok())
+    else {
+        return Ok(());
+    };
+    let Some(done) = followed.iter().find(|f| f.closed == id) else {
+        return Ok(());
+    };
+    match of_task(tx, id)? {
+        Some(now) => {
+            let now = serde_json::to_value(now).map_err(|e| {
+                Failure::Op(messages::storage(
+                    "storage-json",
+                    &[("error", e.to_string())],
+                ))
+            })?;
+            task.insert("recurrence".to_owned(), now);
+        }
+        None => {
+            task.remove("recurrence");
+        }
+    }
+    if let Some(next) = done.next
+        && let Some(row) = lookup::task_by_id(tx, next)?
+        && let Some(out) = output.as_object_mut()
+    {
+        let key = lookup::task_key(tx, row.project, row.number)?;
+        out.insert("next_occurrence".to_owned(), Value::String(key));
     }
     Ok(())
 }

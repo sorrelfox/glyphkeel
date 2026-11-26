@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Button } from "react-aria-components";
 
 import { classes } from "../../classes";
+import { useAskCloseDuplicatesOf } from "../../components/DuplicatePrompt";
 import { usePriorityName } from "../../components/Glyphs";
 import { Select, type SelectOption } from "../../components/Select";
 import { useToasts } from "../../components/Toasts";
@@ -37,7 +38,8 @@ const NONE = "";
 /**
  * The bar over a selection: change the status, priority or labels of every
  * selected task, or move them to another project. Each change is previewed
- * first (how many tasks change), then made as one Undo step.
+ * first (how many tasks change), then made as one Undo step. A status that
+ * closes them asks first whether to close their open duplicates too.
  */
 export function BulkBar({ keys, names, onClear }: BulkBarProps) {
   const t = useT();
@@ -46,6 +48,7 @@ export function BulkBar({ keys, names, onClear }: BulkBarProps) {
   const { undo } = useUndo();
   const priorityName = usePriorityName();
   const trash = useTrashTasks();
+  const askDuplicates = useAskCloseDuplicatesOf();
   const [pending, setPending] = useState<Pending | null>(null);
   const [busy, setBusy] = useState(false);
   // The project the selection is to move to: the move asks what to do with what it has no match for.
@@ -70,7 +73,12 @@ export function BulkBar({ keys, names, onClear }: BulkBarProps) {
       return;
     }
     setBusy(true);
-    applyBulk(call, keys, pending.changes, pending.preview.count).then(
+    // Closing tasks asks, as everywhere, whether to close their open duplicates too.
+    const status = pending.changes.status;
+    const closing = status !== undefined && status !== null && names.closing.has(status);
+    (closing ? askDuplicates(keys) : Promise.resolve(undefined))
+      .then((close) => applyBulk(call, keys, { ...pending.changes, ...(close === undefined ? {} : { close_duplicates: close }) }, pending.preview.count))
+      .then(
       (result) => {
         setPending(null);
         setBusy(false);

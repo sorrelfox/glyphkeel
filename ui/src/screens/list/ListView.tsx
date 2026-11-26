@@ -12,6 +12,7 @@ import { useCreateTask } from "../../data/board";
 import { useGroupText } from "./GroupName";
 import { useAppearance } from "../../appearance/AppearanceProvider";
 import { classes } from "../../classes";
+import { useAskCloseDuplicates } from "../../components/DuplicatePrompt";
 import { Kbd } from "../../components/Kbd";
 import { QueryField, type QueryFieldHandle, type Reading } from "../../components/QueryField/QueryField";
 import { useToasts } from "../../components/Toasts";
@@ -175,6 +176,7 @@ function LoadedList({ project, views, layout, openTask, onOpen }: LoadedListProp
   const update = useCommand("task.update");
   const keepLayout = useCommand("list.layout.update");
   const move = useCommand("task.move");
+  const askDuplicates = useAskCloseDuplicates();
   const cellActions: CellActions = {
     today: isoDay(new Date()),
     hueOf: (task) => names.hues.get(task.status.id) ?? "grey",
@@ -183,8 +185,10 @@ function LoadedList({ project, views, layout, openTask, onOpen }: LoadedListProp
     rename: (task, title) => {
       update.mutate({ key: task.key, title, expected_version: task.version });
     },
-    setStatus: (task, status) => {
-      move.mutate({ key: task.key, status });
+    setStatus: (task, status, closing) => {
+      void askDuplicates(task.key, closing && task.closed_at === undefined).then((close) => {
+        move.mutate({ key: task.key, status, ...(close === undefined ? {} : { close_duplicates: close }) });
+      });
     },
     setPriority: (task, priority) => {
       update.mutate({ key: task.key, priority });

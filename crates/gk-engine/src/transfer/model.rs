@@ -276,7 +276,7 @@ pub(crate) struct Status {
 pub(crate) struct TaskType {
     pub(crate) id: String,
     pub(crate) name: String,
-    /// `task`, `bug`, `feature` or `milestone`.
+    /// `task`, `bug`, `feature`, `milestone`, `epic` or `story`.
     pub(crate) glyph: String,
     pub(crate) hue: String,
     pub(crate) rank: String,

@@ -15,7 +15,10 @@ function role(label: string | undefined) {
   return label === undefined ? { "aria-hidden": true as const } : { role: "img", "aria-label": label };
 }
 
-/** The task type glyph: one drawing holds the four shapes, the class shows one. */
+/**
+ * The task type glyph: one drawing holds every shape, the class shows one.
+ * Epic is a filled lightning bolt, story an open bookmark.
+ */
 export function TypeGlyph({ glyph, label }: GlyphProps & { glyph: Glyph }) {
   return (
     <svg className={`tt t-${glyph}`} viewBox="0 0 16 16" {...role(label)}>
@@ -23,6 +26,8 @@ export function TypeGlyph({ glyph, label }: GlyphProps & { glyph: Glyph }) {
       <circle className="s-bug" cx="8" cy="8" r="4" />
       <path className="s-feature" d="M8 3v10M3 8h10" />
       <path className="s-milestone" d="M8 2.5 13.5 8 8 13.5 2.5 8z" />
+      <path className="s-epic" d="M9.2 2 4 9h3.6L6.8 14 12 7H8.4z" />
+      <path className="s-story" d="M4.5 2.5h7v11L8 10.6l-3.5 2.9z" />
     </svg>
   );
 }

@@ -120,6 +120,8 @@ input.radio:checked { box-shadow: inset 0 0 0 5px var(--accent); }
 .t-bug { color: var(--hue-red); } .t-bug .s-bug { display: block; fill: currentColor; }
 .t-feature { color: var(--hue-green); } .t-feature .s-feature { display: block; }
 .t-milestone { color: var(--hue-purple); } .t-milestone .s-milestone { display: block; fill: currentColor; }
+.t-epic { color: var(--hue-orange); } .t-epic .s-epic { display: block; fill: currentColor; }
+.t-story { color: var(--hue-teal); } .t-story .s-story { display: block; }
 
 /* priority glyph: bars count up; urgent swaps to a filled alert box */
 .prio { width: 14px; height: 14px; flex: none; }

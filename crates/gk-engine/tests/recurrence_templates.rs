@@ -461,15 +461,16 @@ fn task_templates_keep_names_dates_subtasks_and_checklists() {
     ws.call("history.undo", json!({}));
     assert!(keys(&ws.call("task.search", json!({ "query": "project:OT" }))).is_empty());
 
-    let list = ws.call("template.list", json!({ "project": "TM" }));
+    let list = ws.call("template.list", json!({ "project": "TM", "kind": "task" }));
     assert_eq!(list["items"][0]["items"], 3);
     ws.call(
         "template.delete",
         json!({ "template": "Bug", "project": "TM" }),
     );
-    assert_eq!(ws.call("template.list", json!({}))["total"], 0);
+    let tasks = json!({ "kind": "task" });
+    assert_eq!(ws.call("template.list", tasks.clone())["total"], 0);
     ws.call("history.undo", json!({}));
-    assert_eq!(ws.call("template.list", json!({}))["total"], 1);
+    assert_eq!(ws.call("template.list", tasks)["total"], 1);
 }
 
 #[test]
@@ -592,10 +593,12 @@ fn templates_and_series_travel_in_export_archives() {
     let water = other.task("TM-1");
     assert_eq!(water["recurrence"]["summary"], "Every 2 days");
     let templates = other.call("template.list", json!({}));
+    // The built-in ones are in every workspace, not in the archive.
     let names: Vec<&str> = templates["items"]
         .as_array()
         .unwrap()
         .iter()
+        .filter(|t| t.get("built_in").is_none())
         .map(|t| t["name"].as_str().unwrap())
         .collect();
     assert_eq!(names, ["Garden", "Watering"]);

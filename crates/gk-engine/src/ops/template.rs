@@ -36,6 +36,7 @@ use gk_store::rusqlite::{OptionalExtension, Transaction, params};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use super::builtin_templates;
 use super::comment::actor;
 use super::desc;
 use super::lookup::{self, List, ProjectRow, Target, b, id_at, opt_id_at};
@@ -72,6 +73,7 @@ pub(super) fn register(r: &mut Registry) {
     r.command::<TemplateUpdate, _>(desc::<TemplateUpdate>(), update);
     r.command::<TemplateDelete, _>(desc::<TemplateDelete>(), |w, input: TemplateRef| {
         let (id, old) = find(w.tx(), &input.template, input.project.as_ref())?;
+        refuse_built_in(id, &old)?;
         let template = output(w.tx(), id, &old)?;
         set(w, id, None)?;
         Ok(TemplateChange {
@@ -134,6 +136,48 @@ fn read_row(r: &gk_store::rusqlite::Row<'_>) -> gk_store::rusqlite::Result<(Id, 
             updated_at: r.get(10)?,
         },
     ))
+}
+
+/// The built-in templates as records, for listing, reading and using.
+fn built_ins() -> Vec<(Id, Record)> {
+    builtin_templates::all()
+        .into_iter()
+        .map(|t| {
+            let content = serde_json::to_value(&t.setup).unwrap_or(Value::Null);
+            (
+                t.id,
+                Record {
+                    project: None,
+                    kind: t.kind,
+                    name: t.name.to_owned(),
+                    description: t.description.to_owned(),
+                    content,
+                    rank: String::new(),
+                    created_at: 0,
+                    created_by_kind: "user".to_owned(),
+                    created_by_name: builtin_templates::CREATOR.to_owned(),
+                    updated_at: 0,
+                },
+            )
+        })
+        .collect()
+}
+
+/// Refuses to change or delete a template that comes with the program.
+fn refuse_built_in(id: Id, r: &Record) -> Result<(), Failure> {
+    if builtin_templates::get(id).is_some() {
+        return Err(messages::hint(
+            messages::invalid_at(
+                "template",
+                "template-built-in",
+                &[("template", r.name.clone())],
+            ),
+            "template-built-in-hint",
+            &[],
+        )
+        .into());
+    }
+    Ok(())
 }
 
 fn load(tx: &Transaction<'_>, id: Id) -> Result<Option<Record>, StoreError> {
@@ -268,6 +312,7 @@ fn output(tx: &Transaction<'_>, id: Id, r: &Record) -> Result<Template, Failure>
         created_by: actor(&r.created_by_kind, r.created_by_name.clone()),
         created_at: rfc3339(r.created_at),
         updated_at: rfc3339(r.updated_at),
+        built_in: builtin_templates::get(id).map(|t| t.key.to_owned()),
     })
 }
 
@@ -292,6 +337,7 @@ fn summary(tx: &Transaction<'_>, id: Id, r: &Record) -> Result<TemplateSummary, 
         description: r.description.clone(),
         title,
         items: u32::try_from(items).unwrap_or(u32::MAX),
+        built_in: builtin_templates::get(id).map(|t| t.key.to_owned()),
     })
 }
 
@@ -304,8 +350,9 @@ fn list(tx: &Transaction<'_>, input: &TemplateListInput) -> Result<TemplateList,
         Some(p) => Some(lookup::project(tx, "project", p)?.id),
         None => None,
     };
-    let items = all(tx)?
+    let items = built_ins()
         .into_iter()
+        .chain(all(tx)?)
         .filter(|(_, r)| visible(r))
         .filter(|(_, r)| input.kind.is_none_or(|k| k == r.kind))
         .filter(|(_, r)| {
@@ -326,11 +373,15 @@ fn find(
     text: &str,
     project: Option<&String>,
 ) -> Result<(Id, Record), Failure> {
-    if let Ok(id) = text.trim().parse::<Id>()
-        && let Some(r) = load(tx, id)?
-        && visible(&r)
-    {
-        return Ok((id, r));
+    if let Ok(id) = text.trim().parse::<Id>() {
+        if let Some(r) = load(tx, id)?
+            && visible(&r)
+        {
+            return Ok((id, r));
+        }
+        if let Some(found) = built_ins().into_iter().find(|(b, _)| *b == id) {
+            return Ok(found);
+        }
     }
     let scope = match project {
         Some(p) => Some(lookup::project(tx, "project", p)?.id),
@@ -339,6 +390,7 @@ fn find(
     let wanted = fold(text.trim());
     let candidates: Vec<(Id, Record)> = all(tx)?
         .into_iter()
+        .chain(built_ins())
         .filter(|(_, r)| visible(r))
         .filter(|(_, r)| {
             r.kind == TemplateKind::Project || scope.is_none_or(|p| r.project_id() == Some(p))
@@ -353,6 +405,10 @@ fn find(
     // the same name.
     if found.len() > 1 && scope.is_some() {
         found.retain(|(_, r)| r.kind == TemplateKind::Task);
+    }
+    // The workspace's own template wins over a built-in one of its name.
+    if found.len() > 1 {
+        found.retain(|(id, _)| builtin_templates::get(*id).is_none());
     }
     match found.len() {
         1 => Ok(found.remove(0)),
@@ -903,6 +959,7 @@ fn create(w: &mut WriteCtx<'_>, input: TemplateCreateInput) -> Result<TemplateCh
 
 fn update(w: &mut WriteCtx<'_>, input: TemplateUpdateInput) -> Result<TemplateChange, Failure> {
     let (id, old) = find(w.tx(), &input.template, input.project.as_ref())?;
+    refuse_built_in(id, &old)?;
     let mut r = old.clone();
     if let Some(name) = &input.name {
         r.name = check_name(name)?;
@@ -1215,6 +1272,19 @@ fn apply(w: &mut WriteCtx<'_>, input: TemplateApplyInput) -> Result<TemplateAppl
                 Making::Checked,
                 &mut left_out,
             )?;
+            // A due date or priority given with the template wins over its
+            // own, in the same change.
+            if input.due_date.is_some() || input.priority.is_some() {
+                super::task::update(
+                    w,
+                    gk_api::ops::task::TaskUpdateInput {
+                        key: id.to_string(),
+                        due_date: input.due_date.clone(),
+                        priority: input.priority,
+                        ..gk_api::ops::task::TaskUpdateInput::default()
+                    },
+                )?;
+            }
             let task = super::task::changed(w, id, Vec::new())?.task;
             Ok(TemplateApplied {
                 task: Some(task),
