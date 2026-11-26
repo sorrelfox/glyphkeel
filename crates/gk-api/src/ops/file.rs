@@ -82,7 +82,9 @@ pub struct FileAttachInput {
     /// The page's project (key or ID); needed unless `page` is an ID.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub project: Option<String>,
-    /// The path of a local file to read.
+    /// The path of a local file to read. For agents, a plain name is a file
+    /// in the workspace's `exports` folder; other paths must be inside a
+    /// folder agents may use.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
     /// The file name; default: the path's last part.

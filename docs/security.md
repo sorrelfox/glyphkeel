@@ -116,12 +116,19 @@ network port.
   a determined prompt injection on its own: give an agent no more than its
   task needs, and prefer the read-only profile for agents that only need to
   read.
-- **Files and agents.** Agents export and import only by plain names in the
-  workspace's own `exports` folder. Attaching a file by its path is the one
-  exception, because agents are often asked to attach a file they just
-  wrote: an agent with the standard profile can attach any file you can
-  read. Only connect agents you trust with your files, or give them the
-  read-only profile.
+- **Files and agents.** Every path an agent gives (to attach a file, to
+  import an archive, a CSV file or a folder of Markdown files, and where an
+  export goes) is checked by the engine before the operation runs, whichever
+  tool it came through. Agents may use only the workspace's own `exports`
+  folder (a plain file name means a file there) and the folders you add in
+  Preferences › Agents & CLI. Other absolute paths, `..`, hidden files and
+  folders, Windows' reserved names and streams, and links that lead outside
+  these folders are refused; the workspace's own folder and its backups stay
+  off limits even inside a folder you added. The path is resolved once,
+  following links, and the operation uses exactly the place that was
+  checked. Only you can add folders, from the folder chooser; the setting is
+  personal and applies to every agent on this computer. See
+  [Files on disk](mcp.md#files-on-disk).
 
 ## The command line
 
@@ -136,6 +143,14 @@ profiles.
   system's disk encryption.
 - **Programs you open files with.** A document opened from an attachment is
   shown by your desktop's program, with that program's protections.
+- **Files you put where agents may look.** Anything in the `exports` folder
+  or in a folder you added can be attached and then read back by an agent
+  with the standard or full profile. Add only folders meant for agents, not
+  your home folder. A backup folder you chose yourself outside the data
+  folder is not known to the check: don't add a folder around it.
+- **Changes while a path is checked.** Another program running as you could
+  swap a file for a link between the check and the read. That needs a
+  program on your account already, which can read your files anyway.
 - **Agents you allow to do more.** An agent with the standard or full profile
   can change or delete what its profile allows, within its limits. Every
   change can be reverted from the history, and backups are made every day.

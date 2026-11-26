@@ -602,9 +602,10 @@ pub struct WikiExportInput {
     /// (always, for a whole wiki).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub subpages: bool,
-    /// Where to write it: a new file or folder. Agents give a plain name,
-    /// which goes into the workspace's `exports` folder. Left out: a name
-    /// made from the page's slug and the date, in the `exports` folder.
+    /// Where to write it: a new file or folder. For agents, a plain name
+    /// goes into the workspace's `exports` folder; other paths must be
+    /// inside a folder agents may use. Left out: a name made from the
+    /// page's slug and the date, in the `exports` folder.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
     /// A `.zip` file (the default) or a folder.
@@ -655,8 +656,9 @@ pub(crate) const WIKI_EXPORT: OpDescriptor = OpDescriptor::of::<WikiExport>(Meta
 pub struct WikiImportInput {
     /// The project whose wiki the pages go to (key or ID).
     pub project: String,
-    /// The folder (or a `.zip` file of one). Agents give a plain name of
-    /// one in the workspace's `exports` folder.
+    /// The folder (or a `.zip` file of one). For agents, a plain name is
+    /// one in the workspace's `exports` folder; other paths must be inside
+    /// a folder agents may use.
     pub path: String,
     /// The page to put the imported pages in (title, slug or ID); left out:
     /// at the top of the wiki.

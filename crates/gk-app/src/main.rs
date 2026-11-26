@@ -139,6 +139,8 @@ fn main() -> ExitCode {
             wiki_window::open_wiki_window,
             app_settings::app_settings,
             app_settings::update_app_settings,
+            app_settings::add_agent_folder,
+            app_settings::remove_agent_folder,
             app_settings::set_ui_pref,
             app_settings::time_zones,
             app_settings::set_autostart,

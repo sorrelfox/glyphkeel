@@ -25,6 +25,8 @@ fn main() {
         "choose_csv",
         "import_csv",
         "choose_backup_folder",
+        "add_agent_folder",
+        "remove_agent_folder",
         "open_link",
         "watch_open_links",
         "open_task_window",

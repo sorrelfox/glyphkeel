@@ -36,6 +36,13 @@ pub struct WorkspaceInfo {
     /// The limits on agent sessions enforced now, as in the settings; a
     /// limit left out is lifted.
     pub agent_limits: AgentLimits,
+    /// For an agent: the folders whose files it may name by path, to attach,
+    /// import or export, as absolute paths. The first is the workspace's
+    /// `exports` folder, where a plain file name goes; the others are the
+    /// ones the person added. Paths elsewhere are refused. Left out for the
+    /// person, whose paths aren't limited.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_folders: Option<Vec<String>>,
     /// The timer, while one runs or is paused.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timer: Option<crate::ops::time::Timer>,

@@ -1076,7 +1076,7 @@ fn a_page_exports_with_its_subpages_and_files_as_plain_markdown() {
     let err = ws.fails("wiki.export", json!({}));
     assert_eq!(err.details["message_id"], "wiki-export-what", "{err:?}");
 
-    // An agent names a plain file only.
+    // An agent names a file in the folders agents may use only.
     let agent = agent_of(&ws.engine, "Helper");
     let err = ws
         .engine
@@ -1086,7 +1086,8 @@ fn a_page_exports_with_its_subpages_and_files_as_plain_markdown() {
             json!({ "project": "TM", "page": "Home", "path": "/tmp/x.zip" }),
         )
         .unwrap_err();
-    assert_eq!(err.code, ErrorCode::Invalid, "{err:?}");
+    assert_eq!(err.code, ErrorCode::Forbidden, "{err:?}");
+    assert_eq!(err.details["message_id"], "agent-path-outside", "{err:?}");
 }
 
 #[test]
@@ -1597,7 +1598,8 @@ fn a_folder_of_markdown_imports_as_pages_with_links_and_images_in_one_change() {
             json!({ "project": "TM", "path": dir.to_string_lossy() }),
         )
         .unwrap_err();
-    assert_eq!(err.code, ErrorCode::Invalid, "{err:?}");
+    assert_eq!(err.code, ErrorCode::Forbidden, "{err:?}");
+    assert_eq!(err.details["message_id"], "agent-path-outside", "{err:?}");
 }
 
 #[test]

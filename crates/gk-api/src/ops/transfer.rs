@@ -60,9 +60,10 @@ pub struct ExportInput {
     /// workspace when empty.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub projects: Vec<String>,
-    /// Where to write it: a new file or folder. Agents give a plain name,
-    /// which goes into the workspace's `exports` folder. Left out: a name
-    /// with the date in the `exports` folder.
+    /// Where to write it: a new file or folder. For agents, a plain name
+    /// goes into the workspace's `exports` folder; other paths must be
+    /// inside a folder agents may use. Left out: a name with the date in
+    /// the `exports` folder.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
     /// A `.zip` file (the default) or a folder.
@@ -100,8 +101,9 @@ pub struct KeyChange {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ImportInput {
-    /// The archive: a `.zip` file or a folder. Agents give a name in the
-    /// workspace's `exports` folder.
+    /// The archive: a `.zip` file or a folder. For agents, a plain name is
+    /// one in the workspace's `exports` folder; other paths must be inside
+    /// a folder agents may use.
     pub path: String,
     /// New keys for projects whose key is taken in this workspace.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

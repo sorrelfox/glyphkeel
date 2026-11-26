@@ -641,6 +641,13 @@
         "additionalProperties": false,
         "description": "The open workspace and who is asking.",
         "properties": {
+          "agent_folders": {
+            "description": "For an agent: the folders whose files it may name by path, to attach,\nimport or export, as absolute paths. The first is the workspace's\n`exports` folder, where a plain file name goes; the others are the\nones the person added. Paths elsewhere are refused. Left out for the\nperson, whose paths aren't limited.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "agent_limits": {
             "$ref": "#/$defs/AgentLimits",
             "description": "The limits on agent sessions enforced now, as in the settings; a\nlimit left out is lifted."
@@ -59926,7 +59933,7 @@
             ]
           },
           "path": {
-            "description": "Where to write it: a new file or folder. Agents give a plain name,\nwhich goes into the workspace's `exports` folder. Left out: a name\nmade from the page's slug and the date, in the `exports` folder.",
+            "description": "Where to write it: a new file or folder. For agents, a plain name\ngoes into the workspace's `exports` folder; other paths must be\ninside a folder agents may use. Left out: a name made from the\npage's slug and the date, in the `exports` folder.",
             "type": [
               "string",
               "null"
@@ -60045,7 +60052,7 @@
             ]
           },
           "path": {
-            "description": "The folder (or a `.zip` file of one). Agents give a plain name of\none in the workspace's `exports` folder.",
+            "description": "The folder (or a `.zip` file of one). For agents, a plain name is\none in the workspace's `exports` folder; other paths must be inside\na folder agents may use.",
             "type": "string"
           },
           "project": {
@@ -61176,7 +61183,7 @@
             ]
           },
           "path": {
-            "description": "The path of a local file to read.",
+            "description": "The path of a local file to read. For agents, a plain name is a file\nin the workspace's `exports` folder; other paths must be inside a\nfolder agents may use.",
             "type": [
               "string",
               "null"
@@ -65067,7 +65074,7 @@
             "description": "A `.zip` file (the default) or a folder."
           },
           "path": {
-            "description": "Where to write it: a new file or folder. Agents give a plain name,\nwhich goes into the workspace's `exports` folder. Left out: a name\nwith the date in the `exports` folder.",
+            "description": "Where to write it: a new file or folder. For agents, a plain name\ngoes into the workspace's `exports` folder; other paths must be\ninside a folder agents may use. Left out: a name with the date in\nthe `exports` folder.",
             "type": [
               "string",
               "null"
@@ -65271,7 +65278,7 @@
             "type": "array"
           },
           "path": {
-            "description": "The archive: a `.zip` file or a folder. Agents give a name in the\nworkspace's `exports` folder.",
+            "description": "The archive: a `.zip` file or a folder. For agents, a plain name is\none in the workspace's `exports` folder; other paths must be inside\na folder agents may use.",
             "type": "string"
           }
         },
@@ -65722,7 +65729,7 @@
             "type": "boolean"
           },
           "path": {
-            "description": "The CSV file. Agents give the plain name of a file in the\nworkspace's `exports` folder.",
+            "description": "The CSV file. For agents, a plain name is a file in the workspace's\n`exports` folder; other paths must be inside a folder agents may\nuse.",
             "type": "string"
           },
           "preset": {

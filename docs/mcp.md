@@ -99,6 +99,45 @@ project.
 
 `glyphkeel mcp --help` lists them all.
 
+## Files on disk
+
+Some tools name a file or a folder on your computer: `attach_file` (by
+`path`), `import_data`, `import_csv` and `import_wiki_pages`, and
+`export_data` and `export_wiki_page`. Agents may use only the files in the
+**folders agents may use**:
+
+- the workspace's `exports` folder, always. A plain file name, such as
+  `report.pdf` or `notes/plan.md`, means a file in it;
+- the folders you add in Preferences › Agents & CLI › **Files agents may use**
+  (**Add folder…**). The agent then gives a full path inside one of them.
+
+Everything else is refused, with a message that lists the folders:
+
+- any other absolute path, such as `/home/me/.ssh/id_ed25519` or
+  `C:\Users\me\Documents\secret.pdf`;
+- a path that goes up a folder with `..`;
+- hidden files and folders (a name that starts with `.`), also inside a
+  folder you added;
+- a link (symbolic link or junction) that leads outside the folders. Links
+  are followed, and the place they lead to is what counts; an export never
+  writes onto a link;
+- the workspace's own folder and its backups, even inside a folder you added;
+- names that Windows reserves, such as `CON` or `file.txt:stream`.
+
+Paths on Windows are compared without regard to case, in every form
+(`C:\…`, `C:/…`, `\\?\C:\…`, `\\server\share\…`).
+
+`get_workspace` lists the folders, as `agent_folders`, so an agent knows
+where to put a file before it asks you to attach it.
+
+The setting is personal: it is kept in your personal settings
+(`agent_folders` in `settings.json`, see [Data and settings](data-and-settings.md))
+and applies to every agent on this computer, in every workspace. The server
+reads it again on every call, so a folder you add or remove counts at once.
+Only you can change it: no tool changes it, and the app adds a folder only
+from the folder chooser. Your own commands, in the app and with `glyphkeel`,
+are not limited.
+
 ## Telling agents how to work
 
 - **The agent brief:** mark a wiki page with **Use as the agent brief**, or
@@ -164,3 +203,4 @@ glyphkeel activity --actor-kind agent
   project.
 - You choose the most it may do, and only you can raise it.
 - Everything it changes can be seen and reverted.
+- It reads and writes files only in the [folders agents may use](#files-on-disk).

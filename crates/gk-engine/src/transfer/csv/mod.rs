@@ -1132,7 +1132,13 @@ impl Engine {
     ) -> Result<CsvImportResult, OpError> {
         let format = input.format.clone().unwrap_or_default();
         check_format(&format).map_err(OpError::from)?;
-        let path = resolve(self, ctx, &input.path, "path")?;
+        let path = resolve(
+            self,
+            ctx,
+            &input.path,
+            "path",
+            crate::agent_files::Access::Read,
+        )?;
         let setup = self
             .store()
             .read(|tx| {

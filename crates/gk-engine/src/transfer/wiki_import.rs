@@ -115,7 +115,13 @@ impl Engine {
         ctx: &Context,
         input: &WikiImportInput,
     ) -> Result<WikiImportResult, OpError> {
-        let path = resolve(self, ctx, &input.path, "path")?;
+        let path = resolve(
+            self,
+            ctx,
+            &input.path,
+            "path",
+            crate::agent_files::Access::Read,
+        )?;
         let target = self
             .store()
             .read(|tx| {

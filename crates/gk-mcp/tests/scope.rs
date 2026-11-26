@@ -382,7 +382,11 @@ async fn a_limited_agent_sees_nothing_of_other_projects_in_references_and_errors
     refused(&inside);
     assert!(common::text(&inside).contains("already used"), "{inside:?}");
     // An import makes top-level projects, so it is refused before the
-    // archive is read: a dry run doesn't list keys taken elsewhere.
+    // archive is read: a dry run doesn't list keys taken elsewhere. (The
+    // file is there, so the check of the path lets it through.)
+    let exports = options.layout().unwrap().exports_dir();
+    std::fs::create_dir_all(&exports).unwrap();
+    std::fs::write(exports.join("none.zip"), b"not read").unwrap();
     let import = c
         .call(
             "import_data",

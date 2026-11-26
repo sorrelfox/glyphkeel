@@ -404,6 +404,12 @@
 
 /* ---------- Agents & CLI ---------- */
 
+/* A folder's path: long ones wrap anywhere instead of leaving the box. */
+.folder {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
 /* A set-up snippet: where it goes, then the text with its Copy button. */
 .snippetBlock {
   display: flex;

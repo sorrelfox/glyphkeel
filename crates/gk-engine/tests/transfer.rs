@@ -314,9 +314,15 @@ fn taken_keys_need_new_ones_and_existing_ids_are_replaced() {
 }
 
 #[test]
-fn an_agent_imports_and_exports_only_in_the_exports_folder() {
+fn an_agent_imports_and_exports_only_in_the_folders_agents_may_use() {
     let dir = TempDir::new().unwrap();
-    let e = open(dir.path(), "W");
+    let shared = dir.path().join("shared");
+    std::fs::create_dir_all(&shared).unwrap();
+    let shared = std::fs::canonicalize(&shared).unwrap();
+    let layout = WorkspaceLayout::new(dir.path().join("W"));
+    let mut config = EngineConfig::new(Role::Cli);
+    config.agent_folders = gk_engine::AgentFolders::Fixed(vec![shared.clone()]);
+    let e = Engine::open(&layout, config).unwrap();
     let session = e
         .start_session(&gk_engine::SessionStart {
             name: "Agent".into(),
@@ -326,17 +332,37 @@ fn an_agent_imports_and_exports_only_in_the_exports_folder() {
         })
         .unwrap();
     let agent = Context::agent("Agent", session, gk_api::Profile::Standard);
-    for path in ["/tmp/x.zip", "../x.zip", "sub/x.zip", ".hidden"] {
+    let outside = dir.path().join("elsewhere.zip");
+    for (path, code) in [
+        (outside.to_string_lossy().into_owned(), ErrorCode::Forbidden),
+        ("/tmp/x.zip".to_owned(), ErrorCode::Forbidden),
+        ("../x.zip".to_owned(), ErrorCode::Invalid),
+        ("sub/../../x.zip".to_owned(), ErrorCode::Invalid),
+        (".hidden".to_owned(), ErrorCode::Invalid),
+        ("NUL.zip".to_owned(), ErrorCode::Invalid),
+    ] {
         let err = e
             .call(&agent, "transfer.export", json!({ "path": path }))
             .unwrap_err();
-        assert_eq!(err.code, ErrorCode::Invalid, "{path}");
+        assert_eq!(err.code, code, "{path}: {err:?}");
+        assert!(
+            err.hint
+                .as_deref()
+                .unwrap_or_default()
+                .contains(&shared.to_string_lossy().into_owned()),
+            "{err:?}"
+        );
     }
+    assert!(!outside.exists());
     call(&e, "project.create", json!({ "name": "T", "key": "TM" }));
     let out = e
         .call(&agent, "transfer.export", json!({ "path": "tm.zip" }))
         .unwrap();
-    assert!(Path::new(out["path"].as_str().unwrap()).starts_with(e.store().layout().exports_dir()));
+    let exports = std::fs::canonicalize(e.store().layout().exports_dir()).unwrap();
+    assert_eq!(
+        Path::new(out["path"].as_str().unwrap()),
+        exports.join("tm.zip")
+    );
     let check = e
         .call(
             &agent,
@@ -345,6 +371,102 @@ fn an_agent_imports_and_exports_only_in_the_exports_folder() {
         )
         .unwrap();
     assert_eq!(check["taken_keys"], json!(["TM"]));
+    // A plain name may have folders in front, inside exports.
+    let out = e
+        .call(&agent, "transfer.export", json!({ "path": "sub/tm.zip" }))
+        .unwrap();
+    assert_eq!(
+        Path::new(out["path"].as_str().unwrap()),
+        exports.join("sub").join("tm.zip")
+    );
+    // A folder the person added takes absolute paths.
+    let there = shared.join("tm.zip");
+    let out = e
+        .call(
+            &agent,
+            "transfer.export",
+            json!({ "path": there.to_string_lossy() }),
+        )
+        .unwrap();
+    assert_eq!(Path::new(out["path"].as_str().unwrap()), there);
+    let check = e
+        .call(
+            &agent,
+            "transfer.import",
+            json!({ "path": there.to_string_lossy(), "dry_run": true }),
+        )
+        .unwrap();
+    assert_eq!(check["taken_keys"], json!(["TM"]));
+    // The person's paths are not limited.
+    let mine = dir.path().join("mine.zip");
+    call(
+        &e,
+        "transfer.export",
+        json!({ "path": mine.to_string_lossy() }),
+    );
+    assert!(mine.is_file());
+    let err = e
+        .call(
+            &agent,
+            "transfer.import",
+            json!({ "path": mine.to_string_lossy(), "dry_run": true }),
+        )
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::Forbidden);
+    // get_workspace tells the agent where it may put files.
+    let info = e.call(&agent, "workspace.get", json!({})).unwrap();
+    assert_eq!(
+        info["agent_folders"],
+        json!([exports.to_string_lossy(), shared.to_string_lossy()])
+    );
+    let info = call(&e, "workspace.get", json!({}));
+    assert!(info.get("agent_folders").is_none());
+}
+
+#[cfg(unix)]
+#[test]
+fn an_agent_cant_read_through_a_link_in_the_exports_folder() {
+    let dir = TempDir::new().unwrap();
+    let layout = WorkspaceLayout::new(dir.path().join("W"));
+    let mut config = EngineConfig::new(Role::Cli);
+    config.agent_folders = gk_engine::AgentFolders::Fixed(Vec::new());
+    let e = Engine::open(&layout, config).unwrap();
+    call(&e, "project.create", json!({ "name": "T", "key": "TM" }));
+    let mine = dir.path().join("mine.zip");
+    call(
+        &e,
+        "transfer.export",
+        json!({ "path": mine.to_string_lossy() }),
+    );
+    let exports = e.store().layout().exports_dir();
+    std::fs::create_dir_all(&exports).unwrap();
+    std::os::unix::fs::symlink(&mine, exports.join("link.zip")).unwrap();
+    std::os::unix::fs::symlink(dir.path(), exports.join("up")).unwrap();
+    let session = e
+        .start_session(&gk_engine::SessionStart {
+            name: "Agent".into(),
+            client_id: None,
+            client_version: None,
+            profile: gk_api::Profile::Standard,
+        })
+        .unwrap();
+    let agent = Context::agent("Agent", session, gk_api::Profile::Standard);
+    for (op, path) in [
+        ("transfer.import", "link.zip"),
+        ("transfer.import", "up/mine.zip"),
+        ("transfer.export", "up/new.zip"),
+        ("transfer.export", "link.zip"),
+    ] {
+        let input = if op == "transfer.import" {
+            json!({ "path": path, "dry_run": true })
+        } else {
+            json!({ "path": path })
+        };
+        let err = e.call(&agent, op, input).unwrap_err();
+        assert_eq!(err.code, ErrorCode::Forbidden, "{op} {path}: {err:?}");
+        assert_eq!(err.details["message_id"], "agent-path-link", "{op} {path}");
+    }
+    assert!(!dir.path().join("new.zip").exists());
 }
 
 /// Every file and folder below `root`, as paths with `/`.

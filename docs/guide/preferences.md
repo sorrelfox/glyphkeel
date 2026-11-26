@@ -73,6 +73,11 @@ See [Keyboard shortcuts](keyboard-shortcuts.md).
   **Only one project** for a repository.
 - **What agents may do:** **Most an agent may do** (Read only, Standard or Full)
   and the **Limits on each agent session**.
+- **Files agents may use:** the workspace's exports folder, which agents may
+  always use, and **Add folder…** for more folders whose files agents may
+  attach, import or export to; **Remove** takes one away. The folders are
+  yours, for every agent on this computer
+  ([Files on disk](../mcp.md#files-on-disk)).
 - **Agent sessions:** each session with what it read and changed, and **Revert
   session…**.
 
