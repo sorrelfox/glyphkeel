@@ -27,6 +27,7 @@ import { ShellContext, type ShellHooks, type StatusInfo } from "./context";
 import { FirstRun, markFirstRunPending } from "./FirstRun";
 import { HeaderBar } from "./HeaderBar";
 import { Preferences, type PreferencePage } from "./Preferences";
+import { screenOf } from "./screenKeys";
 import { ShortcutSheet } from "./ShortcutSheet";
 import { shellActions, type View } from "./shellActions";
 import { Sidebar } from "./Sidebar";
@@ -237,7 +238,7 @@ export function Shell({ titleBar, openGallery, firstRun = false }: ShellProps) {
           </div>
         </div>
         <CommandPalette isOpen={paletteOpen} onOpenChange={setPaletteOpen} />
-        <ShortcutSheet isOpen={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+        <ShortcutSheet isOpen={shortcutsOpen} onOpenChange={setShortcutsOpen} screen={screenOf(pathname)} />
         <Preferences isOpen={preferencesOpen} onOpenChange={setPreferencesOpen} page={preferencesPage} />
         {settingUp && (
           <FirstRun

@@ -18,6 +18,17 @@ describe("messages", () => {
     }
   });
 
+  it("are loaded from every message file", () => {
+    const files = import.meta.glob<string>("./en/*.ftl", { query: "?raw", import: "default", eager: true });
+    const names = Object.keys(files).map((path) => path.replace(/^.*\//, ""));
+    expect(names).toEqual(expect.arrayContaining(["calendar.ftl", "gantt.ftl", "wiki.ftl"]));
+    const loaded = MESSAGES.en ?? [];
+    const missing = Object.entries(files)
+      .filter(([, text]) => !loaded.includes(text))
+      .map(([path]) => path);
+    expect(missing).toEqual([]);
+  });
+
   it("exist for every message ID the code names", () => {
     const bundle = createBundle("en");
     const named = new Set<string>();

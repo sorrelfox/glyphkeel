@@ -3,9 +3,11 @@
 
 import { type ActionGroup } from "../actions/actions";
 import { useActions } from "../actions/ActionsProvider";
+import { parseChord } from "../actions/keymap";
 import { Dialog } from "../components/Dialog";
 import { Kbd } from "../components/Kbd";
 import { useT } from "../i18n/I18n";
+import { SCREEN_KEYS, type KeyedScreen } from "./screenKeys";
 import styles from "./Shell.module.css";
 
 const GROUPS: readonly { group: ActionGroup; label: string }[] = [
@@ -18,12 +20,18 @@ const GROUPS: readonly { group: ActionGroup; label: string }[] = [
 interface ShortcutSheetProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
+  /** The screen on screen, when it has keys of its own. */
+  screen?: KeyedScreen | null;
 }
 
-/** `?`: every action that has a shortcut, from the same registry as the menus. */
-export function ShortcutSheet({ isOpen, onOpenChange }: ShortcutSheetProps) {
+/**
+ * `?`: every action that has a shortcut, from the same registry as the
+ * menus, and the keys the screen on screen handles itself.
+ */
+export function ShortcutSheet({ isOpen, onOpenChange, screen = null }: ShortcutSheetProps) {
   const t = useT();
   const actions = useActions().filter((action) => action.keys.length > 0);
+  const screenKeys = screen === null ? [] : SCREEN_KEYS[screen];
   return (
     <Dialog title={t("shortcuts-title")} isOpen={isOpen} onOpenChange={onOpenChange}>
       <div className={styles.shortcutColumns}>
@@ -50,6 +58,23 @@ export function ShortcutSheet({ isOpen, onOpenChange }: ShortcutSheetProps) {
             </section>
           );
         })}
+        {screenKeys.length > 0 && (
+          <section className={styles.shortcutGroup}>
+            <h2 className="caption">{t("shortcut-group-screen")}</h2>
+            <dl className={styles.shortcutList}>
+              {screenKeys.map((entry) => (
+                <div key={entry.label} className={styles.shortcutRow}>
+                  <dt>{t(entry.label)}</dt>
+                  <dd>
+                    {entry.keys.map((keys) => (
+                      <Kbd key={keys} chord={parseChord(keys)} />
+                    ))}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        )}
       </div>
     </Dialog>
   );
