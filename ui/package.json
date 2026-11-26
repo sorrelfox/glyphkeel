@@ -21,6 +21,7 @@
     "test:list": "playwright test --config playwright.list.config.ts",
     "test:palette": "playwright test --config playwright.palette.config.ts",
     "test:today": "playwright test --config playwright.today.config.ts",
+    "test:calendar": "playwright test --config playwright.calendar.config.ts",
     "test:safety": "playwright test --config playwright.safety.config.ts",
     "test:prefs": "playwright test --config playwright.prefs.config.ts",
     "test:pseudo": "playwright test --config playwright.pseudo.config.ts",

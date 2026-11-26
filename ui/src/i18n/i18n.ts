@@ -7,6 +7,7 @@ import { PSEUDO_LOCALE, pseudoResource } from "./pseudo";
 
 import enAgents from "./en/agents.ftl?raw";
 import enApp from "./en/app.ftl?raw";
+import enCalendar from "./en/calendar.ftl?raw";
 import enDev from "./en/dev.ftl?raw";
 import enEditor from "./en/editor.ftl?raw";
 import enFirstRun from "./en/first-run.ftl?raw";
@@ -24,7 +25,7 @@ import enEngine from "../../../crates/gk-engine/i18n/en/engine.ftl?raw";
 
 /** The languages the app has text for, with their message files. */
 export const MESSAGES: Readonly<Record<string, readonly string[]>> = {
-  en: [enAgents, enApp, enDev, enEditor, enEngine, enFirstRun, enList, enPalette, enPrefs, enQuery, enReader, enSafety, enSearch, enToday],
+  en: [enAgents, enApp, enCalendar, enDev, enEditor, enEngine, enFirstRun, enList, enPalette, enPrefs, enQuery, enReader, enSafety, enSearch, enToday],
 };
 
 /** The language the app falls back to. */

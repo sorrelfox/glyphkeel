@@ -31,6 +31,7 @@ import { type StartData } from "./start";
 // Loaded on first use, so that it costs the app's start nothing.
 const Gallery = lazy(() => import("./dev/Gallery"));
 const EditorPlayground = lazy(() => import("./editor/dev/EditorPlayground"));
+const CalendarScreen = lazy(() => import("./screens/calendar/CalendarScreen").then((module) => ({ default: module.CalendarScreen })));
 
 /** The path that opens the gallery directly, for the browser tests. */
 export const GALLERY_PATH = "/dev/themes";
@@ -105,6 +106,14 @@ export const projectListRoute = createRoute({
   component: ProjectListScreen,
 });
 
+/** A project's calendar; loaded on first use. */
+export const projectCalendarRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: "/projects/$key/calendar",
+  validateSearch: taskSearch,
+  component: LazyCalendarScreen,
+});
+
 /** The quick-add window: one field, without the board and the sidebar. */
 const quickAddRoute = createRoute({ getParentRoute: () => rootRoute, path: QUICK_ADD_PATH, component: QuickAdd });
 
@@ -119,7 +128,7 @@ const routeTree = rootRoute.addChildren([
   editorPlaygroundRoute,
   quickAddRoute,
   taskWindowRoute,
-  shellRoute.addChildren([todayRoute, searchRoute, allTasksRoute, timeReportRoute, trashRoute, activityRoute, boardRoute, projectListRoute, openTaskRoute]),
+  shellRoute.addChildren([todayRoute, searchRoute, allTasksRoute, timeReportRoute, trashRoute, activityRoute, boardRoute, projectListRoute, projectCalendarRoute, openTaskRoute]),
 ]);
 
 /**
@@ -186,6 +195,14 @@ function GalleryScreen() {
   return (
     <Suspense>
       <Gallery onLeave={() => void navigate({ to: "/" })} />
+    </Suspense>
+  );
+}
+
+function LazyCalendarScreen() {
+  return (
+    <Suspense>
+      <CalendarScreen />
     </Suspense>
   );
 }
