@@ -243,6 +243,7 @@ impl Engine {
                 });
             }
         };
+        crate::ops::links::index_pending(&store);
         let jobs_lock = if config.role == Role::Cli {
             None
         } else {

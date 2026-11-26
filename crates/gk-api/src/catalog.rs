@@ -8,8 +8,8 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::ops::{
-    agent, backup, board, bulk, comment, description, draft, file, history, project, query, search,
-    settings, task, time, today, transfer, trash, view, wiki, workspace,
+    agent, backup, board, bulk, comment, description, draft, file, history, link, project, query,
+    search, settings, task, time, today, transfer, trash, view, wiki, workspace,
 };
 use crate::schema;
 
@@ -231,8 +231,13 @@ pub static CATALOG: &[OpDescriptor] = &[
     wiki::WIKI_GET,
     wiki::WIKI_CREATE,
     wiki::WIKI_UPDATE,
+    wiki::WIKI_MOVE,
     wiki::WIKI_DELETE,
     wiki::WIKI_HISTORY,
+    link::WIKI_BACKLINKS,
+    link::WIKI_REFERENCES,
+    link::TASK_BACKLINKS,
+    link::TASK_REFERENCES,
     file::FILE_GET,
     file::FILE_READ,
     file::FILE_THUMBNAIL,

@@ -21,6 +21,8 @@ use serde::{Deserialize, Serialize};
 use crate::catalog::{Exposure, Meta, OpDescriptor, OpKind, Safety};
 use crate::ops::common::Edge;
 use crate::ops::description::{ConflictResolution, DescriptionSave, RevisionList, TextEdit};
+pub use crate::ops::link::Backlink;
+use crate::ops::link::Reference;
 use crate::ops::query::TextRange;
 
 /// A page as lists show it.
@@ -151,8 +153,10 @@ pub struct WikiSearchResult {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum WikiPart {
-    /// The pages and tasks that link to it.
+    /// The pages, task descriptions and comments that link to it.
     Backlinks,
+    /// The pages and tasks its text links to.
+    References,
 }
 
 /// A page to read.
@@ -167,7 +171,7 @@ pub struct WikiGetInput {
     /// An older revision to read instead of the current text.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub revision: Option<String>,
-    /// What to add: `backlinks`.
+    /// What to add: `backlinks`, `references`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub include: Vec<WikiPart>,
 }
@@ -182,23 +186,6 @@ pub struct WikiPageRef {
     pub slug: String,
     /// Its ID.
     pub id: String,
-}
-
-/// What links to a page.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct Backlink {
-    /// A task's key, for a link in its description.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub task: Option<String>,
-    /// A page, for a link in its text.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub page: Option<WikiPageRef>,
-    /// The title of the task or page.
-    pub title: String,
-    /// The heading the link names, if any.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub heading: Option<String>,
 }
 
 /// One wiki page.
@@ -241,6 +228,9 @@ pub struct WikiPage {
     /// What links to it, when asked for with `include`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub backlinks: Option<Vec<Backlink>>,
+    /// What its text links to, in order, when asked for with `include`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub references: Option<Vec<Reference>>,
     /// When it was created (RFC 3339, UTC).
     pub created_at: String,
     /// When it last changed.
@@ -299,7 +289,8 @@ pub struct WikiUpdateInput {
     /// The project (key or ID); needed unless `page` is an ID.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub project: Option<String>,
-    /// A new title; old links by the old title stop working.
+    /// A new title. The old slug keeps finding the page, so links by the
+    /// old title still resolve until another page takes that name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
     /// A new text (Markdown), replacing the old one.
@@ -498,4 +489,46 @@ pub(crate) const WIKI_HISTORY: OpDescriptor = OpDescriptor::of::<WikiHistory>(re
     "wiki history <page>",
     "WikiHistoryInput",
     "RevisionList",
+));
+
+/// Where to move a page: into another parent, to the top, or to another
+/// place among its siblings. Its slug stays, so links to it keep working.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WikiMoveInput {
+    /// The page: its title (any case), slug or ID.
+    pub page: String,
+    /// The project (key or ID); needed unless `page` is an ID.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
+    /// The new parent page (title, slug or ID, same project). Not the page
+    /// itself or a page inside it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent: Option<String>,
+    /// Move it to the top of the tree, out of its parent.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub top_level: bool,
+    /// Place it before this page of the (new) parent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub before: Option<String>,
+    /// Place it after this page of the (new) parent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub after: Option<String>,
+    /// Place it first or last; default when the parent changes: last.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub at: Option<Edge>,
+}
+
+op!(
+    /// A page to another place in the tree.
+    WikiMove,
+    "wiki.move",
+    WikiMoveInput,
+    WikiChange
+);
+
+pub(crate) const WIKI_MOVE: OpDescriptor = OpDescriptor::of::<WikiMove>(write(
+    "Move a wiki page, with the pages inside it, into another parent page or to the top, and to a place among its siblings; refuses moves into itself; links to it keep working.",
+    "wiki move <page>",
+    "WikiMoveInput",
 ));

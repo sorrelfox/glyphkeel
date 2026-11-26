@@ -145,6 +145,11 @@ pub(crate) fn refresh_text(w: &WriteCtx<'_>, task: Id) -> Result<(), Failure> {
         |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
     )?;
     let analysis = gk_markdown::analyze(&description);
+    super::links::index_refs(
+        w.tx(),
+        super::links::Source::Task(task),
+        &analysis.references,
+    )?;
     let total = analysis.checklist.len();
     let done = analysis.checklist.iter().filter(|i| i.checked).count();
     w.tx().execute(
@@ -282,6 +287,8 @@ pub(crate) fn load(
                 checklist_items: None,
                 revisions: None,
                 time_entries: None,
+                backlinks: None,
+                references: None,
                 reminder: None,
                 rank: r.get(19)?,
                 old_keys: Vec::new(),
@@ -372,6 +379,10 @@ pub(crate) fn add_parts(
                 task.time_entries = Some(super::time::of_task(tx, id, units(tx)?)?);
             }
             TaskPart::Reminder => task.reminder = super::reminder::of_task(tx, id, zone)?,
+            TaskPart::Backlinks => task.backlinks = Some(super::links::task_backlinks(tx, id)?),
+            TaskPart::References => {
+                task.references = Some(super::links::task_references(tx, id)?);
+            }
         }
     }
     Ok(())

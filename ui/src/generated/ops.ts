@@ -239,16 +239,28 @@ export type Attachment = {
   width?: number;
 };
 
-/** What links to a page. */
+/** A text that links somewhere: a wiki page, a task's description or a comment on a task. */
 export type Backlink = {
+  /** The comment's ID, for a link in a comment. */
+  comment?: string;
   /** The heading the link names, if any. */
   heading?: string;
   /** A page, for a link in its text. */
   page?: WikiPageRef;
-  /** A task's key, for a link in its description. */
+  /** The key of the project the task or page is in. */
+  project: string;
+  /** A task's key, for a link in its description or in a comment on it. */
   task?: string;
   /** The title of the task or page. */
   title: string;
+};
+
+/** What links to a page or a task: pages first (by title), then task descriptions (by key), then comments (oldest first). Each text is listed once, with the heading of its first link. */
+export type BacklinkList = {
+  /** The texts that link here. */
+  items: Backlink[];
+  /** How many. */
+  total: number;
 };
 
 /** One backup. */
@@ -1665,6 +1677,39 @@ export type RecentTask = {
   task: ListedTask;
 };
 
+/** One link in a text, resolved now. */
+export type Reference = {
+  /** The comment the link is in, when it is not in the description. */
+  comment?: string;
+  /** Whether the target was found; false for a page that doesn't exist (yet), a task key that names nothing, or a target in the trash. */
+  found: boolean;
+  /** The heading a page link names, if any. */
+  heading?: string;
+  /** A page or a task. */
+  kind: ReferenceKind;
+  /** The page found. */
+  page?: WikiPageRef;
+  /** The key of the project of the page or task found. */
+  project?: string;
+  /** The page name or task key as written. */
+  target: string;
+  /** The task found: its current key. */
+  task?: string;
+  /** The title of the page or task found. */
+  title?: string;
+};
+
+/** What a link points at. */
+export type ReferenceKind = "page" | "task";
+
+/** The links a text makes, in the order they first appear: for a task, its description's, then its comments' (oldest first). */
+export type ReferenceList = {
+  /** The links. */
+  items: Reference[];
+  /** How many. */
+  total: number;
+};
+
 /** A link to add or remove. */
 export type RelationInput = {
   /** The task: its key or ID. */
@@ -2170,6 +2215,8 @@ export type SubtaskReorderInput = {
 
 /** One task. */
 export type Task = {
+  /** The wiki pages, other tasks and comments that mention it, when asked for with `include`. */
+  backlinks?: Backlink[];
   /** Whether a task that blocks it is still open. */
   blocked: boolean;
   /** The description's checklist. */
@@ -2228,6 +2275,8 @@ export type Task = {
   project: string;
   /** Its place in its status column. */
   rank: string;
+  /** What its description and comments link to, when asked for with `include`. */
+  references?: Reference[];
   /** Its personal reminder, when asked for with `include` and it has one. */
   reminder?: Reminder;
   /** The description's revisions, newest first, conflict copies included, when asked for with `include`. */
@@ -2343,10 +2392,16 @@ export type TaskField = "description" | "parent" | "start_date" | "due_date" | "
 
 /** Which tasks to read. */
 export type TaskGetInput = {
-  /** What to add to each task: `subtasks`, `links`, `comments`, `files`, `checklist`, `revisions`, `time`, `reminder`. */
+  /** What to add to each task: `subtasks`, `links`, `comments`, `files`, `checklist`, `revisions`, `time`, `reminder`, `backlinks`, `references`. */
   include?: TaskPart[];
   /** One to 20 task keys or IDs. */
   keys: string[];
+};
+
+/** A task whose links to read. */
+export type TaskLinksInput = {
+  /** The task: its key (current or old) or ID. */
+  key: string;
 };
 
 /** The tasks asked for, in the order asked. */
@@ -2378,7 +2433,7 @@ export type TaskMoveInput = {
 };
 
 /** What `task.get` adds to each task. */
-export type TaskPart = "subtasks" | "links" | "comments" | "files" | "checklist" | "revisions" | "time" | "reminder";
+export type TaskPart = "subtasks" | "links" | "comments" | "files" | "checklist" | "revisions" | "time" | "reminder" | "backlinks" | "references";
 
 /** Another task, as links and subtask lists show it. */
 export type TaskRef = {
@@ -3113,7 +3168,7 @@ export type WikiField = "parent";
 
 /** A page to read. */
 export type WikiGetInput = {
-  /** What to add: `backlinks`. */
+  /** What to add: `backlinks`, `references`. */
   include?: WikiPart[];
   /** The page: its title (any case), slug or ID. */
   page: string;
@@ -3141,6 +3196,14 @@ export type WikiHistoryInput = {
   project?: string | null;
 };
 
+/** A wiki page whose links to read. */
+export type WikiLinksInput = {
+  /** The page: its title (any case), slug or ID. */
+  page: string;
+  /** The project (key or ID); needed unless `page` is an ID. */
+  project?: string | null;
+};
+
 /** A project's pages. */
 export type WikiListInput = {
   /** The project: its key or ID. */
@@ -3149,6 +3212,24 @@ export type WikiListInput = {
 
 /** Where a page matched. */
 export type WikiMatch = "title" | "heading" | "text" | "recent";
+
+/** Where to move a page: into another parent, to the top, or to another place among its siblings. Its slug stays, so links to it keep working. */
+export type WikiMoveInput = {
+  /** Place it after this page of the (new) parent. */
+  after?: string | null;
+  /** Place it first or last; default when the parent changes: last. */
+  at?: Edge | null;
+  /** Place it before this page of the (new) parent. */
+  before?: string | null;
+  /** The page: its title (any case), slug or ID. */
+  page: string;
+  /** The new parent page (title, slug or ID, same project). Not the page itself or a page inside it. */
+  parent?: string | null;
+  /** The project (key or ID); needed unless `page` is an ID. */
+  project?: string | null;
+  /** Move it to the top of the tree, out of its parent. */
+  top_level?: boolean;
+};
 
 /** One wiki page. */
 export type WikiPage = {
@@ -3176,6 +3257,8 @@ export type WikiPage = {
   path?: WikiPageRef[];
   /** Its project's key. */
   project: string;
+  /** What its text links to, in order, when asked for with `include`. */
+  references?: Reference[];
   /** The revision of `body`; pass it as `base_revision` when you save a new text. Left out while the page has no text yet. */
   revision?: string;
   /** Its name in addresses, made from the title. */
@@ -3219,7 +3302,7 @@ export type WikiPageSummary = {
 };
 
 /** What `wiki.get` adds to a page. */
-export type WikiPart = "backlinks";
+export type WikiPart = "backlinks" | "references";
 
 /** One page found. */
 export type WikiSearchHit = {
@@ -3291,7 +3374,7 @@ export type WikiUpdateInput = {
   project?: string | null;
   /** Resolve a conflict copy of the text. */
   resolve_conflict?: ConflictResolution | null;
-  /** A new title; old links by the old title stop working. */
+  /** A new title. The old slug keeps finding the page, so links by the old title still resolve until another page takes that name. */
   title?: string | null;
 };
 
@@ -3409,8 +3492,13 @@ export interface OpMap {
   "wiki.get": { input: WikiGetInput; output: WikiPage; safety: "read"; kind: "query" };
   "wiki.create": { input: WikiCreateInput; output: WikiChange; safety: "write"; kind: "command" };
   "wiki.update": { input: WikiUpdateInput; output: WikiChange; safety: "write"; kind: "command" };
+  "wiki.move": { input: WikiMoveInput; output: WikiChange; safety: "write"; kind: "command" };
   "wiki.delete": { input: WikiDeleteInput; output: TrashChange; safety: "trash"; kind: "command" };
   "wiki.history": { input: WikiHistoryInput; output: RevisionList; safety: "read"; kind: "query" };
+  "wiki.backlinks": { input: WikiLinksInput; output: BacklinkList; safety: "read"; kind: "query" };
+  "wiki.references": { input: WikiLinksInput; output: ReferenceList; safety: "read"; kind: "query" };
+  "task.backlinks": { input: TaskLinksInput; output: BacklinkList; safety: "read"; kind: "query" };
+  "task.references": { input: TaskLinksInput; output: ReferenceList; safety: "read"; kind: "query" };
   "file.get": { input: FileRef; output: Attachment; safety: "read"; kind: "query" };
   "file.read": { input: FileRef; output: FileContent; safety: "read"; kind: "query" };
   "file.thumbnail": { input: FileRef; output: Thumbnail; safety: "read"; kind: "query" };
@@ -3519,8 +3607,13 @@ export const OP_SAFETY = {
   "wiki.get": "read",
   "wiki.create": "write",
   "wiki.update": "write",
+  "wiki.move": "write",
   "wiki.delete": "trash",
   "wiki.history": "read",
+  "wiki.backlinks": "read",
+  "wiki.references": "read",
+  "task.backlinks": "read",
+  "task.references": "read",
   "file.get": "read",
   "file.read": "read",
   "file.thumbnail": "read",
@@ -3741,6 +3834,10 @@ export function makeOps(call: Call) {
       claim: (input: OpMap["task.claim"]["input"]) => call("task.claim", input),
       /** Give up a claim on a task, optionally moving it and adding a comment. (write) */
       release: (input: OpMap["task.release"]["input"]) => call("task.release", input),
+      /** The wiki pages, other tasks' descriptions and comments that mention a task by its key (current or old). (read) */
+      backlinks: (input: OpMap["task.backlinks"]["input"]) => call("task.backlinks", input),
+      /** The pages and tasks a task's description and comments link to, in order, each resolved now; links that find nothing are marked. (read) */
+      references: (input: OpMap["task.references"]["input"]) => call("task.references", input),
     },
     time: {
       /** Log time on a task: a duration, the day of the work (default today) and a note. (write) */
@@ -3809,10 +3906,16 @@ export function makeOps(call: Call) {
       create: (input: OpMap["wiki.create"]["input"]) => call("wiki.create", input),
       /** Change a wiki page: its text (whole, with a base revision, or by targeted edits), title, parent or place; or resolve a conflict copy. (write) */
       update: (input: OpMap["wiki.update"]["input"]) => call("wiki.update", input),
+      /** Move a wiki page, with the pages inside it, into another parent page or to the top, and to a place among its siblings; refuses moves into itself; links to it keep working. (write) */
+      move: (input: OpMap["wiki.move"]["input"]) => call("wiki.move", input),
       /** Move a wiki page, with the pages inside it, to the trash; links to it stop resolving until it is restored. (trash) */
       delete: (input: OpMap["wiki.delete"]["input"]) => call("wiki.delete", input),
       /** List the revisions of a wiki page, newest first, conflict copies included; read one with wiki.get and its revision. (read) */
       history: (input: OpMap["wiki.history"]["input"]) => call("wiki.history", input),
+      /** The wiki pages, task descriptions and comments that link to a wiki page, by its title, slug, an old slug or its ID. (read) */
+      backlinks: (input: OpMap["wiki.backlinks"]["input"]) => call("wiki.backlinks", input),
+      /** The pages and tasks a wiki page's text links to, in order, each resolved now; links that find nothing are marked. (read) */
+      references: (input: OpMap["wiki.references"]["input"]) => call("wiki.references", input),
     },
     workspace: {
       /** The open workspace: its name and ID, the schema and program versions, who is asking with which rights, the settings, the limits on agents and a short guide. (read) */

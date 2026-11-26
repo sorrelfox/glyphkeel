@@ -95,6 +95,7 @@ const TABLES: &[(&str, &str, &[&str])] = &[
     ("blobs", "sha256", &["created_at"]),
     ("saved_views", "id", &[]),
     ("agent_sessions", "id", &["scope_project"]),
+    ("text_links", "source_kind, source_id, position", &[]),
 ];
 
 fn history(e: &Engine) -> Vec<String> {
@@ -169,6 +170,8 @@ fn data_set_s_imports_and_round_trips_through_an_export() {
     assert_eq!(count(&a, "SELECT count(*) FROM comments"), 500);
     assert_eq!(count(&a, "SELECT count(*) FROM attachments"), 50);
     assert_eq!(count(&a, "SELECT count(*) FROM wiki_pages"), 10);
+    // The links in the texts are indexed as they come in.
+    assert!(count(&a, "SELECT count(*) FROM text_links") > 0);
     assert_eq!(stored_hashes(a.store().layout()).len(), 50);
     // The data reads back through the operations: tasks, search, trash.
     let tm = call(&a, "task.get", json!({ "keys": ["TM-1"] }));

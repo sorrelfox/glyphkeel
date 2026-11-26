@@ -201,8 +201,8 @@ fn invalid(field: &str, e: impl gk_core::Message) -> Failure {
     super::task::invalid(field, e)
 }
 
-/// Keeps the comment's search entry in step: indexed while live, removed
-/// while trashed.
+/// Keeps the comment's search entry in step (indexed while live, removed
+/// while trashed) and its links.
 fn reindex(w: &WriteCtx<'_>, id: Id) -> Result<(), Failure> {
     type Indexed = (Vec<u8>, Vec<u8>, String, String, bool);
     let row: Option<Indexed> = w
@@ -239,7 +239,8 @@ fn reindex(w: &WriteCtx<'_>, id: Id) -> Result<(), Failure> {
             )?;
         }
     }
-    Ok(())
+    // Links are kept while the comment is in the trash, for its return.
+    super::links::index(w.tx(), super::links::Source::Comment(id))
 }
 
 /// Adds a comment to the task `input.key` names and records it; `field`

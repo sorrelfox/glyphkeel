@@ -543,6 +543,8 @@ wiki-list-hint = List the pages with list_wiki_pages (`glyphkeel wiki list`).
 wiki-project-gone = The page's project is gone.
 wiki-no-place = No place was found for the page.
 wiki-parent-and-clear = Give parent or clear it, not both.
+wiki-parent-and-top = Give a parent page or move the page to the top, not both.
+wiki-move-nowhere = Say where the page goes: a parent page, the top, or a place among its siblings.
 wiki-page-gone = The page is gone.
 wiki-holds-pages = The page now holds other pages, so its creation can't be reverted.
 

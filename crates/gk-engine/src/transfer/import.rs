@@ -29,6 +29,7 @@ use crate::engine::Engine;
 use crate::failure::Failure;
 use crate::messages;
 use crate::ops::fields::PROJECT;
+use crate::ops::links::{self, Source as LinkSource};
 use crate::registry::CommandFn;
 use crate::write::WriteCtx;
 
@@ -1022,6 +1023,7 @@ pub(crate) fn import(
 #[derive(Debug, Default)]
 struct Derived {
     plain: String,
+    refs: gk_markdown::References,
     done: i64,
     total: i64,
 }
@@ -1032,11 +1034,11 @@ struct Derived {
 struct Texts {
     /// Per project, per task.
     tasks: Vec<Vec<Derived>>,
-    /// Per project, per comment: the plain text.
-    comments: Vec<Vec<String>>,
-    /// The plain text of the wiki revisions that are a page's current text,
-    /// by revision ID.
-    pages: HashMap<String, String>,
+    /// Per project, per comment: the plain text and the links.
+    comments: Vec<Vec<(String, gk_markdown::References)>>,
+    /// The plain text and the links of the wiki revisions that are a
+    /// page's current text, by revision ID.
+    pages: HashMap<String, (String, gk_markdown::References)>,
 }
 
 /// Runs `f` on every item of `items` on several threads, keeping the order.
@@ -1073,18 +1075,24 @@ impl Texts {
                     done: a.checklist.iter().filter(|i| i.checked).count() as i64,
                     total: a.checklist.len() as i64,
                     plain: a.plain_text,
+                    refs: a.references,
                 }
             }));
             let bodies: Vec<&str> = p.comments.iter().map(|c| c.body.as_str()).collect();
-            out.comments
-                .push(on_threads(&bodies, |b| gk_markdown::plain_text(b)));
+            out.comments.push(on_threads(&bodies, |b| {
+                let a = gk_markdown::analyze(b);
+                (a.plain_text, a.references)
+            }));
             let current: HashSet<&String> = p.wiki.iter().map(|w| &w.current_rev).collect();
             let revs: Vec<&Revision> = p
                 .revisions
                 .iter()
                 .filter(|r| r.owner_kind == "wiki_page" && current.contains(&r.id))
                 .collect();
-            let plain = on_threads(&revs, |r| gk_markdown::plain_text(&r.body));
+            let plain = on_threads(&revs, |r| {
+                let a = gk_markdown::analyze(&r.body);
+                (a.plain_text, a.references)
+            });
             out.pages
                 .extend(revs.iter().map(|r| r.id.clone()).zip(plain));
         }
@@ -1337,6 +1345,7 @@ fn write(
             let analysis = &texts.tasks[pi][ti];
             let (checked, total) = (analysis.done, analysis.total);
             let tid = plan.id(&t.id);
+            links::index_refs(tx, LinkSource::Task(tid), &analysis.refs)?;
             tx.prepare_cached(
                 "INSERT INTO tasks (id, project_id, number, title, title_fold, description,
                    description_rev, status_id, status_entered_at, type_id, priority, rank,
@@ -1459,6 +1468,7 @@ fn write(
             .collect();
         for (ci, c) in proj.comments.iter().enumerate() {
             let cid = plan.id(&c.id);
+            links::index_refs(tx, LinkSource::Comment(cid), &texts.comments[pi][ci].1)?;
             tx.prepare_cached(
                 "INSERT INTO comments (id, task_id, body, actor_kind, actor_name, session_id, via,
                    created_at, edited_at, deleted_at, deleted_group, version)
@@ -1504,7 +1514,7 @@ fn write(
                     b(plan.id(&c.task_id)),
                     b(id),
                     title,
-                    texts.comments[pi][ci],
+                    texts.comments[pi][ci].0,
                     c.edited_at.unwrap_or(c.created_at)
                 ])?;
             }
@@ -1623,11 +1633,14 @@ fn write(
             tick(1);
         }
         for page in &proj.wiki {
+            if let Some((_, refs)) = texts.pages.get(&page.current_rev) {
+                links::index_refs(tx, LinkSource::Wiki(plan.id(&page.id)), refs)?;
+            }
             if page.deleted_at.is_none() && p.deleted_at.is_none() {
                 let body = texts
                     .pages
                     .get(&page.current_rev)
-                    .map_or("", String::as_str);
+                    .map_or("", |(plain, _)| plain.as_str());
                 tx.prepare_cached(
                     "INSERT INTO search_docs (kind, entity_id, task_id, project_id, title, body,
                        updated_at) VALUES ('wiki', ?1, NULL, ?2, ?3, ?4, ?5)",

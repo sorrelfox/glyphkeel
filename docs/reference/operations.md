@@ -93,8 +93,13 @@ The safety class decides who may run an operation:
 | `wiki.get` | read | app, command line, MCP | `get_wiki_page` | `glyphkeel wiki get <page>` |
 | `wiki.create` | write | app, command line, MCP | `create_wiki_page` | `glyphkeel wiki new` |
 | `wiki.update` | write | app, command line, MCP | `update_wiki_page` | `glyphkeel wiki put <page>` |
+| `wiki.move` | write | app, command line, MCP | `update_wiki_page` | `glyphkeel wiki move <page>` |
 | `wiki.delete` | trash | app, command line, MCP | `delete_wiki_page` | `glyphkeel wiki delete <page>` |
 | `wiki.history` | read | app, command line, MCP | `get_wiki_history` | `glyphkeel wiki history <page>` |
+| `wiki.backlinks` | read | app, command line, MCP | `get_wiki_page` | `glyphkeel wiki backlinks <page>` |
+| `wiki.references` | read | app, command line, MCP | `get_wiki_page` | `glyphkeel wiki references <page>` |
+| `task.backlinks` | read | app, command line, MCP | `get_task` | `glyphkeel task backlinks <key>` |
+| `task.references` | read | app, command line, MCP | `get_task` | `glyphkeel task references <key>` |
 | `file.get` | read | app, command line, MCP | `read_attachment` | `glyphkeel file show <attachment>` |
 | `file.read` | read | app, command line, MCP | `read_attachment` | `glyphkeel file cat <attachment>` |
 | `file.thumbnail` | read | app | — | — |
@@ -603,6 +608,12 @@ Change a wiki page: its text (whole, with a base revision, or by targeted edits)
 
 Input: `WikiUpdateInput`. Output: `WikiChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
+## `wiki.move`
+
+Move a wiki page, with the pages inside it, into another parent page or to the top, and to a place among its siblings; refuses moves into itself; links to it keep working.
+
+Input: `WikiMoveInput`. Output: `WikiChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
 ## `wiki.delete`
 
 Move a wiki page, with the pages inside it, to the trash; links to it stop resolving until it is restored.
@@ -614,6 +625,30 @@ Input: `WikiDeleteInput`. Output: `TrashChange`. Schemas: [catalog.schema.json](
 List the revisions of a wiki page, newest first, conflict copies included; read one with wiki.get and its revision.
 
 Input: `WikiHistoryInput`. Output: `RevisionList`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `wiki.backlinks`
+
+The wiki pages, task descriptions and comments that link to a wiki page, by its title, slug, an old slug or its ID.
+
+Input: `WikiLinksInput`. Output: `BacklinkList`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `wiki.references`
+
+The pages and tasks a wiki page's text links to, in order, each resolved now; links that find nothing are marked.
+
+Input: `WikiLinksInput`. Output: `ReferenceList`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `task.backlinks`
+
+The wiki pages, other tasks' descriptions and comments that mention a task by its key (current or old).
+
+Input: `TaskLinksInput`. Output: `BacklinkList`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `task.references`
+
+The pages and tasks a task's description and comments link to, in order, each resolved now; links that find nothing are marked.
+
+Input: `TaskLinksInput`. Output: `ReferenceList`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `file.get`
 
