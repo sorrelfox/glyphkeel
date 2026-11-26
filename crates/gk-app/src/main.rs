@@ -250,6 +250,21 @@ fn main() -> ExitCode {
                         let err = memory_env::start_again();
                         eprintln!("glyphkeel-app: cannot start again: {err}");
                     }
+                    // A restart from Preferences: let go of the single
+                    // instance first, or the new run would hand itself over
+                    // to this one and exit.
+                    #[cfg(not(target_os = "linux"))]
+                    if app
+                        .state::<app_settings::Restart>()
+                        .0
+                        .load(Ordering::SeqCst)
+                    {
+                        #[cfg(windows)]
+                        tauri_plugin_single_instance::destroy(app);
+                        if let Err(err) = graphics::start_again() {
+                            eprintln!("glyphkeel-app: cannot start again: {err}");
+                        }
+                    }
                 }
                 _ => {}
             });

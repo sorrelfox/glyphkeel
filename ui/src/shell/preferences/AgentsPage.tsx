@@ -87,6 +87,12 @@ function CliGroup({ status, isPending }: { status: CliStatus | null | undefined;
             {t("agents-cli-install")}
           </Button>
         </Row>
+      ) : status.bundled !== undefined ? (
+        <Row label={t("agents-cli-tool")} about={t("agents-cli-bundled-not-on-path", { path: status.bundled })}>
+          <span className="chip" data-testid="cli-state">
+            {t("agents-cli-not-on-path-chip")}
+          </span>
+        </Row>
       ) : (
         <Row label={t("agents-cli-tool")} about={t("agents-cli-missing")}>
           <span className="chip" data-testid="cli-state">

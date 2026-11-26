@@ -33,6 +33,11 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// bundle (`bundle.active` is off in tauri.conf.json).
 const BUNDLE_CONFIG: &str = r#"{"bundle":{"active":true}}"#;
 
+/// The Cargo profile of the installer. The command line and the app must
+/// both be built with it, for the same target and into the same target
+/// folder: the installer takes `glyphkeel.exe` from beside the app.
+const INSTALLER_PROFILE: &str = "dist";
+
 /// Where the release directory is mounted in the container.
 const RELEASE_MOUNT: &str = "/release";
 
@@ -142,15 +147,16 @@ impl WinSuite {
             ],
             Self::Nsis => {
                 let mut steps = vec![
-                    // The command line of the same profile, for the
-                    // installer to carry next to the app.
+                    // The command line of the same profile, target and
+                    // target folder, for the installer to carry next to
+                    // the app.
                     WinStep::xwin(&[
                         "build",
                         "--locked",
                         "--package",
                         "gk-cli",
                         "--profile",
-                        "dist",
+                        INSTALLER_PROFILE,
                     ]),
                     WinStep::Bundle,
                 ];
@@ -182,7 +188,8 @@ fn cli_debug() -> PathBuf {
 pub(crate) fn installer() -> PathBuf {
     Path::new("target")
         .join(TARGET)
-        .join("dist/bundle/nsis")
+        .join(INSTALLER_PROFILE)
+        .join("bundle/nsis")
         .join(installer_name())
 }
 
@@ -258,7 +265,7 @@ impl WinStep {
             BUNDLE_CONFIG,
             "--",
             "--profile",
-            "dist",
+            INSTALLER_PROFILE,
         ]
         .map(str::to_owned)
         .to_vec()

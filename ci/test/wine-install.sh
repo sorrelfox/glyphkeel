@@ -6,10 +6,10 @@
 # shortcuts and registry keys it leaves, then a silent uninstall that removes
 # the program and keeps the data.
 #
-# Checks of what the packaging is still to add (the install folder under
+# The checks of what the Windows packaging adds (the install folder under
 # %LOCALAPPDATA%\Programs, the command line next to the app and on the user's
-# PATH, the glyphkeel:// handler, no desktop shortcut) are skipped with a
-# message while it is missing, or failed with GK_WINE_STRICT=1.
+# PATH, the glyphkeel:// handler, no desktop shortcut) fail when it is
+# missing, or are only skipped with GK_WINE_STRICT=0.
 #
 # Usage: wine-install.sh PATH/TO/Glyphkeel_<version>_x64-setup.exe
 # EXPECTED_VERSION, when set, is the version the uninstall entry and the
@@ -95,6 +95,15 @@ echo "== shortcuts"
 start_menu=$(unix_path "$(win_env APPDATA)\\Microsoft\\Windows\\Start Menu\\Programs")
 desktop=$(unix_path "$(win_env USERPROFILE)\\Desktop")
 check "a Start menu shortcut" sh -c 'find "$1" -iname "Glyphkeel*.lnk" | grep -q .' sh "$start_menu"
+# The toasts carry the app's ID; Windows shows them for the app whose
+# Start menu shortcut has the same ID. Wine may not write it into the file.
+app_id=io.github.sorrelfox.Glyphkeel
+shortcut=$(find "$start_menu" -iname 'Glyphkeel*.lnk' | head -n 1)
+if [ -n "$shortcut" ] && tr -d '\000' <"$shortcut" | grep -aq "$app_id"; then
+  pass "the Start menu shortcut carries the app ID $app_id"
+else
+  skip "the app ID on the Start menu shortcut: not found in the file (Wine may not store it)"
+fi
 if find "$desktop" -iname 'Glyphkeel*.lnk' 2>/dev/null | grep -q .; then
   pending "no desktop shortcut" "the installer still adds one"
 else
@@ -125,6 +134,16 @@ else
   pending "the glyphkeel:// handler" "the installer doesn't register it"
 fi
 
+# Autostart as the app sets it, switched off in Task Manager: both values
+# go with the uninstall.
+run_key='HKCU\Software\Microsoft\Windows\CurrentVersion\Run'
+approved_key='HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'
+wine reg add "$run_key" /v Glyphkeel /t REG_SZ \
+  /d "\"$install_dir_win\\glyphkeel-app.exe\" --background" /f >/dev/null 2>&1
+wine reg add "$approved_key" /v Glyphkeel /t REG_BINARY /d 030000000000000000000000 /f >/dev/null 2>&1
+check "autostart values to remove are set" \
+  sh -c '[ -n "$1" ] && [ -n "$2" ]' sh "$(reg_value "$run_key" Glyphkeel)" "$(reg_value "$approved_key" Glyphkeel)"
+
 echo "== silent uninstall"
 rc=0
 wine "$(unix_path "$uninstaller_win")" /S || rc=$?
@@ -143,6 +162,8 @@ if [ -n "$cli" ]; then
 fi
 check "the uninstall entry is removed" [ -z "$(reg_value "$uninstall_key" DisplayName)" ]
 check "the user's data is kept" [ -f "$data_dir/workspaces/Personal/user-data.txt" ]
+check "the autostart value is removed" [ -z "$(reg_value "$run_key" Glyphkeel)" ]
+check "Task Manager's autostart state is removed" [ -z "$(reg_value "$approved_key" Glyphkeel)" ]
 if [ "$on_path" = 1 ]; then
   case ";$(reg_value 'HKCU\Environment' Path);" in
     *";$install_dir_win;"*) fail "the install folder is taken off the PATH" ;;

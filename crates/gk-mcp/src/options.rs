@@ -203,9 +203,9 @@ mod tests {
         assert_eq!(layout.root(), path);
         let layout = workspace_layout(Some("./ws")).expect("relative path");
         assert_eq!(layout.root(), Path::new("./ws"));
-        if gk_store::data_dir().is_some() {
+        if let Some(data) = gk_store::data_dir() {
             let layout = workspace_layout(Some("Work")).expect("name");
-            assert!(layout.root().ends_with("glyphkeel/workspaces/Work"));
+            assert_eq!(layout.root(), data.join("workspaces").join("Work"));
             assert!(workspace_layout(None).is_ok());
         }
     }

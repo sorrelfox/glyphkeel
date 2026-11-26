@@ -6,14 +6,16 @@
 # image (`cargo xtask ci --distro windows-cross`), without a display.
 #
 # GK_WINE_ROOT   the folder for the Wine prefixes (default: /tmp/gk-wine)
-# GK_WINE_STRICT 1 turns the checks of what packaging adds later (install
-#                folder, PATH, the glyphkeel:// handler, the command line
-#                next to the app) from skipped into failed
+# GK_WINE_STRICT 1 (the default) fails the checks of what the Windows
+#                packaging adds (install folder, PATH, the glyphkeel://
+#                handler, the command line next to the app) when it is
+#                missing; 0 only skips them, for an installer made without
+#                the packaging settings
 
 set -eu
 
 : "${GK_WINE_ROOT:=${TMPDIR:-/tmp}/gk-wine}"
-: "${GK_WINE_STRICT:=0}"
+: "${GK_WINE_STRICT:=1}"
 # No window can open: no display, and no Mono or Gecko install prompts.
 export WINEDEBUG=-all DISPLAY= WAYLAND_DISPLAY= WINEDLLOVERRIDES="mscoree,mshtml="
 # Wine converts the command line with the locale's encoding; UTF-8 keeps
@@ -46,8 +48,8 @@ check() {
   if "$@"; then pass "$what"; else fail "$what"; fi
 }
 
-# pending DESCRIPTION REASON: something the packaging doesn't provide yet.
-# Skipped with the reason, or failed with GK_WINE_STRICT=1.
+# pending DESCRIPTION REASON: something the packaging should provide and
+# doesn't. Failed, or skipped with the reason when GK_WINE_STRICT=0.
 pending() {
   if [ "$GK_WINE_STRICT" = 1 ]; then
     fail "$1 ($2)"
