@@ -5,6 +5,34 @@ Conventional Commits, and versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-11-26
+
+### Features
+
+- **Custom fields:** nine kinds per project, in the task panel, on board
+  cards, as list and CSV columns, in grouping, bulk changes, search and
+  queries (`cf.<name>`, including what a field was and when it changed).
+  Required fields are checked on type changes and moves.
+- **Versions:** versions per project, a fix version on tasks, a `version:`
+  query field, a roadmap page and version markers on the Gantt.
+- **Rules:** per status, fields required, read-only, set or cleared on
+  entry, the timer stopped and claims released; per project, limits on
+  what agents may change. Checked for every change from every client.
+- **Recurring tasks and templates:** calendar and after-done repeats with
+  skip and stop; task and project templates, a built-in Software project
+  template, and a default due date per task type.
+- **CSV import:** encoding and separator detection, column mapping to
+  built-in and custom fields, saved presets and presets for Jira and
+  Redmine exports, a dry run with row errors.
+- **Flow reports:** created against closed, cumulative flow and cycle time.
+- **Queries and planning:** history predicates (`was:`, `changed:`,
+  `changed-by:`), lag on dependencies, a minimum next to the WIP limit,
+  kinds of work on time entries, and closing duplicates with the original.
+- **Projects and workspaces:** move tasks between projects with a mapping
+  and a check, change a project's key with old keys kept, and switch,
+  create and rename workspaces from the app, the command line and MCP.
+- **MCP:** prompts for agents with argument completion.
+
 ## [0.1.5] - 2026-11-26
 
 ### Features
