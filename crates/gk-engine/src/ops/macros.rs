@@ -11,7 +11,7 @@
 
 use gk_api::ops::common::Category;
 use gk_core::Id;
-use gk_markdown::{Included, MacroSource, PageItem, TaskItem, TaskList};
+use gk_markdown::{Included, MacroSource, NoteMessage, PageItem, TaskItem, TaskList};
 use gk_query::check::NameKind;
 use gk_query::{Compiled, Scope, SqlEnv};
 use gk_store::rusqlite::Transaction;
@@ -104,11 +104,17 @@ impl MacroSource for WikiMacros<'_> {
         })
     }
 
-    fn tasks(&self, page: Option<&str>, query: &str) -> Result<TaskList, String> {
-        let from = self.page_of(page).ok_or_else(String::new)?;
+    fn tasks(&self, page: Option<&str>, query: &str) -> Result<TaskList, NoteMessage> {
+        let from = self.page_of(page).ok_or_else(unreadable)?;
         let compiled = super::query::try_compile(self.tx, self.zone, self.now, query)
-            .map_err(|e| failure_text(&e))?;
-        let (_, checked) = compiled.map_err(|e| e.message())?;
+            .map_err(|_| unreadable())?;
+        let (_, checked) = compiled.map_err(|e| {
+            e.args
+                .iter()
+                .fold(NoteMessage::new(e.id), |message, (name, value)| {
+                    message.arg(*name, value.clone())
+                })
+        })?;
         let names_project = checked.names().iter().any(|n| n.kind == NameKind::Project);
         let scope = if names_project {
             None
@@ -126,11 +132,10 @@ impl MacroSource for WikiMacros<'_> {
                 default_sort: Vec::new(),
             },
         );
-        let ids = super::query::matching_ids(self.tx, &compiled).map_err(|e| failure_text(&e))?;
+        let ids = super::query::matching_ids(self.tx, &compiled).map_err(|_| unreadable())?;
         let mut items = Vec::with_capacity(ids.len().min(MAX_TASKS));
         for id in ids.iter().take(MAX_TASKS) {
-            let task =
-                super::query::listed(self.tx, *id, self.now).map_err(|e| failure_text(&e))?;
+            let task = super::query::listed(self.tx, *id, self.now).map_err(|_| unreadable())?;
             items.push(TaskItem {
                 key: task.key,
                 title: task.title,
@@ -145,11 +150,8 @@ impl MacroSource for WikiMacros<'_> {
     }
 }
 
-/// The text of a failure, for a note in the page.
-fn failure_text(failure: &crate::failure::Failure) -> String {
-    match failure {
-        crate::failure::Failure::Op(e) => e.message.clone(),
-        crate::failure::Failure::Store(e) => e.to_string(),
-        crate::failure::Failure::SnapshotFirst { .. } => String::new(),
-    }
+/// The note for a list the engine failed to read: the failure itself is
+/// the engine's own business, not the reader's.
+fn unreadable() -> NoteMessage {
+    NoteMessage::new("wiki-macro-tasks-unreadable")
 }

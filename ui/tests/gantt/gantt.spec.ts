@@ -13,10 +13,10 @@ const TODAY = "2026-11-11";
 /** Pixels per day at the day zoom. */
 const DAY_PX = 32;
 
-async function openGantt(page: Page, query = "") {
+async function openGantt(page: Page, query = "", project = /Task Manager/) {
   await page.clock.setFixedTime(new Date(`${TODAY}T10:00:00`));
   await page.goto(`/${query}`);
-  await page.getByRole("row", { name: /Task Manager/ }).click();
+  await page.getByRole("row", { name: project }).click();
   await expect(page.getByRole("group", { name: /Board of/ })).toBeVisible();
   await page.getByRole("group", { name: "Project views" }).getByRole("button", { name: "Gantt" }).click();
   const grid = page.getByRole("treegrid", { name: "Gantt chart" });
@@ -113,6 +113,29 @@ test("dragging a bar moves it, dragging an edge resizes it, and Undo takes it ba
   await page.keyboard.press("Control+z");
   await page.keyboard.press("Control+z");
   await expect.poll(() => datesOf(grid, key)).toEqual([start, due]);
+});
+
+test("a summary bar follows its subtasks: a drag or Alt+arrow on it changes no dates", async ({ page }) => {
+  // The home lab's sample data has a parent with a dated subtask.
+  const grid = await openGantt(page, "", /Home lab/);
+  const summary = grid.locator("[data-bar][data-shape=summary]").first();
+  await expect(summary).toBeAttached();
+  const key = (await summary.getAttribute("data-bar")) ?? "";
+  // It has nothing to grab, and its dates aren't buttons to edit.
+  await expect(summary.locator("[data-handle]")).toHaveCount(0);
+  await expect(row(grid, key).locator("button[aria-label*='date of']:not([disabled])")).toHaveCount(0);
+  const allDates = () => grid.locator("button[aria-label*='date of']").evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-label")));
+  const before = await allDates();
+  // The bar is on the timeline, not under the table.
+  const box = await summary.boundingBox();
+  expect(box !== null && box.x > 520 && box.x + box.width < 1350).toBe(true);
+  await dragBy(page, summary.locator("rect").first(), 3 * DAY_PX);
+  await cellOf(grid, key).click();
+  await page.keyboard.press("Alt+ArrowRight");
+  await page.keyboard.press("Alt+Shift+ArrowRight");
+  // Nothing moved, here or in the subtasks, and nothing was announced as moved.
+  expect(await allDates()).toEqual(before);
+  expect(await live(page)()).not.toContain("now runs");
 });
 
 test("with Also move dependents on, a drag says how many tasks it may move, and moves them in one change", async ({ page }) => {
@@ -562,6 +585,31 @@ test("claimed by: the agent's column and grouping by the session that claimed th
     await expect(claimed.first()).toHaveAttribute("aria-label", /claimed by ⁨?Build agent/);
     expect(plain(await groups.first().textContent())).toMatch(/^Build agent: (one task|\d+ tasks)$/);
   }
+});
+
+test("a claim that ends leaves the chart without a reload", async ({ page }) => {
+  // A clock that runs, so the chart's timer fires when the time is moved on.
+  await page.clock.install({ time: new Date(`${TODAY}T10:00:00`) });
+  await page.goto("/");
+  await page.getByRole("row", { name: /Task Manager/ }).click();
+  await page.getByRole("group", { name: "Project views" }).getByRole("button", { name: "Gantt" }).click();
+  const grid = page.getByRole("treegrid", { name: "Gantt chart" });
+  await page.getByText("Include sub-projects", { exact: true }).click();
+  // Grouped by claim, the claimed task comes first.
+  await page.getByRole("button", { name: /^Group: / }).click();
+  await page.getByRole("menuitemradio", { name: "Claimed by" }).click();
+  const groups = grid.locator("[data-group^='claim:']");
+  const agentGroup = groups.filter({ hasText: "Build agent" });
+  // The sample agent's claim lasts 45 minutes from when the sample was made.
+  await expect(agentGroup).toHaveCount(1);
+  const claimed = grid.locator("[data-row]").filter({ has: page.locator("[role=gridcell]", { hasText: "Build agent" }) });
+  await expect(claimed).toHaveCount(1);
+  await page.clock.runFor("30:00");
+  await expect(agentGroup).toHaveCount(1);
+  await page.clock.runFor("16:00");
+  await expect(agentGroup).toHaveCount(0);
+  await expect(claimed).toHaveCount(0);
+  await expect(groups).toHaveCount(1);
 });
 
 test("milestones: the project's list with dates and how each stands; choosing one shows it in the chart", async ({ page }) => {

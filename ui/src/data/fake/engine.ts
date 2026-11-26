@@ -211,7 +211,9 @@ export class FakeWorkspace {
         });
     }
     // One task in progress is claimed by an agent, as agents do while they work.
-    const claimed = state.tasks.find((task) => task.closedAt === null && this.statusIn(this.projectOf(task), task.statusId).category === "in_progress");
+    // One with dates, so the Gantt chart shows it too.
+    const working = state.tasks.filter((task) => task.closedAt === null && this.statusIn(this.projectOf(task), task.statusId).category === "in_progress");
+    const claimed = working.find((task) => task.dueDate !== null) ?? working[0];
     if (claimed) {
       state.claims.push({ taskId: claimed.id, agent: SAMPLE_AGENT, session: "session-1", until: new Date(today().getTime() + 45 * 60_000).toISOString() });
     }
@@ -1417,7 +1419,10 @@ export class FakeWorkspace {
       try {
         keys = matchingKeys(all, argument, names, this.archivedKeys());
       } catch (error) {
-        return `<div data-macro="tasks">${note("tasks-error", queryError(error)?.message ?? String(error))}</div>`;
+        // As the engine does: the query's message by its ID and arguments, for the reader to word.
+        const problem = queryError(error)?.details;
+        const why = problem === undefined ? { id: "wiki-macro-tasks-unreadable", args: {} } : { args: problem.args ?? {}, id: problem.message_id };
+        return `<div data-macro="tasks">${note("tasks-error", JSON.stringify(why))}</div>`;
       }
       const shown = keys.slice(0, 50).map((key) => all.find((task) => task.key === key)).filter((task) => task !== undefined);
       const done = (task: ListedTask) => task.status.category === "done" || task.status.category === "cancelled";
@@ -1608,12 +1613,19 @@ export class FakeWorkspace {
   }
 
   /** Every task as lists show it, worked out once per state of the workspace (lists may hold 20,000 tasks). */
-  private searchCache = new WeakMap<FakeState, { seq: number; results: Map<string, { found: ListedTask[]; order: string[] }> }>();
-  private listedCache = new WeakMap<FakeState, { seq: number; items: ListedTask[] }>();
+  private searchCache = new WeakMap<FakeState, { seq: string; results: Map<string, { found: ListedTask[]; order: string[] }> }>();
+  private listedCache = new WeakMap<FakeState, { seq: string; items: ListedTask[] }>();
+
+  /** The state the caches were made for: the last change, and the claims still on (a claim ends without a change). */
+  private cacheStamp(): string {
+    const now = this.today().toISOString();
+    return `${String(this.state.seq)}:${String(this.state.claims.filter((claim) => claim.until > now).length)}`;
+  }
 
   private listedTasks(): ListedTask[] {
+    const stamp = this.cacheStamp();
     const cached = this.listedCache.get(this.state);
-    if (cached?.seq === this.state.seq) {
+    if (cached?.seq === stamp) {
       return cached.items;
     }
     const children = new Map<string, FakeTask[]>();
@@ -1682,7 +1694,7 @@ export class FakeWorkspace {
         version: task.version,
       };
     });
-    this.listedCache.set(this.state, { seq: this.state.seq, items });
+    this.listedCache.set(this.state, { seq: stamp, items });
     return items;
   }
 
@@ -2969,9 +2981,10 @@ export class FakeWorkspace {
         const project = this.state.projects.find((candidate) => candidate.key === task.project);
         return project ? project.statuses.findIndex((status) => status.id === task.status.id) : 0;
       };
+      const stamp = this.cacheStamp();
       let cache = this.searchCache.get(this.state);
-      if (cache?.seq !== this.state.seq) {
-        cache = { seq: this.state.seq, results: new Map() };
+      if (cache?.seq !== stamp) {
+        cache = { seq: stamp, results: new Map() };
         this.searchCache.set(this.state, cache);
       }
       const results = cache.results;

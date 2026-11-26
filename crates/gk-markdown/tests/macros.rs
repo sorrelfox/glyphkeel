@@ -11,8 +11,8 @@ use std::collections::HashMap;
 
 use common::violations;
 use gk_markdown::{
-    Included, Macro, MacroSource, Note, PageItem, RenderOptions, TaskItem, TaskList, checklist,
-    macros, render,
+    Included, Macro, MacroSource, Note, NoteMessage, PageItem, RenderOptions, TaskItem, TaskList,
+    checklist, macros, render,
 };
 
 /// Pages by ID, each with its text and subpages.
@@ -60,9 +60,9 @@ impl MacroSource for Wiki {
         })
     }
 
-    fn tasks(&self, _page: Option<&str>, query: &str) -> Result<TaskList, String> {
+    fn tasks(&self, _page: Option<&str>, query: &str) -> Result<TaskList, NoteMessage> {
         match query {
-            "bad" => Err("Unknown field “bad”.".to_owned()),
+            "bad" => Err(NoteMessage::new("query-unknown-field-plain").arg("field", "bad")),
             "none" => Ok(TaskList::default()),
             _ => Ok(TaskList {
                 items: vec![
@@ -233,7 +233,9 @@ fn tasks_list_keys_titles_and_states() {
     assert!(out.contains("data-macro-note=\"tasks-empty\""), "{out}");
     let out = html("{{tasks bad}}\n");
     assert!(
-        out.contains("data-macro-note=\"tasks-error\" data-macro-arg=\"Unknown field “bad”.\""),
+        out.contains(
+            "data-macro-note=\"tasks-error\" data-macro-arg=\"{&quot;args&quot;:{&quot;field&quot;:&quot;bad&quot;},&quot;id&quot;:&quot;query-unknown-field-plain&quot;}\""
+        ),
         "{out}"
     );
 }

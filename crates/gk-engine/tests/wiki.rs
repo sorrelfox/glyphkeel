@@ -1605,6 +1605,17 @@ fn macros_show_subpages_included_pages_and_live_task_lists() {
         html.contains("data-macro-note=\"tasks-error\""),
         "an unknown status is an error: {html}"
     );
+    // The error is the query's message by its ID and arguments, for the
+    // reader to word in the person's language; no English text.
+    assert!(
+        html.contains("&quot;id&quot;:&quot;query-unknown-status&quot;"),
+        "{html}"
+    );
+    assert!(
+        html.contains("&quot;value&quot;:&quot;nothing&quot;"),
+        "{html}"
+    );
+    assert!(!html.contains("No status"), "{html}");
     assert!(html.contains("data-macro-note=\"include-loop\""), "{html}");
     // The page's own checklist doesn't count the included page's.
     assert_eq!(item["checklist"].as_array().unwrap().len(), 0);
@@ -1666,6 +1677,8 @@ fn macros_show_subpages_included_pages_and_live_task_lists() {
         page.contains("is not included again inside itself"),
         "{page}"
     );
+    let why = page.split("The task list can").nth(1).unwrap_or_default();
+    assert!(why.contains("No status"), "{page}");
     let md = ws._dir.path().join("macros-md");
     ws.call(
         "wiki.export",

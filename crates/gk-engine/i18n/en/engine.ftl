@@ -535,6 +535,7 @@ wiki-macro-tasks-more = { $count ->
        *[other] { $count } more tasks match.
     }
 wiki-macro-tasks-error = The task list can't be shown: { $error }
+wiki-macro-tasks-unreadable = The tasks couldn't be read.
 wiki-import-nothing = The folder holds no Markdown files (`.md`).
 wiki-import-not-text = { $path } is not text in UTF-8.
 wiki-import-too-many = The folder makes { $count } pages; one import makes at most { $max }.

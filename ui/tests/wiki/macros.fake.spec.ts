@@ -46,7 +46,7 @@ test("a page's macros show its outline, subpages, an included page and a live ta
   const tree = await openWiki(page);
   await tree.getByRole("row", { name: "Architecture" }).click();
   const view = page.getByRole("region", { name: /Wiki page/ });
-  await writePage(page, view, "# Overview\n\n{{toc}}\n\n## Parts\n\n{{children}}\n\n{{include Release plan}}\n\n{{tasks is:open}}\n\n{{include Nowhere}}\n");
+  await writePage(page, view, "# Overview\n\n{{toc}}\n\n## Parts\n\n{{children}}\n\n{{include Release plan}}\n\n{{tasks is:open}}\n\n{{include Nowhere}}\n\n{{tasks colour:red}}\n");
   const article = view.locator("article");
   await expect(article.locator('[data-macro="toc"] a[data-wiki="#Parts"]')).toBeVisible();
   await expect(article.locator('[data-macro="children"] a[data-wiki="Query language"]')).toBeVisible();
@@ -54,6 +54,8 @@ test("a page's macros show its outline, subpages, an included page and a live ta
   const tasks = article.locator('[data-macro="tasks"]');
   await expect(tasks.locator("a[data-ref]").first()).toBeVisible();
   await expect(article.getByText(/There is no page\W+Nowhere\W+to include/)).toBeVisible();
+  // A query's mistake is worded from its message, inside the sentence about the list.
+  await expect(article.getByText(/The task list can.t be shown: \W*Unknown field\W+colour/)).toBeVisible();
   await shot(page, "wiki-macros");
 
   // A subpage listed by {{children}} opens on a click.

@@ -162,8 +162,49 @@ pub trait MacroSource {
     ///
     /// # Errors
     ///
-    /// The query's mistake, as text for the reader.
-    fn tasks(&self, page: Option<&str>, query: &str) -> Result<TaskList, String>;
+    /// The query's mistake, as a message the reader words in its own
+    /// language.
+    fn tasks(&self, page: Option<&str>, query: &str) -> Result<TaskList, NoteMessage>;
+}
+
+/// A message by its ID in the app's message files, with its arguments by
+/// name, so that the reader shows it in the person's language rather than
+/// in the engine's.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NoteMessage {
+    /// The message's ID (`query-unknown-field`).
+    pub id: String,
+    /// Its arguments, by name.
+    pub args: Vec<(String, String)>,
+}
+
+impl NoteMessage {
+    /// A message without arguments yet.
+    #[must_use]
+    pub fn new(id: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            args: Vec::new(),
+        }
+    }
+
+    /// Adds an argument.
+    #[must_use]
+    pub fn arg(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
+        self.args.push((name.into(), value.into()));
+        self
+    }
+
+    /// As the HTML carries it: `{"id": …, "args": {…}}`.
+    #[must_use]
+    pub fn to_json(&self) -> String {
+        let args: serde_json::Map<String, serde_json::Value> = self
+            .args
+            .iter()
+            .map(|(k, v)| (k.clone(), serde_json::Value::from(v.as_str())))
+            .collect();
+        serde_json::json!({ "id": self.id, "args": args }).to_string()
+    }
 }
 
 /// A line the reader shows in place of, or after, a macro's output.
@@ -187,7 +228,7 @@ pub enum Note {
     /// `{{tasks}}` that finds more than it lists: how many more.
     MoreTasks(usize),
     /// `{{tasks}}` with a query that can't run: why.
-    TasksError(String),
+    TasksError(NoteMessage),
 }
 
 impl Note {
@@ -208,7 +249,8 @@ impl Note {
     }
 
     /// Its value, as the HTML carries it (`data-macro-arg`): a page's name,
-    /// a count or an error; empty when it has none.
+    /// a count, or an error as [`NoteMessage::to_json`]; empty when it has
+    /// none.
     #[must_use]
     pub fn value(&self) -> String {
         match self {
@@ -218,7 +260,7 @@ impl Note {
             | Self::IncludeTooDeep(page)
             | Self::IncludeTooMany(page) => page.clone(),
             Self::MoreTasks(count) => count.to_string(),
-            Self::TasksError(error) => error.clone(),
+            Self::TasksError(error) => error.to_json(),
         }
     }
 }
