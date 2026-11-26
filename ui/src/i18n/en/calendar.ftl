@@ -22,7 +22,7 @@ calendar-include-subprojects = Include sub-projects
 
 # The grid's accessible name; $range is the month or the week on screen.
 calendar-grid-label = Calendar, { $range }
-calendar-keys-hint = Arrow keys move between days, Page Up and Page Down between pages. Enter goes to the tasks of the day. On a task, Alt and an arrow key moves it to another day.
+calendar-keys-hint = Arrow keys move between days, Page Up and Page Down between pages. Enter goes to the tasks of the day, and N adds a task due that day. On a task, Alt and an arrow key moves it to another day.
 # A day's accessible name; $date is the full date.
 calendar-day-label =
     { $count ->
@@ -45,9 +45,18 @@ calendar-more-label =
 calendar-task-day = { $key } { $title }, { $date }
 calendar-task-days = { $key } { $title }, { $from } to { $to }
 
+## Quick add
+
+# The "+" of a day, and the form it opens; $date is the full date.
+calendar-add = Add a task on { $date }
+calendar-add-title = New task due { $date }
+calendar-add-placeholder = Task title
+calendar-add-confirm = Add
+
 ## Notes
 
 calendar-moved = { $key } moved to { $date }
+calendar-added = { $key } added, due { $date }
 calendar-truncated = Showing { $shown } of { $total } tasks of these days. Narrow the query to see the rest.
 calendar-error = The calendar's tasks couldn't be read: { $message }
 calendar-status =

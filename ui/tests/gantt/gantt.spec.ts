@@ -86,7 +86,7 @@ async function dragBy(page: Page, handle: Locator, dx: number, dy = 0) {
 test("the chart: table and timeline, today, the sample tasks, the Unscheduled group", async ({ page }) => {
   const grid = await openGantt(page);
   await expect(grid.locator("[data-today]")).toHaveCount(1);
-  await expect(grid.getByRole("columnheader")).toHaveCount(5);
+  await expect(grid.getByRole("columnheader")).toHaveCount(6);
   await expect(grid.getByRole("row", { name: /^Unscheduled/ })).toHaveCount(await grid.getByRole("row", { name: /^Unscheduled/ }).count());
   // The range of days on screen is shown in the toolbar.
   await expect(page.getByTestId("gantt-range")).not.toHaveText("");
@@ -542,4 +542,108 @@ test("touch screens: read only, a tap opens the task, two fingers zoom", async (
   await pinch(30, 120);
   await expect(page.locator("[data-gantt]")).not.toHaveAttribute("data-zoom", out ?? "");
   await context.close();
+});
+
+test("claimed by: the agent's column and grouping by the session that claimed the tasks", async ({ page }) => {
+  const grid = await openGantt(page);
+  await expect(grid.getByRole("columnheader", { name: "Claimed by" })).toBeVisible();
+  await page.getByText("Include sub-projects", { exact: true }).click();
+  await page.getByRole("button", { name: /^Group: / }).click();
+  await page.getByRole("menuitemradio", { name: "Claimed by" }).click();
+  await expect.poll(async () => plain(await page.getByRole("button", { name: /^Group: / }).getAttribute("aria-label"))).toBe("Group: Claimed by");
+  // The tasks no agent works on come last, flat.
+  const groups = grid.locator("[data-group^='claim:']");
+  await expect(groups.last()).toHaveAttribute("data-group", "claim:");
+  expect(plain(await groups.last().textContent())).toMatch(/^Not claimed: (one task|\d+ tasks)$/);
+  await expect(grid.locator("[role=row][aria-level='2']")).toHaveCount(0);
+  // A claimed task names its agent in the column and in its row's name.
+  const claimed = grid.locator("[data-row]").filter({ has: page.locator("[role=gridcell]", { hasText: "Build agent" }) });
+  if ((await claimed.count()) > 0) {
+    await expect(claimed.first()).toHaveAttribute("aria-label", /claimed by ⁨?Build agent/);
+    expect(plain(await groups.first().textContent())).toMatch(/^Build agent: (one task|\d+ tasks)$/);
+  }
+});
+
+test("milestones: the project's list with dates and how each stands; choosing one shows it in the chart", async ({ page }) => {
+  const grid = await openGantt(page);
+  await page.getByRole("button", { name: "Milestones" }).click();
+  const dialog = page.getByRole("dialog", { name: "Milestones" });
+  await expect(dialog).toBeVisible();
+  const items = dialog.locator("[data-milestone]");
+  await expect(items.first()).toBeVisible();
+  // Each has a date (or "No date") and a state; overdue ones say by how long.
+  for (const item of await items.all()) {
+    const text = plain(await item.innerText());
+    expect(text.length).toBeGreaterThan(0);
+    if ((await item.getAttribute("data-state")) === "overdue") {
+      expect(text).toMatch(/Overdue by/);
+    }
+  }
+  await shot(page, "gantt-milestones.png");
+  const key = (await items.first().getAttribute("data-milestone")) ?? "";
+  await items.first().click();
+  await expect(dialog).toBeHidden();
+  // The chart selects its row.
+  await expect(row(grid, key)).toHaveAttribute("aria-selected", "true");
+  await expect(row(grid, key)).toBeInViewport();
+});
+
+test("saved views: a query and a grouping saved as a view of the chart, chosen again later", async ({ page }) => {
+  await openGantt(page);
+  // The status bar counts the tasks shown; the rows themselves are drawn only near the screen.
+  const counts = page.getByText(/scheduled.*unscheduled/);
+  const all = plain(await counts.textContent());
+  const field = page.getByRole("textbox", { name: "Filter query" });
+  await field.click();
+  await page.keyboard.type("is:closed");
+  await page.keyboard.press("Escape");
+  await expect.poll(async () => plain(await counts.textContent())).not.toBe(all);
+  const filtered = plain(await counts.textContent());
+  await expect(page.getByTestId("list-changed")).toBeVisible();
+
+  await page.getByRole("button", { name: "Save as…" }).click();
+  const save = page.getByRole("dialog", { name: "Save view" });
+  await save.getByRole("textbox", { name: "Name" }).fill("Finished work");
+  await expect(save.getByText("Show it first when the chart opens")).toBeVisible();
+  await save.getByRole("button", { name: "Save view" }).click();
+  await expect(page.getByRole("button", { name: /Saved view: .*Finished work/ })).toBeVisible();
+  await expect(page.getByTestId("list-changed")).toHaveCount(0);
+
+  // A grouping chosen while the view is on changes the view, until saved.
+  await page.getByRole("button", { name: /^Group: / }).click();
+  await page.getByRole("menuitemradio", { name: "Status" }).click();
+  await expect(page.getByTestId("list-changed")).toBeVisible();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByTestId("list-changed")).toHaveCount(0);
+
+  // All tasks: the person's own grouping and no query.
+  await page.getByRole("button", { name: /Saved view: / }).click();
+  await page.getByRole("menuitem", { name: "All tasks" }).click();
+  await expect.poll(async () => plain(await counts.textContent())).toBe(all);
+  await expect.poll(async () => plain(await page.getByRole("button", { name: /^Group: / }).getAttribute("aria-label"))).toBe("Group: Parent");
+
+  // The view is there on the next visit, and brings back its query and grouping.
+  await page.getByRole("group", { name: "Project views" }).getByRole("button", { name: "Board" }).click();
+  await page.getByRole("group", { name: "Project views" }).getByRole("button", { name: "Gantt" }).click();
+  await page.getByRole("button", { name: /Saved view: / }).click();
+  await page.getByRole("menuitem", { name: /Finished work/ }).click();
+  await expect.poll(async () => plain(await counts.textContent())).toBe(filtered);
+  await expect(field).toHaveText("is:closed");
+  await expect.poll(async () => plain(await page.getByRole("button", { name: /^Group: / }).getAttribute("aria-label"))).toBe("Group: Status");
+});
+
+test("Today, and the keys for a page earlier, later and back to today", async ({ page }) => {
+  const grid = await openGantt(page);
+  const today = grid.locator("[data-today]");
+  await expect(today).toBeInViewport();
+  await page.keyboard.press("Alt+PageDown");
+  await page.keyboard.press("Alt+PageDown");
+  await expect(today).not.toBeInViewport();
+  await page.keyboard.press("Alt+Home");
+  await expect(today).toBeInViewport();
+  await page.getByRole("button", { name: "Later" }).click();
+  await page.getByRole("button", { name: "Later" }).click();
+  await expect(today).not.toBeInViewport();
+  await page.getByRole("button", { name: "Today", exact: true }).click();
+  await expect(today).toBeInViewport();
 });

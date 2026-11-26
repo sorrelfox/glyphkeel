@@ -11,14 +11,14 @@ import { type GanttGrouping, type GanttLayout as EngineLayout, type GanttLayoutU
 import { ZOOMS, type Zoom } from "./scale";
 
 /** The table's columns, in order. */
-export const COLUMNS = ["key", "title", "start", "due", "progress"] as const;
+export const COLUMNS = ["key", "title", "claim", "start", "due", "progress"] as const;
 export type Column = (typeof COLUMNS)[number];
 
 /** The columns whose width the person sets; the title takes the rest. */
-export const SIZED: readonly Column[] = ["key", "start", "due", "progress"];
+export const SIZED: readonly Column[] = ["key", "claim", "start", "due", "progress"];
 
 /** The ways to group the rows, as the toolbar offers them. */
-export const GROUPINGS: readonly GanttGrouping[] = ["parent", "label", "status", "none"];
+export const GROUPINGS: readonly GanttGrouping[] = ["parent", "label", "status", "claim", "none"];
 
 /** The narrowest and widest table and column, in pixels. */
 export const TABLE_MIN = 240;

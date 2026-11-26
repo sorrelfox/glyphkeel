@@ -2,9 +2,9 @@
 // Copyright (C) 2026 Glyphkeel contributors
 
 import { useLocalization } from "@fluent/react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { useEffect, useEffectEvent, useId, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { Button, useLocale } from "react-aria-components";
+import { Button, Dialog, Popover, useLocale } from "react-aria-components";
 
 import { keysOf } from "../../actions/actions";
 import { classes } from "../../classes";
@@ -13,13 +13,14 @@ import { QueryField, type QueryFieldHandle, type Reading } from "../../component
 import { Segmented } from "../../components/Segmented";
 import { Switch } from "../../components/Switch";
 import { useToasts } from "../../components/Toasts";
+import { useCreateTask } from "../../data/board";
 import { useCalendarTasks } from "../../data/calendar";
 import { useCommand, useUndo } from "../../data/hooks";
 import { useListNames, useParsedQuery, useQueryFields } from "../../data/list";
 import { useToday } from "../../data/zone";
 import { type ListedTask, type QueryProblem } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
-import { useScreenActions, useStatus, useTimerTask } from "../../shell/context";
+import { useNewTask, useScreenActions, useStatus, useTimerTask } from "../../shell/context";
 import {
   addDays,
   asDate,
@@ -84,7 +85,8 @@ function useProblemText(): (problem: QueryProblem) => string {
 /**
  * A project's tasks on a month or week grid, by start and due date. A task
  * with both dates runs as a bar across its days. Dragging a task, or Alt and
- * an arrow key, moves both of its dates; the change is one Undo step.
+ * an arrow key, moves both of its dates; the change is one Undo step. A
+ * day's "+", a double click on it or New task (N) adds a task due that day.
  */
 export function CalendarView({ project, openTask, onOpen }: CalendarViewProps) {
   const t = useT();
@@ -175,6 +177,43 @@ export function CalendarView({ project, openTask, onOpen }: CalendarViewProps) {
     );
   };
 
+  // ---------- quick add ----------
+
+  /** The day a new task is being added on, with the cell the form opens at. */
+  const [adding, setAdding] = useState<Day | null>(null);
+  const addAnchor = useRef<HTMLElement | null>(null);
+  const createTask = useCreateTask();
+  const startAdding = (day: Day) => {
+    // The form opens under the day's head, where its "+" is.
+    addAnchor.current = gridRef.current?.querySelector<HTMLElement>(`[data-day="${day}"] [data-add]`) ?? null;
+    if (addAnchor.current) {
+      setFocusedDay(day);
+      setAdding(day);
+    }
+  };
+  // New task (N) adds on the focused day, as the "+" of a day and a double click do.
+  useNewTask(() => {
+    startAdding(dayIsShown(focusedDay) ? focusedDay : from);
+  });
+  const stopAdding = (day: Day) => {
+    setAdding(null);
+    requestAnimationFrame(() => {
+      gridRef.current?.querySelector<HTMLElement>(`[data-day="${day}"]`)?.focus();
+    });
+  };
+  /** Creates a task due on `day`, through the same command as everywhere else. */
+  const add = (day: Day, title: string) => {
+    stopAdding(day);
+    createTask.mutate(
+      { project, title, due_date: day },
+      {
+        onSuccess: (change) => {
+          toasts.show({ tone: "info", text: t("calendar-added", { key: change.task.key, date: fullDate.format(asDate(day)) }), action: { label: t("toast-undo"), run: undo } });
+        },
+      },
+    );
+  };
+
   // ---------- focus ----------
 
   const gridRef = useRef<HTMLDivElement>(null);
@@ -190,7 +229,7 @@ export function CalendarView({ project, openTask, onOpen }: CalendarViewProps) {
     }
     const measure = () => {
       const head = grid.querySelector<HTMLElement>("[role=row]")?.offsetHeight ?? 0;
-      const number = grid.querySelector<HTMLElement>("[data-day] > span");
+      const number = grid.querySelector<HTMLElement>("[data-day-number]");
       const slot = probe.offsetHeight;
       if (slot <= 0 || !number) {
         return;
@@ -589,15 +628,35 @@ export function CalendarView({ project, openTask, onOpen }: CalendarViewProps) {
                         event.currentTarget.focus();
                       }
                     }}
+                    onDoubleClick={(event) => {
+                      if (!(event.target instanceof Element) || event.target.closest("[data-task-bar], [data-more], [data-add]") === null) {
+                        startAdding(day);
+                      }
+                    }}
                     onKeyDown={(event) => {
                       if (event.target === event.currentTarget) {
                         onCellKey(event, day);
                       }
                     }}
                   >
-                    <span className={classes(styles.dayNumber, isToday && styles.today)} aria-hidden="true">
-                      {day.endsWith("-01") || (column === 0 && index === 0 && mode === "week") ? shortDate.format(asDate(day)) : dayNumber.format(asDate(day))}
-                    </span>
+                    <div className={styles.dayHead}>
+                      <span className={classes(styles.dayNumber, isToday && styles.today)} aria-hidden="true" data-day-number="">
+                        {day.endsWith("-01") || (column === 0 && index === 0 && mode === "week") ? shortDate.format(asDate(day)) : dayNumber.format(asDate(day))}
+                      </span>
+                      <button
+                        type="button"
+                        tabIndex={-1}
+                        className={styles.add}
+                        data-add={day}
+                        aria-label={t("calendar-add", { date })}
+                        title={t("calendar-add", { date })}
+                        onClick={() => {
+                          startAdding(day);
+                        }}
+                      >
+                        <Plus className="ic s" aria-hidden="true" />
+                      </button>
+                    </div>
                     <div className={styles.lanes}>{bars.filter((bar) => bar.column === column && bar.lane < shownLanes).map((bar) => renderBar(bar, week))}</div>
                     {more > 0 && (
                       <button
@@ -632,6 +691,71 @@ export function CalendarView({ project, openTask, onOpen }: CalendarViewProps) {
           );
         })}
       </div>
+      {adding !== null && (
+        <Popover
+          className="pop"
+          triggerRef={addAnchor}
+          placement="bottom end"
+          offset={2}
+          isOpen
+          onOpenChange={(isOpen) => {
+            if (!isOpen) {
+              stopAdding(adding);
+            }
+          }}
+        >
+          <Dialog className={classes(styles.addDialog)} aria-label={t("calendar-add-title", { date: fullDate.format(asDate(adding)) })}>
+            <QuickAdd
+              label={t("calendar-add-title", { date: fullDate.format(asDate(adding)) })}
+              onAdd={(title) => {
+                add(adding, title);
+              }}
+              onCancel={() => {
+                stopAdding(adding);
+              }}
+            />
+          </Dialog>
+        </Popover>
+      )}
     </div>
+  );
+}
+
+/** The quick add form of a day: a title, Enter adds and Escape cancels. */
+function QuickAdd({ label, onAdd, onCancel }: { label: string; onAdd: (title: string) => void; onCancel: () => void }) {
+  const t = useT();
+  const [title, setTitle] = useState("");
+  return (
+    <form
+      className={styles.addForm}
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (title.trim() !== "") {
+          onAdd(title.trim());
+        }
+      }}
+    >
+      <span className="field">
+        <input
+          autoFocus
+          aria-label={label}
+          placeholder={t("calendar-add-placeholder")}
+          value={title}
+          onChange={(event) => {
+            setTitle(event.target.value);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              event.stopPropagation();
+              onCancel();
+            }
+          }}
+        />
+      </span>
+      <Button type="submit" className="btn primary" isDisabled={title.trim() === ""}>
+        {t("calendar-add-confirm")}
+      </Button>
+    </form>
   );
 }

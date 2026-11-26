@@ -32615,6 +32615,30 @@
                   "description": "A task that blocks it is still open.",
                   "type": "boolean"
                 },
+                "claim": {
+                  "additionalProperties": false,
+                  "description": "The agent session that claimed it, while the claim lasts.",
+                  "properties": {
+                    "agent": {
+                      "description": "The agent's name.",
+                      "type": "string"
+                    },
+                    "session": {
+                      "description": "The agent session holding it.",
+                      "type": "string"
+                    },
+                    "until": {
+                      "description": "When the claim ends unless renewed (RFC 3339, UTC).",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "agent",
+                    "session",
+                    "until"
+                  ],
+                  "type": "object"
+                },
                 "closed": {
                   "description": "Whether it is closed (done or cancelled).",
                   "type": "boolean"
@@ -32880,6 +32904,30 @@
               "additionalProperties": false,
               "description": "A task without dates, for the Unscheduled lane.",
               "properties": {
+                "claim": {
+                  "additionalProperties": false,
+                  "description": "The agent session that claimed it, while the claim lasts.",
+                  "properties": {
+                    "agent": {
+                      "description": "The agent's name.",
+                      "type": "string"
+                    },
+                    "session": {
+                      "description": "The agent session holding it.",
+                      "type": "string"
+                    },
+                    "until": {
+                      "description": "When the claim ends unless renewed (RFC 3339, UTC).",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "agent",
+                    "session",
+                    "until"
+                  ],
+                  "type": "object"
+                },
                 "closed": {
                   "description": "Whether it is closed.",
                   "type": "boolean"

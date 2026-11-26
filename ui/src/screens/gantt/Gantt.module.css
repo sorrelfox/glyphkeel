@@ -104,8 +104,9 @@
 .row {
   display: grid;
   grid-template-columns:
-    var(--gantt-col-key, 5em) minmax(4em, 1fr) var(--gantt-col-start, 5.5em)
-    var(--gantt-col-due, 5.5em) var(--gantt-col-progress, 3.5em);
+    var(--gantt-col-key, 5em) minmax(4em, 1fr) var(--gantt-col-claim, 6em)
+    var(--gantt-col-start, 5.5em) var(--gantt-col-due, 5.5em)
+    var(--gantt-col-progress, 3.5em);
   column-gap: 8px;
   align-items: center;
   padding-inline: 12px;
@@ -277,6 +278,14 @@
   color: var(--fg-muted);
   font-family: var(--font-mono);
   font-size: var(--fs-micro);
+}
+
+.claim {
+  overflow: hidden;
+  color: var(--fg-muted);
+  font-size: var(--fs-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .title {
@@ -545,4 +554,108 @@
   .handle {
     transition: none;
   }
+}
+
+/* ---------- milestones ---------- */
+
+.milestones {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 20rem;
+  max-inline-size: min(40rem, calc(100vw - 32px));
+  max-block-size: min(28rem, 70vh);
+  padding: 8px;
+  outline: none;
+}
+
+.milestonesHeading {
+  margin: 0;
+  padding: 4px 8px 8px;
+  font-size: var(--fs-small);
+  font-weight: 600;
+}
+
+.milestonesNote {
+  margin: 0;
+  padding: 4px 8px 8px;
+  color: var(--fg-muted);
+  font-size: var(--fs-small);
+}
+
+.milestoneList {
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.milestone {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "mark key title date"
+    ". state state state";
+  gap: 0 8px;
+  align-items: baseline;
+  inline-size: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--r-m);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.milestone[data-hovered],
+.milestone[data-focus-visible] {
+  background: var(--hover);
+}
+
+.milestone[data-focus-visible] {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.milestoneMark {
+  grid-area: mark;
+  align-self: center;
+  color: var(--accent);
+}
+
+.milestoneKey {
+  grid-area: key;
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+}
+
+.milestoneTitle {
+  grid-area: title;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.milestoneDate {
+  grid-area: date;
+  color: var(--fg-muted);
+  font-size: var(--fs-small);
+  white-space: nowrap;
+}
+
+.milestoneState {
+  grid-area: state;
+  color: var(--fg-muted);
+  font-size: var(--fs-small);
+}
+
+.milestoneLate {
+  color: var(--danger);
+}
+
+.milestoneDone .milestoneTitle {
+  color: var(--fg-muted);
+  text-decoration: line-through;
 }

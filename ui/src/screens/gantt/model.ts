@@ -6,14 +6,18 @@
 // each task's shape lies on the timeline, what a drag or a key press does to
 // its dates, and the path of a dependency's arrow.
 
-import { type GanttGrouping, type Hue, type LabelRef, type ScheduleDependency, type ScheduleProblem, type ScheduledTask, type UnscheduledTask } from "../../generated/ops";
+import { type GanttGrouping, type Hue, type LabelRef, type Schedule, type ScheduleDependency, type ScheduleProblem, type ScheduledTask, type UnscheduledTask } from "../../generated/ops";
 import { addDays, daysBetween, type Day } from "../calendar/model";
 
 /** A row's height, in pixels. */
 export const ROW = 32;
 
-/** What a group row heads: the tasks without dates, or the tasks sharing a label or a status. */
-export type GroupHead = { by: "unscheduled" } | { by: "label"; name: string | undefined; hue: Hue | undefined } | { by: "status"; name: string; hue: Hue | undefined };
+/** What a group row heads: the tasks without dates, or the tasks sharing a label, a status or an agent's claim. */
+export type GroupHead =
+  | { by: "unscheduled" }
+  | { by: "label"; name: string | undefined; hue: Hue | undefined }
+  | { by: "status"; name: string; hue: Hue | undefined }
+  | { by: "claim"; agent: string | undefined; session: string | undefined };
 
 export type Row =
   | { kind: "task"; task: ScheduledTask; level: number; hasKids: boolean; open: boolean }
@@ -54,8 +58,8 @@ function flat(tasks: readonly ScheduledTask[]): Row[] {
   return tasks.map((task) => ({ kind: "task", task, level: 1, hasKids: false, open: true }));
 }
 
-/** The dated tasks in groups by label or status, each group headed by a row, in the group's order. */
-function grouped(tasks: readonly ScheduledTask[], by: "label" | "status", order: GroupOrder): Row[] {
+/** The dated tasks in groups by label, status or claim, each group headed by a row, in the group's order. */
+function grouped(tasks: readonly ScheduledTask[], by: "label" | "status" | "claim", order: GroupOrder): Row[] {
   const groups = new Map<string, { head: GroupHead; tasks: ScheduledTask[]; rank: [number, number, string] }>();
   for (const task of tasks) {
     let id: string;
@@ -66,6 +70,12 @@ function grouped(tasks: readonly ScheduledTask[], by: "label" | "status", order:
       id = label === undefined ? "" : label.name;
       head = { by: "label", name: label?.name, hue: label?.hue };
       rank = [label === undefined ? 1 : 0, 0, label?.name ?? ""];
+    } else if (by === "claim") {
+      // One group per agent session: two sessions of one agent are two groups.
+      const claim = task.claim;
+      id = claim?.session ?? "";
+      head = { by: "claim", agent: claim?.agent, session: claim?.session };
+      rank = [claim === undefined ? 1 : 0, 0, claim ? `${claim.agent}\u0000${claim.session}` : ""];
     } else {
       id = task.status.id;
       head = { by: "status", name: task.status.name, hue: order.hues.get(task.status.id) };
@@ -88,7 +98,8 @@ export const PLAIN_ORDER: GroupOrder = { statuses: new Map(), hues: new Map(), c
 /**
  * The chart's rows: the schedule's tree in its order, without the subtasks
  * of folded tasks (grouped by parent, the default); or one flat list; or
- * groups by label or status. Then a group row and the tasks without dates.
+ * groups by label, status or the agent session that claimed the task.
+ * Then a group row and the tasks without dates.
  */
 export function buildRows(
   tasks: readonly ScheduledTask[],
@@ -100,7 +111,7 @@ export function buildRows(
   let rows: Row[] = [];
   if (grouping === "none") {
     rows = flat(tasks);
-  } else if (grouping === "label" || grouping === "status") {
+  } else if (grouping === "label" || grouping === "status" || grouping === "claim") {
     rows = grouped(tasks, grouping, order);
   } else {
     let hideBelow: number | null = null;
@@ -134,20 +145,72 @@ export function buildRows(
   return { rows, index };
 }
 
+/** How many percentage points expected progress may run ahead of actual progress before a bar is behind. */
+export const BEHIND_TOLERANCE = 0.1;
+
 /**
- * How far behind a bar is: when today is further along the bar than its
- * progress, the share done and the share of its time gone by (to the middle
- * of today, where the today line is). Only open bars with both dates that
+ * How far behind a bar is: the share done and the share of its time gone
+ * by (to the middle of today, where the today line is), when the second
+ * runs ahead of the first by more than ten percentage points and at least
+ * one whole day of the bar has passed. Only open bars with both dates that
  * aren't overdue yet; an overdue bar has its own note.
  */
 export function behindSchedule(task: ScheduledTask, today: Day): { done: number; expected: number } | undefined {
   const { start_date: start, due_date: due } = task;
-  if (task.shape !== "bar" || task.closed || task.overdue || start === undefined || due === undefined || today < start || today > due) {
+  if (task.shape !== "bar" || task.closed || task.overdue || start === undefined || due === undefined || today > due) {
     return undefined;
   }
-  const expected = (daysBetween(start, today) + 0.5) / (daysBetween(start, due) + 1);
+  // The days of the bar wholly gone: none on its first day.
+  const gone = daysBetween(start, today);
+  if (gone < 1) {
+    return undefined;
+  }
+  const expected = (gone + 0.5) / (daysBetween(start, due) + 1);
   const done = task.progress_percent / 100;
-  return expected > done ? { done, expected } : undefined;
+  // Rounded to whole hundredths of a point, so a share such as 0.3 - 0.2 isn't counted as more than 0.1.
+  return Math.round((expected - done) * 10_000) > BEHIND_TOLERANCE * 10_000 ? { done, expected } : undefined;
+}
+
+/** A milestone in the project's list of them. */
+export interface Milestone {
+  key: string;
+  title: string;
+  /** Its day: the due date, else the start; none when it has no date yet. */
+  date: Day | undefined;
+  /** Its status's name. */
+  status: string;
+  /** Closed; open and past its day; or open. */
+  state: "done" | "overdue" | "open";
+  /** For an overdue milestone, the days since its day. */
+  late: number;
+}
+
+/**
+ * A schedule's milestones, by their day, those without a day last; ties by
+ * key in its numeric order.
+ */
+export function milestonesOf(schedule: Pick<Schedule, "tasks" | "unscheduled" | "today">): Milestone[] {
+  const dated = schedule.tasks
+    .filter((task) => task.shape === "milestone")
+    .map((task): Milestone => {
+      const date = task.due_date ?? task.start_date;
+      const overdue = !task.closed && date !== undefined && date < schedule.today;
+      return {
+        key: task.key,
+        title: task.title,
+        date,
+        status: task.status.name,
+        state: task.closed ? "done" : overdue ? "overdue" : "open",
+        late: overdue ? daysBetween(date, schedule.today) : 0,
+      };
+    });
+  const undated = schedule.unscheduled
+    .filter((task) => task.milestone)
+    .map((task): Milestone => ({ key: task.key, title: task.title, date: undefined, status: task.status.name, state: task.closed ? "done" : "open", late: 0 }));
+  const byKey = (a: Milestone, b: Milestone) => a.key.localeCompare(b.key, "en", { numeric: true });
+  dated.sort((a, b) => (a.date ?? "").localeCompare(b.date ?? "") || byKey(a, b));
+  undated.sort(byKey);
+  return [...dated, ...undated];
 }
 
 /** A task's own dates. */

@@ -15,7 +15,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::catalog::{Exposure, Meta, OpDescriptor, OpKind, Safety};
-use crate::ops::task::{LabelRef, StatusRef};
+use crate::ops::task::{Claim, LabelRef, StatusRef};
 
 /// Which tasks to schedule.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -102,6 +102,9 @@ pub struct ScheduledTask {
     /// Why its dates can't be changed; left out when they can.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub read_only: Option<ReadOnlyReason>,
+    /// The agent session that claimed it, while the claim lasts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claim: Option<Claim>,
     /// How the chart draws it.
     pub shape: ScheduleShape,
     /// Its own start date.
@@ -152,6 +155,9 @@ pub struct UnscheduledTask {
     /// Why its dates can't be changed; left out when they can.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub read_only: Option<ReadOnlyReason>,
+    /// The agent session that claimed it, while the claim lasts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claim: Option<Claim>,
     /// A task of a milestone type.
     pub milestone: bool,
     /// Its version, for `expected_version`.
@@ -308,6 +314,8 @@ pub enum GanttGrouping {
     Label,
     /// By status, in board order.
     Status,
+    /// By the agent session that claimed the task; unclaimed tasks last.
+    Claim,
     /// One flat list, without groups or nesting.
     None,
 }

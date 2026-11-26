@@ -1025,7 +1025,7 @@ export type FileRef = {
 };
 
 /** How the Gantt chart groups its rows. */
-export type GanttGrouping = "parent" | "label" | "status" | "none";
+export type GanttGrouping = "parent" | "label" | "status" | "claim" | "none";
 
 /** The person's own layout of a project's Gantt chart: the zoom level, the table's width and its columns' widths, the grouping, and whether moving a task also moves the tasks that depend on it. Unlike saved views it belongs to the person, not to the workspace. */
 export type GanttLayout = {
@@ -2117,6 +2117,8 @@ export type ScheduleShape = "bar" | "deadline" | "no_deadline" | "milestone" | "
 export type ScheduledTask = {
   /** A task that blocks it is still open. */
   blocked: boolean;
+  /** The agent session that claimed it, while the claim lasts. */
+  claim?: Claim;
   /** Whether it is closed (done or cancelled). */
   closed: boolean;
   /** How many tasks depend on it, directly or through others: the tasks "also move dependents" may move. */
@@ -3255,6 +3257,8 @@ export type UndoResult = {
 
 /** A task without dates, for the Unscheduled lane. */
 export type UnscheduledTask = {
+  /** The agent session that claimed it, while the claim lasts. */
+  claim?: Claim;
   /** Whether it is closed. */
   closed: boolean;
   /** The task's ID. */

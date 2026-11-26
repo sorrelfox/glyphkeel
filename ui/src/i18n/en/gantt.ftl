@@ -23,10 +23,19 @@ gantt-group-button = Group: { $grouping }
 gantt-group-by-parent = Parent
 gantt-group-by-label = Label
 gantt-group-by-status = Status
+gantt-group-by-claim = Claimed by
 gantt-group-by-none = None
 gantt-export = Export
 gantt-export-png = PNG image
 gantt-export-print = Print or save as PDF
+# In the Save view dialog, when the view belongs to the Gantt chart.
+gantt-view-default = Show it first when the chart opens
+
+## Milestones: the project's list of them, beside the chart
+
+gantt-milestones = Milestones
+gantt-milestones-none = This project has no milestones yet. A task of a milestone type is one.
+gantt-milestone-no-date = No date
 
 ## Table
 
@@ -37,6 +46,9 @@ gantt-col-start = Start
 gantt-col-due = Due
 gantt-col-progress = %
 gantt-col-progress-label = Progress
+# The agent session working on the task, while its claim lasts.
+gantt-col-claim = Claimed by
+gantt-claim-until = Claimed by { $agent } until { $until }
 # The handle between the table and the timeline, and between two columns.
 gantt-resize-table = Width of the table
 gantt-resize-column = Width of the column { $column }
@@ -60,6 +72,7 @@ gantt-row-due = { $key } { $title }, due { $due }, { $progress } done
 gantt-row-start = { $key } { $title }, starts { $start }, no due date
 gantt-row-unscheduled = { $key } { $title }, unscheduled
 gantt-row-closed = { $row }, closed
+gantt-row-claimed = { $row }, claimed by { $agent }
 gantt-drag-unscheduled = Drag { $key } onto the timeline to schedule it
 gantt-row-behind = { $row }, behind schedule
 gantt-row-read-only =
@@ -81,6 +94,17 @@ gantt-group-status =
     { $count ->
         [one] { $name }: one task
        *[other] { $name }: { $count } tasks
+    }
+# Group rows when the chart is grouped by the agent session that claimed the tasks.
+gantt-group-claim =
+    { $count ->
+        [one] { $agent }: one task
+       *[other] { $agent }: { $count } tasks
+    }
+gantt-group-unclaimed =
+    { $count ->
+        [one] Not claimed: one task
+       *[other] Not claimed: { $count } tasks
     }
 
 ## Timeline notes

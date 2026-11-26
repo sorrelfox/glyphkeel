@@ -14,16 +14,18 @@ import { Segmented } from "../../components/Segmented";
 import { Switch } from "../../components/Switch";
 import { useToasts } from "../../components/Toasts";
 import { errorToast, useCommand, useOp, useUndo } from "../../data/hooks";
-import { useListNames, useParsedQuery, useQueryFields } from "../../data/list";
+import { defaultView, useListNames, useParsedQuery, useQueryFields, useSavedViews } from "../../data/list";
 import { useGanttLayout, useSchedule } from "../../data/schedule";
-import { type GanttGrouping, type QueryProblem, type ReadOnlyReason, type Schedule, type ScheduleDependency } from "../../generated/ops";
+import { type GanttGrouping, type QueryProblem, type ReadOnlyReason, type SavedView, type Schedule, type ScheduleDependency } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { saveExport } from "../../ipc/exportFile";
-import { useStatus, useTimerTask } from "../../shell/context";
+import { useScreenActions, useStatus, useTimerTask } from "../../shell/context";
 import { isoDay } from "../board/model";
 import { asDate, firstDayOfWeek, type Day } from "../calendar/model";
+import { SaveControls, useViewCommands, ViewPicker } from "../list/ViewMenu";
 import { chartSvg, exportSpan, lightPalette, printSvg, svgToPng } from "./export";
 import { DEFAULT_TABLE, Gantt, groupText, headerText, noteOf, useFormats, type GanttHandle, type Movable } from "./Gantt";
+import { MilestonesButton } from "./Milestones";
 import { GROUPINGS, layoutFrom, layoutUpdate, type Column, type GanttLayout } from "./layout";
 import { datesUpdate, endsLater, type Dates, type GroupOrder } from "./model";
 import { ZOOMS, chartSpan, weekendDays, type Zoom } from "./scale";
@@ -63,21 +65,28 @@ function useTouchOnly(): boolean {
 }
 
 /**
- * A project's Gantt chart with its toolbar: zoom, today, paging, the filter
- * query, the sub-projects switch, grouping and export. Dates change through
+ * A project's Gantt chart with its toolbar: zoom, today, paging, saved
+ * views, the filter query, the sub-projects switch, grouping, the list of
+ * milestones and export. Dates change through
  * `task.update`, with "also move dependents" when the person turned it on,
  * as one change that Undo takes back; dependencies are `blocks` links. The
  * person's layout is read once from the engine, before the chart draws.
  */
 export function GanttView(props: GanttViewProps) {
   const own = useGanttLayout(props.project);
-  if (!own.layout && !own.error) {
+  const saved = useSavedViews(props.project, "gantt");
+  if ((!own.layout && !own.error) || !saved.views) {
     return <div className={styles.screen} aria-busy="true" />;
   }
-  return <LoadedGantt {...props} saved={layoutFrom(own.layout?.layout)} />;
+  return <LoadedGantt {...props} saved={layoutFrom(own.layout?.layout)} views={saved.views} />;
 }
 
-function LoadedGantt({ project, openTask, onOpen, saved }: GanttViewProps & { saved: GanttLayout }) {
+/** A saved view's grouping, when it names one the chart knows. */
+function viewGrouping(view: SavedView | undefined): GanttGrouping | undefined {
+  return GROUPINGS.find((grouping) => grouping === view?.group_by);
+}
+
+function LoadedGantt({ project, openTask, onOpen, saved, views }: GanttViewProps & { saved: GanttLayout; views: SavedView[] }) {
   const t = useT();
   const { locale, direction } = useLocale();
   const problemText = useProblemText();
@@ -94,9 +103,17 @@ function LoadedGantt({ project, openTask, onOpen, saved }: GanttViewProps & { sa
 
   const [includeSubprojects, setIncludeSubprojects] = useState(false);
 
+  // The saved view the chart came from, as the list has them: its query and grouping.
+  const initial = defaultView(views, project);
+  const [activeId, setActiveId] = useState<string | undefined>(initial?.id);
+  const active = views.find((view) => view.id === activeId);
+  // A view's grouping holds while it is chosen; without one, the person's own.
+  const [viewGroup, setViewGroup] = useState<GanttGrouping | undefined>(viewGrouping(initial));
+  const groupBy = active ? (viewGroup ?? layout.groupBy) : layout.groupBy;
+
   // The query that runs: the text once the engine reads it without a mistake.
-  const [text, setText] = useState("");
-  const [running, setRunning] = useState("");
+  const [text, setText] = useState(initial?.query ?? "");
+  const [running, setRunning] = useState(initial?.query ?? "");
   const parsed = useParsedQuery(text);
   const reading = parsed.data && !parsed.isPlaceholderData ? parsed.data : undefined;
   const valid = reading?.valid === true;
@@ -140,6 +157,12 @@ function LoadedGantt({ project, openTask, onOpen, saved }: GanttViewProps & { sa
     note: touchOnly ? t("gantt-touch-read-only") : undefined,
   });
   useTimerTask(openTask ?? null);
+  // The same keys as the calendar's: a page earlier or later, and back to today.
+  useScreenActions([
+    { id: "view.previousPeriod", label: "action-previous-period", group: "navigation", keys: keysOf("view.previousPeriod"), run: () => { chart.current?.page(-1); } },
+    { id: "view.nextPeriod", label: "action-next-period", group: "navigation", keys: keysOf("view.nextPeriod"), run: () => { chart.current?.page(1); } },
+    { id: "view.today", label: "action-go-to-today", group: "navigation", keys: keysOf("view.today"), run: () => { chart.current?.goToday(); } },
+  ]);
 
   const [range, setRange] = useState<{ from: Day; to: Day } | null>(null);
   const rangeFormat = new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
@@ -208,6 +231,39 @@ function LoadedGantt({ project, openTask, onOpen, saved }: GanttViewProps & { sa
   const onRefused = (key: string, reason: ReadOnlyReason) => {
     toasts.show({ tone: "error", text: t("gantt-read-only", { key, reason }) });
   };
+
+  // ---------- saved views ----------
+
+  const choose = (view: SavedView | undefined) => {
+    setActiveId(view?.id);
+    setText(view?.query ?? "");
+    setRunning(view?.query ?? "");
+    setViewGroup(viewGrouping(view));
+  };
+  const group = (next: GanttGrouping) => {
+    if (active) {
+      setViewGroup(next);
+    } else {
+      changeLayout({ groupBy: next });
+    }
+  };
+  const changed = active ? active.query.trim() !== text.trim() || (viewGrouping(active) ?? layout.groupBy) !== groupBy : text.trim() !== "";
+  const viewCommands = useViewCommands({
+    project,
+    kind: "gantt",
+    views,
+    active,
+    setup: { query: text, sort: "", columns: [], groupBy },
+    onChoose: choose,
+    onSaved: (view) => {
+      setActiveId(view?.id);
+      if (view) {
+        setViewGroup(viewGrouping(view));
+      } else {
+        choose(undefined);
+      }
+    },
+  });
 
   // ---------- printing and pictures ----------
 
@@ -295,6 +351,9 @@ function LoadedGantt({ project, openTask, onOpen, saved }: GanttViewProps & { sa
             {rangeText}
           </h2>
         </div>
+        <div className={styles.toolbarItem}>
+          <ViewPicker active={active} entries={viewCommands.entries} />
+        </div>
         <QueryField
           ref={field}
           value={text}
@@ -309,6 +368,9 @@ function LoadedGantt({ project, openTask, onOpen, saved }: GanttViewProps & { sa
           onEscape={focusChart}
           shortcut={filterChord && <Kbd chord={filterChord} />}
         />
+        <div className={styles.toolbarItem}>
+          <SaveControls changed={changed} active={active} onSave={viewCommands.save} onSaveAs={viewCommands.saveAs} />
+        </div>
         <div className={styles.toolbarItem}>
           <Switch isSelected={includeSubprojects} onChange={setIncludeSubprojects}>
             {t("gantt-include-subprojects")}
@@ -327,12 +389,8 @@ function LoadedGantt({ project, openTask, onOpen, saved }: GanttViewProps & { sa
           </div>
         )}
         <div className={styles.toolbarItem}>
-          <GroupMenu
-            value={layout.groupBy}
-            onChange={(groupBy) => {
-              changeLayout({ groupBy });
-            }}
-          />
+          <GroupMenu value={groupBy} onChange={group} />
+          <MilestonesButton project={project} includeSubprojects={includeSubprojects} onShow={(key) => chart.current?.show(key) ?? false} onOpen={onOpen} />
           <MenuTrigger>
             <Button className="btn flat" isDisabled={!schedule}>
               <Download className="ic" aria-hidden="true" />
@@ -378,7 +436,7 @@ function LoadedGantt({ project, openTask, onOpen, saved }: GanttViewProps & { sa
             table={layout.table ?? DEFAULT_TABLE}
             widths={layout.widths}
             moveDependents={layout.moveDependents && !touchOnly}
-            groupBy={layout.groupBy}
+            groupBy={groupBy}
             groupOrder={groupOrder}
             readOnly={touchOnly}
             openTask={openTask}
@@ -400,6 +458,7 @@ function LoadedGantt({ project, openTask, onOpen, saved }: GanttViewProps & { sa
           />
         </>
       )}
+      {viewCommands.dialog}
     </div>
   );
 }

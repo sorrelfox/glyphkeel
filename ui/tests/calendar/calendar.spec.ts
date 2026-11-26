@@ -231,3 +231,75 @@ test("calendar actions: the palette opens it, keys page and go back to today, th
   await expect(page.getByRole("alert")).toHaveCount(0);
   await expect(field).not.toHaveAttribute("aria-invalid", "true");
 });
+
+test("quick add on a day: its +, a double click, or N on the focused day adds a task due that day", async ({ page }) => {
+  const grid = await openCalendar(page);
+  await showWeek(page);
+  const target = addDays(TODAY, 1);
+  const added = (title: string) => grid.locator("[data-task-bar]").filter({ hasText: title });
+
+  // The day's "+".
+  await day(grid, target).hover();
+  await day(grid, target).getByRole("button", { name: /^Add a task on/ }).click();
+  const form = page.getByRole("dialog", { name: /^New task due/ });
+  await expect(form).toBeVisible();
+  await expect(form.getByRole("textbox")).toBeFocused();
+  await page.keyboard.type("Water the plants");
+  await page.keyboard.press("Enter");
+  await expect(form).toHaveCount(0);
+  await expect(added("Water the plants")).toHaveAttribute("data-days", target);
+  const note = page.getByRole("status").filter({ hasText: /added, due/ });
+  await expect(note).toBeVisible();
+  await shot(page, "calendar-quick-add.png");
+  // Undo takes it back.
+  await note.getByRole("button", { name: "Undo" }).click();
+  await expect(added("Water the plants")).toHaveCount(0);
+
+  // A double click on the day.
+  await day(grid, TODAY).dblclick({ position: { x: 30, y: 4 } });
+  await expect(form).toBeVisible();
+  await page.keyboard.type("Call the plumber");
+  await page.keyboard.press("Enter");
+  await expect(added("Call the plumber")).toHaveAttribute("data-days", TODAY);
+
+  // N on the focused day; Escape leaves without adding, and the focus goes back to the day.
+  await day(grid, target).click({ position: { x: 4, y: 4 } });
+  await expect.poll(() => focusedDay(page)).toBe(target);
+  await page.keyboard.press("n");
+  await expect(form).toBeVisible();
+  await page.keyboard.type("Never mind");
+  await page.keyboard.press("Escape");
+  await expect(form).toHaveCount(0);
+  await expect.poll(() => focusedDay(page)).toBe(target);
+  await expect(added("Never mind")).toHaveCount(0);
+  await page.keyboard.press("n");
+  await page.keyboard.type("Buy seeds");
+  await page.keyboard.press("Enter");
+  await expect(added("Buy seeds")).toHaveAttribute("data-days", target);
+});
+
+test("pseudo-locale: the calendar's words all come from the messages", async ({ browser }) => {
+  const context = await browser.newContext({ locale: "en-XA", viewport: { width: 1400, height: 900 } });
+  const page = await context.newPage();
+  await page.clock.setFixedTime(new Date(`${TODAY}T10:00:00`));
+  await page.goto("/");
+  await page.getByRole("row", { name: /Task Manager/ }).click();
+  await page.getByRole("banner").locator("button:has(svg.lucide-calendar-days)").first().click();
+  const grid = page.locator("[data-calendar]");
+  await expect(grid.locator("[data-task-bar]").first()).toBeAttached();
+  const words = await grid.evaluate((root) => {
+    const texts: string[] = [];
+    for (const el of root.querySelectorAll("[role=radio], button.btn, [role=switch], label, [data-add], [role=grid]")) {
+      const text = (el.getAttribute("aria-label") ?? el.textContent).trim();
+      if (text !== "") {
+        texts.push(text);
+      }
+    }
+    return texts;
+  });
+  expect(words.length).toBeGreaterThan(5);
+  const english = words.filter((text) => /\b(Today|Month|Week|Include|Add a task|Calendar)\b/.test(text));
+  expect(english).toEqual([]);
+  await shot(page, "calendar-pseudo.png");
+  await context.close();
+});
