@@ -18,6 +18,15 @@ gantt-query-label = Filter query
 gantt-query-placeholder = Filter, for example: is:open label:release
 gantt-include-subprojects = Include sub-projects
 gantt-move-dependents = Also move dependents
+gantt-group = Group
+gantt-group-button = Group: { $grouping }
+gantt-group-by-parent = Parent
+gantt-group-by-label = Label
+gantt-group-by-status = Status
+gantt-group-by-none = None
+gantt-export = Export
+gantt-export-png = PNG image
+gantt-export-print = Print or save as PDF
 
 ## Table
 
@@ -52,6 +61,27 @@ gantt-row-start = { $key } { $title }, starts { $start }, no due date
 gantt-row-unscheduled = { $key } { $title }, unscheduled
 gantt-row-closed = { $row }, closed
 gantt-drag-unscheduled = Drag { $key } onto the timeline to schedule it
+gantt-row-behind = { $row }, behind schedule
+gantt-row-read-only =
+    { $reason ->
+       *[archived_project] { $row }, read only because its project is archived
+    }
+# Group rows when the chart is grouped by label or by status.
+gantt-group-label =
+    { $count ->
+        [one] { $name }: one task
+       *[other] { $name }: { $count } tasks
+    }
+gantt-group-no-label =
+    { $count ->
+        [one] No label: one task
+       *[other] No label: { $count } tasks
+    }
+gantt-group-status =
+    { $count ->
+        [one] { $name }: one task
+       *[other] { $name }: { $count } tasks
+    }
 
 ## Timeline notes
 
@@ -61,6 +91,8 @@ gantt-overdue-by =
        *[other] Overdue by { $days } days
     }
 gantt-no-deadline = No deadline
+# A bar whose time has passed further than its work: both are percentages.
+gantt-behind = Behind schedule: { $done } done, { $expected } of the time gone
 gantt-problems =
     { $count ->
         [one] One problem
@@ -75,6 +107,13 @@ gantt-drag-dependents =
     { $count ->
         [one] May move one dependent task
        *[other] May move up to { $count } dependent tasks
+    }
+# With "Also move dependents" on, the tasks the engine says a drop would move.
+gantt-drag-will-move =
+    { $count ->
+        [0] Moves no dependent tasks
+        [one] Moves one dependent task
+       *[other] Moves { $count } dependent tasks
     }
 gantt-quarter = Q{ $quarter }
 
@@ -108,8 +147,23 @@ gantt-status =
     }, { $unscheduled ->
         [one] one unscheduled
        *[other] { $unscheduled } unscheduled
-    }{ $overdue ->
-        [0] {""}
-        [one] , one overdue
-       *[other] , { $overdue } overdue
     }
+gantt-status-overdue =
+    { $count ->
+        [one] One overdue
+       *[other] { $count } overdue
+    }
+gantt-touch-read-only = Read only on touch screens: change dates in the task.
+gantt-read-only =
+    { $reason ->
+       *[archived_project] { $key } can't be changed: its project is archived.
+    }
+
+## Export
+
+# The heading of a printed chart or a picture of it.
+gantt-export-title = { $project }: { $range }
+# The suggested file name of a picture of the chart; keep the extension .png.
+gantt-export-file = { $project } Gantt chart { $date }.png
+gantt-exported = Saved the chart as { $file }
+gantt-export-failed = The picture of the chart couldn't be made; it may be too large. Try a coarser zoom.

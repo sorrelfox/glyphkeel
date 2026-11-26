@@ -16,12 +16,14 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use gk_api::ops::common::Category;
+use gk_api::ops::common::Hue;
 use gk_api::ops::query::TaskSearchInput;
 use gk_api::ops::schedule::{
-    DayRange, MovedTask, Schedule, ScheduleDependency, ScheduleGet, ScheduleInput, ScheduleProblem,
+    DayRange, MovedTask, ReadOnlyReason, Schedule, ScheduleDependency, ScheduleGet, ScheduleInput,
+    SchedulePreview, SchedulePreviewInput, SchedulePreviewMove, ScheduleProblem,
     ScheduleProblemKind, ScheduleShape, ScheduledTask, UnscheduledTask,
 };
-use gk_api::ops::task::StatusRef;
+use gk_api::ops::task::{LabelRef, StatusRef};
 use gk_core::schedule::{self as rules, Dates, Dependency, Graph, ShiftError};
 use gk_core::{Day, Id, SubtaskProgress};
 use gk_store::rusqlite::types::Value as Sql;
@@ -46,6 +48,7 @@ const MAX_DEPTH: usize = 16;
 
 pub(super) fn register(r: &mut Registry) {
     r.query::<ScheduleGet, _>(desc::<ScheduleGet>(), get);
+    r.query::<SchedulePreviewMove, _>(desc::<SchedulePreviewMove>(), preview);
 }
 
 // ---------------------------------------------------------------------
@@ -76,6 +79,11 @@ struct Entry {
 impl Entry {
     fn key(&self) -> String {
         format!("{}-{}", self.project_key, self.number)
+    }
+
+    /// Why its dates can't be changed, if they can't.
+    fn read_only(&self) -> Option<ReadOnlyReason> {
+        (!self.project_active).then_some(ReadOnlyReason::ArchivedProject)
     }
 }
 
@@ -140,6 +148,39 @@ fn rows_where(
         }
     }
     Ok(())
+}
+
+/// The labels of the tasks `ids`, each in its project's label order.
+fn labels_of(tx: &Transaction<'_>, ids: &[Id]) -> Result<HashMap<Id, Vec<LabelRef>>, Failure> {
+    let mut out: HashMap<Id, Vec<LabelRef>> = HashMap::new();
+    for chunk in ids.chunks(CHUNK) {
+        let marks = vec!["?"; chunk.len()].join(", ");
+        let sql = format!(
+            "SELECT tl.task_id, l.id, l.name, l.hue FROM task_labels tl
+               JOIN labels l ON l.id = tl.label_id
+              WHERE tl.task_id IN ({marks}) ORDER BY l.rank, l.id"
+        );
+        let mut stmt = tx.prepare(&sql)?;
+        let found = stmt
+            .query_map(
+                params_from_iter(chunk.iter().map(|id| Sql::Blob(b(*id)))),
+                |r| {
+                    Ok((
+                        id_at(r, 0)?,
+                        LabelRef {
+                            id: id_at(r, 1)?.to_string(),
+                            name: r.get(2)?,
+                            hue: parse_enum(&r.get::<_, String>(3)?).unwrap_or(Hue::Grey),
+                        },
+                    ))
+                },
+            )?
+            .collect::<Result<Vec<_>, _>>()?;
+        for (task, label) in found {
+            out.entry(task).or_default().push(label);
+        }
+    }
+    Ok(out)
 }
 
 /// One `blocks` link between two live tasks the caller may see.
@@ -454,6 +495,12 @@ fn get(q: &QueryCtx<'_>, input: ScheduleInput) -> Result<Schedule, Failure> {
         known: HashMap::new(),
     };
     let key_of = |id: &Id| rows.get(id).map(Entry::key);
+    let labelled: Vec<Id> = ordered
+        .iter()
+        .map(|(id, _)| *id)
+        .chain(undated.iter().copied())
+        .collect();
+    let mut labels = labels_of(tx, &labelled)?;
     let mut tasks = Vec::with_capacity(ordered.len());
     let mut span: Option<(Day, Day)> = None;
     for (id, depth) in &ordered {
@@ -486,6 +533,8 @@ fn get(q: &QueryCtx<'_>, input: ScheduleInput) -> Result<Schedule, Failure> {
             depth: *depth,
             status: r.status.clone(),
             closed: r.closed,
+            labels: labels.remove(id).unwrap_or_default(),
+            read_only: r.read_only(),
             shape,
             start_date: r.dates.start.map(|d| d.to_string()),
             due_date: r.dates.due.map(|d| d.to_string()),
@@ -511,6 +560,8 @@ fn get(q: &QueryCtx<'_>, input: ScheduleInput) -> Result<Schedule, Failure> {
                 parent: r.parent.as_ref().and_then(key_of),
                 status: r.status.clone(),
                 closed: r.closed,
+                labels: labels.remove(id).unwrap_or_default(),
+                read_only: r.read_only(),
                 milestone: r.milestone,
                 version: r.version,
                 id: id.to_string(),
@@ -649,6 +700,81 @@ fn get(q: &QueryCtx<'_>, input: ScheduleInput) -> Result<Schedule, Failure> {
         dependencies,
         problems,
     })
+}
+
+// ---------------------------------------------------------------------
+// Trying out a move
+
+/// A day given to the preview, `YYYY-MM-DD` only.
+fn preview_day(field: &str, text: Option<&str>) -> Result<Option<Day>, Failure> {
+    text.filter(|t| !t.trim().is_empty())
+        .map(|t| {
+            t.trim().parse::<Day>().map_err(|_| {
+                messages::invalid(
+                    field,
+                    "schedule-preview-date",
+                    &[("field", field.to_owned())],
+                )
+            })
+        })
+        .transpose()
+}
+
+/// What "also move dependents" would move if task `key` got the given
+/// dates: the same walk as `move_dependents`, on dates held in memory.
+fn preview(q: &QueryCtx<'_>, input: SchedulePreviewInput) -> Result<SchedulePreview, Failure> {
+    let start = preview_day("start_date", input.start_date.as_deref())?;
+    let due = preview_day("due_date", input.due_date.as_deref())?;
+    if let (Some(s), Some(d)) = (start, due)
+        && s > d
+    {
+        return Err(messages::invalid(
+            "start_date",
+            "schedule-preview-reversed",
+            &[],
+        ));
+    }
+    let task = super::lookup::task(q.tx, "key", &input.key)?;
+    let links = links(q.tx)?;
+    let net = numbered(&links);
+    let Some(&root) = net.index.get(&task.id) else {
+        return Ok(SchedulePreview::default());
+    };
+    let reach = net.graph.dependents(root);
+    if reach.is_empty() {
+        return Ok(SchedulePreview::default());
+    }
+    let ids: Vec<Id> = reach.iter().map(|&i| net.ids[i]).collect();
+    let mut rows = HashMap::new();
+    rows_where(q.tx, "t.id", &ids, &mut rows)?;
+    let n = net.ids.len();
+    let mut dates = vec![Dates::default(); n];
+    let mut movable = vec![false; n];
+    for (i, id) in net.ids.iter().enumerate() {
+        if let Some(r) = rows.get(id) {
+            dates[i] = r.dates;
+            movable[i] = !r.closed && r.project_active;
+        }
+    }
+    dates[root] = Dates::new(start, due);
+    // A loop or a date out of range: the change itself will say what is
+    // wrong; nothing moves.
+    let shifts = rules::shift_dependents(&net.graph, &dates, root, &movable).unwrap_or_default();
+    let moved = shifts
+        .iter()
+        .filter_map(|s| {
+            let id = net.ids[s.task];
+            let r = rows.get(&id)?;
+            Some(MovedTask {
+                key: r.key(),
+                days: s.days,
+                start_date: s.dates.start.map(|d| d.to_string()),
+                due_date: s.dates.due.map(|d| d.to_string()),
+                id: id.to_string(),
+            })
+        })
+        .collect();
+    Ok(SchedulePreview { moved })
 }
 
 // ---------------------------------------------------------------------

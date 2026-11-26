@@ -75,7 +75,7 @@ export function describeChange(t: Translate, entry: ActivityEntry, locale: strin
   return { what, item, fields };
 }
 
-const ENTITIES = new Set(["task", "project", "comment", "attachment", "time_entry", "relation", "status", "task_type", "label", "layout", "list_layout", "view", "wiki_page", "settings", "timer", "description"]);
+const ENTITIES = new Set(["task", "project", "comment", "attachment", "time_entry", "relation", "status", "task_type", "label", "layout", "list_layout", "gantt_layout", "view", "wiki_page", "settings", "timer", "description"]);
 
 /** The entity's name in the messages; anything newer reads as an item. */
 function entityName(entity: string): string {

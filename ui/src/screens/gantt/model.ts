@@ -6,15 +6,18 @@
 // each task's shape lies on the timeline, what a drag or a key press does to
 // its dates, and the path of a dependency's arrow.
 
-import { type ScheduleDependency, type ScheduleProblem, type ScheduledTask, type UnscheduledTask } from "../../generated/ops";
+import { type GanttGrouping, type Hue, type LabelRef, type ScheduleDependency, type ScheduleProblem, type ScheduledTask, type UnscheduledTask } from "../../generated/ops";
 import { addDays, daysBetween, type Day } from "../calendar/model";
 
 /** A row's height, in pixels. */
 export const ROW = 32;
 
+/** What a group row heads: the tasks without dates, or the tasks sharing a label or a status. */
+export type GroupHead = { by: "unscheduled" } | { by: "label"; name: string | undefined; hue: Hue | undefined } | { by: "status"; name: string; hue: Hue | undefined };
+
 export type Row =
   | { kind: "task"; task: ScheduledTask; level: number; hasKids: boolean; open: boolean }
-  | { kind: "group"; count: number }
+  | { kind: "group"; id: string; head: GroupHead; count: number }
   | { kind: "unscheduled"; task: UnscheduledTask };
 
 export interface Rows {
@@ -23,29 +26,101 @@ export interface Rows {
   index: Map<string, number>;
 }
 
+/** What grouping by status or label needs to know beyond the tasks. */
+export interface GroupOrder {
+  /** The statuses' places on the board, by status ID; the others follow by category, then name. */
+  statuses: ReadonlyMap<string, number>;
+  /** Each status's colour, by ID, where known. */
+  hues: ReadonlyMap<string, Hue>;
+  /** Compares names in the person's language. */
+  compare: (a: string, b: string) => number;
+}
+
+const CATEGORY_ORDER: Readonly<Record<string, number>> = { todo: 0, in_progress: 1, done: 2, cancelled: 3 };
+
+/** A task's first label in alphabetical order, as the list groups by label. */
+export function firstLabel(task: Pick<ScheduledTask, "labels">, compare: (a: string, b: string) => number): LabelRef | undefined {
+  let first: LabelRef | undefined;
+  for (const label of task.labels ?? []) {
+    if (first === undefined || compare(label.name, first.name) < 0) {
+      first = label;
+    }
+  }
+  return first;
+}
+
+/** The dated tasks as one level, each a row of its own: for flat and grouped charts. */
+function flat(tasks: readonly ScheduledTask[]): Row[] {
+  return tasks.map((task) => ({ kind: "task", task, level: 1, hasKids: false, open: true }));
+}
+
+/** The dated tasks in groups by label or status, each group headed by a row, in the group's order. */
+function grouped(tasks: readonly ScheduledTask[], by: "label" | "status", order: GroupOrder): Row[] {
+  const groups = new Map<string, { head: GroupHead; tasks: ScheduledTask[]; rank: [number, number, string] }>();
+  for (const task of tasks) {
+    let id: string;
+    let head: GroupHead;
+    let rank: [number, number, string];
+    if (by === "label") {
+      const label = firstLabel(task, order.compare);
+      id = label === undefined ? "" : label.name;
+      head = { by: "label", name: label?.name, hue: label?.hue };
+      rank = [label === undefined ? 1 : 0, 0, label?.name ?? ""];
+    } else {
+      id = task.status.id;
+      head = { by: "status", name: task.status.name, hue: order.hues.get(task.status.id) };
+      rank = [order.statuses.get(task.status.id) ?? Number.MAX_SAFE_INTEGER, CATEGORY_ORDER[task.status.category] ?? 4, task.status.name];
+    }
+    const group = groups.get(id);
+    if (group) {
+      group.tasks.push(task);
+    } else {
+      groups.set(id, { head, tasks: [task], rank });
+    }
+  }
+  const sorted = [...groups.entries()].sort(([, a], [, b]) => a.rank[0] - b.rank[0] || a.rank[1] - b.rank[1] || order.compare(a.rank[2], b.rank[2]));
+  return sorted.flatMap(([id, group]) => [{ kind: "group", id: `${by}:${id}`, head: group.head, count: group.tasks.length } satisfies Row, ...flat(group.tasks)]);
+}
+
+/** The default order of groups: names in code-point order, statuses by category. */
+export const PLAIN_ORDER: GroupOrder = { statuses: new Map(), hues: new Map(), compare: (a, b) => (a < b ? -1 : a > b ? 1 : 0) };
+
 /**
  * The chart's rows: the schedule's tree in its order, without the subtasks
- * of folded tasks, then a group row and the tasks without dates.
+ * of folded tasks (grouped by parent, the default); or one flat list; or
+ * groups by label or status. Then a group row and the tasks without dates.
  */
-export function buildRows(tasks: readonly ScheduledTask[], unscheduled: readonly UnscheduledTask[], folded: ReadonlySet<string>): Rows {
-  const rows: Row[] = [];
-  let hideBelow: number | null = null;
-  tasks.forEach((task, at) => {
-    if (hideBelow !== null) {
-      if (task.depth > hideBelow) {
-        return;
+export function buildRows(
+  tasks: readonly ScheduledTask[],
+  unscheduled: readonly UnscheduledTask[],
+  folded: ReadonlySet<string>,
+  grouping: GanttGrouping = "parent",
+  order: GroupOrder = PLAIN_ORDER,
+): Rows {
+  let rows: Row[] = [];
+  if (grouping === "none") {
+    rows = flat(tasks);
+  } else if (grouping === "label" || grouping === "status") {
+    rows = grouped(tasks, grouping, order);
+  } else {
+    let hideBelow: number | null = null;
+    tasks.forEach((task, at) => {
+      if (hideBelow !== null) {
+        if (task.depth > hideBelow) {
+          return;
+        }
+        hideBelow = null;
       }
-      hideBelow = null;
-    }
-    const hasKids = (tasks[at + 1]?.depth ?? -1) > task.depth;
-    const open = !folded.has(task.key);
-    rows.push({ kind: "task", task, level: task.depth + 1, hasKids, open });
-    if (hasKids && !open) {
-      hideBelow = task.depth;
-    }
-  });
+      const hasKids = (tasks[at + 1]?.depth ?? -1) > task.depth;
+      const open = !folded.has(task.key);
+      rows.push({ kind: "task", task, level: task.depth + 1, hasKids, open });
+      if (hasKids && !open) {
+        hideBelow = task.depth;
+      }
+    });
+  }
   if (unscheduled.length > 0) {
-    rows.push({ kind: "group", count: unscheduled.length });
+    rows.push({ kind: "group", id: "unscheduled", head: { by: "unscheduled" }, count: unscheduled.length });
     for (const task of unscheduled) {
       rows.push({ kind: "unscheduled", task });
     }
@@ -57,6 +132,22 @@ export function buildRows(tasks: readonly ScheduledTask[], unscheduled: readonly
     }
   });
   return { rows, index };
+}
+
+/**
+ * How far behind a bar is: when today is further along the bar than its
+ * progress, the share done and the share of its time gone by (to the middle
+ * of today, where the today line is). Only open bars with both dates that
+ * aren't overdue yet; an overdue bar has its own note.
+ */
+export function behindSchedule(task: ScheduledTask, today: Day): { done: number; expected: number } | undefined {
+  const { start_date: start, due_date: due } = task;
+  if (task.shape !== "bar" || task.closed || task.overdue || start === undefined || due === undefined || today < start || today > due) {
+    return undefined;
+  }
+  const expected = (daysBetween(start, today) + 0.5) / (daysBetween(start, due) + 1);
+  const done = task.progress_percent / 100;
+  return expected > done ? { done, expected } : undefined;
 }
 
 /** A task's own dates. */

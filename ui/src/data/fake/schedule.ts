@@ -69,7 +69,8 @@ function dependentsOf(id: string, links: readonly BlocksLink[]): Set<string> {
  * The schedule of `tasks` (already narrowed to the project and the query).
  * `milestone` tells the tasks of a milestone type.
  */
-export function scheduleOf(tasks: readonly ListedTask[], links: readonly BlocksLink[], milestone: (task: ListedTask) => boolean, today: string): Schedule {
+export function scheduleOf(tasks: readonly ListedTask[], links: readonly BlocksLink[], milestone: (task: ListedTask) => boolean, today: string, archived: ReadonlySet<string> = new Set()): Schedule {
+  const readOnly = (task: ListedTask) => (archived.has(task.project) ? { read_only: "archived_project" as const } : {});
   const byKey = new Map(tasks.map((task) => [task.key, task]));
   const kids = new Map<string, ListedTask[]>();
   for (const task of tasks) {
@@ -137,6 +138,8 @@ export function scheduleOf(tasks: readonly ListedTask[], links: readonly BlocksL
       ...(task.due_date === undefined ? {} : { due_date: task.due_date }),
       id: task.id,
       key: task.key,
+      ...(task.labels.length > 0 ? { labels: task.labels } : {}),
+      ...readOnly(task),
       overdue: !closed && task.due_date !== undefined && task.due_date < today,
       ...(task.parent === undefined || !byKey.has(task.parent) ? {} : { parent: task.parent }),
       progress_percent: task.progress_percent,
@@ -192,6 +195,8 @@ export function scheduleOf(tasks: readonly ListedTask[], links: readonly BlocksL
       closed: task.closed_at !== undefined,
       id: task.id,
       key: task.key,
+      ...(task.labels.length > 0 ? { labels: task.labels } : {}),
+      ...readOnly(task),
       milestone: milestone(task),
       ...(task.parent === undefined ? {} : { parent: task.parent }),
       project: task.project,

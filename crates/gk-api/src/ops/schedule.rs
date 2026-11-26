@@ -15,7 +15,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::catalog::{Exposure, Meta, OpDescriptor, OpKind, Safety};
-use crate::ops::task::StatusRef;
+use crate::ops::task::{LabelRef, StatusRef};
 
 /// Which tasks to schedule.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -68,6 +68,14 @@ pub struct DayRange {
     pub end: String,
 }
 
+/// Why a task's dates can't be changed from the chart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ReadOnlyReason {
+    /// Its project is archived, so nothing in it changes.
+    ArchivedProject,
+}
+
 /// One row of the chart.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -88,6 +96,12 @@ pub struct ScheduledTask {
     pub status: StatusRef,
     /// Whether it is closed (done or cancelled).
     pub closed: bool,
+    /// Its labels, in the project's label order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub labels: Vec<LabelRef>,
+    /// Why its dates can't be changed; left out when they can.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub read_only: Option<ReadOnlyReason>,
     /// How the chart draws it.
     pub shape: ScheduleShape,
     /// Its own start date.
@@ -132,6 +146,12 @@ pub struct UnscheduledTask {
     pub status: StatusRef,
     /// Whether it is closed.
     pub closed: bool,
+    /// Its labels, in the project's label order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub labels: Vec<LabelRef>,
+    /// Why its dates can't be changed; left out when they can.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub read_only: Option<ReadOnlyReason>,
     /// A task of a milestone type.
     pub milestone: bool,
     /// Its version, for `expected_version`.
@@ -239,6 +259,133 @@ pub struct MovedTask {
     pub id: String,
 }
 
+/// Which change of dates to try out.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SchedulePreviewInput {
+    /// The task whose dates would change.
+    pub key: String,
+    /// Its new start date (`YYYY-MM-DD`); left out: none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_date: Option<String>,
+    /// Its new due date (`YYYY-MM-DD`); left out: none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub due_date: Option<String>,
+}
+
+/// What "also move dependents" would do, without doing it.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SchedulePreview {
+    /// The tasks that would move and their new dates, blockers first.
+    pub moved: Vec<MovedTask>,
+}
+
+/// A zoom level of the Gantt chart.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum GanttZoom {
+    /// One column per day.
+    #[default]
+    Day,
+    /// Weeks.
+    Week,
+    /// Months.
+    Month,
+    /// Quarters.
+    Quarter,
+}
+
+/// How the Gantt chart groups its rows.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum GanttGrouping {
+    /// Subtasks under their parent tasks: the schedule's tree.
+    #[default]
+    Parent,
+    /// By the first label in alphabetical order, as the list groups;
+    /// tasks without one last.
+    Label,
+    /// By status, in board order.
+    Status,
+    /// One flat list, without groups or nesting.
+    None,
+}
+
+/// The person's own layout of a project's Gantt chart: the zoom level, the
+/// table's width and its columns' widths, the grouping, and whether moving
+/// a task also moves the tasks that depend on it.
+/// Unlike saved views it belongs to the person, not to the workspace.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct GanttLayout {
+    /// The zoom level.
+    #[serde(default)]
+    pub zoom: GanttZoom,
+    /// The table's width in pixels; left out: the default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub table: Option<u32>,
+    /// Column widths in pixels, by column; the columns left out keep their
+    /// default width.
+    #[serde(default)]
+    pub widths: BTreeMap<String, u32>,
+    /// How the rows are grouped.
+    #[serde(default)]
+    pub group_by: GanttGrouping,
+    /// Whether a change of dates also moves the tasks that depend on the
+    /// task ("also move dependents").
+    #[serde(default)]
+    pub move_dependents: bool,
+}
+
+/// Which Gantt layout to read.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct GanttLayoutGetInput {
+    /// The project (key or ID).
+    pub project: String,
+}
+
+/// Changes to a Gantt layout; fields left out keep their value.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct GanttLayoutUpdateInput {
+    /// The project (key or ID).
+    pub project: String,
+    /// Go back to the default layout first.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub reset: bool,
+    /// The zoom level.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub zoom: Option<GanttZoom>,
+    /// The table's width in pixels (200 to 1200).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub table: Option<u32>,
+    /// Widths to set, in pixels (24 to 600), by column; the others keep
+    /// theirs.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub widths: BTreeMap<String, u32>,
+    /// How the rows are grouped.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group_by: Option<GanttGrouping>,
+    /// Whether a change of dates also moves the dependent tasks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub move_dependents: Option<bool>,
+}
+
+/// A Gantt layout, after a change or as read.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct GanttLayoutChange {
+    /// The project's key.
+    pub project: String,
+    /// The layout.
+    pub layout: GanttLayout,
+    /// The history group; left out when nothing changed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
+}
+
 op!(
     /// The Gantt chart's data and the problems of the plan.
     ScheduleGet,
@@ -255,4 +402,65 @@ pub(crate) const SCHEDULE_GET: OpDescriptor = OpDescriptor::of::<ScheduleGet>(Me
     cli: Some("schedule"),
     input_name: "ScheduleInput",
     output_name: "Schedule",
+});
+
+op!(
+    /// What "also move dependents" would move, without moving anything.
+    SchedulePreviewMove,
+    "schedule.preview_move",
+    SchedulePreviewInput,
+    SchedulePreview
+);
+
+pub(crate) const SCHEDULE_PREVIEW_MOVE: OpDescriptor = OpDescriptor::of::<SchedulePreviewMove>(
+    Meta {
+        summary: "The tasks that \"also move dependents\" would move, and their new dates, if a task got the given dates; nothing is changed.",
+        kind: OpKind::Query,
+        safety: Safety::Read,
+        exposure: Exposure::App {
+            reason: "It previews a drag in the Gantt chart while the pointer moves; agents and scripts change dates with update_task and move_dependents, whose answer lists the tasks that moved.",
+        },
+        cli: None,
+        input_name: "SchedulePreviewInput",
+        output_name: "SchedulePreview",
+    },
+);
+
+op!(
+    /// The person's layout of a project's Gantt chart.
+    GanttLayoutGet,
+    "gantt.layout.get",
+    GanttLayoutGetInput,
+    GanttLayoutChange
+);
+op!(
+    /// Changes the person's layout of a project's Gantt chart.
+    GanttLayoutUpdate,
+    "gantt.layout.update",
+    GanttLayoutUpdateInput,
+    GanttLayoutChange
+);
+
+pub(crate) const GANTT_LAYOUT_GET: OpDescriptor = OpDescriptor::of::<GanttLayoutGet>(Meta {
+    summary: "The person's layout of a project's Gantt chart: zoom level, table and column widths, grouping, and whether moving a task also moves its dependents.",
+    kind: OpKind::Query,
+    safety: Safety::Read,
+    exposure: Exposure::App {
+        reason: "It holds how the person's own Gantt chart looks, not the workspace's data; agents and scripts read the schedule itself.",
+    },
+    cli: None,
+    input_name: "GanttLayoutGetInput",
+    output_name: "GanttLayoutChange",
+});
+
+pub(crate) const GANTT_LAYOUT_UPDATE: OpDescriptor = OpDescriptor::of::<GanttLayoutUpdate>(Meta {
+    summary: "Change the zoom level, table or column widths, grouping or the \"also move dependents\" switch of a project's Gantt chart, or go back to the default layout.",
+    kind: OpKind::Command,
+    safety: Safety::Write,
+    exposure: Exposure::App {
+        reason: "It changes how the person's own Gantt chart looks, not the workspace's data; agents and scripts read the schedule itself.",
+    },
+    cli: None,
+    input_name: "GanttLayoutUpdateInput",
+    output_name: "GanttLayoutChange",
 });

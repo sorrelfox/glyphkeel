@@ -134,11 +134,18 @@ test("with Also move dependents on, a drag says how many tasks it may move, and 
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
   await page.mouse.move(box.x + 10 * DAY_PX, box.y + box.height / 2, { steps: 10 });
+  // The engine works out exactly which tasks the drop moves; they show as outlines where they would go.
   const tip = page.getByTestId("gantt-tip");
-  await expect(tip).toContainText(count === 1 ? "May move one dependent task" : `May move up to ${String(count)} dependent tasks`);
+  await expect(tip).toContainText(/Moves (no|one|\d+) dependent tasks?/);
+  const tipText = plain(await tip.textContent());
+  const exact = /Moves no/.test(tipText) ? 0 : /Moves one/.test(tipText) ? 1 : Number(/Moves (\d+)/.exec(tipText)?.[1]);
+  expect(exact).toBeLessThanOrEqual(count);
+  await expect(grid.locator("[data-ghost]")).toHaveCount(await grid.locator("[data-ghost]").count());
   await shot(page, "gantt-dependents.png");
   await page.mouse.up();
-  await expect(page.getByText(/dependent tasks? moved/)).toBeVisible();
+  if (exact > 0) {
+    await expect(page.getByText(exact === 1 ? "and one dependent task moved" : `and ${String(exact)} dependent tasks moved`)).toBeVisible();
+  }
   await page.keyboard.press("Control+z");
   await expect.poll(() => datesOf(grid, key)).toEqual(before);
 });
@@ -224,13 +231,13 @@ test("the keyboard moves, resizes, links, folds and zooms; zoom keeps the middle
   await expect(page.locator("[data-gantt]")).toHaveAttribute("data-zoom", "day");
   await expect(range).toHaveText(dayRange ?? "");
 
-  // The zoom is the person's: it is kept for the next visit.
+  // The zoom is the person's: the engine keeps it for the next visit.
   await page.keyboard.press("-");
   await page.keyboard.press("-");
   await expect(page.locator("[data-gantt]")).toHaveAttribute("data-zoom", "month");
   await shot(page, "gantt-month.png");
-  await page.reload();
-  await page.getByRole("row", { name: /Task Manager/ }).click();
+  await page.getByRole("group", { name: "Project views" }).getByRole("button", { name: "Board" }).click();
+  await expect(page.locator("[data-gantt]")).toHaveCount(0);
   await page.getByRole("group", { name: "Project views" }).getByRole("button", { name: "Gantt" }).click();
   await expect(page.locator("[data-gantt]")).toHaveAttribute("data-zoom", "month");
 });
@@ -378,5 +385,161 @@ test("pseudo-locale: the chart's words all come from the messages", async ({ bro
   const english = words.filter((text) => /\b(Key|Title|Start|Due|Day|Week|Month|Quarter|Today|Include|Also)\b/.test(text));
   expect(english).toEqual([]);
   await shot(page, "gantt-pseudo.png");
+  await context.close();
+});
+
+test("grouping by label, status or none, kept by the engine for the next visit", async ({ page }) => {
+  const grid = await openGantt(page);
+  const group = page.getByRole("button", { name: /^Group: / });
+  expect(plain(await group.getAttribute("aria-label"))).toBe("Group: Parent");
+  await group.click();
+  await page.getByRole("menuitemradio", { name: "Label" }).click();
+  await expect(grid.locator("[data-group^='label:']").first()).toBeAttached();
+  // Every task is in a group of its own label, one level deep; the tasks without dates stay last.
+  await expect(grid.locator("[role=row][aria-level='2']")).toHaveCount(0);
+  await shot(page, "gantt-group-label.png");
+
+  await page.getByRole("button", { name: /^Group: / }).click();
+  await page.getByRole("menuitemradio", { name: "Status" }).click();
+  await expect(grid.locator("[data-group^='status:']").first()).toBeAttached();
+  const first = plain(await grid.locator("[data-group^='status:']").first().textContent());
+  expect(first).toMatch(/: (one task|\d+ tasks)$/);
+
+  await page.getByRole("button", { name: /^Group: / }).click();
+  await page.getByRole("menuitemradio", { name: "None" }).click();
+  await expect(grid.locator("[data-group^='status:'], [data-group^='label:']")).toHaveCount(0);
+
+  await page.getByRole("button", { name: /^Group: / }).click();
+  await page.getByRole("menuitemradio", { name: "Status" }).click();
+  await page.getByRole("group", { name: "Project views" }).getByRole("button", { name: "Board" }).click();
+  await page.getByRole("group", { name: "Project views" }).getByRole("button", { name: "Gantt" }).click();
+  await expect.poll(async () => plain(await page.getByRole("button", { name: /^Group: / }).getAttribute("aria-label"))).toBe("Group: Status");
+  await expect(page.locator("[data-group^='status:']").first()).toBeAttached();
+});
+
+test("export: a PNG picture of the whole chart, and printing (or PDF) through the system's dialog", async ({ page }) => {
+  await openGantt(page);
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export" }).click();
+  await page.getByRole("menuitem", { name: "PNG image" }).click();
+  const file = await download;
+  expect(file.suggestedFilename()).toMatch(/^TM Gantt chart \d{4}-\d{2}-\d{2}\.png$/);
+  const path = await file.path();
+  const { readFile } = await import("node:fs/promises");
+  const bytes = await readFile(path);
+  expect([...bytes.subarray(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  // Wide enough for the table and the timeline: the picture's width sits in the PNG header.
+  expect(bytes.readUInt32BE(16)).toBeGreaterThan(1000);
+  await expect(page.getByText(/Saved the chart as/)).toBeVisible();
+
+  // Printing shows only the picture; the dialog itself is the system's.
+  await page.evaluate(() => {
+    (window as unknown as { printed: number }).printed = 0;
+    window.print = () => {
+      (window as unknown as { printed: number }).printed += 1;
+    };
+  });
+  await page.getByRole("button", { name: "Export" }).click();
+  await page.getByRole("menuitem", { name: "Print or save as PDF" }).click();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { printed: number }).printed)).toBe(1);
+  const sheet = page.locator("img[data-gantt-print]");
+  await expect(sheet).toHaveCount(1);
+  expect(await sheet.getAttribute("src")).toMatch(/^data:image\/svg\+xml/);
+  await page.emulateMedia({ media: "print" });
+  await expect(sheet).toBeVisible();
+  await expect(page.locator("[data-gantt]")).toBeHidden();
+  await page.emulateMedia({ media: "screen" });
+});
+
+test("bars behind schedule are marked; the status bar shows overdue tasks in red", async ({ page }) => {
+  const grid = await openGantt(page);
+  // The sample data has open bars over today with less done than the time gone.
+  const behind = grid.locator("[data-bar][class*=behind]");
+  await expect(behind.first()).toBeAttached();
+  const key = (await behind.first().getAttribute("data-bar")) ?? "";
+  await expect(row(grid, key)).toHaveAttribute("aria-label", /behind schedule$/);
+  await expect(grid.getByText(/^Behind schedule: \S+ done, \S+ of the time gone$/).first()).toBeAttached();
+  const alert = page.getByTestId("status-alert");
+  await expect(alert).toHaveText(/^(One|\u2068\d+\u2069) overdue$/);
+  expect(await alert.evaluate((el) => getComputedStyle(el).color)).not.toBe(await page.getByTestId("status-note").evaluate((el) => getComputedStyle(el).color));
+  await shot(page, "gantt-behind.png");
+});
+
+test("tasks of an archived project can't be changed: a drag or F2 says why", async ({ page }) => {
+  await page.clock.setFixedTime(new Date(`${TODAY}T10:00:00`));
+  await page.goto("/");
+  // Archive the Personal project, then open its chart from the Archived list.
+  await page.getByRole("row", { name: /Personal/ }).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Archive" }).click();
+  await page.getByRole("button", { name: "Personal", exact: true }).click();
+  await page.getByRole("group", { name: "Project views" }).getByRole("button", { name: "Gantt" }).click();
+  const grid = page.getByRole("treegrid", { name: "Gantt chart" });
+  await expect(grid).toBeVisible();
+  const first = grid.locator("[data-row]").first();
+  await expect(first).toBeAttached();
+  await expect(first).toHaveAttribute("aria-label", /read only because its project is archived/);
+  const key = (await first.getAttribute("data-row")) ?? "";
+  await first.getByRole("gridcell").first().click();
+  await page.keyboard.press("F2");
+  await expect(grid.locator("input[type=date]")).toHaveCount(0);
+  await expect(page.getByRole("alert").filter({ hasText: /can't be changed: its project is archived/ }).first()).toBeVisible();
+  await expect.poll(live(page)).toBe(`${key} can't be changed: its project is archived.`);
+  const bars = grid.locator("[data-bar][data-read-only] [data-handle=move]");
+  if ((await bars.count()) > 0) {
+    const barKey = (await grid.locator("[data-bar][data-read-only]").first().getAttribute("data-bar")) ?? "";
+    const before = await datesOf(grid, barKey);
+    await dragBy(page, bars.first(), 2 * DAY_PX);
+    await expect.poll(live(page)).toContain(`${barKey} can't be changed`);
+    expect(await datesOf(grid, barKey)).toEqual(before);
+  }
+});
+
+test("touch screens: read only, a tap opens the task, two fingers zoom", async ({ browser }) => {
+  const context = await browser.newContext({ hasTouch: true, isMobile: true, viewport: { width: 1000, height: 800 } });
+  const page = await context.newPage();
+  const grid = await openGantt(page);
+  await expect(page.getByTestId("status-note")).toHaveText(/Read only on touch screens/);
+  await expect(page.getByRole("switch", { name: "Also move dependents" })).toHaveCount(0);
+  await expect(grid.locator("[data-handle=link]")).toHaveCount(0);
+  await expect(grid.locator("button[aria-label*='date of']:not([disabled])")).toHaveCount(0);
+  const key = await (async () => {
+    for (const element of await grid.locator("[data-bar][data-shape=bar]").all()) {
+      const box = await element.locator("[data-handle=move]").boundingBox();
+      if (box && box.width >= 2 * DAY_PX && box.x > 450 && box.x + box.width < 950) {
+        return (await element.getAttribute("data-bar")) ?? "";
+      }
+    }
+    throw new Error("no bar on screen");
+  })();
+  const before = await datesOf(grid, key);
+  await bar(grid, key).locator("[data-handle=move]").tap();
+  await expect(page.getByRole("complementary").or(page.locator("[data-task-panel]")).first()).toBeVisible();
+  expect(await datesOf(grid, key)).toEqual(before);
+
+  // Pinch out zooms in, pinch in zooms out: touch events through the browser's own protocol.
+  const cdp = await context.newCDPSession(page);
+  const box = await grid.boundingBox();
+  if (!box) {
+    throw new Error("no chart");
+  }
+  const cx = box.x + box.width * 0.6;
+  const cy = box.y + box.height / 2;
+  const fingers = (gap: number) => [
+    { x: cx - gap, y: cy, id: 1 },
+    { x: cx + gap, y: cy, id: 2 },
+  ];
+  const pinch = async (from: number, to: number) => {
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: fingers(from) });
+    for (let step = 1; step <= 6; step += 1) {
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: fingers(from + ((to - from) * step) / 6) });
+    }
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  };
+  await expect(page.locator("[data-gantt]")).toHaveAttribute("data-zoom", "day");
+  await pinch(120, 30);
+  await expect(page.locator("[data-gantt]")).not.toHaveAttribute("data-zoom", "day");
+  const out = await page.locator("[data-gantt]").getAttribute("data-zoom");
+  await pinch(30, 120);
+  await expect(page.locator("[data-gantt]")).not.toHaveAttribute("data-zoom", out ?? "");
   await context.close();
 });

@@ -2,9 +2,9 @@
 // Copyright (C) 2026 Glyphkeel contributors
 
 import { useLocalization } from "@fluent/react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { Button, useLocale } from "react-aria-components";
+import { ChevronDown, ChevronLeft, ChevronRight, Download } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { Button, Menu, MenuItem, MenuTrigger, Popover, useLocale } from "react-aria-components";
 
 import { keysOf } from "../../actions/actions";
 import { classes } from "../../classes";
@@ -13,17 +13,20 @@ import { QueryField, type QueryFieldHandle, type Reading } from "../../component
 import { Segmented } from "../../components/Segmented";
 import { Switch } from "../../components/Switch";
 import { useToasts } from "../../components/Toasts";
-import { useCommand, useOp, useUndo } from "../../data/hooks";
+import { errorToast, useCommand, useOp, useUndo } from "../../data/hooks";
 import { useListNames, useParsedQuery, useQueryFields } from "../../data/list";
-import { useSchedule } from "../../data/schedule";
-import { type QueryProblem, type ScheduleDependency } from "../../generated/ops";
+import { useGanttLayout, useSchedule } from "../../data/schedule";
+import { type GanttGrouping, type QueryProblem, type ReadOnlyReason, type Schedule, type ScheduleDependency } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
+import { saveExport } from "../../ipc/exportFile";
 import { useStatus, useTimerTask } from "../../shell/context";
-import { asDate, type Day } from "../calendar/model";
-import { DEFAULT_TABLE, Gantt, type GanttHandle, type Movable } from "./Gantt";
-import { DEFAULT_LAYOUT, loadLayout, saveLayout, type Column, type GanttLayout } from "./layout";
-import { datesUpdate, endsLater, type Dates } from "./model";
-import { ZOOMS, chartSpan, type Zoom } from "./scale";
+import { isoDay } from "../board/model";
+import { asDate, firstDayOfWeek, type Day } from "../calendar/model";
+import { chartSvg, exportSpan, lightPalette, printSvg, svgToPng } from "./export";
+import { DEFAULT_TABLE, Gantt, groupText, headerText, noteOf, useFormats, type GanttHandle, type Movable } from "./Gantt";
+import { GROUPINGS, layoutFrom, layoutUpdate, type Column, type GanttLayout } from "./layout";
+import { datesUpdate, endsLater, type Dates, type GroupOrder } from "./model";
+import { ZOOMS, chartSpan, weekendDays, type Zoom } from "./scale";
 import styles from "./Gantt.module.css";
 
 /** How long typing pauses before the query runs, as in the list. */
@@ -41,32 +44,52 @@ function useProblemText(): (problem: QueryProblem) => string {
   return (problem) => (l10n.getBundle(problem.message_id) ? l10n.getString(problem.message_id, problem.args ?? null) : problem.message);
 }
 
+/** A screen that only takes touch: phones and tablets without a mouse or pen. */
+const TOUCH_ONLY = "(pointer: coarse) and (not (any-pointer: fine))";
+
+/** Whether the screen only takes touch, following changes (a mouse plugged in). */
+function useTouchOnly(): boolean {
+  return useSyncExternalStore(
+    (changed) => {
+      const query = window.matchMedia(TOUCH_ONLY);
+      query.addEventListener("change", changed);
+      return () => {
+        query.removeEventListener("change", changed);
+      };
+    },
+    () => window.matchMedia(TOUCH_ONLY).matches,
+    () => false,
+  );
+}
+
 /**
  * A project's Gantt chart with its toolbar: zoom, today, paging, the filter
- * query and the sub-projects switch. Dates change through `task.update`,
- * with "also move dependents" when the person turned it on, as one change
- * that Undo takes back; dependencies are `blocks` links.
+ * query, the sub-projects switch, grouping and export. Dates change through
+ * `task.update`, with "also move dependents" when the person turned it on,
+ * as one change that Undo takes back; dependencies are `blocks` links. The
+ * person's layout is read once from the engine, before the chart draws.
  */
-export function GanttView({ project, openTask, onOpen }: GanttViewProps) {
+export function GanttView(props: GanttViewProps) {
+  const own = useGanttLayout(props.project);
+  if (!own.layout && !own.error) {
+    return <div className={styles.screen} aria-busy="true" />;
+  }
+  return <LoadedGantt {...props} saved={layoutFrom(own.layout?.layout)} />;
+}
+
+function LoadedGantt({ project, openTask, onOpen, saved }: GanttViewProps & { saved: GanttLayout }) {
   const t = useT();
-  const { locale } = useLocale();
+  const { locale, direction } = useLocale();
   const problemText = useProblemText();
   const projectInfo = useOp("project.get", { project });
-  const projectId = projectInfo.data?.id;
+  const touchOnly = useTouchOnly();
 
-  // The person's layout, per project; read once the project's ID is known.
-  const [layout, setLayout] = useState<GanttLayout>(DEFAULT_LAYOUT);
-  const [layoutOf, setLayoutOf] = useState<string | undefined>(undefined);
-  if (projectId !== undefined && layoutOf !== projectId) {
-    setLayoutOf(projectId);
-    setLayout(loadLayout(projectId));
-  }
+  // The person's layout, kept by the engine; the chart follows it at once.
+  const [layout, setLayout] = useState<GanttLayout>(saved);
+  const keepLayout = useCommand("gantt.layout.update");
   const changeLayout = (change: Partial<GanttLayout>) => {
-    const next = { ...layout, ...change, widths: { ...layout.widths, ...change.widths } };
-    setLayout(next);
-    if (projectId !== undefined) {
-      saveLayout(projectId, next);
-    }
+    setLayout((now) => ({ ...now, ...change, widths: { ...now.widths, ...change.widths } }));
+    keepLayout.mutate(layoutUpdate(project, change));
   };
 
   const [includeSubprojects, setIncludeSubprojects] = useState(false);
@@ -97,14 +120,30 @@ export function GanttView({ project, openTask, onOpen }: GanttViewProps) {
   const schedule = data.schedule;
   const span = schedule ? chartSpan(schedule.range, schedule.today, layout.zoom) : undefined;
 
+  // Groups by status follow the board's order; labels sort in the person's language.
+  const statuses = projectInfo.data?.statuses;
+  const groupOrder = useMemo<GroupOrder>(() => {
+    const collator = new Intl.Collator(locale, { numeric: true });
+    return {
+      statuses: new Map((statuses ?? []).map((status, at) => [status.id, at])),
+      hues: new Map((statuses ?? []).map((status) => [status.id, status.hue])),
+      compare: (a, b) => collator.compare(a, b),
+    };
+  }, [locale, statuses]);
+
   const scheduledCount = schedule?.tasks.length ?? 0;
   const unscheduledCount = schedule?.unscheduled.length ?? 0;
   const overdueCount = schedule?.tasks.filter((task) => task.overdue && task.shape !== "summary").length ?? 0;
-  useStatus({ summary: t("gantt-status", { scheduled: scheduledCount, unscheduled: unscheduledCount, overdue: overdueCount }) });
+  useStatus({
+    summary: t("gantt-status", { scheduled: scheduledCount, unscheduled: unscheduledCount }),
+    alert: overdueCount > 0 ? t("gantt-status-overdue", { count: overdueCount }) : undefined,
+    note: touchOnly ? t("gantt-touch-read-only") : undefined,
+  });
   useTimerTask(openTask ?? null);
 
   const [range, setRange] = useState<{ from: Day; to: Day } | null>(null);
-  const rangeText = range ? new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).formatRange(asDate(range.from), asDate(range.to)) : "";
+  const rangeFormat = new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+  const rangeText = range ? rangeFormat.formatRange(asDate(range.from), asDate(range.to)) : "";
 
   // ---------- changes ----------
 
@@ -166,6 +205,60 @@ export function GanttView({ project, openTask, onOpen }: GanttViewProps) {
       },
     ));
 
+  const onRefused = (key: string, reason: ReadOnlyReason) => {
+    toasts.show({ tone: "error", text: t("gantt-read-only", { key, reason }) });
+  };
+
+  // ---------- printing and pictures ----------
+
+  const fmt = useFormats(locale, schedule?.today ?? isoDay(new Date()));
+  const picture = (shown: Schedule) => {
+    const rows = chart.current?.rows() ?? [];
+    const { from, to } = exportSpan(shown, layout.zoom);
+    const name = projectInfo.data?.name ?? project;
+    return chartSvg({
+      schedule: shown,
+      rows,
+      zoom: layout.zoom,
+      rtl: direction === "rtl",
+      weekStart: firstDayOfWeek(locale),
+      weekend: weekendDays(locale),
+      palette: lightPalette(),
+      font: getComputedStyle(document.body).fontFamily,
+      text: {
+        title: t("gantt-export-title", { project: name, range: rangeFormat.formatRange(asDate(from), asDate(to)) }),
+        columns: { key: t("gantt-col-key"), title: t("gantt-col-title"), start: t("gantt-col-start"), due: t("gantt-col-due"), progress: t("gantt-col-progress") },
+        cell: (cell, top) => headerText(cell, top, fmt, t),
+        day: (day) => fmt.cell(day),
+        percent: (share) => fmt.percent.format(share),
+        group: (row) => groupText(t, row),
+        note: (task) => noteOf(task, shown.today, t, fmt.percent) ?? undefined,
+      },
+    });
+  };
+  const exportAs = (kind: "png" | "print") => {
+    if (!schedule) {
+      return;
+    }
+    const { svg, width, height } = picture(schedule);
+    if (kind === "print") {
+      printSvg(svg);
+      return;
+    }
+    // A file name, without the marks that keep a placeable's direction on screen.
+    const file = t("gantt-export-file", { project, date: isoDay(new Date()) }).replace(/[\u2068\u2069]/g, "");
+    svgToPng(svg, width, height)
+      .then((bytes) => saveExport(file, bytes, "image/png"))
+      .then((saved) => {
+        if (saved) {
+          toasts.show({ tone: "info", text: t("gantt-exported", { file }) });
+        }
+      })
+      .catch((error: unknown) => {
+        toasts.show(error instanceof Error && (error.message === "canvas" || error.message === "png") ? { tone: "error", text: t("gantt-export-failed") } : errorToast(t, error));
+      });
+  };
+
   // ---------- drawing ----------
 
   const filterChord = keysOf("view.filter")[0];
@@ -221,15 +314,47 @@ export function GanttView({ project, openTask, onOpen }: GanttViewProps) {
             {t("gantt-include-subprojects")}
           </Switch>
         </div>
+        {!touchOnly && (
+          <div className={styles.toolbarItem}>
+            <Switch
+              isSelected={layout.moveDependents}
+              onChange={(on) => {
+                changeLayout({ moveDependents: on });
+              }}
+            >
+              {t("gantt-move-dependents")}
+            </Switch>
+          </div>
+        )}
         <div className={styles.toolbarItem}>
-          <Switch
-            isSelected={layout.moveDependents}
-            onChange={(on) => {
-              changeLayout({ moveDependents: on });
+          <GroupMenu
+            value={layout.groupBy}
+            onChange={(groupBy) => {
+              changeLayout({ groupBy });
             }}
-          >
-            {t("gantt-move-dependents")}
-          </Switch>
+          />
+          <MenuTrigger>
+            <Button className="btn flat" isDisabled={!schedule}>
+              <Download className="ic" aria-hidden="true" />
+              <span className="hide-narrow">{t("gantt-export")}</span>
+            </Button>
+            <Popover className="pop menuPopover" placement="bottom end" offset={4}>
+              <Menu
+                className="menu"
+                aria-label={t("gantt-export")}
+                onAction={(id) => {
+                  exportAs(id === "print" ? "print" : "png");
+                }}
+              >
+                <MenuItem id="png" className="item">
+                  {t("gantt-export-png")}
+                </MenuItem>
+                <MenuItem id="print" className="item">
+                  {t("gantt-export-print")}
+                </MenuItem>
+              </Menu>
+            </Popover>
+          </MenuTrigger>
         </div>
       </div>
       {data.error !== null && (
@@ -252,7 +377,10 @@ export function GanttView({ project, openTask, onOpen }: GanttViewProps) {
             zoom={layout.zoom}
             table={layout.table ?? DEFAULT_TABLE}
             widths={layout.widths}
-            moveDependents={layout.moveDependents}
+            moveDependents={layout.moveDependents && !touchOnly}
+            groupBy={layout.groupBy}
+            groupOrder={groupOrder}
+            readOnly={touchOnly}
             openTask={openTask}
             onDates={onDates}
             onLink={onLink}
@@ -268,9 +396,45 @@ export function GanttView({ project, openTask, onOpen }: GanttViewProps) {
               changeLayout({ widths: { [column]: width } });
             }}
             onRange={setRange}
+            onRefused={onRefused}
           />
         </>
       )}
     </div>
+  );
+}
+
+/** The Group menu: by parent (the tree), label, status, or none. */
+function GroupMenu({ value, onChange }: { value: GanttGrouping; onChange: (grouping: GanttGrouping) => void }) {
+  const t = useT();
+  const name = (grouping: GanttGrouping) => t(`gantt-group-by-${grouping}`);
+  return (
+    <MenuTrigger>
+      <Button className="btn flat" aria-label={t("gantt-group-button", { grouping: name(value) })}>
+        <span className="muted hide-narrow">{t("gantt-group")}</span>
+        <span>{name(value)}</span>
+        <ChevronDown className="ic s muted" aria-hidden="true" />
+      </Button>
+      <Popover className="pop menuPopover" placement="bottom end" offset={4}>
+        <Menu
+          className="menu"
+          aria-label={t("gantt-group")}
+          selectionMode="single"
+          selectedKeys={[value]}
+          onAction={(id) => {
+            const chosen = GROUPINGS.find((grouping) => grouping === id);
+            if (chosen) {
+              onChange(chosen);
+            }
+          }}
+        >
+          {GROUPINGS.map((grouping) => (
+            <MenuItem key={grouping} id={grouping} className="item">
+              {name(grouping)}
+            </MenuItem>
+          ))}
+        </Menu>
+      </Popover>
+    </MenuTrigger>
   );
 }

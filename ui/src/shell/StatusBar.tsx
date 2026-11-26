@@ -21,6 +21,11 @@ export function StatusBar({ info }: StatusBarProps) {
   return (
     <footer className={classes("statusbar", styles.statusbar)} aria-label={t("status-label")} data-region="status" tabIndex={-1}>
       {info && <span className="num">{info.summary}</span>}
+      {info?.alert && (
+        <span className="num meta overdue" data-testid="status-alert">
+          {info.alert}
+        </span>
+      )}
       {info?.selection && <span className="num hide-narrow">{info.selection}</span>}
       <span className={classes("truncate", styles.statusNote)} role="status" data-testid="status-note">
         {info?.note}

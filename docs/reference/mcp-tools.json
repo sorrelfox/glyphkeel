@@ -32410,6 +32410,80 @@
                   "description": "The task's key.",
                   "type": "string"
                 },
+                "labels": {
+                  "description": "Its labels, in the project's label order.",
+                  "items": {
+                    "additionalProperties": false,
+                    "description": "A label on a task.",
+                    "properties": {
+                      "hue": {
+                        "description": "Its colour.",
+                        "oneOf": [
+                          {
+                            "const": "red",
+                            "description": "Red.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "orange",
+                            "description": "Orange.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "yellow",
+                            "description": "Yellow.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "green",
+                            "description": "Green.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "teal",
+                            "description": "Teal.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "blue",
+                            "description": "Blue.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "purple",
+                            "description": "Purple.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "pink",
+                            "description": "Pink.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "grey",
+                            "description": "Grey.",
+                            "type": "string"
+                          }
+                        ]
+                      },
+                      "id": {
+                        "description": "The label's ID.",
+                        "type": "string"
+                      },
+                      "name": {
+                        "description": "Its name.",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "hue"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
                 "overdue": {
                   "description": "Open and due before today.",
                   "type": "boolean"
@@ -32427,6 +32501,16 @@
                 "project": {
                   "description": "Its project's key.",
                   "type": "string"
+                },
+                "read_only": {
+                  "description": "Why its dates can't be changed; left out when they can.",
+                  "oneOf": [
+                    {
+                      "const": "archived_project",
+                      "description": "Its project is archived, so nothing in it changes.",
+                      "type": "string"
+                    }
+                  ]
                 },
                 "shape": {
                   "description": "How the chart draws it.",
@@ -32576,6 +32660,80 @@
                   "description": "The task's key.",
                   "type": "string"
                 },
+                "labels": {
+                  "description": "Its labels, in the project's label order.",
+                  "items": {
+                    "additionalProperties": false,
+                    "description": "A label on a task.",
+                    "properties": {
+                      "hue": {
+                        "description": "Its colour.",
+                        "oneOf": [
+                          {
+                            "const": "red",
+                            "description": "Red.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "orange",
+                            "description": "Orange.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "yellow",
+                            "description": "Yellow.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "green",
+                            "description": "Green.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "teal",
+                            "description": "Teal.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "blue",
+                            "description": "Blue.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "purple",
+                            "description": "Purple.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "pink",
+                            "description": "Pink.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "grey",
+                            "description": "Grey.",
+                            "type": "string"
+                          }
+                        ]
+                      },
+                      "id": {
+                        "description": "The label's ID.",
+                        "type": "string"
+                      },
+                      "name": {
+                        "description": "Its name.",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "hue"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
                 "milestone": {
                   "description": "A task of a milestone type.",
                   "type": "boolean"
@@ -32587,6 +32745,16 @@
                 "project": {
                   "description": "Its project's key.",
                   "type": "string"
+                },
+                "read_only": {
+                  "description": "Why its dates can't be changed; left out when they can.",
+                  "oneOf": [
+                    {
+                      "const": "archived_project",
+                      "description": "Its project is archived, so nothing in it changes.",
+                      "type": "string"
+                    }
+                  ]
                 },
                 "status": {
                   "additionalProperties": false,

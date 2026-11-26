@@ -29,8 +29,8 @@ use serde_json::{Map, Value};
 
 use super::description::{self, Owner};
 use super::{
-    agent, board, claim, comment, desc, fields, file, list_layout, lookup, project, relation,
-    reminder, settings, task, time, trash, view, wiki,
+    agent, board, claim, comment, desc, fields, file, gantt_layout, list_layout, lookup, project,
+    relation, reminder, settings, task, time, trash, view, wiki,
 };
 use crate::failure::Failure;
 use crate::messages;
@@ -400,6 +400,7 @@ fn current(
         (settings::ENTITY, _) => settings::raw(tx, field)?,
         (board::ENTITY, "settings") => board::raw(tx, id)?,
         (list_layout::ENTITY, list_layout::FIELD) => list_layout::raw(tx, id)?,
+        (gantt_layout::ENTITY, gantt_layout::FIELD) => gantt_layout::raw(tx, id)?,
         (view::ENTITY, view::RECORD) => view::raw(tx, id)?,
         (_, "deleted" | trash::PURGED) => return Ok(None),
         (fields::PROJECT | fields::TASK | fields::WIKI, trash::TRASHED) => {
@@ -485,6 +486,12 @@ fn apply(
         (list_layout::ENTITY, list_layout::FIELD) => {
             let before = list_layout::raw(w.tx(), id)?;
             list_layout::write_raw(w, id, value.as_ref())?;
+            w.record_field(entity, id, project, field, before, value);
+            Ok(())
+        }
+        (gantt_layout::ENTITY, gantt_layout::FIELD) => {
+            let before = gantt_layout::raw(w.tx(), id)?;
+            gantt_layout::write_raw(w, id, value.as_ref())?;
             w.record_field(entity, id, project, field, before, value);
             Ok(())
         }

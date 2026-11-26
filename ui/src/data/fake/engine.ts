@@ -20,6 +20,7 @@ import {
   type Attachment,
   type Board,
   type BoardLayout,
+  type GanttLayout,
   type ListLayout,
   type Card,
   type Column,
@@ -76,6 +77,9 @@ import { newProject, nextFileId, nextId, nextUuid, SAMPLE_AGENT } from "./seed";
 import { type FakeComment, type FakeFile, type FakeProject, type FakeRelation, type FakeReminder, type FakeRevision, type FakeState, type FakeTask, type FakeTimeEntry, type FakeWikiPage } from "./state";
 import { naturalDay, nextDay, searchAll, searchWiki, slugOf, headingsOf } from "./overview";
 import { moveDependents, scheduleOf } from "./schedule";
+
+/** The Gantt chart's layout until the person changes it. */
+const DEFAULT_GANTT_LAYOUT: GanttLayout = { zoom: "day", widths: {}, group_by: "parent", move_dependents: false };
 import { linksIn, placePage, subtree, type TextLink } from "./wiki";
 import { createView, deleteView, listViews, matchingKeys, parseQuery, queryError, searchTasks, updateView, type GroupInfo, type QueryNames } from "./query";
 import { addDays, csvOf, localDay, MAX_ENTRY_MINUTES, momentOf, reminderAt, reminderOut, sortDue, timeEntryOut, timerElapsedMs, timerOut, unitsOf, weekStart, workDay } from "./time";
@@ -2542,7 +2546,7 @@ export class FakeWorkspace {
       const tasks = this.listedTasks().filter((task) => (keys === null || keys.has(task.project)) && (filter === null || filter.has(task.key)));
       const milestoneTypes = new Set(this.state.projects.flatMap((project) => project.types.filter((type) => type.glyph === "milestone").map((type) => type.id)));
       const links = this.state.relations.filter((relation) => relation.kind === "blocks").map((relation) => ({ id: relation.id, from: relation.from, to: relation.to }));
-      return scheduleOf(tasks, links, (task) => milestoneTypes.has(task.type.id), localDay(this.today()));
+      return scheduleOf(tasks, links, (task) => milestoneTypes.has(task.type.id), localDay(this.today()), archived);
     },
     "search.query": (input) => {
       const scope = input.project === null || input.project === undefined ? null : this.project(input.project);
@@ -2815,6 +2819,66 @@ export class FakeWorkspace {
     "draft.discard": ({ kind, target }) => {
       const owner = this.draftOwner(kind, target);
       return { discarded: this.drafts.delete(`${kind}:${owner.id}`) };
+    },
+    "schedule.preview_move": ({ key, start_date, due_date }) => {
+      const task = this.task(key);
+      const day = /^\d{4}-\d{2}-\d{2}$/;
+      for (const [field, value] of [["start_date", start_date], ["due_date", due_date]] as const) {
+        if (value !== null && value !== undefined && !day.test(value)) {
+          fail("invalid", `${field} must be a date written as YYYY-MM-DD.`, { details: { path: field, message_id: "schedule-preview-date", args: { field } } });
+        }
+      }
+      const archived = this.archivedKeys();
+      const dates = new Map(
+        this.state.tasks.map((each) => [each.id, { start: each.startDate, due: each.dueDate, closed: each.closedAt !== null || archived.has(this.projectOf(each).key) }]),
+      );
+      dates.set(task.id, { start: start_date ?? null, due: due_date ?? null, closed: false });
+      const links = this.state.relations.filter((relation) => relation.kind === "blocks");
+      const moved = moveDependents(task.id, dates, links).flatMap((id) => {
+        const other = this.state.tasks.find((candidate) => candidate.id === id);
+        const now = dates.get(id);
+        if (!other || !now) {
+          return [];
+        }
+        const was = other.startDate ?? other.dueDate;
+        const is = now.start ?? now.due;
+        const days = was === null || is === null ? 0 : Math.round((Date.parse(is) - Date.parse(was)) / 86_400_000);
+        return [{ days, id: other.id, key: this.keyOf(other), ...some("start_date", now.start), ...some("due_date", now.due) }];
+      });
+      return { moved };
+    },
+    "gantt.layout.get": ({ project: ref }) => {
+      const project = this.project(ref);
+      return { project: project.key, layout: structuredClone(this.state.ganttLayouts?.[project.id] ?? DEFAULT_GANTT_LAYOUT) };
+    },
+    "gantt.layout.update": ({ project: ref, reset, zoom, table, widths, group_by, move_dependents }) => {
+      const project = this.project(ref);
+      this.state.ganttLayouts ??= {};
+      const before = reset === true ? DEFAULT_GANTT_LAYOUT : (this.state.ganttLayouts[project.id] ?? DEFAULT_GANTT_LAYOUT);
+      if (table !== null && table !== undefined && (!Number.isInteger(table) || table < 200 || table > 1200)) {
+        fail("invalid", "The table is 200 to 1200 pixels wide.", { details: { path: "table", message_id: "gantt-layout-table", args: { min: 200, max: 1200 } } });
+      }
+      for (const [column, width] of Object.entries(widths ?? {})) {
+        if (!["key", "title", "start", "due", "progress"].includes(column)) {
+          fail("invalid", "The chart's table has only these columns: key, title, start, due, progress.", { details: { path: `widths.${column}`, message_id: "gantt-layout-column", args: { columns: "key, title, start, due, progress" } } });
+        }
+        if (!Number.isInteger(width) || width < 24 || width > 600) {
+          fail("invalid", "A column is 24 to 600 pixels wide.", { details: { path: `widths.${column}`, message_id: "gantt-layout-width", args: { min: 24, max: 600 } } });
+        }
+      }
+      const next: GanttLayout = {
+        zoom: zoom ?? before.zoom,
+        ...(table === null || table === undefined ? (before.table === undefined ? {} : { table: before.table }) : { table }),
+        widths: { ...before.widths, ...widths },
+        group_by: group_by ?? before.group_by,
+        move_dependents: move_dependents ?? before.move_dependents,
+      };
+      const was = this.state.ganttLayouts[project.id] ?? DEFAULT_GANTT_LAYOUT;
+      this.state.ganttLayouts[project.id] = next;
+      return {
+        output: { project: project.key, layout: structuredClone(next) },
+        changes: JSON.stringify(was) === JSON.stringify(next) ? [] : [{ entity: "gantt_layout", id: project.id, fields: ["settings"], project: project.key }],
+      };
     },
     "list.layout.get": ({ project: ref }) => {
       const project = ref === null || ref === undefined ? undefined : this.project(ref);

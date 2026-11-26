@@ -13,6 +13,8 @@ export interface StatusInfo {
   selection?: string | undefined;
   /** The result of the last action, also read out by screen readers. */
   note?: string | undefined;
+  /** A count that needs attention, shown in the danger colour: "3 overdue". */
+  alert?: string | undefined;
 }
 
 export interface ShellHooks {
@@ -30,10 +32,10 @@ export const ShellContext = createContext<ShellHooks>({ setStatus: () => undefin
 /** Shows the screen's counts and selection in the status bar while it is on screen. */
 export function useStatus(info: StatusInfo): void {
   const { setStatus } = use(ShellContext);
-  const { summary, selection, note } = info;
+  const { summary, selection, note, alert } = info;
   useEffect(() => {
-    setStatus({ summary, selection, note });
-  }, [setStatus, summary, selection, note]);
+    setStatus({ summary, selection, note, alert });
+  }, [setStatus, summary, selection, note, alert]);
   useEffect(() => () => {
     setStatus(null);
   }, [setStatus]);

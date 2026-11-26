@@ -24,9 +24,9 @@ export const ENTITY_QUERIES: Readonly<Record<string, readonly OpId[]>> = {
   // A task's reminder is one of its fields; the time report shows titles.
   // Deleting, restoring and purging show in the trash.
   // Its description links to pages and tasks, and its key is a link's target.
-  task: ["trash.list", "task.get", "board.get", "project.list", "markdown.render", "description.history", "description.revision", "time.report", "timer.get", "task.search", "today.get", "search.query", "schedule.get", ...LINKS],
+  task: ["trash.list", "task.get", "board.get", "project.list", "markdown.render", "description.history", "description.revision", "time.report", "timer.get", "task.search", "today.get", "search.query", "schedule.get", "schedule.preview_move", ...LINKS],
   // Statuses, types and labels show on every card and in the task panel.
-  project: ["trash.list", "project.list", "project.get", "board.get", "task.get", "layout.get", "list.layout.get", "markdown.render", "time.report", "task.search", "query.parse", "view.list", "today.get", "search.query", "wiki.search", "wiki.get", "wiki.list", "schedule.get", ...LINKS],
+  project: ["trash.list", "project.list", "project.get", "board.get", "task.get", "layout.get", "list.layout.get", "markdown.render", "time.report", "task.search", "query.parse", "view.list", "today.get", "search.query", "wiki.search", "wiki.get", "wiki.list", "schedule.get", "schedule.preview_move", "gantt.layout.get", ...LINKS],
   status: ["project.get", "board.get", "task.get", "project.list", "task.search", "query.parse", "today.get", "search.query", "schedule.get"],
   task_type: ["project.get", "board.get", "task.get", "task.search", "query.parse", "schedule.get"],
   label: ["project.get", "board.get", "task.get", "task.search", "query.parse", "schedule.get"],
@@ -34,11 +34,13 @@ export const ENTITY_QUERIES: Readonly<Record<string, readonly OpId[]>> = {
   layout: ["layout.get", "board.get"],
   // The order and widths of the list's columns.
   list_layout: ["list.layout.get"],
+  // The person's zoom, widths and grouping of the Gantt chart.
+  gantt_layout: ["gantt.layout.get"],
   // Cards count comments and files, and show the Blocked badge.
   comment: ["trash.list", "comment.list", "task.get", "board.get", "markdown.render", "task.search", "today.get", "search.query", ...LINKS],
   attachment: ["trash.list", "comment.list", "task.get", "board.get", "file.get", "file.read", "task.search", "search.query"],
   // The Gantt chart draws blocks links as dependencies.
-  relation: ["task.get", "board.get", "task.search", "schedule.get"],
+  relation: ["task.get", "board.get", "task.search", "schedule.get", "schedule.preview_move"],
   // Cards and the task show the time spent; the report adds it up.
   time_entry: ["trash.list", "task.get", "board.get", "time.report", "task.search"],
   // The one timer: its chip, the task's timer button, and `workspace.get`, which carries it.

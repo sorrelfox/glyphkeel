@@ -115,6 +115,7 @@ activity-entity-task_type = Task type
 activity-entity-label = Label
 activity-entity-layout = Board layout
 activity-entity-list_layout = List layout
+activity-entity-gantt_layout = Gantt chart layout
 activity-entity-view = Saved view
 activity-entity-wiki_page = Wiki page
 activity-entity-settings = Settings

@@ -18,6 +18,7 @@ pub(crate) mod draft;
 pub(crate) mod duplicate;
 pub(crate) mod fields;
 pub(crate) mod file;
+pub(crate) mod gantt_layout;
 pub(crate) mod history;
 pub(crate) mod links;
 pub(crate) mod list_layout;
@@ -68,6 +69,7 @@ pub(crate) fn register(r: &mut Registry) {
     view::register(r);
     schedule::register(r);
     list_layout::register(r);
+    gantt_layout::register(r);
     search::register(r);
     today::register(r);
     wiki::register(r);

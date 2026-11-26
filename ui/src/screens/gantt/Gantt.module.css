@@ -85,6 +85,9 @@
   outline: none;
   background: var(--surface);
   overscroll-behavior: contain;
+
+  /* One finger scrolls; two fingers zoom the chart, not the page. */
+  touch-action: pan-x pan-y;
 }
 
 .scroll:focus-visible {
@@ -345,6 +348,18 @@
   fill: var(--gantt-weekend);
 }
 
+.groupBand {
+  fill: var(--sunken);
+}
+
+.ghost {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+  pointer-events: none;
+}
+
 .focusRow {
   fill: var(--selected);
 }
@@ -427,6 +442,13 @@
   fill: var(--danger);
 }
 
+/* Behind schedule: today is further along the bar than its progress. */
+.bar.behind .body {
+  stroke: var(--warning);
+  stroke-width: 2;
+  stroke-dasharray: 4 3;
+}
+
 .bar.closedBar {
   opacity: 0.55;
 }
@@ -439,6 +461,14 @@
 
 .hit {
   cursor: grab;
+}
+
+/* Dates that can't be changed here: no grabbing, no handles. */
+.bar.fixed .body,
+.bar.fixed .diamond,
+.bar.fixed .hit,
+.bar.fixed .edge {
+  cursor: not-allowed;
 }
 
 .handle {
