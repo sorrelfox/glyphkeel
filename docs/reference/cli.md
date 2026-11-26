@@ -53,6 +53,9 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel reminder clear <key>` | `reminder.clear` | Remove a task's personal reminder. |
 | `glyphkeel reminder due` | `reminder.due` | The reminders, deadline alerts and timer reminders that are due and not acknowledged, with those missed marked, and when the next one comes. |
 | `glyphkeel reminder set <key>` | `reminder.set` | Set a task's personal reminder: a moment, or a number of days before its due date. |
+| `glyphkeel report created-closed` | `report.created_closed` | Tasks created against tasks closed and reopened per day, week or month, with the open tasks at the end of each period; from the history, with optional CSV. |
+| `glyphkeel report cycle-time` | `report.cycle_time` | Cycle time (first move into progress to the last close) and lead time (creation to the last close) of the tasks closed over a range of days, with percentiles per period; optional task list and CSV. |
+| `glyphkeel report flow` | `report.cumulative_flow` | How many tasks were in each status (or category) at the end of each day, week or month; from the history, with optional CSV. |
 | `glyphkeel revert` | `history.revert` | Revert history groups or everything an agent session changed. Groups that something changed since are skipped and listed. |
 | `glyphkeel schedule` | `schedule.get` | The schedule of a project or a query for the Gantt chart: dated tasks as a tree with summary ranges for parents, milestones, the tasks without dates, blocks links as finish-to-start dependencies, and problems such as a task starting before its blocker ends. |
 | `glyphkeel search <text>` | `search.query` | Search task titles and descriptions, comments, wiki pages and file names for words and fragments, ranked, with the matches marked; a task key finds that task. |

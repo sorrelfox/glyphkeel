@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { Clock, History, List, Plus, SlidersHorizontal, Sun, Trash2 } from "lucide-react";
+import { ChartArea, Clock, History, List, Plus, SlidersHorizontal, Sun, Trash2 } from "lucide-react";
 
 import { useAction } from "../actions/ActionsProvider";
 import { Kbd } from "../components/Kbd";
@@ -42,6 +42,7 @@ export function Sidebar({ view, project, width, titleBar = "app", onNewProject, 
   const today = useAction("nav.today");
   const allTasks = useAction("nav.allTasks");
   const timeReport = useAction("nav.timeReport");
+  const reports = useAction("nav.reports");
   const activity = useAction("nav.activity");
   const trash = useAction("nav.trash");
   const preferences = useAction("app.preferences");
@@ -78,6 +79,10 @@ export function Sidebar({ view, project, width, titleBar = "app", onNewProject, 
         <button type="button" className={classes("nav", view === "time" && "on")} aria-current={view === "time" ? "page" : undefined} onClick={timeReport.run}>
           <Clock className="ic" />
           <span>{t("view-time-report")}</span>
+        </button>
+        <button type="button" className={classes("nav", view === "reports" && "on")} aria-current={view === "reports" ? "page" : undefined} onClick={reports.run}>
+          <ChartArea className="ic" />
+          <span>{t("view-reports")}</span>
         </button>
         <button type="button" className={classes("nav", view === "activity" && "on")} aria-current={view === "activity" ? "page" : undefined} onClick={activity.run}>
           <History className="ic" />

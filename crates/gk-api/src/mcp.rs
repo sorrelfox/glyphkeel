@@ -29,7 +29,7 @@ pub enum Toolset {
     Tasks,
     /// Comments.
     Comments,
-    /// Time entries, report, timer, reminders.
+    /// Time entries, the time and flow reports, timer, reminders.
     Time,
     /// Today, the board, saved views, personal layout.
     Views,
@@ -724,6 +724,48 @@ Example: get_time_report {\"from\": \"2026-11-01\", \"to\": \"2026-11-30\", \"gr
         idempotent: true,
     },
     McpTool {
+        name: "get_created_closed_report",
+        toolset: Toolset::Time,
+        title: "Created against closed",
+        description: "Counts, per `day`, `week` (default) or `month` in the person's time zone, the \
+tasks created, the times tasks were closed and reopened, and the open tasks at the end of each \
+period, from the history. Use it to see whether work comes in faster than it is finished. Default \
+range: the last 12 periods up to today. Narrow it to a `project` (with its sub-projects unless \
+`include_subprojects: false`), a `type`, a `label` or a `query`, as the tasks are now; `actor` \
+(`me`, `agent` or a name) counts only what that actor did. `csv: true` adds CSV text. \
+Example: get_created_closed_report {\"project\": \"TM\", \"from\": \"2026-09-01\", \"bucket\": \"week\"}",
+        main: "report.created_closed",
+        covers: &["report.created_closed"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "get_cumulative_flow",
+        toolset: Toolset::Time,
+        title: "Cumulative flow",
+        description: "How many tasks were in each status at the end of each `day`, `week` \
+(default) or `month`, from the history: a widening band shows where work piles up. Statuses of \
+the same name in several projects share a band; `group_by: \"category\"` gives one band per \
+category instead. The same filters as get_created_closed_report, without `actor`. \
+Example: get_cumulative_flow {\"project\": \"TM\", \"bucket\": \"day\", \"from\": \"2026-11-01\"}",
+        main: "report.cumulative_flow",
+        covers: &["report.cumulative_flow"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "get_cycle_time",
+        toolset: Toolset::Time,
+        title: "Cycle and lead time",
+        description: "Cycle time (from the first move into an in-progress status to the last \
+close) and lead time (from creation to the last close) of the tasks closed in the range, in days: \
+count, mean, median, 85th and 95th percentile, shortest and longest, overall and per period. \
+`tasks: true` lists each task with its times; `actor` counts only tasks that actor closed. The \
+same filters as get_created_closed_report. \
+Example: get_cycle_time {\"project\": \"TM\", \"bucket\": \"month\", \"tasks\": true}",
+        main: "report.cycle_time",
+        covers: &["report.cycle_time"],
+        idempotent: true,
+    },
+    McpTool {
         name: "start_timer",
         toolset: Toolset::Time,
         title: "Start the timer",
@@ -1325,6 +1367,9 @@ mod tests {
                 "check_move",
                 "get_description_revision",
                 "get_time_report",
+                "get_created_closed_report",
+                "get_cumulative_flow",
+                "get_cycle_time",
                 "get_reminders",
                 "get_today",
                 "get_board",

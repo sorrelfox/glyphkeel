@@ -798,6 +798,72 @@ export type ConflictResolution = {
   text?: string | null;
 };
 
+/** Tasks created against tasks closed, per period. */
+export type CreatedClosedReport = {
+  /** The length of a period. */
+  bucket: FlowBucket;
+  /** Closings over the whole range. */
+  closed: number;
+  /** Tasks created over the whole range. */
+  created: number;
+  /** The report as CSV text, when asked for. */
+  csv?: string;
+  /** The first day. */
+  from: string;
+  /** The periods, oldest first. */
+  items: CreatedClosedRow[];
+  /** Open tasks just before `from`. */
+  open_before: number;
+  /** Reopenings over the whole range. */
+  reopened: number;
+  /** The last day, included. */
+  to: string;
+};
+
+/** One period of tasks created against tasks closed. */
+export type CreatedClosedRow = {
+  /** Times a task was closed in the period. */
+  closed: number;
+  /** Tasks created in the period. */
+  created: number;
+  /** The period's last day, included. */
+  end: string;
+  /** Open tasks at the end of the period. */
+  open: number;
+  /** Times a closed task was opened again in the period. */
+  reopened: number;
+  /** The period's first day. */
+  start: string;
+};
+
+/** How many tasks were in each status at the end of each period. */
+export type CumulativeFlowReport = {
+  /** The bands in workflow order: by category, then by board order. */
+  bands: FlowBand[];
+  /** The length of a period. */
+  bucket: FlowBucket;
+  /** The report as CSV text, when asked for. */
+  csv?: string;
+  /** The first day. */
+  from: string;
+  /** What the bands are. */
+  group_by: FlowGroupBy;
+  /** The periods, oldest first. */
+  items: CumulativeFlowRow[];
+  /** The last day, included. */
+  to: string;
+};
+
+/** The tasks in each band at the end of one period. */
+export type CumulativeFlowRow = {
+  /** The number of tasks in each band, in the order of `bands`. */
+  counts: number[];
+  /** The period's last day, included. */
+  end: string;
+  /** The period's first day. */
+  start: string;
+};
+
 /** A custom field. */
 export type CustomField = {
   /** The value new tasks get; left out when there is none. */
@@ -934,6 +1000,56 @@ export type CustomFieldValue = {
   query_name: string;
   /** The value: a string, a number, `true`/`false`, or a list of options for a multi-select field. */
   value: unknown;
+};
+
+/** Cycle and lead time of the tasks closed over a range of days. */
+export type CycleTimeReport = {
+  /** The length of a period. */
+  bucket: FlowBucket;
+  /** One line per task as CSV text, when asked for. */
+  csv?: string;
+  /** Cycle time over the whole range. */
+  cycle: FlowStats;
+  /** The first day. */
+  from: string;
+  /** The periods, oldest first. */
+  items: CycleTimeRow[];
+  /** Lead time over the whole range. */
+  lead: FlowStats;
+  /** The tasks, by closing time, when asked for. */
+  tasks?: CycleTimeTask[];
+  /** The last day, included. */
+  to: string;
+};
+
+/** Cycle and lead time of the tasks closed in one period. */
+export type CycleTimeRow = {
+  /** Cycle time of the tasks closed in the period that were in progress. */
+  cycle: FlowStats;
+  /** The period's last day, included. */
+  end: string;
+  /** Lead time of the tasks closed in the period. */
+  lead: FlowStats;
+  /** The period's first day. */
+  start: string;
+};
+
+/** One task closed in the period. */
+export type CycleTimeTask = {
+  /** When it was last closed (RFC 3339, UTC). */
+  closed_at: string;
+  /** The day it was last closed, in the personal time zone. */
+  closed_day: string;
+  /** Days from the first move into progress to the last close; left out when the task was never in progress. */
+  cycle_days?: number;
+  /** The task's key. */
+  key: string;
+  /** Days from its creation to the last close. */
+  lead_days: number;
+  /** How often it was opened again after a close. */
+  reopened: number;
+  /** Its title. */
+  title: string;
 };
 
 /** A range of days, both included. */
@@ -1170,6 +1286,70 @@ export type FileKind = "image" | "text" | "executable" | "other";
 export type FileRef = {
   /** The attachment's ID. */
   attachment: string;
+};
+
+/** One band of the cumulative flow. */
+export type FlowBand = {
+  /** The status's category. */
+  category: Category;
+  /** The status's colour; left out for categories. */
+  hue?: Hue;
+  /** The band's key: the status name in lower case, or the category. */
+  key: string;
+  /** The status's name as written; the category's name for categories. */
+  name: string;
+};
+
+/** How long each period of a flow report is. */
+export type FlowBucket = "day" | "week" | "month";
+
+/** What the bands of the cumulative flow are. */
+export type FlowGroupBy = "status" | "category";
+
+/** Which tasks and which days a flow report covers. */
+export type FlowReportInput = {
+  /** Created against closed and cycle time only: count only what `me` (the local user), `agent` (any agent) or the person or agent of that name did: creating a task, closing or reopening it. */
+  actor?: string | null;
+  /** The length of a period: `day`, `week` (default) or `month`. At most 1,000 periods. */
+  bucket?: FlowBucket | null;
+  /** Also return the report as CSV text (comma-separated, a header line, CRLF line ends). */
+  csv?: boolean;
+  /** The first day: `YYYY-MM-DD`, `today` or `yesterday`; default twelve periods before `to` (30 days, 12 weeks or 12 months). */
+  from?: string | null;
+  /** Cumulative flow only: bands by `status` (default) or `category`. */
+  group_by?: FlowGroupBy | null;
+  /** With `project`: its sub-projects' tasks too; default true. */
+  include_subprojects?: boolean | null;
+  /** Only tasks with this label, by name. */
+  label?: string | null;
+  /** Only this project: a key or ID. */
+  project?: string | null;
+  /** Only tasks that match this query (the task query language), as they are now. */
+  query?: string | null;
+  /** Cycle time only: also list every task closed in the period. */
+  tasks?: boolean;
+  /** The last day, included; default today. */
+  to?: string | null;
+  /** Only tasks of this type, by name. */
+  type?: string | null;
+};
+
+/** Summary figures of a set of durations, in days (two decimals). The percentiles interpolate between the nearest values. */
+export type FlowStats = {
+  /** How many tasks the figures cover. */
+  count: number;
+  /** The longest. */
+  max?: number;
+  /** The mean; left out without tasks. */
+  mean?: number;
+  /** The shortest. */
+  min?: number;
+  /** The median. */
+  p50?: number;
+  /** The 85th percentile. */
+  p85?: number;
+  /** The 95th percentile. */
+  p95?: number;
 };
 
 /** How the Gantt chart groups its rows. */
@@ -4040,6 +4220,9 @@ export interface OpMap {
   "time.update": { input: TimeUpdateInput; output: TimeEntryChange; safety: "write"; kind: "command" };
   "time.delete": { input: TimeEntryRef; output: TimeEntryChange; safety: "trash"; kind: "command" };
   "time.report": { input: TimeReportInput; output: TimeReport; safety: "read"; kind: "query" };
+  "report.created_closed": { input: FlowReportInput; output: CreatedClosedReport; safety: "read"; kind: "query" };
+  "report.cumulative_flow": { input: FlowReportInput; output: CumulativeFlowReport; safety: "read"; kind: "query" };
+  "report.cycle_time": { input: FlowReportInput; output: CycleTimeReport; safety: "read"; kind: "query" };
   "timer.get": { input: TimerGetInput; output: TimerStatus; safety: "read"; kind: "query" };
   "timer.start": { input: TimerStartInput; output: TimerChange; safety: "write"; kind: "command" };
   "timer.pause": { input: TimerPauseInput; output: TimerChange; safety: "write"; kind: "command" };
@@ -4166,6 +4349,9 @@ export const OP_SAFETY = {
   "time.update": "write",
   "time.delete": "trash",
   "time.report": "read",
+  "report.created_closed": "read",
+  "report.cumulative_flow": "read",
+  "report.cycle_time": "read",
   "timer.get": "read",
   "timer.start": "write",
   "timer.pause": "write",
@@ -4393,6 +4579,14 @@ export function makeOps(call: Call) {
       due: (input: OpMap["reminder.due"]["input"] = {}) => call("reminder.due", input),
       /** Acknowledge reminders that were shown, so they don't come due again. (write) */
       acknowledge: (input: OpMap["reminder.acknowledge"]["input"]) => call("reminder.acknowledge", input),
+    },
+    report: {
+      /** Tasks created against tasks closed and reopened per day, week or month, with the open tasks at the end of each period; from the history, with optional CSV. (read) */
+      createdClosed: (input: OpMap["report.created_closed"]["input"] = {}) => call("report.created_closed", input),
+      /** How many tasks were in each status (or category) at the end of each day, week or month; from the history, with optional CSV. (read) */
+      cumulativeFlow: (input: OpMap["report.cumulative_flow"]["input"] = {}) => call("report.cumulative_flow", input),
+      /** Cycle time (first move into progress to the last close) and lead time (creation to the last close) of the tasks closed over a range of days, with percentiles per period; optional task list and CSV. (read) */
+      cycleTime: (input: OpMap["report.cycle_time"]["input"] = {}) => call("report.cycle_time", input),
     },
     schedule: {
       /** The schedule of a project or a query for the Gantt chart: dated tasks as a tree with summary ranges for parents, milestones, the tasks without dates, blocks links as finish-to-start dependencies, and problems such as a task starting before its blocker ends. (read) */

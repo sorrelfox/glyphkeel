@@ -9,7 +9,8 @@ use serde::de::DeserializeOwned;
 
 use crate::ops::{
     agent, backup, board, bulk, comment, description, draft, field, file, history, link, project,
-    query, schedule, search, settings, task, time, today, transfer, trash, view, wiki, workspace,
+    query, report, schedule, search, settings, task, time, today, transfer, trash, view, wiki,
+    workspace,
 };
 use crate::schema;
 
@@ -212,6 +213,9 @@ pub static CATALOG: &[OpDescriptor] = &[
     time::TIME_UPDATE,
     time::TIME_DELETE,
     time::TIME_REPORT,
+    report::REPORT_CREATED_CLOSED,
+    report::REPORT_CUMULATIVE_FLOW,
+    report::REPORT_CYCLE_TIME,
     time::TIMER_GET,
     time::TIMER_START,
     time::TIMER_PAUSE,

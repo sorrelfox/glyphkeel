@@ -72,6 +72,7 @@ import {
   type WikiPageSummary,
   type Backlink,
   type Reference,
+  type FlowReportInput,
 } from "../../generated/ops";
 import { PROJECT_ICONS, suggestHue } from "../catalog";
 import { formatDuration, parseDuration } from "../duration";
@@ -87,6 +88,7 @@ import { moveDependents, scheduleOf } from "./schedule";
 const DEFAULT_GANTT_LAYOUT: GanttLayout = { zoom: "day", widths: {}, group_by: "parent", move_dependents: false };
 import { linksIn, placePage, subtree, type TextLink } from "./wiki";
 import { createView, deleteView, listViews, matchingKeys, parseQuery, queryError, searchTasks, updateView, type GroupInfo, type QueryNames } from "./query";
+import { createdClosed, cumulativeFlow, cycleTime, defaultFrom, flowPeriods, type FlowEvent, type FlowInput, type FlowStatus, type FlowTask } from "./reports";
 import { addDays, csvOf, localDay, MAX_ENTRY_MINUTES, momentOf, reminderAt, reminderOut, sortDue, timeEntryOut, timerElapsedMs, timerOut, unitsOf, weekStart, workDay } from "./time";
 
 /** An operation failed: the engine's error, as the transports deliver it. */
@@ -1832,6 +1834,85 @@ export class FakeWorkspace {
   }
 
   /** Runs a query; a query that doesn't read fails as the engine's `invalid`. */
+  /** The tasks, statuses and days a flow report covers, from its input. */
+  private flowScope(input: FlowReportInput): { tasks: FlowTask[]; statuses: Map<string, FlowStatus>; scoped: Set<string>; range: FlowInput } {
+    const now = this.today();
+    const bucket = input.bucket ?? "week";
+    const first = this.state.settings.week_start;
+    const to = input.to === null || input.to === undefined ? localDay(now) : (workDay(input.to, now) ?? fail("invalid", `"${input.to}" isn't a day.`, { details: { path: "to" } }));
+    const from = input.from === null || input.from === undefined ? defaultFrom(to, bucket, first) : (workDay(input.from, now) ?? fail("invalid", `"${input.from}" isn't a day.`, { details: { path: "from" } }));
+    if (to < from) {
+      fail("invalid", "The last day comes before the first.", { details: { path: "to", message_id: "activity-to-before-from" } });
+    }
+    if (flowPeriods(from, to, bucket, first).length > 1000) {
+      fail("invalid", "A report has at most 1000 periods; choose a shorter range or longer periods.", { details: { path: "from", message_id: "flow-report-too-many-periods", args: { max: 1000 } } });
+    }
+    if (input.actor?.trim() === "") {
+      fail("invalid", "Name who did it: me, agent, or a name.", { details: { path: "actor", message_id: "flow-report-no-actor" } });
+    }
+    const scope = input.project === null || input.project === undefined ? null : this.project(input.project);
+    const projects = scope === null ? this.state.projects : [scope, ...(input.include_subprojects === false ? [] : this.descendants(scope))];
+    const inScope = new Set(projects.map((each) => each.id));
+    const named = (kind: "type" | "label") => {
+      const text = (kind === "type" ? input.type : input.label)?.trim().toLowerCase();
+      if (text === undefined) {
+        return null;
+      }
+      const ids = new Set(this.state.projects.flatMap((project) => (kind === "type" ? project.types : project.labels).filter((each) => each.name.toLowerCase() === text).map((each) => each.id)));
+      if (ids.size === 0) {
+        fail("invalid", `No project has a ${kind === "type" ? "task type" : "label"} named "${text}".`, { details: { path: kind, message_id: kind === "type" ? "flow-report-unknown-type" : "flow-report-unknown-label", args: { name: text } } });
+      }
+      return ids;
+    };
+    const types = named("type");
+    const labels = named("label");
+    const query = input.query?.trim();
+    const matching = query === undefined || query === "" ? null : new Set(this.runQuery(() => matchingKeys(this.listedTasks(), query, this.queryNames(), this.archivedKeys())));
+    const statuses = new Map<string, FlowStatus>();
+    for (const project of this.state.projects) {
+      project.statuses.forEach((status, rank) => {
+        statuses.set(status.id, { id: status.id, name: status.name, category: status.category, hue: status.hue, rank });
+      });
+    }
+    const scoped = new Set(projects.flatMap((project) => project.statuses.map((status) => status.id)));
+    const events = new Map<string, FlowEvent[]>();
+    for (const entry of this.state.activity) {
+      if (entry.entity !== "task") {
+        continue;
+      }
+      const status = entry.fields.status?.after;
+      const trashed = entry.fields.trashed;
+      if (typeof status !== "string" && trashed === undefined) {
+        continue;
+      }
+      const list = events.get(entry.id) ?? [];
+      list.push({ at: new Date(entry.at).getTime(), ...(typeof status === "string" ? { status } : {}), ...(trashed === undefined ? {} : { trashed: trashed.after === true }), actor: entry.actor });
+      events.set(entry.id, list);
+    }
+    const tasks = this.state.tasks
+      .filter((task) => inScope.has(task.projectId) && (types === null || types.has(task.typeId)) && (labels === null || task.labelIds.some((id) => labels.has(id))) && (matching === null || matching.has(this.keyOf(task))))
+      .map((task): FlowTask => {
+        const project = this.projectOf(task);
+        return {
+          key: this.keyOf(task),
+          title: task.title,
+          created: new Date(task.createdAt).getTime(),
+          createdBy: { kind: "user", name: "You" },
+          status: task.statusId,
+          entered: new Date(task.statusEnteredAt).getTime(),
+          firstOpen: project.statuses.find((status) => status.category === "todo")?.id,
+          events: events.get(task.id) ?? [],
+        };
+      });
+    for (const task of tasks) {
+      const made = this.state.activity.find((entry) => entry.entity === "task" && entry.fields.created?.after === true && entry.fields.key?.after === task.key);
+      if (made) {
+        task.createdBy = made.actor;
+      }
+    }
+    return { tasks, statuses, scoped, range: { from, to, bucket, actor: input.actor ?? undefined } };
+  }
+
   private runQuery<T>(run: () => T): T {
     try {
       return run();
@@ -3953,6 +4034,19 @@ export class FakeWorkspace {
         total_duration: formatDuration(total, units),
         total_minutes: total,
       };
+    },
+
+    "report.created_closed": (input) => {
+      const { tasks, statuses, range } = this.flowScope(input);
+      return createdClosed(tasks, statuses, range, this.state.settings.week_start, input.csv === true);
+    },
+    "report.cumulative_flow": (input) => {
+      const { tasks, statuses, scoped, range } = this.flowScope(input);
+      return cumulativeFlow(tasks, statuses, scoped, range, input.group_by ?? "status", this.state.settings.week_start, input.csv === true);
+    },
+    "report.cycle_time": (input) => {
+      const { tasks, statuses, range } = this.flowScope(input);
+      return cycleTime(tasks, statuses, range, this.state.settings.week_start, input.tasks === true, input.csv === true);
     },
 
     // ---------- timer ----------

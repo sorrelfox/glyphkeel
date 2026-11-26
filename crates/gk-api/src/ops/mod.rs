@@ -35,6 +35,7 @@ pub mod history;
 pub mod link;
 pub mod project;
 pub mod query;
+pub mod report;
 pub mod schedule;
 pub mod search;
 pub mod settings;

@@ -470,7 +470,7 @@ pub(crate) fn set_live(
 // ---------------------------------------------------------------------
 // The report
 
-fn first_weekday(start: WeekStart) -> Weekday {
+pub(crate) fn first_weekday(start: WeekStart) -> Weekday {
     match start {
         WeekStart::Monday => Weekday::Monday,
         WeekStart::Saturday => Weekday::Saturday,
@@ -796,7 +796,7 @@ fn entries_csv(
 /// One CSV line (RFC 4180, CRLF). A text cell that a spreadsheet would
 /// run as a formula (it starts with `=`, `+`, `-`, `@`, a tab or a carriage
 /// return) gets a leading apostrophe; numbers stay as they are.
-fn csv_line(out: &mut String, cells: &[&str]) {
+pub(crate) fn csv_line(out: &mut String, cells: &[&str]) {
     for (i, cell) in cells.iter().enumerate() {
         if i > 0 {
             out.push(',');

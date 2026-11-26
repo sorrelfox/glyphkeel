@@ -18,6 +18,7 @@ import { windowReady, type Transport } from "./ipc/ready";
 import { BoardScreen } from "./screens/board/BoardScreen";
 import { OpenTaskScreen, TaskWindowScreen } from "./screens/task/TaskWindow";
 import { AllTasksListScreen, ProjectListScreen } from "./screens/list/ListScreen";
+import { FlowReportsScreen } from "./screens/reports/FlowReports";
 import { TimeReportScreen } from "./screens/time/TimeReport";
 import { ActivityScreen } from "./screens/safety/ActivityScreen";
 import { TrashScreen } from "./screens/safety/TrashScreen";
@@ -86,6 +87,8 @@ const allTasksRoute = createRoute({ getParentRoute: () => shellRoute, path: "/al
 
 /** The time report: logged time over a range of days. */
 const timeReportRoute = createRoute({ getParentRoute: () => shellRoute, path: "/time", component: TimeReportScreen });
+/** The flow reports: created against closed, cumulative flow, cycle time. */
+const reportsRoute = createRoute({ getParentRoute: () => shellRoute, path: "/reports", component: FlowReportsScreen });
 
 /** The trash: deleted items, to restore or delete for good. */
 const trashRoute = createRoute({ getParentRoute: () => shellRoute, path: "/trash", component: TrashScreen });
@@ -157,7 +160,7 @@ const routeTree = rootRoute.addChildren([
   quickAddRoute,
   taskWindowRoute,
   wikiWindowRoute,
-  shellRoute.addChildren([todayRoute, searchRoute, allTasksRoute, timeReportRoute, trashRoute, activityRoute, boardRoute, projectListRoute, projectCalendarRoute, projectGanttRoute, wikiRoute, openTaskRoute]),
+  shellRoute.addChildren([todayRoute, searchRoute, allTasksRoute, timeReportRoute, reportsRoute, trashRoute, activityRoute, boardRoute, projectListRoute, projectCalendarRoute, projectGanttRoute, wikiRoute, openTaskRoute]),
 ]);
 
 /**
