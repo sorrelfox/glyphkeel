@@ -215,7 +215,25 @@ fn shared_versions_reach_sub_projects_until_the_sharing_or_the_tree_changes() {
     let b = new_task(&e, "APP", "Moved", json!({ "fix_version": "1.0" }));
     assert_eq!(version_of(&e, &a).as_deref(), Some("1.0"));
 
-    // A task moved to a project the version isn't shared with loses it.
+    // A task moved to a project the version isn't shared with loses it,
+    // and the check says so first; within the tree it keeps it.
+    let check = call(
+        &e,
+        "task.move_check",
+        json!({ "keys": [b], "project": "YARD" }),
+    );
+    assert_eq!(check["versions"], json!([{ "name": "1.0", "tasks": 1 }]));
+    let check = call(
+        &e,
+        "task.move_check",
+        json!({ "keys": [b], "project": "TM" }),
+    );
+    assert_eq!(
+        check["versions"],
+        json!([{ "name": "1.0", "tasks": 1, "target": "1.0" }])
+    );
+    let listed = call(&e, "task.search", json!({ "query": "version:1.0" }));
+    assert_eq!(listed["items"][0]["fix_version"]["name"], "1.0", "{listed}");
     let moved = call(&e, "task.move", json!({ "key": b, "project": "YARD" }));
     let moved_key = moved["task"]["key"].as_str().unwrap().to_owned();
     assert_eq!(version_of(&e, &moved_key), None);

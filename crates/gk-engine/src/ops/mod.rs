@@ -13,6 +13,7 @@ pub(crate) mod board;
 pub(crate) mod bulk;
 pub(crate) mod claim;
 pub(crate) mod comment;
+pub(crate) mod custom_field;
 pub(crate) mod description;
 pub(crate) mod draft;
 pub(crate) mod duplicate;
@@ -54,6 +55,7 @@ pub(crate) fn register(r: &mut Registry) {
     agent::register(r);
     history::register(r);
     project::register(r);
+    custom_field::register(r);
     project_delete::register(r);
     task::register(r);
     duplicate::register(r);

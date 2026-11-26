@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use crate::catalog::{Exposure, Meta, OpDescriptor, OpKind, Safety};
 use crate::ops::common::{Actor, Hue, Priority};
 use crate::ops::task::{Checklist, Claim, LabelRef, StatusRef, TypeRef};
+use crate::ops::version::VersionRef;
 
 /// A query to read for the query field.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -248,6 +249,14 @@ pub struct ListedTask {
     pub priority: Priority,
     /// Its labels.
     pub labels: Vec<LabelRef>,
+    /// Its custom field values by query name (`story-points`): a string,
+    /// a number, `true`/`false`, or a list of options; fields without a
+    /// value are left out.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub fields: BTreeMap<String, serde_json::Value>,
+    /// The version it is planned for.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fix_version: Option<VersionRef>,
     /// The parent task's key, for a subtask.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,

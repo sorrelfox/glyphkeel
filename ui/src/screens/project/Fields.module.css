@@ -1,0 +1,90 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+   Copyright (C) 2026 Glyphkeel contributors */
+
+/* The Fields page of project settings: a block per field, then the form
+   that adds one. Field names and options are the person's own and of any
+   length, so nothing here has a width that fits only some words. */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  inline-size: min(640px, 80vw);
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-m);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.name {
+  flex: 1;
+  min-inline-size: 10em;
+}
+
+.buttons {
+  display: flex;
+  gap: 2px;
+  margin-inline-start: auto;
+}
+
+.note {
+  margin: 0;
+  font-size: var(--fs-small);
+}
+
+.detail {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+}
+
+.label {
+  padding-block-start: 4px;
+  color: var(--fg-muted);
+  font-size: var(--fs-small);
+}
+
+.optionList,
+.types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.optionRow {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.kind {
+  min-inline-size: 0;
+}
+
+.confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-block-start: 6px;
+}

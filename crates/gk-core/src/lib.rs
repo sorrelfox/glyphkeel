@@ -9,6 +9,7 @@
 //! current time in where a rule needs it.
 
 pub mod actor;
+pub mod custom_field;
 pub mod day;
 pub mod duration;
 pub mod file;
@@ -19,6 +20,7 @@ pub mod link;
 pub mod merge;
 pub mod message;
 pub mod palette;
+pub mod portable;
 pub mod progress;
 pub mod rank;
 pub mod schedule;
@@ -28,6 +30,7 @@ pub mod wiki;
 pub mod worklog;
 
 pub use actor::{ActorKind, Via};
+pub use custom_field::{FieldError, FieldKind, Stored};
 pub use day::{Day, DayError, Weekday, check_date_range};
 pub use duration::{DurationError, DurationUnits, format_duration, format_minutes, parse_minutes};
 pub use file::{
@@ -41,6 +44,10 @@ pub use link::{LinkKind, Relation};
 pub use merge::{Edit, EditError, Merge, apply_edits, merge3, unified_diff};
 pub use message::Message;
 pub use palette::{PALETTE, suggest_hue};
+pub use portable::{
+    PORTABLE_NAME_MAX_BYTES, is_windows_device, numbered_file_name, portable_file_name,
+    unique_file_name,
+};
 pub use progress::{SubtaskProgress, progress, subtask_progress};
 pub use rank::{Rank, RankError};
 pub use schedule::{Dates, Dependency, Graph, Shift, ShiftError, shift_dependents};

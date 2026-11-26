@@ -6,8 +6,37 @@
 
 use std::fmt::Write as _;
 
-use gk_core::{DurationUnits, Weekday};
+use gk_core::{DurationUnits, FieldKind, Weekday};
+use gk_query::fields::CustomField;
 use gk_query::{CheckEnv, Compiled, FixedCalendar, Param, Scope, SqlEnv, compile};
+
+fn custom_fields() -> Vec<CustomField> {
+    let field = |name: &str, query_name: &str, kind, options: &[&str]| CustomField {
+        name: name.to_owned(),
+        query_name: query_name.to_owned(),
+        kind,
+        options: options.iter().map(|o| (*o).to_owned()).collect(),
+    };
+    vec![
+        field("Points", "points", FieldKind::Integer, &[]),
+        field("Cost", "cost", FieldKind::Decimal, &[]),
+        field("Review on", "review-on", FieldKind::Date, &[]),
+        field("Approved", "approved", FieldKind::Boolean, &[]),
+        field(
+            "Area",
+            "area",
+            FieldKind::Select,
+            &["Front end", "Back end"],
+        ),
+        field(
+            "Platforms",
+            "platforms",
+            FieldKind::MultiSelect,
+            &["Linux", "Windows"],
+        ),
+        field("Ticket", "ticket", FieldKind::Text, &[]),
+    ]
+}
 
 fn golden(queries: &[&str], scope: Option<Scope>) -> String {
     let cal = FixedCalendar {
@@ -15,6 +44,7 @@ fn golden(queries: &[&str], scope: Option<Scope>) -> String {
         offset_minutes: 60,
         week_start: Weekday::Monday,
     };
+    let custom = custom_fields();
     let mut out = String::new();
     for src in queries {
         let (_, checked) = compile(
@@ -22,6 +52,7 @@ fn golden(queries: &[&str], scope: Option<Scope>) -> String {
             CheckEnv {
                 calendar: &cal,
                 units: DurationUnits::default(),
+                custom: &custom,
             },
         )
         .unwrap_or_else(|e| panic!("{src}: {e}"));
@@ -50,6 +81,22 @@ fn golden(queries: &[&str], scope: Option<Scope>) -> String {
         );
     }
     out
+}
+
+#[test]
+fn custom_fields_by_kind() {
+    insta::assert_snapshot!(golden(
+        &[
+            "cf.points>=3 cf.cost<2.5",
+            "points:1..5,none sort:-cf.points",
+            "cf.review-on:this-week -cf.approved:yes",
+            "cf.approved:no",
+            "cf.area:\"front END\" cf.platforms!=linux",
+            "cf.ticket:abc cf.ticket=\"ABC-1\" sort:cf.area",
+            "cf.platforms:none",
+        ],
+        None,
+    ));
 }
 
 #[test]

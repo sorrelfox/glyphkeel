@@ -660,6 +660,23 @@ pub(crate) fn drop_unreachable_task(
     Ok(Some(current.name))
 }
 
+/// For a move check: the version `task` is planned for, if any, and whether
+/// project `to` can plan tasks for it (else the move would take it off).
+pub(crate) fn move_match(
+    tx: &Transaction<'_>,
+    task: Id,
+    to: Id,
+) -> Result<Option<(String, bool)>, Failure> {
+    let Some(current) = of_task(tx, task)? else {
+        return Ok(None);
+    };
+    let version: Id = current
+        .id
+        .parse()
+        .map_err(|_| Failure::Store(StoreError::Corrupt("version ID".to_owned())))?;
+    Ok(Some((current.name, reaches(tx, version, to)?)))
+}
+
 /// The project and every project below it.
 fn subtree(tx: &Transaction<'_>, project: Id) -> Result<Vec<Id>, Failure> {
     let mut stmt = tx.prepare_cached(

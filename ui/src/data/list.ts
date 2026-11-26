@@ -25,6 +25,7 @@ import {
   type TaskSearchResult,
   type ViewKind,
 } from "../generated/ops";
+import { csvFieldText } from "./fields";
 import { formatDuration, type DurationUnits } from "./duration";
 import { useCall, useOp } from "./hooks";
 import { opKey } from "./queries";
@@ -300,10 +301,12 @@ function csvField(value: string): string {
  * locale-neutral: ISO dates, durations in the workspace's units and in
  * minutes, priorities and fields by their machine names.
  */
-export function toCsv(tasks: readonly ListedTask[], units: DurationUnits): string {
-  const lines = [EXPORT_COLUMNS.join(",")];
+export function toCsv(tasks: readonly ListedTask[], units: DurationUnits, fields: readonly string[] = []): string {
+  // Custom fields follow, as `cf.<name>`: the ones given, then any other a task has.
+  const custom = [...new Set([...fields.map((field) => field.replace(/^cf\./, "")), ...tasks.flatMap((task) => Object.keys(task.fields ?? {}))])];
+  const lines = [[...EXPORT_COLUMNS, ...custom.map((name) => csvField(`cf.${name}`))].join(",")];
   for (const task of tasks) {
-    lines.push(EXPORT_COLUMNS.map((column) => csvField(exportValue(task, column, units))).join(","));
+    lines.push([...EXPORT_COLUMNS.map((column) => csvField(exportValue(task, column, units))), ...custom.map((name) => csvField(csvFieldText(task.fields?.[name])))].join(","));
   }
   return `${lines.join("\r\n")}\r\n`;
 }

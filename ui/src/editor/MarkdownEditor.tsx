@@ -10,6 +10,7 @@ import { Button } from "react-aria-components";
 import { useContextMenu, type MenuEntry } from "../components/ContextMenu";
 import { classes } from "../classes";
 import { useT } from "../i18n/I18n";
+import { webViewChecksSpelling } from "../platform";
 import { startLink } from "./complete";
 import { applyFormat } from "./format";
 import { convertLineBreaks, openText, type LineBreak } from "./lineEndings";
@@ -42,6 +43,8 @@ export default function MarkdownEditor(props: MarkdownEditorProps) {
   const translate = useRef(t);
   const [note, setNote] = useState<LineBreakNote | null>(null);
   const spellChecker = props.spellChecker === undefined ? defaultSpellChecker() : props.spellChecker;
+  // Where the web view checks spelling itself, a screen that passes no checker gets the web view's.
+  const webViewSpelling = props.spellChecker === undefined && webViewChecksSpelling();
   const renderBlock = props.renderBlock ?? null;
   const spellMenu = useContextMenu(t("editor-spelling-menu"));
 
@@ -68,6 +71,7 @@ export default function MarkdownEditor(props: MarkdownEditorProps) {
         mode,
         readOnly,
         spellChecker,
+        webViewSpelling,
         renderBlock,
         label,
         environment: {
@@ -156,8 +160,8 @@ export default function MarkdownEditor(props: MarkdownEditorProps) {
     view.current?.dispatch({ effects: compartments.renderer.reconfigure(rendererExtension(renderBlock)) });
   }, [renderBlock]);
   useEffect(() => {
-    view.current?.dispatch({ effects: compartments.label.reconfigure(labelExtension(label)) });
-  }, [label]);
+    view.current?.dispatch({ effects: compartments.label.reconfigure(labelExtension(label, webViewSpelling)) });
+  }, [label, webViewSpelling]);
 
   useImperativeHandle(
     ref,

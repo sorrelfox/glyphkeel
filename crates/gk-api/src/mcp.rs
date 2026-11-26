@@ -307,6 +307,61 @@ Example: update_project {\"project\": \"TM\", \"statuses\": [{\"name\": \"Blocke
         idempotent: false,
     },
     McpTool {
+        name: "list_custom_fields",
+        toolset: Toolset::Projects,
+        title: "List custom fields",
+        description: "Lists the custom fields of a project (its own and those of every project) or \
+of the whole workspace: `name`, `query_name` for search_tasks (`cf.story-points>3`, \
+`cf.area:\"Back end\"`, `sort:-cf.story-points`), `kind` (text, markdown, integer, decimal, date, \
+boolean, select, multi_select, url), `options`, `default`, the task `types` it shows for and \
+whether it is `required`. Set values with create_task or update_task `fields`. \
+Example: list_custom_fields {\"project\": \"TM\"}",
+        main: "field.list",
+        covers: &["field.list"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "create_custom_field",
+        toolset: Toolset::Projects,
+        title: "Create a custom field",
+        description: "Adds a custom field to a project, or to every project when `project` is left \
+out. Give a `name` and a `kind`; select and multi_select fields need `options`. Optional: a \
+`default` value, the task `types` it shows for, `required`, and a place (`before`/`after`/`at`). \
+Only add fields the person asked for. \
+Example: create_custom_field {\"project\": \"TM\", \"name\": \"Story points\", \"kind\": \
+\"integer\"}",
+        main: "field.create",
+        covers: &["field.create"],
+        idempotent: false,
+    },
+    McpTool {
+        name: "update_custom_field",
+        toolset: Toolset::Projects,
+        title: "Update a custom field",
+        description: "Changes a custom field: a new `name`, `rename_options` ([{from, to}]), the \
+whole `options` list (options left out are taken off every task), `default`, `types`, \
+`required`, or its place. Its kind can't change. Saved views that use the field or a renamed \
+option are rewritten. To clear the default or the types, list them in `clear`. \
+Example: update_custom_field {\"project\": \"TM\", \"field\": \"Area\", \"rename_options\": \
+[{\"from\": \"UI\", \"to\": \"Front end\"}]}",
+        main: "field.update",
+        covers: &["field.update"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "delete_custom_field",
+        toolset: Toolset::Projects,
+        title: "Delete a custom field",
+        description: "Deletes a custom field and its value on every task; saved views lose their \
+conditions on it. It can't be undone, needs the full profile, and should only be done when the \
+person asked for it. Pass `expected_task_count` (the field's `tasks` from list_custom_fields). \
+Example: delete_custom_field {\"project\": \"TM\", \"field\": \"Old estimate\", \
+\"expected_task_count\": 4}",
+        main: "field.delete",
+        covers: &["field.delete"],
+        idempotent: false,
+    },
+    McpTool {
         name: "get_agent_brief",
         toolset: Toolset::Projects,
         title: "Get the agent brief",
@@ -445,7 +500,8 @@ Example: get_task {\"keys\": [\"TM-41\"], \"include\": [\"checklist\", \"comment
         title: "Create a task",
         description: "Creates a task in a project from a title alone, or with `description`, \
 `status`, `type`, `priority` (none, low, normal, high, urgent), `labels`, `fix_version`, `parent`, \
-`start_date`, `due_date` (YYYY-MM-DD) and `estimate` (`1d 4h`, `90m`). It lands in the first to-do status at \
+`start_date`, `due_date` (YYYY-MM-DD), `estimate` (`1d 4h`, `90m`) and custom `fields` by name (see \
+list_custom_fields; a required field needs a value). It lands in the first to-do status at \
 the bottom unless told otherwise, and gets the project's next key. Pass `client_request_id` so \
 a retry doesn't create a second task. \
 Example: create_task {\"project\": \"TM\", \"title\": \"Write the release notes\", \"due_date\": \
@@ -460,7 +516,9 @@ Example: create_task {\"project\": \"TM\", \"title\": \"Write the release notes\
         title: "Update a task",
         description: "Changes the given fields of a task only: `title`, `type`, `priority`, \
 `labels` (replace) or `add_labels`/`remove_labels`, `fix_version` (an open version, see \
-list_versions), `parent`, `start_date`, `due_date`, `estimate`, `progress`, and the description. With new dates, `move_dependents: true` also \
+list_versions), `parent`, `start_date`, `due_date`, `estimate`, `progress`, custom `fields` \
+({\"Story points\": 3}; null clears one), and the description. With new dates, \
+`move_dependents: true` also \
 moves the tasks that depend on this one (blocks links, and theirs in turn) later, as far as each \
 must to begin after its blocker ends, in the same change; `moved` lists them. Prefer `description_edits` ([{old_text, new_text}], \
 each old_text found exactly once) for changes to part of the description; a whole new \
@@ -481,11 +539,28 @@ Example: update_task {\"key\": \"TM-41\", \"description_edits\": [{\"old_text\":
         title: "Move a task",
         description: "Moves a task to another `status` (by name), to a place in its column \
 (`before` or `after` another task's key, or `at`: top or bottom), or to another `project`, where \
-it gets a new key while the old one keeps finding it. Entering a done or cancelled status closes \
-the task. \
+it gets a new key while the old one keeps finding it; its subtasks, comments, files, time and \
+links come along. Statuses, types and labels are matched by name there; check_move first shows \
+which have no match, and `mapping` ({statuses, types, labels}: from the old name to the target's \
+name) says what takes their place. Custom field values go to the target's field of the same \
+name and kind; others are left off, with a warning. Entering a done or cancelled status closes the task. \
 Example: move_task {\"key\": \"TM-41\", \"status\": \"In progress\", \"at\": \"top\"}",
         main: "task.move",
         covers: &["task.move"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "check_move",
+        toolset: Toolset::Tasks,
+        title: "Check a move to another project",
+        description: "Shows what moving tasks to another project would do, without moving them: \
+the key each task (and subtask) would get, and for each of their statuses, types and labels the \
+target's item of the same name, or none. Pass what has no match as `mapping` to move_task. \
+`fields` lists their custom fields with the target's field that would keep the values (same \
+name and kind), or none when the values would be left off. \
+Example: check_move {\"keys\": [\"TM-41\"], \"project\": \"OPS\"}",
+        main: "task.move_check",
+        covers: &["task.move_check"],
         idempotent: true,
     },
     McpTool {
@@ -1308,11 +1383,13 @@ mod tests {
                 "get_activity",
                 "list_projects",
                 "get_project",
+                "list_custom_fields",
                 "get_agent_brief",
                 "list_versions",
                 "get_version",
                 "search_tasks",
                 "get_task",
+                "check_move",
                 "get_description_revision",
                 "get_time_report",
                 "get_reminders",

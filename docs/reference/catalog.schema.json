@@ -13561,6 +13561,955 @@
       "summary": "Delete a version; its tasks are planned for no version. Revert brings both back."
     },
     {
+      "cli": "field list",
+      "exposure": "data",
+      "id": "field.list",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Which custom fields to list.",
+        "properties": {
+          "project": {
+            "description": "The project: its key (current or old) or ID. Lists the fields its\ntasks have: its own and those of every project. Left out: every\nfield of the workspace.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "CustomFieldListInput",
+        "type": "object"
+      },
+      "input_name": "CustomFieldListInput",
+      "kind": "query",
+      "mcp_tool": "list_custom_fields",
+      "output": {
+        "$defs": {
+          "CustomField": {
+            "additionalProperties": false,
+            "description": "A custom field.",
+            "properties": {
+              "default": {
+                "description": "The value new tasks get; left out when there is none."
+              },
+              "id": {
+                "description": "The field's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/CustomFieldKind",
+                "description": "What it holds."
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "options": {
+                "description": "The options of a select or multi-select field, in order.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "project": {
+                "description": "The project it belongs to (its key); left out for a field of every\nproject.",
+                "type": "string"
+              },
+              "query_name": {
+                "description": "How queries name it: `cf.story-points`.",
+                "type": "string"
+              },
+              "required": {
+                "description": "Whether tasks it is shown for must have a value.",
+                "type": "boolean"
+              },
+              "tasks": {
+                "description": "Tasks with a value for it (not in the trash).",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "types": {
+                "description": "The task types it is shown for, by name; empty: every type.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "query_name",
+              "kind",
+              "required",
+              "tasks"
+            ],
+            "type": "object"
+          },
+          "CustomFieldKind": {
+            "description": "What a custom field holds.",
+            "oneOf": [
+              {
+                "const": "text",
+                "description": "One line of text, up to 1000 characters.",
+                "type": "string"
+              },
+              {
+                "const": "markdown",
+                "description": "Formatted text (Markdown), up to 64 KB.",
+                "type": "string"
+              },
+              {
+                "const": "integer",
+                "description": "A whole number.",
+                "type": "string"
+              },
+              {
+                "const": "decimal",
+                "description": "A number with a fraction.",
+                "type": "string"
+              },
+              {
+                "const": "date",
+                "description": "A day, `YYYY-MM-DD`.",
+                "type": "string"
+              },
+              {
+                "const": "boolean",
+                "description": "Yes or no.",
+                "type": "string"
+              },
+              {
+                "const": "select",
+                "description": "One option of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "multi_select",
+                "description": "Any number of options of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "url",
+                "description": "A link with a scheme (`https://…`, `mailto:…`).",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The custom fields of a project, or of the whole workspace.",
+        "properties": {
+          "fields": {
+            "description": "The fields in order: those of every project first, then the\nproject's own.",
+            "items": {
+              "$ref": "#/$defs/CustomField"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "fields"
+        ],
+        "title": "CustomFieldList",
+        "type": "object"
+      },
+      "output_name": "CustomFieldList",
+      "safety": "read",
+      "summary": "The custom fields of a project (its own and those of every project) or of the whole workspace: name, query name, kind, options, default, task types, required, and how many tasks have a value."
+    },
+    {
+      "cli": "field add",
+      "exposure": "data",
+      "id": "field.create",
+      "input": {
+        "$defs": {
+          "CustomFieldKind": {
+            "description": "What a custom field holds.",
+            "oneOf": [
+              {
+                "const": "text",
+                "description": "One line of text, up to 1000 characters.",
+                "type": "string"
+              },
+              {
+                "const": "markdown",
+                "description": "Formatted text (Markdown), up to 64 KB.",
+                "type": "string"
+              },
+              {
+                "const": "integer",
+                "description": "A whole number.",
+                "type": "string"
+              },
+              {
+                "const": "decimal",
+                "description": "A number with a fraction.",
+                "type": "string"
+              },
+              {
+                "const": "date",
+                "description": "A day, `YYYY-MM-DD`.",
+                "type": "string"
+              },
+              {
+                "const": "boolean",
+                "description": "Yes or no.",
+                "type": "string"
+              },
+              {
+                "const": "select",
+                "description": "One option of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "multi_select",
+                "description": "Any number of options of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "url",
+                "description": "A link with a scheme (`https://…`, `mailto:…`).",
+                "type": "string"
+              }
+            ]
+          },
+          "Edge": {
+            "description": "The two ends of an ordered list.",
+            "oneOf": [
+              {
+                "const": "top",
+                "description": "First.",
+                "type": "string"
+              },
+              {
+                "const": "bottom",
+                "description": "Last.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A new custom field.",
+        "properties": {
+          "after": {
+            "description": "Place it after this field.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "at": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Edge"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Place it first or last; default: last."
+          },
+          "before": {
+            "description": "Place it before this field.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "default": {
+            "description": "The value new tasks get unless told otherwise."
+          },
+          "kind": {
+            "$ref": "#/$defs/CustomFieldKind",
+            "description": "What it holds."
+          },
+          "name": {
+            "description": "The name, 1 to 50 characters with at least one letter or digit;\nunique among the fields the project's tasks have, ignoring case. A\nfield of the same name in another project must hold the same kind.",
+            "type": "string"
+          },
+          "options": {
+            "description": "The options of a select or multi-select field, in order (1 to 200,\neach 1 to 100 characters, unique ignoring case).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "project": {
+            "description": "The project: its key (current or old) or ID. Left out: a field of\nevery project. A project's sub-projects created later get a copy of\nits own fields.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "required": {
+            "default": false,
+            "description": "Tasks it is shown for must have a value: a new task needs one (or\nthe default), and a value can't be cleared.",
+            "type": "boolean"
+          },
+          "types": {
+            "description": "Show it only for tasks of these types, by name; default: every type.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "kind"
+        ],
+        "title": "CustomFieldCreateInput",
+        "type": "object"
+      },
+      "input_name": "CustomFieldCreateInput",
+      "kind": "command",
+      "mcp_tool": "create_custom_field",
+      "output": {
+        "$defs": {
+          "CustomField": {
+            "additionalProperties": false,
+            "description": "A custom field.",
+            "properties": {
+              "default": {
+                "description": "The value new tasks get; left out when there is none."
+              },
+              "id": {
+                "description": "The field's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/CustomFieldKind",
+                "description": "What it holds."
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "options": {
+                "description": "The options of a select or multi-select field, in order.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "project": {
+                "description": "The project it belongs to (its key); left out for a field of every\nproject.",
+                "type": "string"
+              },
+              "query_name": {
+                "description": "How queries name it: `cf.story-points`.",
+                "type": "string"
+              },
+              "required": {
+                "description": "Whether tasks it is shown for must have a value.",
+                "type": "boolean"
+              },
+              "tasks": {
+                "description": "Tasks with a value for it (not in the trash).",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "types": {
+                "description": "The task types it is shown for, by name; empty: every type.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "query_name",
+              "kind",
+              "required",
+              "tasks"
+            ],
+            "type": "object"
+          },
+          "CustomFieldKind": {
+            "description": "What a custom field holds.",
+            "oneOf": [
+              {
+                "const": "text",
+                "description": "One line of text, up to 1000 characters.",
+                "type": "string"
+              },
+              {
+                "const": "markdown",
+                "description": "Formatted text (Markdown), up to 64 KB.",
+                "type": "string"
+              },
+              {
+                "const": "integer",
+                "description": "A whole number.",
+                "type": "string"
+              },
+              {
+                "const": "decimal",
+                "description": "A number with a fraction.",
+                "type": "string"
+              },
+              {
+                "const": "date",
+                "description": "A day, `YYYY-MM-DD`.",
+                "type": "string"
+              },
+              {
+                "const": "boolean",
+                "description": "Yes or no.",
+                "type": "string"
+              },
+              {
+                "const": "select",
+                "description": "One option of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "multi_select",
+                "description": "Any number of options of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "url",
+                "description": "A link with a scheme (`https://…`, `mailto:…`).",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A custom field changed, with the history group of the change.",
+        "properties": {
+          "field": {
+            "$ref": "#/$defs/CustomField",
+            "description": "The field after the change; left out when it was deleted."
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "values_removed": {
+            "description": "How many tasks lost a value: of the deleted field, or of options\ntaken off its list.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "views_rewritten": {
+            "description": "The saved views whose queries were rewritten because the field or\none of its options was renamed or deleted, by name; left out when\nnone was.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "CustomFieldChange",
+        "type": "object"
+      },
+      "output_name": "CustomFieldChange",
+      "safety": "write",
+      "summary": "Add a custom field to a project, or to every project: text, Markdown, whole number, decimal, date, yes/no, select, multi-select or link; with options, a default, the task types it shows for, and whether it is required."
+    },
+    {
+      "cli": "field edit",
+      "exposure": "data",
+      "id": "field.update",
+      "input": {
+        "$defs": {
+          "CustomFieldOptionRename": {
+            "additionalProperties": false,
+            "description": "An option of a select field to rename.",
+            "properties": {
+              "from": {
+                "description": "The option's current name (any case).",
+                "type": "string"
+              },
+              "to": {
+                "description": "Its new name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "from",
+              "to"
+            ],
+            "type": "object"
+          },
+          "CustomFieldSetting": {
+            "description": "A custom field setting that can be cleared.",
+            "oneOf": [
+              {
+                "const": "default",
+                "description": "The default value.",
+                "type": "string"
+              },
+              {
+                "const": "types",
+                "description": "The task types: it shows for every type again.",
+                "type": "string"
+              }
+            ]
+          },
+          "Edge": {
+            "description": "The two ends of an ordered list.",
+            "oneOf": [
+              {
+                "const": "top",
+                "description": "First.",
+                "type": "string"
+              },
+              {
+                "const": "bottom",
+                "description": "Last.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Changes to a custom field; settings left out keep their value. Its kind\ncan't change.",
+        "properties": {
+          "after": {
+            "description": "Move it after this field.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "at": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Edge"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Move it first or last."
+          },
+          "before": {
+            "description": "Move it before this field.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "clear": {
+            "description": "Settings to clear.",
+            "items": {
+              "$ref": "#/$defs/CustomFieldSetting"
+            },
+            "type": "array"
+          },
+          "default": {
+            "description": "A new default value."
+          },
+          "field": {
+            "description": "The field: its name or ID.",
+            "type": "string"
+          },
+          "name": {
+            "description": "A new name. Saved queries that use the field are rewritten.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "options": {
+            "description": "The whole list of options after the renames, in order. Options left\nout are taken off every task.",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "project": {
+            "description": "The project whose fields to look in: its key (current or old) or\nID; left out: the fields of every project.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rename_options": {
+            "description": "Options to rename; tasks and saved queries keep up.",
+            "items": {
+              "$ref": "#/$defs/CustomFieldOptionRename"
+            },
+            "type": "array"
+          },
+          "required": {
+            "description": "Whether tasks must have a value.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "types": {
+            "description": "Show it only for tasks of these types, by name.",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "field"
+        ],
+        "title": "CustomFieldUpdateInput",
+        "type": "object"
+      },
+      "input_name": "CustomFieldUpdateInput",
+      "kind": "command",
+      "mcp_tool": "update_custom_field",
+      "output": {
+        "$defs": {
+          "CustomField": {
+            "additionalProperties": false,
+            "description": "A custom field.",
+            "properties": {
+              "default": {
+                "description": "The value new tasks get; left out when there is none."
+              },
+              "id": {
+                "description": "The field's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/CustomFieldKind",
+                "description": "What it holds."
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "options": {
+                "description": "The options of a select or multi-select field, in order.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "project": {
+                "description": "The project it belongs to (its key); left out for a field of every\nproject.",
+                "type": "string"
+              },
+              "query_name": {
+                "description": "How queries name it: `cf.story-points`.",
+                "type": "string"
+              },
+              "required": {
+                "description": "Whether tasks it is shown for must have a value.",
+                "type": "boolean"
+              },
+              "tasks": {
+                "description": "Tasks with a value for it (not in the trash).",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "types": {
+                "description": "The task types it is shown for, by name; empty: every type.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "query_name",
+              "kind",
+              "required",
+              "tasks"
+            ],
+            "type": "object"
+          },
+          "CustomFieldKind": {
+            "description": "What a custom field holds.",
+            "oneOf": [
+              {
+                "const": "text",
+                "description": "One line of text, up to 1000 characters.",
+                "type": "string"
+              },
+              {
+                "const": "markdown",
+                "description": "Formatted text (Markdown), up to 64 KB.",
+                "type": "string"
+              },
+              {
+                "const": "integer",
+                "description": "A whole number.",
+                "type": "string"
+              },
+              {
+                "const": "decimal",
+                "description": "A number with a fraction.",
+                "type": "string"
+              },
+              {
+                "const": "date",
+                "description": "A day, `YYYY-MM-DD`.",
+                "type": "string"
+              },
+              {
+                "const": "boolean",
+                "description": "Yes or no.",
+                "type": "string"
+              },
+              {
+                "const": "select",
+                "description": "One option of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "multi_select",
+                "description": "Any number of options of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "url",
+                "description": "A link with a scheme (`https://…`, `mailto:…`).",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A custom field changed, with the history group of the change.",
+        "properties": {
+          "field": {
+            "$ref": "#/$defs/CustomField",
+            "description": "The field after the change; left out when it was deleted."
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "values_removed": {
+            "description": "How many tasks lost a value: of the deleted field, or of options\ntaken off its list.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "views_rewritten": {
+            "description": "The saved views whose queries were rewritten because the field or\none of its options was renamed or deleted, by name; left out when\nnone was.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "CustomFieldChange",
+        "type": "object"
+      },
+      "output_name": "CustomFieldChange",
+      "safety": "write",
+      "summary": "Rename a custom field, rename, add, reorder or remove its options, change its default, task types or whether it is required, or move it; saved queries keep up with renames."
+    },
+    {
+      "cli": "field delete",
+      "exposure": "data",
+      "id": "field.delete",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A custom field to delete, with its values.",
+        "properties": {
+          "expected_task_count": {
+            "description": "The number of tasks you expect to have a value for it; the deletion\nstops if the number differs.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "field": {
+            "description": "The field: its name or ID. Its values leave every task, and saved\nqueries that use it lose those conditions.",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project whose fields to look in: its key (current or old) or\nID; left out: the fields of every project.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "field"
+        ],
+        "title": "CustomFieldDeleteInput",
+        "type": "object"
+      },
+      "input_name": "CustomFieldDeleteInput",
+      "kind": "command",
+      "mcp_tool": "delete_custom_field",
+      "output": {
+        "$defs": {
+          "CustomField": {
+            "additionalProperties": false,
+            "description": "A custom field.",
+            "properties": {
+              "default": {
+                "description": "The value new tasks get; left out when there is none."
+              },
+              "id": {
+                "description": "The field's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/CustomFieldKind",
+                "description": "What it holds."
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "options": {
+                "description": "The options of a select or multi-select field, in order.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "project": {
+                "description": "The project it belongs to (its key); left out for a field of every\nproject.",
+                "type": "string"
+              },
+              "query_name": {
+                "description": "How queries name it: `cf.story-points`.",
+                "type": "string"
+              },
+              "required": {
+                "description": "Whether tasks it is shown for must have a value.",
+                "type": "boolean"
+              },
+              "tasks": {
+                "description": "Tasks with a value for it (not in the trash).",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "types": {
+                "description": "The task types it is shown for, by name; empty: every type.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "query_name",
+              "kind",
+              "required",
+              "tasks"
+            ],
+            "type": "object"
+          },
+          "CustomFieldKind": {
+            "description": "What a custom field holds.",
+            "oneOf": [
+              {
+                "const": "text",
+                "description": "One line of text, up to 1000 characters.",
+                "type": "string"
+              },
+              {
+                "const": "markdown",
+                "description": "Formatted text (Markdown), up to 64 KB.",
+                "type": "string"
+              },
+              {
+                "const": "integer",
+                "description": "A whole number.",
+                "type": "string"
+              },
+              {
+                "const": "decimal",
+                "description": "A number with a fraction.",
+                "type": "string"
+              },
+              {
+                "const": "date",
+                "description": "A day, `YYYY-MM-DD`.",
+                "type": "string"
+              },
+              {
+                "const": "boolean",
+                "description": "Yes or no.",
+                "type": "string"
+              },
+              {
+                "const": "select",
+                "description": "One option of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "multi_select",
+                "description": "Any number of options of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "url",
+                "description": "A link with a scheme (`https://…`, `mailto:…`).",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A custom field changed, with the history group of the change.",
+        "properties": {
+          "field": {
+            "$ref": "#/$defs/CustomField",
+            "description": "The field after the change; left out when it was deleted."
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "values_removed": {
+            "description": "How many tasks lost a value: of the deleted field, or of options\ntaken off its list.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "views_rewritten": {
+            "description": "The saved views whose queries were rewritten because the field or\none of its options was renamed or deleted, by name; left out when\nnone was.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "CustomFieldChange",
+        "type": "object"
+      },
+      "output_name": "CustomFieldChange",
+      "safety": "permanent",
+      "summary": "Delete a custom field with its values on every task; saved queries lose their conditions on it. Can't be undone."
+    },
+    {
       "cli": "task list",
       "exposure": "data",
       "id": "task.search",
@@ -13983,11 +14932,20 @@
                 "format": "int64",
                 "type": "integer"
               },
+              "fields": {
+                "additionalProperties": true,
+                "description": "Its custom field values by query name (`story-points`): a string,\na number, `true`/`false`, or a list of options; fields without a\nvalue are left out.",
+                "type": "object"
+              },
               "file_count": {
                 "description": "How many files are attached to it and to its comments.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
+              },
+              "fix_version": {
+                "$ref": "#/$defs/VersionRef",
+                "description": "The version it is planned for."
               },
               "id": {
                 "description": "The task's ID.",
@@ -14168,6 +15126,59 @@
               "glyph"
             ],
             "type": "object"
+          },
+          "VersionRef": {
+            "additionalProperties": false,
+            "description": "A version as a task shows it.",
+            "properties": {
+              "due_date": {
+                "description": "Its due date (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/VersionStatus",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "status",
+              "id"
+            ],
+            "type": "object"
+          },
+          "VersionStatus": {
+            "description": "Where a version stands.",
+            "oneOf": [
+              {
+                "const": "open",
+                "description": "Tasks can be planned for it (the default).",
+                "type": "string"
+              },
+              {
+                "const": "locked",
+                "description": "No new tasks; the tasks in it stay.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Finished; no new tasks.",
+                "type": "string"
+              }
+            ]
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -14669,6 +15680,89 @@
               "body",
               "replaced_by",
               "replaced_at"
+            ],
+            "type": "object"
+          },
+          "CustomFieldKind": {
+            "description": "What a custom field holds.",
+            "oneOf": [
+              {
+                "const": "text",
+                "description": "One line of text, up to 1000 characters.",
+                "type": "string"
+              },
+              {
+                "const": "markdown",
+                "description": "Formatted text (Markdown), up to 64 KB.",
+                "type": "string"
+              },
+              {
+                "const": "integer",
+                "description": "A whole number.",
+                "type": "string"
+              },
+              {
+                "const": "decimal",
+                "description": "A number with a fraction.",
+                "type": "string"
+              },
+              {
+                "const": "date",
+                "description": "A day, `YYYY-MM-DD`.",
+                "type": "string"
+              },
+              {
+                "const": "boolean",
+                "description": "Yes or no.",
+                "type": "string"
+              },
+              {
+                "const": "select",
+                "description": "One option of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "multi_select",
+                "description": "Any number of options of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "url",
+                "description": "A link with a scheme (`https://…`, `mailto:…`).",
+                "type": "string"
+              }
+            ]
+          },
+          "CustomFieldValue": {
+            "additionalProperties": false,
+            "description": "One custom field's value on a task.",
+            "properties": {
+              "id": {
+                "description": "The field's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/CustomFieldKind",
+                "description": "What it holds."
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "query_name": {
+                "description": "How queries name it: `cf.story-points`.",
+                "type": "string"
+              },
+              "value": {
+                "description": "The value: a string, a number, `true`/`false`, or a list of options\nfor a multi-select field."
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "query_name",
+              "kind",
+              "value"
             ],
             "type": "object"
           },
@@ -15197,6 +16291,13 @@
                 "description": "The estimate in minutes.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "fields": {
+                "description": "Its custom field values, in the fields' order; fields without a\nvalue are left out.",
+                "items": {
+                  "$ref": "#/$defs/CustomFieldValue"
+                },
+                "type": "array"
               },
               "file_count": {
                 "description": "How many files are attached to it and to its comments.",
@@ -15757,6 +16858,11 @@
               "null"
             ]
           },
+          "fields": {
+            "additionalProperties": true,
+            "description": "Custom field values, by field name, query name or ID (see\n`field.list`): a string, a number, `true`/`false`, or a list of\noptions for a multi-select field. Fields with a default get it\nunless given here; a required field needs a value.",
+            "type": "object"
+          },
           "fix_version": {
             "description": "The version it is planned for (name or ID): an open version of the\nproject or one shared with it.",
             "type": [
@@ -16180,6 +17286,89 @@
               "body",
               "replaced_by",
               "replaced_at"
+            ],
+            "type": "object"
+          },
+          "CustomFieldKind": {
+            "description": "What a custom field holds.",
+            "oneOf": [
+              {
+                "const": "text",
+                "description": "One line of text, up to 1000 characters.",
+                "type": "string"
+              },
+              {
+                "const": "markdown",
+                "description": "Formatted text (Markdown), up to 64 KB.",
+                "type": "string"
+              },
+              {
+                "const": "integer",
+                "description": "A whole number.",
+                "type": "string"
+              },
+              {
+                "const": "decimal",
+                "description": "A number with a fraction.",
+                "type": "string"
+              },
+              {
+                "const": "date",
+                "description": "A day, `YYYY-MM-DD`.",
+                "type": "string"
+              },
+              {
+                "const": "boolean",
+                "description": "Yes or no.",
+                "type": "string"
+              },
+              {
+                "const": "select",
+                "description": "One option of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "multi_select",
+                "description": "Any number of options of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "url",
+                "description": "A link with a scheme (`https://…`, `mailto:…`).",
+                "type": "string"
+              }
+            ]
+          },
+          "CustomFieldValue": {
+            "additionalProperties": false,
+            "description": "One custom field's value on a task.",
+            "properties": {
+              "id": {
+                "description": "The field's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/CustomFieldKind",
+                "description": "What it holds."
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "query_name": {
+                "description": "How queries name it: `cf.story-points`.",
+                "type": "string"
+              },
+              "value": {
+                "description": "The value: a string, a number, `true`/`false`, or a list of options\nfor a multi-select field."
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "query_name",
+              "kind",
+              "value"
             ],
             "type": "object"
           },
@@ -16788,6 +17977,13 @@
                 "description": "The estimate in minutes.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "fields": {
+                "description": "Its custom field values, in the fields' order; fields without a\nvalue are left out.",
+                "items": {
+                  "$ref": "#/$defs/CustomFieldValue"
+                },
+                "type": "array"
               },
               "file_count": {
                 "description": "How many files are attached to it and to its comments.",
@@ -17459,6 +18655,11 @@
               "null"
             ]
           },
+          "fields": {
+            "additionalProperties": true,
+            "description": "Custom field values to set, by field name, query name or ID: a\nstring, a number, `true`/`false`, a list of options for a\nmulti-select field, or `null` to clear the value.",
+            "type": "object"
+          },
           "fix_version": {
             "description": "Plan it for this version (name or ID): an open version of the\nproject or one shared with it.",
             "type": [
@@ -17918,6 +19119,89 @@
               "body",
               "replaced_by",
               "replaced_at"
+            ],
+            "type": "object"
+          },
+          "CustomFieldKind": {
+            "description": "What a custom field holds.",
+            "oneOf": [
+              {
+                "const": "text",
+                "description": "One line of text, up to 1000 characters.",
+                "type": "string"
+              },
+              {
+                "const": "markdown",
+                "description": "Formatted text (Markdown), up to 64 KB.",
+                "type": "string"
+              },
+              {
+                "const": "integer",
+                "description": "A whole number.",
+                "type": "string"
+              },
+              {
+                "const": "decimal",
+                "description": "A number with a fraction.",
+                "type": "string"
+              },
+              {
+                "const": "date",
+                "description": "A day, `YYYY-MM-DD`.",
+                "type": "string"
+              },
+              {
+                "const": "boolean",
+                "description": "Yes or no.",
+                "type": "string"
+              },
+              {
+                "const": "select",
+                "description": "One option of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "multi_select",
+                "description": "Any number of options of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "url",
+                "description": "A link with a scheme (`https://…`, `mailto:…`).",
+                "type": "string"
+              }
+            ]
+          },
+          "CustomFieldValue": {
+            "additionalProperties": false,
+            "description": "One custom field's value on a task.",
+            "properties": {
+              "id": {
+                "description": "The field's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/CustomFieldKind",
+                "description": "What it holds."
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "query_name": {
+                "description": "How queries name it: `cf.story-points`.",
+                "type": "string"
+              },
+              "value": {
+                "description": "The value: a string, a number, `true`/`false`, or a list of options\nfor a multi-select field."
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "query_name",
+              "kind",
+              "value"
             ],
             "type": "object"
           },
@@ -18526,6 +19810,13 @@
                 "description": "The estimate in minutes.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "fields": {
+                "description": "Its custom field values, in the fields' order; fields without a\nvalue are left out.",
+                "items": {
+                  "$ref": "#/$defs/CustomFieldValue"
+                },
+                "type": "array"
               },
               "file_count": {
                 "description": "How many files are attached to it and to its comments.",
@@ -19009,6 +20300,34 @@
                 "type": "string"
               }
             ]
+          },
+          "MoveMapping": {
+            "additionalProperties": false,
+            "description": "What tasks moving to another project take there in place of the\nstatuses, types and labels of their own project. Each map goes from a\nname in the task's project to a name in the target project (any case).\nA name left out keeps the target's item of the same name; without one, a\nstatus becomes the target's first status, a type its default type, and\na label is left off. Every change says which.",
+            "properties": {
+              "labels": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Label names, the same way.",
+                "type": "object"
+              },
+              "statuses": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Status names: from the task's project to the target project.",
+                "type": "object"
+              },
+              "types": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Type names, the same way.",
+                "type": "object"
+              }
+            },
+            "type": "object"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -19051,6 +20370,10 @@
           "key": {
             "description": "The task: its key or ID.",
             "type": "string"
+          },
+          "mapping": {
+            "$ref": "#/$defs/MoveMapping",
+            "description": "With `project`: which status, type or label of that project stands\nin for one it has no match for."
           },
           "override_claim": {
             "default": false,
@@ -19432,6 +20755,89 @@
               "body",
               "replaced_by",
               "replaced_at"
+            ],
+            "type": "object"
+          },
+          "CustomFieldKind": {
+            "description": "What a custom field holds.",
+            "oneOf": [
+              {
+                "const": "text",
+                "description": "One line of text, up to 1000 characters.",
+                "type": "string"
+              },
+              {
+                "const": "markdown",
+                "description": "Formatted text (Markdown), up to 64 KB.",
+                "type": "string"
+              },
+              {
+                "const": "integer",
+                "description": "A whole number.",
+                "type": "string"
+              },
+              {
+                "const": "decimal",
+                "description": "A number with a fraction.",
+                "type": "string"
+              },
+              {
+                "const": "date",
+                "description": "A day, `YYYY-MM-DD`.",
+                "type": "string"
+              },
+              {
+                "const": "boolean",
+                "description": "Yes or no.",
+                "type": "string"
+              },
+              {
+                "const": "select",
+                "description": "One option of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "multi_select",
+                "description": "Any number of options of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "url",
+                "description": "A link with a scheme (`https://…`, `mailto:…`).",
+                "type": "string"
+              }
+            ]
+          },
+          "CustomFieldValue": {
+            "additionalProperties": false,
+            "description": "One custom field's value on a task.",
+            "properties": {
+              "id": {
+                "description": "The field's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/CustomFieldKind",
+                "description": "What it holds."
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "query_name": {
+                "description": "How queries name it: `cf.story-points`.",
+                "type": "string"
+              },
+              "value": {
+                "description": "The value: a string, a number, `true`/`false`, or a list of options\nfor a multi-select field."
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "query_name",
+              "kind",
+              "value"
             ],
             "type": "object"
           },
@@ -20041,6 +21447,13 @@
                 "format": "int64",
                 "type": "integer"
               },
+              "fields": {
+                "description": "Its custom field values, in the fields' order; fields without a\nvalue are left out.",
+                "items": {
+                  "$ref": "#/$defs/CustomFieldValue"
+                },
+                "type": "array"
+              },
               "file_count": {
                 "description": "How many files are attached to it and to its comments.",
                 "format": "uint32",
@@ -20504,6 +21917,163 @@
       "summary": "Move a task to another status or place in its column, or to another project (new key; the old one forwards)."
     },
     {
+      "cli": "task move-check <keys>",
+      "exposure": "data",
+      "id": "task.move_check",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Tasks that might move to another project, to see first what the move\nwould do.",
+        "properties": {
+          "keys": {
+            "description": "The tasks: keys or IDs, 1 to 500. Their subtasks would move with them.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "project": {
+            "description": "The project they would move to.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "keys",
+          "project"
+        ],
+        "title": "TaskMoveCheckInput",
+        "type": "object"
+      },
+      "input_name": "TaskMoveCheckInput",
+      "kind": "query",
+      "mcp_tool": "check_move",
+      "output": {
+        "$defs": {
+          "MoveMatch": {
+            "additionalProperties": false,
+            "description": "A status, type, label or custom field of the moving tasks, and its match\nin the target project.",
+            "properties": {
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "target": {
+                "description": "The target's item of the same name; absent when it has none.",
+                "type": "string"
+              },
+              "tasks": {
+                "description": "How many of the moving tasks have it.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "name",
+              "tasks"
+            ],
+            "type": "object"
+          },
+          "MovedKey": {
+            "additionalProperties": false,
+            "description": "A key now and the one a move would give.",
+            "properties": {
+              "from": {
+                "description": "The key now.",
+                "type": "string"
+              },
+              "to": {
+                "description": "The key in the target project.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "from",
+              "to"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "What moving tasks to another project would do: their new keys, and how\ntheir statuses, types and labels would be matched there.",
+        "properties": {
+          "fallback_status": {
+            "description": "The target's status for those it has no match for: its first one.",
+            "type": "string"
+          },
+          "fallback_type": {
+            "description": "The target's type for those it has no match for: its default one.",
+            "type": "string"
+          },
+          "fields": {
+            "default": [],
+            "description": "The custom fields they have values of. The target is the target's\nfield that would hold the values; absent when they would be left off.",
+            "items": {
+              "$ref": "#/$defs/MoveMatch"
+            },
+            "type": "array"
+          },
+          "keys": {
+            "description": "Every task that would move, subtasks included, with its key now and\nthe key it would get.",
+            "items": {
+              "$ref": "#/$defs/MovedKey"
+            },
+            "type": "array"
+          },
+          "labels": {
+            "description": "Their labels.",
+            "items": {
+              "$ref": "#/$defs/MoveMatch"
+            },
+            "type": "array"
+          },
+          "project": {
+            "description": "The target project's key.",
+            "type": "string"
+          },
+          "statuses": {
+            "description": "The statuses the tasks have now.",
+            "items": {
+              "$ref": "#/$defs/MoveMatch"
+            },
+            "type": "array"
+          },
+          "types": {
+            "description": "Their types.",
+            "items": {
+              "$ref": "#/$defs/MoveMatch"
+            },
+            "type": "array"
+          },
+          "versions": {
+            "default": [],
+            "description": "The versions they are planned for. The target is the same version\nwhen the target project can plan tasks for it; absent when the move\nwould take it off.",
+            "items": {
+              "$ref": "#/$defs/MoveMatch"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "project",
+          "keys",
+          "statuses",
+          "types",
+          "labels",
+          "fields",
+          "versions",
+          "fallback_status",
+          "fallback_type"
+        ],
+        "title": "MoveCheck",
+        "type": "object"
+      },
+      "output_name": "MoveCheck",
+      "safety": "read",
+      "summary": "What moving tasks to another project would do: their new keys, and which of their statuses, types and labels the target project has no match for."
+    },
+    {
       "cli": "task delete <keys>",
       "exposure": "data",
       "id": "task.delete",
@@ -20763,6 +22333,10 @@
                   "null"
                 ]
               },
+              "mapping": {
+                "$ref": "#/$defs/MoveMapping",
+                "description": "With `project`: which status, type or label of that project stands\nin for one it has no match for."
+              },
               "parent": {
                 "description": "Make them subtasks of this task.",
                 "type": [
@@ -20829,6 +22403,34 @@
                   "string",
                   "null"
                 ]
+              }
+            },
+            "type": "object"
+          },
+          "MoveMapping": {
+            "additionalProperties": false,
+            "description": "What tasks moving to another project take there in place of the\nstatuses, types and labels of their own project. Each map goes from a\nname in the task's project to a name in the target project (any case).\nA name left out keeps the target's item of the same name; without one, a\nstatus becomes the target's first status, a type its default type, and\na label is left off. Every change says which.",
+            "properties": {
+              "labels": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Label names, the same way.",
+                "type": "object"
+              },
+              "statuses": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Status names: from the task's project to the target project.",
+                "type": "object"
+              },
+              "types": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Type names, the same way.",
+                "type": "object"
               }
             },
             "type": "object"
@@ -21493,6 +23095,89 @@
             ],
             "type": "object"
           },
+          "CustomFieldKind": {
+            "description": "What a custom field holds.",
+            "oneOf": [
+              {
+                "const": "text",
+                "description": "One line of text, up to 1000 characters.",
+                "type": "string"
+              },
+              {
+                "const": "markdown",
+                "description": "Formatted text (Markdown), up to 64 KB.",
+                "type": "string"
+              },
+              {
+                "const": "integer",
+                "description": "A whole number.",
+                "type": "string"
+              },
+              {
+                "const": "decimal",
+                "description": "A number with a fraction.",
+                "type": "string"
+              },
+              {
+                "const": "date",
+                "description": "A day, `YYYY-MM-DD`.",
+                "type": "string"
+              },
+              {
+                "const": "boolean",
+                "description": "Yes or no.",
+                "type": "string"
+              },
+              {
+                "const": "select",
+                "description": "One option of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "multi_select",
+                "description": "Any number of options of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "url",
+                "description": "A link with a scheme (`https://…`, `mailto:…`).",
+                "type": "string"
+              }
+            ]
+          },
+          "CustomFieldValue": {
+            "additionalProperties": false,
+            "description": "One custom field's value on a task.",
+            "properties": {
+              "id": {
+                "description": "The field's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/CustomFieldKind",
+                "description": "What it holds."
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "query_name": {
+                "description": "How queries name it: `cf.story-points`.",
+                "type": "string"
+              },
+              "value": {
+                "description": "The value: a string, a number, `true`/`false`, or a list of options\nfor a multi-select field."
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "query_name",
+              "kind",
+              "value"
+            ],
+            "type": "object"
+          },
           "DescriptionSave": {
             "additionalProperties": false,
             "description": "The result of saving a description.",
@@ -22098,6 +23783,13 @@
                 "description": "The estimate in minutes.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "fields": {
+                "description": "Its custom field values, in the fields' order; fields without a\nvalue are left out.",
+                "items": {
+                  "$ref": "#/$defs/CustomFieldValue"
+                },
+                "type": "array"
               },
               "file_count": {
                 "description": "How many files are attached to it and to its comments.",
@@ -22984,6 +24676,89 @@
             ],
             "type": "object"
           },
+          "CustomFieldKind": {
+            "description": "What a custom field holds.",
+            "oneOf": [
+              {
+                "const": "text",
+                "description": "One line of text, up to 1000 characters.",
+                "type": "string"
+              },
+              {
+                "const": "markdown",
+                "description": "Formatted text (Markdown), up to 64 KB.",
+                "type": "string"
+              },
+              {
+                "const": "integer",
+                "description": "A whole number.",
+                "type": "string"
+              },
+              {
+                "const": "decimal",
+                "description": "A number with a fraction.",
+                "type": "string"
+              },
+              {
+                "const": "date",
+                "description": "A day, `YYYY-MM-DD`.",
+                "type": "string"
+              },
+              {
+                "const": "boolean",
+                "description": "Yes or no.",
+                "type": "string"
+              },
+              {
+                "const": "select",
+                "description": "One option of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "multi_select",
+                "description": "Any number of options of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "url",
+                "description": "A link with a scheme (`https://…`, `mailto:…`).",
+                "type": "string"
+              }
+            ]
+          },
+          "CustomFieldValue": {
+            "additionalProperties": false,
+            "description": "One custom field's value on a task.",
+            "properties": {
+              "id": {
+                "description": "The field's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/CustomFieldKind",
+                "description": "What it holds."
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "query_name": {
+                "description": "How queries name it: `cf.story-points`.",
+                "type": "string"
+              },
+              "value": {
+                "description": "The value: a string, a number, `true`/`false`, or a list of options\nfor a multi-select field."
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "query_name",
+              "kind",
+              "value"
+            ],
+            "type": "object"
+          },
           "DescriptionSave": {
             "additionalProperties": false,
             "description": "The result of saving a description.",
@@ -23589,6 +25364,13 @@
                 "description": "The estimate in minutes.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "fields": {
+                "description": "Its custom field values, in the fields' order; fields without a\nvalue are left out.",
+                "items": {
+                  "$ref": "#/$defs/CustomFieldValue"
+                },
+                "type": "array"
               },
               "file_count": {
                 "description": "How many files are attached to it and to its comments.",
@@ -24712,6 +26494,89 @@
             ],
             "type": "object"
           },
+          "CustomFieldKind": {
+            "description": "What a custom field holds.",
+            "oneOf": [
+              {
+                "const": "text",
+                "description": "One line of text, up to 1000 characters.",
+                "type": "string"
+              },
+              {
+                "const": "markdown",
+                "description": "Formatted text (Markdown), up to 64 KB.",
+                "type": "string"
+              },
+              {
+                "const": "integer",
+                "description": "A whole number.",
+                "type": "string"
+              },
+              {
+                "const": "decimal",
+                "description": "A number with a fraction.",
+                "type": "string"
+              },
+              {
+                "const": "date",
+                "description": "A day, `YYYY-MM-DD`.",
+                "type": "string"
+              },
+              {
+                "const": "boolean",
+                "description": "Yes or no.",
+                "type": "string"
+              },
+              {
+                "const": "select",
+                "description": "One option of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "multi_select",
+                "description": "Any number of options of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "url",
+                "description": "A link with a scheme (`https://…`, `mailto:…`).",
+                "type": "string"
+              }
+            ]
+          },
+          "CustomFieldValue": {
+            "additionalProperties": false,
+            "description": "One custom field's value on a task.",
+            "properties": {
+              "id": {
+                "description": "The field's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/CustomFieldKind",
+                "description": "What it holds."
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "query_name": {
+                "description": "How queries name it: `cf.story-points`.",
+                "type": "string"
+              },
+              "value": {
+                "description": "The value: a string, a number, `true`/`false`, or a list of options\nfor a multi-select field."
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "query_name",
+              "kind",
+              "value"
+            ],
+            "type": "object"
+          },
           "DescriptionSave": {
             "additionalProperties": false,
             "description": "The result of saving a description.",
@@ -25317,6 +27182,13 @@
                 "description": "The estimate in minutes.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "fields": {
+                "description": "Its custom field values, in the fields' order; fields without a\nvalue are left out.",
+                "items": {
+                  "$ref": "#/$defs/CustomFieldValue"
+                },
+                "type": "array"
               },
               "file_count": {
                 "description": "How many files are attached to it and to its comments.",
@@ -26183,6 +28055,89 @@
             ],
             "type": "object"
           },
+          "CustomFieldKind": {
+            "description": "What a custom field holds.",
+            "oneOf": [
+              {
+                "const": "text",
+                "description": "One line of text, up to 1000 characters.",
+                "type": "string"
+              },
+              {
+                "const": "markdown",
+                "description": "Formatted text (Markdown), up to 64 KB.",
+                "type": "string"
+              },
+              {
+                "const": "integer",
+                "description": "A whole number.",
+                "type": "string"
+              },
+              {
+                "const": "decimal",
+                "description": "A number with a fraction.",
+                "type": "string"
+              },
+              {
+                "const": "date",
+                "description": "A day, `YYYY-MM-DD`.",
+                "type": "string"
+              },
+              {
+                "const": "boolean",
+                "description": "Yes or no.",
+                "type": "string"
+              },
+              {
+                "const": "select",
+                "description": "One option of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "multi_select",
+                "description": "Any number of options of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "url",
+                "description": "A link with a scheme (`https://…`, `mailto:…`).",
+                "type": "string"
+              }
+            ]
+          },
+          "CustomFieldValue": {
+            "additionalProperties": false,
+            "description": "One custom field's value on a task.",
+            "properties": {
+              "id": {
+                "description": "The field's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/CustomFieldKind",
+                "description": "What it holds."
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "query_name": {
+                "description": "How queries name it: `cf.story-points`.",
+                "type": "string"
+              },
+              "value": {
+                "description": "The value: a string, a number, `true`/`false`, or a list of options\nfor a multi-select field."
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "query_name",
+              "kind",
+              "value"
+            ],
+            "type": "object"
+          },
           "DescriptionSave": {
             "additionalProperties": false,
             "description": "The result of saving a description.",
@@ -26788,6 +28743,13 @@
                 "description": "The estimate in minutes.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "fields": {
+                "description": "Its custom field values, in the fields' order; fields without a\nvalue are left out.",
+                "items": {
+                  "$ref": "#/$defs/CustomFieldValue"
+                },
+                "type": "array"
               },
               "file_count": {
                 "description": "How many files are attached to it and to its comments.",
@@ -27647,6 +29609,89 @@
             ],
             "type": "object"
           },
+          "CustomFieldKind": {
+            "description": "What a custom field holds.",
+            "oneOf": [
+              {
+                "const": "text",
+                "description": "One line of text, up to 1000 characters.",
+                "type": "string"
+              },
+              {
+                "const": "markdown",
+                "description": "Formatted text (Markdown), up to 64 KB.",
+                "type": "string"
+              },
+              {
+                "const": "integer",
+                "description": "A whole number.",
+                "type": "string"
+              },
+              {
+                "const": "decimal",
+                "description": "A number with a fraction.",
+                "type": "string"
+              },
+              {
+                "const": "date",
+                "description": "A day, `YYYY-MM-DD`.",
+                "type": "string"
+              },
+              {
+                "const": "boolean",
+                "description": "Yes or no.",
+                "type": "string"
+              },
+              {
+                "const": "select",
+                "description": "One option of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "multi_select",
+                "description": "Any number of options of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "url",
+                "description": "A link with a scheme (`https://…`, `mailto:…`).",
+                "type": "string"
+              }
+            ]
+          },
+          "CustomFieldValue": {
+            "additionalProperties": false,
+            "description": "One custom field's value on a task.",
+            "properties": {
+              "id": {
+                "description": "The field's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/CustomFieldKind",
+                "description": "What it holds."
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "query_name": {
+                "description": "How queries name it: `cf.story-points`.",
+                "type": "string"
+              },
+              "value": {
+                "description": "The value: a string, a number, `true`/`false`, or a list of options\nfor a multi-select field."
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "query_name",
+              "kind",
+              "value"
+            ],
+            "type": "object"
+          },
           "DescriptionSave": {
             "additionalProperties": false,
             "description": "The result of saving a description.",
@@ -28252,6 +30297,13 @@
                 "description": "The estimate in minutes.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "fields": {
+                "description": "Its custom field values, in the fields' order; fields without a\nvalue are left out.",
+                "items": {
+                  "$ref": "#/$defs/CustomFieldValue"
+                },
+                "type": "array"
               },
               "file_count": {
                 "description": "How many files are attached to it and to its comments.",
@@ -29154,6 +31206,89 @@
             ],
             "type": "object"
           },
+          "CustomFieldKind": {
+            "description": "What a custom field holds.",
+            "oneOf": [
+              {
+                "const": "text",
+                "description": "One line of text, up to 1000 characters.",
+                "type": "string"
+              },
+              {
+                "const": "markdown",
+                "description": "Formatted text (Markdown), up to 64 KB.",
+                "type": "string"
+              },
+              {
+                "const": "integer",
+                "description": "A whole number.",
+                "type": "string"
+              },
+              {
+                "const": "decimal",
+                "description": "A number with a fraction.",
+                "type": "string"
+              },
+              {
+                "const": "date",
+                "description": "A day, `YYYY-MM-DD`.",
+                "type": "string"
+              },
+              {
+                "const": "boolean",
+                "description": "Yes or no.",
+                "type": "string"
+              },
+              {
+                "const": "select",
+                "description": "One option of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "multi_select",
+                "description": "Any number of options of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "url",
+                "description": "A link with a scheme (`https://…`, `mailto:…`).",
+                "type": "string"
+              }
+            ]
+          },
+          "CustomFieldValue": {
+            "additionalProperties": false,
+            "description": "One custom field's value on a task.",
+            "properties": {
+              "id": {
+                "description": "The field's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/CustomFieldKind",
+                "description": "What it holds."
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "query_name": {
+                "description": "How queries name it: `cf.story-points`.",
+                "type": "string"
+              },
+              "value": {
+                "description": "The value: a string, a number, `true`/`false`, or a list of options\nfor a multi-select field."
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "query_name",
+              "kind",
+              "value"
+            ],
+            "type": "object"
+          },
           "DescriptionSave": {
             "additionalProperties": false,
             "description": "The result of saving a description.",
@@ -29759,6 +31894,13 @@
                 "description": "The estimate in minutes.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "fields": {
+                "description": "Its custom field values, in the fields' order; fields without a\nvalue are left out.",
+                "items": {
+                  "$ref": "#/$defs/CustomFieldValue"
+                },
+                "type": "array"
               },
               "file_count": {
                 "description": "How many files are attached to it and to its comments.",
@@ -30661,6 +32803,89 @@
             ],
             "type": "object"
           },
+          "CustomFieldKind": {
+            "description": "What a custom field holds.",
+            "oneOf": [
+              {
+                "const": "text",
+                "description": "One line of text, up to 1000 characters.",
+                "type": "string"
+              },
+              {
+                "const": "markdown",
+                "description": "Formatted text (Markdown), up to 64 KB.",
+                "type": "string"
+              },
+              {
+                "const": "integer",
+                "description": "A whole number.",
+                "type": "string"
+              },
+              {
+                "const": "decimal",
+                "description": "A number with a fraction.",
+                "type": "string"
+              },
+              {
+                "const": "date",
+                "description": "A day, `YYYY-MM-DD`.",
+                "type": "string"
+              },
+              {
+                "const": "boolean",
+                "description": "Yes or no.",
+                "type": "string"
+              },
+              {
+                "const": "select",
+                "description": "One option of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "multi_select",
+                "description": "Any number of options of the field's list.",
+                "type": "string"
+              },
+              {
+                "const": "url",
+                "description": "A link with a scheme (`https://…`, `mailto:…`).",
+                "type": "string"
+              }
+            ]
+          },
+          "CustomFieldValue": {
+            "additionalProperties": false,
+            "description": "One custom field's value on a task.",
+            "properties": {
+              "id": {
+                "description": "The field's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/CustomFieldKind",
+                "description": "What it holds."
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "query_name": {
+                "description": "How queries name it: `cf.story-points`.",
+                "type": "string"
+              },
+              "value": {
+                "description": "The value: a string, a number, `true`/`false`, or a list of options\nfor a multi-select field."
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "query_name",
+              "kind",
+              "value"
+            ],
+            "type": "object"
+          },
           "DescriptionSave": {
             "additionalProperties": false,
             "description": "The result of saving a description.",
@@ -31266,6 +33491,13 @@
                 "description": "The estimate in minutes.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "fields": {
+                "description": "Its custom field values, in the fields' order; fields without a\nvalue are left out.",
+                "items": {
+                  "$ref": "#/$defs/CustomFieldValue"
+                },
+                "type": "array"
               },
               "file_count": {
                 "description": "How many files are attached to it and to its comments.",
@@ -37036,11 +39268,20 @@
                 "format": "int64",
                 "type": "integer"
               },
+              "fields": {
+                "additionalProperties": true,
+                "description": "Its custom field values by query name (`story-points`): a string,\na number, `true`/`false`, or a list of options; fields without a\nvalue are left out.",
+                "type": "object"
+              },
               "file_count": {
                 "description": "How many files are attached to it and to its comments.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
+              },
+              "fix_version": {
+                "$ref": "#/$defs/VersionRef",
+                "description": "The version it is planned for."
               },
               "id": {
                 "description": "The task's ID.",
@@ -37431,6 +39672,59 @@
               "glyph"
             ],
             "type": "object"
+          },
+          "VersionRef": {
+            "additionalProperties": false,
+            "description": "A version as a task shows it.",
+            "properties": {
+              "due_date": {
+                "description": "Its due date (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/VersionStatus",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "status",
+              "id"
+            ],
+            "type": "object"
+          },
+          "VersionStatus": {
+            "description": "Where a version stands.",
+            "oneOf": [
+              {
+                "const": "open",
+                "description": "Tasks can be planned for it (the default).",
+                "type": "string"
+              },
+              {
+                "const": "locked",
+                "description": "No new tasks; the tasks in it stay.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Finished; no new tasks.",
+                "type": "string"
+              }
+            ]
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",

@@ -23,7 +23,9 @@ use super::model::{
     WikiPage,
 };
 use super::source::{Source, safe_path};
-use super::{FORMAT_NAME, FORMAT_VERSION, Limits, Progress, Rejected, project_dir, report};
+use super::{
+    FORMAT_NAME, FORMAT_VERSION, Limits, Progress, Rejected, plain_project_dir, project_dir, report,
+};
 use crate::context::Context;
 use crate::engine::Engine;
 use crate::failure::Failure;
@@ -98,7 +100,8 @@ fn is_hash(s: &str) -> bool {
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
-fn classify(path: &str, keys: &HashSet<String>) -> Option<Class> {
+/// `keys` maps each project folder's name to its project's key.
+fn classify(path: &str, keys: &HashMap<String, String>) -> Option<Class> {
     match path {
         MANIFEST => return Some(Class::Manifest),
         SESSIONS => return Some(Class::Sessions),
@@ -109,10 +112,8 @@ fn classify(path: &str, keys: &HashSet<String>) -> Option<Class> {
         return is_hash(sha).then(|| Class::Blob(sha.to_owned()));
     }
     let rest = path.strip_prefix("projects/")?;
-    let (key, inner) = rest.split_once('/')?;
-    if !keys.contains(key) {
-        return None;
-    }
+    let (folder, inner) = rest.split_once('/')?;
+    let key = keys.get(folder)?.as_str();
     if inner == "project.json" {
         return Some(Class::ProjectJson);
     }
@@ -182,15 +183,21 @@ pub(crate) fn read(
     let manifest: Manifest = serde_json::from_value(raw)
         .map_err(|e| Rejected::Json(MANIFEST.into(), 1, e.to_string()))?;
 
-    let mut keys = HashSet::new();
+    let mut keys = HashMap::new();
+    let mut seen = HashSet::new();
     for p in &manifest.projects {
         let dir = project_dir(&p.key);
-        if ProjectKey::new(&p.key).is_err() || p.path != dir || !safe_path(&dir) {
+        if ProjectKey::new(&p.key).is_err()
+            || (p.path != dir && p.path != plain_project_dir(&p.key))
+            || !safe_path(&p.path)
+        {
             return Err(Rejected::BadPath(p.path.clone()));
         }
-        if !keys.insert(p.key.clone()) {
+        if !seen.insert(p.key.clone()) {
             return Err(Rejected::Duplicate(dir));
         }
+        let folder = p.path.trim_start_matches("projects/").to_owned();
+        keys.insert(folder, p.key.clone());
     }
     let listing: Vec<(String, u64)> = source
         .entries()
@@ -257,7 +264,8 @@ pub(crate) fn read(
     };
     let mut projects = Vec::new();
     for mp in &manifest.projects {
-        let dir = project_dir(&mp.key);
+        // The folder the manifest names: checked to be the key's.
+        let dir = mp.path.clone();
         let file_path = format!("{dir}/project.json");
         let bytes = texts
             .remove(&file_path)
@@ -465,6 +473,7 @@ fn check(parsed: &mut Parsed) -> Result<(), Rejected> {
             rank_ok(&pj, 1, &v.rank)?;
         }
         let tp = format!("{dir}/tasks.jsonl");
+        super::custom_fields::check(&pj, &tp, &proj.file.custom_fields, &proj.tasks)?;
         let mut numbers = HashSet::new();
         let mut parents: HashMap<String, Option<String>> = HashMap::new();
         for (i, t) in proj.tasks.iter().enumerate() {
@@ -897,6 +906,14 @@ pub(crate) fn plan(
             replace("attachments", &a.id)?;
         }
     }
+    super::custom_fields::plan(
+        tx,
+        parsed
+            .projects
+            .iter()
+            .flat_map(|p| p.file.custom_fields.iter()),
+        &mut plan.ids,
+    )?;
     let mut groups: HashSet<String> = HashSet::new();
     for p in &parsed.projects {
         for a in &p.activity {
@@ -1323,6 +1340,7 @@ fn write(
                 v.updated_at
             ])?;
         }
+        super::custom_fields::write_fields(tx, &proj.file.custom_fields, id, &|t| plan.id(t), now)?;
         for v in &proj.file.views {
             let j = |v: &Option<Value>| v.as_ref().map(Value::to_string);
             tx.prepare_cached(
@@ -1475,6 +1493,7 @@ fn write(
                 )?
                 .execute(params![b(tid), b(plan.id(l))])?;
             }
+            super::custom_fields::write_values(tx, tid, &t.custom_values, &|t| plan.id(t))?;
             for alias in &t.key_aliases {
                 if let Ok(old) = alias.parse::<gk_core::TaskKey>() {
                     tx.prepare_cached(

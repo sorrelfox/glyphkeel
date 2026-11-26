@@ -174,6 +174,8 @@ transfer-invalid-project-nesting = { $path }: sub-projects form a circle.
 transfer-invalid-task-project = { $path }, line { $line }: the task belongs to another project.
 transfer-invalid-task-number = { $path }, line { $line }: task number { $number } is not unique.
 transfer-invalid-task-status = { $path }, line { $line }: the status or type is not one of the project's.
+transfer-invalid-field = { $path }, line { $line }: the custom field { $value } is not valid: an unknown kind, a name without letters or digits, or a name or ID given twice.
+transfer-invalid-field-value = { $path }, line { $line }: a value of the custom field { $value } is not one of the project's fields, or not text or a number.
 transfer-invalid-task-label = { $path }, line { $line }: the label { $label } is not one of the project's.
 transfer-invalid-version = { $path }, line { $line }: the version "{ $version }" is not valid (name, status, sharing or dates), or its name is used twice.
 transfer-invalid-title = { $path }, line { $line }: the title is empty or too long.
@@ -281,6 +283,16 @@ value-text-too-long-bytes = { $what ->
         [body] The body is { $length } bytes long; the limit is { $max }.
        *[other] The text is { $length } bytes long; the limit is { $max }.
     }
+value-field-kind = "{ $text }" is not a kind of field: use text, markdown, integer, decimal, date, boolean, select, multi_select or url.
+value-field-query-name = The field name "{ $text }" needs at least one letter or digit.
+value-field-integer = "{ $text }" is not a whole number.
+value-field-number = "{ $text }" is not a number: write it with a point, for example 2.5.
+value-field-date = "{ $text }" is not a date: expected YYYY-MM-DD, for example 2026-12-01.
+value-field-boolean = "{ $text }" is not yes or no: use true or false.
+value-field-url = "{ $text }" is not a link: it needs a scheme, for example https://example.org.
+value-field-option = "{ $text }" is not an option of { $field }: use one of { $choices }.
+value-field-too-long = The value is { $length } long; the limit is { $max }.
+value-field-empty = The value is empty; to remove it, clear the field.
 value-page-title-reserved = A page title can't contain "{ $char }".
 value-log-zero = Log at least one minute.
 value-log-over-a-day = { $minutes } minutes is more than a day; log the time on each day it was done.
@@ -311,6 +323,7 @@ place-bad-neighbour = An item can't be placed next to itself or next to one in a
 ## Tasks
 
 task-get-count = Ask for 1 to { $max } tasks at once.
+task-move-check-count = Check 1 to { $max } tasks at once.
 project-no-statuses = Project { $project } has no statuses; add one first.
 project-no-types = Project { $project } has no task types; add one first.
 task-parent-other-project = { $task }'s parent must be in the same project.
@@ -335,6 +348,8 @@ task-open-subtasks = { $count ->
 task-still-blocked = { $task } is still blocked by { $blockers }.
 task-still-blocked-outside = { $task } is still blocked by a task outside the project you work in.
 task-label-left-off = Label "{ $label }" doesn't exist in { $project } and was left off.
+task-status-fallback = Status "{ $status }" doesn't exist in { $project }; the tasks that had it are in "{ $target }" now.
+task-type-fallback = Type "{ $type }" doesn't exist in { $project }; the tasks that had it are of type "{ $target }" now.
 storage-task-no-project = A task needs a project.
 storage-task-no-number = A task needs a number.
 
@@ -517,6 +532,27 @@ input-id-hint = IDs look like 0193b2a4-5c6d-7e8f-9a0b-1c2d3e4f5a6b.
 input-limit = limit must be from 1 to { $max }.
 input-cursor-unknown = The cursor is not one this list gave.
 
+## Custom fields
+
+field-not-found = There is no custom field "{ $name }" here.
+field-name-taken = The custom field "{ $name }" would clash with "{ $other }": names must differ, ignoring case and punctuation.
+field-kind-clash = Another project has a custom field "{ $name }" of kind { $other_kind }; a field of that name must be { $other_kind } too, not { $kind }.
+field-options-not-allowed = A field of kind { $kind } has no options; only select and multi_select fields do.
+field-needs-options = A select field needs at least one option.
+field-options-max = A field has at most { $max } options.
+field-option-twice = The option "{ $option }" is listed twice.
+field-option-unknown = "{ $option }" is not an option of the field: it has { $choices }.
+field-count-differs = { $count ->
+        [one] "{ $field }" has a value on one task, not { $expected }; nothing was deleted.
+       *[other] "{ $field }" has a value on { $count } tasks, not { $expected }; nothing was deleted.
+    }
+field-value-shape = Give { $field } a string, a number or true/false.
+field-one-value = { $field } takes one value, not a list.
+field-given-twice = { $field } is given twice.
+field-not-for-type = { $field } is shown only for tasks of the types { $types }, not { $type }.
+field-required = { $field } is required; give it a value.
+field-left-off = The custom field "{ $field }" doesn't exist in { $project }; its value was left off.
+
 ## Time zones
 
 time-zone-unknown = "{ $name }" is not a known time zone.
@@ -698,3 +734,15 @@ thumb-unreadable = the stored file can't be read: { $error }
 ## Drafts
 
 draft-title-long = A draft's title is at most { $max } characters.
+
+## The workspaces in the data folder
+
+workspace-exists = There is already a workspace called "{ $name }".
+workspace-not-found = There is no workspace "{ $name }".
+workspace-name-invalid = "{ $name }" can't be the name of a workspace.
+workspace-name-invalid-hint = Use letters, digits, spaces, "-" and "_", at most 64 characters.
+workspace-in-use = The workspace "{ $name }" is open in another program.
+workspace-in-use-hint = Close it in the app and stop the agents and commands working in it, then try again.
+workspace-rename-failed = The workspace "{ $name }" could not be renamed: { $error }
+workspace-choice-no-folder = There is no folder for the personal settings: no home folder is set.
+workspace-choice-not-saved = The workspace you chose could not be remembered: { $error }

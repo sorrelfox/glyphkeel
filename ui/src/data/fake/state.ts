@@ -25,6 +25,7 @@ import {
   type Via,
 } from "../../generated/ops";
 import { type FakeVersion } from "./versions";
+import { type FakeField, type FieldValue } from "./fields";
 
 export interface FakeStatus {
   id: string;
@@ -67,12 +68,16 @@ export interface FakeProject {
   types: FakeType[];
   labels: FakeLabel[];
   nextNumber: number;
+  /** Keys it had before a new key; they still find it and its tasks. */
+  oldKeys?: string[];
 }
 
 export interface FakeTask {
   id: string;
   projectId: string;
   number: number;
+  /** Keys it had in other projects before it moved; they still find it. */
+  oldKeys?: string[];
   title: string;
   description: string;
   statusId: string;
@@ -101,6 +106,8 @@ export interface FakeTask {
   version: number;
   /** The version (release) it is planned for. */
   fixVersionId?: string | null;
+  /** Custom field values by field ID; none until one is set. */
+  fields?: Record<string, FieldValue>;
 }
 
 /** A link between two tasks, stored the way it reads from `from`. */
@@ -265,6 +272,8 @@ export interface FakeState {
   backups?: Backup[];
   /** Versions (releases) of the projects; none until one is made. */
   versions?: FakeVersion[];
+  /** Custom fields, in order; none until one is made. */
+  customFields?: FakeField[];
   workspaceName: string;
   seq: number;
 }

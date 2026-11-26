@@ -123,6 +123,7 @@ fn duplicate(w: &mut WriteCtx<'_>, input: TaskDuplicateInput) -> Result<TaskChan
         )?;
         super::version::copy_to(w, old, new, project.id)?;
         super::file::copy_to(w, old, new, project.id)?;
+        super::custom_field::copy_values(w, old, new)?;
         copies.insert(old, new);
     }
     let copy = copies

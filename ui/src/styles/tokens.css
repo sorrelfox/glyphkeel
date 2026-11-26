@@ -74,6 +74,14 @@
   --gantt-today: var(--hue-orange);
 }
 
+/* On Windows (the app puts .platform-windows on <html>): the system's own
+   faces first, Segoe UI Variable on Windows 11, then Segoe UI. The rest of
+   the stack is Linux's, unchanged. */
+.platform-windows[data-theme] {
+  --font-ui: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", "Adwaita Sans", "Inter", "Noto Sans", system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", "Consolas", "Adwaita Mono", "JetBrains Mono", ui-monospace, monospace;
+}
+
 /* ---------- 2. Themes: each block fills the same contract ---------- */
 [data-theme="light"] {
   color-scheme: light;

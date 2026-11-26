@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::catalog::{Exposure, Meta, OpDescriptor, OpKind, Safety};
 use crate::ops::common::Priority;
-use crate::ops::task::TaskField;
+use crate::ops::task::{MoveMapping, TaskField};
 
 /// The change to make to every task. Fields left out stay as they are.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -61,6 +61,10 @@ pub struct BulkChanges {
     /// Move them to this project (new keys; old keys forward).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub project: Option<String>,
+    /// With `project`: which status, type or label of that project stands
+    /// in for one it has no match for.
+    #[serde(default, skip_serializing_if = "MoveMapping::is_empty")]
+    pub mapping: MoveMapping,
     /// Fields to clear.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub clear: Vec<TaskField>,

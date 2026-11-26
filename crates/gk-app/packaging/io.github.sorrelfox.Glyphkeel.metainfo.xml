@@ -71,6 +71,11 @@
   </supports>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.1.5" date="2026-11-26">
+      <description>
+        <p>Windows support: an installer for the current user, Windows notifications, links and dialogs, starting with Windows, and portable file names in exports.</p>
+      </description>
+    </release>
     <release version="0.1.4" date="2026-11-26">
       <description>
         <p>A wiki with links, backlinks, page moves, files, templates, macros, export and folder import; a Gantt chart with dependencies and moving dependents; a calendar; and a fuller time report.</p>

@@ -8,7 +8,8 @@ Pushes to branches and pull requests start no runs.
    in `CHANGELOG.md`.
 2. Push a pre-release tag such as `v0.1.0-rc.1`. The pre-release workflow
    (`.github/workflows/prerelease.yml`) runs every suite, builds the deb, the
-   rpm and the Flatpak bundle, and publishes them as a GitHub pre-release
+   rpm, the Flatpak bundle and the Windows installer (NSIS, per-user,
+   unsigned), and publishes them as a GitHub pre-release
    with an SBOM, `SHA256SUMS` and build-provenance attestations.
 3. When the pre-release is good, push the final tag (`v0.1.0`) on the same
    commit. The release workflow (`.github/workflows/release.yml`) builds

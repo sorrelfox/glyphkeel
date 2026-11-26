@@ -29,8 +29,8 @@ use serde_json::{Map, Value};
 
 use super::description::{self, Owner};
 use super::{
-    agent, board, claim, comment, desc, fields, file, gantt_layout, list_layout, lookup, project,
-    relation, reminder, settings, task, time, trash, version, view, wiki,
+    agent, board, claim, comment, custom_field, desc, fields, file, gantt_layout, list_layout,
+    lookup, project, relation, reminder, settings, task, time, trash, version, view, wiki,
 };
 use crate::failure::Failure;
 use crate::messages;
@@ -396,6 +396,11 @@ fn current(
     id: Id,
     field: &str,
 ) -> Result<Option<Option<Value>>, StoreError> {
+    if entity == custom_field::ENTITY
+        || (entity == fields::TASK && field.starts_with(custom_field::VALUE_PREFIX))
+    {
+        return custom_field::current(tx, entity, id, field);
+    }
     Ok(Some(match (entity, field) {
         (settings::ENTITY, _) => settings::raw(tx, field)?,
         (board::ENTITY, "settings") => board::raw(tx, id)?,
@@ -476,6 +481,11 @@ fn apply(
     field: &str,
     value: Option<Value>,
 ) -> Result<(), Failure> {
+    if entity == custom_field::ENTITY
+        || (entity == fields::TASK && field.starts_with(custom_field::VALUE_PREFIX))
+    {
+        return custom_field::apply(w, entity, id, project, field, value);
+    }
     match (entity, field) {
         (settings::ENTITY, _) => settings::write_raw(w, field, value),
         (board::ENTITY, "settings") => {

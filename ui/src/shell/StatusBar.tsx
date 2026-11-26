@@ -1,20 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { HardDrive } from "lucide-react";
-
 import { classes } from "../classes";
 import { useOp } from "../data/hooks";
 import { useT } from "../i18n/I18n";
 import { type StatusInfo } from "./context";
 import styles from "./Shell.module.css";
+import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 
 interface StatusBarProps {
   /** What the screen reports; nothing for screens without a count of their own. */
   info: StatusInfo | null;
 }
 
-/** Text only: counts, selection and the last action's result on the left; the workspace on the right. */
+/** Counts, selection and the last action's result on the left; the workspace on the right, a menu to switch to another. */
 export function StatusBar({ info }: StatusBarProps) {
   const t = useT();
   const workspace = useOp("workspace.get", {});
@@ -31,12 +30,10 @@ export function StatusBar({ info }: StatusBarProps) {
         {info?.note}
       </span>
       <div className="grow" />
-      <span className="meta" data-testid="status-workspace" title={workspace.error ? workspace.error.error.message : undefined}>
-        <HardDrive className="ic" />
-        {workspace.data
-          ? t("status-workspace-name", { name: workspace.data.name })
-          : t(workspace.isError ? "status-workspace-unavailable" : "status-workspace")}
-      </span>
+      <WorkspaceSwitcher
+        title={workspace.error ? workspace.error.error.message : undefined}
+        name={workspace.data ? t("status-workspace-name", { name: workspace.data.name }) : t(workspace.isError ? "status-workspace-unavailable" : "status-workspace")}
+      />
     </footer>
   );
 }

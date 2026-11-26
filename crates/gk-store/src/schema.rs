@@ -71,10 +71,9 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
         version: 10,
         sql: include_str!("../migrations/0010_wiki_templates.sql"),
     },
-    // Placeholder until the custom fields' migration (version 11) is merged.
     Migration {
         version: 11,
-        sql: "",
+        sql: include_str!("../migrations/0011_custom_fields.sql"),
     },
     Migration {
         version: 12,
@@ -613,5 +612,68 @@ mod tests {
             )
             .unwrap();
         assert_eq!(columns, 1);
+    }
+
+    #[test]
+    fn version_11_keeps_values_with_their_task_and_field() {
+        let mut conn = memory();
+        migrate(&mut conn, &MIGRATIONS[..10], |_| Ok(())).unwrap();
+        conn.execute_batch(
+            "INSERT INTO projects (id, rank, key, name, name_fold, hue, modules, created_at,
+                                   updated_at)
+             VALUES (x'01010101010101010101010101010101', 'i', 'CF', 'CF', 'cf', 'blue', '{}',
+                     0, 0);
+             INSERT INTO statuses (id, project_id, name, name_fold, category, hue, rank)
+             VALUES (x'02020202020202020202020202020202', x'01010101010101010101010101010101',
+                     'To do', 'to do', 'todo', 'grey', 'i');
+             INSERT INTO task_types (id, project_id, name, name_fold, glyph, hue, rank, is_default)
+             VALUES (x'03030303030303030303030303030303', x'01010101010101010101010101010101',
+                     'Task', 'task', 'task', 'grey', 'i', 1);
+             INSERT INTO tasks (id, project_id, number, title, title_fold, status_id,
+                                status_entered_at, type_id, rank, created_at, created_by_kind,
+                                created_by_name, edited_at, updated_at)
+             VALUES (x'04040404040404040404040404040404', x'01010101010101010101010101010101',
+                     1, 'A', 'a', x'02020202020202020202020202020202', 0,
+                     x'03030303030303030303030303030303', 'i', 0, 'user', 'me', 0, 0);",
+        )
+        .unwrap();
+        migrate(&mut conn, &MIGRATIONS[..11], |_| Ok(())).unwrap();
+        assert_eq!(user_version(&conn).unwrap(), 11);
+        conn.execute_batch(
+            "INSERT INTO custom_fields (id, project_id, name, name_fold, query_name, kind, rank,
+                                        created_at)
+             VALUES (x'05050505050505050505050505050505', x'01010101010101010101010101010101',
+                     'Points', 'points', 'points', 'integer', 'i', 0);
+             INSERT INTO custom_fields (id, project_id, name, name_fold, query_name, kind, rank,
+                                        created_at)
+             VALUES (x'06060606060606060606060606060606', NULL, 'Points', 'points', 'points',
+                     'integer', 'j', 0);
+             INSERT INTO custom_values (task_id, field_id, value)
+             VALUES (x'04040404040404040404040404040404', x'05050505050505050505050505050505', 3);",
+        )
+        .unwrap();
+        let twice = conn.execute(
+            "INSERT INTO custom_fields (id, project_id, name, name_fold, query_name, kind, rank,
+                                        created_at)
+             VALUES (x'07070707070707070707070707070707', NULL, 'POINTS', 'points', 'points', 'text', 'k',
+                     0)",
+            [],
+        );
+        assert!(twice.is_err(), "one name among the fields of every project");
+        let blob = conn.execute(
+            "INSERT INTO custom_values (task_id, field_id, value)
+             VALUES (x'04040404040404040404040404040404', x'05050505050505050505050505050505', x'00')",
+            [],
+        );
+        assert!(blob.is_err(), "a value is text or a number");
+        conn.execute(
+            "DELETE FROM tasks WHERE id = x'04040404040404040404040404040404'",
+            [],
+        )
+        .unwrap();
+        let left: i64 = conn
+            .query_row("SELECT count(*) FROM custom_values", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(left, 0, "a task's values go with it");
     }
 }

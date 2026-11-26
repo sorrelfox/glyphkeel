@@ -25,6 +25,9 @@ query-empty-range-end = A range needs both ends, such as 1h..4h.
 
 query-unknown-field = Unknown field "{ $field }". Did you mean "{ $suggestion }"?
 query-unknown-field-plain = Unknown field "{ $field }". To search for text with a colon, put it in quotes.
+query-unknown-custom-field = No custom field "{ $field }". Did you mean "{ $suggestion }"?
+query-unknown-custom-field-plain = No custom field "{ $field }". Custom fields: { $choices }.
+query-no-custom-fields = No custom field "{ $field }": the workspace has no custom fields yet.
 query-operator = "{ $op }" doesn't apply to { $field }. Use { $usage }.
 query-no-range = { $field } takes no ranges. Use { $usage }.
 query-range-operator = A range works only with ":", such as { $field }:1h..4h.
@@ -36,6 +39,7 @@ query-equals-text = "=" doesn't apply to { $field }. Use { $field }:word.
 query-bad-date = Dates are written 2026-12-31, or as today, +7d, this-week.
 query-bad-duration = "{ $value }" is not a duration. Write it as 90m, 1.5h, 1h30m or 2d.
 query-bad-number = "{ $value }" is not a whole number.
+query-bad-decimal = "{ $value }" is not a number: write it with a point, for example 2.5.
 query-bad-percent = "{ $value }" is not a percentage from 0 to 100.
 query-bad-key = "{ $value }" is not a task key such as TM-41.
 query-bad-project = "{ $value }" is not a project key such as TM, or TM/* with its sub-projects.

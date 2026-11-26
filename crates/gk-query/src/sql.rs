@@ -16,7 +16,10 @@ use std::fmt::Write as _;
 
 use gk_core::Day;
 
-use crate::check::{AuthorRef, Bounds, Checked, Cond, Filter, KeyRef, ProjectRef, Sort, SortBy};
+use crate::check::{
+    AuthorRef, Bounds, Checked, Cond, CustomCond, CustomTest, Filter, KeyRef, ProjectRef,
+    RealBounds, Sort, SortBy,
+};
 use crate::fields::{
     CountOf, DateColumn, DurationColumn, FieldType, LinkField, MomentColumn, TextScope,
 };
@@ -95,7 +98,7 @@ pub struct Compiled {
     /// The `WHERE` condition.
     filter: Sql,
     /// The `ORDER BY` list.
-    order: String,
+    order: Sql,
     /// The sort keys used, `-` for descending.
     sort: Vec<String>,
 }
@@ -175,7 +178,7 @@ impl Compiled {
         } else {
             env.default_sort.clone()
         };
-        let mut order = String::new();
+        let mut order = Sql::default();
         let mut keys = sorts;
         if keys.is_empty() {
             let status = crate::fields::find("status").map(SortBy::Field);
@@ -190,18 +193,20 @@ impl Compiled {
         }
         let mut names = Vec::with_capacity(keys.len());
         for key in &keys {
-            let name = match key.by {
-                SortBy::Field(f) => f.name,
-                SortBy::Rank => "rank",
-                SortBy::Relevance => "relevance",
+            let name = match &key.by {
+                SortBy::Field(f) => f.name.to_owned(),
+                SortBy::Custom(q) => format!("{}{q}", crate::fields::CUSTOM_PREFIX),
+                SortBy::Rank => "rank".to_owned(),
+                SortBy::Relevance => "relevance".to_owned(),
             };
             names.push(format!("{}{name}", if key.descending { "-" } else { "" }));
-            for e in sort_exprs(key.by, relevance) {
+            for e in sort_exprs(&key.by, relevance) {
                 let dir = if key.descending { "DESC" } else { "ASC" };
-                let _ = write!(order, "{e} {dir} NULLS LAST, ");
+                order.append(e);
+                let _ = write!(order.text, " {dir} NULLS LAST, ");
             }
         }
-        order.push_str("p.key ASC, t.number ASC");
+        order.push("p.key ASC, t.number ASC");
         Self {
             with,
             from,
@@ -235,7 +240,8 @@ impl Compiled {
         let mut sql = self.with.clone();
         let _ = write!(sql.text, "SELECT t.id FROM {} WHERE ", self.from);
         sql.append(self.filter.clone());
-        let _ = write!(sql.text, " ORDER BY {}", self.order);
+        sql.push(" ORDER BY ");
+        sql.append(self.order.clone());
         sql
     }
 
@@ -257,7 +263,7 @@ impl Compiled {
     /// Keeps groups of rows together: `order` (an `ORDER BY` list over the
     /// tables `t`, `p`, `s` and `y`) comes before the query's own order.
     pub fn group_first(&mut self, order: &str) {
-        self.order = format!("{order}, {}", self.order);
+        self.order.text = format!("{order}, {}", self.order.text);
     }
 
     /// One row per group of the matching tasks: `SELECT {select}, count(*)
@@ -595,6 +601,7 @@ fn day_text(d: Day, offset: i64) -> String {
 fn cond(c: &Cond, today: Day, now: i64) -> Sql {
     let mut sql = Sql::default();
     match c {
+        Cond::Custom(c) => sql.append(custom(c)),
         Cond::Keys(keys) => {
             sql.push("t.id IN ");
             sql.append(key_ids(keys));
@@ -885,9 +892,134 @@ fn cond(c: &Cond, today: Day, now: i64) -> Sql {
     sql
 }
 
+/// A condition on a custom field: whether one of the task's values of the
+/// fields with this query name passes the test, or the task has none.
+fn custom(c: &CustomCond) -> Sql {
+    let values = |sql: &mut Sql| {
+        sql.push(
+            "SELECT 1 FROM custom_values v JOIN custom_fields f ON f.id = v.field_id \
+             WHERE v.task_id = t.id AND f.query_name = ",
+        );
+        sql.str(&c.query_name);
+    };
+    let mut parts = Vec::new();
+    if c.none {
+        let mut sql = Sql::default();
+        sql.push("NOT EXISTS (");
+        values(&mut sql);
+        sql.push(")");
+        parts.push(sql);
+    }
+    let test: Option<Vec<Sql>> = match &c.test {
+        CustomTest::Nothing => None,
+        CustomTest::Anything => {
+            let mut sql = Sql::default();
+            sql.push("1");
+            parts.push(sql);
+            None
+        }
+        CustomTest::Boolean(false) => {
+            // No value counts as no.
+            let mut sql = Sql::default();
+            sql.push("NOT EXISTS (");
+            values(&mut sql);
+            sql.push(" AND v.value = 1)");
+            parts.push(sql);
+            None
+        }
+        CustomTest::Boolean(true) => Some(vec![Sql {
+            text: "v.value = 1".to_owned(),
+            params: Vec::new(),
+        }]),
+        CustomTest::Contains(texts) => Some(
+            texts
+                .iter()
+                .map(|t| {
+                    let mut sql = Sql::default();
+                    sql.push("v.value LIKE ");
+                    sql.str(&like_pattern(t));
+                    sql.push(" ESCAPE '\\'");
+                    sql
+                })
+                .collect(),
+        ),
+        CustomTest::Exact(texts) | CustomTest::Options(texts) => {
+            let mut sql = Sql::default();
+            sql.push("lower(v.value) IN (");
+            for (i, t) in texts.iter().enumerate() {
+                if i > 0 {
+                    sql.push(", ");
+                }
+                sql.push("lower(");
+                sql.str(t);
+                sql.push(")");
+            }
+            sql.push(")");
+            Some(vec![sql])
+        }
+        CustomTest::Integer(b) => Some(bounds_on("v.value", b, false)),
+        CustomTest::Date(b) => Some(bounds_on("v.value", b, true)),
+        CustomTest::Decimal(b) => Some(b.iter().map(real_bounds).collect()),
+    };
+    if let Some(tests) = test {
+        let mut sql = Sql::default();
+        sql.push("EXISTS (");
+        values(&mut sql);
+        sql.push(" AND (");
+        sql.append(any(tests));
+        sql.push("))");
+        parts.push(sql);
+    }
+    any(parts)
+}
+
+fn real_bounds(b: &RealBounds) -> Sql {
+    let mut sql = Sql::default();
+    let mut first = true;
+    for (bound, below) in [(&b.lo, false), (&b.hi, true)] {
+        let Some(bound) = bound else { continue };
+        if !first {
+            sql.push(" AND ");
+        }
+        first = false;
+        let op = match (below, bound.inclusive) {
+            (false, true) => ">=",
+            (false, false) => ">",
+            (true, true) => "<=",
+            (true, false) => "<",
+        };
+        let _ = write!(sql.text, "v.value {op} CAST(");
+        sql.str(&bound.value);
+        sql.push(" AS REAL)");
+    }
+    if first {
+        sql.push("1");
+    }
+    sql
+}
+
 /// The expressions a sort key orders by.
-fn sort_exprs(by: SortBy, relevance: bool) -> Vec<&'static str> {
-    match by {
+fn sort_exprs(by: &SortBy, relevance: bool) -> Vec<Sql> {
+    let fixed = |e: Vec<&str>| {
+        e.into_iter()
+            .map(|t| Sql {
+                text: t.to_owned(),
+                params: Vec::new(),
+            })
+            .collect()
+    };
+    if let SortBy::Custom(query_name) = by {
+        let mut sql = Sql::default();
+        sql.push(
+            "(SELECT min(v.value) FROM custom_values v JOIN custom_fields f ON f.id = v.field_id \
+             WHERE v.task_id = t.id AND f.query_name = ",
+        );
+        sql.str(query_name);
+        sql.push(")");
+        return vec![sql];
+    }
+    fixed(match *by {
+        SortBy::Custom(_) => Vec::new(),
         SortBy::Rank => vec!["t.rank"],
         SortBy::Relevance => {
             if relevance {
@@ -927,5 +1059,5 @@ fn sort_exprs(by: SortBy, relevance: bool) -> Vec<&'static str> {
             | FieldType::Is
             | FieldType::Has => Vec::new(),
         },
-    }
+    })
 }

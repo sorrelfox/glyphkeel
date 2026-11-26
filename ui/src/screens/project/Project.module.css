@@ -301,3 +301,16 @@
 .deleteDialog {
   max-inline-size: 44ch;
 }
+
+/* The project's key with its button, or the field for a new one. */
+.keyField {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  min-inline-size: 0;
+}
+
+.keyField .field {
+  inline-size: 12ch;
+}

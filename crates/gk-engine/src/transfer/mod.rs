@@ -27,6 +27,7 @@
 //! reading but can't be reverted, since their values may name items of the
 //! workspace they came from.
 
+mod custom_fields;
 mod export;
 mod import;
 mod model;
@@ -321,7 +322,15 @@ impl Engine {
     }
 }
 
-/// The archive path of project `key`'s folder.
+/// The archive path of project `key`'s folder: the key, with a `_` in
+/// front when Windows reserves it as a device name (`CON`, `NUL`, `COM1`…)
+/// so that the archive can be unpacked there.
 fn project_dir(key: &str) -> String {
+    format!("projects/{}", gk_core::portable_file_name(key))
+}
+
+/// The folder archives written before device names were avoided used for
+/// project `key`; still read.
+fn plain_project_dir(key: &str) -> String {
     format!("projects/{key}")
 }

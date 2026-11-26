@@ -2,8 +2,9 @@
 // Copyright (C) 2026 Glyphkeel contributors
 
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
-import { Button, Tab, TabList, TabPanel, Tabs } from "react-aria-components";
+import { Button, Tab, TabList, TabPanel, Tabs, useLocale } from "react-aria-components";
 
 import { classes } from "../../classes";
 import { Dialog } from "../../components/Dialog";
@@ -16,6 +17,7 @@ import { useCommand } from "../../data/hooks";
 import { useT } from "../../i18n/I18n";
 import { HuePicker } from "./HuePicker";
 import { DeleteQuestion } from "./DeleteProject";
+import { FieldsSettings } from "./FieldsSettings";
 import { IconPicker } from "./IconPicker";
 import styles from "./Project.module.css";
 
@@ -25,8 +27,8 @@ interface ProjectSettingsProps {
 }
 
 /**
- * Project settings: general, statuses (with WIP limits), task types and
- * labels. Every change applies at once, as in Preferences.
+ * Project settings: general, statuses (with WIP limits), task types,
+ * labels and custom fields. Every change applies at once, as in Preferences.
  */
 export function ProjectSettings({ projectKey, onClose }: ProjectSettingsProps) {
   const t = useT();
@@ -57,6 +59,9 @@ export function ProjectSettings({ projectKey, onClose }: ProjectSettingsProps) {
               <Tab id="labels" className={({ isSelected }) => (isSelected ? "tab on" : "tab")}>
                 {t("project-settings-labels")}
               </Tab>
+              <Tab id="fields" className={({ isSelected }) => (isSelected ? "tab on" : "tab")}>
+                {t("project-settings-fields")}
+              </Tab>
             </TabList>
             <TabPanel id="general" className={classes(styles.panel)}>
               <General project={project.data} onDeleted={onClose} />
@@ -69,6 +74,9 @@ export function ProjectSettings({ projectKey, onClose }: ProjectSettingsProps) {
             </TabPanel>
             <TabPanel id="labels" className={classes(styles.panel)}>
               <Labels project={project.data} />
+            </TabPanel>
+            <TabPanel id="fields" className={classes(styles.panel)}>
+              <FieldsSettings project={project.data} />
             </TabPanel>
           </Tabs>
         )}
@@ -119,6 +127,93 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+/**
+ * The project's key, and changing it. The old key stays an alias: task
+ * keys with it keep working in links, addresses, the command line, agents
+ * and queries, and saved queries are rewritten to the new one.
+ */
+function KeyField({ project }: { project: Project }) {
+  const t = useT();
+  const { locale } = useLocale();
+  const navigate = useNavigate();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const change = useCommand("project.change_key", { undoable: t("toast-project-key-changed") });
+  const [editing, setEditing] = useState<string | null>(null);
+  const readOnly = project.state === "archived";
+  const oldKeys = project.old_keys ?? [];
+  const save = () => {
+    const key = (editing ?? "").trim().toUpperCase();
+    if (key === "" || key === project.key) {
+      setEditing(null);
+      return;
+    }
+    const before = project.key;
+    change.mutate(
+      { project: project.key, key },
+      {
+        onSuccess: (changed) => {
+          setEditing(null);
+          // The project's own pages move to the new key; the old address would still work.
+          const prefix = `/projects/${before}`;
+          if (pathname === prefix || pathname.startsWith(`${prefix}/`)) {
+            void navigate({ to: `/projects/${changed.project.key}${pathname.slice(prefix.length)}` });
+          }
+        },
+      },
+    );
+  };
+  if (editing === null) {
+    return (
+      <div className={styles.keyField}>
+        <span className="key" data-testid="project-key">
+          {project.key}
+        </span>
+        <Button className="btn sm" isDisabled={readOnly} onPress={() => { setEditing(project.key); }}>
+          {t("project-key-change")}
+        </Button>
+        {oldKeys.length > 0 && (
+          <span className="meta">{t("project-key-old", { keys: new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(oldKeys), count: oldKeys.length })}</span>
+        )}
+      </div>
+    );
+  }
+  return (
+    <form
+      className={styles.keyField}
+      onSubmit={(event) => {
+        event.preventDefault();
+        save();
+      }}
+    >
+      <span className="field">
+        <input
+          autoFocus
+          className="num"
+          aria-label={t("project-key-new")}
+          value={editing}
+          maxLength={10}
+          onChange={(event) => {
+            setEditing(event.target.value.toUpperCase());
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.stopPropagation();
+              setEditing(null);
+            }
+          }}
+        />
+      </span>
+      <Button className="btn primary sm" type="submit" isDisabled={change.isPending || editing.trim() === ""}>
+        {t("project-key-save")}
+      </Button>
+      <Button className="btn sm" onPress={() => { setEditing(null); }}>
+        {t("dialog-cancel")}
+      </Button>
+      <p className="meta">{t("project-key-note", { old: project.key })}</p>
+    </form>
+  );
+}
+
 function General({ project, onDeleted }: { project: Project; onDeleted: () => void }) {
   const t = useT();
   const update = useCommand("project.update", { undoable: t("toast-project-changed") });
@@ -133,7 +228,7 @@ function General({ project, onDeleted }: { project: Project; onDeleted: () => vo
         <SaveField label={t("project-name")} value={project.name} onSave={(name) => { patch({ name }); }} />
       </Row>
       <Row label={t("project-key")}>
-        <span className="key">{project.key}</span>
+        <KeyField project={project} />
       </Row>
       <Row label={t("project-colour")}>
         <HuePicker label={t("project-colour")} value={project.hue} onChange={(hue) => { patch({ hue }); }} />

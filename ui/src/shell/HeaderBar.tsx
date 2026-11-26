@@ -15,7 +15,7 @@ import { classes } from "../classes";
 import { ProjectMark } from "../components/ProjectMark";
 import { useT } from "../i18n/I18n";
 import { appWindow } from "../ipc/window";
-import { type TitleBar } from "../start";
+import { dragRegion, type TitleBar } from "../start";
 import styles from "./Shell.module.css";
 
 interface HeaderBarProps {
@@ -32,11 +32,13 @@ interface HeaderBarProps {
 
 /**
  * The window's header bar. Its empty parts move the window and a double click
- * maximizes it. With the system title bar, the window manager draws the window
- * buttons, so the header bar leaves them out.
+ * maximizes it. With the system title bar (always on Windows), the system
+ * draws the window buttons and moves the window, so the header bar leaves
+ * out both.
  */
 export function HeaderBar({ titleBar, title, subtitle, project, onProjectSettings, onNewSubproject }: HeaderBarProps) {
   const t = useT();
+  const drag = dragRegion(titleBar);
   const toggleSidebar = useAction("sidebar.toggle");
   const newTask = useAction("task.new");
   const menuItems = [
@@ -57,7 +59,7 @@ export function HeaderBar({ titleBar, title, subtitle, project, onProjectSetting
   ] as const;
 
   return (
-    <header className={classes("headerbar", styles.headerbar)} data-region="header" tabIndex={-1} data-tauri-drag-region>
+    <header className={classes("headerbar", styles.headerbar)} data-region="header" tabIndex={-1} {...drag}>
       <Tooltip text={t(toggleSidebar.label)} chord={toggleSidebar.keys[0]}>
         <Button className="btn flat icon" aria-label={t(toggleSidebar.label)} onPress={toggleSidebar.run}>
           <PanelLeft className="ic" />
@@ -66,24 +68,24 @@ export function HeaderBar({ titleBar, title, subtitle, project, onProjectSetting
       {project ? (
         <>
           <ProjectButton project={project} onSettings={onProjectSettings} onNewSubproject={onNewSubproject} />
-          <div className={styles.spacer} data-tauri-drag-region />
+          <div className={styles.spacer} {...drag} />
           <ViewSwitcher project={project.key} />
-          <div className={styles.spacer} data-tauri-drag-region />
+          <div className={styles.spacer} {...drag} />
         </>
       ) : (
         <>
-          <div className={styles.spacer} data-tauri-drag-region />
-          <div className={styles.viewTitle} data-tauri-drag-region>
-            <h1 className={styles.title} data-tauri-drag-region>
+          <div className={styles.spacer} {...drag} />
+          <div className={styles.viewTitle} {...drag}>
+            <h1 className={styles.title} {...drag}>
               {title}
             </h1>
             {subtitle && (
-              <span className={classes("muted", styles.subtitle)} data-tauri-drag-region>
+              <span className={classes("muted", styles.subtitle)} {...drag}>
                 {subtitle}
               </span>
             )}
           </div>
-          <div className={styles.spacer} data-tauri-drag-region />
+          <div className={styles.spacer} {...drag} />
         </>
       )}
       <Tooltip text={t(newTask.label)} chord={newTask.keys[0]}>

@@ -213,6 +213,7 @@ fn apply(
                 key: key.clone(),
                 status: c.status.clone(),
                 project: c.project.clone(),
+                mapping: c.mapping.clone(),
                 ..TaskMoveInput::default()
             },
         )?;

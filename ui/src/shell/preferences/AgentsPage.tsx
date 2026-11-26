@@ -17,10 +17,11 @@ import { Switch } from "../../components/Switch";
 import { type AgentLimit, type AgentLimitsPatch, type AgentSession, type Profile } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { useCliStatus, useInstallCli, type CliStatus } from "../../ipc/cli";
+import { platform, type Platform } from "../../platform";
 import { useMomentFormat } from "../../screens/task/Activity";
 import { Group, NumberSetting, Row } from "../PreferenceRows";
 import styles from "../Preferences.module.css";
-import { MCP_CLIENTS, projectSnippet } from "./clients";
+import { clientFile, MCP_CLIENTS, projectSnippet } from "./clients";
 
 const PROFILES: readonly Profile[] = ["read-only", "standard", "full"];
 
@@ -49,9 +50,17 @@ export function AgentsPage() {
 
 // ---------- the command-line tool ----------
 
+/** The messages for a tool off the PATH, which on Windows name the installer instead of a package manager. */
+export function cliMessages(on: Platform): { bundledNotOnPath: string; missing: string } {
+  return on === "windows"
+    ? { bundledNotOnPath: "agents-cli-bundled-not-on-path-windows", missing: "agents-cli-missing-windows" }
+    : { bundledNotOnPath: "agents-cli-bundled-not-on-path", missing: "agents-cli-missing" };
+}
+
 function CliGroup({ status, isPending }: { status: CliStatus | null | undefined; isPending: boolean }) {
   const t = useT();
   const install = useInstallCli();
+  const messages = cliMessages(platform());
   if (isPending) {
     return null;
   }
@@ -88,13 +97,13 @@ function CliGroup({ status, isPending }: { status: CliStatus | null | undefined;
           </Button>
         </Row>
       ) : status.bundled !== undefined ? (
-        <Row label={t("agents-cli-tool")} about={t("agents-cli-bundled-not-on-path", { path: status.bundled })}>
+        <Row label={t("agents-cli-tool")} about={t(messages.bundledNotOnPath, { path: status.bundled })}>
           <span className="chip" data-testid="cli-state">
             {t("agents-cli-not-on-path-chip")}
           </span>
         </Row>
       ) : (
-        <Row label={t("agents-cli-tool")} about={t("agents-cli-missing")}>
+        <Row label={t("agents-cli-tool")} about={t(messages.missing)}>
           <span className="chip" data-testid="cli-state">
             {t("agents-cli-missing-chip")}
           </span>
@@ -146,6 +155,7 @@ function ClientsGroup({ command }: { command: readonly string[] }) {
   if (!client) {
     return null;
   }
+  const file = clientFile(client, platform());
   return (
     <Group title={t("agents-clients")}>
       <Row label={t("agents-client")} about={t("agents-clients-about")}>
@@ -158,7 +168,7 @@ function ClientsGroup({ command }: { command: readonly string[] }) {
       </Row>
       <div className={styles.snippetBlock}>
         <p className={styles.snippetWhere}>
-          {client.file === undefined ? t("agents-client-run", { client: client.name }) : t("agents-client-file", { client: client.name, file: client.file })}
+          {file === undefined ? t("agents-client-run", { client: client.name }) : t("agents-client-file", { client: client.name, file })}
         </p>
         <Snippet text={client.snippet(command)} label={t("agents-client-snippet", { client: client.name })} />
       </div>

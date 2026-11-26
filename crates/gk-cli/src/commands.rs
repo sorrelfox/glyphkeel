@@ -147,7 +147,11 @@ pub(crate) fn build(ops: &[OpCommand]) -> Command {
         }
     }
     for child in tree.children {
-        root = root.subcommand(child.into_command(ops));
+        let mut cmd = child.into_command(ops);
+        if cmd.get_name() == WORKSPACE {
+            cmd = crate::workspace::commands(cmd);
+        }
+        root = root.subcommand(cmd);
     }
 
     root.subcommand(

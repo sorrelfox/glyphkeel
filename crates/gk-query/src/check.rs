@@ -10,13 +10,13 @@
 //! task keys) are only collected here; the engine looks them up
 //! ([`Checked::names`]).
 
-use gk_core::{Day, DurationUnits, fold, parse_minutes};
+use gk_core::{Day, DurationUnits, FieldKind, fold, parse_minutes};
 
 use crate::dates::{Calendar, Days, parse_query_date};
 use crate::error::{QueryError, closest};
 use crate::fields::{
-    self, CATEGORIES, CountOf, DateColumn, DurationColumn, Field, FieldType, HAS_PARTS, IS_FLAGS,
-    LinkField, MomentColumn, PRIORITIES, TextScope,
+    self, CATEGORIES, CountOf, CustomField, DateColumn, DurationColumn, Field, FieldType,
+    HAS_PARTS, IS_FLAGS, LinkField, MomentColumn, PRIORITIES, TextScope,
 };
 use crate::syntax::{Expr, Op, Predicate, Query, Span, Value, ValueKind};
 
@@ -192,13 +192,71 @@ pub enum Cond {
     Is(Vec<&'static str>),
     /// Has any of these parts.
     Has(Vec<&'static str>),
+    /// A condition on a custom field.
+    Custom(CustomCond),
+}
+
+/// A condition on a custom field: the task's own field of that query name
+/// passes the test, or (`none`) the task has no value for it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CustomCond {
+    /// The field's query name.
+    pub query_name: String,
+    /// What a value must be.
+    pub test: CustomTest,
+    /// Tasks without a value match too.
+    pub none: bool,
+}
+
+/// One bound of a decimal: the number as text and whether it is included.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RealBound {
+    /// The number, as Rust writes an `f64`.
+    pub value: String,
+    /// Whether the bound itself matches.
+    pub inclusive: bool,
+}
+
+/// Bounds on a decimal; `None` is open.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RealBounds {
+    /// The lower bound.
+    pub lo: Option<RealBound>,
+    /// The upper bound.
+    pub hi: Option<RealBound>,
+}
+
+/// What a custom field's value must be.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CustomTest {
+    /// Nothing: only `none` matches.
+    Nothing,
+    /// Every task matches (`yes,no`).
+    Anything,
+    /// Contains any of these texts, ignoring case.
+    Contains(Vec<String>),
+    /// Is exactly one of these texts, ignoring case.
+    Exact(Vec<String>),
+    /// A whole number within any of the bounds.
+    Integer(Vec<Bounds>),
+    /// A decimal within any of the bounds.
+    Decimal(Vec<RealBounds>),
+    /// A day within any of the bounds (days since 1970).
+    Date(Vec<Bounds>),
+    /// Yes or no; a task without a value counts as no.
+    Boolean(bool),
+    /// Any of these options, as the field lists them.
+    Options(Vec<String>),
 }
 
 /// What a sort key sorts by.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SortBy {
     /// A field.
     Field(&'static Field),
+    /// A custom field, by its query name; several values (multi-select)
+    /// sort by the first in order.
+    Custom(String),
     /// The place on the board.
     Rank,
     /// How well the text terms match.
@@ -206,7 +264,7 @@ pub enum SortBy {
 }
 
 /// One checked sort key.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sort {
     /// What to sort by.
     pub by: SortBy,
@@ -380,6 +438,8 @@ pub struct CheckEnv<'a> {
     pub calendar: &'a dyn Calendar,
     /// The working day and week, for durations.
     pub units: DurationUnits,
+    /// The workspace's custom fields, one per query name.
+    pub custom: &'a [CustomField],
 }
 
 impl std::fmt::Debug for CheckEnv<'_> {
@@ -387,6 +447,7 @@ impl std::fmt::Debug for CheckEnv<'_> {
         f.debug_struct("CheckEnv")
             .field("today", &self.calendar.today())
             .field("units", &self.units)
+            .field("custom", &self.custom.len())
             .finish()
     }
 }
@@ -405,18 +466,29 @@ pub fn check(query: &Query, env: CheckEnv<'_>) -> Result<Checked, QueryError> {
                 "rank" => SortBy::Rank,
                 "relevance" => SortBy::Relevance,
                 _ => match fields::find(&lower).filter(|f| f.sortable) {
-                    Some(f) => SortBy::Field(f),
-                    None => {
-                        return Err(match closest(&lower, fields::sort_keys()) {
+                    Some(f) if fields::strip_custom_prefix(&key.field).is_none() => {
+                        SortBy::Field(f)
+                    }
+                    _ => {
+                        if let Some(c) = fields::find_custom(&key.field, env.custom) {
+                            sort.push(Sort {
+                                by: SortBy::Custom(c.query_name.clone()),
+                                descending: key.descending,
+                            });
+                            continue;
+                        }
+                        let custom: Vec<String> =
+                            env.custom.iter().map(CustomField::written).collect();
+                        let mut keys: Vec<&str> = fields::sort_keys().collect();
+                        keys.extend(custom.iter().map(String::as_str));
+                        let suggestion = closest(&lower, keys.iter().copied()).map(str::to_owned);
+                        return Err(match suggestion {
                             Some(s) => QueryError::new("query-sort-unknown", key.span)
                                 .arg("field", key.field.clone())
                                 .arg("suggestion", s),
                             None => QueryError::new("query-sort-unknown-plain", key.span)
                                 .arg("field", key.field.clone())
-                                .arg(
-                                    "choices",
-                                    fields::sort_keys().collect::<Vec<_>>().join(", "),
-                                ),
+                                .arg("choices", keys.join(", ")),
                         });
                     }
                 },
@@ -485,8 +557,31 @@ fn usage(field: &Field) -> String {
 }
 
 fn predicate(p: &Predicate, env: CheckEnv<'_>) -> Result<Filter, QueryError> {
+    let prefixed = fields::strip_custom_prefix(&p.field).is_some();
+    if let Some(custom) = fields::find_custom(&p.field, env.custom) {
+        return custom_predicate(p, custom, env);
+    }
+    let custom_names: Vec<String> = env.custom.iter().map(CustomField::written).collect();
+    if prefixed {
+        let names = custom_names.iter().map(String::as_str);
+        return Err(match closest(&p.field, names) {
+            Some(s) => QueryError::new("query-unknown-custom-field", p.field_span)
+                .arg("field", p.field.clone())
+                .arg("suggestion", s),
+            None if custom_names.is_empty() => {
+                QueryError::new("query-no-custom-fields", p.field_span)
+                    .arg("field", p.field.clone())
+            }
+            None => QueryError::new("query-unknown-custom-field-plain", p.field_span)
+                .arg("field", p.field.clone())
+                .arg("choices", custom_names.join(", ")),
+        });
+    }
     let Some(field) = fields::find(&p.field) else {
-        return Err(match closest(&p.field, fields::all_names()) {
+        let mut names: Vec<&str> = fields::all_names().collect();
+        names.extend(custom_names.iter().map(String::as_str));
+        let suggestion = closest(&p.field, names).map(str::to_owned);
+        return Err(match suggestion {
             Some(s) => QueryError::new("query-unknown-field", p.field_span)
                 .arg("field", p.field.clone())
                 .arg("suggestion", s),
@@ -538,6 +633,203 @@ fn predicate(p: &Predicate, env: CheckEnv<'_>) -> Result<Filter, QueryError> {
         Filter::Not(Box::new(cond))
     } else {
         cond
+    })
+}
+
+fn custom_usage(field: &CustomField) -> String {
+    field
+        .ops()
+        .iter()
+        .map(|op| format!("{}{}", field.written(), op.as_str()))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn custom_predicate(
+    p: &Predicate,
+    field: &CustomField,
+    env: CheckEnv<'_>,
+) -> Result<Filter, QueryError> {
+    let name = field.written();
+    if !field.ops().contains(&p.op) {
+        return Err(QueryError::new("query-operator", p.op_span)
+            .arg("op", p.op.as_str())
+            .arg("field", name)
+            .arg("usage", custom_usage(field)));
+    }
+    for v in &p.values {
+        if let ValueKind::Range(..) = v.kind {
+            if !field.ranges() {
+                return Err(QueryError::new("query-no-range", v.span)
+                    .arg("field", name)
+                    .arg("usage", custom_usage(field)));
+            }
+            if !matches!(p.op, Op::Is | Op::Eq) {
+                return Err(QueryError::new("query-range-operator", v.span).arg("field", name));
+            }
+        }
+        if is_none(v) && !matches!(p.op, Op::Is | Op::Eq | Op::Ne) {
+            return Err(QueryError::new("query-none-operator", v.span));
+        }
+    }
+    let (op, negate) = match p.op {
+        Op::Ne => (Op::Is, true),
+        op => (op, false),
+    };
+    let exact = p.op == Op::Eq;
+    let none = p.values.iter().any(is_none);
+    let values: Vec<&Value> = p.values.iter().filter(|v| !is_none(v)).collect();
+    let test = if values.is_empty() {
+        CustomTest::Nothing
+    } else {
+        custom_test(field, op, exact, &values, env)?
+    };
+    let cond = Filter::Cond(Cond::Custom(CustomCond {
+        query_name: field.query_name.clone(),
+        test,
+        none,
+    }));
+    Ok(if negate {
+        Filter::Not(Box::new(cond))
+    } else {
+        cond
+    })
+}
+
+fn custom_test(
+    field: &CustomField,
+    op: Op,
+    exact: bool,
+    values: &[&Value],
+    env: CheckEnv<'_>,
+) -> Result<CustomTest, QueryError> {
+    let name = field.written();
+    Ok(match field.kind {
+        FieldKind::Text | FieldKind::Markdown | FieldKind::Url => {
+            let texts = values
+                .iter()
+                .map(|v| {
+                    let text = v.text();
+                    if text.trim().is_empty() {
+                        Err(QueryError::new("query-empty-value", v.span).arg("field", name.clone()))
+                    } else {
+                        Ok(text)
+                    }
+                })
+                .collect::<Result<_, _>>()?;
+            if exact {
+                CustomTest::Exact(texts)
+            } else {
+                CustomTest::Contains(texts)
+            }
+        }
+        FieldKind::Integer => CustomTest::Integer(
+            values
+                .iter()
+                .map(|v| {
+                    let one = |t: &str| {
+                        t.trim().parse::<i64>().map_err(|_| {
+                            QueryError::new("query-bad-number", v.span).arg("value", t)
+                        })
+                    };
+                    let (lo, hi) = match &v.kind {
+                        ValueKind::Word { text, .. } => (one(text)?, one(text)?),
+                        ValueKind::Range(a, b) => (one(a)?, one(b)?),
+                    };
+                    Ok(bounds(op, lo, hi))
+                })
+                .collect::<Result<_, QueryError>>()?,
+        ),
+        FieldKind::Decimal => CustomTest::Decimal(
+            values
+                .iter()
+                .map(|v| {
+                    let one = |t: &str| match t.trim().parse::<f64>() {
+                        Ok(n) if n.is_finite() => Ok(n.to_string()),
+                        _ => Err(QueryError::new("query-bad-decimal", v.span).arg("value", t)),
+                    };
+                    let (lo, hi) = match &v.kind {
+                        ValueKind::Word { text, .. } => (one(text)?, one(text)?),
+                        ValueKind::Range(a, b) => (one(a)?, one(b)?),
+                    };
+                    let bound = |value: String, inclusive| Some(RealBound { value, inclusive });
+                    Ok(match op {
+                        Op::Lt => RealBounds {
+                            lo: None,
+                            hi: bound(lo, false),
+                        },
+                        Op::Le => RealBounds {
+                            lo: None,
+                            hi: bound(hi, true),
+                        },
+                        Op::Gt => RealBounds {
+                            lo: bound(hi, false),
+                            hi: None,
+                        },
+                        Op::Ge => RealBounds {
+                            lo: bound(lo, true),
+                            hi: None,
+                        },
+                        Op::Is | Op::Eq | Op::Ne => RealBounds {
+                            lo: bound(lo, true),
+                            hi: bound(hi, true),
+                        },
+                    })
+                })
+                .collect::<Result<_, QueryError>>()?,
+        ),
+        FieldKind::Date => CustomTest::Date(
+            values
+                .iter()
+                .map(|v| {
+                    days_of(v, env).map(|(first, last)| {
+                        bounds(op, first.days_since_epoch(), last.days_since_epoch())
+                    })
+                })
+                .collect::<Result<_, _>>()?,
+        ),
+        FieldKind::Boolean => {
+            let mut wanted = None;
+            for v in values {
+                let b = gk_core::custom_field::parse_bool(word(v)).ok_or_else(|| {
+                    QueryError::new("query-bad-choice", v.span)
+                        .arg("value", word(v))
+                        .arg("field", name.clone())
+                        .arg("choices", "yes, no")
+                })?;
+                if wanted.is_some_and(|w| w != b) {
+                    // `yes,no` matches every task.
+                    return Ok(CustomTest::Anything);
+                }
+                wanted = Some(b);
+            }
+            CustomTest::Boolean(wanted.unwrap_or(true))
+        }
+        FieldKind::Select | FieldKind::MultiSelect => {
+            let mut out: Vec<String> = Vec::new();
+            for v in values {
+                let wanted = fold(&v.text());
+                let Some(option) = field.options.iter().find(|o| fold(o) == wanted) else {
+                    let text = v.text();
+                    return Err(
+                        match closest(&text, field.options.iter().map(String::as_str)) {
+                            Some(s) => QueryError::new("query-bad-choice-suggest", v.span)
+                                .arg("value", text)
+                                .arg("field", name.clone())
+                                .arg("suggestion", s),
+                            None => QueryError::new("query-bad-choice", v.span)
+                                .arg("value", text)
+                                .arg("field", name.clone())
+                                .arg("choices", field.options.join(", ")),
+                        },
+                    );
+                };
+                if !out.contains(option) {
+                    out.push(option.clone());
+                }
+            }
+            CustomTest::Options(out)
+        }
     })
 }
 
@@ -975,15 +1267,74 @@ mod tests {
         }
     }
 
+    fn custom() -> Vec<CustomField> {
+        vec![
+            CustomField {
+                name: "Points".to_owned(),
+                query_name: "points".to_owned(),
+                kind: FieldKind::Integer,
+                options: Vec::new(),
+            },
+            CustomField {
+                name: "Área".to_owned(),
+                query_name: "área".to_owned(),
+                kind: FieldKind::Select,
+                options: vec!["Front end".to_owned(), "Back end".to_owned()],
+            },
+            CustomField {
+                name: "Link".to_owned(),
+                query_name: "link".to_owned(),
+                kind: FieldKind::Url,
+                options: Vec::new(),
+            },
+        ]
+    }
+
     fn run(src: &str) -> Result<Checked, QueryError> {
         let c = cal();
+        let custom = custom();
         check(
             &parse(src)?,
             CheckEnv {
                 calendar: &c,
                 units: DurationUnits::default(),
+                custom: &custom,
             },
         )
+    }
+
+    #[test]
+    fn custom_fields_take_the_operators_and_values_of_their_kind() {
+        let ok = |src: &str| run(src).unwrap_or_else(|e| panic!("{src}: {e:?}"));
+        let first = |src: &str| match ok(src).filter {
+            Some(Filter::Cond(Cond::Custom(c))) => c,
+            other => panic!("{src}: {other:?}"),
+        };
+        let c = first("cf.points>3");
+        assert_eq!(c.query_name, "points");
+        assert_eq!(
+            c.test,
+            CustomTest::Integer(vec![Bounds {
+                lo: Some(4),
+                hi: None
+            }])
+        );
+        assert!(first("points:none").none);
+        assert_eq!(
+            first("cf.ÁREA:\"back END\"").test,
+            CustomTest::Options(vec!["Back end".to_owned()])
+        );
+        assert_eq!(err("cf.área:middle").id, "query-bad-choice");
+        assert_eq!(err("cf.points:abc").id, "query-bad-number");
+        assert_eq!(err("cf.link>3").id, "query-operator");
+        assert_eq!(err("cf.link:a..b").id, "query-no-range");
+        assert_eq!(err("cf.pionts:3").id, "query-unknown-custom-field");
+        assert_eq!(err("cf.zzzzzzzz:3").id, "query-unknown-custom-field-plain");
+        assert!(matches!(
+            ok("is:open sort:-cf.points").sort.first().map(|s| &s.by),
+            Some(SortBy::Custom(q)) if q == "points"
+        ));
+        assert_eq!(err("sort:cf.nothing").id, "query-sort-unknown-plain");
     }
 
     fn err(src: &str) -> QueryError {

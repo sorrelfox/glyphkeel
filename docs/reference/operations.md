@@ -44,11 +44,16 @@ The safety class decides who may run an operation:
 | `version.create` | write | app, command line, MCP | `create_version` | `glyphkeel version create` |
 | `version.update` | write | app, command line, MCP | `update_version` | `glyphkeel version edit <version>` |
 | `version.delete` | write | app, command line, MCP | `delete_version` | `glyphkeel version delete <version>` |
+| `field.list` | read | app, command line, MCP | `list_custom_fields` | `glyphkeel field list` |
+| `field.create` | write | app, command line, MCP | `create_custom_field` | `glyphkeel field add` |
+| `field.update` | write | app, command line, MCP | `update_custom_field` | `glyphkeel field edit` |
+| `field.delete` | permanent | app, command line, MCP | `delete_custom_field` | `glyphkeel field delete` |
 | `task.search` | read | app, command line, MCP | `search_tasks` | `glyphkeel task list` |
 | `task.get` | read | app, command line, MCP | `get_task` | `glyphkeel task show <keys>` |
 | `task.create` | write | app, command line, MCP | `create_task` | `glyphkeel task create` |
 | `task.update` | write | app, command line, MCP | `update_task` | `glyphkeel task edit <key>` |
 | `task.move` | write | app, command line, MCP | `move_task` | `glyphkeel task move <key>` |
+| `task.move_check` | read | app, command line, MCP | `check_move` | `glyphkeel task move-check <keys>` |
 | `task.delete` | trash | app, command line, MCP | `delete_tasks` | `glyphkeel task delete <keys>` |
 | `task.bulk_update` | write | app, command line, MCP | `bulk_update_tasks` | `glyphkeel task bulk` |
 | `task.reorder_subtask` | write | app, command line, MCP | `reorder_subtask` | `glyphkeel task reorder-subtask <key>` |
@@ -309,6 +314,30 @@ Delete a version; its tasks are planned for no version. Revert brings both back.
 
 Input: `VersionDeleteInput`. Output: `VersionChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
+## `field.list`
+
+The custom fields of a project (its own and those of every project) or of the whole workspace: name, query name, kind, options, default, task types, required, and how many tasks have a value.
+
+Input: `CustomFieldListInput`. Output: `CustomFieldList`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `field.create`
+
+Add a custom field to a project, or to every project: text, Markdown, whole number, decimal, date, yes/no, select, multi-select or link; with options, a default, the task types it shows for, and whether it is required.
+
+Input: `CustomFieldCreateInput`. Output: `CustomFieldChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `field.update`
+
+Rename a custom field, rename, add, reorder or remove its options, change its default, task types or whether it is required, or move it; saved queries keep up with renames.
+
+Input: `CustomFieldUpdateInput`. Output: `CustomFieldChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `field.delete`
+
+Delete a custom field with its values on every task; saved queries lose their conditions on it. Can't be undone.
+
+Input: `CustomFieldDeleteInput`. Output: `CustomFieldChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
 ## `task.search`
 
 List the tasks matching a query (is:open due<+7d label:bug sort:due), a page at a time, with totals of estimates and logged time.
@@ -338,6 +367,12 @@ Input: `TaskUpdateInput`. Output: `TaskChange`. Schemas: [catalog.schema.json](c
 Move a task to another status or place in its column, or to another project (new key; the old one forwards).
 
 Input: `TaskMoveInput`. Output: `TaskChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `task.move_check`
+
+What moving tasks to another project would do: their new keys, and which of their statuses, types and labels the target project has no match for.
+
+Input: `TaskMoveCheckInput`. Output: `MoveCheck`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `task.delete`
 

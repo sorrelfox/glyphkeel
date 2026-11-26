@@ -8,8 +8,9 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::ops::{
-    agent, backup, board, bulk, comment, description, draft, file, history, link, project, query,
-    schedule, search, settings, task, time, today, transfer, trash, version, view, wiki, workspace,
+    agent, backup, board, bulk, comment, description, draft, field, file, history, link, project,
+    query, schedule, search, settings, task, time, today, transfer, trash, version, view, wiki,
+    workspace,
 };
 use crate::schema;
 
@@ -182,11 +183,16 @@ pub static CATALOG: &[OpDescriptor] = &[
     version::VERSION_CREATE,
     version::VERSION_UPDATE,
     version::VERSION_DELETE,
+    field::FIELD_LIST,
+    field::FIELD_CREATE,
+    field::FIELD_UPDATE,
+    field::FIELD_DELETE,
     query::TASK_SEARCH,
     task::TASK_GET,
     task::TASK_CREATE,
     task::TASK_UPDATE,
     task::TASK_MOVE,
+    task::TASK_MOVE_CHECK,
     task::TASK_DELETE,
     bulk::TASK_BULK_UPDATE,
     task::TASK_REORDER_SUBTASK,

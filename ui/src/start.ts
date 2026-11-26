@@ -1,8 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
+import { isPlatform, type Platform } from "./platform";
+
 /** Which title bar the window has: the app's own header bar, or the system's. */
 export type TitleBar = "app" | "system";
+
+/** The attribute that lets a part of the page move the window: only without the system title bar. */
+export function dragRegion(titleBar: TitleBar): { "data-tauri-drag-region"?: true } {
+  return titleBar === "app" ? { "data-tauri-drag-region": true } : {};
+}
 
 /** What the app hands the page before its first frame. */
 export interface StartData {
@@ -19,12 +26,14 @@ export interface StartData {
   quickAdd?: boolean;
   /** The workspace was made at this start: the main window offers the first-run set-up. */
   firstRun?: boolean;
+  /** The operating system, when the app names one the page knows; absent counts as Linux. */
+  platform?: Platform;
 }
 
 declare global {
   interface Window {
     /** Set by the app's initialization script; absent in a plain browser. */
-    readonly __GLYPHKEEL_START__?: { titleBar?: unknown; locale?: unknown; task?: unknown; wiki?: unknown; open?: unknown; prefs?: unknown; quickAdd?: unknown; firstRun?: unknown };
+    readonly __GLYPHKEEL_START__?: { titleBar?: unknown; locale?: unknown; task?: unknown; wiki?: unknown; open?: unknown; prefs?: unknown; quickAdd?: unknown; firstRun?: unknown; platform?: unknown };
   }
 }
 
@@ -53,6 +62,9 @@ export function readStart(win: Window = window): StartData {
   // Outside the app, `?first-run` asks for the set-up, for work on it and its browser flows.
   if (given.firstRun === true || (win.__GLYPHKEEL_START__ === undefined && new URLSearchParams((win.location as Location | undefined)?.search ?? "").has("first-run"))) {
     start.firstRun = true;
+  }
+  if (isPlatform(given.platform)) {
+    start.platform = given.platform;
   }
   return start;
 }

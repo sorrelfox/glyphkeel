@@ -310,6 +310,7 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
                     subtask_rank: r.get(30)?,
                     key_aliases: Vec::new(),
                     fix_version_id: opt_id(r, 31)?,
+                    custom_values: Vec::new(),
                 },
                 description,
             ))
@@ -360,7 +361,14 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
             &tb,
             |r| r.get(0),
         )?;
+        t.custom_values = super::custom_fields::export_values(tx, &tb)?;
     }
+    let task_ids: Vec<Vec<u8>> = tasks
+        .iter()
+        .filter_map(|t| t.id.parse::<Id>().ok())
+        .map(|id| id.as_bytes().to_vec())
+        .collect();
+    let custom_fields = super::custom_fields::export_fields(tx, &pid, &task_ids)?;
 
     let mut comments = all(
         tx,
@@ -511,18 +519,30 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
             ))
         },
     )?;
+    // Each page's file name: its slug made valid on every system, unique
+    // among the pages next to it ignoring case.
+    let mut taken = HashSet::new();
     let slugs: BTreeMap<String, (Option<String>, String)> = pages
         .iter()
-        .map(|(p, _)| (p.id.clone(), (p.parent_id.clone(), p.slug.clone())))
+        .map(|(p, _)| {
+            let name = gk_core::unique_file_name(&p.slug, |name| {
+                taken.insert((p.parent_id.clone(), name.to_lowercase()))
+            });
+            (p.id.clone(), (p.parent_id.clone(), name))
+        })
         .collect();
     let mut wiki = Vec::new();
     for (mut page, body) in pages {
-        let mut parts = vec![page.slug.clone()];
+        let mut parts = vec![
+            slugs
+                .get(&page.id)
+                .map_or_else(|| page.slug.clone(), |(_, name)| name.clone()),
+        ];
         let mut at = page.parent_id.clone();
         while let Some(parent) = at {
             match slugs.get(&parent) {
-                Some((up, slug)) if parts.len() < 16 => {
-                    parts.push(slug.clone());
+                Some((up, name)) if parts.len() < 16 => {
+                    parts.push(name.clone());
                     at = up.clone();
                 }
                 _ => break,
@@ -610,6 +630,7 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
             views,
             layouts,
             key_aliases,
+            custom_fields,
         },
         tasks,
         descriptions,

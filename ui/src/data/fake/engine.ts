@@ -16,6 +16,7 @@ import {
   type BulkItem,
   type BulkResult,
   type BulkUpdateInput,
+  type CustomFieldChange,
   type ListedTask,
   type Attachment,
   type Board,
@@ -40,6 +41,9 @@ import {
   type Link,
   type LinkKind,
   type LabelRef,
+  type MoveCheck,
+  type MoveMapping,
+  type MoveMatch,
   type OpError,
   type OpId,
   type OpMap,
@@ -72,6 +76,7 @@ import {
 import { PROJECT_ICONS, suggestHue } from "../catalog";
 import { formatDuration, parseDuration } from "../duration";
 import { decodeBase64, materialize, recordedFields, sniff } from "./details";
+import { applyValues, createField, deleteField, fieldOut, fieldsFor, fieldsOf, findField, listedValues, moveMatches, moveValues, placeField, queryFields, taskValues, updateField } from "./fields";
 import { checklistOf, escapeHtml, merge3, publicChecklist, renderFake, setChecked, unifiedDiff } from "./markdown";
 import { newProject, nextFileId, nextId, nextUuid, SAMPLE_AGENT } from "./seed";
 import { type FakeComment, type FakeFile, type FakeProject, type FakeRelation, type FakeReminder, type FakeRevision, type FakeState, type FakeTask, type FakeTimeEntry, type FakeWikiPage } from "./state";
@@ -81,7 +86,7 @@ import { moveDependents, scheduleOf } from "./schedule";
 /** The Gantt chart's layout until the person changes it. */
 const DEFAULT_GANTT_LAYOUT: GanttLayout = { zoom: "day", widths: {}, group_by: "parent", move_dependents: false };
 import { linksIn, placePage, subtree, type TextLink } from "./wiki";
-import { createVersion, deleteVersion, getVersion, listVersions, updateVersion, versionForTask, versionRef, type VersionHost } from "./versions";
+import { createVersion, deleteVersion, getVersion, listVersions, updateVersion, versionForTask, versionRef, visibleVersions, type VersionHost } from "./versions";
 import { createView, deleteView, listViews, matchingKeys, parseQuery, queryError, searchTasks, updateView, type GroupInfo, type QueryNames } from "./query";
 import { addDays, csvOf, localDay, MAX_ENTRY_MINUTES, momentOf, reminderAt, reminderOut, sortDue, timeEntryOut, timerElapsedMs, timerOut, unitsOf, weekStart, workDay } from "./time";
 
@@ -220,6 +225,14 @@ export class FakeWorkspace {
     }
   }
 
+  /** Gives the workspace another name, as renaming its folder does; Undo doesn't take it back. */
+  rename(name: string): void {
+    this.state.workspaceName = name;
+    for (const step of [...this.undoStack, ...this.redoStack]) {
+      step.state.workspaceName = name;
+    }
+  }
+
   /** Runs one operation. Commands record an Undo step and return their changes. */
   /** Runs an operation; `by` records its changes as another actor's (an agent's, through MCP), for tests. */
   call(op: string, input: unknown, by?: { actor: Actor; via: Via }): FakeAnswer {
@@ -315,7 +328,9 @@ export class FakeWorkspace {
 
   private project(ref: string): FakeProject {
     const folded = ref.toUpperCase();
-    const project = this.state.projects.find((candidate) => candidate.key === folded || candidate.id === ref);
+    const project =
+      this.state.projects.find((candidate) => candidate.key === folded || candidate.id === ref) ??
+      this.state.projects.find((candidate) => candidate.oldKeys?.includes(folded) === true);
     if (!project) {
       fail("not_found", `There is no project "${ref}".`, {
         details: { choices: this.state.projects.map((candidate) => candidate.key) },
@@ -359,10 +374,13 @@ export class FakeWorkspace {
   }
 
   private task(key: string): FakeTask {
-    const [projectKey, number] = key.toUpperCase().split("-");
-    const task = this.state.tasks.find(
-      (candidate) => candidate.id === key || (String(candidate.number) === number && this.projectOf(candidate).key === projectKey),
-    );
+    const upper = key.toUpperCase();
+    const [projectKey, number] = upper.split("-");
+    const ownKey = (candidate: FakeTask) => String(candidate.number) === number && this.projectOf(candidate).key === projectKey;
+    // An old key: the project's before it got a new one, or the task's before it moved.
+    const oldKey = (candidate: FakeTask) =>
+      (String(candidate.number) === number && this.projectOf(candidate).oldKeys?.includes(projectKey ?? "") === true) || candidate.oldKeys?.includes(upper) === true;
+    const task = this.state.tasks.find((candidate) => candidate.id === key || ownKey(candidate)) ?? this.state.tasks.find(oldKey);
     if (!task) {
       fail("not_found", `There is no task ${key}.`);
     }
@@ -514,6 +532,7 @@ export class FakeWorkspace {
       labels: project.labels.map((label) => ({ ...label, tasks: tasks.filter((task) => task.labelIds.includes(label.id)).length })),
       next_label_hue: suggestHue(project.labels.map((label) => label.hue)),
       children: this.children(project).map((child) => child.key),
+      ...(project.oldKeys && project.oldKeys.length > 0 ? { old_keys: [...project.oldKeys] } : {}),
       created_at: "2026-01-01T00:00:00Z",
       updated_at: "2026-01-01T00:00:00Z",
     };
@@ -596,6 +615,7 @@ export class FakeWorkspace {
       type: this.typeRef(task),
       priority: task.priority,
       labels: this.labelRefs(task),
+      ...(taskValues(this.state, task).length > 0 ? { fields: taskValues(this.state, task) } : {}),
       ...some("parent", parent && this.keyOf(parent)),
       ...some("fix_version", versionRef(this.versionHost, task)),
       ...some("start_date", task.startDate),
@@ -615,6 +635,7 @@ export class FakeWorkspace {
       status_entered_at: task.statusEnteredAt,
       updated_at: task.updatedAt,
       ...some("closed_at", task.closedAt),
+      ...(task.oldKeys && task.oldKeys.length > 0 ? { old_keys: [...task.oldKeys] } : {}),
       version: task.version,
     };
   }
@@ -965,6 +986,95 @@ export class FakeWorkspace {
     return copy;
   }
 
+  /** The status tasks moved to `project` get when it has none of their status's name: its first to-do status. */
+  private fallbackStatus(project: FakeProject) {
+    return project.statuses.find((status) => status.category === "todo") ?? project.statuses[0] ?? fail("invalid", `Project ${project.key} has no statuses.`);
+  }
+
+  /** The type tasks moved to `project` get when it has none of their type's name: its default type. */
+  private fallbackType(project: FakeProject) {
+    return project.types.find((type) => type.is_default) ?? project.types[0] ?? fail("invalid", `Project ${project.key} has no types.`);
+  }
+
+  /**
+   * Moves `task` and its subtasks to project `to`, as the engine does: new
+   * keys, the old ones kept, statuses, types and labels matched by the
+   * mapping, else by name, else the target's defaults, with a warning for
+   * each that had no match. Returns the tasks that moved.
+   */
+  private moveToProject(task: FakeTask, to: FakeProject, rootStatus: string | null, mapping: MoveMapping, warnings: string[]): FakeTask[] {
+    const warn = (text: string) => {
+      if (!warnings.includes(text)) {
+        warnings.push(text);
+      }
+    };
+    const pick = <T extends { name: string }>(items: readonly T[], map: Record<string, string> | undefined, name: string, path: string): T | undefined => {
+      const mapped = Object.entries(map ?? {}).find(([from]) => fold(from) === fold(name))?.[1];
+      if (mapped !== undefined) {
+        return items.find((item) => fold(item.name) === fold(mapped)) ?? fail("not_found", `Project ${to.key} has no "${mapped}".`, { details: { path } });
+      }
+      return items.find((item) => fold(item.name) === fold(name));
+    };
+    for (const [list, map, path] of [
+      [to.statuses, mapping.statuses, "mapping.statuses"],
+      [to.types, mapping.types, "mapping.types"],
+      [to.labels, mapping.labels, "mapping.labels"],
+    ] as const) {
+      for (const [from, name] of Object.entries(map ?? {})) {
+        pick(list, { [from]: name }, from, path);
+      }
+    }
+    const fallbackStatus = this.fallbackStatus(to);
+    const fallbackType = this.fallbackType(to);
+    const moving = [task, ...this.subtasksDeep(task.id)];
+    for (const one of moving) {
+      const from = this.projectOf(one);
+      const oldKey = this.keyOf(one);
+      const status = this.statusIn(from, one.statusId);
+      const type = from.types.find((candidate) => candidate.id === one.typeId);
+      const labels = from.labels.filter((label) => one.labelIds.includes(label.id));
+      one.oldKeys = [...(one.oldKeys ?? []).filter((key) => key !== oldKey), oldKey];
+      for (const field of moveValues(this.state, one, to.id)) {
+        warn(`The custom field "${field}" doesn't exist in ${to.key}; its value was left off.`);
+      }
+      const planned = versionRef(this.versionHost, one);
+      if (planned !== undefined && !visibleVersions(this.versionHost, to).some((each) => each.version.id === one.fixVersionId)) {
+        one.fixVersionId = null;
+        warn(`Version "${planned.name}" isn't available in ${to.key} and was taken off.`);
+      }
+      one.projectId = to.id;
+      one.number = to.nextNumber;
+      to.nextNumber += 1;
+      const newStatus =
+        one === task && rootStatus !== null
+          ? this.statusIn(to, rootStatus)
+          : (pick(to.statuses, mapping.statuses, status.name, "mapping.statuses") ??
+            (warn(`Status "${status.name}" doesn't exist in ${to.key}; the tasks that had it are in "${fallbackStatus.name}" now.`), fallbackStatus));
+      one.statusId = "";
+      this.enterStatus(one, newStatus.id);
+      one.rank = this.rankAt(newStatus.id, { at: "bottom" }, one);
+      const newType =
+        (type && pick(to.types, mapping.types, type.name, "mapping.types")) ??
+        (warn(`Type "${type?.name ?? ""}" doesn't exist in ${to.key}; the tasks that had it are of type "${fallbackType.name}" now.`), fallbackType);
+      one.typeId = newType.id;
+      const kept: string[] = [];
+      for (const label of labels) {
+        const match = pick(to.labels, mapping.labels, label.name, "mapping.labels");
+        if (match === undefined) {
+          warn(`Label "${label.name}" doesn't exist in ${to.key} and was left off.`);
+        } else if (!kept.includes(match.id)) {
+          kept.push(match.id);
+        }
+      }
+      one.labelIds = kept;
+      if (one === task) {
+        one.parentId = null;
+      }
+      this.touch(one);
+    }
+    return moving;
+  }
+
   // ---------- changes ----------
 
   private touch(task: FakeTask, edited = true): void {
@@ -1008,6 +1118,15 @@ export class FakeWorkspace {
     return {
       output: { task: this.fullTask(task) },
       changes: [{ entity: "task", id: task.id, fields, project: this.projectOf(task).key }],
+    };
+  }
+
+  private fieldChange(field: { id: string; projectId: string | null }, fields: string[], removed: number): Result<CustomFieldChange> {
+    const stored = fieldsOf(this.state).find((each) => each.id === field.id);
+    const project = this.state.projects.find((candidate) => candidate.id === field.projectId);
+    return {
+      output: { ...(stored ? { field: fieldOut(this.state, stored, this.state.projects) } : {}), ...(removed > 0 ? { values_removed: removed } : {}) },
+      changes: [{ entity: "custom_field", id: field.id, fields, ...(project ? { project: project.key } : {}) }],
     };
   }
 
@@ -1268,6 +1387,8 @@ export class FakeWorkspace {
       id: card.id,
       key: card.key,
       labels: card.labels,
+      ...some("fields", listedValues(this.state, task)),
+      ...some("fix_version", versionRef(this.versionHost, task)),
       ...some("parent", card.parent),
       priority: card.priority,
       progress_percent: card.progress_percent,
@@ -1680,6 +1801,7 @@ export class FakeWorkspace {
         id: task.id,
         key: `${project.key}-${String(task.number)}`,
         labels: this.labelRefs(task),
+        ...some("fields", listedValues(this.state, task)),
         ...some("parent", parent && this.keyOf(parent)),
         priority: task.priority,
         progress_percent: progress(task),
@@ -1704,6 +1826,7 @@ export class FakeWorkspace {
   private queryNames(): QueryNames {
     const unique = (names: string[]) => [...new Set(names)];
     return {
+      custom: queryFields(this.state),
       statuses: unique(this.state.projects.flatMap((project) => project.statuses.map((status) => status.name))),
       types: unique(this.state.projects.flatMap((project) => project.types.map((type) => type.name))),
       labels: unique(this.state.projects.flatMap((project) => project.labels.map((label) => label.name))),
@@ -1767,7 +1890,7 @@ export class FakeWorkspace {
       for (const key of keys) {
         const before = shown(this.listed(this.task(key)));
         if ((change.status !== null && change.status !== undefined) || (change.project !== null && change.project !== undefined)) {
-          take(this.handlers["task.move"]?.({ key, ...some("status", change.status), ...some("project", change.project) }));
+          take(this.handlers["task.move"]?.({ key, ...some("status", change.status), ...some("project", change.project), ...some("mapping", change.mapping) }));
         }
         const update: TaskUpdateInput = {
           key,
@@ -2001,6 +2124,39 @@ export class FakeWorkspace {
       }
       return this.projectChange(project, "project", fields);
     },
+    "project.change_key": ({ project: ref, key }) => {
+      const project = this.writable(ref);
+      const wanted = key.trim().toUpperCase();
+      if (!KEY_PATTERN.test(wanted)) {
+        fail("invalid", `"${key}" can't be a project key.`, {
+          hint: "Use 2 to 10 capital letters and digits, starting with a letter.",
+          details: { path: "key" },
+        });
+      }
+      if (wanted === project.key) {
+        return { output: { project: this.fullProject(project) }, changes: [] };
+      }
+      const taken = this.state.projects.some((other) => other !== project && (other.key === wanted || other.oldKeys?.includes(wanted) === true));
+      if (taken) {
+        fail("conflict", `The key ${wanted} is taken.`, { details: { path: "key" } });
+      }
+      const old = project.key;
+      project.oldKeys = [...(project.oldKeys ?? []).filter((candidate) => candidate !== wanted && candidate !== old), old].sort();
+      project.key = wanted;
+      // Saved queries that name the old key name the new one.
+      const pattern = new RegExp(`(^|[^A-Za-z0-9_])${old}(?=$|[^A-Za-z0-9_])`, "gi");
+      const rewritten: string[] = [];
+      const changes: EntityChange[] = [{ entity: "project", id: project.id, fields: ["key"], project: wanted }];
+      for (const view of this.state.views ?? []) {
+        const query = view.query.replace(pattern, (_match, before: string) => `${before}${wanted}`);
+        if (query !== view.query) {
+          view.query = query;
+          rewritten.push(view.name);
+          changes.push(...this.viewChange(view, ["query"]));
+        }
+      }
+      return { output: { project: this.fullProject(project), ...(rewritten.length > 0 ? { views_rewritten: rewritten } : {}) }, changes };
+    },
     "project.move": ({ project: ref, parent, top_level }) => {
       const project = this.writable(ref);
       const target = parent && top_level !== true ? this.project(parent) : null;
@@ -2187,6 +2343,33 @@ export class FakeWorkspace {
       }
       project.labels = project.labels.filter((candidate) => candidate !== label);
       return this.projectChange(project, "label", ["*"]);
+    },
+    "field.list": ({ project: ref }) => {
+      const project = ref === null || ref === undefined ? null : this.project(ref);
+      return { fields: fieldsFor(this.state, project?.id ?? null).map((field) => fieldOut(this.state, field, this.state.projects)) };
+    },
+    "field.create": (input) => {
+      const project = input.project === null || input.project === undefined ? null : this.writable(input.project);
+      const field = createField(this.state, { ...input, project }, nextId("cf"), fail);
+      placeField(this.state, field, input, fail);
+      return this.fieldChange(field, ["*"], 0);
+    },
+    "field.update": (input) => {
+      const project = input.project === null || input.project === undefined ? null : this.project(input.project);
+      const field = findField(fieldsFor(this.state, project?.id ?? null), input.field, fail);
+      const removed = updateField(this.state, field, input, fail);
+      placeField(this.state, field, input, fail);
+      return this.fieldChange(field, ["*"], removed);
+    },
+    "field.delete": (input) => {
+      const project = input.project === null || input.project === undefined ? null : this.project(input.project);
+      const field = findField(fieldsFor(this.state, project?.id ?? null), input.field, fail);
+      const count = this.state.tasks.filter((task) => task.fields?.[field.id] !== undefined).length;
+      if (input.expected_task_count !== null && input.expected_task_count !== undefined && input.expected_task_count !== count) {
+        fail("conflict", `"${field.name}" has a value on ${String(count)} tasks, not ${String(input.expected_task_count)}.`, { details: { message_id: "field-count-differs" } });
+      }
+      const removed = deleteField(this.state, field);
+      return this.fieldChange(field, ["deleted"], removed);
     },
     "board.get": ({ project, include_subprojects, show_older }) => this.board(project, include_subprojects, show_older === true),
     "layout.get": ({ project: ref }) => {
@@ -3200,7 +3383,7 @@ export class FakeWorkspace {
       }
       return { output: { reverted, skipped }, changes: [{ entity: "workspace", id: "w-1", fields: ["*"] }] };
     },
-    "task.create": ({ project: ref, title, status, description, priority, before, after, at, parent: parentKey, start_date, due_date, fix_version }) => {
+    "task.create": ({ project: ref, title, status, description, priority, before, after, at, parent: parentKey, start_date, due_date, fix_version, fields }) => {
       const project = this.writable(ref);
       const fixVersion = fix_version === null || fix_version === undefined ? null : versionForTask(this.versionHost, project, fix_version).id;
       const startDate = start_date === null || start_date === undefined ? null : this.dayInput(start_date, "start_date");
@@ -3249,6 +3432,7 @@ export class FakeWorkspace {
         version: 1,
         ...(fixVersion === null ? {} : { fixVersionId: fixVersion }),
       };
+      applyValues(this.state, task, type.name, fields, true, fail);
       project.nextNumber += 1;
       this.state.tasks.push(task);
       if (task.description !== "") {
@@ -3338,6 +3522,9 @@ export class FakeWorkspace {
       if (clear.includes("estimate")) {
         task.estimateMin = null;
         fields.push("estimate");
+      }
+      if (input.fields !== undefined && applyValues(this.state, task, this.typeRef(task).name, input.fields, false, fail)) {
+        fields.push("fields");
       }
       if (fields.length === 0) {
         return { output: { task: this.fullTask(task), ...some("description_save", save) }, changes: [] };
@@ -3581,16 +3768,20 @@ export class FakeWorkspace {
       this.touch(sub, false);
       return { output: { task: this.withParts(parent, ["subtasks"]) }, changes: [{ entity: "task", id: sub.id, fields: ["subtask_rank"], project: this.projectOf(sub).key }] };
     },
-    "task.move": ({ key, status, project: toProject, expected_version, before, after, at }) => {
+    "task.move": ({ key, status, project: toProject, mapping, expected_version, before, after, at }) => {
       const task = this.task(key);
-      const project = this.writable(this.projectOf(task).key);
-      if (toProject !== null && toProject !== undefined && this.project(toProject) !== project) {
-        fail("invalid", "The sample workspace doesn't move tasks between projects.");
-      }
+      const from = this.writable(this.projectOf(task).key);
       if (expected_version !== null && expected_version !== undefined && expected_version !== task.version) {
         fail("conflict", `${this.keyOf(task)} changed since you read it.`, { details: { current_version: task.version } });
       }
       const fields: string[] = [];
+      const warnings: string[] = [];
+      const to = toProject === null || toProject === undefined ? from : this.writable(toProject);
+      const moved = to === from ? [] : this.moveToProject(task, to, status ?? null, mapping ?? {}, warnings);
+      if (moved.length > 0) {
+        fields.push("project", "number", "status", "type", "labels", "rank");
+      }
+      const project = to;
       const target = status === null || status === undefined ? this.statusIn(project, task.statusId) : this.statusIn(project, status);
       if (target.id !== task.statusId) {
         this.enterStatus(task, target.id);
@@ -3602,7 +3793,81 @@ export class FakeWorkspace {
         fields.push("rank");
       }
       this.touch(task, fields.includes("status"));
-      return this.taskChange(task, fields);
+      const change = this.taskChange(task, fields);
+      for (const sub of moved.filter((other) => other !== task)) {
+        change.changes.push({ entity: "task", id: sub.id, fields: ["project", "number", "status", "type", "labels", "rank"], project: to.key });
+      }
+      return warnings.length > 0 ? { ...change, output: { ...change.output, warnings } } : change;
+    },
+    "task.move_check": ({ keys, project: toProject }) => {
+      if (keys.length === 0 || keys.length > 500) {
+        fail("invalid", "Check 1 to 500 tasks at once.", { details: { path: "keys" } });
+      }
+      const to = this.writable(toProject);
+      const check: MoveCheck = {
+        project: to.key,
+        keys: [],
+        statuses: [],
+        types: [],
+        labels: [],
+        fields: [],
+        versions: [],
+        fallback_status: this.fallbackStatus(to).name,
+        fallback_type: this.fallbackType(to).name,
+      };
+      const count = (list: MoveMatch[], names: readonly { name: string }[], name: string) => {
+        const found = list.find((match) => fold(match.name) === fold(name));
+        if (found) {
+          found.tasks += 1;
+          return;
+        }
+        const target = names.find((candidate) => fold(candidate.name) === fold(name));
+        list.push({ name, tasks: 1, ...some("target", target?.name) });
+      };
+      const seen = new Set<string>();
+      let next = to.nextNumber;
+      for (const key of keys) {
+        const task = this.task(key);
+        if (task.projectId === to.id || seen.has(task.id)) {
+          continue;
+        }
+        for (const one of [task, ...this.subtasksDeep(task.id)]) {
+          if (seen.has(one.id)) {
+            continue;
+          }
+          seen.add(one.id);
+          const project = this.projectOf(one);
+          check.keys.push({ from: this.keyOf(one), to: `${to.key}-${String(next)}` });
+          next += 1;
+          count(check.statuses, to.statuses, this.statusIn(project, one.statusId).name);
+          count(check.types, to.types, this.typeRef(one).name);
+          for (const label of this.labelRefs(one)) {
+            count(check.labels, to.labels, label.name);
+          }
+          const planned = versionRef(this.versionHost, one);
+          if (planned !== undefined) {
+            const kept = visibleVersions(this.versionHost, to).some((each) => each.version.id === one.fixVersionId);
+            const found = check.versions.find((each) => each.name === planned.name);
+            if (found === undefined) {
+              check.versions.push({ name: planned.name, tasks: 1, ...some("target", kept ? planned.name : undefined) });
+            } else {
+              found.tasks += 1;
+            }
+          }
+          for (const match of moveMatches(this.state, one, to.id)) {
+            const found = check.fields.find((each) => fold(each.name) === fold(match.name));
+            if (found === undefined) {
+              check.fields.push({ ...match, tasks: 1 });
+            } else {
+              found.tasks += 1;
+              if (match.target === undefined) {
+                delete found.target;
+              }
+            }
+          }
+        }
+      }
+      return check;
     },
 
     // ---------- time ----------
