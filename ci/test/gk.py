@@ -7,8 +7,11 @@ only, so it runs on every distribution's own Python.
   gk.py mcp-probe KEY   a short MCP session: read, search and write
   gk.py perf            the performance measurements with data set L;
                         writes /out/perf.json and /out/perf.md
+  gk.py perf-depth [P]  only the reported measures: flow reports, history
+                        queries and a CSV import of 10,000 rows
 """
 
+import datetime
 import json
 import os
 import signal
@@ -361,6 +364,92 @@ def mcp_latency(key, project):
     }
 
 
+def timed(args, runs):
+    """The median and the slowest of `runs` runs of a command, in ms."""
+    took = []
+    for _ in range(runs):
+        t = time.monotonic()
+        run(args)
+        took.append(time.monotonic() - t)
+    return {"median_ms": ms(statistics.median(took)), "max_ms": ms(max(took))}
+
+
+def csv_rows(path, count):
+    """A plain CSV file of `count` tasks: title, status, priority, estimate."""
+    statuses = ["Backlog", "To do", "In progress", "Done"]
+    priorities = ["low", "medium", "high"]
+    with open(path, "w", encoding="utf-8", newline="") as out:
+        out.write("Title,Status,Priority,Estimate\r\n")
+        for n in range(count):
+            out.write(f"Imported task {n},{statuses[n % 4]},{priorities[n % 3]},{n % 8 + 1}h\r\n")
+
+
+def depth_timings(project, csv_dir="/tmp"):
+    """Flow reports and history queries over the whole data set, and a CSV
+    import of 10,000 rows into a project of its own. Reported only: these
+    have no budget yet."""
+    results = {}
+    # The command takes a calendar day, not a relative one.
+    year_ago = (datetime.date.today() - datetime.timedelta(weeks=52)).isoformat()
+    days_ago = (datetime.date.today() - datetime.timedelta(days=90)).isoformat()
+    for name in ("created-closed", "flow", "cycle-time"):
+        results[f"report_{name.replace('-', '_')}"] = timed(
+            ["glyphkeel", "report", name, "--bucket", "week", "--from", year_ago], 5
+        )
+    results["report_flow_project"] = timed(
+        ["glyphkeel", "report", "flow", "--project", project, "--bucket", "day", "--from", days_ago], 5
+    )
+    for name, query in (
+        ("was_status", "was:category:in_progress"),
+        ("changed_status", "changed:status>-30d"),
+        ("changed_by", "changed-by:me is:open"),
+    ):
+        results[f"query_{name}"] = timed(["glyphkeel", "task", "list", "--query", query], 5)
+    path = os.path.join(csv_dir, "glyphkeel-perf-10k.csv")
+    csv_rows(path, 10_000)
+    run(["glyphkeel", "project", "create", "--name", "CSV import", "--key", "CSVP"])
+    t = time.monotonic()
+    run(["glyphkeel", "import", "csv", path, "--project", "CSVP", "--dry-run"])
+    results["csv_check_10k_ms"] = ms(time.monotonic() - t)
+    t = time.monotonic()
+    run(["glyphkeel", "import", "csv", path, "--project", "CSVP"])
+    results["csv_import_10k_ms"] = ms(time.monotonic() - t)
+    return results
+
+
+DEPTH_LABELS = [
+    ("report_created_closed", "Report created against closed, 52 weeks, all projects"),
+    ("report_flow", "Report cumulative flow, 52 weeks, all projects"),
+    ("report_cycle_time", "Report cycle time, 52 weeks, all projects"),
+    ("report_flow_project", "Report cumulative flow, 90 days by day, one project"),
+    ("query_was_status", "Query `was:category:in_progress`"),
+    ("query_changed_status", "Query `changed:status>-30d`"),
+    ("query_changed_by", "Query `changed-by:me is:open`"),
+]
+
+
+def depth_table(depth):
+    """The reported-only measures as a Markdown table."""
+    lines = [
+        "",
+        "Reports, history queries and CSV import (reported, no budget yet):",
+        "",
+        "| Measure | Median | Slowest |",
+        "|---|---|---|",
+    ]
+    for key, label in DEPTH_LABELS:
+        value = depth.get(key)
+        if value:
+            lines.append(f"| {label} | {value['median_ms']} ms | {value['max_ms']} ms |")
+    for key, label in (
+        ("csv_check_10k_ms", "CSV import of 10,000 rows: the check"),
+        ("csv_import_10k_ms", "CSV import of 10,000 rows: the import"),
+    ):
+        if key in depth:
+            lines.append(f"| {label} | {depth[key]} ms | – |")
+    return "\n".join(lines) + "\n"
+
+
 def start_and_idle(link, runs=5, settle=15):
     """Launch to visible window, without automation; then idle memory."""
     times, idle = [], None
@@ -543,6 +632,11 @@ def perf():
         results.update(drive(link))
     except Exception as err:  # noqa: BLE001 - reported in the results
         results["drive_error"] = str(err)
+    # After the app's measures, so its 10,000 new tasks don't change them.
+    try:
+        results["depth"] = depth_timings(project)
+    except Exception as err:  # noqa: BLE001 - reported in the results
+        results["depth_error"] = str(err)
     with open(f"{OUT}/perf.json", "w", encoding="utf-8") as out:
         json.dump(results, out, indent=2)
     text, failed = table(results)
@@ -550,6 +644,10 @@ def perf():
         text += f"\nThe start and idle run failed: {results['start_error']}\n"
     if "drive_error" in results:
         text += f"\nThe automated board and list run failed: {results['drive_error']}\n"
+    if "depth" in results:
+        text += depth_table(results["depth"])
+    if "depth_error" in results:
+        text += f"\nThe reports, queries and CSV run failed (reported only): {results['depth_error']}\n"
     missing = [label for key, label, _, _ in BUDGETS if lookup(results, key) is None]
     for part in ("idle_pss_parts", "after_use_pss_parts"):
         if part in results:
@@ -577,6 +675,12 @@ def main():
         return 0
     if sys.argv[1:2] == ["perf"]:
         return perf()
+    if sys.argv[1:2] == ["perf-depth"]:
+        # The reported-only measures alone, on the workspace `glyphkeel`
+        # opens, for a run outside the container.
+        depth = depth_timings(sys.argv[2] if len(sys.argv) > 2 else "BULK", os.environ.get("TMPDIR", "/tmp"))
+        print(depth_table(depth))
+        return 0
     print(__doc__)
     return 2
 
