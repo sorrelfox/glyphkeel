@@ -43,6 +43,9 @@
       "update_time_entry",
       "delete_time_entry",
       "get_time_report",
+      "get_created_closed_report",
+      "get_cumulative_flow",
+      "get_cycle_time",
       "start_timer",
       "pause_timer",
       "stop_timer",
@@ -86,6 +89,9 @@
       "check_move",
       "get_description_revision",
       "get_time_report",
+      "get_created_closed_report",
+      "get_cumulative_flow",
+      "get_cycle_time",
       "get_reminders",
       "get_today",
       "get_board",
@@ -139,6 +145,9 @@
       "update_time_entry",
       "delete_time_entry",
       "get_time_report",
+      "get_created_closed_report",
+      "get_cumulative_flow",
+      "get_cycle_time",
       "start_timer",
       "pause_timer",
       "stop_timer",
@@ -29150,6 +29159,909 @@
         "type": "object"
       },
       "title": "Time report",
+      "toolset": "time"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Created against closed"
+      },
+      "covers": [
+        "report.created_closed"
+      ],
+      "description": "Counts, per `day`, `week` (default) or `month` in the person's time zone, the tasks created, the times tasks were closed and reopened, and the open tasks at the end of each period, from the history. Use it to see whether work comes in faster than it is finished. Default range: the last 12 periods up to today. Narrow it to a `project` (with its sub-projects unless `include_subprojects: false`), a `type`, a `label`, a `fix_version` (name or ID) or a `query` (custom fields as `cf.<name>`), as the tasks are now; `actor` (`me`, `agent` or a name) counts only what that actor did. `csv: true` adds CSV text. Example: get_created_closed_report {\"project\": \"TM\", \"from\": \"2026-09-01\", \"bucket\": \"week\"}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Which tasks and which days a flow report covers.",
+        "properties": {
+          "actor": {
+            "description": "Created against closed and cycle time only: count only what `me`\n(the local user), `agent` (any agent) or the person or agent of that\nname did: creating a task, closing or reopening it.",
+            "type": "string"
+          },
+          "bucket": {
+            "description": "The length of a period: `day`, `week` (default) or `month`. At most\n1,000 periods.",
+            "oneOf": [
+              {
+                "const": "day",
+                "description": "One day.",
+                "type": "string"
+              },
+              {
+                "const": "week",
+                "description": "One week, from the workspace's first day of the week.",
+                "type": "string"
+              },
+              {
+                "const": "month",
+                "description": "One calendar month.",
+                "type": "string"
+              }
+            ]
+          },
+          "csv": {
+            "default": false,
+            "description": "Also return the report as CSV text (comma-separated, a header line,\nCRLF line ends).",
+            "type": "boolean"
+          },
+          "fix_version": {
+            "description": "Only tasks planned for this version: a name (every version of that\nname) or an ID.",
+            "type": "string"
+          },
+          "from": {
+            "description": "The first day: `YYYY-MM-DD`, `today` or `yesterday`; default twelve\nperiods before `to` (30 days, 12 weeks or 12 months).",
+            "type": "string"
+          },
+          "group_by": {
+            "description": "Cumulative flow only: bands by `status` (default) or `category`.",
+            "oneOf": [
+              {
+                "const": "status",
+                "description": "One band per status name; statuses of the same name in several\nprojects share a band.",
+                "type": "string"
+              },
+              {
+                "const": "category",
+                "description": "One band per status category.",
+                "type": "string"
+              }
+            ]
+          },
+          "include_subprojects": {
+            "description": "With `project`: its sub-projects' tasks too; default true.",
+            "type": "boolean"
+          },
+          "label": {
+            "description": "Only tasks with this label, by name.",
+            "type": "string"
+          },
+          "project": {
+            "description": "Only this project: a key or ID.",
+            "type": "string"
+          },
+          "query": {
+            "description": "Only tasks that match this query (the task query language), as they\nare now.",
+            "type": "string"
+          },
+          "tasks": {
+            "default": false,
+            "description": "Cycle time only: also list every task closed in the period.",
+            "type": "boolean"
+          },
+          "to": {
+            "description": "The last day, included; default today.",
+            "type": "string"
+          },
+          "type": {
+            "description": "Only tasks of this type, by name.",
+            "type": "string"
+          }
+        },
+        "title": "FlowReportInput",
+        "type": "object"
+      },
+      "name": "get_created_closed_report",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "Tasks created against tasks closed, per period.",
+        "properties": {
+          "bucket": {
+            "description": "The length of a period.",
+            "oneOf": [
+              {
+                "const": "day",
+                "description": "One day.",
+                "type": "string"
+              },
+              {
+                "const": "week",
+                "description": "One week, from the workspace's first day of the week.",
+                "type": "string"
+              },
+              {
+                "const": "month",
+                "description": "One calendar month.",
+                "type": "string"
+              }
+            ]
+          },
+          "closed": {
+            "description": "Closings over the whole range.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "created": {
+            "description": "Tasks created over the whole range.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "csv": {
+            "description": "The report as CSV text, when asked for.",
+            "type": "string"
+          },
+          "from": {
+            "description": "The first day.",
+            "type": "string"
+          },
+          "items": {
+            "description": "The periods, oldest first.",
+            "items": {
+              "additionalProperties": false,
+              "description": "One period of tasks created against tasks closed.",
+              "properties": {
+                "closed": {
+                  "description": "Times a task was closed in the period.",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "created": {
+                  "description": "Tasks created in the period.",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "end": {
+                  "description": "The period's last day, included.",
+                  "type": "string"
+                },
+                "open": {
+                  "description": "Open tasks at the end of the period.",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "reopened": {
+                  "description": "Times a closed task was opened again in the period.",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "start": {
+                  "description": "The period's first day.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "start",
+                "end",
+                "created",
+                "closed",
+                "reopened",
+                "open"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "open_before": {
+            "description": "Open tasks just before `from`.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "reopened": {
+            "description": "Reopenings over the whole range.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "to": {
+            "description": "The last day, included.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "bucket",
+          "items",
+          "created",
+          "closed",
+          "reopened",
+          "open_before"
+        ],
+        "title": "CreatedClosedReport",
+        "type": "object"
+      },
+      "title": "Created against closed",
+      "toolset": "time"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Cumulative flow"
+      },
+      "covers": [
+        "report.cumulative_flow"
+      ],
+      "description": "How many tasks were in each status at the end of each `day`, `week` (default) or `month`, from the history: a widening band shows where work piles up. Statuses of the same name in several projects share a band; `group_by: \"category\"` gives one band per category instead. The same filters as get_created_closed_report, without `actor`. Example: get_cumulative_flow {\"project\": \"TM\", \"bucket\": \"day\", \"from\": \"2026-11-01\"}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Which tasks and which days a flow report covers.",
+        "properties": {
+          "actor": {
+            "description": "Created against closed and cycle time only: count only what `me`\n(the local user), `agent` (any agent) or the person or agent of that\nname did: creating a task, closing or reopening it.",
+            "type": "string"
+          },
+          "bucket": {
+            "description": "The length of a period: `day`, `week` (default) or `month`. At most\n1,000 periods.",
+            "oneOf": [
+              {
+                "const": "day",
+                "description": "One day.",
+                "type": "string"
+              },
+              {
+                "const": "week",
+                "description": "One week, from the workspace's first day of the week.",
+                "type": "string"
+              },
+              {
+                "const": "month",
+                "description": "One calendar month.",
+                "type": "string"
+              }
+            ]
+          },
+          "csv": {
+            "default": false,
+            "description": "Also return the report as CSV text (comma-separated, a header line,\nCRLF line ends).",
+            "type": "boolean"
+          },
+          "fix_version": {
+            "description": "Only tasks planned for this version: a name (every version of that\nname) or an ID.",
+            "type": "string"
+          },
+          "from": {
+            "description": "The first day: `YYYY-MM-DD`, `today` or `yesterday`; default twelve\nperiods before `to` (30 days, 12 weeks or 12 months).",
+            "type": "string"
+          },
+          "group_by": {
+            "description": "Cumulative flow only: bands by `status` (default) or `category`.",
+            "oneOf": [
+              {
+                "const": "status",
+                "description": "One band per status name; statuses of the same name in several\nprojects share a band.",
+                "type": "string"
+              },
+              {
+                "const": "category",
+                "description": "One band per status category.",
+                "type": "string"
+              }
+            ]
+          },
+          "include_subprojects": {
+            "description": "With `project`: its sub-projects' tasks too; default true.",
+            "type": "boolean"
+          },
+          "label": {
+            "description": "Only tasks with this label, by name.",
+            "type": "string"
+          },
+          "project": {
+            "description": "Only this project: a key or ID.",
+            "type": "string"
+          },
+          "query": {
+            "description": "Only tasks that match this query (the task query language), as they\nare now.",
+            "type": "string"
+          },
+          "tasks": {
+            "default": false,
+            "description": "Cycle time only: also list every task closed in the period.",
+            "type": "boolean"
+          },
+          "to": {
+            "description": "The last day, included; default today.",
+            "type": "string"
+          },
+          "type": {
+            "description": "Only tasks of this type, by name.",
+            "type": "string"
+          }
+        },
+        "title": "FlowReportInput",
+        "type": "object"
+      },
+      "name": "get_cumulative_flow",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "How many tasks were in each status at the end of each period.",
+        "properties": {
+          "bands": {
+            "description": "The bands in workflow order: by category, then by board order.",
+            "items": {
+              "additionalProperties": false,
+              "description": "One band of the cumulative flow.",
+              "properties": {
+                "category": {
+                  "description": "The status's category.",
+                  "oneOf": [
+                    {
+                      "const": "todo",
+                      "description": "Not started.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "in_progress",
+                      "description": "Being worked on.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "done",
+                      "description": "Finished; closes the task.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "cancelled",
+                      "description": "Dropped; closes the task.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "hue": {
+                  "description": "The status's colour; left out for categories.",
+                  "oneOf": [
+                    {
+                      "const": "red",
+                      "description": "Red.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "orange",
+                      "description": "Orange.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "yellow",
+                      "description": "Yellow.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "green",
+                      "description": "Green.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "teal",
+                      "description": "Teal.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "blue",
+                      "description": "Blue.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "purple",
+                      "description": "Purple.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "pink",
+                      "description": "Pink.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "grey",
+                      "description": "Grey.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "key": {
+                  "description": "The band's key: the status name in lower case, or the category.",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "The status's name as written; the category's name for categories.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "name",
+                "category"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "bucket": {
+            "description": "The length of a period.",
+            "oneOf": [
+              {
+                "const": "day",
+                "description": "One day.",
+                "type": "string"
+              },
+              {
+                "const": "week",
+                "description": "One week, from the workspace's first day of the week.",
+                "type": "string"
+              },
+              {
+                "const": "month",
+                "description": "One calendar month.",
+                "type": "string"
+              }
+            ]
+          },
+          "csv": {
+            "description": "The report as CSV text, when asked for.",
+            "type": "string"
+          },
+          "from": {
+            "description": "The first day.",
+            "type": "string"
+          },
+          "group_by": {
+            "description": "What the bands are.",
+            "oneOf": [
+              {
+                "const": "status",
+                "description": "One band per status name; statuses of the same name in several\nprojects share a band.",
+                "type": "string"
+              },
+              {
+                "const": "category",
+                "description": "One band per status category.",
+                "type": "string"
+              }
+            ]
+          },
+          "items": {
+            "description": "The periods, oldest first.",
+            "items": {
+              "additionalProperties": false,
+              "description": "The tasks in each band at the end of one period.",
+              "properties": {
+                "counts": {
+                  "description": "The number of tasks in each band, in the order of `bands`.",
+                  "items": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "type": "array"
+                },
+                "end": {
+                  "description": "The period's last day, included.",
+                  "type": "string"
+                },
+                "start": {
+                  "description": "The period's first day.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "start",
+                "end",
+                "counts"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "to": {
+            "description": "The last day, included.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "bucket",
+          "group_by",
+          "bands",
+          "items"
+        ],
+        "title": "CumulativeFlowReport",
+        "type": "object"
+      },
+      "title": "Cumulative flow",
+      "toolset": "time"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Cycle and lead time"
+      },
+      "covers": [
+        "report.cycle_time"
+      ],
+      "description": "Cycle time (from the first move into an in-progress status to the last close) and lead time (from creation to the last close) of the tasks closed in the range, in days: count, mean, median, 85th and 95th percentile, shortest and longest, overall and per period. `tasks: true` lists each task with its times; `actor` counts only tasks that actor closed. The same filters as get_created_closed_report. Example: get_cycle_time {\"project\": \"TM\", \"bucket\": \"month\", \"tasks\": true}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Which tasks and which days a flow report covers.",
+        "properties": {
+          "actor": {
+            "description": "Created against closed and cycle time only: count only what `me`\n(the local user), `agent` (any agent) or the person or agent of that\nname did: creating a task, closing or reopening it.",
+            "type": "string"
+          },
+          "bucket": {
+            "description": "The length of a period: `day`, `week` (default) or `month`. At most\n1,000 periods.",
+            "oneOf": [
+              {
+                "const": "day",
+                "description": "One day.",
+                "type": "string"
+              },
+              {
+                "const": "week",
+                "description": "One week, from the workspace's first day of the week.",
+                "type": "string"
+              },
+              {
+                "const": "month",
+                "description": "One calendar month.",
+                "type": "string"
+              }
+            ]
+          },
+          "csv": {
+            "default": false,
+            "description": "Also return the report as CSV text (comma-separated, a header line,\nCRLF line ends).",
+            "type": "boolean"
+          },
+          "fix_version": {
+            "description": "Only tasks planned for this version: a name (every version of that\nname) or an ID.",
+            "type": "string"
+          },
+          "from": {
+            "description": "The first day: `YYYY-MM-DD`, `today` or `yesterday`; default twelve\nperiods before `to` (30 days, 12 weeks or 12 months).",
+            "type": "string"
+          },
+          "group_by": {
+            "description": "Cumulative flow only: bands by `status` (default) or `category`.",
+            "oneOf": [
+              {
+                "const": "status",
+                "description": "One band per status name; statuses of the same name in several\nprojects share a band.",
+                "type": "string"
+              },
+              {
+                "const": "category",
+                "description": "One band per status category.",
+                "type": "string"
+              }
+            ]
+          },
+          "include_subprojects": {
+            "description": "With `project`: its sub-projects' tasks too; default true.",
+            "type": "boolean"
+          },
+          "label": {
+            "description": "Only tasks with this label, by name.",
+            "type": "string"
+          },
+          "project": {
+            "description": "Only this project: a key or ID.",
+            "type": "string"
+          },
+          "query": {
+            "description": "Only tasks that match this query (the task query language), as they\nare now.",
+            "type": "string"
+          },
+          "tasks": {
+            "default": false,
+            "description": "Cycle time only: also list every task closed in the period.",
+            "type": "boolean"
+          },
+          "to": {
+            "description": "The last day, included; default today.",
+            "type": "string"
+          },
+          "type": {
+            "description": "Only tasks of this type, by name.",
+            "type": "string"
+          }
+        },
+        "title": "FlowReportInput",
+        "type": "object"
+      },
+      "name": "get_cycle_time",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "Cycle and lead time of the tasks closed over a range of days.",
+        "properties": {
+          "bucket": {
+            "description": "The length of a period.",
+            "oneOf": [
+              {
+                "const": "day",
+                "description": "One day.",
+                "type": "string"
+              },
+              {
+                "const": "week",
+                "description": "One week, from the workspace's first day of the week.",
+                "type": "string"
+              },
+              {
+                "const": "month",
+                "description": "One calendar month.",
+                "type": "string"
+              }
+            ]
+          },
+          "csv": {
+            "description": "One line per task as CSV text, when asked for.",
+            "type": "string"
+          },
+          "cycle": {
+            "additionalProperties": false,
+            "description": "Cycle time over the whole range.",
+            "properties": {
+              "count": {
+                "description": "How many tasks the figures cover.",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "max": {
+                "description": "The longest.",
+                "type": "number"
+              },
+              "mean": {
+                "description": "The mean; left out without tasks.",
+                "type": "number"
+              },
+              "min": {
+                "description": "The shortest.",
+                "type": "number"
+              },
+              "p50": {
+                "description": "The median.",
+                "type": "number"
+              },
+              "p85": {
+                "description": "The 85th percentile.",
+                "type": "number"
+              },
+              "p95": {
+                "description": "The 95th percentile.",
+                "type": "number"
+              }
+            },
+            "required": [
+              "count"
+            ],
+            "type": "object"
+          },
+          "from": {
+            "description": "The first day.",
+            "type": "string"
+          },
+          "items": {
+            "description": "The periods, oldest first.",
+            "items": {
+              "additionalProperties": false,
+              "description": "Cycle and lead time of the tasks closed in one period.",
+              "properties": {
+                "cycle": {
+                  "additionalProperties": false,
+                  "description": "Cycle time of the tasks closed in the period that were in progress.",
+                  "properties": {
+                    "count": {
+                      "description": "How many tasks the figures cover.",
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "max": {
+                      "description": "The longest.",
+                      "type": "number"
+                    },
+                    "mean": {
+                      "description": "The mean; left out without tasks.",
+                      "type": "number"
+                    },
+                    "min": {
+                      "description": "The shortest.",
+                      "type": "number"
+                    },
+                    "p50": {
+                      "description": "The median.",
+                      "type": "number"
+                    },
+                    "p85": {
+                      "description": "The 85th percentile.",
+                      "type": "number"
+                    },
+                    "p95": {
+                      "description": "The 95th percentile.",
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "count"
+                  ],
+                  "type": "object"
+                },
+                "end": {
+                  "description": "The period's last day, included.",
+                  "type": "string"
+                },
+                "lead": {
+                  "additionalProperties": false,
+                  "description": "Lead time of the tasks closed in the period.",
+                  "properties": {
+                    "count": {
+                      "description": "How many tasks the figures cover.",
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "max": {
+                      "description": "The longest.",
+                      "type": "number"
+                    },
+                    "mean": {
+                      "description": "The mean; left out without tasks.",
+                      "type": "number"
+                    },
+                    "min": {
+                      "description": "The shortest.",
+                      "type": "number"
+                    },
+                    "p50": {
+                      "description": "The median.",
+                      "type": "number"
+                    },
+                    "p85": {
+                      "description": "The 85th percentile.",
+                      "type": "number"
+                    },
+                    "p95": {
+                      "description": "The 95th percentile.",
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "count"
+                  ],
+                  "type": "object"
+                },
+                "start": {
+                  "description": "The period's first day.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "start",
+                "end",
+                "cycle",
+                "lead"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "lead": {
+            "additionalProperties": false,
+            "description": "Lead time over the whole range.",
+            "properties": {
+              "count": {
+                "description": "How many tasks the figures cover.",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "max": {
+                "description": "The longest.",
+                "type": "number"
+              },
+              "mean": {
+                "description": "The mean; left out without tasks.",
+                "type": "number"
+              },
+              "min": {
+                "description": "The shortest.",
+                "type": "number"
+              },
+              "p50": {
+                "description": "The median.",
+                "type": "number"
+              },
+              "p85": {
+                "description": "The 85th percentile.",
+                "type": "number"
+              },
+              "p95": {
+                "description": "The 95th percentile.",
+                "type": "number"
+              }
+            },
+            "required": [
+              "count"
+            ],
+            "type": "object"
+          },
+          "tasks": {
+            "description": "The tasks, by closing time, when asked for.",
+            "items": {
+              "additionalProperties": false,
+              "description": "One task closed in the period.",
+              "properties": {
+                "closed_at": {
+                  "description": "When it was last closed (RFC 3339, UTC).",
+                  "type": "string"
+                },
+                "closed_day": {
+                  "description": "The day it was last closed, in the personal time zone.",
+                  "type": "string"
+                },
+                "cycle_days": {
+                  "description": "Days from the first move into progress to the last close; left out\nwhen the task was never in progress.",
+                  "type": "number"
+                },
+                "key": {
+                  "description": "The task's key.",
+                  "type": "string"
+                },
+                "lead_days": {
+                  "description": "Days from its creation to the last close.",
+                  "type": "number"
+                },
+                "reopened": {
+                  "description": "How often it was opened again after a close.",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "title": {
+                  "description": "Its title.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "title",
+                "closed_at",
+                "closed_day",
+                "lead_days",
+                "reopened"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "to": {
+            "description": "The last day, included.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "bucket",
+          "cycle",
+          "lead",
+          "items"
+        ],
+        "title": "CycleTimeReport",
+        "type": "object"
+      },
+      "title": "Cycle and lead time",
       "toolset": "time"
     },
     {

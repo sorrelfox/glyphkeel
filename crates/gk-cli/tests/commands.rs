@@ -292,6 +292,58 @@ fn time_is_logged_edited_and_reported() {
     assert_eq!(code(&out), 1, "{}", stderr(&out));
 }
 
+#[test]
+fn flow_reports_count_created_and_closed_tasks() {
+    let ws = Workspace::new();
+    ws.ok(&["project", "create", "--name", "Glyphkeel", "--key", "GK"]);
+    ws.ok(&["task", "create", "--project", "GK", "--title", "One"]);
+    ws.ok(&["task", "create", "--project", "GK", "--title", "Two"]);
+    ws.ok(&["task", "move", "GK-1", "--status", "In progress"]);
+    ws.ok(&["task", "move", "GK-1", "--status", "Done"]);
+    let report = ws.json(&[
+        "report",
+        "created-closed",
+        "--bucket",
+        "day",
+        "--from",
+        "today",
+    ]);
+    assert_eq!(report["items"][0]["created"], 2);
+    assert_eq!(report["items"][0]["closed"], 1);
+    assert_eq!(report["items"][0]["open"], 1);
+    let csv = ws.ok(&[
+        "report",
+        "created-closed",
+        "--bucket",
+        "day",
+        "--from",
+        "today",
+        "--csv",
+    ]);
+    assert!(
+        csv.starts_with("start,end,created,closed,reopened,open\r\n"),
+        "{csv}"
+    );
+    assert!(csv.ends_with(",2,1,0,1\r\n"), "{csv}");
+    let flow = ws.json(&[
+        "report",
+        "flow",
+        "--project",
+        "GK",
+        "--group-by",
+        "category",
+    ]);
+    assert_eq!(flow["bands"][0]["key"], "todo");
+    let cycle = ws.json(&["report", "cycle-time", "--tasks"]);
+    assert_eq!(cycle["lead"]["count"], 1);
+    assert_eq!(cycle["tasks"][0]["key"], "GK-1");
+    ws.ok(&["version", "create", "--project", "GK", "--name", "1.0"]);
+    let planned = ws.json(&["report", "cycle-time", "--fix-version", "1.0"]);
+    assert_eq!(planned["lead"]["count"], 0, "no task is planned for 1.0");
+    let out = ws.run(&["report", "flow", "--type", "Nope"]);
+    assert_eq!(code(&out), 1, "{}", stderr(&out));
+}
+
 /// The timer lives in the workspace, so each command is its own process:
 /// one starts it, others see it, pause it and stop it.
 #[test]

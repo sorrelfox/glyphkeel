@@ -79,6 +79,9 @@ The safety class decides who may run an operation:
 | `time.update` | write | app, command line, MCP | `update_time_entry` | `glyphkeel time edit <entry>` |
 | `time.delete` | trash | app, command line, MCP | `delete_time_entry` | `glyphkeel time delete <entry>` |
 | `time.report` | read | app, command line, MCP | `get_time_report` | `glyphkeel time report` |
+| `report.created_closed` | read | app, command line, MCP | `get_created_closed_report` | `glyphkeel report created-closed` |
+| `report.cumulative_flow` | read | app, command line, MCP | `get_cumulative_flow` | `glyphkeel report flow` |
+| `report.cycle_time` | read | app, command line, MCP | `get_cycle_time` | `glyphkeel report cycle-time` |
 | `timer.get` | read | app, command line, MCP | `get_workspace` | `glyphkeel timer status` |
 | `timer.start` | write | app, command line, MCP | `start_timer` | `glyphkeel timer start <key>` |
 | `timer.pause` | write | app, command line, MCP | `pause_timer` | `glyphkeel timer pause` |
@@ -534,6 +537,24 @@ Input: `TimeEntryRef`. Output: `TimeEntryChange`. Schemas: [catalog.schema.json]
 Logged time over a range of days, grouped by day, week, month, task, project or person, with totals in the workspace's units and optional CSV.
 
 Input: `TimeReportInput`. Output: `TimeReport`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `report.created_closed`
+
+Tasks created against tasks closed and reopened per day, week or month, with the open tasks at the end of each period; from the history, with optional CSV.
+
+Input: `FlowReportInput`. Output: `CreatedClosedReport`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `report.cumulative_flow`
+
+How many tasks were in each status (or category) at the end of each day, week or month; from the history, with optional CSV.
+
+Input: `FlowReportInput`. Output: `CumulativeFlowReport`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `report.cycle_time`
+
+Cycle time (first move into progress to the last close) and lead time (creation to the last close) of the tasks closed over a range of days, with percentiles per period; optional task list and CSV.
+
+Input: `FlowReportInput`. Output: `CycleTimeReport`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `timer.get`
 

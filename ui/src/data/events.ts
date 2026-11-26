@@ -13,26 +13,28 @@ import { OP_ROOT, opPrefix } from "./queries";
  */
 /** What links to a page or a task, and what a text links to: any text, page or task can change them. */
 const LINKS: readonly OpId[] = ["wiki.backlinks", "wiki.references", "task.backlinks", "task.references"];
+/** The flow reports read tasks, statuses, types and labels, and the week's first day. */
+const FLOW: readonly OpId[] = ["report.created_closed", "report.cumulative_flow", "report.cycle_time"];
 
 export const ENTITY_QUERIES: Readonly<Record<string, readonly OpId[]>> = {
   // `workspace.get` carries the settings too.
   // Durations are told in the workspace's units, and the timer reminds after its hours.
   // The trash counts its days left by the `trash_days` setting.
-  settings: ["settings.get", "workspace.get", "timer.get", "time.report", "trash.list"],
+  settings: ["settings.get", "workspace.get", "timer.get", "time.report", "trash.list", ...FLOW],
   // Open-task counts show in the project tree. Rendered texts link task keys
   // only while the task exists, and descriptions keep their revisions.
   // A task's reminder is one of its fields; the time report shows titles.
   // Deleting, restoring and purging show in the trash.
   // Its description links to pages and tasks, and its key is a link's target.
-  task: ["trash.list", "task.get", "board.get", "project.list", "markdown.render", "description.history", "description.revision", "time.report", "timer.get", "task.search", "today.get", "search.query", "schedule.get", "schedule.preview_move", "version.list", "version.get", "field.list", ...LINKS],
+  task: ["trash.list", "task.get", "board.get", "project.list", "markdown.render", "description.history", "description.revision", "time.report", "timer.get", "task.search", "today.get", "search.query", "schedule.get", "schedule.preview_move", "version.list", "version.get", "field.list", ...LINKS, ...FLOW],
   // Statuses, types and labels show on every card and in the task panel;
   // a wiki page's task lists (`{{tasks …}}`) show statuses and match by them.
-  project: ["trash.list", "project.list", "project.get", "board.get", "task.get", "layout.get", "list.layout.get", "markdown.render", "time.report", "task.search", "query.parse", "view.list", "today.get", "search.query", "wiki.search", "wiki.get", "wiki.list", "schedule.get", "schedule.preview_move", "gantt.layout.get", "version.list", "version.get", "field.list", ...LINKS],
-  status: ["project.get", "board.get", "task.get", "project.list", "task.search", "query.parse", "today.get", "search.query", "schedule.get", "markdown.render"],
-  task_type: ["project.get", "board.get", "task.get", "task.search", "query.parse", "schedule.get", "markdown.render", "field.list"],
-  label: ["project.get", "board.get", "task.get", "task.search", "query.parse", "schedule.get", "markdown.render"],
+  project: ["trash.list", "project.list", "project.get", "board.get", "task.get", "layout.get", "list.layout.get", "markdown.render", "time.report", "task.search", "query.parse", "view.list", "today.get", "search.query", "wiki.search", "wiki.get", "wiki.list", "schedule.get", "schedule.preview_move", "gantt.layout.get", "version.list", "version.get", "field.list", ...LINKS, ...FLOW],
+  status: ["project.get", "board.get", "task.get", "project.list", "task.search", "query.parse", "today.get", "search.query", "schedule.get", "markdown.render", ...FLOW],
+  task_type: ["project.get", "board.get", "task.get", "task.search", "query.parse", "schedule.get", "markdown.render", "field.list", ...FLOW],
+  label: ["project.get", "board.get", "task.get", "task.search", "query.parse", "schedule.get", "markdown.render", ...FLOW],
   // Custom fields: their list, the values tasks show, the columns and the query field.
-  custom_field: ["field.list", "task.get", "task.search", "query.parse", "view.list"],
+  custom_field: ["field.list", "task.get", "task.search", "query.parse", "view.list", ...FLOW],
   // The board leaves out the cards of hidden columns.
   layout: ["layout.get", "board.get"],
   // The order and widths of the list's columns.
@@ -51,7 +53,7 @@ export const ENTITY_QUERIES: Readonly<Record<string, readonly OpId[]>> = {
   // Saved views of the list.
   view: ["view.list"],
   // Versions: the roadmap, the task panel's picker, queries naming them and the Gantt chart's markers.
-  version: ["version.list", "version.get", "task.get", "task.search", "query.parse"],
+  version: ["version.list", "version.get", "task.get", "task.search", "query.parse", ...FLOW],
   // Wiki pages: their search, links to them and their text, and their revisions (read like a description's).
   wiki_page: ["trash.list", "wiki.search", "wiki.get", "wiki.list", "wiki.history", "description.revision", "search.query", "markdown.render", ...LINKS],
 };
