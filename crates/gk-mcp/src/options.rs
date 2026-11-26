@@ -57,6 +57,14 @@ pub struct Options {
     /// trace.
     #[arg(long, value_name = "LEVEL", default_value = "warn", value_parser = parse_level)]
     pub log_level: tracing::level_filters::LevelFilter,
+
+    /// The folders the agent may name files in besides the workspace's
+    /// `exports` folder, in place of the personal setting `agent_folders`
+    /// (for tests and embedders); `None`: the personal setting. Not an
+    /// option of the command: only the person chooses these folders, in
+    /// their personal settings.
+    #[arg(skip)]
+    pub agent_folders: Option<Vec<std::path::PathBuf>>,
 }
 
 impl Options {
@@ -80,6 +88,7 @@ impl Options {
             agent_name: None,
             tz: None,
             log_level: tracing::level_filters::LevelFilter::WARN,
+            agent_folders: None,
         }
     }
 

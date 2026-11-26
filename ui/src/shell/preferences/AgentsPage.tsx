@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Glyphkeel contributors
 
 import { useQueryClient } from "@tanstack/react-query";
-import { Copy, Terminal } from "lucide-react";
+import { Copy, FolderPlus, Terminal, X } from "lucide-react";
 import { useState } from "react";
 import { Button } from "react-aria-components";
 
@@ -16,6 +16,7 @@ import { skippedReason, useFailureToast } from "../../data/safety";
 import { Switch } from "../../components/Switch";
 import { type AgentLimit, type AgentLimitsPatch, type AgentSession, type Profile } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
+import { canAddAgentFolders, useAgentFolders, useAppSettings } from "../../ipc/appSettings";
 import { useCliStatus, useInstallCli, type CliStatus } from "../../ipc/cli";
 import { platform, type Platform } from "../../platform";
 import { useMomentFormat } from "../../screens/task/Activity";
@@ -31,7 +32,7 @@ const BARE_COMMAND: readonly string[] = ["glyphkeel"];
 /**
  * Agents & CLI: where the command-line tool is (and a link to install it),
  * the set-up to copy into common MCP clients, the most an agent may do, the
- * limits on each agent session (only the person changes them, here), and
+ * folders whose files agents may name by path, the limits on each agent session (only the person changes them, here), and
  * the agent sessions, each of which can be reverted.
  */
 export function AgentsPage() {
@@ -42,6 +43,7 @@ export function AgentsPage() {
       <CliGroup status={cli.data} isPending={cli.isPending} />
       <ClientsGroup command={command} />
       <PolicyGroup />
+      <FilesGroup />
       <LimitsGroup />
       <SessionsGroup />
     </>
@@ -252,6 +254,63 @@ function PolicyGroup() {
         />
       </Row>
       <Row label={t("agents-raise")} about={t("agents-raise-about")} />
+    </Group>
+  );
+}
+
+// ---------- the files agents may use ----------
+
+/**
+ * The folders whose files agents may name by path (to attach, import or
+ * export): the workspace's exports folder always, and the ones the person
+ * adds here. Only the native folder chooser adds one; this page can only
+ * take one away. Personal: the agent server reads the same setting.
+ */
+export function FilesGroup() {
+  const t = useT();
+  const settings = useAppSettings();
+  const folders = useAgentFolders();
+  const canAdd = canAddAgentFolders();
+  const added = settings.data?.agent_folders ?? [];
+  const exports = settings.data?.exports_folder;
+  return (
+    <Group title={t("agents-files")}>
+      <Row label={t("agents-files-exports")} about={t("agents-files-exports-about")}>
+        {exports !== undefined && <code className={classes("selectable", styles.command, styles.folder)}>{exports}</code>}
+      </Row>
+      {added.map((folder) => (
+        <div key={folder} className={styles.row} data-testid="agent-folder">
+          <code className={classes("selectable", styles.command, styles.folder)}>{folder}</code>
+          <span className={styles.control}>
+            <Button
+              className="btn sm"
+              aria-label={t("agents-files-remove-folder", { folder })}
+              isDisabled={folders.isPending}
+              onPress={() => {
+                folders.remove(folder);
+              }}
+            >
+              <X className="ic s" />
+              {t("agents-files-remove")}
+            </Button>
+          </span>
+        </div>
+      ))}
+      <Row label={t("agents-files-add-label")} about={t(canAdd ? "agents-files-add-about" : "agents-files-outside-app")}>
+        {canAdd && (
+          <Button
+            className="btn"
+            isDisabled={folders.isPending}
+            onPress={() => {
+              folders.add();
+            }}
+          >
+            <FolderPlus className="ic s" />
+            {t("agents-files-add")}
+          </Button>
+        )}
+      </Row>
+      <Row label={t("agents-files-rules")} about={t("agents-files-rules-about")} />
     </Group>
   );
 }

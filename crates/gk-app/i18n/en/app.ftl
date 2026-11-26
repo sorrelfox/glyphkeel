@@ -65,6 +65,8 @@ chooser-zip-filter = Archives (.zip)
 chooser-backup-folder-title = Choose a folder for backups
 chooser-backup-folder = _Choose
 chooser-wiki-folder-title = Import a folder of Markdown files into the wiki
+chooser-agent-folder-title = Choose a folder agents may use
+agent-folders-not-stored = Can't store the folders agents may use in { $file }: { $error }.
 
 ## The tray icon of background mode
 

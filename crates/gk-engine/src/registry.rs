@@ -33,6 +33,8 @@ pub struct Env {
     pub layout: gk_store::WorkspaceLayout,
     /// The time zone of local days and times of day.
     pub(crate) zone: crate::time::Zone,
+    /// Where the folders agents may use come from.
+    pub(crate) agent_folders: crate::AgentFolders,
 }
 
 /// A query's view of the workspace: one read transaction, one snapshot.

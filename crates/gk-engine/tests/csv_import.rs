@@ -413,7 +413,8 @@ fn an_agent_imports_only_from_the_exports_folder() {
             json!({ "project": "SHOP", "path": outside, "dry_run": true }),
         )
         .unwrap_err();
-    assert_eq!(err.code, ErrorCode::Invalid);
+    assert_eq!(err.code, ErrorCode::Forbidden);
+    assert_eq!(err.details["message_id"], "agent-path-outside");
     let exports = e.store().layout().exports_dir();
     std::fs::create_dir_all(&exports).unwrap();
     std::fs::copy(fixture("jira.csv"), exports.join("jira.csv")).unwrap();

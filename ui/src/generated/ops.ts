@@ -951,7 +951,7 @@ export type CsvImportInput = {
   format?: CsvFormat | null;
   /** List only the rows with problems, not every row. */
   only_problems?: boolean;
-  /** The CSV file. Agents give the plain name of a file in the workspace's `exports` folder. */
+  /** The CSV file. For agents, a plain name is a file in the workspace's `exports` folder; other paths must be inside a folder agents may use. */
   path: string;
   /** The preset to start from: `jira`, `redmine`, or the name of a saved one. Left out: detected from the header row, else columns are matched by their names. */
   preset?: string | null;
@@ -1492,7 +1492,7 @@ export type ErrorCode = "invalid" | "not_found" | "conflict" | "forbidden" | "li
 export type ExportInput = {
   /** A `.zip` file (the default) or a folder. */
   format?: ArchiveFormat | null;
-  /** Where to write it: a new file or folder. Agents give a plain name, which goes into the workspace's `exports` folder. Left out: a name with the date in the `exports` folder. */
+  /** Where to write it: a new file or folder. For agents, a plain name goes into the workspace's `exports` folder; other paths must be inside a folder agents may use. Left out: a name with the date in the `exports` folder. */
   path?: string | null;
   /** The projects (keys or IDs), each with its sub-projects; the whole workspace when empty. */
   projects?: string[];
@@ -1552,7 +1552,7 @@ export type FileAttachInput = {
   name?: string | null;
   /** The wiki page to attach it to: its title (any case), slug or ID. */
   page?: string | null;
-  /** The path of a local file to read. */
+  /** The path of a local file to read. For agents, a plain name is a file in the workspace's `exports` folder; other paths must be inside a folder agents may use. */
   path?: string | null;
   /** The page's project (key or ID); needed unless `page` is an ID. */
   project?: string | null;
@@ -1728,7 +1728,7 @@ export type ImportInput = {
   dry_run?: boolean;
   /** New keys for projects whose key is taken in this workspace. */
   keys?: KeyChange[];
-  /** The archive: a `.zip` file or a folder. Agents give a name in the workspace's `exports` folder. */
+  /** The archive: a `.zip` file or a folder. For agents, a plain name is one in the workspace's `exports` folder; other paths must be inside a folder agents may use. */
   path: string;
 };
 
@@ -4918,7 +4918,7 @@ export type WikiExportInput = {
   format?: ArchiveFormat | null;
   /** The page: its title (any case), slug or ID. Left out: the project's whole wiki, every page in it. */
   page?: string | null;
-  /** Where to write it: a new file or folder. Agents give a plain name, which goes into the workspace's `exports` folder. Left out: a name made from the page's slug and the date, in the `exports` folder. */
+  /** Where to write it: a new file or folder. For agents, a plain name goes into the workspace's `exports` folder; other paths must be inside a folder agents may use. Left out: a name made from the page's slug and the date, in the `exports` folder. */
   path?: string | null;
   /** The project (key or ID); needed unless `page` is an ID. */
   project?: string | null;
@@ -4981,7 +4981,7 @@ export type WikiImportInput = {
   dry_run?: boolean;
   /** The page to put the imported pages in (title, slug or ID); left out: at the top of the wiki. */
   parent?: string | null;
-  /** The folder (or a `.zip` file of one). Agents give a plain name of one in the workspace's `exports` folder. */
+  /** The folder (or a `.zip` file of one). For agents, a plain name is one in the workspace's `exports` folder; other paths must be inside a folder agents may use. */
   path: string;
   /** The project whose wiki the pages go to (key or ID). */
   project: string;
@@ -5285,6 +5285,8 @@ export type WorkspaceGetInput = Record<string, never>;
 
 /** The open workspace and who is asking. */
 export type WorkspaceInfo = {
+  /** For an agent: the folders whose files it may name by path, to attach, import or export, as absolute paths. The first is the workspace's `exports` folder, where a plain file name goes; the others are the ones the person added. Paths elsewhere are refused. Left out for the person, whose paths aren't limited. */
+  agent_folders?: string[];
   /** The limits on agent sessions enforced now, as in the settings; a limit left out is lifted. */
   agent_limits: AgentLimits;
   /** Who is asking, through which program, with which rights. */

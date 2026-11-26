@@ -145,8 +145,9 @@ pub struct CsvValueMaps {
 pub struct CsvImportInput {
     /// The project the tasks go to (key or ID).
     pub project: String,
-    /// The CSV file. Agents give the plain name of a file in the
-    /// workspace's `exports` folder.
+    /// The CSV file. For agents, a plain name is a file in the workspace's
+    /// `exports` folder; other paths must be inside a folder agents may
+    /// use.
     pub path: String,
     /// The preset to start from: `jira`, `redmine`, or the name of a saved
     /// one. Left out: detected from the header row, else columns are

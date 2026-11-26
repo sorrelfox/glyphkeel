@@ -9,6 +9,7 @@
 //! and runs operations through [`Engine::call`] with a [`Context`] saying
 //! who is calling. Nothing else writes to the workspace.
 
+mod agent_files;
 pub mod backup;
 mod context;
 mod engine;
@@ -26,6 +27,7 @@ pub mod transfer;
 pub mod workspaces;
 mod write;
 
+pub use agent_files::AgentFolders;
 pub use context::{ConfirmRequest, Confirmation, Context};
 pub use engine::{Engine, EngineConfig, Role, SessionStart};
 pub use failure::{Failure, store_error};

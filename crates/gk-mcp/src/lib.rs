@@ -126,6 +126,9 @@ pub fn open(options: &Options) -> Result<Server, OpError> {
         options.tz.as_deref(),
         &gk_store::UserSettings::load_default(),
     )?;
+    if let Some(folders) = &options.agent_folders {
+        config.agent_folders = gk_engine::AgentFolders::Fixed(folders.clone());
+    }
     let engine = Engine::open(&layout, config)?;
     tracing::info!(
         workspace = %layout.root().display(),

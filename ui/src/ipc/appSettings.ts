@@ -9,6 +9,11 @@
 // desktop's autostart folder; a plain browser (the development bridge, the
 // sample data, tests) keeps them in the page's storage.
 //
+// The folders agents may name files in, besides the workspace's `exports`
+// folder, are a personal setting in the same file. Only the native folder
+// chooser adds one (the page never names a folder to add); the page may
+// take one away. Outside the app there are none.
+//
 // The person's time zone comes with them: the app keeps it in the personal
 // settings that the command line and the MCP server read too. In a plain
 // browser it lives in the page's storage and changes only how the page
@@ -41,6 +46,10 @@ export interface AppSettings {
   zone_in_use?: string;
   /** The open workspace's folder; absent where the page can't know it. */
   workspace_path?: string;
+  /** The workspace's `exports` folder, which agents may always use; absent where the page can't know it. */
+  exports_folder?: string;
+  /** The other folders agents may use files in, as the person added them. */
+  agent_folders: string[];
 }
 
 export type AppSettingsPatch = Partial<Pick<AppSettings, "background" | "notifications" | "safe_rendering" | "time_zone">>;
@@ -71,6 +80,7 @@ function stored(): AppSettings {
     safe_rendering_in_use: false,
     time_zone: zone,
     ...(inUse === undefined ? {} : { zone_in_use: inUse }),
+    agent_folders: [],
   };
 }
 
@@ -144,6 +154,28 @@ export function setAutostart(on: boolean): Promise<AppSettings> {
   return Promise.resolve(stored());
 }
 
+/** Lets the person add a folder agents may use, in the native folder chooser; null when they cancelled. Only in the app. */
+export async function addAgentFolder(): Promise<AppSettings | null> {
+  if (!inApp()) {
+    return null;
+  }
+  try {
+    return await invoke<AppSettings | null>("add_agent_folder");
+  } catch (error: unknown) {
+    throw new OpFailure("add_agent_folder", toCallError(error));
+  }
+}
+
+/** Takes a folder out of the ones agents may use. */
+export function removeAgentFolder(folder: string): Promise<AppSettings> {
+  return inApp() ? command("remove_agent_folder", { folder }) : Promise.resolve(stored());
+}
+
+/** Whether folders for agents can be added here: only in the app, which has the folder chooser. */
+export function canAddAgentFolders(): boolean {
+  return inApp();
+}
+
 /** Ends the app and starts it again, so that a rendering change applies. Only in the app. */
 export async function restartApp(): Promise<void> {
   if (inApp()) {
@@ -198,6 +230,32 @@ export function useSetAutostart(): (on: boolean) => void {
   });
   return (on) => {
     mutation.mutate(on);
+  };
+}
+
+/** Adds a folder agents may use (`add`) or takes one away (`remove`); errors become a toast. */
+export function useAgentFolders(): { add: () => void; remove: (folder: string) => void; isPending: boolean } {
+  const queryClient = useQueryClient();
+  const toasts = useToasts();
+  const t = useT();
+  const done = (settings: AppSettings | null) => {
+    if (settings !== null) {
+      queryClient.setQueryData(KEY, settings);
+    }
+  };
+  const fail = (error: OpFailure) => {
+    toasts.show(errorToast(t, error));
+  };
+  const adding = useMutation({ mutationFn: addAgentFolder, onSuccess: done, onError: fail });
+  const removing = useMutation({ mutationFn: removeAgentFolder, onSuccess: done, onError: fail });
+  return {
+    add: () => {
+      adding.mutate();
+    },
+    remove: (folder) => {
+      removing.mutate(folder);
+    },
+    isPending: adding.isPending || removing.isPending,
   };
 }
 

@@ -13,6 +13,12 @@
 //! is not a workspace operation: it isn't workspace data, has no place in
 //! the workspace's history, and an agent must not change it.
 //!
+//! The folders agents may name files in, besides the workspace's `exports`
+//! folder, are a personal setting in the same shared file
+//! (`agent_folders`): the agent server reads it at every check. The page
+//! never names one: a folder is added only through the native folder
+//! chooser ([`add_agent_folder`]); the page may only take one away again.
+//!
 //! Whether the app starts with the system is kept in the desktop's own
 //! autostart folder (see [`crate::autostart`]), not here, except inside
 //! Flatpak, where the portal's answer is remembered here. Safe rendering
@@ -234,6 +240,50 @@ impl AppSettings {
         })
     }
 
+    /// The folders agents may use besides `exports`, as stored.
+    pub(crate) fn agent_folders(&self) -> Vec<String> {
+        self.user_file
+            .as_deref()
+            .map(UserSettings::load)
+            .unwrap_or_default()
+            .agent_folders
+    }
+
+    /// Changes the folders agents may use with `change`, keeping the shared
+    /// file's other fields.
+    fn change_agent_folders(&self, change: impl FnOnce(&mut Vec<String>)) -> Result<(), OpError> {
+        let Some(path) = &self.user_file else {
+            return Ok(());
+        };
+        let mut user = UserSettings::load(path);
+        change(&mut user.agent_folders);
+        user.save(path).map_err(|err| {
+            OpError::storage(crate::messages::text(
+                "agent-folders-not-stored",
+                &[
+                    ("file", path.display().to_string()),
+                    ("error", err.to_string()),
+                ],
+            ))
+        })
+    }
+
+    /// Adds `folder`, which the person chose, unless it is there already.
+    fn add_agent_folder(&self, folder: &Path) -> Result<(), OpError> {
+        let folder = std::fs::canonicalize(folder).unwrap_or_else(|_| folder.to_path_buf());
+        let folder = folder.to_string_lossy().into_owned();
+        self.change_agent_folders(|folders| {
+            if !folders.contains(&folder) {
+                folders.push(folder);
+            }
+        })
+    }
+
+    /// Takes `folder` out of the folders agents may use.
+    fn remove_agent_folder(&self, folder: &str) -> Result<(), OpError> {
+        self.change_agent_folders(|folders| folders.retain(|f| f != folder))
+    }
+
     /// Applies a change from Preferences.
     fn apply(&self, patch: &Patch) -> Stored {
         self.change(|stored| {
@@ -336,6 +386,12 @@ pub(crate) struct View {
     /// The workspace folder; absent when the workspace didn't open.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) workspace_path: Option<String>,
+    /// The workspace's `exports` folder, which agents may always use;
+    /// absent when the workspace didn't open.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) exports_folder: Option<String>,
+    /// The other folders agents may use, as the person added them.
+    pub(crate) agent_folders: Vec<String>,
 }
 
 /// A change from Preferences; fields left out keep their value.
@@ -370,6 +426,10 @@ fn view(
         workspace_path: workspace
             .layout()
             .map(|layout| layout.root().display().to_string()),
+        exports_folder: workspace
+            .layout()
+            .map(|layout| layout.exports_dir().display().to_string()),
+        agent_folders: settings.agent_folders(),
     }
 }
 
@@ -438,6 +498,40 @@ pub(crate) fn restart_app(app: AppHandle, restart: State<'_, Restart>) {
 /// Set when the app is to start again once it has ended.
 #[derive(Debug, Default)]
 pub(crate) struct Restart(pub(crate) AtomicBool);
+
+/// Lets the person choose a folder agents may use, in the native folder
+/// chooser, and keeps it in the personal settings; the page never names
+/// the folder. Returns the settings, or `null` when the person cancelled.
+#[tauri::command]
+pub(crate) async fn add_agent_folder(
+    window: tauri::WebviewWindow,
+    settings: State<'_, AppSettings>,
+    mode: State<'_, BackgroundMode>,
+    workspace: State<'_, Arc<Workspace>>,
+) -> Result<Option<View>, OpError> {
+    let chosen = crate::files::dialog::choose(&window, crate::files::dialog::Mode::AgentFolder)
+        .await?
+        .into_iter()
+        .next();
+    let Some(folder) = chosen else {
+        return Ok(None);
+    };
+    settings.add_agent_folder(&folder)?;
+    Ok(Some(view(&settings, &settings.stored(), &mode, &workspace)))
+}
+
+/// Takes `folder` out of the folders agents may use. Only taking away is
+/// open to the page; adding needs the person's choice.
+#[tauri::command]
+pub(crate) fn remove_agent_folder(
+    settings: State<'_, AppSettings>,
+    mode: State<'_, BackgroundMode>,
+    workspace: State<'_, Arc<Workspace>>,
+    folder: String,
+) -> Result<View, OpError> {
+    settings.remove_agent_folder(&folder)?;
+    Ok(view(&settings, &settings.stored(), &mode, &workspace))
+}
 
 /// Every time zone a person can choose, with its offset from UTC now, for
 /// the picker in Preferences.
@@ -562,6 +656,33 @@ mod tests {
         assert_eq!(settings.time_zone(), "system");
         let patch: Patch = serde_json::from_str(r#"{"time_zone": "UTC"}"#).unwrap();
         assert_eq!(patch.time_zone.as_deref(), Some("UTC"));
+    }
+
+    #[test]
+    fn folders_for_agents_are_kept_in_the_shared_personal_settings() {
+        let dir = tempfile::tempdir().unwrap();
+        let user = dir.path().join(gk_store::USER_SETTINGS_FILE);
+        std::fs::write(&user, br#"{"time_zone": "Asia/Tokyo"}"#).unwrap();
+        let chosen = dir.path().join("For agents");
+        std::fs::create_dir_all(&chosen).unwrap();
+        let mut settings = AppSettings::new(Some(dir.path().join("app.json")), Stored::default());
+        settings.user_file = Some(user.clone());
+        assert!(settings.agent_folders().is_empty());
+        settings.add_agent_folder(&chosen).unwrap();
+        settings.add_agent_folder(&chosen).unwrap();
+        let canonical = std::fs::canonicalize(&chosen).unwrap();
+        let stored = canonical.to_string_lossy().into_owned();
+        assert_eq!(settings.agent_folders(), std::slice::from_ref(&stored));
+        // The agent server reads the same file; the other fields stay.
+        let shared = gk_store::UserSettings::load(&user);
+        assert_eq!(shared.agent_folders, std::slice::from_ref(&stored));
+        assert_eq!(shared.zone_name(), Some("Asia/Tokyo"));
+        settings.remove_agent_folder("/not/there").unwrap();
+        assert_eq!(settings.agent_folders(), std::slice::from_ref(&stored));
+        settings.remove_agent_folder(&stored).unwrap();
+        assert!(settings.agent_folders().is_empty());
+        // A change from the page can't name a folder.
+        assert!(serde_json::from_str::<Patch>(r#"{"agent_folders": ["/"]}"#).is_err());
     }
 
     #[test]

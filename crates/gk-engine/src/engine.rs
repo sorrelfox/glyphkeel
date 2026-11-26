@@ -70,6 +70,9 @@ pub struct EngineConfig {
     /// `backup_folder` setting; `None`: that setting, else the default
     /// ([`crate::backup::default_folder`]).
     pub backups: Option<std::path::PathBuf>,
+    /// The folders agents may name files in, besides the workspace's
+    /// `exports` folder; by default the person's own setting.
+    pub agent_folders: crate::AgentFolders,
 }
 
 impl EngineConfig {
@@ -85,6 +88,7 @@ impl EngineConfig {
             checkpoints: CheckpointPolicy::default(),
             time_zone: None,
             backups: None,
+            agent_folders: crate::AgentFolders::Personal,
         }
     }
 }
@@ -273,6 +277,7 @@ impl Engine {
             schema_version: SCHEMA_VERSION,
             layout: layout.clone(),
             zone: crate::time::Zone::new(config.time_zone.as_deref()),
+            agent_folders: config.agent_folders,
         };
         Ok(Self {
             store,
@@ -397,6 +402,14 @@ impl Engine {
         let input = if input.is_null() { json!({}) } else { input };
         let input = crate::scope::narrow_input(ctx, entry.desc.id, input);
         (entry.validate)(&input)?;
+        // Every path an agent names passes here, whatever the operation.
+        let input = crate::agent_files::confine(
+            ctx,
+            &self.env.layout,
+            &self.env.agent_folders,
+            entry.desc.id,
+            input,
+        )?;
         let parts: Vec<&'static OpDescriptor> = entry
             .parts
             .map(|parts| parts(&input).into_iter().filter_map(descriptor).collect())

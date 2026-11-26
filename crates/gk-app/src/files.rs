@@ -713,6 +713,8 @@ pub(crate) enum Mode {
     WikiFolder,
     /// Choose a CSV file to import tasks from.
     Csv,
+    /// Choose a folder agents may use.
+    AgentFolder,
 }
 
 /// What kind of chooser a [`Mode`] shows.
@@ -794,6 +796,11 @@ impl Mode {
                 "chooser-import",
             ),
             Mode::Csv => spec(Choose::File, "chooser-csv-title", "chooser-import"),
+            Mode::AgentFolder => spec(
+                Choose::Folder,
+                "chooser-agent-folder-title",
+                "chooser-backup-folder",
+            ),
         }
     }
 }
@@ -1303,6 +1310,7 @@ mod tests {
             (Mode::Import { folder: true }, "chooser-import-folder-title"),
             (Mode::BackupFolder, "chooser-backup-folder-title"),
             (Mode::WikiFolder, "chooser-wiki-folder-title"),
+            (Mode::AgentFolder, "chooser-agent-folder-title"),
         ] {
             let spec = mode.spec();
             assert_eq!(
@@ -1327,6 +1335,7 @@ mod tests {
             Mode::BackupFolder,
             Mode::WikiFolder,
             Mode::Csv,
+            Mode::AgentFolder,
         ] {
             let spec = mode.spec();
             for id in [

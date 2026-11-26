@@ -33,6 +33,10 @@ pub(super) fn register(r: &mut crate::registry::Registry) {
                 session: q.caller.session.map(|s| s.to_string()),
             },
             agent_limits: settings.agent_limits,
+            agent_folders: q
+                .caller
+                .is_agent()
+                .then(|| crate::agent_files::listed(&q.env.layout, &q.env.agent_folders)),
             settings,
             timer: super::time::current(q.tx, q.now, super::task::units(q.tx)?)?
                 .filter(|t| super::lookup::task(q.tx, "task", &t.task.id).is_ok()),

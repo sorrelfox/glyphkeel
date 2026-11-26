@@ -235,23 +235,25 @@ impl From<Rejected> for OpError {
     }
 }
 
-/// Whether `name` is a plain file name: what agents may give as a path.
-fn plain_name(name: &str) -> bool {
-    !name.is_empty()
-        && name.len() <= 255
-        && !name.starts_with('.')
-        && !name.contains(['/', '\\', ':'])
-        && !name.chars().any(char::is_control)
-}
-
-/// Where an agent's `path` is: a plain name in the workspace's `exports`
-/// folder. The person's paths are taken as given.
-fn resolve(engine: &Engine, ctx: &Context, path: &str, field: &str) -> Result<PathBuf, OpError> {
+/// Where an agent's `path` is: checked against the folders agents may use
+/// (see [`crate::agent_files`]), which [`Engine::call`] did already; this
+/// keeps the check for callers that come here directly. The person's paths
+/// are taken as given.
+fn resolve(
+    engine: &Engine,
+    ctx: &Context,
+    path: &str,
+    field: &str,
+    access: crate::agent_files::Access,
+) -> Result<PathBuf, OpError> {
     if ctx.is_agent() {
-        if !plain_name(path) {
-            return Err(messages::invalid(field, "transfer-agent-path", &[]).into());
-        }
-        Ok(engine.store().layout().exports_dir().join(path))
+        crate::agent_files::check(
+            &engine.env.layout,
+            &engine.env.agent_folders,
+            field,
+            path,
+            access,
+        )
     } else {
         Ok(PathBuf::from(path))
     }
@@ -271,7 +273,7 @@ impl Engine {
             _ => ArchiveFormat::Zip,
         });
         let target = match &input.path {
-            Some(p) => resolve(self, ctx, p, "path")?,
+            Some(p) => resolve(self, ctx, p, "path", crate::agent_files::Access::Write)?,
             None => {
                 let stamp = crate::time::rfc3339(self.now_ms())
                     .replace([':', '.'], "")
@@ -319,7 +321,13 @@ impl Engine {
                 .map_err(OpError::from)?;
             return Err(OpError::from(refusal));
         }
-        let path = resolve(self, ctx, &input.path, "path")?;
+        let path = resolve(
+            self,
+            ctx,
+            &input.path,
+            "path",
+            crate::agent_files::Access::Read,
+        )?;
         import::import(self, ctx, input, &path, &Limits::default(), progress)
     }
 

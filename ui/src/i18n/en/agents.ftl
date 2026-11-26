@@ -48,6 +48,18 @@ agents-profile-full-about = Agents can do everything you can, including emptying
 agents-raise = Letting agents do more
 agents-raise-about = Letting agents do more, or raising their limits, asks you in a window of the desktop, so that an agent can't widen its own rights.
 
+agents-files = Files agents may use
+agents-files-exports = The workspace's exports folder
+agents-files-exports-about = Agents may always read and write files here. A plain file name, such as report.pdf, means a file in this folder.
+agents-files-add-label = More folders
+agents-files-add-about = Add a folder whose files agents may attach, import or export to. You choose it here; agents can't add folders.
+agents-files-outside-app = Folders can be added in the app, which has the folder chooser.
+agents-files-add = Add folder…
+agents-files-remove = Remove
+agents-files-remove-folder = Stop agents from using { $folder }
+agents-files-rules = Everywhere else
+agents-files-rules-about = Agents can't name other files on this computer, go up a folder with "..", follow links out of these folders or use hidden files. This applies to every agent on this computer; your own commands are not limited.
+
 agents-limits = Limits on each agent session
 agents-limits-only-here = Who can change them
 agents-limits-only-here-about = Only you, here in the app. Agents and the command line can't change these limits or undo your changes to them.

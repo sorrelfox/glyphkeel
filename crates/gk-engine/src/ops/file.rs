@@ -83,7 +83,7 @@ pub(super) fn register(r: &mut Registry) {
         })
     });
     r.engine_op::<FileAttach, _>(desc::<FileAttach>(), |engine, ctx, input| {
-        let prepared = Arc::new(prepare(engine, &input)?);
+        let prepared = Arc::new(prepare(engine, ctx, &input)?);
         let value = serde_json::to_value(&input)
             .map_err(|e| messages::storage("storage-json", &[("error", e.to_string())]))?;
         let for_command = Arc::clone(&prepared);
@@ -424,7 +424,11 @@ fn limit_error(size: u64, max_mb: u32) -> OpError {
     .with_detail("limit_mb", max_mb)
 }
 
-fn prepare(engine: &crate::engine::Engine, input: &FileAttachInput) -> Result<Prepared, OpError> {
+fn prepare(
+    engine: &crate::engine::Engine,
+    ctx: &crate::Context,
+    input: &FileAttachInput,
+) -> Result<Prepared, OpError> {
     let owners = [
         input.task.is_some(),
         input.comment.is_some(),
@@ -447,7 +451,22 @@ fn prepare(engine: &crate::engine::Engine, input: &FileAttachInput) -> Result<Pr
         .file_max_mb;
     let max = u64::from(max_mb) * MB;
     let (bytes, default_name) = match (&input.path, &input.data_base64) {
-        (Some(path), None) => {
+        (Some(given), None) => {
+            // An agent's path was checked by the engine already; checked
+            // again for callers that come here directly.
+            let path = &if ctx.is_agent() {
+                crate::agent_files::check(
+                    &engine.env().layout,
+                    &engine.env().agent_folders,
+                    "path",
+                    given,
+                    crate::agent_files::Access::Read,
+                )?
+                .to_string_lossy()
+                .into_owned()
+            } else {
+                given.clone()
+            };
             let unreadable = |e: std::io::Error| {
                 messages::invalid_at(
                     "path",

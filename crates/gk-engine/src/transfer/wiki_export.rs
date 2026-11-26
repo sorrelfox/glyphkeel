@@ -82,7 +82,7 @@ impl Engine {
             })
             .map_err(OpError::from)?;
         let target = match &input.path {
-            Some(p) => resolve(self, ctx, p, "path")?,
+            Some(p) => resolve(self, ctx, p, "path", crate::agent_files::Access::Write)?,
             None => {
                 let stamp = crate::time::rfc3339(self.now_ms())
                     .replace([':', '.'], "")

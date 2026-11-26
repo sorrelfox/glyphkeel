@@ -13,7 +13,8 @@
 //! $XDG_CONFIG_HOME/glyphkeel/settings.json     (normally ~/.config/glyphkeel)
 //! {
 //!   "time_zone": "Europe/Berlin",
-//!   "workspace": "Side project"
+//!   "workspace": "Side project",
+//!   "agent_folders": ["/home/me/Documents/For agents"]
 //! }
 //! ```
 //!
@@ -26,6 +27,11 @@
 //!   and the command line and the agent server work in it unless told
 //!   another (see [`Location::find`](crate::Location::find)). Left out, it
 //!   is the default workspace.
+//! - `agent_folders`: folders, by absolute path, whose files agents may name
+//!   by path (to attach, import or export), besides the workspace's
+//!   `exports` folder, which they may always use. Left out, agents use only
+//!   `exports`. Only the person sets it, here or in the app's Preferences;
+//!   it doesn't limit the person's own commands.
 //!
 //! Fields this program doesn't know are kept when it writes the file, so an
 //! older and a newer program can share it. A missing or damaged file means
@@ -85,6 +91,10 @@ pub struct UserSettings {
     /// the default workspace.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workspace: Option<String>,
+    /// Folders agents may use files in besides the workspace's `exports`
+    /// folder, by absolute path; empty (left out): only `exports`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub agent_folders: Vec<String>,
     /// Fields of other versions of the program, kept as they are.
     #[serde(flatten)]
     pub other: Map<String, Value>,
