@@ -324,10 +324,14 @@ pub fn shift_dependents(
     }
     let mut ready = VecDeque::from([root]);
     let mut order = Vec::with_capacity(reach.len() + 1);
+    // A link back to `root` means `root` is in a loop with its dependents.
+    let mut back_to_root = false;
     while let Some(u) = ready.pop_front() {
         order.push(u);
         for d in graph.blocks(u) {
-            if inside[d.to] {
+            if d.to == root {
+                back_to_root = true;
+            } else if inside[d.to] {
                 waiting[d.to] -= 1;
                 if waiting[d.to] == 0 {
                     ready.push_back(d.to);
@@ -335,7 +339,7 @@ pub fn shift_dependents(
             }
         }
     }
-    if order.len() <= reach.len() {
+    if back_to_root || order.len() <= reach.len() {
         // Tasks after a loop wait too; name only the loop's own.
         let mut tasks: Vec<usize> = graph
             .loops()
@@ -548,6 +552,24 @@ mod tests {
         // A loop elsewhere doesn't matter.
         let g = Graph::new(4, [dep(0, 1), dep(2, 3), dep(3, 2)]);
         assert!(shift_dependents(&g, &d, 0, &[true; 4]).is_ok());
+    }
+
+    #[test]
+    fn a_loop_through_the_moved_task_is_refused() {
+        let d = [dates(None, Some("2026-12-10")); 4];
+        let g = Graph::new(4, [dep(0, 1), dep(1, 2), dep(2, 0), dep(0, 3)]);
+        assert_eq!(
+            shift_dependents(&g, &d, 0, &[true; 4]),
+            Err(ShiftError::Loop {
+                tasks: vec![0, 1, 2]
+            })
+        );
+        // Two tasks blocking each other directly.
+        let g = Graph::new(2, [dep(0, 1), dep(1, 0)]);
+        assert_eq!(
+            shift_dependents(&g, &d, 1, &[true; 2]),
+            Err(ShiftError::Loop { tasks: vec![0, 1] })
+        );
     }
 
     #[test]

@@ -177,6 +177,21 @@ shortcut-group-app = Application
 shortcut-group-navigation = Navigation
 shortcut-group-tasks = Tasks
 shortcut-group-window = Window
+shortcut-group-screen = This view
+screen-key-wiki-edit = Edit the page
+screen-key-wiki-move-sibling = Move the page up or down in the tree
+screen-key-wiki-move-in = Move the page into the page above it
+screen-key-wiki-move-out = Move the page out of its parent
+screen-key-gantt-move = Move the bar by a day
+screen-key-gantt-resize = Make the bar a day shorter or longer
+screen-key-gantt-edit-start = Edit the start date
+screen-key-gantt-edit-due = Edit the due date
+screen-key-gantt-link = Link to another task
+screen-key-gantt-zoom-in = Zoom in
+screen-key-gantt-zoom-out = Zoom out
+screen-key-calendar-open-day = Go into the day's tasks
+screen-key-calendar-move-day = Move the task by a day
+screen-key-calendar-move-week = Move the task by a week
 
 ## Key names in shortcut hints
 
