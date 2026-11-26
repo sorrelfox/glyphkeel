@@ -15,8 +15,10 @@
 //! logs its time first. Stopping logs the time, rounded to the minute, on
 //! the day the timer was first started.
 //!
+//! An entry and the timer may name a kind of work (`work_kind.rs`).
+//!
 //! History records an entry's `created` (its life), `trashed`, `task`,
-//! `date`, `minutes` and `note`, and the timer as one value (`timer`) on an
+//! `date`, `minutes`, `note` and `work_kind` (its ID), and the timer as one value (`timer`) on an
 //! item whose ID is the workspace's, so Undo and revert cover both.
 
 use std::collections::{HashMap, HashSet};
@@ -27,7 +29,7 @@ use gk_api::ops::time::{
     TimeDelete, TimeEntry, TimeEntryChange, TimeEntryRef, TimeGroupBy, TimeLog, TimeLogInput,
     TimeReport, TimeReportCsv, TimeReportInput, TimeReportOp, TimeReportRow, TimeUpdate,
     TimeUpdateInput, Timer, TimerChange, TimerGet, TimerPause, TimerStart, TimerStartInput,
-    TimerState, TimerStatus, TimerStop, TimerStopInput,
+    TimerState, TimerStatus, TimerStop, TimerStopInput, WorkKindRef,
 };
 use gk_core::worklog::{self, WorklogError};
 use gk_core::{Day, DurationUnits, Id, Weekday, format_duration};
@@ -50,6 +52,9 @@ use crate::write::WriteCtx;
 pub(crate) const ENTRY: &str = "time_entry";
 /// History's name for the timer; its ID is the workspace's.
 pub(crate) const TIMER: &str = "timer";
+
+/// The entry field holding its kind of work.
+pub(crate) const WORK_KIND_FIELD: &str = "work_kind";
 
 /// The longest range of the time report, in days.
 const REPORT_MAX_DAYS: i64 = 366;
@@ -91,10 +96,10 @@ fn ensure_active(tx: &Transaction<'_>, project: Id) -> Result<(), Failure> {
 // Entries
 
 const COLUMNS: &str = "e.id, p.key || '-' || t.number, e.work_date, e.minutes, e.note,
-    e.actor_kind, e.actor_name, e.created_at, e.edited_at, e.version";
+    e.actor_kind, e.actor_name, e.created_at, e.edited_at, e.version, k.id, k.name";
 
 const FROM: &str = "time_entries e JOIN tasks t ON t.id = e.task_id
-    JOIN projects p ON p.id = t.project_id";
+    JOIN projects p ON p.id = t.project_id LEFT JOIN work_kinds k ON k.id = e.work_kind_id";
 
 fn row(r: &Row<'_>, units: DurationUnits) -> gk_store::rusqlite::Result<TimeEntry> {
     let minutes: i64 = r.get(3)?;
@@ -105,6 +110,13 @@ fn row(r: &Row<'_>, units: DurationUnits) -> gk_store::rusqlite::Result<TimeEntr
         minutes,
         duration: format_duration(minutes, units),
         note: r.get(4)?,
+        work_kind: match (lookup::opt_id_at(r, 10)?, r.get::<_, Option<String>>(11)?) {
+            (Some(id), Some(name)) => Some(WorkKindRef {
+                id: id.to_string(),
+                name,
+            }),
+            _ => None,
+        },
         author: actor(&r.get::<_, String>(5)?, r.get(6)?),
         created_at: rfc3339(r.get(7)?),
         edited_at: r.get::<_, Option<i64>>(8)?.map(rfc3339),
@@ -206,13 +218,14 @@ fn insert(
     date: Day,
     minutes: i64,
     note: &str,
+    work_kind: Option<Id>,
 ) -> Result<Id, Failure> {
     let id = Id::generate_at(u64::try_from(w.now()).unwrap_or(0));
     let caller = w.caller().clone();
     w.tx().execute(
         "INSERT INTO time_entries (id, task_id, work_date, minutes, note, actor_kind, actor_name,
-                                   session_id, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                                   session_id, created_at, work_kind_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         params![
             b(id),
             b(task.id),
@@ -222,7 +235,8 @@ fn insert(
             caller.actor.kind.as_str(),
             caller.actor.name,
             caller.session.map(b),
-            w.now()
+            w.now(),
+            work_kind.map(b)
         ],
     )?;
     refresh_spent(w, task.id)?;
@@ -234,6 +248,16 @@ fn insert(
     w.record_field(ENTRY, id, pid, "minutes", None, Some(minutes.into()));
     if !note.is_empty() {
         w.record_field(ENTRY, id, pid, "note", None, text(note));
+    }
+    if let Some(kind) = work_kind {
+        w.record_field(
+            ENTRY,
+            id,
+            pid,
+            WORK_KIND_FIELD,
+            None,
+            text(kind.to_string()),
+        );
     }
     Ok(id)
 }
@@ -255,7 +279,11 @@ fn log(w: &mut WriteCtx<'_>, input: TimeLogInput) -> Result<TimeEntryChange, Fai
     let date = work_day(w, "date", input.date.as_deref())?;
     let note = worklog::entry_note(input.note.as_deref().unwrap_or_default())
         .map_err(|e| bad("note", &e))?;
-    let id = insert(w, &task, date, minutes, &note)?;
+    let kind = match &input.work_kind {
+        Some(k) => super::work_kind::for_entry(w.tx(), "work_kind", k, None)?,
+        None => None,
+    };
+    let id = insert(w, &task, date, minutes, &note, kind)?;
     changed(w, id)
 }
 
@@ -293,6 +321,11 @@ fn update(w: &mut WriteCtx<'_>, input: TimeUpdateInput) -> Result<TimeEntryChang
         let note = worklog::entry_note(n).map_err(|e| bad("note", &e))?;
         wanted.push(("note", (!note.is_empty()).then_some(Value::String(note))));
     }
+    if let Some(k) = &input.work_kind {
+        let current = entry_kind(w.tx(), e.id)?;
+        let kind = super::work_kind::for_entry(w.tx(), "work_kind", k, current)?;
+        wanted.push((WORK_KIND_FIELD, kind.and_then(|k| text(k.to_string()))));
+    }
     let mut any = false;
     for (field, value) in wanted {
         any |= set_field(w, e.id, Some(e.project), field, value)?;
@@ -327,23 +360,37 @@ fn touch(w: &WriteCtx<'_>, id: Id) -> Result<(), Failure> {
     Ok(())
 }
 
-/// The entry's `date`, `minutes` or `note`, as history records it.
+/// The kind of work of entry `id`.
+fn entry_kind(tx: &Transaction<'_>, id: Id) -> Result<Option<Id>, StoreError> {
+    Ok(tx
+        .query_row(
+            "SELECT work_kind_id FROM time_entries WHERE id = ?1",
+            [b(id)],
+            |r| lookup::opt_id_at(r, 0),
+        )
+        .optional()?
+        .flatten())
+}
+
+/// The entry's `date`, `minutes`, `note` or `work_kind`, as history
+/// records it.
 pub(crate) fn raw_field(
     tx: &Transaction<'_>,
     id: Id,
     field: &str,
 ) -> Result<Option<Value>, StoreError> {
-    let row: Option<(String, i64, String)> = tx
+    let row: Option<(String, i64, String, Option<Id>)> = tx
         .query_row(
-            "SELECT work_date, minutes, note FROM time_entries WHERE id = ?1",
+            "SELECT work_date, minutes, note, work_kind_id FROM time_entries WHERE id = ?1",
             [b(id)],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, lookup::opt_id_at(r, 3)?)),
         )
         .optional()?;
-    Ok(row.and_then(|(date, minutes, note)| match field {
+    Ok(row.and_then(|(date, minutes, note, kind)| match field {
         "date" => Some(Value::String(date)),
         "minutes" => Some(minutes.into()),
         "note" => (!note.is_empty()).then_some(Value::String(note)),
+        WORK_KIND_FIELD => kind.map(|k| Value::String(k.to_string())),
         _ => None,
     }))
 }
@@ -395,6 +442,25 @@ fn set_field(
             w.tx().execute(
                 "UPDATE time_entries SET note = ?2 WHERE id = ?1",
                 params![b(id), note],
+            )?;
+        }
+        WORK_KIND_FIELD => {
+            let kind = match value.as_ref() {
+                None | Some(Value::Null) => None,
+                Some(v) => Some(
+                    v.as_str()
+                        .and_then(|t| t.parse::<Id>().ok())
+                        .ok_or_else(corrupt)?,
+                ),
+            };
+            if let Some(k) = kind
+                && super::work_kind::raw(w.tx(), k)?.is_none()
+            {
+                return Err(messages::conflict("work-kind-gone", &[]).into());
+            }
+            w.tx().execute(
+                "UPDATE time_entries SET work_kind_id = ?2 WHERE id = ?1",
+                params![b(id), kind.map(b)],
             )?;
         }
         _ => return Err(corrupt()),
@@ -532,10 +598,16 @@ fn report(
     if person.is_some_and(str::is_empty) {
         return Err(messages::invalid("person", "time-report-no-person", &[]));
     }
+    // `Some(None)`: only time without a kind.
+    let kind: Option<Option<Id>> = match input.work_kind.as_deref().map(str::trim) {
+        None => None,
+        Some(k) if k.eq_ignore_ascii_case("none") => Some(None),
+        Some(k) => Some(Some(super::work_kind::find(tx, "work_kind", k)?.0)),
+    };
 
     let mut stmt = tx.prepare_cached(&format!(
         "SELECT e.id, e.task_id, t.project_id, e.work_date, e.minutes, e.actor_kind,
-                e.actor_name, e.note FROM {FROM}
+                e.actor_name, e.note, k.id, k.name FROM {FROM}
           WHERE e.deleted_at IS NULL AND t.deleted_at IS NULL AND p.deleted_at IS NULL
             AND e.work_date BETWEEN ?1 AND ?2
           ORDER BY e.work_date, e.created_at, e.id"
@@ -551,6 +623,8 @@ fn report(
                 actor_kind: r.get(5)?,
                 actor_name: r.get(6)?,
                 note: r.get(7)?,
+                kind: lookup::opt_id_at(r, 8)?,
+                kind_name: r.get(9)?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -559,6 +633,7 @@ fn report(
         .filter(|l| projects.as_ref().is_none_or(|p| p.contains(&l.project)))
         .filter(|l| tasks.as_ref().is_none_or(|t| t.contains(&l.task)))
         .filter(|l| person.is_none_or(|p| l.logged_by(p)))
+        .filter(|l| kind.is_none_or(|k| l.kind == k))
         .collect();
 
     let group_by = input.group_by.unwrap_or_default();
@@ -575,6 +650,7 @@ fn report(
             TimeGroupBy::Task => l.task.to_string(),
             TimeGroupBy::Project => l.project.to_string(),
             TimeGroupBy::Person => format!("{}:{}", l.actor_kind, l.actor_name),
+            TimeGroupBy::WorkKind => l.kind.map_or_else(|| "none".to_owned(), |k| k.to_string()),
         };
         let g = groups.entry(key.clone()).or_insert_with(|| {
             order.push(key);
@@ -614,6 +690,7 @@ fn report(
                 person = Some(actor(&l.actor_kind, l.actor_name.clone()));
                 (key, l.actor_name.clone())
             }
+            TimeGroupBy::WorkKind => (key, l.kind_name.clone().unwrap_or_default()),
         };
         items.push(TimeReportRow {
             key,
@@ -626,7 +703,7 @@ fn report(
     }
     if matches!(
         group_by,
-        TimeGroupBy::Task | TimeGroupBy::Project | TimeGroupBy::Person
+        TimeGroupBy::Task | TimeGroupBy::Project | TimeGroupBy::Person | TimeGroupBy::WorkKind
     ) {
         items.sort_by(|a, b| b.minutes.cmp(&a.minutes).then_with(|| a.key.cmp(&b.key)));
     } else {
@@ -672,6 +749,8 @@ struct Line {
     actor_kind: String,
     actor_name: String,
     note: String,
+    kind: Option<Id>,
+    kind_name: Option<String>,
 }
 
 impl Line {
@@ -770,6 +849,7 @@ fn entries_csv(
             "minutes",
             "duration",
             "note",
+            "work_kind",
         ],
     );
     for l in lines {
@@ -787,6 +867,7 @@ fn entries_csv(
                 &l.minutes.to_string(),
                 &format_duration(l.minutes, units),
                 &l.note,
+                l.kind_name.as_deref().unwrap_or_default(),
             ],
         );
     }
@@ -829,6 +910,7 @@ pub(crate) struct TimerRow {
     pub(crate) running_since: Option<i64>,
     pub(crate) elapsed_ms: i64,
     note: String,
+    work_kind: Option<Id>,
     actor_kind: String,
     actor_name: String,
     pub(crate) reminded_at: Option<i64>,
@@ -846,7 +928,7 @@ pub(crate) fn timer_row(tx: &Transaction<'_>) -> Result<Option<TimerRow>, StoreE
     Ok(tx
         .query_row(
             "SELECT task_id, started_at, running_since, elapsed_ms, note, actor_kind, actor_name,
-                    reminded_at
+                    reminded_at, work_kind_id
                FROM timer WHERE id = 1",
             [],
             |r| {
@@ -859,6 +941,7 @@ pub(crate) fn timer_row(tx: &Transaction<'_>) -> Result<Option<TimerRow>, StoreE
                     actor_kind: r.get(5)?,
                     actor_name: r.get(6)?,
                     reminded_at: r.get(7)?,
+                    work_kind: lookup::opt_id_at(r, 8)?,
                 })
             },
         )
@@ -890,6 +973,7 @@ fn timer_out(
         elapsed_seconds: elapsed / 1000,
         elapsed: format_duration(worklog::timer_minutes(elapsed), units),
         note: row.note.clone(),
+        work_kind: super::work_kind::reference(tx, row.work_kind)?,
         started_by: actor(&row.actor_kind, row.actor_name.clone()),
         task_trashed: trashed,
     })
@@ -909,7 +993,7 @@ pub(crate) fn current(
 /// The timer as history records it.
 pub(crate) fn raw_timer(tx: &Transaction<'_>) -> Result<Option<Value>, StoreError> {
     Ok(timer_row(tx)?.map(|r| {
-        json!({
+        let mut v = json!({
             "task": r.task.to_string(),
             "started_at": r.started_at,
             "running_since": r.running_since,
@@ -917,7 +1001,11 @@ pub(crate) fn raw_timer(tx: &Transaction<'_>) -> Result<Option<Value>, StoreErro
             "note": r.note,
             "actor_kind": r.actor_kind,
             "actor_name": r.actor_name,
-        })
+        });
+        if let Some(k) = r.work_kind {
+            v["work_kind"] = Value::String(k.to_string());
+        }
+        v
     }))
 }
 
@@ -931,6 +1019,10 @@ fn row_from_value(value: &Value) -> Option<TimerRow> {
         actor_kind: value.get("actor_kind")?.as_str()?.to_owned(),
         actor_name: value.get("actor_name")?.as_str()?.to_owned(),
         reminded_at: None,
+        work_kind: value
+            .get("work_kind")
+            .and_then(Value::as_str)
+            .and_then(|k| k.parse().ok()),
     })
 }
 
@@ -953,8 +1045,8 @@ fn write_timer(w: &mut WriteCtx<'_>, row: Option<&TimerRow>) -> Result<(), Failu
     if let Some(r) = row {
         w.tx().execute(
             "INSERT INTO timer (id, task_id, started_at, running_since, elapsed_ms, note,
-                                actor_kind, actor_name, reminded_at)
-             VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                                actor_kind, actor_name, reminded_at, work_kind_id)
+             VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
                 b(r.task),
                 r.started_at,
@@ -963,7 +1055,8 @@ fn write_timer(w: &mut WriteCtx<'_>, row: Option<&TimerRow>) -> Result<(), Failu
                 r.note,
                 r.actor_kind,
                 r.actor_name,
-                r.reminded_at
+                r.reminded_at,
+                r.work_kind.map(b)
             ],
         )?;
     }
@@ -996,6 +1089,7 @@ fn log_timer(
     row: &TimerRow,
     note: Option<&str>,
     duration: Option<&str>,
+    kind: Option<Option<Id>>,
 ) -> Result<(Option<Id>, Vec<String>), Failure> {
     let units = units(w.tx())?;
     let Some(task) = lookup::task_by_id(w.tx(), row.task)? else {
@@ -1033,7 +1127,8 @@ fn log_timer(
         None => row.note.clone(),
     };
     let date = w.zone().day_of(row.started_at);
-    let id = insert(w, &task, date, minutes, &note)?;
+    let kind = kind.unwrap_or(row.work_kind);
+    let id = insert(w, &task, date, minutes, &note, kind)?;
     Ok((Some(id), Vec::new()))
 }
 
@@ -1053,7 +1148,7 @@ pub(crate) fn stop_before_trash(
     if !going(w.tx(), row.task)? {
         return Ok(());
     }
-    match log_timer(w, &row, None, None) {
+    match log_timer(w, &row, None, None, None) {
         Ok(_) => write_timer(w, None),
         Err(Failure::Op(_)) if row.running_since.is_some() => {
             let paused = TimerRow {
@@ -1100,6 +1195,18 @@ fn start(w: &mut WriteCtx<'_>, input: TimerStartInput) -> Result<TimerChange, Fa
         .map_err(|e| bad("note", &e))?;
     let now = w.now();
     let current = timer_row(w.tx())?;
+    let kind = input
+        .work_kind
+        .as_deref()
+        .map(|k| {
+            super::work_kind::for_entry(
+                w.tx(),
+                "work_kind",
+                k,
+                current.as_ref().and_then(|r| r.work_kind),
+            )
+        })
+        .transpose()?;
     let task = match &input.key {
         Some(key) => {
             let t = lookup::task(w.tx(), "key", key)?;
@@ -1118,11 +1225,14 @@ fn start(w: &mut WriteCtx<'_>, input: TimerStartInput) -> Result<TimerChange, Fa
             if let Some(n) = note {
                 row.note = n;
             }
+            if let Some(k) = kind {
+                row.work_kind = k;
+            }
             row
         }
         other => {
             if let Some(old) = other {
-                (entry, warnings) = log_timer(w, &old, None, None)?;
+                (entry, warnings) = log_timer(w, &old, None, None, None)?;
             }
             let caller = w.caller().clone();
             TimerRow {
@@ -1131,6 +1241,7 @@ fn start(w: &mut WriteCtx<'_>, input: TimerStartInput) -> Result<TimerChange, Fa
                 running_since: Some(now),
                 elapsed_ms: 0,
                 note: note.unwrap_or_default(),
+                work_kind: kind.flatten(),
                 actor_kind: caller.actor.kind.as_str().to_owned(),
                 actor_name: caller.actor.name,
                 reminded_at: None,
@@ -1157,7 +1268,18 @@ fn stop(w: &mut WriteCtx<'_>, input: TimerStopInput) -> Result<TimerChange, Fail
     let (entry, warnings) = if input.discard {
         (None, Vec::new())
     } else {
-        log_timer(w, &row, input.note.as_deref(), input.duration.as_deref())?
+        let kind = input
+            .work_kind
+            .as_deref()
+            .map(|k| super::work_kind::for_entry(w.tx(), "work_kind", k, row.work_kind))
+            .transpose()?;
+        log_timer(
+            w,
+            &row,
+            input.note.as_deref(),
+            input.duration.as_deref(),
+            kind,
+        )?
     };
     write_timer(w, None)?;
     timer_change(w, entry, warnings)

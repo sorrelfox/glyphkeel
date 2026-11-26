@@ -46,6 +46,22 @@ export interface QueryNames {
   custom?: readonly CustomQueryField[];
   /** Today, `YYYY-MM-DD`. */
   today: string;
+  /** A task's recorded changes, oldest first, for `was:`, `changed:` and `changed-by:`; none when left out. */
+  history?: (key: string) => readonly TaskHistory[];
+}
+
+/** One recorded change of a task, its values as names (statuses, types, labels and versions by name). */
+export interface TaskHistory {
+  /** The day it happened, `YYYY-MM-DD`. */
+  day: string;
+  agent: boolean;
+  actor: string;
+  /** The task's creation. */
+  created: boolean;
+  /** The changed fields as the engine's history names them (`due_date`), each value before and after. */
+  fields: Readonly<Record<string, { before?: unknown; after?: unknown }>>;
+  /** The category of a status named in `fields.status`, by its name in lower case. */
+  categories?: Readonly<Record<string, string>>;
 }
 
 /** A custom field as queries see it. */
@@ -55,7 +71,7 @@ export interface CustomQueryField {
   options: readonly string[];
 }
 
-type FieldType = "custom" | "key" | "project" | "text" | "status" | "category" | "type" | "priority" | "label" | "version" | "parent" | "date" | "span" | "duration" | "number" | "is";
+type FieldType = "custom" | "key" | "project" | "text" | "status" | "category" | "type" | "priority" | "label" | "version" | "parent" | "date" | "span" | "duration" | "number" | "is" | "was" | "changed" | "changed-by";
 
 interface FieldSpec {
   name: string;
@@ -66,7 +82,26 @@ interface FieldSpec {
   values: string;
   choices?: string[];
   custom?: CustomQueryField;
+  /** A condition on the history (`was:status`): which, and the field it looks at. */
+  history?: { kind: "was" | "changed"; inner: FieldSpec };
 }
+
+/** The history's names for the fields `was:` and `changed:` look at. */
+const HISTORY_KEYS: ReadonlyMap<string, string> = new Map([
+  ["status", "status"],
+  ["category", "status"],
+  ["type", "type"],
+  ["priority", "priority"],
+  ["label", "labels"],
+  ["version", "fix_version"],
+  ["title", "title"],
+  ["start", "start_date"],
+  ["due", "due_date"],
+  ["estimate", "estimate"],
+  ["parent", "parent"],
+]);
+const WAS_FIELDS = ["status", "category", "type", "priority", "label", "version"];
+const CHANGED_FIELDS = ["status", "type", "priority", "title", "start", "due", "estimate", "parent", "label", "version"];
 
 const NAME_OPS = [":", "!="];
 const ORDERED_OPS = [":", "!=", "<", "<=", ">", ">="];
@@ -95,6 +130,9 @@ export const FAKE_FIELDS: readonly FieldSpec[] = [
   { name: "spent", aliases: [], type: "duration", operators: ORDERED_OPS, sortable: true, values: "a duration such as 2h" },
   { name: "progress", aliases: [], type: "number", operators: ORDERED_OPS, sortable: true, values: "a percentage, 0 to 100" },
   { name: "is", aliases: [], type: "is", operators: [":"], sortable: false, values: "open, closed, blocked", choices: ["open", "closed", "blocked"] },
+  { name: "was", aliases: [], type: "was", operators: [":"], sortable: false, values: "a field and a value the task had at any time: was:status:Review", choices: WAS_FIELDS },
+  { name: "changed", aliases: [], type: "changed", operators: [":"], sortable: false, values: "a field that changed; with dates, when: changed:due>-7d", choices: CHANGED_FIELDS },
+  { name: "changed-by", aliases: [], type: "changed-by", operators: NAME_OPS, sortable: false, values: "me, agent, or an agent's name: who changed the task's fields" },
 ];
 
 function findField(name: string, names?: QueryNames): FieldSpec | undefined {
@@ -269,6 +307,11 @@ function condition(piece: Piece, tokens: QueryToken[], names: QueryNames): Node 
       }
       return { sort: keys.map((key) => (key.startsWith("-") ? `-${findField(key.slice(1), names)?.name ?? key}` : (findField(key, names)?.name ?? key))) };
     }
+    // A condition on the history names a field of its own: `was:status:Review`.
+    const inner = /^([a-zA-Z][a-zA-Z-]*)(!=|<=|>=|:|<|>|=)(.*)$/u.exec(valueText);
+    if (op === ":" && (name.toLowerCase() === "was" || name.toLowerCase() === "changed") && inner) {
+      return historyCondition(piece, tokens, names, { negated, start, name, fieldEnd, valueStart, inner: inner[1] ?? "", op: inner[2] ?? ":", rest: inner[3] ?? "" });
+    }
     const field = findField(name, names);
     if (!field) {
       token(tokens, "error", start, fieldEnd);
@@ -320,6 +363,65 @@ function condition(piece: Piece, tokens: QueryToken[], names: QueryNames): Node 
   token(tokens, "text", start, piece.to);
   const node: Node = { kind: "text", words: [body.replace(/^"(.*)"$/, "$1")], ranges: [{ from: start, to: piece.to }] };
   return negated ? { kind: "not", item: node } : node;
+}
+
+/** `was:<field><op>values` or `changed:<field><op>dates`. */
+function historyCondition(
+  piece: Piece,
+  tokens: QueryToken[],
+  names: QueryNames,
+  at: { negated: boolean; start: number; name: string; fieldEnd: number; valueStart: number; inner: string; op: string; rest: string },
+): Node {
+  const kind = at.name.toLowerCase() === "was" ? "was" : "changed";
+  const innerStart = at.valueStart;
+  const innerEnd = innerStart + at.inner.length;
+  token(tokens, "field", at.start, at.fieldEnd);
+  token(tokens, "operator", at.fieldEnd, at.valueStart);
+  const allowed = kind === "was" ? WAS_FIELDS : CHANGED_FIELDS;
+  const inner = findField(at.inner);
+  if (!inner || !allowed.includes(inner.name)) {
+    const suggestion = closest(at.inner, allowed);
+    const range = { from: innerStart, to: innerEnd };
+    throw suggestion
+      ? new QueryFailure("query-history-field-suggest", `${kind}: doesn't look up "${at.inner}". Did you mean "${suggestion}"?`, range, { field: at.inner, history: kind, suggestion })
+      : new QueryFailure("query-history-field", `${kind}: doesn't look up "${at.inner}". Use one of: ${allowed.join(", ")}.`, range, { field: at.inner, history: kind, choices: allowed.join(", ") });
+  }
+  token(tokens, "field", innerStart, innerEnd);
+  const opEnd = innerEnd + at.op.length;
+  token(tokens, "operator", innerEnd, opEnd);
+  const op = at.op === "=" ? ":" : at.op;
+  const ops = kind === "was" ? NAME_OPS : ORDERED_OPS;
+  const written = `${kind}:${inner.name}`;
+  if (!ops.includes(op)) {
+    throw new QueryFailure("query-operator", `"${at.op}" doesn't apply to ${written}. Use ${written}:value.`, { from: innerEnd, to: opEnd }, { op: at.op, field: written, usage: `${written}:value` });
+  }
+  if (at.rest === "") {
+    throw new QueryFailure("query-missing-value", `"${written}${at.op}" needs a value.`, { from: at.start, to: piece.to }, { field: written, op: at.op });
+  }
+  const field: FieldSpec = { name: written, aliases: [], type: kind, operators: ops, sortable: false, values: "", history: { kind, inner } };
+  const values: string[] = [];
+  const valueRanges: TextRange[] = [];
+  let from = opEnd;
+  for (const raw of at.rest.split(",")) {
+    const range = { from, to: from + raw.length };
+    const value = raw.replace(/^"(.*)"$/, "$1");
+    if (value !== "") {
+      if (value.toLowerCase() === "none") {
+        throw new QueryFailure("query-history-none", `"none" can't be looked up in the history. For tasks without a ${inner.name} now, use ${inner.name}:none.`, range, { history: kind, field: inner.name });
+      }
+      checkValue(kind === "was" ? inner : { ...inner, type: "date" }, value, range, names);
+      token(tokens, "value", range.from, range.to);
+      values.push(value);
+      valueRanges.push(range);
+    }
+    from += raw.length;
+    if (from < piece.to) {
+      token(tokens, "comma", from, from + 1);
+      from += 1;
+    }
+  }
+  const node: Node = { kind: "cond", field, op, values, range: { from: piece.from, to: piece.to }, valueRanges };
+  return at.negated ? { kind: "not", item: node } : node;
 }
 
 function unknownName(kind: "status" | "type" | "label" | "project", value: string, range: TextRange, known: readonly string[]): QueryFailure {
@@ -387,7 +489,18 @@ function checkValue(field: FieldSpec, value: string, range: TextRange, names: Qu
       }
       return;
     case "text":
+    case "changed-by":
       return;
+    case "was":
+    case "changed": {
+      if (field.type === "changed" && !CHANGED_FIELDS.includes(findField(value)?.name ?? "")) {
+        throw new QueryFailure("query-history-field", `changed: doesn't look up "${value}". Use one of: ${CHANGED_FIELDS.join(", ")}.`, range, { field: value, history: "changed", choices: CHANGED_FIELDS.join(", ") });
+      }
+      if (field.type === "was") {
+        throw new QueryFailure("query-was-value", "was: needs a field and a value, such as was:status:Review.", range);
+      }
+      return;
+    }
     case "custom": {
       const kind = field.custom?.kind;
       if (value.toLowerCase() === "none") {
@@ -661,9 +774,57 @@ function valueOf(task: ListedTask, field: string): number | string | null {
   }
 }
 
-function matchesValue(task: ListedTask, field: FieldSpec, op: string, value: string, today: string): boolean {
+/** Whether a recorded value (a name, or a list of names) is the one asked for. */
+function namedIn(recorded: unknown, wanted: string): boolean {
+  const list = Array.isArray(recorded) ? (recorded as unknown[]) : [recorded];
+  return list.some((each) => typeof each === "string" && each.toLowerCase() === wanted);
+}
+
+/** `was:`, `changed:` and `changed-by:` against the task's recorded changes. */
+function matchesHistory(task: ListedTask, field: FieldSpec, op: string, value: string, today: string, history: readonly TaskHistory[]): boolean {
+  const lower = value.toLowerCase();
+  const changes = history.filter((entry) => !entry.created);
+  if (field.type === "changed-by") {
+    return changes.some((entry) => (lower === "me" ? !entry.agent : lower === "agent" ? entry.agent : entry.actor.toLowerCase() === lower));
+  }
+  if (field.type === "changed" && field.history === undefined) {
+    const key = HISTORY_KEYS.get(findField(value)?.name ?? "") ?? value;
+    return changes.some((entry) => key in entry.fields);
+  }
+  const inner = field.history?.inner;
+  if (!inner) {
+    return false;
+  }
+  const key = HISTORY_KEYS.get(inner.name) ?? inner.name;
+  if (field.history?.kind === "changed") {
+    const day = dayOf(lower, today) ?? lower;
+    return changes.some((entry) => key in entry.fields && compare(op === ":" ? "=" : op, entry.day, day));
+  }
+  // `was:`: the value now, or before or after a recorded change.
+  if (matchesValue(task, inner, ":", value, today)) {
+    return true;
+  }
+  return history.some((entry) => {
+    const change = entry.fields[key];
+    if (change === undefined) {
+      return false;
+    }
+    if (inner.name === "category") {
+      const category = (name: unknown) => (typeof name === "string" ? entry.categories?.[name.toLowerCase()] : undefined);
+      const wanted = lower === "open" ? ["todo", "in_progress"] : lower === "closed" ? ["done", "cancelled"] : [lower];
+      return [category(change.before), category(change.after)].some((each) => each !== undefined && wanted.includes(each));
+    }
+    return namedIn(change.before, lower) || namedIn(change.after, lower);
+  });
+}
+
+function matchesValue(task: ListedTask, field: FieldSpec, op: string, value: string, today: string, history: readonly TaskHistory[] = []): boolean {
   const lower = value.toLowerCase();
   switch (field.type) {
+    case "was":
+    case "changed":
+    case "changed-by":
+      return matchesHistory(task, field, op, value, today, history);
     case "is":
       return lower === "open" ? !isClosed(task) : lower === "closed" ? isClosed(task) : task.blocked;
     case "label":
@@ -738,23 +899,25 @@ function matchesValue(task: ListedTask, field: FieldSpec, op: string, value: str
   }
 }
 
-function matches(node: Node, task: ListedTask, today: string): boolean {
+function matches(node: Node, task: ListedTask, today: string, history?: QueryNames["history"]): boolean {
   switch (node.kind) {
     case "and":
-      return node.items.every((item) => matches(item, task, today));
+      return node.items.every((item) => matches(item, task, today, history));
     case "or":
-      return node.items.some((item) => matches(item, task, today));
+      return node.items.some((item) => matches(item, task, today, history));
     case "not":
-      return !matches(node.item, task, today);
+      return !matches(node.item, task, today, history);
     case "text": {
       const haystack = task.title.toLowerCase();
       return node.words.every((word) => haystack.includes(word.toLowerCase()));
     }
-    case "cond":
+    case "cond": {
+      const recorded = history?.(task.key) ?? [];
       if (node.op === "!=") {
-        return !node.values.some((value) => matchesValue(task, node.field, ":", value, today));
+        return !node.values.some((value) => matchesValue(task, node.field, ":", value, today, recorded));
       }
-      return node.values.some((value) => matchesValue(task, node.field, node.op, value, today));
+      return node.values.some((value) => matchesValue(task, node.field, node.op, value, today, recorded));
+    }
   }
 }
 
@@ -798,7 +961,7 @@ function findTasks(
 ): { found: ListedTask[]; order: string[] } {
   const reading = read(input.query ?? "", names, []);
   const withArchived = options.scoped || namesProject(reading.root);
-  const found = all.filter((task) => (withArchived || !options.archived.has(task.project)) && (reading.root === null || matches(reading.root, task, names.today)));
+  const found = all.filter((task) => (withArchived || !options.archived.has(task.project)) && (reading.root === null || matches(reading.root, task, names.today, names.history)));
   const keys = reading.sort.length > 0 ? reading.sort : (input.sort ?? "").split(",").filter((key) => key !== "");
   const order = keys.length > 0 ? keys : ["status", "rank"];
   found.sort((a, b) => {
@@ -940,7 +1103,7 @@ export function matchingKeys(all: readonly ListedTask[], text: string, names: Qu
   const reading = read(text, names, []);
   const withArchived = namesProject(reading.root);
   return all
-    .filter((task) => (withArchived || !archived.has(task.project)) && (reading.root === null || matches(reading.root, task, names.today)))
+    .filter((task) => (withArchived || !archived.has(task.project)) && (reading.root === null || matches(reading.root, task, names.today, names.history)))
     .map((task) => task.key);
 }
 

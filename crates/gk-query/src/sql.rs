@@ -18,7 +18,7 @@ use gk_core::Day;
 
 use crate::check::{
     AuthorRef, Bounds, Checked, Cond, CustomCond, CustomTest, Filter, KeyRef, ProjectRef,
-    RealBounds, Sort, SortBy,
+    RealBounds, Sort, SortBy, WasTest,
 };
 use crate::fields::{
     CountOf, DateColumn, DurationColumn, FieldType, LinkField, MomentColumn, TextScope,
@@ -561,6 +561,163 @@ WHEN c.closed_at IS NOT NULL THEN 100 WHEN c.checklist_total > 0 \
 THEN c.checklist_done * 100.0 / c.checklist_total ELSE 0 END)) AS INTEGER) \
 FROM tasks c WHERE c.parent_id = t.id AND c.deleted_at IS NULL), 0) END)";
 
+/// The start of a history condition: the tasks with a recorded change,
+/// other than their creation, that passes the test after it. The list is
+/// made once per query, not once per task.
+const HISTORY: &str = "t.id IN (SELECT a.entity_id FROM activity a WHERE a.entity_kind = 'task' \
+AND json_type(a.changes, '$.fields.created') IS NULL";
+
+/// Who: the person, any agent, or an agent by name.
+fn actor(a: &AuthorRef, kind: &str, name: &str) -> Sql {
+    let mut p = Sql::default();
+    match a {
+        AuthorRef::Me => {
+            let _ = write!(p.text, "{kind} = 'user'");
+        }
+        AuthorRef::Agent => {
+            let _ = write!(p.text, "{kind} = 'agent'");
+        }
+        AuthorRef::Named(n) => {
+            let _ = write!(p.text, "{name} = ");
+            p.str(n);
+            p.push(" COLLATE NOCASE");
+        }
+    }
+    p
+}
+
+/// The task has the value now, or a recorded change of the field had it
+/// before or after (its creation included). IDs are recorded as hyphenated
+/// text, compared here without the hyphens.
+fn was(test: &WasTest) -> Sql {
+    // The IDs of the named items, as the history writes them.
+    let ids = |table: &str, test: Sql| {
+        let mut sql = Sql::default();
+        let _ = write!(sql.text, "(SELECT lower(hex(x.id)) FROM {table} x WHERE ");
+        sql.append(test);
+        sql.push(")");
+        sql
+    };
+    let list = |column: &str, values: &[&str]| {
+        let mut sql = Sql::default();
+        let _ = write!(sql.text, "{column} IN (");
+        for (i, v) in values.iter().enumerate() {
+            if i > 0 {
+                sql.push(", ");
+            }
+            sql.str(v);
+        }
+        sql.push(")");
+        sql
+    };
+    let (now, key, set, array) = match test {
+        WasTest::Statuses(n) => (
+            names_in("s.name_fold", n),
+            "status",
+            ids("statuses", names_in("x.name_fold", n)),
+            false,
+        ),
+        WasTest::Categories(c) => (
+            list("s.category", c),
+            "status",
+            ids("statuses", list("x.category", c)),
+            false,
+        ),
+        WasTest::Types(n) => (
+            names_in("y.name_fold", n),
+            "type",
+            ids("task_types", names_in("x.name_fold", n)),
+            false,
+        ),
+        WasTest::Versions(n) => {
+            let mut now = Sql::default();
+            now.push("t.fix_version_id IN (SELECT v.id FROM versions v WHERE ");
+            now.append(names_in("v.name_fold", n));
+            now.push(")");
+            (
+                now,
+                "fix_version",
+                ids("versions", names_in("x.name_fold", n)),
+                false,
+            )
+        }
+        WasTest::Labels(n) => {
+            let mut now = Sql::default();
+            now.push(
+                "EXISTS (SELECT 1 FROM task_labels tl JOIN labels l ON l.id = tl.label_id \
+                 WHERE tl.task_id = t.id AND ",
+            );
+            now.append(names_in("l.name_fold", n));
+            now.push(")");
+            (
+                now,
+                "labels",
+                ids("labels", names_in("x.name_fold", n)),
+                true,
+            )
+        }
+        WasTest::Priorities(p) => {
+            let numbers: Vec<i64> = p
+                .iter()
+                .filter_map(|name| crate::fields::PRIORITIES.iter().position(|q| q == name))
+                .filter_map(|i| i64::try_from(i).ok())
+                .collect();
+            let mut now = Sql::default();
+            now.push("t.priority IN (");
+            for (i, n) in numbers.iter().enumerate() {
+                if i > 0 {
+                    now.push(", ");
+                }
+                now.int(*n);
+            }
+            now.push(")");
+            let mut set = Sql::default();
+            set.push("(");
+            for (i, v) in p.iter().enumerate() {
+                if i > 0 {
+                    set.push(", ");
+                }
+                set.str(v);
+            }
+            set.push(")");
+            (now, "priority", set, false)
+        }
+    };
+    let id_valued = !matches!(test, WasTest::Priorities(_));
+    let mut sql = Sql::default();
+    sql.push("(");
+    sql.append(now);
+    sql.push(") OR t.id IN (SELECT a.entity_id FROM activity a WHERE a.entity_kind = 'task' AND (");
+    for (i, side) in ["before", "after"].iter().enumerate() {
+        if i > 0 {
+            sql.push(" OR ");
+        }
+        if array {
+            let _ = write!(
+                sql.text,
+                "EXISTS (SELECT 1 FROM json_each(a.changes, '$.fields.{key}.{side}') j \
+                 WHERE replace(j.value, '-', '') IN "
+            );
+            sql.append(set.clone());
+            sql.push(")");
+        } else if id_valued {
+            let _ = write!(
+                sql.text,
+                "replace(json_extract(a.changes, '$.fields.{key}.{side}'), '-', '') IN "
+            );
+            sql.append(set.clone());
+        } else {
+            let _ = write!(
+                sql.text,
+                "json_extract(a.changes, '$.fields.{key}.{side}') IN "
+            );
+            sql.append(set.clone());
+        }
+    }
+    sql.push("))");
+    sql
+}
+
 fn date_column(c: DateColumn) -> &'static str {
     match c {
         DateColumn::Start => "t.start_date",
@@ -602,6 +759,36 @@ fn cond(c: &Cond, today: Day, now: i64) -> Sql {
     let mut sql = Sql::default();
     match c {
         Cond::Custom(c) => sql.append(custom(c)),
+        Cond::Was(test) => sql.append(was(test)),
+        Cond::Changed { keys, at } => {
+            sql.push(HISTORY);
+            sql.push(" AND (");
+            for (i, key) in keys.iter().enumerate() {
+                if i > 0 {
+                    sql.push(" OR ");
+                }
+                let _ = write!(
+                    sql.text,
+                    "json_type(a.changes, '$.fields.{key}') IS NOT NULL"
+                );
+            }
+            sql.push(")");
+            if !at.is_empty() {
+                sql.push(" AND (");
+                sql.append(any(bounds_on("a.at", at, false)));
+                sql.push(")");
+            }
+            sql.push(")");
+        }
+        Cond::ChangedBy(who) => {
+            sql.push(HISTORY);
+            sql.push(" AND (");
+            sql.append(any(who
+                .iter()
+                .map(|a| actor(a, "a.actor_kind", "a.actor_name"))
+                .collect()));
+            sql.push("))");
+        }
         Cond::Keys(keys) => {
             sql.push("t.id IN ");
             sql.append(key_ids(keys));
@@ -781,19 +968,7 @@ fn cond(c: &Cond, today: Day, now: i64) -> Sql {
         Cond::Author(who) => {
             let parts = who
                 .iter()
-                .map(|a| {
-                    let mut p = Sql::default();
-                    match a {
-                        AuthorRef::Me => p.push("t.created_by_kind = 'user'"),
-                        AuthorRef::Agent => p.push("t.created_by_kind = 'agent'"),
-                        AuthorRef::Named(name) => {
-                            p.push("t.created_by_name = ");
-                            p.str(name);
-                            p.push(" COLLATE NOCASE");
-                        }
-                    }
-                    p
-                })
+                .map(|a| actor(a, "t.created_by_kind", "t.created_by_name"))
                 .collect();
             sql.append(any(parts));
         }
@@ -1057,7 +1232,10 @@ fn sort_exprs(by: &SortBy, relevance: bool) -> Vec<Sql> {
             | FieldType::Link(_)
             | FieldType::Claimed
             | FieldType::Is
-            | FieldType::Has => Vec::new(),
+            | FieldType::Has
+            | FieldType::Was
+            | FieldType::Changed
+            | FieldType::ChangedBy => Vec::new(),
         },
     })
 }

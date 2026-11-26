@@ -98,6 +98,7 @@ pub(super) fn register(r: &mut Registry) {
             category: i.category,
             hue: i.hue,
             wip_limit: i.wip_limit,
+            wip_min: i.wip_min,
             before: i.before,
             after: i.after,
             at: i.at,
@@ -114,6 +115,7 @@ pub(super) fn register(r: &mut Registry) {
             category: i.category,
             hue: i.hue,
             wip_limit: i.wip_limit,
+            wip_min: i.wip_min,
             clear: i.clear,
             ..StatusChange::default()
         };
@@ -394,7 +396,7 @@ pub(crate) fn load(tx: &Transaction<'_>, id: Id) -> Result<Project, Failure> {
         let mut stmt = tx.prepare_cached(
             "SELECT s.id, s.name, s.category, s.hue, s.wip_limit,
                     (SELECT count(*) FROM tasks t WHERE t.status_id = s.id AND t.deleted_at IS NULL),
-                    s.rules
+                    s.rules, s.wip_min
                FROM statuses s WHERE s.project_id = ?1 ORDER BY s.rank, s.id",
         )?;
         stmt.query_map([b(id)], |r| {
@@ -405,6 +407,9 @@ pub(crate) fn load(tx: &Transaction<'_>, id: Id) -> Result<Project, Failure> {
                 hue: parse_enum(&r.get::<_, String>(3)?).unwrap_or(Hue::Grey),
                 wip_limit: r
                     .get::<_, Option<i64>>(4)?
+                    .and_then(|n| u32::try_from(n).ok()),
+                wip_min: r
+                    .get::<_, Option<i64>>(7)?
                     .and_then(|n| u32::try_from(n).ok()),
                 tasks: r.get::<_, i64>(5)?.unsigned_abs(),
                 rules: super::rules::parse(r.get::<_, Option<String>>(6)?.as_deref()),
@@ -793,7 +798,7 @@ fn copy_configuration(w: &WriteCtx<'_>, id: Id, parent: Option<Id>) -> Result<()
     let new_id = || Id::generate_at(u64::try_from(w.now()).unwrap_or(0));
     if let Some(parent) = parent {
         let mut stmt = tx.prepare(
-            "SELECT name, name_fold, category, hue, rank, wip_limit, rules FROM statuses
+            "SELECT name, name_fold, category, hue, rank, wip_limit, rules, wip_min FROM statuses
               WHERE project_id = ?1",
         )?;
         let rows = stmt
@@ -806,15 +811,27 @@ fn copy_configuration(w: &WriteCtx<'_>, id: Id, parent: Option<Id>) -> Result<()
                     r.get::<_, String>(4)?,
                     r.get::<_, Option<i64>>(5)?,
                     r.get::<_, Option<String>>(6)?,
+                    r.get::<_, Option<i64>>(7)?,
                 ))
             })?
             .collect::<Result<Vec<_>, _>>()?;
-        for (name, name_fold, category, hue, rank, wip, rules) in rows {
+        for (name, name_fold, category, hue, rank, wip, rules, wip_min) in rows {
             tx.execute(
                 "INSERT INTO statuses (id, project_id, name, name_fold, category, hue, rank, wip_limit,
-                                       rules)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-                params![b(new_id()), b(id), name, name_fold, category, hue, rank, wip, rules],
+                                       rules, wip_min)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                params![
+                    b(new_id()),
+                    b(id),
+                    name,
+                    name_fold,
+                    category,
+                    hue,
+                    rank,
+                    wip,
+                    rules,
+                    wip_min
+                ],
             )?;
         }
         tx.execute(
@@ -974,6 +991,7 @@ fn update_parts(input: &Value) -> Vec<&'static str> {
                     "category",
                     "hue",
                     "wip_limit",
+                    "wip_min",
                     "glyph",
                     "clear",
                     "due_offset_days",
@@ -1367,6 +1385,33 @@ fn wip(limit: Option<u32>) -> Result<Option<Value>, Failure> {
     }
 }
 
+fn wip_minimum(min: Option<u32>) -> Result<Option<Value>, Failure> {
+    match min {
+        Some(0) => Err(messages::invalid("wip_min", "status-wip-min", &[])),
+        Some(n) => Ok(Some(Value::from(n))),
+        None => Ok(None),
+    }
+}
+
+/// A status's minimum must not be above its limit.
+fn check_wip_range(tx: &Transaction<'_>, status: Id) -> Result<(), Failure> {
+    let (limit, min): (Option<i64>, Option<i64>) = tx.query_row(
+        "SELECT wip_limit, wip_min FROM statuses WHERE id = ?1",
+        [b(status)],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )?;
+    if let (Some(limit), Some(min)) = (limit, min)
+        && min > limit
+    {
+        return Err(messages::invalid(
+            "wip_min",
+            "status-wip-min-above-limit",
+            &[("min", min.to_string()), ("limit", limit.to_string())],
+        ));
+    }
+    Ok(())
+}
+
 fn apply_status(w: &mut WriteCtx<'_>, p: &ProjectRow, c: &StatusChange) -> Result<(), Failure> {
     let pid = Some(p.id);
     let clears_wip = c.clear.contains(&StatusField::WipLimit);
@@ -1375,6 +1420,14 @@ fn apply_status(w: &mut WriteCtx<'_>, p: &ProjectRow, c: &StatusChange) -> Resul
             "clear",
             "field-given-and-cleared",
             &[("field", "wip_limit".to_owned())],
+        ));
+    }
+    let clears_min = c.clear.contains(&StatusField::WipMin);
+    if clears_min && c.wip_min.is_some() {
+        return Err(messages::invalid(
+            "clear",
+            "field-given-and-cleared",
+            &[("field", "wip_min".to_owned())],
         ));
     }
     let Some(which) = &c.status else {
@@ -1386,6 +1439,7 @@ fn apply_status(w: &mut WriteCtx<'_>, p: &ProjectRow, c: &StatusChange) -> Resul
         let category = c.category.unwrap_or(Category::Todo);
         let hue = c.hue.unwrap_or(Hue::Grey);
         let limit = wip(c.wip_limit)?;
+        let min = wip_minimum(c.wip_min)?;
         let id = Id::generate_at(u64::try_from(w.now()).unwrap_or(0));
         let target = target_in(
             w,
@@ -1398,8 +1452,9 @@ fn apply_status(w: &mut WriteCtx<'_>, p: &ProjectRow, c: &StatusChange) -> Resul
         .unwrap_or(Target::Bottom);
         let rank = new_rank(w, List::Statuses, STATUS, p, id, target)?;
         w.tx().execute(
-            "INSERT INTO statuses (id, project_id, name, name_fold, category, hue, rank, wip_limit)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT INTO statuses (id, project_id, name, name_fold, category, hue, rank, wip_limit,
+                                   wip_min)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
                 b(id),
                 b(p.id),
@@ -1408,9 +1463,11 @@ fn apply_status(w: &mut WriteCtx<'_>, p: &ProjectRow, c: &StatusChange) -> Resul
                 enum_text(category),
                 enum_text(hue),
                 rank.as_str(),
-                limit.and_then(|v| v.as_i64())
+                limit.and_then(|v| v.as_i64()),
+                min.and_then(|v| v.as_i64())
             ],
         )?;
+        check_wip_range(w.tx(), id)?;
         w.record_field(STATUS, id, pid, "created", None, Some(Value::Bool(true)));
         w.record_field(STATUS, id, pid, "name", None, text(name));
         return Ok(());
@@ -1452,6 +1509,20 @@ fn apply_status(w: &mut WriteCtx<'_>, p: &ProjectRow, c: &StatusChange) -> Resul
     if clears_wip {
         fields::set(w, STATUS, status.id, pid, "wip_limit", None)?;
     }
+    if c.wip_min.is_some() {
+        fields::set(
+            w,
+            STATUS,
+            status.id,
+            pid,
+            "wip_min",
+            wip_minimum(c.wip_min)?,
+        )?;
+    }
+    if clears_min {
+        fields::set(w, STATUS, status.id, pid, "wip_min", None)?;
+    }
+    check_wip_range(w.tx(), status.id)?;
     if let Some(target) = target_in(
         w,
         List::Statuses,

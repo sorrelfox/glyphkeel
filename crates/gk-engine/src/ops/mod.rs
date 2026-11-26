@@ -46,6 +46,7 @@ pub(crate) mod trash;
 pub(crate) mod version;
 pub(crate) mod view;
 pub(crate) mod wiki;
+pub(crate) mod work_kind;
 pub(crate) mod workspace;
 
 /// The catalog's descriptor of `O`.
@@ -72,6 +73,7 @@ pub(crate) fn register(r: &mut Registry) {
     board::register(r);
     file::register(r);
     time::register(r);
+    work_kind::register(r);
     reminder::register(r);
     recurrence::register(r);
     template::register(r);

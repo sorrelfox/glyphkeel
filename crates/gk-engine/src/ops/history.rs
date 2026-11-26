@@ -31,6 +31,7 @@ use super::description::{self, Owner};
 use super::{
     agent, board, claim, comment, custom_field, desc, fields, file, gantt_layout, list_layout,
     lookup, project, relation, reminder, settings, task, time, trash, version, view, wiki,
+    work_kind,
 };
 use super::{recurrence, template};
 use crate::failure::Failure;
@@ -422,7 +423,10 @@ fn current(
         (comment::ENTITY, "body") => comment::raw_body(tx, id)?,
         (file::ENTITY, "created" | "trashed") => file::raw_life(tx, id, field)?,
         (time::ENTRY, "created" | "trashed") => time::raw_life(tx, id, field)?,
-        (time::ENTRY, "date" | "minutes" | "note") => time::raw_field(tx, id, field)?,
+        (time::ENTRY, "date" | "minutes" | "note" | time::WORK_KIND_FIELD) => {
+            time::raw_field(tx, id, field)?
+        }
+        (work_kind::ENTITY, work_kind::RECORD) => work_kind::raw(tx, id)?,
         (time::TIMER, "timer") => time::raw_timer(tx)?,
         (fields::TASK, "reminder") => reminder::raw(tx, id)?,
         (fields::TASK, "claim") => claim::raw(tx, id)?,
@@ -548,8 +552,14 @@ fn apply(
         }
         (file::ENTITY, "created" | "trashed") => file::set_live(w, id, project, field, value),
         (time::ENTRY, "created" | "trashed") => time::set_live(w, id, project, field, value),
-        (time::ENTRY, "date" | "minutes" | "note") => {
+        (time::ENTRY, "date" | "minutes" | "note" | time::WORK_KIND_FIELD) => {
             time::apply_field(w, id, project, field, value)
+        }
+        (work_kind::ENTITY, work_kind::RECORD) => {
+            let before = work_kind::raw(w.tx(), id)?;
+            work_kind::write_raw(w, id, value.as_ref())?;
+            w.record_field(entity, id, project, field, before, value);
+            Ok(())
         }
         (time::TIMER, "timer") => time::apply_timer(w, value.as_ref()),
         (fields::TASK, "reminder") => reminder::write_value(w, id, project, value),

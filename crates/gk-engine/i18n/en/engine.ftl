@@ -362,6 +362,10 @@ task-open-subtasks = { $count ->
     }
 task-still-blocked = { $task } is still blocked by { $blockers }.
 task-still-blocked-outside = { $task } is still blocked by a task outside the project you work in.
+task-open-duplicates = { $count ->
+        [one] { $task } is closed; its duplicate { $duplicates } is still open. Move it with close_duplicates to close it too.
+       *[other] { $task } is closed; its duplicates { $duplicates } are still open. Move it with close_duplicates to close them too.
+    }
 task-label-left-off = Label "{ $label }" doesn't exist in { $project } and was left off.
 task-status-fallback = Status "{ $status }" doesn't exist in { $project }; the tasks that had it are in "{ $target }" now.
 task-type-fallback = Type "{ $type }" doesn't exist in { $project }; the tasks that had it are of type "{ $target }" now.
@@ -386,6 +390,8 @@ project-name-taken = Project { $project } already has "{ $name }".
 ## Statuses, task types and labels
 
 status-wip-limit = A WIP limit is 1 or more.
+status-wip-min = A WIP minimum is 1 or more.
+status-wip-min-above-limit = The WIP minimum ({ $min }) can't be above the WIP limit ({ $limit }).
 status-needs-name = A new status needs a name.
 status-last-one = A project needs at least one status.
 status-delete-move-to = { $count ->
@@ -431,6 +437,8 @@ link-task-gone = One of the linked tasks is gone, so the link can't come back.
 link-to-itself = A task can't be linked to itself.
 link-to-subtask = { $task } and { $other } are a task and its own subtask; they can't be linked.
 link-loop = This link would make a loop of tasks blocking each other.
+link-lag-blocks-only = Only a blocks link takes a lag.
+link-lag-range = A lag is 0 to { $max } days.
 link-not-a-subtask = { $task } is not a subtask of the other task.
 link-not-found = There is no such link between { $task } and { $other }.
 link-not-found-hint = get_task with include ["links"] lists a task's links.
@@ -707,6 +715,19 @@ file-content-gone = The file's content is no longer stored, so it can't come bac
 
 ## Time entries and the timer
 
+work-kind-not-found = There is no kind of work "{ $kind }".
+work-kind-not-found-hint = Kinds of work: { $choices }.
+work-kind-not-found-none = The workspace has no kinds of work yet; work_kind.create adds one.
+work-kind-name-taken = There is already a kind of work named "{ $kind }".
+work-kind-name-taken-hint = Choose another name, or change that kind of work.
+work-kind-archived = The kind of work "{ $kind }" is archived.
+work-kind-archived-hint = Choose another one, or offer it again with work_kind.update and archived false.
+work-kind-in-use = { $count ->
+        [one] The kind of work "{ $kind }" is used by one time entry or the timer.
+       *[other] The kind of work "{ $kind }" is used by { $count } time entries or the timer.
+    }
+work-kind-in-use-hint = Archive it instead: it stays on those entries and is no longer offered.
+work-kind-gone = The kind of work no longer exists.
 time-entry-not-found = There is no time entry "{ $entry }".
 time-entry-not-found-hint = Entry IDs are listed by get_task with include ["time"].
 time-entry-version = The time entry changed since you read it: it has version { $version }, not { $expected }.

@@ -14,6 +14,28 @@ list-add-condition = Add condition
 list-advanced = Advanced query · edit as text
 list-chip-remove = Remove condition: { $condition }
 list-chip-text = Text contains { $values }
+list-chip-was = { $field } was { $values }
+list-chip-was-not = { $field } was never { $values }
+list-chip-changed =
+    { $op ->
+        [lt] { $field } changed before { $values }
+        [le] { $field } changed up to { $values }
+        [gt] { $field } changed after { $values }
+        [ge] { $field } changed from { $values }
+       *[is] { $field } changed on { $values }
+    }
+list-chip-changed-not =
+    { $op ->
+        [lt] { $field } didn't change before { $values }
+        [le] { $field } didn't change up to { $values }
+        [gt] { $field } didn't change after { $values }
+        [ge] { $field } didn't change from { $values }
+       *[is] { $field } didn't change on { $values }
+    }
+list-chip-changed-any = Changed: { $values }
+list-chip-changed-any-not = Not changed: { $values }
+list-chip-changed-by = Changed by { $values }
+list-chip-changed-by-not = Not changed by { $values }
 list-chip-is = { $field } is { $values }
 list-chip-is-not = { $field } is not { $values }
 list-chip-lt = { $field } before { $values }

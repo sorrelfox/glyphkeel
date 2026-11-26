@@ -232,6 +232,16 @@ function LoadedGantt({ project, openTask, onOpen, saved, views }: GanttViewProps
       },
     ));
 
+  const onLag = (dependency: ScheduleDependency, days: number) =>
+    done(relate.mutateAsync(
+      { key: dependency.from, kind: "blocks", other: dependency.to, lag_days: days },
+      {
+        onSuccess: () => {
+          toasts.show({ tone: "info", text: t("gantt-lag-set", { from: dependency.from, to: dependency.to, days }), action: { label: t("toast-undo"), run: undo } });
+        },
+      },
+    ));
+
   const onRefused = (key: string, reason: ReadOnlyReason) => {
     toasts.show({ tone: "error", text: t("gantt-read-only", { key, reason }) });
   };
@@ -447,6 +457,7 @@ function LoadedGantt({ project, openTask, onOpen, saved, views }: GanttViewProps
             onDates={onDates}
             onLink={onLink}
             onUnlink={onUnlink}
+            onLag={onLag}
             onOpen={onOpen}
             onZoom={(zoom) => {
               changeLayout({ zoom });

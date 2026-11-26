@@ -434,11 +434,31 @@ impl Parser<'_> {
         if let Some(Part::Bare(first, span)) = chunk.parts.first()
             && let Some((field_len, op, op_len)) = field_and_op(first)
         {
-            let field = first[..field_len].to_owned();
-            let field_span = Span::new(span.start, span.start + field_len);
-            let op_span = Span::new(field_span.end, field_span.end + op_len);
+            let mut field = first[..field_len].to_owned();
+            let mut field_span = Span::new(span.start, span.start + field_len);
+            let mut op_span = Span::new(field_span.end, field_span.end + op_len);
+            let mut op = op;
+            let mut after = &first[field_len + op_len..];
+            // The part of the field's name highlighted as the field.
+            let mut field_token = field_span;
+            // A condition on the history names a field of its own:
+            // `was:status:Review`, `changed:due>-7d`. The field's name is
+            // then `was:status`, and the operator the one after it.
+            if op == Op::Is
+                && crate::fields::is_history_prefix(&field)
+                && let Some((inner_len, inner_op, inner_op_len)) = field_and_op(after)
+            {
+                self.token(TokenKind::Field, field_span);
+                self.token(TokenKind::Operator, op_span);
+                let inner_start = op_span.end;
+                field = first[..field_len + op_len + inner_len].to_owned();
+                field_span = Span::new(span.start, inner_start + inner_len);
+                field_token = Span::new(inner_start, field_span.end);
+                op_span = Span::new(field_span.end, field_span.end + inner_op_len);
+                op = inner_op;
+                after = &after[inner_len + inner_op_len..];
+            }
             let mut rest = chunk.parts.clone();
-            let after = &first[field_len + op_len..];
             if after.is_empty() {
                 rest.remove(0);
             } else {
@@ -449,7 +469,7 @@ impl Parser<'_> {
                 self.token(TokenKind::Sort, field_span.join(op_span));
                 return self.sort(&values, chunk.span, depth).map(|()| None);
             }
-            self.token(TokenKind::Field, field_span);
+            self.token(TokenKind::Field, field_token);
             self.token(TokenKind::Operator, op_span);
             for v in &values {
                 self.token(TokenKind::Value, v.span);
@@ -806,6 +826,55 @@ mod tests {
             "(pred \"cf.story-points\" >= [\"3\"])"
         );
         assert_eq!(shape("área:x"), "(text \"área:x\" false)");
+    }
+
+    #[test]
+    fn history_conditions_name_a_field_of_their_own() {
+        assert_eq!(
+            shape("was:status:Review"),
+            r#"(pred "was:status" : ["Review"])"#
+        );
+        assert_eq!(
+            shape(r#"was:status:"In review",Done"#),
+            r#"(pred "was:status" : ["In review" "Done"])"#
+        );
+        assert_eq!(
+            shape("changed:due>-7d"),
+            r#"(pred "changed:due" > ["-7d"])"#
+        );
+        assert_eq!(
+            shape("-changed:status:this-week"),
+            r#"(not (pred "changed:status" : ["this-week"]))"#
+        );
+        assert_eq!(
+            shape("changed:due,start"),
+            r#"(pred "changed" : ["due" "start"])"#
+        );
+        assert_eq!(
+            shape("changed-by:agent"),
+            r#"(pred "changed-by" : ["agent"])"#
+        );
+        assert_eq!(err_id("was:status:"), "query-missing-value");
+        let src = "was:status:Review";
+        let (_, tokens) = parse_with_tokens(src);
+        let kinds: Vec<(&str, &str)> = tokens
+            .iter()
+            .map(|t| (t.kind.as_str(), t.span.of(src)))
+            .collect();
+        assert_eq!(
+            kinds,
+            [
+                ("field", "was"),
+                ("operator", ":"),
+                ("field", "status"),
+                ("operator", ":"),
+                ("value", "Review"),
+            ]
+        );
+    }
+
+    fn err_id(src: &str) -> &'static str {
+        parse(src).expect_err(src).id
     }
 
     #[test]

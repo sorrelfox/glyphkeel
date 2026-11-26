@@ -10,8 +10,12 @@
 //! that blocks it is open.
 //!
 //! History records a link as the `link` field of the `relation` item,
-//! holding both ends and the kind, so a removed link comes back with the
-//! same ID when its removal is reverted.
+//! holding both ends, the kind and a `blocks` link's lag, so a removed link
+//! comes back with the same ID when its removal is reverted, and a changed
+//! lag goes back to what it was.
+//!
+//! The lag of a `blocks` link is 0 to 365 calendar days between the end of
+//! the blocking task and the start of the blocked one; 0 is stored as none.
 
 use gk_api::ops::task::{
     Link, LinkKind as ApiLinkKind, RelationAdd, RelationInput, RelationKind, RelationRemove,
@@ -67,7 +71,7 @@ fn api_kind(kind: LinkKind) -> ApiLinkKind {
 /// project, links to tasks outside it.
 pub(crate) fn links(tx: &Transaction<'_>, id: Id) -> Result<Vec<Link>, Failure> {
     let mut stmt = tx.prepare_cached(
-        "SELECT r.id, r.from_task, r.to_task, r.kind, f.project_id, t.project_id
+        "SELECT r.id, r.from_task, r.to_task, r.kind, f.project_id, t.project_id, r.lag_days
            FROM task_relations r
            JOIN tasks f ON f.id = r.from_task JOIN tasks t ON t.id = r.to_task
           WHERE (r.from_task = ?1 OR r.to_task = ?1)
@@ -83,11 +87,12 @@ pub(crate) fn links(tx: &Transaction<'_>, id: Id) -> Result<Vec<Link>, Failure> 
                 r.get::<_, String>(3)?,
                 id_at(r, 4)?,
                 id_at(r, 5)?,
+                r.get::<_, Option<i64>>(6)?,
             ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
     let mut out = Vec::with_capacity(rows.len());
-    for (link, from, to, kind, from_project, to_project) in rows {
+    for (link, from, to, kind, from_project, to_project, lag) in rows {
         let Ok(relation) = kind.parse::<Relation>() else {
             continue;
         };
@@ -100,6 +105,7 @@ pub(crate) fn links(tx: &Transaction<'_>, id: Id) -> Result<Vec<Link>, Failure> 
                 kind: api_kind(kind),
                 task: super::task::task_ref(tx, other)?,
                 id: link.to_string(),
+                lag_days: lag.filter(|d| *d != 0),
             });
         }
     }
@@ -183,24 +189,35 @@ fn blocks_path(tx: &Transaction<'_>, from: Id, to: Id) -> Result<bool, Failure> 
     Ok(false)
 }
 
-/// A link's recorded value.
-fn value(from: Id, to: Id, relation: Relation) -> Value {
-    json!({ "from": from.to_string(), "to": to.to_string(), "kind": relation.as_str() })
+/// The longest lag of a `blocks` link, in days.
+pub(crate) const MAX_LAG_DAYS: i64 = 365;
+
+/// A link's recorded value; the lag only when there is one.
+fn value(from: Id, to: Id, relation: Relation, lag: Option<i64>) -> Value {
+    let mut v =
+        json!({ "from": from.to_string(), "to": to.to_string(), "kind": relation.as_str() });
+    if let Some(lag) = lag.filter(|d| *d != 0) {
+        v["lag_days"] = lag.into();
+    }
+    v
 }
+
+/// A link's row: both ends, the kind and the lag.
+type LinkRow = (Vec<u8>, Vec<u8>, String, Option<i64>);
 
 /// The link `id` as history records it; `None` when it doesn't exist.
 pub(crate) fn raw(tx: &Transaction<'_>, id: Id) -> Result<Option<Value>, StoreError> {
-    let row: Option<(Vec<u8>, Vec<u8>, String)> = tx
+    let row: Option<LinkRow> = tx
         .query_row(
-            "SELECT from_task, to_task, kind FROM task_relations WHERE id = ?1",
+            "SELECT from_task, to_task, kind, lag_days FROM task_relations WHERE id = ?1",
             [b(id)],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
         )
         .optional()?;
-    Ok(row.and_then(|(from, to, kind)| {
+    Ok(row.and_then(|(from, to, kind, lag)| {
         let from = Id::from_slice(&from).ok()?;
         let to = Id::from_slice(&to).ok()?;
-        Some(value(from, to, kind.parse().ok()?))
+        Some(value(from, to, kind.parse().ok()?, lag))
     }))
 }
 
@@ -219,17 +236,19 @@ fn insert_row(
     from: Id,
     to: Id,
     relation: Relation,
+    lag: Option<i64>,
 ) -> Result<(), Failure> {
     let caller = w.caller();
     w.tx().execute(
-        "INSERT INTO task_relations (id, from_task, to_task, kind, created_at, created_by_kind,
-                                     created_by_name)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        "INSERT INTO task_relations (id, from_task, to_task, kind, lag_days, created_at,
+                                     created_by_kind, created_by_name)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         params![
             b(id),
             b(from),
             b(to),
             relation.as_str(),
+            lag.filter(|d| *d != 0 && relation == Relation::Blocks),
             w.now(),
             caller.actor.kind.as_str(),
             caller.actor.name
@@ -269,12 +288,25 @@ pub(crate) fn apply(
             ) else {
                 return Err(messages::storage("storage-link-broken", &[]).into());
             };
-            for task in [from, to] {
-                if lookup::task_by_id(w.tx(), task)?.is_none() {
-                    return Err(messages::conflict("link-task-gone", &[]).into());
+            let lag = v["lag_days"]
+                .as_i64()
+                .filter(|d| (0..=MAX_LAG_DAYS).contains(d));
+            if before.is_some() {
+                // The same link with another lag.
+                w.tx().execute(
+                    "UPDATE task_relations SET lag_days = ?2 WHERE id = ?1",
+                    params![b(id), lag.filter(|d| *d != 0 && kind == Relation::Blocks)],
+                )?;
+                bump(w, from)?;
+                bump(w, to)?;
+            } else {
+                for task in [from, to] {
+                    if lookup::task_by_id(w.tx(), task)?.is_none() {
+                        return Err(messages::conflict("link-task-gone", &[]).into());
+                    }
                 }
+                insert_row(w, id, from, to, kind, lag)?;
             }
-            insert_row(w, id, from, to, kind)?;
         }
     }
     w.record_field(ENTITY, id, project, "link", before, value);
@@ -334,28 +366,50 @@ fn add(w: &mut WriteCtx<'_>, input: RelationInput) -> Result<TaskChange, Failure
         ));
     }
     let (relation, from, to) = kind.stored(task.id, other.id);
+    if let Some(lag) = input.lag_days {
+        if relation != Relation::Blocks {
+            return Err(messages::invalid("lag_days", "link-lag-blocks-only", &[]));
+        }
+        if !(0..=MAX_LAG_DAYS).contains(&lag) {
+            return Err(messages::invalid(
+                "lag_days",
+                "link-lag-range",
+                &[("max", MAX_LAG_DAYS.to_string())],
+            ));
+        }
+    }
     if relation == Relation::Blocks && blocks_path(w.tx(), to, from)? {
         return Err(messages::invalid("kind", "link-loop", &[]));
     }
-    let exists: Option<i64> = w
+    let exists: Option<Id> = w
         .tx()
         .query_row(
-            "SELECT 1 FROM task_relations WHERE from_task = ?1 AND to_task = ?2 AND kind = ?3",
+            "SELECT id FROM task_relations WHERE from_task = ?1 AND to_task = ?2 AND kind = ?3",
             params![b(from), b(to), relation.as_str()],
-            |r| r.get(0),
+            |r| id_at(r, 0),
         )
         .optional()?;
-    if exists.is_none() {
-        let id = Id::generate_at(u64::try_from(w.now()).unwrap_or(0));
-        insert_row(w, id, from, to, relation)?;
-        w.record_field(
-            ENTITY,
-            id,
-            Some(task.project),
-            "link",
-            None,
-            Some(value(from, to, relation)),
-        );
+    match exists {
+        None => {
+            let id = Id::generate_at(u64::try_from(w.now()).unwrap_or(0));
+            insert_row(w, id, from, to, relation, input.lag_days)?;
+            w.record_field(
+                ENTITY,
+                id,
+                Some(task.project),
+                "link",
+                None,
+                Some(value(from, to, relation, input.lag_days)),
+            );
+        }
+        Some(id) => {
+            if let Some(lag) = input.lag_days {
+                let after = Some(value(from, to, relation, Some(lag)));
+                if raw(w.tx(), id)? != after {
+                    apply(w, id, Some(task.project), after)?;
+                }
+            }
+        }
     }
     super::task::changed_with(w, task.id, Vec::new(), &[TaskPart::Links])
 }

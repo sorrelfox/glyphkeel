@@ -61,6 +61,13 @@ pub enum FieldType {
     Is,
     /// Whether something is present.
     Has,
+    /// A value the task had at any time: `was:status:Review`.
+    Was,
+    /// A field that changed, at any time or within dates:
+    /// `changed:due>-7d`.
+    Changed,
+    /// Who changed the task: `me`, `agent` or an agent's name.
+    ChangedBy,
 }
 
 /// Which text a full-text field searches.
@@ -194,6 +201,26 @@ pub const HAS_PARTS: &[&str] = &[
     "links",
     "time",
     "reminder",
+];
+
+/// The fields `was:` looks up in the history.
+pub const WAS_FIELDS: &[&str] = &["status", "category", "type", "priority", "label", "version"];
+/// The fields `changed:` looks up in the history.
+pub const CHANGED_FIELDS: &[&str] = &[
+    "status",
+    "type",
+    "priority",
+    "title",
+    "description",
+    "start",
+    "due",
+    "estimate",
+    "progress",
+    "parent",
+    "label",
+    "version",
+    "project",
+    "closed",
 ];
 
 const fn field(
@@ -552,6 +579,39 @@ pub static FIELDS: &[Field] = &[
         ),
         HAS_PARTS,
     ),
+    with_choices(
+        field(
+            "was",
+            &[],
+            FieldType::Was,
+            ONE_OP,
+            false,
+            false,
+            "a field and a value the task had at any time: was:status:Review",
+        ),
+        WAS_FIELDS,
+    ),
+    with_choices(
+        field(
+            "changed",
+            &[],
+            FieldType::Changed,
+            ONE_OP,
+            false,
+            false,
+            "a field that changed; with dates, when: changed:due>-7d",
+        ),
+        CHANGED_FIELDS,
+    ),
+    field(
+        "changed-by",
+        &[],
+        FieldType::ChangedBy,
+        NAME_OPS,
+        false,
+        false,
+        "me, agent, or an agent's name: who changed the task's fields",
+    ),
 ];
 
 /// Sort keys that are not fields.
@@ -580,6 +640,83 @@ pub fn sort_keys() -> impl Iterator<Item = &'static str> {
         .filter(|f| f.sortable)
         .map(|f| f.name)
         .chain(EXTRA_SORT_KEYS.iter().copied())
+}
+
+/// How a condition on the history starts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum History {
+    /// `was:<field>…`: the task had a value at any time.
+    Was,
+    /// `changed:<field>…`: the field changed, within dates.
+    Changed,
+}
+
+impl History {
+    /// How it is written, without the colon.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Was => "was",
+            Self::Changed => "changed",
+        }
+    }
+}
+
+/// The history condition a field name starts, with the field it looks at:
+/// `was:status` is `was` and `status`.
+#[must_use]
+pub fn split_history(written: &str) -> Option<(History, &str)> {
+    let (head, inner) = written.split_once(':')?;
+    let kind = if head.eq_ignore_ascii_case("was") {
+        History::Was
+    } else if head.eq_ignore_ascii_case("changed") {
+        History::Changed
+    } else {
+        return None;
+    };
+    Some((kind, inner))
+}
+
+/// Whether `written` (any case) starts a history condition when an
+/// operator follows it: `was` or `changed`.
+#[must_use]
+pub fn is_history_prefix(written: &str) -> bool {
+    written.eq_ignore_ascii_case("was") || written.eq_ignore_ascii_case("changed")
+}
+
+/// The field whose values a condition holds: the field itself, or for
+/// `was:status` the status. `changed:due` holds dates, not values of the
+/// due field, so it has none.
+#[must_use]
+pub fn find_target(written: &str) -> Option<&'static Field> {
+    match split_history(written) {
+        Some((History::Was, inner)) => find(inner),
+        Some((History::Changed, _)) => None,
+        None => find(written),
+    }
+}
+
+/// The history's name for the changes of a field (`due` is `due_date`), for
+/// the fields whose changes the history keeps and queries can search.
+#[must_use]
+pub const fn history_key(ty: FieldType) -> Option<&'static str> {
+    Some(match ty {
+        FieldType::Status => "status",
+        FieldType::Type => "type",
+        FieldType::Priority => "priority",
+        FieldType::Title => "title",
+        FieldType::FullText(TextScope::Description) => "description",
+        FieldType::Date(DateColumn::Start) => "start_date",
+        FieldType::Date(DateColumn::Due) => "due_date",
+        FieldType::Duration(DurationColumn::Estimate) => "estimate",
+        FieldType::Percent => "progress",
+        FieldType::Parent => "parent",
+        FieldType::Label => "labels",
+        FieldType::Version => "fix_version",
+        FieldType::Project => "project",
+        FieldType::Moment(MomentColumn::Closed) => "closed_at",
+        _ => return None,
+    })
 }
 
 /// What custom fields are written with in queries: `cf.points>3`.
@@ -713,6 +850,25 @@ mod tests {
             Some("Due")
         );
         assert_eq!(find_custom("cf.nothing", &custom), None);
+    }
+
+    #[test]
+    fn history_fields_are_known_fields() {
+        for name in WAS_FIELDS {
+            assert!(find(name).is_some(), "{name}");
+        }
+        for name in CHANGED_FIELDS {
+            let f = find(name).expect(name);
+            assert!(history_key(f.ty).is_some(), "{name}");
+        }
+        assert_eq!(split_history("WAS:status"), Some((History::Was, "status")));
+        assert_eq!(
+            split_history("changed:due"),
+            Some((History::Changed, "due"))
+        );
+        assert_eq!(split_history("status"), None);
+        assert_eq!(find_target("was:prio").map(|f| f.name), Some("priority"));
+        assert_eq!(find_target("changed:status"), None);
     }
 
     #[test]

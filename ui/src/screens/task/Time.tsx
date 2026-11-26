@@ -4,17 +4,18 @@
 // Time on a task: the Time tab with its entries, the timer button and the
 // quick "+30m" of the action row, and the task's reminder.
 
-import { Bell, BellOff, MoreHorizontal, Pause, Pencil, Play, Plus, Square, Trash2 } from "lucide-react";
+import { Bell, BellOff, ChevronDown, MoreHorizontal, Pause, Pencil, Play, Plus, Square, Trash2 } from "lucide-react";
 import { useState, type KeyboardEvent } from "react";
 import { Button, Dialog, DialogTrigger, Menu, MenuTrigger, Popover, useLocale } from "react-aria-components";
 
 import { classes } from "../../classes";
 import { MenuEntries } from "../../components/ContextMenu";
+import { Select } from "../../components/Select";
 import { useToasts } from "../../components/Toasts";
 import { formatClock } from "../../data/duration";
 import { errorToast, useCall, useCommand, useOp } from "../../data/hooks";
 import { isLongRunning, useDurations, useElapsedSeconds, useTimer, useTimerCommands } from "../../data/time";
-import { type Reminder, type Task, type TimeEntry } from "../../generated/ops";
+import { type Reminder, type Task, type TimeEntry, type WorkKind } from "../../generated/ops";
 import { dayIn, momentFrom, momentIn, useTimeZone, useToday } from "../../data/zone";
 import { useT } from "../../i18n/I18n";
 import { useDayFormat } from "../board/CardView";
@@ -26,9 +27,36 @@ interface EntryDraft {
   duration: string;
   date: string;
   note: string;
+  /** The kind of work's ID; empty for none. */
+  kind: string;
 }
 
-/** The fields of a time entry: duration, day and note. Enter saves, Escape cancels. */
+/** The list's key for "no kind of work"; no ID has this form. */
+const NO_KIND = "-";
+
+/** The kinds of work new time can take, and an archived one an entry keeps (`keep`). */
+function useKindChoices(keep?: string): WorkKind[] {
+  const kinds = useOp("work_kind.list", { include_archived: true });
+  return (kinds.data?.items ?? []).filter((kind) => kind.archived !== true || kind.id === keep);
+}
+
+/** The kind of work of an entry or the timer: a picker with "No kind of work". */
+function KindPicker({ kinds, value, onChange, className, label }: { kinds: readonly WorkKind[]; value: string; onChange: (id: string) => void; className?: string | undefined; label?: string | undefined }) {
+  const t = useT();
+  return (
+    <Select
+      className={className}
+      label={label ?? t("time-work-kind")}
+      value={value === "" ? NO_KIND : value}
+      onChange={(id) => {
+        onChange(id === NO_KIND ? "" : id);
+      }}
+      options={[{ id: NO_KIND, label: t("time-no-work-kind") }, ...kinds.map((kind) => ({ id: kind.id, label: kind.name }))]}
+    />
+  );
+}
+
+/** The fields of a time entry: duration, day, note and kind of work. Enter saves, Escape cancels. */
 function EntryForm({
   initial,
   label,
@@ -48,6 +76,7 @@ function EntryForm({
   const durations = useDurations();
   const [draft, setDraft] = useState(initial);
   const [invalid, setInvalid] = useState(false);
+  const kinds = useKindChoices(initial.kind);
   const save = () => {
     const minutes = durations.parse(draft.duration);
     if (minutes === null || minutes < 1 || minutes > 24 * 60) {
@@ -106,6 +135,16 @@ function EntryForm({
           onKeyDown={keys}
         />
       </span>
+      {kinds.length > 0 && (
+        <KindPicker
+          className={styles.kind}
+          kinds={kinds}
+          value={draft.kind}
+          onChange={(kind) => {
+            setDraft({ ...draft, kind });
+          }}
+        />
+      )}
       <Button className="btn flat sm" onPress={onCancel}>
         {t("dialog-cancel")}
       </Button>
@@ -133,7 +172,7 @@ function EntryRow({ entry, readOnly }: { entry: TimeEntry; readOnly: boolean }) 
     return (
       <li>
         <EntryForm
-          initial={{ duration: durations.format(entry.minutes), date: entry.date, note: entry.note ?? "" }}
+          initial={{ duration: durations.format(entry.minutes), date: entry.date, note: entry.note ?? "", kind: entry.work_kind?.id ?? "" }}
           label={t("time-edit-label", { day: day(entry.date) })}
           saveLabel={t("panel-save")}
           busy={update.isPending}
@@ -148,6 +187,7 @@ function EntryRow({ entry, readOnly }: { entry: TimeEntry; readOnly: boolean }) 
                 ...(minutes === entry.minutes ? {} : { duration: `${String(minutes)}m` }),
                 ...(draft.date === entry.date || draft.date === "" ? {} : { date: draft.date }),
                 ...(draft.note.trim() === (entry.note ?? "") ? {} : { note: draft.note.trim() }),
+                ...(draft.kind === (entry.work_kind?.id ?? "") ? {} : { work_kind: draft.kind }),
               },
               { onSuccess: () => { setEditing(false); } },
             );
@@ -161,6 +201,11 @@ function EntryRow({ entry, readOnly }: { entry: TimeEntry; readOnly: boolean }) 
       <span className={classes("num", styles.entryDay)}>{day(entry.date)}</span>
       <span className={classes("num", styles.entryDuration)}>{durations.format(entry.minutes)}</span>
       <span className={classes("selectable", styles.entryNote)}>{entry.note ?? <span className="faint">{author}</span>}</span>
+      {entry.work_kind && (
+        <span className="chip" data-work-kind={entry.work_kind.name}>
+          {entry.work_kind.name}
+        </span>
+      )}
       {entry.author.kind !== "user" && <span className="chip hue-purple">{entry.author.name}</span>}
       <MenuTrigger>
         <Button className="btn flat icon sm" isDisabled={readOnly} aria-label={t("time-entry-menu")}>
@@ -207,7 +252,7 @@ export function TimeEntries({ task, readOnly }: { task: Task; readOnly: boolean 
       </div>
       {logging && (
         <EntryForm
-          initial={{ duration: "", date: today, note: "" }}
+          initial={{ duration: "", date: today, note: "", kind: "" }}
           label={t("time-log")}
           saveLabel={t("time-log-save")}
           busy={log.isPending}
@@ -216,7 +261,14 @@ export function TimeEntries({ task, readOnly }: { task: Task; readOnly: boolean 
           }}
           onSave={(draft, minutes) => {
             log.mutate(
-              { key: task.key, duration: `${String(minutes)}m`, date: draft.date === "" ? "today" : draft.date, note: draft.note.trim() === "" ? null : draft.note.trim(), client_request_id: requestId },
+              {
+                key: task.key,
+                duration: `${String(minutes)}m`,
+                date: draft.date === "" ? "today" : draft.date,
+                note: draft.note.trim() === "" ? null : draft.note.trim(),
+                ...(draft.kind === "" ? {} : { work_kind: draft.kind }),
+                client_request_id: requestId,
+              },
               {
                 onSuccess: () => {
                   setLogging(false);
@@ -256,12 +308,27 @@ export function TimerButton({ task, readOnly }: { task: Task; readOnly: boolean 
   const start = useCommand("timer.start");
   const pause = useCommand("timer.pause");
   const { stopAndLog, pending: stopping } = useTimerCommands();
+  const kinds = useKindChoices(mine?.work_kind?.id);
   if (mine === undefined) {
     return (
-      <Button className="btn" isDisabled={readOnly || start.isPending} onPress={() => { start.mutate({ key: task.key }); }}>
-        <Play className="ic" />
-        {t("timer-start")}
-      </Button>
+      <>
+        <Button className="btn" isDisabled={readOnly || start.isPending} onPress={() => { start.mutate({ key: task.key }); }}>
+          <Play className="ic" />
+          {t("timer-start")}
+        </Button>
+        {kinds.length > 0 && (
+          <MenuTrigger>
+            <Button className="btn flat icon" isDisabled={readOnly || start.isPending} aria-label={t("timer-start-as")}>
+              <ChevronDown className="ic s" />
+            </Button>
+            <Popover className="pop menuPopover" placement="bottom end" offset={4}>
+              <Menu className="menu" aria-label={t("timer-start-as")}>
+                <MenuEntries entries={kinds.map((kind) => ({ id: kind.id, label: kind.name, run: () => { start.mutate({ key: task.key, work_kind: kind.id }); } }))} />
+              </Menu>
+            </Popover>
+          </MenuTrigger>
+        )}
+      </>
     );
   }
   const long = isLongRunning(seconds, settings.data?.timer_reminder_hours);
@@ -292,6 +359,16 @@ export function TimerButton({ task, readOnly }: { task: Task; readOnly: boolean 
       >
         {running ? <Pause className="ic" /> : <Play className="ic" />}
       </Button>
+      {running && kinds.length > 0 && (
+        <KindPicker
+          kinds={kinds}
+          label={t("timer-kind")}
+          value={mine.work_kind?.id ?? ""}
+          onChange={(kind) => {
+            start.mutate({ key: task.key, work_kind: kind });
+          }}
+        />
+      )}
     </>
   );
 }

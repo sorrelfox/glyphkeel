@@ -6,7 +6,7 @@ import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } 
 import { CSS as DndCss } from "@dnd-kit/utilities";
 import { ArrowDown, ArrowUp, GripVertical, MoreHorizontal, Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Button, Menu, MenuTrigger, Popover } from "react-aria-components";
+import { Button, Dialog, DialogTrigger, Group, Input, Label, Menu, MenuTrigger, NumberField, Popover } from "react-aria-components";
 
 import { classes } from "../../classes";
 import { MenuEntries } from "../../components/ContextMenu";
@@ -312,6 +312,65 @@ const restrictToVertical: Modifier = ({ transform }) => ({ ...transform, x: 0 })
 /** The kinds of link the person adds, as they read from this task. */
 const ADDABLE: readonly RelationKind[] = ["blocks", "blocked_by", "relates", "duplicates", "duplicated_by", "subtask_of", "parent_of"];
 
+/**
+ * The lag of a `blocks` link: the days the blocked task waits after its
+ * blocker ends. A button showing it opens a small form to change it.
+ */
+function LagButton({ task, link, readOnly }: { task: Task; link: Link; readOnly: boolean }) {
+  const t = useT();
+  const relate = useCommand("relation.add", { undoable: t("links-lag-changed") });
+  const lag = link.lag_days ?? 0;
+  const [days, setDays] = useState(lag);
+  return (
+    <DialogTrigger
+      onOpenChange={(open) => {
+        if (open) {
+          setDays(lag);
+        }
+      }}
+    >
+      <Button className={classes("btn flat sm", lag === 0 && "faint")} isDisabled={readOnly} aria-label={t("links-lag-edit", { key: link.task.key, days: lag })} data-lag-button={link.task.key}>
+        {lag === 0 ? t("links-lag-none") : t("links-lag", { days: lag })}
+      </Button>
+      <Popover className="pop" placement="bottom end" offset={4}>
+        <Dialog className={classes(styles.lagDialog)} aria-label={t("links-lag-edit", { key: link.task.key, days: lag })}>
+          {({ close }) => (
+            <form
+              className={styles.lagForm}
+              onSubmit={(event) => {
+                event.preventDefault();
+                close();
+                if (days !== lag) {
+                  relate.mutate({ key: task.key, kind: link.kind === "blocked_by" ? "blocked_by" : "blocks", other: link.task.key, lag_days: days });
+                }
+              }}
+            >
+              <NumberField
+                minValue={0}
+                maxValue={365}
+                step={1}
+                value={days}
+                onChange={(value) => {
+                  setDays(Number.isFinite(value) ? Math.round(value) : 0);
+                }}
+                autoFocus
+              >
+                <Label className="caption">{t("links-lag-label")}</Label>
+                <Group className="field">
+                  <Input className="num" />
+                </Group>
+              </NumberField>
+              <Button type="submit" className="btn primary sm">
+                {t("panel-save")}
+              </Button>
+            </form>
+          )}
+        </Dialog>
+      </Popover>
+    </DialogTrigger>
+  );
+}
+
 /** Links to other tasks: how each reads from this task, its key, title and status; add and remove. */
 export function LinksSection({
   task,
@@ -361,6 +420,7 @@ export function LinksSection({
             <span className={classes("truncate grow", link.task.closed && styles.closedTitle)}>{link.task.title}</span>
             <StatusPill task={link.task} project={link.task.key.startsWith(`${project.key}-`) ? project : undefined} />
           </Button>
+          {(link.kind === "blocks" || link.kind === "blocked_by") && <LagButton task={task} link={link} readOnly={readOnly} />}
           <Button
             className="btn flat icon sm"
             isDisabled={readOnly}

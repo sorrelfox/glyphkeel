@@ -122,7 +122,28 @@ gantt-problems =
         [one] One problem
        *[other] { $count } problems
     }
-gantt-remove-dependency = Remove the dependency { $from } to { $to }
+gantt-edit-dependency =
+    { $days ->
+        [0] Dependency { $from } to { $to }: give it a lag or remove it
+        [one] Dependency { $from } to { $to }, 1 day of lag: change or remove it
+       *[other] Dependency { $from } to { $to }, { $days } days of lag: change or remove it
+    }
+gantt-dependency-title = { $from } blocks { $to }
+gantt-dependency-remove = Remove the dependency
+gantt-dependency-save = Save
+gantt-lag-about = { $to } may begin only once { $from } has ended and the lag has passed.
+gantt-lag-label = Lag in days
+gantt-lag-short =
+    { $days ->
+        [one] +1 day
+       *[other] +{ $days } days
+    }
+gantt-lag-set =
+    { $days ->
+        [0] { $from } to { $to }: no lag
+        [one] { $from } to { $to }: 1 day of lag
+       *[other] { $from } to { $to }: { $days } days of lag
+    }
 # The tooltip while dragging: the new dates.
 gantt-drag-dates = { $from } to { $to }
 gantt-drag-day = { $date }

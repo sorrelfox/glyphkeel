@@ -7,6 +7,8 @@
 // layouts, typed errors, change events and Undo.
 
 import {
+  type WorkKind,
+  type WorkKindRef,
   type ActivityEntry,
   type ActivityTask,
   type Actor,
@@ -81,7 +83,7 @@ import { decodeBase64, materialize, recordedFields, sniff } from "./details";
 import { applyValues, createField, deleteField, fieldOut, fieldsFor, fieldsOf, findField, listedValues, moveMatches, moveValues, placeField, queryFields, taskValues, updateField } from "./fields";
 import { checklistOf, escapeHtml, merge3, publicChecklist, renderFake, setChecked, unifiedDiff } from "./markdown";
 import { newProject, nextFileId, nextId, nextUuid, SAMPLE_AGENT } from "./seed";
-import { type FakeComment, type FakeFile, type FakeProject, type FakeRelation, type FakeReminder, type FakeRevision, type FakeState, type FakeTask, type FakeTimeEntry, type FakeWikiPage } from "./state";
+import { type FakeComment, type FakeFile, type FakeProject, type FakeRelation, type FakeReminder, type FakeRevision, type FakeState, type FakeStatus, type FakeTask, type FakeTimeEntry, type FakeWikiPage, type FakeWorkKind } from "./state";
 import { checkReadOnly, enter as enterRules } from "./rules";
 import { naturalDay, nextDay, searchAll, searchWiki, slugOf, headingsOf } from "./overview";
 import { moveDependents, scheduleOf } from "./schedule";
@@ -93,7 +95,7 @@ import { templateHandlers } from "./templates";
 const DEFAULT_GANTT_LAYOUT: GanttLayout = { zoom: "day", widths: {}, group_by: "parent", move_dependents: false };
 import { linksIn, placePage, subtree, type TextLink } from "./wiki";
 import { createVersion, deleteVersion, getVersion, listVersions, updateVersion, versionForTask, versionRef, visibleVersions, type VersionHost } from "./versions";
-import { createView, deleteView, listViews, matchingKeys, parseQuery, queryError, searchTasks, updateView, type GroupInfo, type QueryNames } from "./query";
+import { createView, deleteView, listViews, matchingKeys, parseQuery, queryError, searchTasks, updateView, type GroupInfo, type QueryNames, type TaskHistory } from "./query";
 import { createdClosed, cumulativeFlow, cycleTime, defaultFrom, flowPeriods, type FlowEvent, type FlowInput, type FlowStatus, type FlowTask } from "./reports";
 import { addDays, csvOf, localDay, MAX_ENTRY_MINUTES, momentOf, reminderAt, reminderOut, sortDue, timeEntryOut, timerElapsedMs, timerOut, unitsOf, weekStart, workDay } from "./time";
 
@@ -538,6 +540,7 @@ export class FakeWorkspace {
         category: status.category,
         hue: status.hue,
         ...some("wip_limit", status.wip_limit),
+        ...some("wip_min", status.wip_min ?? null),
         ...(status.rules === undefined || isEmptyRules(status.rules) ? {} : { rules: structuredClone(status.rules) }),
         tasks: tasks.filter((task) => task.statusId === status.id).length,
       })),
@@ -666,11 +669,13 @@ export class FakeWorkspace {
       category: status.category,
       hue: status.hue,
       ...some("wip_limit", status.wip_limit),
+      ...some("wip_min", status.wip_min ?? null),
       statuses: { [project.key]: status.id },
       cards: [],
       count: 0,
       older: 0,
       over_limit: false,
+      under_minimum: false,
       hidden: false,
       collapsed: false,
       sort_mode: "manual",
@@ -699,6 +704,7 @@ export class FakeWorkspace {
       column.count = all.length;
       column.older = all.length - shown.length;
       column.over_limit = column.wip_limit !== undefined && all.length > column.wip_limit;
+      column.under_minimum = column.wip_min !== undefined && all.length < column.wip_min;
       column.hidden = layout.hidden.includes(column.id);
       column.collapsed = layout.collapsed.includes(column.id);
       column.sort_mode = layout.column_sort[column.id] ?? layout.sort_mode;
@@ -813,7 +819,7 @@ export class FakeWorkspace {
         return [];
       }
       const other = this.state.tasks.find((candidate) => candidate.id === (forward ? relation.to : relation.from));
-      return other ? [{ id: relation.id, kind: forward ? relation.kind : backwards[relation.kind], task: this.taskRef(other) }] : [];
+      return other ? [{ id: relation.id, kind: forward ? relation.kind : backwards[relation.kind], task: this.taskRef(other), ...(relation.lagDays ? { lag_days: relation.lagDays } : {}) }] : [];
     });
   }
 
@@ -874,7 +880,7 @@ export class FakeWorkspace {
           .map((revision) => this.revisionInfo(revision, current));
       } else if (part === "time") {
         const units = unitsOf(this.state.settings);
-        full.time_entries = this.entriesOf(task).map((entry) => timeEntryOut(entry, this.keyOf(task), units));
+        full.time_entries = this.entriesOf(task).map((entry) => timeEntryOut(entry, this.keyOf(task), units, this.workKindRef(entry.workKindId)));
       } else if (part === "reminder") {
         const reminder = this.reminderOf(task);
         if (reminder) {
@@ -1266,9 +1272,17 @@ export class FakeWorkspace {
     return rest;
   }
 
-  private checkWip(limit: number | null | undefined): void {
+  private checkWip(limit: number | null | undefined, path = "wip_limit"): void {
     if (limit !== null && limit !== undefined && (!Number.isInteger(limit) || limit < 1)) {
-      fail("invalid", "A WIP limit is a whole number of at least 1.", { details: { path: "wip_limit" } });
+      fail("invalid", path === "wip_min" ? "A WIP minimum is 1 or more." : "A WIP limit is a whole number of at least 1.", { details: { path } });
+    }
+  }
+
+  /** A status's minimum must not be above its limit. */
+  private checkWipRange(status: FakeStatus): void {
+    const min = status.wip_min ?? null;
+    if (min !== null && status.wip_limit !== null && min > status.wip_limit) {
+      fail("invalid", `The WIP minimum (${String(min)}) can't be above the WIP limit (${String(status.wip_limit)}).`, { details: { path: "wip_min", message_id: "status-wip-min-above-limit" } });
     }
   }
 
@@ -1323,7 +1337,56 @@ export class FakeWorkspace {
 
   private entryOutput(entry: FakeTimeEntry): TimeEntryChange {
     const task = this.task(entry.taskId);
-    return { deleted: entry.deletedAt !== null, entry: timeEntryOut(entry, this.keyOf(task), unitsOf(this.state.settings)), spent_minutes: task.spentMin };
+    return { deleted: entry.deletedAt !== null, entry: timeEntryOut(entry, this.keyOf(task), unitsOf(this.state.settings), this.workKindRef(entry.workKindId)), spent_minutes: task.spentMin };
+  }
+
+  // ---------- kinds of work ----------
+
+  private workKinds(): FakeWorkKind[] {
+    this.state.workKinds ??= [];
+    return this.state.workKinds;
+  }
+
+  private workKindRef(id: string | undefined): WorkKindRef | undefined {
+    const kind = id === undefined ? undefined : this.workKinds().find((candidate) => candidate.id === id);
+    return kind && { id: kind.id, name: kind.name };
+  }
+
+  private findWorkKind(text: string, path: string): FakeWorkKind {
+    const wanted = fold(text.trim());
+    const kind = this.workKinds().find((candidate) => candidate.id === text.trim() || fold(candidate.name) === wanted);
+    if (kind === undefined) {
+      const names = this.workKinds().filter((candidate) => !candidate.archived).map((candidate) => candidate.name);
+      return fail("not_found", `There is no kind of work "${text.trim()}".`, { hint: names.length === 0 ? "The workspace has no kinds of work yet." : `Kinds of work: ${names.join(", ")}.`, details: { path, message_id: "work-kind-not-found" } });
+    }
+    return kind;
+  }
+
+  /** The kind a time input names for new time; none for an empty text. Archived kinds take no new time. */
+  private kindForEntry(text: string | null | undefined, current: string | undefined): string | undefined {
+    if (text === null || text === undefined || text.trim() === "") {
+      return undefined;
+    }
+    const kind = this.findWorkKind(text, "work_kind");
+    if (kind.archived && kind.id !== current) {
+      fail("conflict", `The kind of work "${kind.name}" is archived.`, { details: { path: "work_kind", message_id: "work-kind-archived" } });
+    }
+    return kind.id;
+  }
+
+  private workKindOut(kind: FakeWorkKind): WorkKind {
+    return { id: kind.id, name: kind.name, ...(kind.archived ? { archived: true } : {}), entries: this.state.timeEntries.filter((entry) => entry.deletedAt === null && entry.workKindId === kind.id).length };
+  }
+
+  private workKindName(name: string, except?: string): string {
+    const clean = name.trim();
+    if (clean === "" || clean.length > 60) {
+      fail("invalid", "A kind of work's name has 1 to 60 characters.", { details: { path: "name" } });
+    }
+    if (this.workKinds().some((candidate) => candidate.id !== except && fold(candidate.name) === fold(clean))) {
+      fail("conflict", `There is already a kind of work named "${clean}".`, { details: { path: "name", message_id: "work-kind-name-taken" } });
+    }
+    return clean;
   }
 
   private entryChange(entry: FakeTimeEntry, fields: string[]): Result<TimeEntryChange> {
@@ -1334,7 +1397,7 @@ export class FakeWorkspace {
   private timerStatus(): TimerStatus {
     const timer = this.state.timer;
     const task = timer && this.state.tasks.find((candidate) => candidate.id === timer.taskId);
-    return timer && task ? { timer: timerOut(timer, this.taskRef(task), this.today(), unitsOf(this.state.settings)) } : {};
+    return timer && task ? { timer: timerOut(timer, this.taskRef(task), this.today(), unitsOf(this.state.settings), this.workKindRef(timer.workKindId)) } : {};
   }
 
   private timerEvent(): EntityChange {
@@ -1342,7 +1405,7 @@ export class FakeWorkspace {
   }
 
   /** Stops the timer: logs its time (rounded; under half a minute logs nothing) unless discarded. */
-  private stopTimer(minutes: number | null, discard: boolean, note?: string): Result<TimerChange> {
+  private stopTimer(minutes: number | null, discard: boolean, note?: string, kind?: string | null): Result<TimerChange> {
     const timer = this.state.timer;
     if (timer === null) {
       return { output: {}, changes: [] };
@@ -1363,6 +1426,7 @@ export class FakeWorkspace {
       date: localDay(new Date(timer.startedAt)),
       minutes: logged,
       note: this.entryNote(note ?? timer.note),
+      ...((kind === undefined ? timer.workKindId : (kind ?? undefined)) === undefined ? {} : { workKindId: kind === undefined ? timer.workKindId : (kind ?? undefined) }),
       author: { kind: "user", name: "You" },
       createdAt: this.today().toISOString(),
       editedAt: null,
@@ -1849,7 +1913,47 @@ export class FakeWorkspace {
       labels: unique(this.state.projects.flatMap((project) => project.labels.map((label) => label.name))),
       projects: this.state.projects.map((project) => project.key),
       today: localDay(this.today()),
+      history: (key) => this.taskHistory(key),
     };
+  }
+
+  /** A task's recorded changes for history conditions, with IDs read as names. */
+  private taskHistory(key: string): TaskHistory[] {
+    const task = this.state.tasks.find((candidate) => this.keyOf(candidate) === key);
+    if (!task) {
+      return [];
+    }
+    const statuses = new Map(this.state.projects.flatMap((project) => project.statuses.map((status) => [status.id, status] as const)));
+    const types = new Map(this.state.projects.flatMap((project) => project.types.map((type) => [type.id, type.name] as const)));
+    const labels = new Map(this.state.projects.flatMap((project) => project.labels.map((label) => [label.id, label.name] as const)));
+    const versions = new Map((this.state.versions ?? []).map((version) => [version.id, version.name] as const));
+    const nameOf = (field: string, value: unknown): unknown => {
+      const one = (id: unknown) => {
+        if (typeof id !== "string") {
+          return id;
+        }
+        return field === "status" ? (statuses.get(id)?.name ?? id) : field === "type" ? (types.get(id) ?? id) : field === "labels" ? (labels.get(id) ?? id) : field === "fix_version" ? (versions.get(id) ?? id) : id;
+      };
+      return Array.isArray(value) ? (value as unknown[]).map(one) : one(value);
+    };
+    return this.state.activity
+      .filter((entry) => entry.entity === "task" && entry.id === task.id)
+      .map((entry) => {
+        const fields: Record<string, { before?: unknown; after?: unknown }> = {};
+        const categories: Record<string, string> = {};
+        for (const [field, change] of Object.entries(entry.fields)) {
+          fields[field] = { ...(change.before === undefined ? {} : { before: nameOf(field, change.before) }), ...(change.after === undefined ? {} : { after: nameOf(field, change.after) }) };
+          if (field === "status") {
+            for (const id of [change.before, change.after]) {
+              const status = typeof id === "string" ? statuses.get(id) : undefined;
+              if (status) {
+                categories[status.name.toLowerCase()] = status.category;
+              }
+            }
+          }
+        }
+        return { day: localDay(new Date(entry.at)), agent: entry.actor.kind === "agent", actor: entry.actor.name, created: entry.fields.created?.after === true, fields, categories };
+      });
   }
 
   private archivedKeys(): Set<string> {
@@ -2378,21 +2482,24 @@ export class FakeWorkspace {
       }
       return this.projectChange(project, "project", ["state"]);
     },
-    "status.create": ({ project: ref, name, category, hue, wip_limit, before, after, at }) => {
+    "status.create": ({ project: ref, name, category, hue, wip_limit, wip_min, before, after, at }) => {
       const project = this.writable(ref);
       this.validHue(hue);
       this.checkWip(wip_limit);
-      const status = {
+      this.checkWip(wip_min, "wip_min");
+      const status: FakeStatus = {
         id: nextId("s"),
         name: this.uniqueName(project.statuses, name, "status"),
         category: category ?? "todo",
         hue: hue ?? "grey",
         wip_limit: wip_limit ?? null,
+        wip_min: wip_min ?? null,
       };
+      this.checkWipRange(status);
       project.statuses = this.place([...project.statuses, status], status, { before, after, at }, "status");
       return this.projectChange(project, "status", ["*"]);
     },
-    "status.update": ({ project: ref, status: statusRef, name, category, hue, wip_limit, clear }) => {
+    "status.update": ({ project: ref, status: statusRef, name, category, hue, wip_limit, wip_min, clear }) => {
       const project = this.writable(ref);
       const status = this.statusIn(project, statusRef);
       const fields: string[] = [];
@@ -2421,6 +2528,16 @@ export class FakeWorkspace {
         status.wip_limit = null;
         fields.push("wip_limit");
       }
+      if (wip_min !== null && wip_min !== undefined) {
+        this.checkWip(wip_min, "wip_min");
+        status.wip_min = wip_min;
+        fields.push("wip_min");
+      }
+      if (clear?.includes("wip_min")) {
+        status.wip_min = null;
+        fields.push("wip_min");
+      }
+      this.checkWipRange(status);
       return this.projectChange(project, "status", fields);
     },
     "rules.update": ({ project: ref, statuses, agents }) => {
@@ -2667,7 +2784,7 @@ export class FakeWorkspace {
       this.state.claims = this.state.claims.filter((claim) => claim.taskId !== task.id);
       return had ? this.taskChange(task, ["claim"]) : { output: { task: this.fullTask(task) }, changes: [] };
     },
-    "relation.add": ({ key, kind, other: otherKey }) => {
+    "relation.add": ({ key, kind, other: otherKey, lag_days }) => {
       const task = this.task(key);
       const other = this.task(otherKey);
       this.writable(this.projectOf(task).key);
@@ -2693,18 +2810,31 @@ export class FakeWorkspace {
       const stored = { blocks: "blocks", blocked_by: "blocks", relates: "relates", duplicates: "duplicates", duplicated_by: "duplicates", clones: "clones", cloned_by: "clones" } as const;
       const [from, to] = forward ? [task, other] : [other, task];
       const relationKind = stored[kind];
-      const exists = this.state.relations.some(
+      if (lag_days !== null && lag_days !== undefined) {
+        if (relationKind !== "blocks") {
+          fail("invalid", "Only a blocks link takes a lag.", { details: { path: "lag_days", message_id: "link-lag-blocks-only" } });
+        }
+        if (!Number.isInteger(lag_days) || lag_days < 0 || lag_days > 365) {
+          fail("invalid", "A lag is 0 to 365 days.", { details: { path: "lag_days", message_id: "link-lag-range", args: { max: "365" } } });
+        }
+      }
+      const exists = this.state.relations.find(
         (relation) =>
           relation.kind === relationKind &&
           ((relation.from === from.id && relation.to === to.id) || (relationKind === "relates" && relation.from === to.id && relation.to === from.id)),
       );
       if (exists) {
-        return { output: { task: this.fullTask(task) }, changes: [] };
+        const lag = lag_days === null || lag_days === undefined ? exists.lagDays : lag_days === 0 ? undefined : lag_days;
+        if (lag === exists.lagDays) {
+          return { output: { task: this.fullTask(task) }, changes: [] };
+        }
+        exists.lagDays = lag;
+        return { output: { task: this.fullTask(task) }, changes: [{ entity: "relation", id: exists.id, fields: ["link"], project: this.projectOf(task).key }] };
       }
       if (relationKind === "blocks" && this.state.relations.some((relation) => relation.kind === "blocks" && relation.from === to.id && relation.to === from.id)) {
         fail("invalid", `${this.keyOf(to)} already blocks ${this.keyOf(from)}.`, { details: { path: "kind" } });
       }
-      const relation: FakeRelation = { id: nextId("r"), from: from.id, to: to.id, kind: relationKind };
+      const relation: FakeRelation = { id: nextId("r"), from: from.id, to: to.id, kind: relationKind, ...(relationKind === "blocks" && lag_days ? { lagDays: lag_days } : {}) };
       this.state.relations.push(relation);
       return { output: { task: this.fullTask(task) }, changes: [{ entity: "relation", id: relation.id, fields: ["link"], project: this.projectOf(task).key }] };
     },
@@ -3071,7 +3201,7 @@ export class FakeWorkspace {
       const filter = input.query === null || input.query === undefined || input.query.trim() === "" ? null : new Set(this.runQuery(() => matchingKeys(this.listedTasks(), input.query ?? "", this.queryNames(), archived)));
       const tasks = this.listedTasks().filter((task) => (keys === null || keys.has(task.project)) && (filter === null || filter.has(task.key)));
       const milestoneTypes = new Set(this.state.projects.flatMap((project) => project.types.filter((type) => type.glyph === "milestone").map((type) => type.id)));
-      const links = this.state.relations.filter((relation) => relation.kind === "blocks").map((relation) => ({ id: relation.id, from: relation.from, to: relation.to }));
+      const links = this.state.relations.filter((relation) => relation.kind === "blocks").map((relation) => ({ id: relation.id, from: relation.from, to: relation.to, lagDays: relation.lagDays }));
       return scheduleOf(tasks, links, (task) => milestoneTypes.has(task.type.id), localDay(this.today()), archived);
     },
     "search.query": (input) => {
@@ -3972,7 +4102,7 @@ export class FakeWorkspace {
       this.touch(sub, false);
       return { output: { task: this.withParts(parent, ["subtasks"]) }, changes: [{ entity: "task", id: sub.id, fields: ["subtask_rank"], project: this.projectOf(sub).key }] };
     },
-    "task.move": ({ key, status, project: toProject, mapping, expected_version, before, after, at }) => {
+    "task.move": ({ key, status, project: toProject, mapping, expected_version, before, after, at, close_duplicates }) => {
       const task = this.task(key);
       const from = this.writable(this.projectOf(task).key);
       if (expected_version !== null && expected_version !== undefined && expected_version !== task.version) {
@@ -3987,6 +4117,7 @@ export class FakeWorkspace {
       }
       const project = to;
       const target = status === null || status === undefined ? this.statusIn(project, task.statusId) : this.statusIn(project, status);
+      const wasOpen = task.closedAt === null;
       if (target.id !== task.statusId) {
         fields.push(...enterRules(project, task, this.keyOf(task), target.id, localDay(this.today()), fail, fieldsFor(this.state, project.id), this.typeRef(task).name));
         this.enterStatus(task, target.id);
@@ -4002,7 +4133,34 @@ export class FakeWorkspace {
       for (const sub of moved.filter((other) => other !== task)) {
         change.changes.push({ entity: "task", id: sub.id, fields: ["project", "number", "status", "type", "labels", "rank"], project: to.key });
       }
-      return warnings.length > 0 ? { ...change, output: { ...change.output, warnings } } : change;
+      // Closing it: its open duplicates close too, or a warning names them.
+      const closedDuplicates: string[] = [];
+      if (wasOpen && task.closedAt !== null) {
+        const duplicates = this.state.relations
+          .filter((relation) => relation.kind === "duplicates" && relation.to === task.id)
+          .flatMap((relation) => this.state.tasks.filter((candidate) => candidate.id === relation.from && candidate.closedAt === null));
+        if (close_duplicates === true) {
+          for (const duplicate of duplicates) {
+            const home = this.projectOf(duplicate);
+            const closing =
+              home.statuses.find((each) => each.id === target.id) ??
+              home.statuses.find((each) => fold(each.name) === fold(target.name)) ??
+              home.statuses.find((each) => each.category === target.category) ??
+              home.statuses.find((each) => each.category === "done" || each.category === "cancelled");
+            if (closing !== undefined) {
+              this.enterStatus(duplicate, closing.id);
+              this.touch(duplicate, true);
+              closedDuplicates.push(this.keyOf(duplicate));
+              change.changes.push({ entity: "task", id: duplicate.id, fields: ["status", "closed_at"], project: home.key });
+            }
+          }
+        } else if (close_duplicates !== false && duplicates.length > 0) {
+          const keys = duplicates.map((duplicate) => this.keyOf(duplicate));
+          warnings.push(`${this.keyOf(task)} is closed; its duplicates ${keys.join(", ")} are still open. Move it with close_duplicates to close them too.`);
+        }
+      }
+      const output = { ...change.output, ...(warnings.length > 0 ? { warnings } : {}), ...(closedDuplicates.length > 0 ? { duplicates_closed: closedDuplicates } : {}) };
+      return { ...change, output };
     },
     "task.move_check": ({ keys, project: toProject }) => {
       if (keys.length === 0 || keys.length > 500) {
@@ -4077,7 +4235,44 @@ export class FakeWorkspace {
 
     // ---------- time ----------
 
-    "time.log": ({ key, duration, date, note }) => {
+    "work_kind.list": ({ include_archived }) => ({
+      items: [...this.workKinds()]
+        .filter((kind) => include_archived === true || !kind.archived)
+        .sort((a, b) => fold(a.name).localeCompare(fold(b.name)))
+        .map((kind) => this.workKindOut(kind)),
+    }),
+    "work_kind.create": ({ name }) => {
+      const kind: FakeWorkKind = { id: nextId("wk"), name: this.workKindName(name), archived: false };
+      this.workKinds().push(kind);
+      return { output: { kind: this.workKindOut(kind) }, changes: [{ entity: "work_kind", id: kind.id, fields: ["record"] }] };
+    },
+    "work_kind.update": ({ kind: ref, name, archived }) => {
+      const kind = this.findWorkKind(ref, "kind");
+      const before = { ...kind };
+      if (name !== null && name !== undefined) {
+        kind.name = this.workKindName(name, kind.id);
+      }
+      if (archived !== null && archived !== undefined) {
+        kind.archived = archived;
+      }
+      const changed = before.name !== kind.name || before.archived !== kind.archived;
+      return { output: { kind: this.workKindOut(kind) }, changes: changed ? [{ entity: "work_kind", id: kind.id, fields: ["record"] }] : [] };
+    },
+    "work_kind.delete": ({ kind: ref }) => {
+      const kind = this.findWorkKind(ref, "kind");
+      const used = this.state.timeEntries.filter((entry) => entry.deletedAt === null && entry.workKindId === kind.id).length + (this.state.timer?.workKindId === kind.id ? 1 : 0);
+      if (used > 0) {
+        fail("conflict", `The kind of work "${kind.name}" is used by ${String(used)} time entries or the timer.`, { hint: "Archive it instead: it stays on those entries and is no longer offered.", details: { message_id: "work-kind-in-use" } });
+      }
+      const out = this.workKindOut(kind);
+      for (const entry of this.state.timeEntries.filter((candidate) => candidate.workKindId === kind.id)) {
+        delete entry.workKindId;
+      }
+      this.state.workKinds = this.workKinds().filter((candidate) => candidate.id !== kind.id);
+      return { output: { kind: out, deleted: true }, changes: [{ entity: "work_kind", id: kind.id, fields: ["record"] }] };
+    },
+
+    "time.log": ({ key, duration, date, note, work_kind }) => {
       const task = this.task(key);
       this.writable(this.projectOf(task).key);
       const minutes = this.entryMinutes(duration, "duration");
@@ -4088,6 +4283,7 @@ export class FakeWorkspace {
         date: day,
         minutes,
         note: this.entryNote(note),
+        ...some("workKindId", this.kindForEntry(work_kind, undefined)),
         author: { kind: "user", name: "You" },
         createdAt: this.today().toISOString(),
         editedAt: null,
@@ -4099,7 +4295,7 @@ export class FakeWorkspace {
       task.updatedAt = this.today().toISOString();
       return this.entryChange(entry, ["created"]);
     },
-    "time.update": ({ entry: id, date, duration, note, expected_version }) => {
+    "time.update": ({ entry: id, date, duration, note, work_kind, expected_version }) => {
       const entry = this.liveEntry(id);
       const task = this.task(entry.taskId);
       this.writable(this.projectOf(task).key);
@@ -4126,6 +4322,17 @@ export class FakeWorkspace {
         entry.note = this.entryNote(note);
         fields.push("note");
       }
+      if (work_kind !== null && work_kind !== undefined) {
+        const kind = this.kindForEntry(work_kind, entry.workKindId);
+        if (kind !== entry.workKindId) {
+          if (kind === undefined) {
+            delete entry.workKindId;
+          } else {
+            entry.workKindId = kind;
+          }
+          fields.push("work_kind");
+        }
+      }
       if (fields.length === 0) {
         return { output: this.entryOutput(entry), changes: [] };
       }
@@ -4143,7 +4350,7 @@ export class FakeWorkspace {
       task.updatedAt = entry.deletedAt;
       return this.entryChange(entry, ["trashed"]);
     },
-    "time.report": ({ from, to, group_by, project, include_subprojects, task: taskRef, person, entries, csv }) => {
+    "time.report": ({ from, to, group_by, project, include_subprojects, task: taskRef, person, work_kind, entries, csv }) => {
       const now = this.today();
       const weekFirst = (day: string) => weekStart(day, this.state.settings.week_start);
       const first = from === null || from === undefined ? weekFirst(localDay(now)) : (workDay(from, now) ?? fail("invalid", `"${from}" isn't a day.`, { details: { path: "from" } }));
@@ -4162,8 +4369,10 @@ export class FakeWorkspace {
       const loggedBy = (entry: FakeTimeEntry): boolean =>
         who === undefined || (who === "me" ? entry.author.kind === "user" : who === "agent" ? entry.author.kind === "agent" : entry.author.name.toLowerCase() === who);
       const units = unitsOf(this.state.settings);
+      const onlyKind = work_kind === null || work_kind === undefined ? undefined : work_kind.trim().toLowerCase() === "none" ? null : this.findWorkKind(work_kind, "work_kind").id;
+      const ofKind = (entry: FakeTimeEntry): boolean => onlyKind === undefined || (onlyKind === null ? entry.workKindId === undefined : entry.workKindId === onlyKind);
       const chosen = this.state.timeEntries
-        .filter((entry) => entry.deletedAt === null && entry.date >= first && entry.date <= last && loggedBy(entry))
+        .filter((entry) => entry.deletedAt === null && entry.date >= first && entry.date <= last && loggedBy(entry) && ofKind(entry))
         .flatMap((entry) => {
           const task = this.state.tasks.find((candidate) => candidate.id === entry.taskId);
           return task && (projects === null || projects.has(task.projectId)) && within(task) ? [{ entry, task }] : [];
@@ -4181,7 +4390,9 @@ export class FakeWorkspace {
               ? [week, `${week}..${addDays(week, 6)}`]
               : grouping === "month"
                 ? [entry.date.slice(0, 7), entry.date.slice(0, 7)]
-                : grouping === "person"
+                : grouping === "work_kind"
+                  ? [entry.workKindId ?? "none", this.workKindRef(entry.workKindId)?.name ?? ""]
+                  : grouping === "person"
                   ? [`${entry.author.kind}:${entry.author.name}`, entry.author.name]
                   : grouping === "project"
                     ? [project.key, project.name]
@@ -4201,14 +4412,14 @@ export class FakeWorkspace {
           ? csvOf([grouping, "title", "minutes", "duration", "entry_count"], items.map((row) => [row.key, row.title, String(row.minutes), row.duration, String(row.entry_count)]))
           : csv === "entries"
             ? csvOf(
-                ["date", "person_kind", "person", "project", "task", "title", "minutes", "duration", "note"],
-                chosen.map(({ entry, task }) => [entry.date, entry.author.kind, entry.author.name, this.projectOf(task).key, this.keyOf(task), task.title, String(entry.minutes), formatDuration(entry.minutes, units), entry.note]),
+                ["date", "person_kind", "person", "project", "task", "title", "minutes", "duration", "note", "work_kind"],
+                chosen.map(({ entry, task }) => [entry.date, entry.author.kind, entry.author.name, this.projectOf(task).key, this.keyOf(task), task.title, String(entry.minutes), formatDuration(entry.minutes, units), entry.note, this.workKindRef(entry.workKindId)?.name ?? ""]),
               )
             : undefined;
       return {
         ...(csvText === undefined ? {} : { csv: csvText }),
         days_per_week: units.daysPerWeek,
-        ...(entries === true ? { entries: chosen.map(({ entry, task }) => timeEntryOut(entry, this.keyOf(task), units)) } : {}),
+        ...(entries === true ? { entries: chosen.map(({ entry, task }) => timeEntryOut(entry, this.keyOf(task), units, this.workKindRef(entry.workKindId))) } : {}),
         from: first,
         group_by: grouping,
         hours_per_day: units.hoursPerDay,
@@ -4235,9 +4446,10 @@ export class FakeWorkspace {
     // ---------- timer ----------
 
     "timer.get": () => this.timerStatus(),
-    "timer.start": ({ key, note }) => {
+    "timer.start": ({ key, note, work_kind }) => {
       const current = this.state.timer;
       const now = this.today().toISOString();
+      const kind = work_kind === null || work_kind === undefined ? null : (this.kindForEntry(work_kind, current?.workKindId) ?? "");
       if (key === null || key === undefined) {
         if (current === null) {
           fail("not_found", "There is no paused timer to start again.", { hint: "Name the task to time." });
@@ -4251,14 +4463,22 @@ export class FakeWorkspace {
       const task = this.task(key);
       this.writable(this.projectOf(task).key);
       if (current !== null && current.taskId === task.id) {
+        const kindChanged = kind !== null && (kind === "" ? undefined : kind) !== current.workKindId;
+        if (kindChanged) {
+          if (kind === "") {
+            delete current.workKindId;
+          } else {
+            current.workKindId = kind;
+          }
+        }
         if (current.runningSince === null) {
           current.runningSince = now;
           return { output: this.timerStatus(), changes: [this.timerEvent()] };
         }
-        return { output: this.timerStatus(), changes: [] };
+        return { output: this.timerStatus(), changes: kindChanged ? [this.timerEvent()] : [] };
       }
       const changes = current === null ? [] : this.stopTimer(null, false).changes;
-      this.state.timer = { taskId: task.id, startedAt: now, runningSince: now, elapsedMs: 0, note: note ?? "" };
+      this.state.timer = { taskId: task.id, startedAt: now, runningSince: now, elapsedMs: 0, note: note ?? "", ...(kind === null || kind === "" ? {} : { workKindId: kind }) };
       return { output: this.timerStatus(), changes: [...changes, this.timerEvent()] };
     },
     "timer.pause": () => {
@@ -4273,12 +4493,13 @@ export class FakeWorkspace {
       current.runningSince = null;
       return { output: this.timerStatus(), changes: [this.timerEvent()] };
     },
-    "timer.stop": ({ discard, duration, note }) => {
+    "timer.stop": ({ discard, duration, note, work_kind }) => {
       if (this.state.timer === null) {
         fail("not_found", "No timer runs.");
       }
       const minutes = duration === null || duration === undefined ? null : this.entryMinutes(duration, "duration");
-      const stopped = this.stopTimer(minutes, discard === true, note ?? undefined);
+      const kind = work_kind === null || work_kind === undefined ? undefined : (this.kindForEntry(work_kind, this.state.timer.workKindId) ?? null);
+      const stopped = this.stopTimer(minutes, discard === true, note ?? undefined, kind);
       return { output: stopped.output, changes: [...stopped.changes, this.timerEvent()] };
     },
 

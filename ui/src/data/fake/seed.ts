@@ -317,6 +317,8 @@ export function seed(today: Date, seedNumber = 7): FakeState {
     activity: [],
     layouts: {},
     timeEntries: [],
+    // Kinds of work for logged time, as a workspace would set them up.
+    workKinds: ["Development", "Design", "Meeting"].map((name) => ({ id: nextId("wk"), name, archived: false })),
     timer: null,
     reminders: [],
     settings: {

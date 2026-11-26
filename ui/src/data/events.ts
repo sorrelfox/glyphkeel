@@ -47,7 +47,9 @@ export const ENTITY_QUERIES: Readonly<Record<string, readonly OpId[]>> = {
   // The Gantt chart draws blocks links as dependencies.
   relation: ["task.get", "board.get", "task.search", "schedule.get", "schedule.preview_move"],
   // Cards and the task show the time spent; the report adds it up.
-  time_entry: ["trash.list", "task.get", "board.get", "time.report", "task.search"],
+  time_entry: ["trash.list", "task.get", "board.get", "time.report", "task.search", "work_kind.list"],
+  // Kinds of work: their list, and the entries and reports that name them.
+  work_kind: ["work_kind.list", "task.get", "time.report", "timer.get"],
   // The one timer: its chip, the task's timer button, and `workspace.get`, which carries it.
   timer: ["timer.get", "workspace.get", "today.get"],
   // Saved views of the list.

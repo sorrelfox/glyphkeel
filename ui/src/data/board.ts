@@ -6,6 +6,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { useAskCloseDuplicates } from "../components/DuplicatePrompt";
 import { useToasts } from "../components/Toasts";
 import { type LayoutChange, type LayoutUpdateInput, type ProjectList, type TaskCreateInput, type TaskUpdateInput } from "../generated/ops";
 import { useT } from "../i18n/I18n";
@@ -177,6 +178,15 @@ export interface Move {
   place: Place;
 }
 
+const isClosed = (category: string | undefined) => category === "done" || category === "cancelled";
+
+/** Whether a move takes a card from an open column into a closed one. */
+export function closesCard(board: Board, move: Move): boolean {
+  const from = board.columns.find((column) => column.cards.some((card) => card.key === move.key));
+  const to = board.columns.find((column) => column.id === move.column);
+  return to !== undefined && isClosed(to.category) && !isClosed(from?.category);
+}
+
 /** The board with one card moved, as it will look once the engine agrees. */
 export function moveOnBoard(board: Board, move: Move): Board {
   const card = cardsOf(board).get(move.key);
@@ -214,8 +224,12 @@ export function useMoveTask(board: { project: string; layout: { include_subproje
   const toasts = useToasts();
   const t = useT();
   const key = opKey("board.get", boardInput(board.project, board.layout.include_subprojects, showOlder));
+  const ask = useAskCloseDuplicates();
   const mutation = useMutation({
-    mutationFn: ({ move }: { move: Move; before: Board | undefined }) => call("task.move", { key: move.key, status: move.status, ...move.place }),
+    mutationFn: async ({ move, before }: { move: Move; before: Board | undefined }) => {
+      const close = await ask(move.key, before !== undefined && closesCard(before, move));
+      return call("task.move", { key: move.key, status: move.status, ...move.place, ...(close === undefined ? {} : { close_duplicates: close }) });
+    },
     onError: (error: OpFailure, { before }) => {
       if (before) {
         queryClient.setQueryData(key, before);

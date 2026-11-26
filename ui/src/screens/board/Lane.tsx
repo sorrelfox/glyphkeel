@@ -116,12 +116,39 @@ interface LaneProps {
   onScroller?: (run: ((index: number) => void) | null) => void;
 }
 
+/** The count in a column's header: alone, against the WIP limit, or against the minimum and the limit. */
+function laneCount(t: ReturnType<typeof useT>, count: number, limit: number | undefined, min: number | undefined): string | number {
+  if (min !== undefined && limit !== undefined) {
+    return t("lane-wip-range", { count, min, limit });
+  }
+  if (min !== undefined) {
+    return t("lane-wip-min", { count, min });
+  }
+  return limit === undefined ? count : t("lane-wip", { count, limit });
+}
+
+/** The column's accessible name, with its WIP limit and minimum. */
+function laneLabel(t: ReturnType<typeof useT>, name: string, count: number, limit: number | undefined, min: number | undefined, under: boolean): string {
+  if (under && min !== undefined) {
+    return t("lane-label-under", { name, count, min });
+  }
+  if (min !== undefined && limit !== undefined) {
+    return t("lane-label-wip-range", { name, count, min, limit });
+  }
+  if (min !== undefined) {
+    return t("lane-label-wip-min", { name, count, min });
+  }
+  return limit === undefined ? t("lane-label", { name, count }) : t("lane-label-wip", { name, count, limit });
+}
+
 /** One board column: its header with the count and WIP limit, its cards, and the inline Add task field. */
 export function Lane({ lane, keys, cards, handlers, active, closed, reason, hot, adding, menu, templates = [], onAdd, onCreate, onStopAdding, onShowOlder, onScroller }: LaneProps) {
   const t = useT();
   const { column } = lane;
   const limit = column.wip_limit;
+  const min = column.wip_min;
   const over = limit !== undefined && lane.total > limit;
+  const under = min !== undefined && lane.total < min;
   // A virtual lane hands over how to bring an index into view, for keyboard moves.
   const [scrollTo, setScrollTo] = useState<{ run: (index: number) => void } | null>(null);
   const data: LaneData = { kind: "lane", cards: keys, closed, scrollTo: scrollTo?.run };
@@ -133,15 +160,15 @@ export function Lane({ lane, keys, cards, handlers, active, closed, reason, hot,
   }, [onScroller, scrollTo]);
   const { setNodeRef } = useDroppable({ id: column.id, data, disabled: closed });
   const body = keys.length > VIRTUAL_OVER;
-  const label = limit === undefined ? t("lane-label", { name: column.name, count: lane.total }) : t("lane-label-wip", { name: column.name, count: lane.total, limit });
+  const label = laneLabel(t, column.name, lane.total, limit, min, under);
 
   return (
     <section className={classes("lane", styles.lane, hot && !closed && styles.hot, closed && active !== null && styles.closedLane)} aria-label={label} data-lane={column.id}>
       <header className={styles.laneHeader}>
         <span className={`dot hue-${column.hue}`} />
         <h2 className={styles.laneName}>{column.name}</h2>
-        <span className={classes("count", over && "over")} data-testid="lane-count">
-          {limit === undefined ? lane.total : t("lane-wip", { count: lane.total, limit })}
+        <span className={classes("count", over && "over", under && "under")} data-testid="lane-count" title={under ? t("lane-under-minimum", { count: lane.total, min }) : undefined}>
+          {laneCount(t, lane.total, limit, min)}
         </span>
         <div className="grow" />
         <Button className="btn flat icon sm" aria-label={t("lane-add", { name: column.name })} onPress={onAdd}>

@@ -1298,7 +1298,7 @@ fn write(
         for s in &proj.file.statuses {
             tx.prepare_cached(
                 "INSERT INTO statuses (id, project_id, name, name_fold, category, hue, rank,
-                   wip_limit, rules) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                   wip_limit, rules, wip_min) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             )?
             .execute(params![
                 b(plan.id(&s.id)),
@@ -1309,7 +1309,9 @@ fn write(
                 s.hue,
                 s.rank,
                 s.wip_limit,
-                rules_text(s.rules.as_ref(), plan)
+                rules_text(s.rules.as_ref(), plan),
+                s.wip_min
+                    .filter(|n| *n > 0 && s.wip_limit.is_none_or(|l| *n <= l))
             ])?;
         }
         for t in &proj.file.types {
@@ -1649,8 +1651,20 @@ fn write(
             }
         }
         for e in &proj.time {
+            // The kind of work comes by name: the workspace's kind of that
+            // name, or a new one.
+            let kind = match e.activity.as_deref().map(str::trim) {
+                Some(name) if !name.is_empty() => Some(work_kind(
+                    tx,
+                    name,
+                    &e.actor_kind,
+                    &e.actor_name,
+                    e.created_at,
+                )?),
+                _ => None,
+            };
             tx.prepare_cached(
-                "INSERT INTO time_entries (id, task_id, work_date, minutes, note, activity,
+                "INSERT INTO time_entries (id, task_id, work_date, minutes, note, work_kind_id,
                    actor_kind, actor_name, session_id, created_at, edited_at, deleted_at,
                    deleted_group, version)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
@@ -1661,7 +1675,7 @@ fn write(
                 e.work_date,
                 e.minutes,
                 e.note,
-                e.activity,
+                kind.map(b),
                 e.actor_kind,
                 e.actor_name,
                 plan.opt(e.session_id.as_ref()),
@@ -1967,4 +1981,34 @@ fn rules_text(rules: Option<&serde_json::Value>, plan: &Plan) -> Option<String> 
         .clone();
     crate::ops::rules::map_custom_fields(&mut rules, &|id| plan.ids.get(&id).copied());
     Some(rules.to_string())
+}
+
+/// The workspace's kind of work named `name` (any case), made when there is
+/// none: imported time keeps its kind by name.
+fn work_kind(
+    tx: &Transaction<'_>,
+    name: &str,
+    actor_kind: &str,
+    actor_name: &str,
+    at: i64,
+) -> Result<Id, Failure> {
+    let name: String = name.chars().take(60).collect();
+    let found: Option<Id> = tx
+        .query_row(
+            "SELECT id FROM work_kinds WHERE name_fold = ?1",
+            [fold(&name)],
+            |r| crate::ops::lookup::id_at(r, 0),
+        )
+        .optional()?;
+    if let Some(id) = found {
+        return Ok(id);
+    }
+    let id = Id::generate_at(u64::try_from(at).unwrap_or(0));
+    tx.execute(
+        "INSERT INTO work_kinds (id, name, name_fold, created_at, created_by_kind, created_by_name,
+                                 updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?4)",
+        params![b(id), name, fold(&name), at, actor_kind, actor_name],
+    )?;
+    Ok(id)
 }

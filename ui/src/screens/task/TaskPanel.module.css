@@ -638,3 +638,15 @@
 .ruleNote {
   margin: 0;
 }
+
+/* The lag of a blocks link: a number and Save. */
+.lagDialog {
+  padding: 10px;
+  outline: none;
+}
+
+.lagForm {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}

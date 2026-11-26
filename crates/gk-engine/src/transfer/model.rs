@@ -263,6 +263,9 @@ pub(crate) struct Status {
     pub(crate) hue: String,
     pub(crate) rank: String,
     pub(crate) wip_limit: Option<i64>,
+    /// The fewest tasks the column should hold; left out when no minimum.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) wip_min: Option<i64>,
     /// The status's rules; left out when it has none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) rules: Option<serde_json::Value>,
@@ -429,6 +432,7 @@ pub(crate) struct TimeEntry {
     pub(crate) work_date: String,
     pub(crate) minutes: i64,
     pub(crate) note: String,
+    /// The kind of work, by name.
     pub(crate) activity: Option<String>,
     pub(crate) actor_kind: String,
     pub(crate) actor_name: String,

@@ -173,7 +173,7 @@ test("with Also move dependents on, a drag says how many tasks it may move, and 
   await expect.poll(() => datesOf(grid, key)).toEqual(before);
 });
 
-test("dragging from a bar's end to another bar links them; clicking the arrow removes it", async ({ page }) => {
+test("dragging from a bar's end to another bar links them; clicking the arrow offers to remove it", async ({ page }) => {
   const grid = await openGantt(page);
   // Two bars not linked yet, either way round.
   const from = await plainBar(grid);
@@ -207,6 +207,7 @@ test("dragging from a bar's end to another bar links them; clicking the arrow re
     return { x: screen.x, y: screen.y };
   });
   await page.mouse.click(point.x, point.y);
+  await page.getByRole("dialog").getByRole("button", { name: "Remove the dependency" }).click();
   await expect(link).toHaveCount(0);
 });
 

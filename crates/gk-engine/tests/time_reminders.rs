@@ -503,15 +503,15 @@ fn the_report_groups_by_week_month_and_person_and_writes_csv() {
     let lines: Vec<&str> = entries["csv"].as_str().unwrap().split("\r\n").collect();
     assert_eq!(
         lines[0],
-        "date,person_kind,person,project,task,title,minutes,duration,note"
+        "date,person_kind,person,project,task,title,minutes,duration,note,work_kind"
     );
     assert_eq!(
         lines[2],
-        format!("2026-11-02,user,You,WEB,{w},\"Fix, \"\"quickly\"\"\",120,2h,n")
+        format!("2026-11-02,user,You,WEB,{w},\"Fix, \"\"quickly\"\"\",120,2h,n,")
     );
     assert_eq!(
         lines[3],
-        format!("2026-11-03,agent,Helper,DOC,{d},'=Write,30,30m,n")
+        format!("2026-11-03,agent,Helper,DOC,{d},'=Write,30,30m,n,")
     );
     assert_eq!(
         lines.len(),

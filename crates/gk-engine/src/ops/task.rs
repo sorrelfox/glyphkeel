@@ -452,6 +452,7 @@ pub(crate) fn changed_with(
         warnings,
         description_save: None,
         moved: Vec::new(),
+        duplicates_closed: Vec::new(),
     })
 }
 
@@ -1393,6 +1394,7 @@ pub(crate) fn move_task(w: &mut WriteCtx<'_>, input: TaskMoveInput) -> Result<Ta
     lookup::check_version(&task, input.expected_version, &input.key)?;
     super::claim::guard(w, task.id, &input.key, input.override_claim)?;
     let mut warnings = Vec::new();
+    let mut closed_duplicates = Vec::new();
     let to = match &input.project {
         Some(p) => {
             let to = lookup::project(w.tx(), "project", p)?;
@@ -1470,13 +1472,93 @@ pub(crate) fn move_task(w: &mut WriteCtx<'_>, input: TaskMoveInput) -> Result<Ta
                     &[("task", input.key.clone())],
                 ));
             }
+            let duplicates = open_duplicates(w.tx(), task.id)?;
+            match input.close_duplicates {
+                Some(true) => {
+                    for (id, key) in duplicates {
+                        close_duplicate(w, id, status)?;
+                        closed_duplicates.push(key);
+                    }
+                }
+                None if !duplicates.is_empty() => {
+                    let keys: Vec<String> = duplicates.into_iter().map(|(_, k)| k).collect();
+                    warnings.push(messages::text(
+                        "task-open-duplicates",
+                        &[
+                            ("task", input.key.clone()),
+                            ("count", keys.len().to_string()),
+                            ("duplicates", keys.join(", ")),
+                        ],
+                    ));
+                }
+                _ => {}
+            }
         }
     }
     if let Some(target) = target {
         let rank = rank_in_column(w, to.id, status, task.id, target)?;
         fields::set(w, TASK, task.id, pid, "rank", text(rank.as_str()))?;
     }
-    changed(w, task.id, warnings)
+    let mut out = changed(w, task.id, warnings)?;
+    out.duplicates_closed = closed_duplicates;
+    Ok(out)
+}
+
+/// The open, live tasks marked as duplicates of task `id` that the caller
+/// may change, with their keys, by key.
+fn open_duplicates(tx: &Transaction<'_>, id: Id) -> Result<Vec<(Id, String)>, Failure> {
+    let mut stmt = tx.prepare_cached(
+        "SELECT d.id, p.key || '-' || d.number, p.id FROM task_relations r
+           JOIN tasks d ON d.id = r.from_task JOIN projects p ON p.id = d.project_id
+          WHERE r.to_task = ?1 AND r.kind = 'duplicates' AND d.deleted_at IS NULL
+            AND d.closed_at IS NULL AND p.deleted_at IS NULL AND p.state = 'active'
+          ORDER BY p.key, d.number",
+    )?;
+    let rows = stmt
+        .query_map([b(id)], |r| {
+            Ok((id_at(r, 0)?, r.get::<_, String>(1)?, id_at(r, 2)?))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut out = Vec::with_capacity(rows.len());
+    for (task, key, project) in rows {
+        if crate::scope::allows(tx, project)? {
+            out.push((task, key));
+        }
+    }
+    Ok(out)
+}
+
+/// Closes duplicate `id` as its original was closed into `status`: into
+/// that status when it is in the same project, else into its project's
+/// status of the same name, else the first of the same category, else the
+/// first closed one.
+fn close_duplicate(w: &mut WriteCtx<'_>, id: Id, status: Id) -> Result<(), Failure> {
+    let target: Option<Id> = w
+        .tx()
+        .query_row(
+            "SELECT c.id FROM tasks d JOIN statuses o ON o.id = ?2
+               JOIN statuses c ON c.project_id = d.project_id
+              WHERE d.id = ?1 AND c.category IN ('done', 'cancelled')
+              ORDER BY c.id <> o.id, c.name_fold <> o.name_fold, c.category <> o.category,
+                       c.rank, c.id
+              LIMIT 1",
+            params![b(id), b(status)],
+            |r| id_at(r, 0),
+        )
+        .optional()?;
+    let Some(target) = target else {
+        return Ok(());
+    };
+    move_task(
+        w,
+        TaskMoveInput {
+            key: id.to_string(),
+            status: Some(target.to_string()),
+            close_duplicates: Some(false),
+            ..TaskMoveInput::default()
+        },
+    )
+    .map(drop)
 }
 
 /// Gives task `id` a project and a number together (one statement, as the

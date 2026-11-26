@@ -136,6 +136,20 @@ preferences-hours-per-day-about = How long a day is in estimates and logged time
 preferences-days-per-week = Working days per week
 preferences-days-per-week-about = How long a week is, such as 1w.
 preferences-timer = Timer
+work-kinds-title = Kinds of work
+work-kinds-about = Time entries and the timer can be marked with one, and the time report groups by them. A kind that entries use is archived rather than deleted.
+work-kinds-name = Name of { $name }
+work-kinds-entries =
+    { $count ->
+        [0] No entries
+        [one] { $shown } entry
+       *[other] { $shown } entries
+    }
+work-kinds-archived = Archived
+work-kinds-delete = Delete { $name }
+work-kinds-deleted = Kind of work { $name } deleted
+work-kinds-new = New kind of work
+work-kinds-add = Add
 preferences-timer-reminder = Remind about a running timer after
 preferences-timer-reminder-about = A timer still running after this long gets a reminder. 0 never reminds.
 preferences-reminders = Reminders
@@ -356,12 +370,33 @@ toast-project-changed = Project changed
 toast-project-key-changed = Project key changed
 toast-project-archived = Project archived
 dialog-cancel = Cancel
+duplicates-title =
+    { $count ->
+        [one] Close the duplicate too?
+       *[other] Close the duplicates too?
+    }
+duplicates-body =
+    { $count ->
+        [one] { $key } is marked as the original of { $keys }, which is still open.
+       *[other] { $key } is marked as the original of { $count } open tasks: { $keys }.
+    }
+duplicates-close =
+    { $count ->
+        [one] Close it too
+       *[other] Close them too
+    }
+duplicates-keep =
+    { $count ->
+        [one] Leave it open
+       *[other] Leave them open
+    }
 settings-add = Add
 
 status-name = Name
 status-category = Category
 status-colour = Colour
 status-wip = WIP limit
+status-wip-minimum = WIP minimum
 status-move-up = Move up
 status-move-down = Move down
 status-delete = Delete status
@@ -481,6 +516,28 @@ lane-label =
     }
 lane-label-wip = { $name }, { $count } of { $limit } tasks
 lane-wip = { $count } / { $limit }
+lane-wip-range = { $count } / { $min }–{ $limit }
+lane-wip-min = { $count } / { $min }+
+lane-label-wip-range =
+    { $count ->
+        [one] { $name }, 1 task, WIP { $min } to { $limit }
+       *[other] { $name }, { $count } tasks, WIP { $min } to { $limit }
+    }
+lane-label-wip-min =
+    { $count ->
+        [one] { $name }, 1 task, WIP minimum { $min }
+       *[other] { $name }, { $count } tasks, WIP minimum { $min }
+    }
+lane-label-under =
+    { $count ->
+        [one] { $name }, 1 task, below its WIP minimum of { $min }
+       *[other] { $name }, { $count } tasks, below its WIP minimum of { $min }
+    }
+lane-under-minimum =
+    { $count ->
+        [one] 1 task: fewer than the WIP minimum of { $min }
+       *[other] { $count } tasks: fewer than the WIP minimum of { $min }
+    }
 lane-add = Add task to { $name }
 lane-menu = { $name }: column menu
 lane-add-task = Add task
@@ -684,6 +741,20 @@ links-other-placeholder = Key, e.g. TM-12
 links-open = { $kind } { $key }: { $title }
 links-remove = Remove link: { $kind } { $key }
 links-removed = Link removed
+links-lag =
+    { $days ->
+        [one] +1 day
+       *[other] +{ $days } days
+    }
+links-lag-none = No lag
+links-lag-label = Lag in days
+links-lag-edit =
+    { $days ->
+        [0] Lag of the link to { $key }: none. Change it
+        [one] Lag of the link to { $key }: 1 day. Change it
+       *[other] Lag of the link to { $key }: { $days } days. Change it
+    }
+links-lag-changed = Lag changed
 relation-blocks = Blocks
 relation-blocked_by = Blocked by
 relation-relates = Relates to
@@ -797,6 +868,9 @@ history-field-key = Key
 history-field-state = State
 history-field-category = Category
 history-field-wip_limit = WIP limit
+history-field-wip_min = WIP minimum
+history-field-work_kind = Kind of work
+history-work-kind-gone = a deleted kind of work
 history-field-glyph = Shape
 history-field-is_default = Default
 history-field-slug = Address
@@ -834,6 +908,10 @@ time-duration-invalid = Type a duration from 1 minute to 24 hours, such as 1h 30
 time-day = Day
 time-note = Note
 time-note-placeholder = What was done
+time-work-kind = Kind of work
+time-no-work-kind = No kind of work
+timer-kind = Kind of work for the timer
+timer-start-as = Start the timer as
 time-entry-label = { $day }, { $duration }, by { $author }
 time-entry-menu = Time entry actions
 time-edit = Edit
@@ -912,6 +990,10 @@ report-by-month = Month
 report-by-task = Task
 report-by-project = Project
 report-by-person = Person
+report-by-work_kind = Kind of work
+report-work-kind = Kind of work
+report-all-work-kinds = All kinds of work
+report-no-work-kind = No kind of work
 report-agent = Agent
 report-export = Export
 report-export-groups = Export the rows as CSV

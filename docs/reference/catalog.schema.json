@@ -546,6 +546,10 @@
               "task_trashed": {
                 "description": "Whether the task is in the trash; stop the timer with `discard`.",
                 "type": "boolean"
+              },
+              "work_kind": {
+                "$ref": "#/$defs/WorkKindRef",
+                "description": "The kind of work the entry will get; left out when none."
               }
             },
             "required": [
@@ -612,6 +616,25 @@
                 "type": "string"
               }
             ]
+          },
+          "WorkKindRef": {
+            "additionalProperties": false,
+            "description": "A kind of work as entries name it.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -2023,6 +2046,12 @@
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
+              },
+              "wip_min": {
+                "description": "Fewest tasks the column should hold; left out when there is no\nminimum.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
               }
             },
             "required": [
@@ -2861,6 +2890,12 @@
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
+              },
+              "wip_min": {
+                "description": "Fewest tasks the column should hold; left out when there is no\nminimum.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
               }
             },
             "required": [
@@ -3355,6 +3390,15 @@
                   "integer",
                   "null"
                 ]
+              },
+              "wip_min": {
+                "description": "Its WIP minimum, 1 or more and not above the limit; the count shows\na warning while the column holds fewer tasks.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
               }
             },
             "type": "object"
@@ -3365,6 +3409,11 @@
               {
                 "const": "wip_limit",
                 "description": "The WIP limit.",
+                "type": "string"
+              },
+              {
+                "const": "wip_min",
+                "description": "The WIP minimum.",
                 "type": "string"
               }
             ]
@@ -4036,6 +4085,12 @@
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
+              },
+              "wip_min": {
+                "description": "Fewest tasks the column should hold; left out when there is no\nminimum.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
               }
             },
             "required": [
@@ -4678,6 +4733,12 @@
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
+              },
+              "wip_min": {
+                "description": "Fewest tasks the column should hold; left out when there is no\nminimum.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
               }
             },
             "required": [
@@ -5271,6 +5332,12 @@
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
+              },
+              "wip_min": {
+                "description": "Fewest tasks the column should hold; left out when there is no\nminimum.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
               }
             },
             "required": [
@@ -5856,6 +5923,12 @@
               },
               "wip_limit": {
                 "description": "Most tasks the column should hold; left out when there is no limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "wip_min": {
+                "description": "Fewest tasks the column should hold; left out when there is no\nminimum.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
@@ -6447,6 +6520,12 @@
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
+              },
+              "wip_min": {
+                "description": "Fewest tasks the column should hold; left out when there is no\nminimum.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
               }
             },
             "required": [
@@ -6912,6 +6991,15 @@
               "integer",
               "null"
             ]
+          },
+          "wip_min": {
+            "description": "Its WIP minimum, 1 or more and not above the limit; the count shows\na warning while the column holds fewer tasks.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
           }
         },
         "required": [
@@ -7353,6 +7441,12 @@
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
+              },
+              "wip_min": {
+                "description": "Fewest tasks the column should hold; left out when there is no\nminimum.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
               }
             },
             "required": [
@@ -7577,6 +7671,11 @@
                 "const": "wip_limit",
                 "description": "The WIP limit.",
                 "type": "string"
+              },
+              {
+                "const": "wip_min",
+                "description": "The WIP minimum.",
+                "type": "string"
               }
             ]
           }
@@ -7631,6 +7730,15 @@
           },
           "wip_limit": {
             "description": "A new WIP limit, 1 or more.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "wip_min": {
+            "description": "A new WIP minimum, 1 or more and not above the limit.",
             "format": "uint32",
             "minimum": 0,
             "type": [
@@ -8075,6 +8183,12 @@
               },
               "wip_limit": {
                 "description": "Most tasks the column should hold; left out when there is no limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "wip_min": {
+                "description": "Fewest tasks the column should hold; left out when there is no\nminimum.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
@@ -8713,6 +8827,12 @@
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
+              },
+              "wip_min": {
+                "description": "Fewest tasks the column should hold; left out when there is no\nminimum.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
               }
             },
             "required": [
@@ -9310,6 +9430,12 @@
               },
               "wip_limit": {
                 "description": "Most tasks the column should hold; left out when there is no limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "wip_min": {
+                "description": "Fewest tasks the column should hold; left out when there is no\nminimum.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
@@ -10016,6 +10142,12 @@
               },
               "wip_limit": {
                 "description": "Most tasks the column should hold; left out when there is no limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "wip_min": {
+                "description": "Fewest tasks the column should hold; left out when there is no\nminimum.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
@@ -10776,6 +10908,12 @@
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
+              },
+              "wip_min": {
+                "description": "Fewest tasks the column should hold; left out when there is no\nminimum.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
               }
             },
             "required": [
@@ -11373,6 +11511,12 @@
               },
               "wip_limit": {
                 "description": "Most tasks the column should hold; left out when there is no limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "wip_min": {
+                "description": "Fewest tasks the column should hold; left out when there is no\nminimum.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
@@ -12029,6 +12173,12 @@
               },
               "wip_limit": {
                 "description": "Most tasks the column should hold; left out when there is no limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "wip_min": {
+                "description": "Fewest tasks the column should hold; left out when there is no\nminimum.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
@@ -12695,6 +12845,12 @@
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
+              },
+              "wip_min": {
+                "description": "Fewest tasks the column should hold; left out when there is no\nminimum.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
               }
             },
             "required": [
@@ -13285,6 +13441,12 @@
               },
               "wip_limit": {
                 "description": "Most tasks the column should hold; left out when there is no limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "wip_min": {
+                "description": "Fewest tasks the column should hold; left out when there is no\nminimum.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
@@ -17647,6 +17809,11 @@
                 "$ref": "#/$defs/LinkKind",
                 "description": "How the link reads from this task."
               },
+              "lag_days": {
+                "description": "For `blocks` and `blocked_by`: the days between the end of the\nblocking task and the start of the blocked one; left out when none.",
+                "format": "int64",
+                "type": "integer"
+              },
               "task": {
                 "$ref": "#/$defs/TaskRef",
                 "description": "The task at the other end."
@@ -18449,6 +18616,10 @@
                 "description": "Goes up by one with every edit; pass it as `expected_version`.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "work_kind": {
+                "$ref": "#/$defs/WorkKindRef",
+                "description": "The kind of work; left out when none."
               }
             },
             "required": [
@@ -18648,6 +18819,25 @@
               "title",
               "slug",
               "id"
+            ],
+            "type": "object"
+          },
+          "WorkKindRef": {
+            "additionalProperties": false,
+            "description": "A kind of work as entries name it.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
             ],
             "type": "object"
           }
@@ -19501,6 +19691,11 @@
               "kind": {
                 "$ref": "#/$defs/LinkKind",
                 "description": "How the link reads from this task."
+              },
+              "lag_days": {
+                "description": "For `blocks` and `blocked_by`: the days between the end of the\nblocking task and the start of the blocked one; left out when none.",
+                "format": "int64",
+                "type": "integer"
               },
               "task": {
                 "$ref": "#/$defs/TaskRef",
@@ -20362,6 +20557,10 @@
                 "description": "Goes up by one with every edit; pass it as `expected_version`.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "work_kind": {
+                "$ref": "#/$defs/WorkKindRef",
+                "description": "The kind of work; left out when none."
               }
             },
             "required": [
@@ -20563,6 +20762,25 @@
               "id"
             ],
             "type": "object"
+          },
+          "WorkKindRef": {
+            "additionalProperties": false,
+            "description": "A kind of work as entries name it.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -20572,6 +20790,13 @@
           "description_save": {
             "$ref": "#/$defs/DescriptionSave",
             "description": "What became of a new description: saved, merged with another edit,\nor kept as a conflict copy."
+          },
+          "duplicates_closed": {
+            "description": "The duplicates closed with the task (`close_duplicates`), by key.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "group": {
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
@@ -21562,6 +21787,11 @@
                 "$ref": "#/$defs/LinkKind",
                 "description": "How the link reads from this task."
               },
+              "lag_days": {
+                "description": "For `blocks` and `blocked_by`: the days between the end of the\nblocking task and the start of the blocked one; left out when none.",
+                "format": "int64",
+                "type": "integer"
+              },
               "task": {
                 "$ref": "#/$defs/TaskRef",
                 "description": "The task at the other end."
@@ -22422,6 +22652,10 @@
                 "description": "Goes up by one with every edit; pass it as `expected_version`.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "work_kind": {
+                "$ref": "#/$defs/WorkKindRef",
+                "description": "The kind of work; left out when none."
               }
             },
             "required": [
@@ -22623,6 +22857,25 @@
               "id"
             ],
             "type": "object"
+          },
+          "WorkKindRef": {
+            "additionalProperties": false,
+            "description": "A kind of work as entries name it.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -22632,6 +22885,13 @@
           "description_save": {
             "$ref": "#/$defs/DescriptionSave",
             "description": "What became of a new description: saved, merged with another edit,\nor kept as a conflict copy."
+          },
+          "duplicates_closed": {
+            "description": "The duplicates closed with the task (`close_duplicates`), by key.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "group": {
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
@@ -22742,6 +23002,13 @@
             "description": "Place it before this task of the target status.",
             "type": [
               "string",
+              "null"
+            ]
+          },
+          "close_duplicates": {
+            "description": "When the move closes the task: `true` closes the open tasks marked\nas its duplicates too, in the same change (each into the status of\nthe same name in its project, else the first one of the same\ncategory); `false` leaves them open without a warning. Left out, they\nstay open and a warning names them.",
+            "type": [
+              "boolean",
               "null"
             ]
           },
@@ -23425,6 +23692,11 @@
                 "$ref": "#/$defs/LinkKind",
                 "description": "How the link reads from this task."
               },
+              "lag_days": {
+                "description": "For `blocks` and `blocked_by`: the days between the end of the\nblocking task and the start of the blocked one; left out when none.",
+                "format": "int64",
+                "type": "integer"
+              },
               "task": {
                 "$ref": "#/$defs/TaskRef",
                 "description": "The task at the other end."
@@ -24285,6 +24557,10 @@
                 "description": "Goes up by one with every edit; pass it as `expected_version`.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "work_kind": {
+                "$ref": "#/$defs/WorkKindRef",
+                "description": "The kind of work; left out when none."
               }
             },
             "required": [
@@ -24486,6 +24762,25 @@
               "id"
             ],
             "type": "object"
+          },
+          "WorkKindRef": {
+            "additionalProperties": false,
+            "description": "A kind of work as entries name it.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -24495,6 +24790,13 @@
           "description_save": {
             "$ref": "#/$defs/DescriptionSave",
             "description": "What became of a new description: saved, merged with another edit,\nor kept as a conflict copy."
+          },
+          "duplicates_closed": {
+            "description": "The duplicates closed with the task (`close_duplicates`), by key.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "group": {
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
@@ -24527,7 +24829,7 @@
       },
       "output_name": "TaskChange",
       "safety": "write",
-      "summary": "Move a task to another status or place in its column, or to another project (new key; the old one forwards)."
+      "summary": "Move a task to another status or place in its column, or to another project (new key; the old one forwards); closing it can close its duplicates too."
     },
     {
       "cli": "task move-check <keys>",
@@ -25989,6 +26291,11 @@
                 "$ref": "#/$defs/LinkKind",
                 "description": "How the link reads from this task."
               },
+              "lag_days": {
+                "description": "For `blocks` and `blocked_by`: the days between the end of the\nblocking task and the start of the blocked one; left out when none.",
+                "format": "int64",
+                "type": "integer"
+              },
               "task": {
                 "$ref": "#/$defs/TaskRef",
                 "description": "The task at the other end."
@@ -26849,6 +27156,10 @@
                 "description": "Goes up by one with every edit; pass it as `expected_version`.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "work_kind": {
+                "$ref": "#/$defs/WorkKindRef",
+                "description": "The kind of work; left out when none."
               }
             },
             "required": [
@@ -27050,6 +27361,25 @@
               "id"
             ],
             "type": "object"
+          },
+          "WorkKindRef": {
+            "additionalProperties": false,
+            "description": "A kind of work as entries name it.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -27059,6 +27389,13 @@
           "description_save": {
             "$ref": "#/$defs/DescriptionSave",
             "description": "What became of a new description: saved, merged with another edit,\nor kept as a conflict copy."
+          },
+          "duplicates_closed": {
+            "description": "The duplicates closed with the task (`close_duplicates`), by key.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "group": {
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
@@ -27797,6 +28134,11 @@
                 "$ref": "#/$defs/LinkKind",
                 "description": "How the link reads from this task."
               },
+              "lag_days": {
+                "description": "For `blocks` and `blocked_by`: the days between the end of the\nblocking task and the start of the blocked one; left out when none.",
+                "format": "int64",
+                "type": "integer"
+              },
               "task": {
                 "$ref": "#/$defs/TaskRef",
                 "description": "The task at the other end."
@@ -28657,6 +28999,10 @@
                 "description": "Goes up by one with every edit; pass it as `expected_version`.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "work_kind": {
+                "$ref": "#/$defs/WorkKindRef",
+                "description": "The kind of work; left out when none."
               }
             },
             "required": [
@@ -28858,6 +29204,25 @@
               "id"
             ],
             "type": "object"
+          },
+          "WorkKindRef": {
+            "additionalProperties": false,
+            "description": "A kind of work as entries name it.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -28867,6 +29232,13 @@
           "description_save": {
             "$ref": "#/$defs/DescriptionSave",
             "description": "What became of a new description: saved, merged with another edit,\nor kept as a conflict copy."
+          },
+          "duplicates_closed": {
+            "description": "The duplicates closed with the task (`close_duplicates`), by key.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "group": {
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
@@ -29842,6 +30214,11 @@
                 "$ref": "#/$defs/LinkKind",
                 "description": "How the link reads from this task."
               },
+              "lag_days": {
+                "description": "For `blocks` and `blocked_by`: the days between the end of the\nblocking task and the start of the blocked one; left out when none.",
+                "format": "int64",
+                "type": "integer"
+              },
               "task": {
                 "$ref": "#/$defs/TaskRef",
                 "description": "The task at the other end."
@@ -30702,6 +31079,10 @@
                 "description": "Goes up by one with every edit; pass it as `expected_version`.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "work_kind": {
+                "$ref": "#/$defs/WorkKindRef",
+                "description": "The kind of work; left out when none."
               }
             },
             "required": [
@@ -30903,6 +31284,25 @@
               "id"
             ],
             "type": "object"
+          },
+          "WorkKindRef": {
+            "additionalProperties": false,
+            "description": "A kind of work as entries name it.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -30912,6 +31312,13 @@
           "description_save": {
             "$ref": "#/$defs/DescriptionSave",
             "description": "What became of a new description: saved, merged with another edit,\nor kept as a conflict copy."
+          },
+          "duplicates_closed": {
+            "description": "The duplicates closed with the task (`close_duplicates`), by key.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "group": {
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
@@ -31630,6 +32037,11 @@
                 "$ref": "#/$defs/LinkKind",
                 "description": "How the link reads from this task."
               },
+              "lag_days": {
+                "description": "For `blocks` and `blocked_by`: the days between the end of the\nblocking task and the start of the blocked one; left out when none.",
+                "format": "int64",
+                "type": "integer"
+              },
               "task": {
                 "$ref": "#/$defs/TaskRef",
                 "description": "The task at the other end."
@@ -32490,6 +32902,10 @@
                 "description": "Goes up by one with every edit; pass it as `expected_version`.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "work_kind": {
+                "$ref": "#/$defs/WorkKindRef",
+                "description": "The kind of work; left out when none."
               }
             },
             "required": [
@@ -32691,6 +33107,25 @@
               "id"
             ],
             "type": "object"
+          },
+          "WorkKindRef": {
+            "additionalProperties": false,
+            "description": "A kind of work as entries name it.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -32700,6 +33135,13 @@
           "description_save": {
             "$ref": "#/$defs/DescriptionSave",
             "description": "What became of a new description: saved, merged with another edit,\nor kept as a conflict copy."
+          },
+          "duplicates_closed": {
+            "description": "The duplicates closed with the task (`close_duplicates`), by key.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "group": {
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
@@ -33411,6 +33853,11 @@
                 "$ref": "#/$defs/LinkKind",
                 "description": "How the link reads from this task."
               },
+              "lag_days": {
+                "description": "For `blocks` and `blocked_by`: the days between the end of the\nblocking task and the start of the blocked one; left out when none.",
+                "format": "int64",
+                "type": "integer"
+              },
               "task": {
                 "$ref": "#/$defs/TaskRef",
                 "description": "The task at the other end."
@@ -34271,6 +34718,10 @@
                 "description": "Goes up by one with every edit; pass it as `expected_version`.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "work_kind": {
+                "$ref": "#/$defs/WorkKindRef",
+                "description": "The kind of work; left out when none."
               }
             },
             "required": [
@@ -34472,6 +34923,25 @@
               "id"
             ],
             "type": "object"
+          },
+          "WorkKindRef": {
+            "additionalProperties": false,
+            "description": "A kind of work as entries name it.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -34481,6 +34951,13 @@
           "description_save": {
             "$ref": "#/$defs/DescriptionSave",
             "description": "What became of a new description: saved, merged with another edit,\nor kept as a conflict copy."
+          },
+          "duplicates_closed": {
+            "description": "The duplicates closed with the task (`close_duplicates`), by key.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "group": {
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
@@ -34583,6 +35060,14 @@
           "kind": {
             "$ref": "#/$defs/RelationKind",
             "description": "How the link reads from this task. `subtask_of` and `parent_of`\nchange the parent instead of adding a link."
+          },
+          "lag_days": {
+            "description": "For `blocks` and `blocked_by` with `relation.add`: the days that must\npass after the blocking task ends before the blocked one may begin\n(finish-to-start plus a lag), 0 to 365. On an existing link it\nchanges the lag; 0 removes it.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "other": {
             "description": "The other task: its key or ID.",
@@ -35235,6 +35720,11 @@
                 "$ref": "#/$defs/LinkKind",
                 "description": "How the link reads from this task."
               },
+              "lag_days": {
+                "description": "For `blocks` and `blocked_by`: the days between the end of the\nblocking task and the start of the blocked one; left out when none.",
+                "format": "int64",
+                "type": "integer"
+              },
               "task": {
                 "$ref": "#/$defs/TaskRef",
                 "description": "The task at the other end."
@@ -36095,6 +36585,10 @@
                 "description": "Goes up by one with every edit; pass it as `expected_version`.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "work_kind": {
+                "$ref": "#/$defs/WorkKindRef",
+                "description": "The kind of work; left out when none."
               }
             },
             "required": [
@@ -36296,6 +36790,25 @@
               "id"
             ],
             "type": "object"
+          },
+          "WorkKindRef": {
+            "additionalProperties": false,
+            "description": "A kind of work as entries name it.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -36305,6 +36818,13 @@
           "description_save": {
             "$ref": "#/$defs/DescriptionSave",
             "description": "What became of a new description: saved, merged with another edit,\nor kept as a conflict copy."
+          },
+          "duplicates_closed": {
+            "description": "The duplicates closed with the task (`close_duplicates`), by key.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "group": {
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
@@ -36337,7 +36857,7 @@
       },
       "output_name": "TaskChange",
       "safety": "write",
-      "summary": "Link two tasks (blocks, relates, duplicates, clones, or make one a subtask of the other)."
+      "summary": "Link two tasks (blocks, with an optional lag in days; relates, duplicates, clones; or make one a subtask of the other)."
     },
     {
       "cli": "task unlink <key>",
@@ -36407,6 +36927,14 @@
           "kind": {
             "$ref": "#/$defs/RelationKind",
             "description": "How the link reads from this task. `subtask_of` and `parent_of`\nchange the parent instead of adding a link."
+          },
+          "lag_days": {
+            "description": "For `blocks` and `blocked_by` with `relation.add`: the days that must\npass after the blocking task ends before the blocked one may begin\n(finish-to-start plus a lag), 0 to 365. On an existing link it\nchanges the lag; 0 removes it.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "other": {
             "description": "The other task: its key or ID.",
@@ -37059,6 +37587,11 @@
                 "$ref": "#/$defs/LinkKind",
                 "description": "How the link reads from this task."
               },
+              "lag_days": {
+                "description": "For `blocks` and `blocked_by`: the days between the end of the\nblocking task and the start of the blocked one; left out when none.",
+                "format": "int64",
+                "type": "integer"
+              },
               "task": {
                 "$ref": "#/$defs/TaskRef",
                 "description": "The task at the other end."
@@ -37919,6 +38452,10 @@
                 "description": "Goes up by one with every edit; pass it as `expected_version`.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "work_kind": {
+                "$ref": "#/$defs/WorkKindRef",
+                "description": "The kind of work; left out when none."
               }
             },
             "required": [
@@ -38120,6 +38657,25 @@
               "id"
             ],
             "type": "object"
+          },
+          "WorkKindRef": {
+            "additionalProperties": false,
+            "description": "A kind of work as entries name it.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -38129,6 +38685,13 @@
           "description_save": {
             "$ref": "#/$defs/DescriptionSave",
             "description": "What became of a new description: saved, merged with another edit,\nor kept as a conflict copy."
+          },
+          "duplicates_closed": {
+            "description": "The duplicates closed with the task (`close_duplicates`), by key.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "group": {
             "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
@@ -40572,6 +41135,15 @@
                   "integer",
                   "null"
                 ]
+              },
+              "wip_min": {
+                "description": "Fewest tasks the column should hold.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
               }
             },
             "required": [
@@ -41528,6 +42100,15 @@
               },
               "wip_limit": {
                 "description": "Most tasks the column should hold.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "wip_min": {
+                "description": "Fewest tasks the column should hold.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": [
@@ -42960,6 +43541,11 @@
                 "$ref": "#/$defs/LinkKind",
                 "description": "How the link reads from this task."
               },
+              "lag_days": {
+                "description": "For `blocks` and `blocked_by`: the days between the end of the\nblocking task and the start of the blocked one; left out when none.",
+                "format": "int64",
+                "type": "integer"
+              },
               "task": {
                 "$ref": "#/$defs/TaskRef",
                 "description": "The task at the other end."
@@ -43665,6 +44251,12 @@
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
+              },
+              "wip_min": {
+                "description": "Fewest tasks the column should hold; left out when there is no\nminimum.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
               }
             },
             "required": [
@@ -44149,6 +44741,10 @@
                 "description": "Goes up by one with every edit; pass it as `expected_version`.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "work_kind": {
+                "$ref": "#/$defs/WorkKindRef",
+                "description": "The kind of work; left out when none."
               }
             },
             "required": [
@@ -44348,6 +44944,25 @@
               "title",
               "slug",
               "id"
+            ],
+            "type": "object"
+          },
+          "WorkKindRef": {
+            "additionalProperties": false,
+            "description": "A kind of work as entries name it.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
             ],
             "type": "object"
           }
@@ -46797,6 +47412,13 @@
               "string",
               "null"
             ]
+          },
+          "work_kind": {
+            "description": "The kind of work: its name (any case) or ID, from `work_kind.list`.",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -46890,6 +47512,10 @@
                 "description": "Goes up by one with every edit; pass it as `expected_version`.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "work_kind": {
+                "$ref": "#/$defs/WorkKindRef",
+                "description": "The kind of work; left out when none."
               }
             },
             "required": [
@@ -46901,6 +47527,25 @@
               "author",
               "created_at",
               "version"
+            ],
+            "type": "object"
+          },
+          "WorkKindRef": {
+            "additionalProperties": false,
+            "description": "A kind of work as entries name it.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
             ],
             "type": "object"
           }
@@ -46938,7 +47583,7 @@
       },
       "output_name": "TimeEntryChange",
       "safety": "write",
-      "summary": "Log time on a task: a duration, the day of the work (default today) and a note."
+      "summary": "Log time on a task: a duration, the day of the work (default today), a note and a kind of work."
     },
     {
       "cli": "time edit <entry>",
@@ -46977,6 +47622,13 @@
           },
           "note": {
             "description": "The new note; an empty text removes it.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "work_kind": {
+            "description": "The new kind of work (name or ID); an empty text removes it.",
             "type": [
               "string",
               "null"
@@ -47073,6 +47725,10 @@
                 "description": "Goes up by one with every edit; pass it as `expected_version`.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "work_kind": {
+                "$ref": "#/$defs/WorkKindRef",
+                "description": "The kind of work; left out when none."
               }
             },
             "required": [
@@ -47084,6 +47740,25 @@
               "author",
               "created_at",
               "version"
+            ],
+            "type": "object"
+          },
+          "WorkKindRef": {
+            "additionalProperties": false,
+            "description": "A kind of work as entries name it.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
             ],
             "type": "object"
           }
@@ -47121,7 +47796,7 @@
       },
       "output_name": "TimeEntryChange",
       "safety": "write",
-      "summary": "Change a time entry's duration, day or note."
+      "summary": "Change a time entry's duration, day, note or kind of work."
     },
     {
       "cli": "time delete <entry>",
@@ -47227,6 +47902,10 @@
                 "description": "Goes up by one with every edit; pass it as `expected_version`.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "work_kind": {
+                "$ref": "#/$defs/WorkKindRef",
+                "description": "The kind of work; left out when none."
               }
             },
             "required": [
@@ -47238,6 +47917,25 @@
               "author",
               "created_at",
               "version"
+            ],
+            "type": "object"
+          },
+          "WorkKindRef": {
+            "additionalProperties": false,
+            "description": "A kind of work as entries name it.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
             ],
             "type": "object"
           }
@@ -47315,6 +48013,11 @@
                 "const": "person",
                 "description": "By the person or agent who logged the time.",
                 "type": "string"
+              },
+              {
+                "const": "work_kind",
+                "description": "By kind of work; time without one is a group of its own.",
+                "type": "string"
               }
             ]
           },
@@ -47370,7 +48073,7 @@
                 "type": "null"
               }
             ],
-            "description": "How to group: `day`, `week`, `month`, `task` (default), `project`\nor `person`."
+            "description": "How to group: `day`, `week`, `month`, `task` (default), `project`,\n`person` or `work_kind`."
           },
           "include_subprojects": {
             "description": "With `project`: its sub-projects' time too; default true.",
@@ -47402,6 +48105,13 @@
           },
           "to": {
             "description": "The last day, included; default six days after `from`. At most 366\ndays after `from`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "work_kind": {
+            "description": "Only the time of this kind of work (name or ID), or `none` for time\nwithout one.",
             "type": [
               "string",
               "null"
@@ -47495,6 +48205,10 @@
                 "description": "Goes up by one with every edit; pass it as `expected_version`.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "work_kind": {
+                "$ref": "#/$defs/WorkKindRef",
+                "description": "The kind of work; left out when none."
               }
             },
             "required": [
@@ -47541,6 +48255,11 @@
                 "const": "person",
                 "description": "By the person or agent who logged the time.",
                 "type": "string"
+              },
+              {
+                "const": "work_kind",
+                "description": "By kind of work; time without one is a group of its own.",
+                "type": "string"
               }
             ]
           },
@@ -47559,7 +48278,7 @@
                 "type": "integer"
               },
               "key": {
-                "description": "The day; the week's first day; the month (`YYYY-MM`); the task's\nor the project's key; or the person (`user:Name`, `agent:Name`).",
+                "description": "The day; the week's first day; the month (`YYYY-MM`); the task's\nor the project's key; the person (`user:Name`, `agent:Name`); or\nthe kind of work's ID (`none` for time without one).",
                 "type": "string"
               },
               "minutes": {
@@ -47572,7 +48291,7 @@
                 "description": "The person or agent, when grouped by person."
               },
               "title": {
-                "description": "The weekday; the week's days (`2026-11-23..2026-11-29`); the month;\nthe task's title; the project's name; or the person's name.",
+                "description": "The weekday; the week's days (`2026-11-23..2026-11-29`); the month;\nthe task's title; the project's name; the person's name; or the kind\nof work's name (empty for time without one).",
                 "type": "string"
               }
             },
@@ -47582,6 +48301,25 @@
               "minutes",
               "duration",
               "entry_count"
+            ],
+            "type": "object"
+          },
+          "WorkKindRef": {
+            "additionalProperties": false,
+            "description": "A kind of work as entries name it.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
             ],
             "type": "object"
           }
@@ -47657,7 +48395,346 @@
       },
       "output_name": "TimeReport",
       "safety": "read",
-      "summary": "Logged time over a range of days, grouped by day, week, month, task, project or person, with totals in the workspace's units and optional CSV."
+      "summary": "Logged time over a range of days, grouped by day, week, month, task, project, person or kind of work, with totals in the workspace's units and optional CSV."
+    },
+    {
+      "cli": "work-kind list",
+      "exposure": "data",
+      "id": "work_kind.list",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Which kinds of work to list.",
+        "properties": {
+          "include_archived": {
+            "default": false,
+            "description": "Also the archived ones.",
+            "type": "boolean"
+          }
+        },
+        "title": "WorkKindListInput",
+        "type": "object"
+      },
+      "input_name": "WorkKindListInput",
+      "kind": "query",
+      "mcp_tool": "list_work_kinds",
+      "output": {
+        "$defs": {
+          "WorkKind": {
+            "additionalProperties": false,
+            "description": "A kind of work of the workspace.",
+            "properties": {
+              "archived": {
+                "description": "Archived: kept for the entries that name it, not offered for new\ntime.",
+                "type": "boolean"
+              },
+              "entries": {
+                "description": "How many live entries name it.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "entries"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The workspace's kinds of work, by name.",
+        "properties": {
+          "items": {
+            "description": "The kinds.",
+            "items": {
+              "$ref": "#/$defs/WorkKind"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "WorkKindList",
+        "type": "object"
+      },
+      "output_name": "WorkKindList",
+      "safety": "read",
+      "summary": "The workspace's kinds of work for logged time (Development, Design, Meeting…), by name, with how many entries use each."
+    },
+    {
+      "cli": "work-kind create",
+      "exposure": "data",
+      "id": "work_kind.create",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A new kind of work.",
+        "properties": {
+          "name": {
+            "description": "Its name, 1 to 60 characters, unique in the workspace (any case).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "WorkKindCreateInput",
+        "type": "object"
+      },
+      "input_name": "WorkKindCreateInput",
+      "kind": "command",
+      "mcp_tool": "create_work_kind",
+      "output": {
+        "$defs": {
+          "WorkKind": {
+            "additionalProperties": false,
+            "description": "A kind of work of the workspace.",
+            "properties": {
+              "archived": {
+                "description": "Archived: kept for the entries that name it, not offered for new\ntime.",
+                "type": "boolean"
+              },
+              "entries": {
+                "description": "How many live entries name it.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "entries"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A kind of work after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether it was deleted.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/$defs/WorkKind",
+            "description": "The kind after the change; as it was, when deleted."
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "WorkKindChange",
+        "type": "object"
+      },
+      "output_name": "WorkKindChange",
+      "safety": "write",
+      "summary": "Add a kind of work that time entries can be marked with."
+    },
+    {
+      "cli": "work-kind edit <kind>",
+      "exposure": "data",
+      "id": "work_kind.update",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Changes to a kind of work.",
+        "properties": {
+          "archived": {
+            "description": "Archive it (`true`) or offer it again (`false`).",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "kind": {
+            "description": "The kind: its name (any case) or ID.",
+            "type": "string"
+          },
+          "name": {
+            "description": "A new name.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "WorkKindUpdateInput",
+        "type": "object"
+      },
+      "input_name": "WorkKindUpdateInput",
+      "kind": "command",
+      "mcp_tool": "update_work_kind",
+      "output": {
+        "$defs": {
+          "WorkKind": {
+            "additionalProperties": false,
+            "description": "A kind of work of the workspace.",
+            "properties": {
+              "archived": {
+                "description": "Archived: kept for the entries that name it, not offered for new\ntime.",
+                "type": "boolean"
+              },
+              "entries": {
+                "description": "How many live entries name it.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "entries"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A kind of work after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether it was deleted.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/$defs/WorkKind",
+            "description": "The kind after the change; as it was, when deleted."
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "WorkKindChange",
+        "type": "object"
+      },
+      "output_name": "WorkKindChange",
+      "safety": "write",
+      "summary": "Rename a kind of work, or archive it so it is no longer offered while its entries keep it."
+    },
+    {
+      "cli": "work-kind delete <kind>",
+      "exposure": "data",
+      "id": "work_kind.delete",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Names one kind of work.",
+        "properties": {
+          "kind": {
+            "description": "The kind: its name (any case) or ID.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "WorkKindDeleteInput",
+        "type": "object"
+      },
+      "input_name": "WorkKindDeleteInput",
+      "kind": "command",
+      "mcp_tool": "delete_work_kind",
+      "output": {
+        "$defs": {
+          "WorkKind": {
+            "additionalProperties": false,
+            "description": "A kind of work of the workspace.",
+            "properties": {
+              "archived": {
+                "description": "Archived: kept for the entries that name it, not offered for new\ntime.",
+                "type": "boolean"
+              },
+              "entries": {
+                "description": "How many live entries name it.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "entries"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A kind of work after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether it was deleted.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/$defs/WorkKind",
+            "description": "The kind after the change; as it was, when deleted."
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "WorkKindChange",
+        "type": "object"
+      },
+      "output_name": "WorkKindChange",
+      "safety": "write",
+      "summary": "Delete a kind of work that no time entry names; archive one that is in use."
     },
     {
       "cli": "report created-closed",
@@ -48842,6 +49919,10 @@
               "task_trashed": {
                 "description": "Whether the task is in the trash; stop the timer with `discard`.",
                 "type": "boolean"
+              },
+              "work_kind": {
+                "$ref": "#/$defs/WorkKindRef",
+                "description": "The kind of work the entry will get; left out when none."
               }
             },
             "required": [
@@ -48868,6 +49949,25 @@
                 "type": "string"
               }
             ]
+          },
+          "WorkKindRef": {
+            "additionalProperties": false,
+            "description": "A kind of work as entries name it.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -48904,6 +50004,13 @@
           },
           "note": {
             "description": "The note the entry will get, at most 2000 characters.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "work_kind": {
+            "description": "The kind of work the entry will get (name or ID); an empty text\nremoves it.",
             "type": [
               "string",
               "null"
@@ -49080,6 +50187,10 @@
                 "description": "Goes up by one with every edit; pass it as `expected_version`.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "work_kind": {
+                "$ref": "#/$defs/WorkKindRef",
+                "description": "The kind of work; left out when none."
               }
             },
             "required": [
@@ -49134,6 +50245,10 @@
               "task_trashed": {
                 "description": "Whether the task is in the trash; stop the timer with `discard`.",
                 "type": "boolean"
+              },
+              "work_kind": {
+                "$ref": "#/$defs/WorkKindRef",
+                "description": "The kind of work the entry will get; left out when none."
               }
             },
             "required": [
@@ -49160,6 +50275,25 @@
                 "type": "string"
               }
             ]
+          },
+          "WorkKindRef": {
+            "additionalProperties": false,
+            "description": "A kind of work as entries name it.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -49371,6 +50505,10 @@
                 "description": "Goes up by one with every edit; pass it as `expected_version`.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "work_kind": {
+                "$ref": "#/$defs/WorkKindRef",
+                "description": "The kind of work; left out when none."
               }
             },
             "required": [
@@ -49425,6 +50563,10 @@
               "task_trashed": {
                 "description": "Whether the task is in the trash; stop the timer with `discard`.",
                 "type": "boolean"
+              },
+              "work_kind": {
+                "$ref": "#/$defs/WorkKindRef",
+                "description": "The kind of work the entry will get; left out when none."
               }
             },
             "required": [
@@ -49451,6 +50593,25 @@
                 "type": "string"
               }
             ]
+          },
+          "WorkKindRef": {
+            "additionalProperties": false,
+            "description": "A kind of work as entries name it.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -49507,6 +50668,13 @@
           },
           "note": {
             "description": "The entry's note; default the timer's own note.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "work_kind": {
+            "description": "The entry's kind of work (name or ID); default the timer's own; an\nempty text logs none.",
             "type": [
               "string",
               "null"
@@ -49683,6 +50851,10 @@
                 "description": "Goes up by one with every edit; pass it as `expected_version`.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "work_kind": {
+                "$ref": "#/$defs/WorkKindRef",
+                "description": "The kind of work; left out when none."
               }
             },
             "required": [
@@ -49737,6 +50909,10 @@
               "task_trashed": {
                 "description": "Whether the task is in the trash; stop the timer with `discard`.",
                 "type": "boolean"
+              },
+              "work_kind": {
+                "$ref": "#/$defs/WorkKindRef",
+                "description": "The kind of work the entry will get; left out when none."
               }
             },
             "required": [
@@ -49763,6 +50939,25 @@
                 "type": "string"
               }
             ]
+          },
+          "WorkKindRef": {
+            "additionalProperties": false,
+            "description": "A kind of work as entries name it.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -51002,6 +52197,10 @@
               "task_trashed": {
                 "description": "Whether the task is in the trash; stop the timer with `discard`.",
                 "type": "boolean"
+              },
+              "work_kind": {
+                "$ref": "#/$defs/WorkKindRef",
+                "description": "The kind of work the entry will get; left out when none."
               }
             },
             "required": [
@@ -51170,6 +52369,25 @@
                 "type": "string"
               }
             ]
+          },
+          "WorkKindRef": {
+            "additionalProperties": false,
+            "description": "A kind of work as entries name it.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -51621,8 +52839,19 @@
                 "description": "Every status shown in this column, by project key: one, or more when\nsub-projects are included.",
                 "type": "object"
               },
+              "under_minimum": {
+                "default": false,
+                "description": "Whether the column holds fewer tasks than its WIP minimum.",
+                "type": "boolean"
+              },
               "wip_limit": {
                 "description": "The WIP limit, if the status has one.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "wip_min": {
+                "description": "The WIP minimum, if the status has one.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
@@ -51635,6 +52864,7 @@
               "hue",
               "statuses",
               "over_limit",
+              "under_minimum",
               "count",
               "older",
               "hidden",
@@ -60981,6 +62211,12 @@
               },
               "wip_limit": {
                 "description": "Most tasks the column should hold; left out when there is no limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "wip_min": {
+                "description": "Fewest tasks the column should hold; left out when there is no\nminimum.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"

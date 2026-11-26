@@ -59,7 +59,7 @@ fn collect(e: &Expr, kind: NameKind, old: &str, new: &str, edits: &mut Vec<(Span
 }
 
 fn predicate(p: &Predicate, kind: NameKind, old: &str, new: &str, edits: &mut Vec<(Span, String)>) {
-    let Some(field) = fields::find(&p.field) else {
+    let Some(field) = fields::find_target(&p.field) else {
         return;
     };
     for v in &p.values {
@@ -182,7 +182,7 @@ fn without_label(e: Expr, ty: FieldType, name: &str, removed: &mut bool) -> Opti
             without_label(*inner, ty, name, removed).map(|i| Expr::Group(Box::new(i), span))
         }
         Expr::Pred(mut p) => {
-            if fields::find(&p.field).is_some_and(|f| f.ty == ty) {
+            if fields::find_target(&p.field).is_some_and(|f| f.ty == ty) {
                 let before = p.values.len();
                 p.values.retain(|v| match &v.kind {
                     ValueKind::Word { text, .. } => !same_name(text, name),
@@ -388,6 +388,24 @@ fn prune_values(e: Expr, change: &mut dyn FnMut(&mut Predicate)) -> Option<Expr>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn history_conditions_are_renamed_by_their_field() {
+        assert_eq!(
+            rename(
+                "was:status:Review changed:status:Review status:Review",
+                NameKind::Status,
+                "review",
+                "In review"
+            )
+            .as_deref(),
+            Some("was:status:\"In review\" changed:status:Review status:\"In review\"")
+        );
+        assert_eq!(
+            remove_label("was:label:bug is:open", "bug").as_deref(),
+            Some("is:open")
+        );
+    }
 
     #[test]
     fn versions_are_renamed_and_removed() {

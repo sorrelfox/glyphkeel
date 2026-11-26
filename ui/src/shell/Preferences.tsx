@@ -25,6 +25,7 @@ import { Group, NumberSetting, Row } from "./PreferenceRows";
 import { AgentsPage } from "./preferences/AgentsPage";
 import { LanguagePage } from "./preferences/LanguagePage";
 import { ShortcutsPage } from "./preferences/ShortcutsPage";
+import { WorkKindsGroup } from "./preferences/WorkKinds";
 import styles from "./Preferences.module.css";
 import { TimeZonePicker } from "./TimeZonePicker";
 
@@ -425,6 +426,7 @@ function TimePage() {
           />
         </Row>
       </Group>
+      <WorkKindsGroup />
       <Group title={t("preferences-timer")}>
         <Row label={t("preferences-timer-reminder")} about={t("preferences-timer-reminder-about")}>
           <NumberSetting

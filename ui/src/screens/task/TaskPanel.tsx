@@ -21,6 +21,7 @@ import {
 
 import { classes } from "../../classes";
 import { MenuEntries } from "../../components/ContextMenu";
+import { useAskCloseDuplicates } from "../../components/DuplicatePrompt";
 import { MoveTasksDialog } from "./MoveTasksDialog";
 import { PriorityGlyph, TypeGlyph } from "../../components/Glyphs";
 import { Select } from "../../components/Select";
@@ -130,6 +131,7 @@ function Loaded({
   const toasts = useToasts();
   const update = useUpdateTask();
   const call = useCall();
+  const askDuplicates = useAskCloseDuplicates();
   const durations = useDurations();
   const moment = useMomentFormat();
   const duplicate = useCommand("task.duplicate", { undoable: t("panel-duplicated") });
@@ -158,9 +160,13 @@ function Loaded({
     patch(value === null ? { clear: [field] } : { [field]: value });
   };
   const setStatus = (status: string) => {
-    call("task.move", { key: task.key, status }).catch((error: unknown) => {
-      toasts.show(errorToast(t, error));
-    });
+    const category = project.statuses.find((each) => each.id === status)?.category;
+    const closing = (category === "done" || category === "cancelled") && task.status.category !== "done" && task.status.category !== "cancelled";
+    askDuplicates(task.key, closing)
+      .then((close) => call("task.move", { key: task.key, status, ...(close === undefined ? {} : { close_duplicates: close }) }))
+      .catch((error: unknown) => {
+        toasts.show(errorToast(t, error));
+      });
   };
   const estimate = task.estimate_minutes ?? null;
   const spent = task.spent_minutes;

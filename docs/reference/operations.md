@@ -90,6 +90,10 @@ The safety class decides who may run an operation:
 | `time.update` | write | app, command line, MCP | `update_time_entry` | `glyphkeel time edit <entry>` |
 | `time.delete` | trash | app, command line, MCP | `delete_time_entry` | `glyphkeel time delete <entry>` |
 | `time.report` | read | app, command line, MCP | `get_time_report` | `glyphkeel time report` |
+| `work_kind.list` | read | app, command line, MCP | `list_work_kinds` | `glyphkeel work-kind list` |
+| `work_kind.create` | write | app, command line, MCP | `create_work_kind` | `glyphkeel work-kind create` |
+| `work_kind.update` | write | app, command line, MCP | `update_work_kind` | `glyphkeel work-kind edit <kind>` |
+| `work_kind.delete` | write | app, command line, MCP | `delete_work_kind` | `glyphkeel work-kind delete <kind>` |
 | `report.created_closed` | read | app, command line, MCP | `get_created_closed_report` | `glyphkeel report created-closed` |
 | `report.cumulative_flow` | read | app, command line, MCP | `get_cumulative_flow` | `glyphkeel report flow` |
 | `report.cycle_time` | read | app, command line, MCP | `get_cycle_time` | `glyphkeel report cycle-time` |
@@ -379,7 +383,7 @@ Input: `TaskUpdateInput`. Output: `TaskChange`. Schemas: [catalog.schema.json](c
 
 ## `task.move`
 
-Move a task to another status or place in its column, or to another project (new key; the old one forwards).
+Move a task to another status or place in its column, or to another project (new key; the old one forwards); closing it can close its duplicates too.
 
 Input: `TaskMoveInput`. Output: `TaskChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
@@ -439,7 +443,7 @@ Input: `TaskReleaseInput`. Output: `TaskChange`. Schemas: [catalog.schema.json](
 
 ## `relation.add`
 
-Link two tasks (blocks, relates, duplicates, clones, or make one a subtask of the other).
+Link two tasks (blocks, with an optional lag in days; relates, duplicates, clones; or make one a subtask of the other).
 
 Input: `RelationInput`. Output: `TaskChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
@@ -595,13 +599,13 @@ Not available to agents: A draft is the person's own unsaved text in an editor o
 
 ## `time.log`
 
-Log time on a task: a duration, the day of the work (default today) and a note.
+Log time on a task: a duration, the day of the work (default today), a note and a kind of work.
 
 Input: `TimeLogInput`. Output: `TimeEntryChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `time.update`
 
-Change a time entry's duration, day or note.
+Change a time entry's duration, day, note or kind of work.
 
 Input: `TimeUpdateInput`. Output: `TimeEntryChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
@@ -613,9 +617,33 @@ Input: `TimeEntryRef`. Output: `TimeEntryChange`. Schemas: [catalog.schema.json]
 
 ## `time.report`
 
-Logged time over a range of days, grouped by day, week, month, task, project or person, with totals in the workspace's units and optional CSV.
+Logged time over a range of days, grouped by day, week, month, task, project, person or kind of work, with totals in the workspace's units and optional CSV.
 
 Input: `TimeReportInput`. Output: `TimeReport`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `work_kind.list`
+
+The workspace's kinds of work for logged time (Development, Design, Meeting…), by name, with how many entries use each.
+
+Input: `WorkKindListInput`. Output: `WorkKindList`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `work_kind.create`
+
+Add a kind of work that time entries can be marked with.
+
+Input: `WorkKindCreateInput`. Output: `WorkKindChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `work_kind.update`
+
+Rename a kind of work, or archive it so it is no longer offered while its entries keep it.
+
+Input: `WorkKindUpdateInput`. Output: `WorkKindChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `work_kind.delete`
+
+Delete a kind of work that no time entry names; archive one that is in use.
+
+Input: `WorkKindDeleteInput`. Output: `WorkKindChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `report.created_closed`
 

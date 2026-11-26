@@ -142,6 +142,9 @@ pub struct StatusBlueprint {
     /// Most tasks the column should hold.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wip_limit: Option<u32>,
+    /// Fewest tasks the column should hold.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wip_min: Option<u32>,
     /// Its rules; custom fields are named as `cf:` and the ID their
     /// [`FieldBlueprint`] has in the template.
     #[serde(default, skip_serializing_if = "StatusRules::is_empty")]
