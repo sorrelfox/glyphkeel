@@ -5,6 +5,7 @@
 // sub-projects when asked and narrowed by a query.
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 
 import { type GanttLayoutChange, type MovedTask, type Schedule, type ScheduleInput, type SchedulePreview, type SchedulePreviewInput } from "../generated/ops";
 import { useCall, useOp } from "./hooks";
@@ -45,7 +46,41 @@ export function useSchedule(scope: ScheduleScope): ScheduleData {
     queryFn: () => call("schedule.get", input),
     placeholderData: keepPreviousData,
   });
+  // A claim ends without a change event: read the schedule again when the
+  // first one shown ends, so the agent's name doesn't stay until a reload.
+  const { data, refetch } = result;
+  useEffect(() => {
+    const now = Date.now();
+    const ends = firstClaimEnd(data, now);
+    if (ends === undefined) {
+      return undefined;
+    }
+    const timer = window.setTimeout(() => void refetch(), Math.min(MAX_TIMER, ends - now + CLAIM_GRACE));
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [data, refetch]);
   return { schedule: result.data, error: result.error, pending: result.isPlaceholderData || result.isFetching };
+}
+
+/** The longest wait a browser timer takes (claims last hours at most). */
+const MAX_TIMER = 2_147_483_647;
+/** A moment after a claim ends, so the engine sees it ended too. */
+const CLAIM_GRACE = 1_000;
+
+/**
+ * When the first claim in `schedule` that is still on at `now` ends
+ * (milliseconds since the epoch); none: `undefined`.
+ */
+export function firstClaimEnd(schedule: Schedule | undefined, now: number): number | undefined {
+  let first: number | undefined;
+  for (const task of [...(schedule?.tasks ?? []), ...(schedule?.unscheduled ?? [])]) {
+    const until = task.claim === undefined ? Number.NaN : Date.parse(task.claim.until);
+    if (until > now && (first === undefined || until < first)) {
+      first = until;
+    }
+  }
+  return first;
 }
 
 /** The person's layout of a project's Gantt chart, as the engine keeps it. */

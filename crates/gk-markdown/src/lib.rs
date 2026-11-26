@@ -73,8 +73,8 @@ mod text;
 pub use checklist::{ChecklistItem, ToggleError, checklist, set_checked, toggle};
 pub use headings::{Heading, headings};
 pub use macros::{
-    Included, MAX_INCLUDE_DEPTH, MAX_INCLUDES, Macro, MacroSource, Note, PageItem, TaskItem,
-    TaskList, macros,
+    Included, MAX_INCLUDE_DEPTH, MAX_INCLUDES, Macro, MacroSource, Note, NoteMessage, PageItem,
+    TaskItem, TaskList, macros,
 };
 pub use plain::plain_text;
 pub use references::{

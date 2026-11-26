@@ -17,10 +17,11 @@ use common::{Agent, Workspace, dates, problems, titles};
 use serde_json::{Value, json};
 
 /// The plan as a folder of Markdown files: a file per page, a folder per
-/// page with pages inside it (its own text in `README.md`).
+/// page with pages inside it (its own text in `README.md`), a relative link
+/// between two files and an image one of them shows.
 const PLAN: &[(&str, &str)] = &[
     (
-        "README.md",
+        "Plan.md",
         "# Plan\n\nRead [[Engine]] first, then [[Screens]].\n\n## Working rules\n\n- [ ] small commits\n- [ ] tests first\n",
     ),
     (
@@ -33,8 +34,17 @@ const PLAN: &[(&str, &str)] = &[
     ),
     (
         "Screens.md",
-        "# Screens\n\nThe Gantt chart shows [[Engine]] work as bars.\n",
+        "# Screens\n\nThe Gantt chart shows [[Engine]] work as bars, with [its tasks](Engine/Data%20model.md#tasks).\n\n![The board](shots/board.png)\n",
     ),
+];
+
+/// A one-pixel PNG image.
+const PNG: &[u8] = &[
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
+    0x89, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0xf8, 0xcf, 0xc0, 0xf0,
+    0x1f, 0x00, 0x05, 0x00, 0x01, 0xff, 0x89, 0x99, 0x3d, 0x1d, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45,
+    0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
 ];
 
 fn write_plan(root: &Path) {
@@ -43,46 +53,8 @@ fn write_plan(root: &Path) {
         std::fs::create_dir_all(file.parent().unwrap()).unwrap();
         std::fs::write(file, text).unwrap();
     }
-}
-
-/// Creates a page per Markdown file under `dir`, inside `parent`: a folder
-/// becomes a page (its text from `README.md`) with its files inside it.
-fn import_folder(ws: &Workspace, dir: &Path, parent: Option<&str>) {
-    let mut entries: Vec<_> = std::fs::read_dir(dir)
-        .unwrap()
-        .map(|e| e.unwrap().path())
-        .filter(|p| p.file_name().is_some_and(|n| n != "README.md"))
-        .collect();
-    entries.sort();
-    for path in entries {
-        let title = path.file_stem().unwrap().to_string_lossy().into_owned();
-        let body_file = if path.is_dir() {
-            path.join("README.md")
-        } else {
-            path.clone()
-        };
-        let body = format!(
-            "--body={}",
-            std::fs::read_to_string(&body_file).unwrap_or_default()
-        );
-        let mut args = vec![
-            "-q",
-            "wiki",
-            "new",
-            "--project",
-            "GK",
-            "--title",
-            &title,
-            &body,
-        ];
-        if let Some(p) = parent {
-            args.extend_from_slice(&["--parent", p]);
-        }
-        ws.ok(&args);
-        if path.is_dir() {
-            import_folder(ws, &path, Some(&title));
-        }
-    }
+    std::fs::create_dir_all(root.join("shots")).unwrap();
+    std::fs::write(root.join("shots/board.png"), PNG).unwrap();
 }
 
 fn tree(ws: &Workspace) -> Vec<String> {
@@ -115,24 +87,15 @@ fn the_plan_lives_in_the_wiki_and_an_agent_keeps_it_and_the_roadmap() {
         "GK",
     ]);
 
-    // 1. The plan's files become the wiki: the top file is the first page,
-    // folders become pages with the files inside them.
-    let readme = format!(
-        "--body={}",
-        std::fs::read_to_string(source.join("README.md")).unwrap()
-    );
-    ws.ok(&[
-        "-q",
-        "wiki",
-        "new",
-        "--project",
-        "GK",
-        "--title",
-        "Plan",
-        &readme,
-    ]);
-    import_folder(&ws, &source, None);
-    assert_eq!(tree(&ws), ["Plan", "Engine", "  Data model", "Screens"]);
+    // 1. The plan's folder becomes the wiki in one import: a file per page,
+    // the folder a page with its files inside it and its README as its text,
+    // the image attached to the page that shows it.
+    let source_arg = source.to_string_lossy().into_owned();
+    let imported = ws.json(&["wiki", "import", &source_arg, "--project", "GK"]);
+    assert_eq!(imported["pages"], 4, "{imported}");
+    assert_eq!(imported["attachments"], 1, "{imported}");
+    assert!(imported.get("renamed").is_none(), "{imported}");
+    assert_eq!(tree(&ws), ["Engine", "  Data model", "Plan", "Screens"]);
     for page in ["Plan", "Engine", "Data model", "Screens"] {
         let refs = ws.json(&["wiki", "references", page, "--project", "GK"]);
         let missing: Vec<&Value> = refs["items"]
@@ -143,6 +106,20 @@ fn the_plan_lives_in_the_wiki_and_an_agent_keeps_it_and_the_roadmap() {
             .collect();
         assert!(missing.is_empty(), "{page}: {refs}");
     }
+    // The relative link is a wiki link now, and the image is the page's
+    // attachment, readable from the command line.
+    let screens = ws.json(&["wiki", "get", "Screens", "--project", "GK"]);
+    let body = screens["body"].as_str().unwrap();
+    assert!(body.contains("[[Data model#Tasks|its tasks]]"), "{body}");
+    let file = body
+        .split("](gk-file://")
+        .nth(1)
+        .and_then(|rest| rest.split(')').next())
+        .unwrap_or_else(|| panic!("{body}"));
+    let shown = ws.json(&["file", "show", file]);
+    assert_eq!(shown["name"], "board.png", "{shown}");
+    assert_eq!(shown["page"], screens["id"], "{shown}");
+    assert_eq!(shown["kind"], "image", "{shown}");
     let found = ws.json(&["wiki", "search", "data model#tasks"]);
     assert_eq!(found["items"][0]["heading"]["text"], "Tasks", "{found}");
     // An export gives back a file per page with the same text.
@@ -315,7 +292,7 @@ fn the_plan_lives_in_the_wiki_and_an_agent_keeps_it_and_the_roadmap() {
         "update_wiki_page",
         json!({ "project": "GK", "page": "Screens", "parent": "Plan" }),
     );
-    assert_eq!(tree(&ws), ["Plan", "  Screens", "Engine", "  Data model"]);
+    assert_eq!(tree(&ws), ["Engine", "  Data model", "Plan", "  Screens"]);
     let ticked = agent.ok(
         "update_checklist",
         json!({ "project": "GK", "page": "Plan",
@@ -427,7 +404,7 @@ fn the_plan_lives_in_the_wiki_and_an_agent_keeps_it_and_the_roadmap() {
         dates(&s, "GK-4"),
         (json!("2027-01-18"), json!("2027-01-22"))
     );
-    assert_eq!(tree(&ws), ["Plan", "Engine", "  Data model", "Screens"]);
+    assert_eq!(tree(&ws), ["Engine", "  Data model", "Plan", "Screens"]);
 }
 
 /// The text of every Markdown file under `dir`.

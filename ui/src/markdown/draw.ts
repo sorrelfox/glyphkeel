@@ -194,8 +194,29 @@ function wordMacroNotes(root: HTMLElement, options: DrawOptions): void {
     }
     const value = note.dataset.macroArg ?? "";
     const max = note.dataset.macroNote === "include-too-deep" ? INCLUDE_DEPTH : INCLUDES;
-    note.textContent = options.text(id, { page: value, count: Number(value) || 0, error: value, max });
+    note.textContent =
+      note.dataset.macroNote === "tasks-error"
+        ? options.text(id, { error: queryMistake(value, options) })
+        : options.text(id, { page: value, count: Number(value) || 0, max });
   }
+}
+
+/**
+ * Why a `{{tasks}}` list can't be shown, in the person's language: the
+ * engine sends the message's ID and arguments (`{"id": …, "args": {…}}`),
+ * never its own English text.
+ */
+function queryMistake(value: string, options: DrawOptions): string {
+  try {
+    const message: unknown = JSON.parse(value);
+    if (typeof message === "object" && message !== null && "id" in message && typeof message.id === "string") {
+      const args = "args" in message && typeof message.args === "object" && message.args !== null ? (message.args as Record<string, string>) : {};
+      return options.text(message.id, args);
+    }
+  } catch {
+    // Not a message: worded as a list that couldn't be read.
+  }
+  return options.text("wiki-macro-tasks-unreadable");
 }
 
 /** Draws everything on the reader's HTML in `root`. Later steps check that the drawing is still current. */

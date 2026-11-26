@@ -134,7 +134,21 @@ pub(crate) fn macro_note(note: &gk_markdown::Note) -> String {
         ),
         Note::NoTasks => messages::text("wiki-macro-tasks-empty", &[]),
         Note::MoreTasks(_) => messages::text("wiki-macro-tasks-more", &[("count", value)]),
-        Note::TasksError(_) => messages::text("wiki-macro-tasks-error", &[("error", value)]),
+        Note::TasksError(error) => {
+            let args: Vec<(&str, String)> = error
+                .args
+                .iter()
+                .map(|(name, value)| (name.as_str(), value.clone()))
+                .collect();
+            // The engine's own message, or the query language's mistake.
+            let file = if messages::ENGINE.has(&error.id) {
+                messages::ENGINE
+            } else {
+                messages::Messages(gk_query::error::MESSAGES_FTL)
+            };
+            let why = file.text(&error.id, &args);
+            messages::text("wiki-macro-tasks-error", &[("error", why)])
+        }
     }
 }
 
