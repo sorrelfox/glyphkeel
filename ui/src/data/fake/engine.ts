@@ -75,18 +75,21 @@ import {
   type FlowReportInput,
 } from "../../generated/ops";
 import { PROJECT_ICONS, suggestHue } from "../catalog";
+import { customRuleField, isEmpty as isEmptyRules } from "../rules";
 import { formatDuration, parseDuration } from "../duration";
 import { decodeBase64, materialize, recordedFields, sniff } from "./details";
 import { applyValues, createField, deleteField, fieldOut, fieldsFor, fieldsOf, findField, listedValues, moveMatches, moveValues, placeField, queryFields, taskValues, updateField } from "./fields";
 import { checklistOf, escapeHtml, merge3, publicChecklist, renderFake, setChecked, unifiedDiff } from "./markdown";
 import { newProject, nextFileId, nextId, nextUuid, SAMPLE_AGENT } from "./seed";
 import { type FakeComment, type FakeFile, type FakeProject, type FakeRelation, type FakeReminder, type FakeRevision, type FakeState, type FakeTask, type FakeTimeEntry, type FakeWikiPage } from "./state";
+import { checkReadOnly, enter as enterRules } from "./rules";
 import { naturalDay, nextDay, searchAll, searchWiki, slugOf, headingsOf } from "./overview";
 import { moveDependents, scheduleOf } from "./schedule";
 
 /** The Gantt chart's layout until the person changes it. */
 const DEFAULT_GANTT_LAYOUT: GanttLayout = { zoom: "day", widths: {}, group_by: "parent", move_dependents: false };
 import { linksIn, placePage, subtree, type TextLink } from "./wiki";
+import { createVersion, deleteVersion, getVersion, listVersions, updateVersion, versionForTask, versionRef, visibleVersions, type VersionHost } from "./versions";
 import { createView, deleteView, listViews, matchingKeys, parseQuery, queryError, searchTasks, updateView, type GroupInfo, type QueryNames } from "./query";
 import { createdClosed, cumulativeFlow, cycleTime, defaultFrom, flowPeriods, type FlowEvent, type FlowInput, type FlowStatus, type FlowTask } from "./reports";
 import { addDays, csvOf, localDay, MAX_ENTRY_MINUTES, momentOf, reminderAt, reminderOut, sortDue, timeEntryOut, timerElapsedMs, timerOut, unitsOf, weekStart, workDay } from "./time";
@@ -527,8 +530,10 @@ export class FakeWorkspace {
         category: status.category,
         hue: status.hue,
         ...some("wip_limit", status.wip_limit),
+        ...(status.rules === undefined || isEmptyRules(status.rules) ? {} : { rules: structuredClone(status.rules) }),
         tasks: tasks.filter((task) => task.statusId === status.id).length,
       })),
+      ...(project.agentRules !== undefined && (project.agentRules.read_only ?? []).length > 0 ? { agent_rules: structuredClone(project.agentRules) } : {}),
       types: project.types.map((type) => ({ ...type, tasks: tasks.filter((task) => task.typeId === type.id).length })),
       labels: project.labels.map((label) => ({ ...label, tasks: tasks.filter((task) => task.labelIds.includes(label.id)).length })),
       next_label_hue: suggestHue(project.labels.map((label) => label.hue)),
@@ -618,6 +623,7 @@ export class FakeWorkspace {
       labels: this.labelRefs(task),
       ...(taskValues(this.state, task).length > 0 ? { fields: taskValues(this.state, task) } : {}),
       ...some("parent", parent && this.keyOf(parent)),
+      ...some("fix_version", versionRef(this.versionHost, task)),
       ...some("start_date", task.startDate),
       ...some("due_date", task.dueDate),
       ...some("estimate_minutes", task.estimateMin),
@@ -1037,6 +1043,11 @@ export class FakeWorkspace {
       for (const field of moveValues(this.state, one, to.id)) {
         warn(`The custom field "${field}" doesn't exist in ${to.key}; its value was left off.`);
       }
+      const planned = versionRef(this.versionHost, one);
+      if (planned !== undefined && !visibleVersions(this.versionHost, to).some((each) => each.version.id === one.fixVersionId)) {
+        one.fixVersionId = null;
+        warn(`Version "${planned.name}" isn't available in ${to.key} and was taken off.`);
+      }
       one.projectId = to.id;
       one.number = to.nextNumber;
       to.nextNumber += 1;
@@ -1383,6 +1394,7 @@ export class FakeWorkspace {
       key: card.key,
       labels: card.labels,
       ...some("fields", listedValues(this.state, task)),
+      ...some("fix_version", versionRef(this.versionHost, task)),
       ...some("parent", card.parent),
       priority: card.priority,
       progress_percent: card.progress_percent,
@@ -1866,6 +1878,16 @@ export class FakeWorkspace {
     };
     const types = named("type");
     const labels = named("label");
+    const versionText = input.fix_version?.trim();
+    let versions: Set<string> | null = null;
+    if (versionText !== undefined) {
+      const all = this.versionHost.versions();
+      const byId = all.filter((each) => each.id === versionText);
+      versions = new Set((byId.length > 0 ? byId : all.filter((each) => each.name.toLowerCase() === versionText.toLowerCase())).map((each) => each.id));
+      if (versions.size === 0) {
+        fail("invalid", `No project has a version named "${versionText}".`, { details: { path: "fix_version", message_id: "flow-report-unknown-version", args: { name: versionText } } });
+      }
+    }
     const query = input.query?.trim();
     const matching = query === undefined || query === "" ? null : new Set(this.runQuery(() => matchingKeys(this.listedTasks(), query, this.queryNames(), this.archivedKeys())));
     const statuses = new Map<string, FlowStatus>();
@@ -1890,7 +1912,7 @@ export class FakeWorkspace {
       events.set(entry.id, list);
     }
     const tasks = this.state.tasks
-      .filter((task) => inScope.has(task.projectId) && (types === null || types.has(task.typeId)) && (labels === null || task.labelIds.some((id) => labels.has(id))) && (matching === null || matching.has(this.keyOf(task))))
+      .filter((task) => inScope.has(task.projectId) && (types === null || types.has(task.typeId)) && (labels === null || task.labelIds.some((id) => labels.has(id))) && (versions === null || (task.fixVersionId !== null && task.fixVersionId !== undefined && versions.has(task.fixVersionId))) && (matching === null || matching.has(this.keyOf(task))))
       .map((task): FlowTask => {
         const project = this.projectOf(task);
         return {
@@ -2000,6 +2022,28 @@ export class FakeWorkspace {
   }
 
   /** The change event of a saved view. */
+  /** What the versions need of this workspace. */
+  private readonly versionHost: VersionHost = {
+    versions: () => (this.state.versions ??= []),
+    tasks: () => this.state.tasks,
+    projects: () => this.state.projects,
+    project: (ref) => this.project(ref),
+    writable: (ref) => this.writable(ref),
+    keyOf: (task) => this.keyOf(task),
+    statusOf: (task) => {
+      const status = this.statusIn(this.projectOf(task), task.statusId);
+      return { id: status.id, name: status.name, category: status.category };
+    },
+    typeName: (task) => this.typeRef(task).name,
+    progress: (task) => this.progress(task),
+    touch: (task) => {
+      this.touch(task);
+    },
+    now: () => this.today().toISOString(),
+    newId: () => nextUuid(),
+    fail: (code, message, path) => fail(code, message, path === undefined ? {} : { details: { path } }),
+  };
+
   private viewChange(view: SavedView, fields: string[]): EntityChange[] {
     return [{ entity: "view", id: view.id, fields, ...some("project", view.project) }];
   }
@@ -2113,7 +2157,8 @@ export class FakeWorkspace {
       project.icon = icon ?? undefined;
       if (parentProject) {
         // A sub-project starts with copies of its parent's statuses, types and labels.
-        project.statuses = parentProject.statuses.map((status) => ({ ...status, id: nextId("s") }));
+        project.statuses = parentProject.statuses.map((status) => ({ ...structuredClone(status), id: nextId("s") }));
+        project.agentRules = structuredClone(parentProject.agentRules);
         project.types = parentProject.types.map((type) => ({ ...type, id: nextId("ty") }));
         project.labels = parentProject.labels.map((label) => ({ ...label, id: nextId("l") }));
         project.modules = { ...parentProject.modules };
@@ -2283,6 +2328,17 @@ export class FakeWorkspace {
         fields.push("wip_limit");
       }
       return this.projectChange(project, "status", fields);
+    },
+    "rules.update": ({ project: ref, statuses, agents }) => {
+      const project = this.writable(ref);
+      for (const change of statuses ?? []) {
+        const status = this.statusIn(project, change.status);
+        status.rules = isEmptyRules(change.rules) ? undefined : structuredClone(change.rules);
+      }
+      if (agents !== null && agents !== undefined) {
+        project.agentRules = (agents.read_only ?? []).length > 0 ? structuredClone(agents) : undefined;
+      }
+      return this.projectChange(project, "status", ["rules"]);
     },
     "status.reorder": ({ project: ref, status: statusRef, before, after, at }) => {
       const project = this.writable(ref);
@@ -3383,6 +3439,11 @@ export class FakeWorkspace {
       const items = listViews(this.state.views ?? [], { ...input, ...some("project", input.project && this.project(input.project).key) });
       return { items: structuredClone(items), total: items.length };
     },
+    "version.list": (input) => listVersions(this.versionHost, input),
+    "version.get": (input) => getVersion(this.versionHost, input),
+    "version.create": (input) => createVersion(this.versionHost, input),
+    "version.update": (input) => updateVersion(this.versionHost, input),
+    "version.delete": (input) => deleteVersion(this.versionHost, input),
     "view.create": (input) => {
       if (input.query.trim() !== "") {
         this.runQuery(() => searchTasks([], { query: input.query }, this.queryNames(), { archived: new Set(), scoped: false, statusOrder: () => 0 }));
@@ -3429,8 +3490,9 @@ export class FakeWorkspace {
       }
       return { output: { reverted, skipped }, changes: [{ entity: "workspace", id: "w-1", fields: ["*"] }] };
     },
-    "task.create": ({ project: ref, title, status, description, priority, before, after, at, parent: parentKey, start_date, due_date, fields }) => {
+    "task.create": ({ project: ref, title, status, description, priority, before, after, at, parent: parentKey, start_date, due_date, fix_version, fields }) => {
       const project = this.writable(ref);
+      const fixVersion = fix_version === null || fix_version === undefined ? null : versionForTask(this.versionHost, project, fix_version).id;
       const startDate = start_date === null || start_date === undefined ? null : this.dayInput(start_date, "start_date");
       const dueDate = due_date === null || due_date === undefined ? null : this.dayInput(due_date, "due_date");
       if (startDate !== null && dueDate !== null && startDate > dueDate) {
@@ -3475,6 +3537,7 @@ export class FakeWorkspace {
         updatedBy: { kind: "user", name: "You" },
         closedAt: isClosed(target.category) ? now : null,
         version: 1,
+        ...(fixVersion === null ? {} : { fixVersionId: fixVersion }),
       };
       applyValues(this.state, task, type.name, fields, true, fail);
       project.nextNumber += 1;
@@ -3494,6 +3557,15 @@ export class FakeWorkspace {
         });
       }
       const clear = input.clear ?? [];
+      const touched = [
+        ...clear,
+        ...(["title", "description", "type", "priority", "start_date", "due_date", "estimate", "progress", "labels", "parent"] as const).filter((field) => input[field] !== null && input[field] !== undefined),
+        ...((input.add_labels ?? []).length > 0 || (input.remove_labels ?? []).length > 0 ? ["labels"] : []),
+        ...((input.description_edits ?? []).length > 0 ? ["description"] : []),
+        ...(input.fix_version !== null && input.fix_version !== undefined ? ["fix_version"] : []),
+        ...Object.keys(input.fields ?? {}).map((ref) => customRuleField(findField(fieldsFor(this.state, project.id), ref, fail, `fields.${ref}`).id)),
+      ];
+      checkReadOnly(project, task, this.keyOf(task), touched, fail);
       const fields: string[] = [];
       if (input.title !== null && input.title !== undefined) {
         task.title = this.checkTitle(input.title);
@@ -3529,6 +3601,17 @@ export class FakeWorkspace {
         const removed = resolve(input.remove_labels ?? [], "remove_labels");
         task.labelIds = labels.filter((id) => !removed.includes(id));
         fields.push("labels");
+      }
+      if (input.fix_version !== null && input.fix_version !== undefined) {
+        const version = versionForTask(this.versionHost, project, input.fix_version).id;
+        if (version !== task.fixVersionId) {
+          task.fixVersionId = version;
+          fields.push("fix_version");
+        }
+      }
+      if (clear.includes("fix_version") && (task.fixVersionId ?? null) !== null) {
+        task.fixVersionId = null;
+        fields.push("fix_version");
       }
       const typed = (text: string | null | undefined, path: string) => (text === null || text === undefined ? null : this.dayInput(text, path));
       const start = clear.includes("start_date") ? null : (typed(input.start_date, "start_date") ?? task.startDate);
@@ -3817,6 +3900,7 @@ export class FakeWorkspace {
       const project = to;
       const target = status === null || status === undefined ? this.statusIn(project, task.statusId) : this.statusIn(project, status);
       if (target.id !== task.statusId) {
+        fields.push(...enterRules(project, task, this.keyOf(task), target.id, localDay(this.today()), fail, fieldsFor(this.state, project.id), this.typeRef(task).name));
         this.enterStatus(task, target.id);
         fields.push("status");
       }
@@ -3844,6 +3928,7 @@ export class FakeWorkspace {
         types: [],
         labels: [],
         fields: [],
+        versions: [],
         fallback_status: this.fallbackStatus(to).name,
         fallback_type: this.fallbackType(to).name,
       };
@@ -3875,6 +3960,16 @@ export class FakeWorkspace {
           count(check.types, to.types, this.typeRef(one).name);
           for (const label of this.labelRefs(one)) {
             count(check.labels, to.labels, label.name);
+          }
+          const planned = versionRef(this.versionHost, one);
+          if (planned !== undefined) {
+            const kept = visibleVersions(this.versionHost, to).some((each) => each.version.id === one.fixVersionId);
+            const found = check.versions.find((each) => each.name === planned.name);
+            if (found === undefined) {
+              check.versions.push({ name: planned.name, tasks: 1, ...some("target", kept ? planned.name : undefined) });
+            } else {
+              found.tasks += 1;
+            }
           }
           for (const match of moveMatches(this.state, one, to.id)) {
             const found = check.fields.find((each) => fold(each.name) === fold(match.name));

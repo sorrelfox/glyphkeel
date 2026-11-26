@@ -6,7 +6,7 @@ import { defineConfig, devices } from "@playwright/test";
 // The flow reports on the sample data: a `--mode fake` build keeps the
 // workspace in memory, so these run without the engine.
 // `GK_REPORTS_PORT` moves the server, so these can run beside other flows.
-const PORT = Number(process.env.GK_REPORTS_PORT ?? 5317);
+const PORT = Number(process.env.GK_REPORTS_PORT ?? 5313);
 const DIST = "node_modules/.cache/reports-dist";
 
 export default defineConfig({

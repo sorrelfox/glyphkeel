@@ -89,7 +89,7 @@ test("cumulative flow by status and by category; cycle time with its tasks", asy
   await expect(page.getByRole("complementary", { name: /Task / })).toBeVisible();
 });
 
-test("a project and a query narrow the report, and a wrong query says why", async ({ page }) => {
+test("a project, a version and a query narrow the report, and a wrong query says why", async ({ page }) => {
   await openReports(page);
   await page.getByRole("button", { name: "This year" }).click();
   await page.getByText("Show as a table", { exact: true }).click();
@@ -99,6 +99,13 @@ test("a project and a query narrow the report, and a wrong query says why", asyn
   await page.getByRole("listbox").getByRole("option", { name: "Task Manager", exact: true }).click();
   await expect(page.getByRole("switch", { name: "Include sub-projects" })).toBeChecked();
   await expect.poll(async () => Number(plain(await total.textContent()).replace(/\D/g, ""))).toBeLessThan(all);
+  const inProject = Number(plain(await total.textContent()).replace(/\D/g, ""));
+  await page.getByRole("button", { name: /^Version/ }).click();
+  await page.getByRole("listbox").getByRole("option", { name: "1.0", exact: true }).click();
+  await expect.poll(async () => Number(plain(await total.textContent()).replace(/\D/g, ""))).toBeLessThan(inProject);
+  await page.getByRole("button", { name: /^Version/ }).click();
+  await page.getByRole("listbox").getByRole("option", { name: "Any version", exact: true }).click();
+  await expect.poll(async () => Number(plain(await total.textContent()).replace(/\D/g, ""))).toBe(inProject);
   const query = page.getByRole("searchbox", { name: "Query" });
   await query.fill("priority:");
   await query.press("Enter");

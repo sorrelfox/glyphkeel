@@ -57,6 +57,7 @@ fn parts(input: &Value) -> Vec<&'static str> {
         "labels",
         "add_labels",
         "remove_labels",
+        "fix_version",
         "parent",
         "start_date",
         "due_date",
@@ -112,12 +113,14 @@ fn summary(tx: &Transaction<'_>, id: Id, units: DurationUnits) -> Result<Summary
         None => None,
     };
     let labels: Vec<String> = task_labels(tx, id)?.into_iter().map(|l| l.name).collect();
+    let fix_version = super::version::of_task(tx, id)?.map(|v| v.name);
     let fields = vec![
         ("project", Some(project)),
         ("status", Some(status)),
         ("type", Some(ty)),
         ("priority", Some(priority_name(priority).to_owned())),
         ("labels", (!labels.is_empty()).then(|| labels.join(", "))),
+        ("fix_version", fix_version),
         ("parent", parent),
         ("start_date", start),
         ("due_date", due),
@@ -239,6 +242,7 @@ fn apply(
         labels: c.labels.clone(),
         add_labels: c.add_labels.clone(),
         remove_labels: c.remove_labels.clone(),
+        fix_version: c.fix_version.clone(),
         parent: c.parent.clone(),
         start_date,
         due_date,

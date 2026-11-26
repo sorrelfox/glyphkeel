@@ -39,6 +39,11 @@ The safety class decides who may run an operation:
 | `label.create` | write | app, command line, MCP | `update_project` | `glyphkeel label add` |
 | `label.update` | write | app, command line, MCP | `update_project` | `glyphkeel label edit` |
 | `label.delete` | permanent | app, command line, MCP | `update_project` | `glyphkeel label delete` |
+| `version.list` | read | app, command line, MCP | `list_versions` | `glyphkeel version list <project>` |
+| `version.get` | read | app, command line, MCP | `get_version` | `glyphkeel version show <version>` |
+| `version.create` | write | app, command line, MCP | `create_version` | `glyphkeel version create` |
+| `version.update` | write | app, command line, MCP | `update_version` | `glyphkeel version edit <version>` |
+| `version.delete` | write | app, command line, MCP | `delete_version` | `glyphkeel version delete <version>` |
 | `field.list` | read | app, command line, MCP | `list_custom_fields` | `glyphkeel field list` |
 | `field.create` | write | app, command line, MCP | `create_custom_field` | `glyphkeel field add` |
 | `field.update` | write | app, command line, MCP | `update_custom_field` | `glyphkeel field edit` |
@@ -122,6 +127,7 @@ The safety class decides who may run an operation:
 | `agent.sessions` | read | app, command line, MCP | `get_activity` | `glyphkeel agents sessions` |
 | `agent.policy.update` | app | app, command line | — | `glyphkeel agents policy` |
 | `agent.limits.update` | app | app | — | — |
+| `rules.update` | app | app, command line | — | `glyphkeel project rules <project>` |
 | `history.feed` | read | app, command line, MCP | `get_activity` | `glyphkeel activity` |
 | `history.revert` | write | app, command line, MCP | `revert_changes` | `glyphkeel revert` |
 | `history.undo` | app | app | — | — |
@@ -281,6 +287,36 @@ Input: `LabelUpdateInput`. Output: `ProjectChange`. Schemas: [catalog.schema.jso
 Delete a label and take it off every task. Can't be undone.
 
 Input: `LabelDeleteInput`. Output: `ProjectChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `version.list`
+
+The versions of a project and those its ancestors share with it, with status, dates and progress; with their tasks for the roadmap.
+
+Input: `VersionListInput`. Output: `VersionList`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `version.get`
+
+One version with its progress and its tasks.
+
+Input: `VersionGetInput`. Output: `Version`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `version.create`
+
+Create a version of a project: name, description, status, start and due dates, and whether its sub-projects can use it.
+
+Input: `VersionCreateInput`. Output: `VersionChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `version.update`
+
+Rename a version, change its description, dates, sharing or status, or close it and move its open tasks to another version.
+
+Input: `VersionUpdateInput`. Output: `VersionChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `version.delete`
+
+Delete a version; its tasks are planned for no version. Revert brings both back.
+
+Input: `VersionDeleteInput`. Output: `VersionChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `field.list`
 
@@ -807,6 +843,14 @@ Change the limits on agent sessions: changes a minute, new tasks a day, and item
 Input: `AgentLimitsPatch`. Output: `SettingsChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 Not available to agents: It sets how much agents may do; an agent that could call it would raise its own limits beyond what the person allowed.
+
+## `rules.update`
+
+Change a project's status rules (fields set, cleared or required when a task enters a status, fields read-only in it, the timer and claims) and its rules for agents (statuses they may not move tasks into, fields they may not change).
+
+Input: `RulesUpdateInput`. Output: `ProjectChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+Not available to agents: It sets what agents may do; an agent that could call it would lift the rules the person set for agents.
 
 ## `history.feed`
 

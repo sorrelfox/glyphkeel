@@ -177,6 +177,7 @@ transfer-invalid-task-status = { $path }, line { $line }: the status or type is 
 transfer-invalid-field = { $path }, line { $line }: the custom field { $value } is not valid: an unknown kind, a name without letters or digits, or a name or ID given twice.
 transfer-invalid-field-value = { $path }, line { $line }: a value of the custom field { $value } is not one of the project's fields, or not text or a number.
 transfer-invalid-task-label = { $path }, line { $line }: the label { $label } is not one of the project's.
+transfer-invalid-version = { $path }, line { $line }: the version "{ $version }" is not valid (name, status, sharing or dates), or its name is used twice.
 transfer-invalid-title = { $path }, line { $line }: the title is empty or too long.
 transfer-invalid-description-size = { $path }, line { $line }: the description is larger than 1 MB.
 transfer-invalid-link-target = { $path }, line { $line }: a link points to no other task in the archive.
@@ -436,6 +437,27 @@ view-not-found-hint = Name a view of the project given with `project`, or use it
 view-name-ambiguous = Several views are named "{ $view }", for different screens.
 view-name-ambiguous-hint = Use the view's ID from view.list.
 
+## Versions
+
+version-not-found = There is no version "{ $version }".
+version-not-found-hint = Name a version of the project given with `project`, or use its ID; version.list lists them.
+version-not-for-project = Tasks of { $project } can't be planned for a version "{ $version }": it is not one of the project's versions or one shared with it.
+version-name-ambiguous = Several projects have a version named "{ $version }".
+version-name-ambiguous-hint = Give the project with `project`, or use the version's ID.
+version-name-taken = The project already has a version named "{ $version }".
+version-name-taken-hint = Choose another name, or change that version.
+version-not-open = { $status ->
+        [locked] Version "{ $version }" is locked, so no tasks can be added to it.
+       *[closed] Version "{ $version }" is closed, so no tasks can be added to it.
+    }
+version-not-open-hint = Choose an open version, or open this one again first.
+version-description-long = A version's description is at most { $max } characters.
+version-dates-order = A version's start date can't be after its due date.
+version-move-needs-close = Open tasks can only be moved on when the version is closed: give status closed too.
+version-move-to-itself = Choose another version to move the open tasks to.
+version-move-not-shared = { $task } can't be planned for the chosen version, because that version isn't shared with its project.
+task-version-left-off = Version "{ $version }" isn't available in { $project } and was taken off.
+
 ## Stored data that can't be read
 
 storage-link-broken = A recorded link is broken.
@@ -681,6 +703,7 @@ flow-report-too-many-periods = A report has at most { $max } periods; choose a s
 flow-report-no-actor = Name who did it: me, agent, or a name.
 flow-report-unknown-type = No project has a task type named "{ $name }".
 flow-report-unknown-label = No project has a label named "{ $name }".
+flow-report-unknown-version = No project has a version named "{ $name }".
 timer-unreadable = A recorded timer can't be read.
 timer-task-trashed = The timer's task is in the trash.
 timer-task-trashed-hint = Stop the timer with `discard` to throw its time away.
@@ -728,3 +751,80 @@ workspace-in-use-hint = Close it in the app and stop the agents and commands wor
 workspace-rename-failed = The workspace "{ $name }" could not be renamed: { $error }
 workspace-choice-no-folder = There is no folder for the personal settings: no home folder is set.
 workspace-choice-not-saved = The workspace you chose could not be remembered: { $error }
+
+## Status rules and rules for agents
+
+rule-required = { $field ->
+        [description] { $task } needs a description before it can enter { $status }.
+        [priority] { $task } needs a priority before it can enter { $status }.
+        [start_date] { $task } needs a start date before it can enter { $status }.
+        [due_date] { $task } needs a due date before it can enter { $status }.
+        [estimate] { $task } needs an estimate before it can enter { $status }.
+        [labels] { $task } needs at least one label before it can enter { $status }.
+        [parent] { $task } needs a parent task before it can enter { $status }.
+        [fix_version] { $task } needs a version before it can enter { $status }.
+        [custom] { $task } needs a value in "{ $name }" before it can enter { $status }.
+       *[other] { $task } needs a value in { $name } before it can enter { $status }.
+    }
+rule-required-hint = { $more ->
+        [0] Fill it in first; the project's settings list the rules of each status.
+        [one] Fill it in first, and one more required field; the project's settings list the rules of each status.
+       *[other] Fill it in first, and { $more } more required fields; the project's settings list the rules of each status.
+    }
+rule-read-only = { $field ->
+        [title] The title of { $task } can't change while it is in { $status }.
+        [description] The description of { $task } can't change while it is in { $status }.
+        [type] The type of { $task } can't change while it is in { $status }.
+        [priority] The priority of { $task } can't change while it is in { $status }.
+        [start_date] The start date of { $task } can't change while it is in { $status }.
+        [due_date] The due date of { $task } can't change while it is in { $status }.
+        [estimate] The estimate of { $task } can't change while it is in { $status }.
+        [progress] The progress of { $task } can't change while it is in { $status }.
+        [labels] The labels of { $task } can't change while it is in { $status }.
+        [parent] The parent of { $task } can't change while it is in { $status }.
+        [fix_version] The version of { $task } can't change while it is in { $status }.
+        [custom] "{ $name }" of { $task } can't change while it is in { $status }.
+       *[other] { $name } of { $task } can't change while it is in { $status }.
+    }
+rule-read-only-hint = Move the task to another status first, or change the rules of the status in the project's settings.
+rule-agents-may-not-enter = Agents may not move tasks into { $status } in { $project }, so { $task } can't go there.
+rule-agent-field = { $field ->
+        [title] Agents may not change the title of tasks in { $project }, so { $task } keeps its title.
+        [description] Agents may not change the description of tasks in { $project }, so { $task } keeps its description.
+        [type] Agents may not change the type of tasks in { $project }, so { $task } keeps its type.
+        [priority] Agents may not change the priority of tasks in { $project }, so { $task } keeps its priority.
+        [start_date] Agents may not change the start date of tasks in { $project }, so { $task } keeps its start date.
+        [due_date] Agents may not change the due date of tasks in { $project }, so { $task } keeps its due date.
+        [estimate] Agents may not change the estimate of tasks in { $project }, so { $task } keeps its estimate.
+        [progress] Agents may not change the progress of tasks in { $project }, so { $task } keeps its progress.
+        [labels] Agents may not change the labels of tasks in { $project }, so { $task } keeps its labels.
+        [parent] Agents may not change the parent of tasks in { $project }, so { $task } keeps its parent.
+        [fix_version] Agents may not change the version of tasks in { $project }, so { $task } keeps its version.
+        [custom] Agents may not change "{ $name }" of tasks in { $project }, so { $task } keeps its value.
+       *[other] Agents may not change { $name } of tasks in { $project }.
+    }
+rule-agent-hint = The person set this rule for agents. Leave the change to them, for example by saying in a comment what should change.
+rule-field-not-allowed = { $rule ->
+        [required] "{ $field }" can't be required before entering a status.
+        [read_only] "{ $field }" can't be made read-only in a status.
+        [set] "{ $field }" can't be set on entering a status.
+        [clear] "{ $field }" can't be cleared on entering a status.
+        [agents] "{ $field }" can't be kept from agents.
+       *[other] "{ $field }" can't be named in this rule.
+    }
+rule-field-twice = "{ $field }" is listed twice.
+rule-too-many-fields = A rule lists at most { $max } fields.
+rule-custom-field-unknown = There is no custom field with the ID { $id } in { $project }.
+rule-set-value = { $field ->
+        [start_date] A start date set on entering a status can only be "today", not "{ $value }".
+        [due_date] A due date set on entering a status can only be "today", not "{ $value }".
+        [progress] Progress is a whole number from 0 to 100; "{ $value }" is not.
+        [priority] "{ $value }" is not a priority; expected none, low, normal, high or urgent.
+       *[other] "{ $value }" can't be set here.
+    }
+rule-set-and-cleared = "{ $field }" can't be both set and cleared on entering a status.
+rule-required-and-cleared = { $field ->
+        [custom] "{ $name }" can't be both required and cleared on entering a status.
+       *[other] "{ $name }" can't be both required and cleared on entering a status.
+    }
+rule-clear-required-field = "{ $name }" is a required field, so a status can't clear it.

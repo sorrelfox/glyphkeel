@@ -33,7 +33,7 @@ import { presetRange, startOfWeek } from "../time/TimeReport";
 import { bandColour, CLOSED, CREATED, CreatedClosedChart, CumulativeFlowChart, CycleTimeChart, OPEN, Swatch } from "./charts";
 import styles from "./FlowReports.module.css";
 
-/** The list's key for "all projects", "any type" and "any label"; no name has this form. */
+/** The list's key for "all projects", "any type", "any label" and "any version"; no name has this form. */
 const ANY = "*";
 /** The most tasks the cycle time table lists; the export has them all. */
 const TASK_ROWS = 500;
@@ -116,7 +116,8 @@ function bandName(t: Translate, band: FlowBand, groupBy: FlowGroupBy): string {
  * The flow reports, from the tasks' history: tasks created against tasks
  * closed, the cumulative flow by status, and cycle and lead time, per day,
  * week or month in the person's time zone; for all projects or one (with or
- * without its sub-projects), a type, a label or a query; by anyone, people
+ * without its sub-projects), a type, a label, a version or a query (custom
+ * fields as `cf.<name>`); by anyone, people
  * or agents. Each chart reads by keyboard and has its table; each report
  * saves as CSV.
  */
@@ -135,6 +136,7 @@ export function FlowReportsScreen() {
   const [subprojects, setSubprojects] = useState(true);
   const [taskType, setTaskType] = useState("");
   const [label, setLabel] = useState("");
+  const [version, setVersion] = useState("");
   const [queryText, setQueryText] = useState("");
   const [query, setQuery] = useState("");
   const [actor, setActor] = useState<Actor>("");
@@ -142,6 +144,7 @@ export function FlowReportsScreen() {
   const [metric, setMetric] = useState<Metric>("cycle");
   const [asTable, setAsTable] = useState(false);
   const chosenProject = useOp("project.get", { project }, { enabled: project !== "" });
+  const chosenVersions = useOp("version.list", { project }, { enabled: project !== "" });
 
   const input: FlowReportInput = {
     bucket,
@@ -149,6 +152,7 @@ export function FlowReportsScreen() {
     ...(project === "" ? {} : { project, include_subprojects: subprojects }),
     ...(taskType === "" ? {} : { type: taskType }),
     ...(label === "" ? {} : { label }),
+    ...(version === "" ? {} : { fix_version: version }),
     ...(query === "" ? {} : { query }),
   };
   const withActor: FlowReportInput = { ...input, ...(actor === "" ? {} : { actor }) };
@@ -187,6 +191,7 @@ export function FlowReportsScreen() {
 
   const types = [...new Set((chosenProject.data?.types ?? []).map((each) => each.name))];
   const labels = [...new Set((chosenProject.data?.labels ?? []).map((each) => each.name))];
+  const versions = [...new Set((chosenVersions.data?.items ?? []).map((each) => each.name))];
   const tabLabel: Record<Tab, string> = { "created-closed": "flow-tab-created-closed", cumulative: "flow-tab-cumulative", cycle: "flow-tab-cycle" };
 
   return (
@@ -234,6 +239,7 @@ export function FlowReportsScreen() {
             setProject(key === ANY ? "" : key);
             setTaskType("");
             setLabel("");
+            setVersion("");
           }}
           options={[{ id: ANY, label: t("report-all-projects") }, ...(projects.data?.items ?? []).map((each) => ({ id: each.key, label: each.path, icon: <ProjectMark hue={each.hue} icon={each.icon} /> }))]}
         />
@@ -262,6 +268,17 @@ export function FlowReportsScreen() {
               setLabel(key === ANY ? "" : key);
             }}
             options={[{ id: ANY, label: t("flow-any-label") }, ...labels.map((name) => ({ id: name, label: name }))]}
+          />
+        )}
+        {project !== "" && versions.length > 0 && (
+          <Select
+            className={styles.select}
+            label={t("flow-version")}
+            value={version === "" ? ANY : version}
+            onChange={(key) => {
+              setVersion(key === ANY ? "" : key);
+            }}
+            options={[{ id: ANY, label: t("flow-any-version") }, ...versions.map((name) => ({ id: name, label: name }))]}
           />
         )}
         <span className={classes("field", styles.queryField)}>

@@ -418,3 +418,94 @@ fn a_removed_status_keeps_its_band_in_earlier_periods() {
     );
     assert_eq!(column(&closed, "closed"), [0, 1]);
 }
+
+#[test]
+fn versions_custom_fields_status_rules_and_renames() {
+    let dir = TempDir::new().unwrap();
+    let ws = open(&dir);
+    let me = Context::user(Via::App);
+    ws.call("project.create", json!({ "name": "Team", "key": "TM" }));
+    ws.call("version.create", json!({ "project": "TM", "name": "1.0" }));
+    ws.call(
+        "field.create",
+        json!({ "project": "TM", "name": "Story points", "kind": "integer" }),
+    );
+    ws.call(
+        "rules.update",
+        json!({
+            "project": "TM",
+            "statuses": [
+                { "status": "In progress", "rules": {
+                    "set": [{ "field": "start_date", "value": "today", "only_if_empty": true }],
+                } },
+                { "status": "Done", "rules": {
+                    "set": [{ "field": "progress", "value": "100" }],
+                } },
+            ],
+        }),
+    );
+    let a = ws.create(
+        &me,
+        "A",
+        json!({ "fix_version": "1.0", "fields": { "Story points": 5 } }),
+    );
+    let b = ws.create(&me, "B", json!({ "fields": { "Story points": 1 } }));
+    ws.at(MONDAY + DAY);
+    ws.move_to(&me, &a, "In progress");
+    ws.move_to(&me, &b, "In progress");
+    ws.at(MONDAY + 3 * DAY);
+    ws.move_to(&me, &a, "Done");
+    ws.at(MONDAY + 5 * DAY);
+    ws.move_to(&me, &b, "Done");
+    // Moved to another project once closed: its history moves with it.
+    ws.call("project.create", json!({ "name": "Other", "key": "OT" }));
+    ws.call("task.move", json!({ "key": b, "project": "OT" }));
+    // Renamed after the moves: history names statuses by ID.
+    ws.call(
+        "status.update",
+        json!({ "project": "TM", "status": "In progress", "name": "Doing" }),
+    );
+    ws.call(
+        "status.update",
+        json!({ "project": "TM", "status": "Done", "name": "Shipped" }),
+    );
+    ws.at(MONDAY + 20 * DAY);
+    let cycle = |extra: Value| {
+        let mut input = json!({ "from": RANGE.0, "to": RANGE.1, "tasks": true });
+        input
+            .as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        ws.call("report.cycle_time", input)
+    };
+    let all = cycle(json!({}));
+    assert_eq!(all["cycle"]["count"], 2);
+    assert_eq!(all["cycle"]["min"], 2.0);
+    assert_eq!(all["cycle"]["max"], 4.0);
+
+    let released = cycle(json!({ "fix_version": "1.0" }));
+    assert_eq!(released["cycle"]["count"], 1);
+    assert_eq!(released["tasks"][0]["key"], a);
+    let points = cycle(json!({ "query": "cf.story-points>=3" }));
+    assert_eq!(points["tasks"].as_array().unwrap().len(), 1);
+    assert_eq!(points["tasks"][0]["key"], a);
+    let none = cycle(json!({ "query": "version:none" }));
+    assert_eq!(none["tasks"][0]["key"], "OT-1");
+    let other = cycle(json!({ "project": "OT" }));
+    assert_eq!(other["cycle"]["count"], 1);
+    assert_eq!(other["cycle"]["max"], 4.0);
+
+    let (names, counts) = flow(&ws.call(
+        "report.cumulative_flow",
+        json!({ "from": RANGE.0, "to": RANGE.1, "fix_version": "1.0" }),
+    ));
+    let shipped = names.iter().position(|n| n == "Shipped").unwrap();
+    assert!(names.iter().any(|n| n == "Doing"));
+    assert_eq!(counts[0][shipped], 1);
+
+    assert_eq!(
+        ws.fails("report.created_closed", json!({ "fix_version": "9.9" }))
+            .details["path"],
+        "fix_version"
+    );
+}

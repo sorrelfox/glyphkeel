@@ -10,9 +10,9 @@
 //! from the first move into an `in_progress` status to the last close; lead
 //! time from the task's creation to the last close.
 //!
-//! The reports count the tasks as they are now: their project, type, labels
-//! and query match today decide whether they are in. Tasks in the trash are
-//! left out; while a task was in the trash it is not counted.
+//! The reports count the tasks as they are now: their project, type, labels,
+//! fix version and query match today decide whether they are in. Tasks in
+//! the trash are left out; while a task was in the trash it is not counted.
 //!
 //! Days, weeks and months are those of the personal time zone; weeks start
 //! on the workspace's first day of the week. The first and last periods are
@@ -76,6 +76,10 @@ pub struct FlowReportInput {
     /// Only tasks with this label, by name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
+    /// Only tasks planned for this version: a name (every version of that
+    /// name) or an ID.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fix_version: Option<String>,
     /// Only tasks that match this query (the task query language), as they
     /// are now.
     #[serde(default, skip_serializing_if = "Option::is_none")]

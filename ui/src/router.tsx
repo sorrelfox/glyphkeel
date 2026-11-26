@@ -37,6 +37,7 @@ const Gallery = lazy(() => import("./dev/Gallery"));
 const EditorPlayground = lazy(() => import("./editor/dev/EditorPlayground"));
 const CalendarScreen = lazy(() => import("./screens/calendar/CalendarScreen").then((module) => ({ default: module.CalendarScreen })));
 const GanttScreen = lazy(() => import("./screens/gantt/GanttScreen").then((module) => ({ default: module.GanttScreen })));
+const RoadmapScreen = lazy(() => import("./screens/roadmap/RoadmapScreen").then((module) => ({ default: module.RoadmapScreen })));
 
 /** The path that opens the gallery directly, for the browser tests. */
 export const GALLERY_PATH = "/dev/themes";
@@ -129,6 +130,14 @@ export const projectGanttRoute = createRoute({
   component: LazyGanttScreen,
 });
 
+/** A project's roadmap: its versions with their progress and tasks; loaded on first use. */
+export const projectRoadmapRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: "/projects/$key/roadmap",
+  validateSearch: taskSearch,
+  component: LazyRoadmapScreen,
+});
+
 /** The quick-add window: one field, without the board and the sidebar. */
 const quickAddRoute = createRoute({ getParentRoute: () => rootRoute, path: QUICK_ADD_PATH, component: QuickAdd });
 
@@ -160,7 +169,7 @@ const routeTree = rootRoute.addChildren([
   quickAddRoute,
   taskWindowRoute,
   wikiWindowRoute,
-  shellRoute.addChildren([todayRoute, searchRoute, allTasksRoute, timeReportRoute, reportsRoute, trashRoute, activityRoute, boardRoute, projectListRoute, projectCalendarRoute, projectGanttRoute, wikiRoute, openTaskRoute]),
+  shellRoute.addChildren([todayRoute, searchRoute, allTasksRoute, timeReportRoute, reportsRoute, trashRoute, activityRoute, boardRoute, projectListRoute, projectCalendarRoute, projectGanttRoute, projectRoadmapRoute, wikiRoute, openTaskRoute]),
 ]);
 
 /**
@@ -255,6 +264,14 @@ function LazyGanttScreen() {
   return (
     <Suspense>
       <GanttScreen />
+    </Suspense>
+  );
+}
+
+function LazyRoadmapScreen() {
+  return (
+    <Suspense>
+      <RoadmapScreen />
     </Suspense>
   );
 }

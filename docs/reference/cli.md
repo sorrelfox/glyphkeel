@@ -47,6 +47,7 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel project list` | `project.list` | The project tree in sidebar order, with keys, names and open-task counts; archived projects on request. |
 | `glyphkeel project move <project>` | `project.move` | Move a project under another one (at most 3 levels), to the top level, or among its siblings. |
 | `glyphkeel project rekey <project>` | `project.change_key` | Give a project a new key; the old key and the old task keys keep working. |
+| `glyphkeel project rules <project>` | `rules.update` | Change a project's status rules (fields set, cleared or required when a task enters a status, fields read-only in it, the timer and claims) and its rules for agents (statuses they may not move tasks into, fields they may not change). |
 | `glyphkeel project show <project>` | `project.get` | One project with its statuses (board order, category, WIP limit), task types, labels, modules, sub-projects and counts. |
 | `glyphkeel project unarchive <project>` | `project.unarchive` | Unarchive a project and its sub-projects. |
 | `glyphkeel reminder ack <ids>` | `reminder.acknowledge` | Acknowledge reminders that were shown, so they don't come due again. |
@@ -98,6 +99,11 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel type add` | `type.create` | Add a task type to a project. |
 | `glyphkeel type delete` | `type.delete` | Delete a task type; its tasks get another type. Can't be undone. |
 | `glyphkeel type edit` | `type.update` | Rename, reshape, recolour or reorder a task type, or make it the default. |
+| `glyphkeel version create` | `version.create` | Create a version of a project: name, description, status, start and due dates, and whether its sub-projects can use it. |
+| `glyphkeel version delete <version>` | `version.delete` | Delete a version; its tasks are planned for no version. Revert brings both back. |
+| `glyphkeel version edit <version>` | `version.update` | Rename a version, change its description, dates, sharing or status, or close it and move its open tasks to another version. |
+| `glyphkeel version list <project>` | `version.list` | The versions of a project and those its ancestors share with it, with status, dates and progress; with their tasks for the roadmap. |
+| `glyphkeel version show <version>` | `version.get` | One version with its progress and its tasks. |
 | `glyphkeel view create` | `view.create` | Save a query as a named view of a project or of the whole workspace, with its columns, order, grouping and totals. |
 | `glyphkeel view delete <view>` | `view.delete` | Delete a saved view; it can be brought back with revert. |
 | `glyphkeel view edit <view>` | `view.update` | Rename a saved view, change its query, columns, order, grouping or totals, or make it the default. |

@@ -17,10 +17,11 @@ import { plainText, shownFor, useCustomFields } from "../../data/fields";
 import { type CustomField, type Task } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { openLink } from "../../ipc/links";
+import { customRuleField } from "../../data/rules";
 import styles from "./Fields.module.css";
 
 /** The section, when the task's project has fields for its type or the task has values. */
-export function FieldsSection({ task, readOnly }: { task: Task; readOnly: boolean }) {
+export function FieldsSection({ task, readOnly, locked }: { task: Task; readOnly: boolean; locked?: ReadonlySet<string> }) {
   const t = useT();
   const fields = useCustomFields(task.project);
   const update = useUpdateTask();
@@ -46,7 +47,7 @@ export function FieldsSection({ task, readOnly }: { task: Task; readOnly: boolea
                 </span>
               )}
             </span>
-            <FieldEditor field={field} value={values.get(field.id)} readOnly={readOnly} onChange={(value) => { set(field, value); }} />
+            <FieldEditor field={field} value={values.get(field.id)} readOnly={readOnly || locked?.has(customRuleField(field.id)) === true} onChange={(value) => { set(field, value); }} />
           </div>
         ))}
       </div>

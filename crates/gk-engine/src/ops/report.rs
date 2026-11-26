@@ -337,6 +337,10 @@ impl Flow {
             }
             None => None,
         };
+        let versions = match input.fix_version.as_deref().map(str::trim) {
+            Some(text) => Some(version_ids(tx, text)?),
+            None => None,
+        };
         let matching: Option<HashSet<Id>> = match input.query.as_deref().map(str::trim) {
             Some(src) if !src.is_empty() => {
                 let (_, checked) = super::query::compile(tx, &zone, q.now, src, "query")?;
@@ -364,7 +368,7 @@ impl Flow {
             let mut stmt = tx.prepare_cached(
                 "SELECT t.id, t.project_id, t.type_id, p.key || '-' || t.number, t.title,
                         t.status_id, t.status_entered_at, t.created_at, t.created_by_kind,
-                        t.created_by_name
+                        t.created_by_name, t.fix_version_id
                    FROM tasks t JOIN projects p ON p.id = t.project_id
                   WHERE t.deleted_at IS NULL AND p.deleted_at IS NULL",
             )?;
@@ -379,6 +383,7 @@ impl Flow {
                     entered: r.get(6)?,
                     created: r.get(7)?,
                     by: (r.get(8)?, r.get(9)?),
+                    version: lookup::opt_id_at(r, 10)?,
                 })
             })?;
             for t in found {
@@ -386,6 +391,9 @@ impl Flow {
                 if projects.as_ref().is_some_and(|p| !p.contains(&t.project))
                     || types.as_ref().is_some_and(|s| !s.contains(&t.kind))
                     || labelled.as_ref().is_some_and(|s| !s.contains(&t.id))
+                    || versions
+                        .as_ref()
+                        .is_some_and(|s| !t.version.is_some_and(|v| s.contains(&v)))
                     || matching.as_ref().is_some_and(|s| !s.contains(&t.id))
                 {
                     continue;
@@ -571,6 +579,7 @@ struct TaskRow {
     entered: i64,
     created: i64,
     by: Who,
+    version: Option<Id>,
 }
 
 /// The IDs of the rows of `table` named `name` (any project); an unknown
@@ -594,6 +603,33 @@ fn named_ids(
                 "flow-report-unknown-label"
             },
             &[("name", name.to_owned())],
+        ));
+    }
+    Ok(ids)
+}
+
+/// The versions `text` names: the one of that ID, or every version of
+/// that name.
+fn version_ids(tx: &Transaction<'_>, text: &str) -> Result<HashSet<Id>, Failure> {
+    if let Ok(id) = text.parse::<Id>() {
+        let found: bool = tx.query_row(
+            "SELECT EXISTS (SELECT 1 FROM versions WHERE id = ?1)",
+            params![lookup::b(id)],
+            |r| r.get(0),
+        )?;
+        if found {
+            return Ok(HashSet::from([id]));
+        }
+    }
+    let mut stmt = tx.prepare_cached("SELECT id FROM versions WHERE name_fold = ?1")?;
+    let ids = stmt
+        .query_map(params![fold(text)], |r| id_at(r, 0))?
+        .collect::<Result<HashSet<_>, _>>()?;
+    if ids.is_empty() {
+        return Err(messages::invalid(
+            "fix_version",
+            "flow-report-unknown-version",
+            &[("name", text.to_owned())],
         ));
     }
     Ok(ids)

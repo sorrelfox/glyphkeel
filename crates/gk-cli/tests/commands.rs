@@ -337,6 +337,9 @@ fn flow_reports_count_created_and_closed_tasks() {
     let cycle = ws.json(&["report", "cycle-time", "--tasks"]);
     assert_eq!(cycle["lead"]["count"], 1);
     assert_eq!(cycle["tasks"][0]["key"], "GK-1");
+    ws.ok(&["version", "create", "--project", "GK", "--name", "1.0"]);
+    let planned = ws.json(&["report", "cycle-time", "--fix-version", "1.0"]);
+    assert_eq!(planned["lead"]["count"], 0, "no task is planned for 1.0");
     let out = ws.run(&["report", "flow", "--type", "Nope"]);
     assert_eq!(code(&out), 1, "{}", stderr(&out));
 }

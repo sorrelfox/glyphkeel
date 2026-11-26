@@ -643,6 +643,13 @@ move-to-fields-row =
         [one] { $name } (1 task)
        *[other] { $name } ({ $count } tasks)
     }
+move-to-versions-left-off = { $project } can't plan tasks for these versions, so they are taken off:
+# $name is a version the tasks are planned for; $count how many of them.
+move-to-versions-row =
+    { $count ->
+        [one] { $name } (1 task)
+       *[other] { $name } ({ $count } tasks)
+    }
 move-to-confirm = Move
 move-to-done = Moved: the task is { $key } now.
 move-to-done-many =

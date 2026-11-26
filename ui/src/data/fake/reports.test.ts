@@ -65,6 +65,25 @@ describe("the stand-in's flow reports", () => {
     expect(() => ws.call("report.cycle_time", { from: "2020-01-01", to: "2026-01-01", bucket: "day" })).toThrow(FakeError);
   });
 
+  it("narrows to a version and to custom fields through the query", () => {
+    const { ws, call, at } = workspace();
+    call("project.create", { name: "Flow", key: "FL" });
+    call("version.create", { project: "FL", name: "1.0" });
+    call("field.create", { project: "FL", name: "Points", kind: "integer" });
+    const a = call<TaskChange>("task.create", { project: "FL", title: "A", status: "To do", fix_version: "1.0", fields: { Points: 5 } }).task.key;
+    const b = call<TaskChange>("task.create", { project: "FL", title: "B", status: "To do", fields: { Points: 1 } }).task.key;
+    at(1);
+    call("task.move", { key: a, status: "Done" });
+    call("task.move", { key: b, status: "Done" });
+    at(20);
+    const range = { project: "FL", from: "2026-11-02", to: "2026-11-15", tasks: true };
+    const keys = (input: object) => call<CycleTimeReport>("report.cycle_time", { ...range, ...input }).tasks?.map((task) => task.key);
+    expect(keys({})).toEqual([a, b]);
+    expect(keys({ fix_version: "1.0" })).toEqual([a]);
+    expect(keys({ query: "cf.points>=3" })).toEqual([a]);
+    expect(() => ws.call("report.created_closed", { fix_version: "9.9" })).toThrow(FakeError);
+  });
+
   it("interpolates percentiles", () => {
     expect(flowStats([4, 1, 3, 2])).toMatchObject({ count: 4, p50: 2.5, p85: 3.55, min: 1, max: 4, mean: 2.5 });
     expect(flowStats([])).toEqual({ count: 0 });
