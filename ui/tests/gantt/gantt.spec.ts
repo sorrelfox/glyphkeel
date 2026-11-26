@@ -1,0 +1,382 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Glyphkeel contributors
+
+import { join } from "node:path";
+
+import { expect, test, type Locator, type Page } from "@playwright/test";
+
+// The Gantt chart on the sample data, whose dates lie around today. The
+// clock is fixed, so the sample data is the same on every run. With
+// GK_SCREENSHOT_DIR set, the flows save screenshots there.
+
+const TODAY = "2026-11-11";
+/** Pixels per day at the day zoom. */
+const DAY_PX = 32;
+
+async function openGantt(page: Page, query = "") {
+  await page.clock.setFixedTime(new Date(`${TODAY}T10:00:00`));
+  await page.goto(`/${query}`);
+  await page.getByRole("row", { name: /Task Manager/ }).click();
+  await expect(page.getByRole("group", { name: /Board of/ })).toBeVisible();
+  await page.getByRole("group", { name: "Project views" }).getByRole("button", { name: "Gantt" }).click();
+  const grid = page.getByRole("treegrid", { name: "Gantt chart" });
+  await expect(grid).toBeVisible();
+  await expect(grid.locator("[data-bar]").first()).toBeAttached();
+  return grid;
+}
+
+async function shot(page: Page, name: string) {
+  const dir = process.env.GK_SCREENSHOT_DIR;
+  if (dir) {
+    await page.screenshot({ path: join(dir, name) });
+  }
+}
+
+function addDays(date: string, days: number): string {
+  const at = new Date(`${date}T12:00:00Z`);
+  at.setUTCDate(at.getUTCDate() + days);
+  return at.toISOString().slice(0, 10);
+}
+
+/** Fluent wraps placeables in invisible isolation marks. */
+const plain = (text: string | null) => (text ?? "").replace(/[\u2068\u2069]/g, "");
+/** What the chart last told screen readers. */
+const live = (page: Page) => async () => plain(await page.getByTestId("gantt-live").textContent());
+
+const bar = (grid: Locator, key: string) => grid.locator(`[data-bar="${key}"]`);
+const row = (grid: Locator, key: string) => grid.locator(`[data-row="${key}"]`);
+/** A row's key cell, which a click selects without editing anything. */
+const cellOf = (grid: Locator, key: string) => row(grid, key).getByRole("gridcell").first();
+
+/** The dates a row's cells show, as the engine knows them (from the buttons' names). */
+async function datesOf(grid: Locator, key: string): Promise<[string, string]> {
+  const buttons = row(grid, key).locator("button[aria-label*='date of']");
+  const start = (await buttons.nth(0).getAttribute("aria-label")) ?? "";
+  const due = (await buttons.nth(1).getAttribute("aria-label")) ?? "";
+  return [start.replace(/^.*: /, "").replace(/[⁨⁩]/g, ""), due.replace(/^.*: /, "").replace(/[⁨⁩]/g, "")];
+}
+
+/** A plain bar (start and due) on screen, not closed. */
+async function plainBar(grid: Locator, skip: string[] = []): Promise<string> {
+  for (const element of await grid.locator("[data-bar][data-shape=bar]").all()) {
+    const key = (await element.getAttribute("data-bar")) ?? "";
+    const box = await element.locator("[data-handle=move]").boundingBox();
+    const cls = (await element.getAttribute("class")) ?? "";
+    if (!skip.includes(key) && box && box.width >= 3 * DAY_PX && box.x > 520 && box.x + box.width < 1250 && !cls.includes("closed")) {
+      return key;
+    }
+  }
+  throw new Error("no plain bar on screen in the sample data");
+}
+
+async function dragBy(page: Page, handle: Locator, dx: number, dy = 0) {
+  const box = await handle.boundingBox();
+  if (!box) {
+    throw new Error("nothing to drag");
+  }
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + dx / 2, y + dy / 2, { steps: 4 });
+  await page.mouse.move(x + dx, y + dy, { steps: 4 });
+  await page.mouse.up();
+}
+
+test("the chart: table and timeline, today, the sample tasks, the Unscheduled group", async ({ page }) => {
+  const grid = await openGantt(page);
+  await expect(grid.locator("[data-today]")).toHaveCount(1);
+  await expect(grid.getByRole("columnheader")).toHaveCount(5);
+  await expect(grid.getByRole("row", { name: /^Unscheduled/ })).toHaveCount(await grid.getByRole("row", { name: /^Unscheduled/ }).count());
+  // The range of days on screen is shown in the toolbar.
+  await expect(page.getByTestId("gantt-range")).not.toHaveText("");
+  // The status bar counts the tasks.
+  await expect(page.getByText(/scheduled.*unscheduled/)).toBeVisible();
+  await shot(page, "gantt-day.png");
+});
+
+test("dragging a bar moves it, dragging an edge resizes it, and Undo takes it back", async ({ page }) => {
+  const grid = await openGantt(page);
+  const key = await plainBar(grid);
+  const [start, due] = await datesOf(grid, key);
+
+  await dragBy(page, bar(grid, key).locator("[data-handle=move]"), 3 * DAY_PX);
+  await expect.poll(() => datesOf(grid, key)).not.toEqual([start, due]);
+  const moved = await datesOf(grid, key);
+  await expect.poll(live(page)).toContain(`${key} now runs`);
+
+  await dragBy(page, bar(grid, key).locator("[data-handle=end]"), 2 * DAY_PX);
+  await expect.poll(async () => (await datesOf(grid, key))[1]).not.toBe(moved[1]);
+  expect((await datesOf(grid, key))[0]).toBe(moved[0]);
+
+  // Undo, twice, restores the dates.
+  await page.keyboard.press("Control+z");
+  await page.keyboard.press("Control+z");
+  await expect.poll(() => datesOf(grid, key)).toEqual([start, due]);
+});
+
+test("with Also move dependents on, a drag says how many tasks it may move, and moves them in one change", async ({ page }) => {
+  const grid = await openGantt(page);
+  const alsoMove = page.getByRole("switch", { name: "Also move dependents" });
+  await page.getByText("Also move dependents").click();
+  await expect(alsoMove).toBeChecked();
+  const candidates = grid.locator("[data-bar][data-shape=bar]:not([data-dependents='0'])");
+  await expect(candidates.first()).toBeAttached();
+  const key = (await candidates.first().getAttribute("data-bar")) ?? "";
+  const count = Number(await candidates.first().getAttribute("data-dependents"));
+  const before = await datesOf(grid, key);
+  const handle = bar(grid, key).locator("[data-handle=end]");
+  await handle.scrollIntoViewIfNeeded();
+  const box = await handle.boundingBox();
+  if (!box) {
+    throw new Error("no bar end");
+  }
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 10 * DAY_PX, box.y + box.height / 2, { steps: 10 });
+  const tip = page.getByTestId("gantt-tip");
+  await expect(tip).toContainText(count === 1 ? "May move one dependent task" : `May move up to ${String(count)} dependent tasks`);
+  await shot(page, "gantt-dependents.png");
+  await page.mouse.up();
+  await expect(page.getByText(/dependent tasks? moved/)).toBeVisible();
+  await page.keyboard.press("Control+z");
+  await expect.poll(() => datesOf(grid, key)).toEqual(before);
+});
+
+test("dragging from a bar's end to another bar links them; clicking the arrow removes it", async ({ page }) => {
+  const grid = await openGantt(page);
+  // Two bars not linked yet, either way round.
+  const from = await plainBar(grid);
+  let to = await plainBar(grid, [from]);
+  const skip = [from];
+  while ((await grid.locator(`[data-dependency="${to}>${from}"], [data-dependency="${from}>${to}"]`).count()) > 0) {
+    skip.push(to);
+    to = await plainBar(grid, skip);
+  }
+  const link = grid.locator(`[data-dependency="${from}>${to}"]`);
+  await expect(link).toHaveCount(0);
+
+  await bar(grid, from).locator("[data-handle=move]").hover();
+  const handle = bar(grid, from).locator("[data-handle=link]");
+  const target = await bar(grid, to).locator("[data-handle=move]").boundingBox();
+  const start = await handle.boundingBox();
+  if (!target || !start) {
+    throw new Error("bars not on screen");
+  }
+  await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(target.x + 4, target.y + target.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await expect(link).toHaveCount(1);
+  await shot(page, "gantt-link.png");
+
+  // Click on the line itself, half way along it.
+  const point = await link.locator("path").nth(1).evaluate((path: SVGPathElement) => {
+    const at = path.getPointAtLength(path.getTotalLength() / 2);
+    const screen = new DOMPoint(at.x, at.y).matrixTransform(path.getScreenCTM() ?? new DOMMatrix());
+    return { x: screen.x, y: screen.y };
+  });
+  await page.mouse.click(point.x, point.y);
+  await expect(link).toHaveCount(0);
+});
+
+test("the keyboard moves, resizes, links, folds and zooms; zoom keeps the middle day", async ({ page }) => {
+  const grid = await openGantt(page);
+  const key = await plainBar(grid);
+  await cellOf(grid, key).click();
+  await expect(grid).toBeFocused();
+  await expect(grid).toHaveAttribute("aria-activedescendant", /row/);
+  const [start, due] = await datesOf(grid, key);
+
+  // Alt+Right moves it a day; Alt+Shift+Right makes it a day longer.
+  await page.keyboard.press("Alt+ArrowRight");
+  await expect.poll(live(page)).toContain(`${key} now runs`);
+  await expect.poll(async () => (await datesOf(grid, key))[1]).not.toBe(due);
+  const [, movedDue] = await datesOf(grid, key);
+  await page.keyboard.press("Alt+Shift+ArrowRight");
+  await expect.poll(async () => (await datesOf(grid, key))[1]).not.toBe(movedDue);
+  expect((await datesOf(grid, key))[0]).not.toBe(start);
+
+  // L, then the next task and Enter, makes a dependency; again removes it.
+  const active = async () => (await grid.getAttribute("aria-activedescendant")) ?? "";
+  await page.keyboard.press("l");
+  await expect.poll(live(page)).toContain(`Dependency from ${key}`);
+  const before = await active();
+  await page.keyboard.press("ArrowDown");
+  await expect.poll(active).not.toBe(before);
+  const other = (await grid.locator(`[id="${await active()}"]`).getAttribute("data-row")) ?? "";
+  await page.keyboard.press("Enter");
+  await expect(grid.locator(`[data-dependency="${key}>${other}"]`)).toHaveCount(1);
+  await cellOf(grid, key).click();
+  await page.keyboard.press("l");
+  await cellOf(grid, other).click();
+  await page.keyboard.press("Enter");
+  await expect(grid.locator(`[data-dependency="${key}>${other}"]`)).toHaveCount(0);
+
+  // Zoom out with "-", in with "+"; the day in the middle stays.
+  const range = page.getByTestId("gantt-range");
+  await expect(page.locator("[data-gantt]")).toHaveAttribute("data-zoom", "day");
+  const dayRange = await range.textContent();
+  await page.keyboard.press("-");
+  await expect(page.locator("[data-gantt]")).toHaveAttribute("data-zoom", "week");
+  await expect(range).not.toHaveText(dayRange ?? "");
+  await page.keyboard.press("+");
+  await expect(page.locator("[data-gantt]")).toHaveAttribute("data-zoom", "day");
+  await expect(range).toHaveText(dayRange ?? "");
+
+  // The zoom is the person's: it is kept for the next visit.
+  await page.keyboard.press("-");
+  await page.keyboard.press("-");
+  await expect(page.locator("[data-gantt]")).toHaveAttribute("data-zoom", "month");
+  await shot(page, "gantt-month.png");
+  await page.reload();
+  await page.getByRole("row", { name: /Task Manager/ }).click();
+  await page.getByRole("group", { name: "Project views" }).getByRole("button", { name: "Gantt" }).click();
+  await expect(page.locator("[data-gantt]")).toHaveAttribute("data-zoom", "month");
+});
+
+test("a task from the Unscheduled group is scheduled by dropping it on the timeline; F2 edits dates", async ({ page }) => {
+  const grid = await openGantt(page);
+  // The Unscheduled group is last; only the rows on screen are drawn.
+  const unscheduled = grid.getByRole("row", { name: /, unscheduled$/ }).last();
+  await expect(async () => {
+    await grid.evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+    });
+    await expect(unscheduled).toBeVisible({ timeout: 500 });
+  }).toPass();
+  const key = (await unscheduled.getAttribute("data-row")) ?? "";
+  const box = await unscheduled.boundingBox();
+  const today = await grid.locator("[data-today]").boundingBox();
+  if (!box || !today) {
+    throw new Error("nothing to drag");
+  }
+  await page.mouse.move(box.x + 200, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(today.x + today.width / 2, box.y - 40, { steps: 10 });
+  await expect(page.getByTestId("gantt-tip")).toBeVisible();
+  await page.mouse.up();
+  await expect(bar(grid, key)).toHaveCount(1);
+  await expect.poll(live(page)).toContain(`${key} scheduled on`);
+
+  // F2 edits the start date, Tab goes on to the due date.
+  await cellOf(grid, key).click();
+  await page.keyboard.press("F2");
+  const field = grid.locator("input[type=date]");
+  await expect(field).toBeFocused();
+  expect(plain(await field.getAttribute("aria-label"))).toBe(`Start date of ${key}`);
+  await page.keyboard.press("Tab");
+  await expect(field).toBeFocused();
+  expect(plain(await field.getAttribute("aria-label"))).toBe(`Due date of ${key}`);
+  const dueField = field;
+  await dueField.fill(addDays(TODAY, 5));
+  await page.keyboard.press("Enter");
+  await expect(bar(grid, key)).toHaveAttribute("data-shape", "bar");
+});
+
+test("right to left: the table is on the right, the timeline runs leftwards, drags follow the pointer", async ({ browser }) => {
+  const context = await browser.newContext({ locale: "he-IL", viewport: { width: 1400, height: 900 } });
+  const page = await context.newPage();
+  const grid = await openGantt(page);
+  await expect(page.locator("[data-gantt]")).toHaveAttribute("dir", "rtl");
+  const table = await grid.getByRole("columnheader").first().boundingBox();
+  const frame = await grid.boundingBox();
+  expect(table && frame && table.x > frame.x + frame.width / 2).toBe(true);
+  const key = await (async () => {
+    for (const element of await grid.locator("[data-bar][data-shape=bar]").all()) {
+      const b = await element.locator("[data-handle=move]").boundingBox();
+      if (b && b.width >= 3 * DAY_PX && b.x > 150 && b.x + b.width < 850) {
+        return (await element.getAttribute("data-bar")) ?? "";
+      }
+    }
+    throw new Error("no bar on screen");
+  })();
+  const [start] = await datesOf(grid, key);
+  // Dragging leftwards moves it later in right-to-left.
+  await dragBy(page, bar(grid, key).locator("[data-handle=move]"), -2 * DAY_PX);
+  await expect.poll(async () => (await datesOf(grid, key))[0]).not.toBe(start);
+  await expect(page.getByTestId("gantt-live")).toContainText(key);
+  await shot(page, "gantt-rtl.png");
+  await context.close();
+});
+
+test("500 tasks and 300 dependencies draw in under a second", async ({ page }) => {
+  await page.clock.setFixedTime(new Date(`${TODAY}T10:00:00`));
+  // GK_CPU_SLOWDOWN=4 measures on a CPU four times slower (Chromium only).
+  // The limit is for reading and drawing the chart; the first visit, which
+  // also loads the chart's code, is only reported.
+  const slowdown = Number(process.env.GK_CPU_SLOWDOWN ?? 1);
+  if (slowdown > 1) {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: slowdown });
+  }
+  await page.goto("/?tasks=500&links=300");
+  await page.getByRole("row", { name: /Task Manager/ }).click();
+  await expect(page.getByRole("group", { name: /Board of/ })).toBeVisible();
+  const views = page.getByRole("group", { name: "Project views" });
+  const grid = page.getByRole("treegrid", { name: "Gantt chart" });
+  const frame = () => page.evaluate(() => new Promise<number>((resolve) => requestAnimationFrame(() => { resolve(performance.now()); })));
+
+  // The first visit also loads the chart's code.
+  let started = await page.evaluate(() => performance.now());
+  await views.getByRole("button", { name: "Gantt" }).click();
+  await expect(grid.locator("[data-bar]").first()).toBeAttached();
+  const first = (await frame()) - started;
+
+  // The second: reading the schedule (in the sample engine) and drawing it.
+  await views.getByRole("button", { name: "Board" }).click();
+  await expect(page.getByRole("group", { name: /Board of/ })).toBeVisible();
+  started = await page.evaluate(() => performance.now());
+  await views.getByRole("button", { name: "Gantt" }).click();
+  await expect(grid.locator("[data-bar]").first()).toBeAttached();
+  const again = (await frame()) - started;
+
+  // A zoom draws everything on screen anew.
+  started = await page.evaluate(() => performance.now());
+  await page.getByRole("radiogroup", { name: "Zoom" }).getByRole("radio", { name: "Week" }).click();
+  await expect(page.locator("[data-gantt]")).toHaveAttribute("data-zoom", "week");
+  const zoom = (await frame()) - started;
+
+  const rows = Number(await grid.getAttribute("aria-rowcount"));
+  const links = await grid.locator("[data-dependency]").count();
+  console.log(`gantt render: first ${String(Math.round(first))} ms, again ${String(Math.round(again))} ms, zoom ${String(Math.round(zoom))} ms; ${String(rows)} rows, ${String(links)} dependencies drawn`);
+  expect(rows).toBeGreaterThan(500);
+  expect(links).toBeGreaterThan(0);
+  expect(again).toBeLessThan(1000);
+  expect(zoom).toBeLessThan(500);
+  // Scrolling to the end keeps drawing only what is on screen.
+  await grid.evaluate((el) => {
+    el.scrollTop = el.scrollHeight;
+  });
+  await expect(grid.locator("[data-row]").last()).toBeVisible();
+  expect(await grid.locator("[data-row]").count()).toBeLessThan(120);
+  await shot(page, "gantt-500.png");
+});
+
+test("pseudo-locale: the chart's words all come from the messages", async ({ browser }) => {
+  const context = await browser.newContext({ locale: "en-XA", viewport: { width: 1400, height: 900 } });
+  const page = await context.newPage();
+  await page.clock.setFixedTime(new Date(`${TODAY}T10:00:00`));
+  await page.goto("/");
+  await page.getByRole("row", { name: /Task Manager/ }).click();
+  // The view with the Gantt icon.
+  await page.getByRole("banner").locator("button:has(svg.lucide-chart-gantt)").click();
+  const chart = page.locator("[data-gantt]");
+  await expect(chart.locator("[data-bar]").first()).toBeAttached();
+  // Every message of the toolbar and the table is accented and in brackets.
+  const words = await page.locator("[data-gantt-view]").evaluate((root) => {
+    const texts: string[] = [];
+    for (const el of root.querySelectorAll("[role=columnheader], [role=radio], label, button.btn, [role=switch]")) {
+      const text = el.textContent.trim();
+      if (text !== "") {
+        texts.push(text);
+      }
+    }
+    return texts;
+  });
+  expect(words.length).toBeGreaterThan(5);
+  const english = words.filter((text) => /\b(Key|Title|Start|Due|Day|Week|Month|Quarter|Today|Include|Also)\b/.test(text));
+  expect(english).toEqual([]);
+  await shot(page, "gantt-pseudo.png");
+  await context.close();
+});

@@ -73,6 +73,7 @@ import { checklistOf, merge3, publicChecklist, renderFake, setChecked, unifiedDi
 import { newProject, nextFileId, nextId, nextUuid, SAMPLE_AGENT } from "./seed";
 import { type FakeComment, type FakeFile, type FakeProject, type FakeRelation, type FakeReminder, type FakeRevision, type FakeState, type FakeTask, type FakeTimeEntry, type FakeWikiPage } from "./state";
 import { naturalDay, nextDay, searchAll, searchWiki, slugOf, headingsOf } from "./overview";
+import { moveDependents, scheduleOf } from "./schedule";
 import { createView, deleteView, listViews, matchingKeys, parseQuery, queryError, searchTasks, updateView, type GroupInfo, type QueryNames } from "./query";
 import { addDays, localDay, MAX_ENTRY_MINUTES, momentOf, reminderAt, reminderOut, sortDue, timeEntryOut, timerElapsedMs, timerOut, unitsOf, weekStart, workDay } from "./time";
 
@@ -2340,6 +2341,19 @@ export class FakeWorkspace {
         },
       };
     },
+    "schedule.get": (input) => {
+      if ((input.project === null || input.project === undefined) && (input.query === null || input.query === undefined)) {
+        fail("invalid", "Give a `project`, a `query`, or both.", { details: { message_id: "schedule-scope-needed" } });
+      }
+      const scope = input.project === null || input.project === undefined ? null : this.project(input.project);
+      const keys = scope === null ? null : new Set([scope, ...(input.include_subprojects === true ? this.descendants(scope) : [])].map((project) => project.key));
+      const archived = this.archivedKeys();
+      const filter = input.query === null || input.query === undefined || input.query.trim() === "" ? null : new Set(this.runQuery(() => matchingKeys(this.listedTasks(), input.query ?? "", this.queryNames(), archived)));
+      const tasks = this.listedTasks().filter((task) => (keys === null || keys.has(task.project)) && (filter === null || filter.has(task.key)));
+      const milestoneTypes = new Set(this.state.projects.flatMap((project) => project.types.filter((type) => type.glyph === "milestone").map((type) => type.id)));
+      const links = this.state.relations.filter((relation) => relation.kind === "blocks").map((relation) => ({ id: relation.id, from: relation.from, to: relation.to }));
+      return scheduleOf(tasks, links, (task) => milestoneTypes.has(task.type.id), localDay(this.today()));
+    },
     "search.query": (input) => {
       const scope = input.project === null || input.project === undefined ? null : this.project(input.project);
       const keys = scope === null ? null : new Set([scope, ...(input.include_subprojects === true ? this.descendants(scope) : [])].map((project) => project.key));
@@ -2685,6 +2699,28 @@ export class FakeWorkspace {
       }
       this.touch(task, !(fields.length === 1 && fields[0] === "conflict_copy"));
       const change = this.taskChange(task, fields);
+      if (input.move_dependents === true && (fields.includes("start_date") || fields.includes("due_date"))) {
+        const dates = new Map(this.state.tasks.map((each) => [each.id, { start: each.startDate, due: each.dueDate, closed: each.closedAt !== null }]));
+        const links = this.state.relations.filter((relation) => relation.kind === "blocks");
+        const movedIds = moveDependents(task.id, dates, links);
+        const moved = [];
+        for (const id of movedIds) {
+          const other = this.state.tasks.find((candidate) => candidate.id === id);
+          const now = dates.get(id);
+          if (!other || !now) {
+            continue;
+          }
+          const was = other.startDate ?? other.dueDate;
+          const is = now.start ?? now.due;
+          other.startDate = now.start;
+          other.dueDate = now.due;
+          this.touch(other);
+          const days = was === null || is === null ? 0 : Math.round((Date.parse(is) - Date.parse(was)) / 86_400_000);
+          moved.push({ days, id: other.id, key: this.keyOf(other), ...some("start_date", other.startDate), ...some("due_date", other.dueDate) });
+          change.changes.push({ entity: "task", id: other.id, fields: ["start_date", "due_date"], project: this.projectOf(other).key });
+        }
+        return { ...change, output: { ...change.output, ...some("description_save", save), ...(moved.length > 0 ? { moved } : {}) } };
+      }
       return { ...change, output: { ...change.output, ...some("description_save", save) } };
     },
     "task.resolve_conflict": ({ key, copy, action, text, base_revision }) => {

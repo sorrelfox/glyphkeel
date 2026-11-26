@@ -20,8 +20,10 @@ export function connect(): Transport {
     // Sample data in memory, for work on the screens without the engine;
     // also inside the app, when it loads a page built this way.
     // `?tasks=20000` adds that many tasks, for long lists.
-    const extraTasks = Number(new URLSearchParams(window.location.search).get("tasks") ?? 0) || 0;
-    return deferredTransport(import("./fake/transport").then(({ fakeTransport }) => fakeTransport({ extraTasks })));
+    const search = new URLSearchParams(window.location.search);
+    const extraTasks = Number(search.get("tasks") ?? 0) || 0;
+    const extraLinks = Number(search.get("links") ?? 0) || 0;
+    return deferredTransport(import("./fake/transport").then(({ fakeTransport }) => fakeTransport({ extraTasks, extraLinks })));
   }
   if (isTauri()) {
     return tauriTransport();
