@@ -2960,8 +2960,8 @@ export class FakeWorkspace {
         fail("invalid", "The table is 200 to 1200 pixels wide.", { details: { path: "table", message_id: "gantt-layout-table", args: { min: 200, max: 1200 } } });
       }
       for (const [column, width] of Object.entries(widths ?? {})) {
-        if (!["key", "title", "start", "due", "progress"].includes(column)) {
-          fail("invalid", "The chart's table has only these columns: key, title, start, due, progress.", { details: { path: `widths.${column}`, message_id: "gantt-layout-column", args: { columns: "key, title, start, due, progress" } } });
+        if (!["key", "title", "claim", "start", "due", "progress"].includes(column)) {
+          fail("invalid", "The chart's table has only these columns: key, title, claim, start, due, progress.", { details: { path: `widths.${column}`, message_id: "gantt-layout-column", args: { columns: "key, title, claim, start, due, progress" } } });
         }
         if (!Number.isInteger(width) || width < 24 || width > 600) {
           fail("invalid", "A column is 24 to 600 pixels wide.", { details: { path: `widths.${column}`, message_id: "gantt-layout-width", args: { min: 24, max: 600 } } });

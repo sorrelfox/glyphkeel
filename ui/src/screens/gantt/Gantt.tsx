@@ -66,7 +66,7 @@ const DRAG_THRESHOLD = 4;
 /** Rows Page Up and Page Down move by. */
 const PAGE_ROWS = 15;
 /** The table's width when the person hasn't set one. */
-export const DEFAULT_TABLE = 440;
+export const DEFAULT_TABLE = 520;
 
 /** A task whose dates the chart can change. */
 export type Movable = Pick<ScheduledTask, "key" | "version" | "start_date" | "due_date" | "read_only"> & { dependents?: number };
@@ -81,6 +81,8 @@ export interface GanttHandle {
   page: (by: -1 | 1) => void;
   /** The rows as the chart shows them now, with its grouping and folds: for printing and pictures. */
   rows: () => readonly Row[];
+  /** Focuses a task's row and scrolls to it, unfolding its parents; false when the chart doesn't have it. */
+  show: (key: string) => boolean;
 }
 
 export interface GanttProps {
@@ -150,6 +152,8 @@ export function useFormats(locale: string, today: Day) {
       monthYear: format({ month: "long", year: "numeric" }),
       year: format({ year: "numeric" }),
       percent: new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 0 }),
+      /** A moment, such as when a claim ends, in the person's own time. */
+      time: new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }),
     };
   }, [locale, today]);
 }
@@ -306,22 +310,6 @@ export const Gantt = memo(function Gantt({
     };
   }, []);
 
-  useImperativeHandle(ref, () => ({
-    goToday: () => {
-      const el = scroller.current;
-      if (el) {
-        setScrollX(scrollFor(daysBetween(origin, today) + 0.5, ppd, timelineWidth(el)));
-      }
-    },
-    page: (by) => {
-      const el = scroller.current;
-      if (el) {
-        setScrollX(Math.max(0, scrollX(el) + by * timelineWidth(el) * 0.8));
-      }
-    },
-    rows: () => rows,
-  }));
-
   // ---------- focus and announcements ----------
 
   const [focusKey, setFocusKey] = useState<string | null>(null);
@@ -372,6 +360,48 @@ export const Gantt = memo(function Gantt({
     setFocusKey(row.task.key);
     showRow(i);
   };
+
+  useImperativeHandle(ref, () => ({
+    goToday: () => {
+      const el = scroller.current;
+      if (el) {
+        setScrollX(scrollFor(daysBetween(origin, today) + 0.5, ppd, timelineWidth(el)));
+      }
+    },
+    page: (by) => {
+      const el = scroller.current;
+      if (el) {
+        setScrollX(Math.max(0, scrollX(el) + by * timelineWidth(el) * 0.8));
+      }
+    },
+    rows: () => rows,
+    show: (key) => {
+      // The chart takes the focus first: taking it with no row chosen would choose the first.
+      const at = index.get(key);
+      if (at !== undefined) {
+        focusGrid();
+        setFocusKey(key);
+        showRow(at);
+        return true;
+      }
+      const task = byKey.get(key) ?? schedule.unscheduled.find((candidate) => candidate.key === key);
+      if (!task) {
+        return false;
+      }
+      // Folded away: unfold its parents, then show it once it has its row.
+      setFolded((now) => {
+        const next = new Set(now);
+        for (let parent = task.parent; parent !== undefined; parent = byKey.get(parent)?.parent) {
+          next.delete(parent);
+        }
+        return next;
+      });
+      focusGrid();
+      setFocusKey(key);
+      reveal.current = key;
+      return true;
+    },
+  }));
 
   // ---------- changes ----------
 
@@ -960,6 +990,10 @@ export const Gantt = memo(function Gantt({
             <span role="columnheader" className={styles.cell}>
               {t("gantt-col-title")}
             </span>
+            <span role="columnheader" className={styles.cell}>
+              {t("gantt-col-claim")}
+              <ResizeHandle column="claim" label={t("gantt-resize-column", { column: t("gantt-col-claim") })} value={widths.claim} onDown={startResize} onKey={resizeByKey} />
+            </span>
             <span role="columnheader" className={classes(styles.cell, styles.num)}>
               {t("gantt-col-start")}
               <ResizeHandle column="start" label={t("gantt-resize-column", { column: t("gantt-col-start") })} value={widths.start} onDown={startResize} onKey={resizeByKey} />
@@ -1182,6 +1216,8 @@ export function groupText(t: ReturnType<typeof useT>, row: Extract<Row, { kind: 
       return row.head.name === undefined ? t("gantt-group-no-label", { count: row.count }) : t("gantt-group-label", { name: row.head.name, count: row.count });
     case "status":
       return t("gantt-group-status", { name: row.head.name, count: row.count });
+    case "claim":
+      return row.head.agent === undefined ? t("gantt-group-unclaimed", { count: row.count }) : t("gantt-group-claim", { agent: row.head.agent, count: row.count });
   }
 }
 
@@ -1265,6 +1301,9 @@ const TableRow = memo(function TableRow({ id, row, at, focused, open, linking, e
     } else {
       label = t("gantt-row-start", { key: task.key, title: task.title, start: fmt.full.format(asDate(first ?? "")) });
     }
+  }
+  if (task.claim) {
+    label = t("gantt-row-claimed", { row: label, agent: task.claim.agent });
   }
   if (scheduled && behindSchedule(scheduled, today)) {
     label = t("gantt-row-behind", { row: label });
@@ -1397,6 +1436,9 @@ const TableRow = memo(function TableRow({ id, row, at, focused, open, linking, e
             ))}
           </span>
         )}
+      </span>
+      <span role="gridcell" className={classes(styles.cell, styles.claim)} title={task.claim ? t("gantt-claim-until", { agent: task.claim.agent, until: fmt.time.format(new Date(task.claim.until)) }) : undefined}>
+        {task.claim?.agent}
       </span>
       <span role="gridcell" className={classes(styles.cell, styles.num)}>
         {dateCell("start")}

@@ -10,8 +10,9 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use gk_api::ErrorCode;
+use gk_api::Profile;
 use gk_api::ops::common::Via;
-use gk_engine::{Context, Engine, EngineConfig, Role};
+use gk_engine::{Context, Engine, EngineConfig, Role, SessionStart};
 use gk_store::WorkspaceLayout;
 use serde_json::{Value, json};
 use tempfile::TempDir;
@@ -542,6 +543,44 @@ fn rows_carry_labels_and_tasks_of_archived_projects_are_read_only() {
 }
 
 #[test]
+fn rows_say_which_agent_session_claimed_a_task() {
+    let dir = tempfile::tempdir().unwrap();
+    let e = open(&dir);
+    call(
+        &e,
+        "project.create",
+        json!({ "name": "Tasks", "key": "TM" }),
+    );
+    let dated = task(&e, "TM", "Dated", Some("2026-12-01"), Some("2026-12-02"));
+    let undated = task(&e, "TM", "Undated", None, None);
+    let free = task(&e, "TM", "Free", Some("2026-12-01"), None);
+    let session = e
+        .start_session(&SessionStart {
+            name: "Helper".into(),
+            client_id: None,
+            client_version: None,
+            profile: Profile::Standard,
+        })
+        .unwrap();
+    let agent = Context::agent("Helper", session, Profile::Standard);
+    for key in [&dated, &undated] {
+        e.call(&agent, "task.claim", json!({ "key": key })).unwrap();
+    }
+
+    let s = call(&e, "schedule.get", json!({ "project": "TM" }));
+    let claim = &row(&s, &dated)["claim"];
+    assert_eq!(claim["agent"], "Helper");
+    assert_eq!(claim["session"], session.to_string());
+    assert_eq!(s["unscheduled"][0]["claim"]["agent"], "Helper");
+    assert!(row(&s, &free).get("claim").is_none());
+
+    e.call(&agent, "task.release", json!({ "key": dated }))
+        .unwrap();
+    let s = call(&e, "schedule.get", json!({ "project": "TM" }));
+    assert!(row(&s, &dated).get("claim").is_none());
+}
+
+#[test]
 fn a_move_can_be_tried_out_without_changing_anything() {
     let dir = tempfile::tempdir().unwrap();
     let e = open(&dir);
@@ -666,6 +705,14 @@ fn the_gantt_layout_is_kept_per_project_and_can_be_undone() {
         json!({ "project": "TM", "reset": true }),
     );
     assert_eq!(reset["layout"], empty["layout"]);
+    // Grouping by the agent session that claimed a task, with its column's width.
+    let claimed = call(
+        &e,
+        "gantt.layout.update",
+        json!({ "project": "TM", "group_by": "claim", "widths": { "claim": 120 } }),
+    );
+    assert_eq!(claimed["layout"]["group_by"], "claim");
+    assert_eq!(claimed["layout"]["widths"]["claim"], 120);
     // Widths, columns and the table are checked.
     for bad in [
         json!({ "project": "TM", "widths": { "key": 5 } }),

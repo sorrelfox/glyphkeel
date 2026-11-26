@@ -23,6 +23,7 @@ import {
   type SavedView,
   type TaskSearchInput,
   type TaskSearchResult,
+  type ViewKind,
 } from "../generated/ops";
 import { formatDuration, type DurationUnits } from "./duration";
 import { useCall, useOp } from "./hooks";
@@ -167,10 +168,10 @@ export function useQueryFields() {
   return useOp("query.parse", { query: "", fields: true }).data?.fields;
 }
 
-/** The list's saved views: a project's own first, then the workspace's. */
-export function useSavedViews(project: string | undefined): { views: SavedView[] | undefined; error: OpFailure | null } {
-  const own = useOp("view.list", { project: project ?? null, kind: "list" }, { enabled: project !== undefined });
-  const shared = useOp("view.list", { kind: "list" });
+/** A screen's saved views (the list's unless said): a project's own first, then the workspace's. */
+export function useSavedViews(project: string | undefined, kind: ViewKind = "list"): { views: SavedView[] | undefined; error: OpFailure | null } {
+  const own = useOp("view.list", { project: project ?? null, kind }, { enabled: project !== undefined });
+  const shared = useOp("view.list", { kind });
   if (shared.error || own.error) {
     return { views: [], error: shared.error ?? own.error };
   }

@@ -13,7 +13,7 @@ import { Switch } from "../../components/Switch";
 import { errorToast, useCall, useUndo } from "../../data/hooks";
 import { OpFailure } from "../../data/transport";
 import { useToasts } from "../../components/Toasts";
-import { type SavedView } from "../../generated/ops";
+import { type SavedView, type ViewKind } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { type ListSetup } from "./model";
 import styles from "./List.module.css";
@@ -21,6 +21,8 @@ import styles from "./List.module.css";
 interface ViewCommandsInput {
   /** The list's project; none for the whole workspace. */
   project: string | undefined;
+  /** The screen whose views these are; the list unless said. */
+  kind?: ViewKind;
   views: readonly SavedView[];
   /** The view the list came from; none for all tasks. */
   active: SavedView | undefined;
@@ -48,7 +50,7 @@ export interface ViewCommands {
  * The saved views' commands: choose, save, save as, rename, make default,
  * delete. Each change is one Undo step, offered in its toast.
  */
-export function useViewCommands({ project, views, active, setup, onChoose, onSaved }: ViewCommandsInput): ViewCommands {
+export function useViewCommands({ project, kind = "list", views, active, setup, onChoose, onSaved }: ViewCommandsInput): ViewCommands {
   const t = useT();
   const call = useCall();
   const toasts = useToasts();
@@ -145,6 +147,7 @@ export function useViewCommands({ project, views, active, setup, onChoose, onSav
     <ViewDialog
       editing={editing}
       project={project}
+      kind={kind}
       onClose={() => {
         setEditing(null);
       }}
@@ -155,7 +158,7 @@ export function useViewCommands({ project, views, active, setup, onChoose, onSav
               () =>
                 call("view.create", {
                   name,
-                  kind: "list",
+                  kind,
                   query: setup.query,
                   columns: [...setup.columns],
                   is_default: isDefault,
@@ -224,13 +227,14 @@ export function SaveControls({ changed, active, onSave, onSaveAs }: { changed: b
 interface ViewDialogProps {
   editing: Exclude<Editing, null>;
   project: string | undefined;
+  kind: ViewKind;
   onClose: () => void;
   /** True when done; the engine's message when it refused. */
   onSubmit: (name: string, forProject: boolean, isDefault: boolean) => Promise<boolean | string>;
 }
 
 /** Save as (name, where, default) or Rename (name). */
-function ViewDialog({ editing, project, onClose, onSubmit }: ViewDialogProps) {
+function ViewDialog({ editing, project, kind, onClose, onSubmit }: ViewDialogProps) {
   const t = useT();
   const [name, setName] = useState(editing.kind === "rename" ? editing.view.name : "");
   const [scope, setScope] = useState<"project" | "workspace">(project === undefined ? "workspace" : "project");
@@ -304,7 +308,7 @@ function ViewDialog({ editing, project, onClose, onSubmit }: ViewDialogProps) {
         )}
         {editing.kind === "create" && (
           <Switch isSelected={isDefault} onChange={setDefault}>
-            {t("list-view-default")}
+            {t(kind === "gantt" ? "gantt-view-default" : "list-view-default")}
           </Switch>
         )}
         {error !== null && (

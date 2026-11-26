@@ -31,7 +31,7 @@ pub(crate) const FIELD: &str = "settings";
 /// The view kind of Gantt layouts in `view_settings`.
 const VIEW: &str = "gantt";
 /// The columns of the chart's table whose width can be set.
-const COLUMNS: [&str; 5] = ["key", "title", "start", "due", "progress"];
+const COLUMNS: [&str; 6] = ["key", "title", "claim", "start", "due", "progress"];
 /// The narrowest and widest table, in pixels.
 const TABLE_MIN: u32 = 200;
 const TABLE_MAX: u32 = 1200;

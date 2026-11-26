@@ -23,7 +23,7 @@ use gk_api::ops::schedule::{
     SchedulePreview, SchedulePreviewInput, SchedulePreviewMove, ScheduleProblem,
     ScheduleProblemKind, ScheduleShape, ScheduledTask, UnscheduledTask,
 };
-use gk_api::ops::task::{LabelRef, StatusRef};
+use gk_api::ops::task::{Claim, LabelRef, StatusRef};
 use gk_core::schedule::{self as rules, Dates, Dependency, Graph, ShiftError};
 use gk_core::{Day, Id, SubtaskProgress};
 use gk_store::rusqlite::types::Value as Sql;
@@ -33,6 +33,7 @@ use super::desc;
 use super::fields::{self, TASK, text};
 use super::lookup::{b, id_at, opt_id_at};
 use super::project::parse_enum;
+use super::task::live_claim;
 use crate::failure::Failure;
 use crate::messages;
 use crate::registry::{QueryCtx, Registry};
@@ -74,6 +75,8 @@ struct Entry {
     closed: bool,
     checklist: (u32, u32),
     version: i64,
+    /// The claim's session, agent name and end, as stored; it may have run out.
+    claim: (Option<Id>, Option<String>, Option<i64>),
 }
 
 impl Entry {
@@ -85,13 +88,19 @@ impl Entry {
     fn read_only(&self) -> Option<ReadOnlyReason> {
         (!self.project_active).then_some(ReadOnlyReason::ArchivedProject)
     }
+
+    /// The agent's claim on it, while it lasts at `now`.
+    fn claim(&self, now: i64) -> Option<Claim> {
+        let (session, name, until) = self.claim.clone();
+        live_claim(session, name, until, now)
+    }
 }
 
 const ROW_SQL: &str = "SELECT t.id, t.project_id, p.key, p.state = 'active', t.number, t.title,
         s.id, s.name, s.category, y.glyph = 'milestone', t.parent_id,
         coalesce(t.subtask_rank, ''), t.rank, t.start_date, t.due_date, t.estimate_min,
         t.progress_override, t.closed_at IS NOT NULL, t.checklist_done, t.checklist_total,
-        t.version
+        t.version, t.claim_session, t.claim_name, t.claim_until
    FROM tasks t JOIN projects p ON p.id = t.project_id
    JOIN statuses s ON s.id = t.status_id JOIN task_types y ON y.id = t.type_id
   WHERE t.deleted_at IS NULL AND p.deleted_at IS NULL";
@@ -123,6 +132,7 @@ fn row(r: &Row<'_>) -> gk_store::rusqlite::Result<Entry> {
         closed: r.get(17)?,
         checklist: (count(r.get(18)?), count(r.get(19)?)),
         version: r.get(20)?,
+        claim: (opt_id_at(r, 21)?, r.get(22)?, r.get(23)?),
     })
 }
 
@@ -535,6 +545,7 @@ fn get(q: &QueryCtx<'_>, input: ScheduleInput) -> Result<Schedule, Failure> {
             closed: r.closed,
             labels: labels.remove(id).unwrap_or_default(),
             read_only: r.read_only(),
+            claim: r.claim(q.now),
             shape,
             start_date: r.dates.start.map(|d| d.to_string()),
             due_date: r.dates.due.map(|d| d.to_string()),
@@ -562,6 +573,7 @@ fn get(q: &QueryCtx<'_>, input: ScheduleInput) -> Result<Schedule, Failure> {
                 closed: r.closed,
                 labels: labels.remove(id).unwrap_or_default(),
                 read_only: r.read_only(),
+                claim: r.claim(q.now),
                 milestone: r.milestone,
                 version: r.version,
                 id: id.to_string(),

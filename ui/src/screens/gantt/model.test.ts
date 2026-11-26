@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { type ScheduleProblem, type ScheduledTask, type UnscheduledTask } from "../../generated/ops";
 import { layoutFrom, layoutUpdate } from "./layout";
-import { behindSchedule, buildRows, columnWindow, firstLabel, datesUpdate, draggedDates, elbow, endsLater, geometry, isWarning, problemsByTask, ROW, rowWindow, visibleDependencies } from "./model";
+import { behindSchedule, buildRows, milestonesOf, columnWindow, firstLabel, datesUpdate, draggedDates, elbow, endsLater, geometry, isWarning, problemsByTask, ROW, rowWindow, visibleDependencies } from "./model";
 
 const status = { id: "s1", name: "To do", category: "todo" as const, hue: "grey" as const };
 
@@ -200,6 +200,20 @@ describe("grouping", () => {
     expect(rows.map((row) => (row.kind === "group" ? row.id : row.task.key))).toEqual(["TM-1", "TM-2", "TM-3"]);
   });
 
+  it("by claim: one group per agent session, the unclaimed tasks last", () => {
+    const claim = (agent: string, session: string) => ({ agent, session, until: "2026-11-26T12:00:00Z" });
+    const claimed = [
+      task("TM-1", 0, { claim: claim("Helper", "s-2") }),
+      task("TM-2", 0),
+      task("TM-3", 0, { claim: claim("Builder", "s-1") }),
+      task("TM-4", 0, { claim: claim("Helper", "s-2") }),
+    ];
+    const { rows } = buildRows(claimed, [], new Set(), "claim", order);
+    expect(rows.map((row) => (row.kind === "group" ? row.id : row.task.key))).toEqual(["claim:s-1", "TM-3", "claim:s-2", "TM-1", "TM-4", "claim:", "TM-2"]);
+    expect(rows[2]).toMatchObject({ head: { by: "claim", agent: "Helper", session: "s-2" }, count: 2 });
+    expect(rows[5]).toMatchObject({ head: { by: "claim", agent: undefined }, count: 1 });
+  });
+
   it("finds the first label in the person's order", () => {
     expect(firstLabel({ labels: [label("b"), label("A")] }, (a, b) => a.localeCompare(b))?.name).toBe("A");
     expect(firstLabel({}, (a, b) => a.localeCompare(b))).toBeUndefined();
@@ -209,10 +223,23 @@ describe("grouping", () => {
 describe("behind schedule", () => {
   const bar = (extra: Parameters<typeof task>[2]) => task("TM-1", 0, { start_date: "2026-11-01", due_date: "2026-11-10", ...extra });
 
-  it("when today is further along the bar than its progress", () => {
+  it("when the time gone runs more than ten points ahead of the progress", () => {
     // The 5th day of 10, to its middle: 45 % of the time.
-    expect(behindSchedule(bar({ progress_percent: 40 }), "2026-11-05")).toEqual({ done: 0.4, expected: 0.45 });
-    expect(behindSchedule(bar({ progress_percent: 50 }), "2026-11-05")).toBeUndefined();
+    expect(behindSchedule(bar({ progress_percent: 30 }), "2026-11-05")).toEqual({ done: 0.3, expected: 0.45 });
+    // 10 points or less behind is within the tolerance.
+    expect(behindSchedule(bar({ progress_percent: 35 }), "2026-11-05")).toBeUndefined();
+    expect(behindSchedule(bar({ progress_percent: 40 }), "2026-11-05")).toBeUndefined();
+    expect(behindSchedule(bar({ progress_percent: 34 }), "2026-11-05")).toEqual({ done: 0.34, expected: 0.45 });
+  });
+
+  it("not before a whole day of the bar has passed", () => {
+    // The first day: 5 % gone, so nothing yet; a one-day bar is never behind.
+    expect(behindSchedule(bar({}), "2026-11-01")).toBeUndefined();
+    expect(behindSchedule(bar({ start_date: "2026-11-05", due_date: "2026-11-05" }), "2026-11-05")).toBeUndefined();
+    // The second day: 15 % gone, more than 10 points ahead of nothing done.
+    expect(behindSchedule(bar({}), "2026-11-02")).toEqual({ done: 0, expected: 0.15 });
+    // A two-day bar on its second day: 75 % gone.
+    expect(behindSchedule(bar({ start_date: "2026-11-01", due_date: "2026-11-02", progress_percent: 60 }), "2026-11-02")).toEqual({ done: 0.6, expected: 0.75 });
   });
 
   it("only for open bars that have begun and aren't overdue", () => {
@@ -221,5 +248,29 @@ describe("behind schedule", () => {
     expect(behindSchedule(bar({ overdue: true }), "2026-11-11")).toBeUndefined();
     expect(behindSchedule(bar({ shape: "summary" }), "2026-11-05")).toBeUndefined();
     expect(behindSchedule(bar({ shape: "deadline", start_date: undefined }), "2026-11-05")).toBeUndefined();
+  });
+});
+
+describe("milestones", () => {
+  it("lists the milestones by day, those without one last, with how each stands", () => {
+    const done = { id: "s3", name: "Done", category: "done" as const };
+    const list = milestonesOf({
+      today: "2026-11-20",
+      tasks: [
+        task("TM-10", 0, { shape: "milestone", start_date: undefined, due_date: "2026-12-01" }),
+        task("TM-2", 0, { shape: "milestone", start_date: undefined, due_date: "2026-11-15" }),
+        task("TM-3", 0, { shape: "milestone", start_date: undefined, due_date: "2026-11-10", closed: true, status: done }),
+        task("TM-4", 0),
+      ],
+      unscheduled: [{ ...loose, key: "TM-12", milestone: true }, loose, { ...loose, key: "TM-11", milestone: true }],
+    });
+    expect(list.map((milestone) => [milestone.key, milestone.date, milestone.state, milestone.late])).toEqual([
+      ["TM-3", "2026-11-10", "done", 0],
+      ["TM-2", "2026-11-15", "overdue", 5],
+      ["TM-10", "2026-12-01", "open", 0],
+      ["TM-11", undefined, "open", 0],
+      ["TM-12", undefined, "open", 0],
+    ]);
+    expect(list[0]?.status).toBe("Done");
   });
 });

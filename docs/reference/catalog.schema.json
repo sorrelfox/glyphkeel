@@ -37517,6 +37517,30 @@
               }
             ]
           },
+          "Claim": {
+            "additionalProperties": false,
+            "description": "An agent's claim on a task.",
+            "properties": {
+              "agent": {
+                "description": "The agent's name.",
+                "type": "string"
+              },
+              "session": {
+                "description": "The agent session holding it.",
+                "type": "string"
+              },
+              "until": {
+                "description": "When the claim ends unless renewed (RFC 3339, UTC).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "agent",
+              "session",
+              "until"
+            ],
+            "type": "object"
+          },
           "DayRange": {
             "additionalProperties": false,
             "description": "A range of days, both included.",
@@ -37769,6 +37793,10 @@
                 "description": "A task that blocks it is still open.",
                 "type": "boolean"
               },
+              "claim": {
+                "$ref": "#/$defs/Claim",
+                "description": "The agent session that claimed it, while the claim lasts."
+              },
               "closed": {
                 "description": "Whether it is closed (done or cancelled).",
                 "type": "boolean"
@@ -37899,6 +37927,10 @@
             "additionalProperties": false,
             "description": "A task without dates, for the Unscheduled lane.",
             "properties": {
+              "claim": {
+                "$ref": "#/$defs/Claim",
+                "description": "The agent session that claimed it, while the claim lasts."
+              },
               "closed": {
                 "description": "Whether it is closed.",
                 "type": "boolean"
@@ -38153,6 +38185,11 @@
                 "type": "string"
               },
               {
+                "const": "claim",
+                "description": "By the agent session that claimed the task; unclaimed tasks last.",
+                "type": "string"
+              },
+              {
                 "const": "none",
                 "description": "One flat list, without groups or nesting.",
                 "type": "string"
@@ -38282,6 +38319,11 @@
                 "type": "string"
               },
               {
+                "const": "claim",
+                "description": "By the agent session that claimed the task; unclaimed tasks last.",
+                "type": "string"
+              },
+              {
                 "const": "none",
                 "description": "One flat list, without groups or nesting.",
                 "type": "string"
@@ -38400,6 +38442,11 @@
               {
                 "const": "status",
                 "description": "By status, in board order.",
+                "type": "string"
+              },
+              {
+                "const": "claim",
+                "description": "By the agent session that claimed the task; unclaimed tasks last.",
                 "type": "string"
               },
               {
