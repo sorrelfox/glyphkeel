@@ -107,7 +107,6 @@ wiki-no-task-backlinks = No tasks link here.
 wiki-references = Links on this page
 wiki-missing = Missing
 wiki-link-heading = { $page } › { $heading }
-wiki-open-task = Open { $key }: { $title }
 
 ## New page and rename
 
@@ -126,9 +125,6 @@ backlinks-none = No pages, tasks or comments link here.
 backlinks-kind-page = Wiki page
 backlinks-kind-task = Description
 backlinks-kind-comment = Comment
-backlinks-open-page = Open the wiki page { $title }
-backlinks-open-task = Open { $key }: { $title }
-backlinks-open-comment = Open { $key }, where a comment links here: { $title }
 
 ## Export and folder import
 

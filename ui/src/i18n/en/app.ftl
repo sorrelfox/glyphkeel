@@ -26,6 +26,12 @@ sidebar-trash = Trash
 sidebar-preferences = Preferences
 sidebar-resize = Sidebar width
 
+## Resize handles: the sidebar's edge, column edges in the list and the Gantt chart
+
+resize-hint = Drag to change the width, or click for a menu
+resize-wider = Wider
+resize-narrower = Narrower
+
 ## Header bar
 
 header-new-task = New task

@@ -154,7 +154,7 @@
   --shadow-card: 0 1px 1px rgba(0, 0, 0, .22);
   --shadow-pop: 0 0 0 1px rgba(210, 225, 255, .09), 0 10px 30px rgba(0, 0, 0, .5);
   --hue-red: #ff8f87; --hue-orange: #ffa25c; --hue-yellow: #e8c35a; --hue-green: #7bd68f;
-  --hue-teal: #5fcfd8; --hue-blue: #8ab4f8; --hue-purple: #c79bf2; --hue-pink: #f59ac0; --hue-grey: #b7c0ce;
+  --hue-teal: #5fcfd8; --hue-blue: #8ab4f8; --hue-purple: #cba1f4; --hue-pink: #f59ac0; --hue-grey: #b7c0ce;
 }
 
 [data-theme="sand"] {

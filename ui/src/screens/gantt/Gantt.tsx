@@ -22,13 +22,16 @@ import {
   useState,
   type CSSProperties,
   type KeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type Ref,
 } from "react";
 import { Button, Group, Input, Label, NumberField, useLocale } from "react-aria-components";
 
 import { classes } from "../../classes";
+import { isMenuKey } from "../../components/ContextMenu";
 import { Dialog } from "../../components/Dialog";
+import { useWidthMenu } from "../../components/WidthMenu";
 import { useFieldSummary } from "../../data/fields";
 import { useMovePreview } from "../../data/schedule";
 import { type VersionMarker } from "../../data/versions";
@@ -66,6 +69,8 @@ import styles from "./Gantt.module.css";
 const HEAD = 48;
 /** How far the pointer moves before a press becomes a drag. */
 const DRAG_THRESHOLD = 4;
+/** How much one "Wider" or "Narrower" from a handle's menu changes a width. */
+const WIDTH_MENU_STEP = 32;
 /** Rows Page Up and Page Down move by. */
 const PAGE_ROWS = 15;
 /** The table's width when the person hasn't set one. */
@@ -855,8 +860,14 @@ export const Gantt = memo(function Gantt({
     const x0 = event.clientX;
     const cell = event.currentTarget.parentElement;
     const w0 = column === "table" ? tableW : (cell?.getBoundingClientRect().width ?? 80);
+    const handle = event.currentTarget;
     let last = w0;
+    let moved = false;
     const move = (ev: PointerEvent) => {
+      moved ||= Math.abs(ev.clientX - x0) > DRAG_THRESHOLD;
+      if (!moved) {
+        return;
+      }
       const delta = rtl ? x0 - ev.clientX : ev.clientX - x0;
       if (column === "table") {
         last = Math.round(Math.max(TABLE_MIN, Math.min(TABLE_MAX, w0 + delta)));
@@ -866,10 +877,17 @@ export const Gantt = memo(function Gantt({
         setLiveWidths({ [column]: last });
       }
     };
-    const up = () => {
+    const up = (ev: PointerEvent) => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up);
+      if (!moved) {
+        // A click without dragging: the menu with "Wider" and "Narrower".
+        if (ev.type === "pointerup") {
+          openWidthMenu(handle, column, w0);
+        }
+        return;
+      }
       if (column === "table") {
         onTable(last);
         setLiveTable(null);
@@ -883,7 +901,37 @@ export const Gantt = memo(function Gantt({
     window.addEventListener("pointercancel", up);
   };
 
+  const widthMenu = useWidthMenu();
+  /** The menu of a handle: its name is the handle's. */
+  const openWidthMenu = (handle: HTMLElement, column: Column | "table", width: number) => {
+    const table = column === "table";
+    widthMenu.openAt(handle, {
+      label: handle.getAttribute("aria-label") ?? "",
+      value: Math.round(width),
+      min: table ? TABLE_MIN : COLUMN_MIN,
+      max: table ? TABLE_MAX : COLUMN_MAX,
+      step: WIDTH_MENU_STEP,
+      onChange: (next) => {
+        if (column === "table") {
+          onTable(next);
+        } else {
+          onWidth(column, next);
+        }
+      },
+    });
+  };
+  const widthMenuByKey = (event: KeyboardEvent<HTMLElement> | ReactMouseEvent<HTMLElement>, column: Column | "table") => {
+    event.preventDefault();
+    event.stopPropagation();
+    const cell = event.currentTarget.parentElement;
+    openWidthMenu(event.currentTarget, column, column === "table" ? tableW : (widths[column] ?? cell?.getBoundingClientRect().width ?? 80));
+  };
+
   const resizeByKey = (event: KeyboardEvent<HTMLElement>, column: Column | "table") => {
+    if (isMenuKey(event)) {
+      widthMenuByKey(event, column);
+      return;
+    }
     const step = event.key === "ArrowRight" ? 16 : event.key === "ArrowLeft" ? -16 : 0;
     if (step === 0) {
       return;
@@ -1006,7 +1054,12 @@ export const Gantt = memo(function Gantt({
         onKeyDown={(event) => {
           resizeByKey(event, "table");
         }}
+        onContextMenu={(event) => {
+          widthMenuByKey(event, "table");
+        }}
+        title={t("resize-hint")}
       />
+      {widthMenu.menu}
       <div
         ref={scroller}
         className={styles.scroll}
@@ -1036,26 +1089,26 @@ export const Gantt = memo(function Gantt({
           <div className={styles.corner} role="row" aria-rowindex={1}>
             <span role="columnheader" className={styles.cell}>
               {t("gantt-col-key")}
-              <ResizeHandle column="key" label={t("gantt-resize-column", { column: t("gantt-col-key") })} value={widths.key} onDown={startResize} onKey={resizeByKey} />
+              <ResizeHandle column="key" label={t("gantt-resize-column", { column: t("gantt-col-key") })} value={widths.key} onDown={startResize} onKey={resizeByKey} onMenu={widthMenuByKey} hint={t("resize-hint")} />
             </span>
             <span role="columnheader" className={styles.cell}>
               {t("gantt-col-title")}
             </span>
             <span role="columnheader" className={styles.cell}>
               {t("gantt-col-claim")}
-              <ResizeHandle column="claim" label={t("gantt-resize-column", { column: t("gantt-col-claim") })} value={widths.claim} onDown={startResize} onKey={resizeByKey} />
+              <ResizeHandle column="claim" label={t("gantt-resize-column", { column: t("gantt-col-claim") })} value={widths.claim} onDown={startResize} onKey={resizeByKey} onMenu={widthMenuByKey} hint={t("resize-hint")} />
             </span>
             <span role="columnheader" className={classes(styles.cell, styles.num)}>
               {t("gantt-col-start")}
-              <ResizeHandle column="start" label={t("gantt-resize-column", { column: t("gantt-col-start") })} value={widths.start} onDown={startResize} onKey={resizeByKey} />
+              <ResizeHandle column="start" label={t("gantt-resize-column", { column: t("gantt-col-start") })} value={widths.start} onDown={startResize} onKey={resizeByKey} onMenu={widthMenuByKey} hint={t("resize-hint")} />
             </span>
             <span role="columnheader" className={classes(styles.cell, styles.num)}>
               {t("gantt-col-due")}
-              <ResizeHandle column="due" label={t("gantt-resize-column", { column: t("gantt-col-due") })} value={widths.due} onDown={startResize} onKey={resizeByKey} />
+              <ResizeHandle column="due" label={t("gantt-resize-column", { column: t("gantt-col-due") })} value={widths.due} onDown={startResize} onKey={resizeByKey} onMenu={widthMenuByKey} hint={t("resize-hint")} />
             </span>
             <span role="columnheader" className={classes(styles.cell, styles.num)} aria-label={t("gantt-col-progress-label")}>
               {t("gantt-col-progress")}
-              <ResizeHandle column="progress" label={t("gantt-resize-column", { column: t("gantt-col-progress-label") })} value={widths.progress} onDown={startResize} onKey={resizeByKey} />
+              <ResizeHandle column="progress" label={t("gantt-resize-column", { column: t("gantt-col-progress-label") })} value={widths.progress} onDown={startResize} onKey={resizeByKey} onMenu={widthMenuByKey} hint={t("resize-hint")} />
             </span>
           </div>
 
@@ -1357,12 +1410,17 @@ function ResizeHandle({
   value,
   onDown,
   onKey,
+  onMenu,
+  hint,
 }: {
   column: Column;
   label: string;
   value: number | undefined;
   onDown: (event: ReactPointerEvent<HTMLElement>, column: Column) => void;
   onKey: (event: KeyboardEvent<HTMLElement>, column: Column) => void;
+  onMenu: (event: ReactMouseEvent<HTMLElement>, column: Column) => void;
+  /** The tooltip: drag, or click for the menu. */
+  hint: string;
 }) {
   // A column without a width of its own has the design's; the handle reports
   // the width the column has on screen, as a separator that can be moved must.
@@ -1400,6 +1458,10 @@ function ResizeHandle({
       onKeyDown={(event) => {
         onKey(event, column);
       }}
+      onContextMenu={(event) => {
+        onMenu(event, column);
+      }}
+      title={hint}
     />
   );
 }

@@ -256,13 +256,14 @@
   box-shadow: inset -2px 0 0 var(--accent);
 }
 
-/* The edge to drag: wider than it looks, half in the column gap. */
+/* The edge to drag: 24 px wide, a pointer target of that size, half in the
+   column gap; the line it draws is 2 px. */
 .resizer {
   position: absolute;
   inset-block: 0;
-  inset-inline-end: -8px;
+  inset-inline-end: -15px;
   z-index: 1;
-  inline-size: 10px;
+  inline-size: 24px;
   cursor: col-resize;
   touch-action: none;
 }
@@ -271,7 +272,7 @@
   content: "";
   position: absolute;
   inset-block: 6px;
-  inset-inline-start: 4px;
+  inset-inline-start: 11px;
   inline-size: 2px;
   background: transparent;
 }

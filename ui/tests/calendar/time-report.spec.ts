@@ -71,7 +71,7 @@ test("one project with or without its sub-projects, saved as CSV", async ({ page
   expect(file.suggestedFilename()).toBe("time-entries-2026-01-01-2026-12-31.csv");
   const text = await readFile(await file.path(), "utf8");
   const lines = text.split("\r\n").filter((line) => line !== "");
-  expect(lines[0]).toBe("date,person_kind,person,project,task,title,minutes,duration,note");
+  expect(lines[0]).toBe("date,person_kind,person,project,task,title,minutes,duration,note,work_kind");
   expect(lines.length).toBeGreaterThan(1);
   expect(lines.slice(1).every((line) => line.split(",")[3] === "TM")).toBe(true);
   await expect(page.getByText("Time report exported")).toBeVisible();

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 // The keyboard on the sample workspace: Tab reaches every part of a screen
 // and never gets stuck, the focused control always shows a focus indicator,
@@ -233,5 +233,43 @@ test.describe("what can be dragged can be done with keys", () => {
     await tree.getByRole("row").nth(1).focus();
     await page.keyboard.press("Alt+ArrowUp");
     await expect.poll(async () => plain((await tree.getByRole("row").first().getAttribute("aria-label")) ?? (await tree.getByRole("row").first().innerText()))).toBe(second);
+  });
+});
+
+test.describe("what can be dragged can be done with one click", () => {
+  /** A handle is at least 24 by 24 px; a click on it, without dragging, opens its menu, whose "Wider" widens. */
+  async function widensByMenu(page: Page, handle: Locator): Promise<void> {
+    const box = await handle.boundingBox();
+    expect(box?.width).toBeGreaterThanOrEqual(24);
+    expect(box?.height).toBeGreaterThanOrEqual(24);
+    const name = (await handle.getAttribute("aria-label")) ?? "";
+    const before = Number(await handle.getAttribute("aria-valuenow"));
+    await handle.click();
+    const menu = page.getByRole("menu", { name });
+    await expect(menu).toBeVisible();
+    await menu.getByRole("menuitem", { name: "Wider" }).click();
+    await expect(menu).toBeHidden();
+    await expect.poll(async () => Number(await handle.getAttribute("aria-valuenow"))).toBeGreaterThan(before);
+    await expect(handle).toBeFocused();
+  }
+
+  test("a list column's edge", async ({ page }) => {
+    await start(page);
+    await view(page, "List");
+    await widensByMenu(page, page.getByRole("grid").first().getByRole("separator").first());
+  });
+
+  test("a Gantt column's edge and the Gantt table's edge", async ({ page }) => {
+    await start(page);
+    await view(page, "Gantt");
+    const column = page.getByRole("separator", { name: /Width of the column/ }).first();
+    await expect(column).toHaveAttribute("aria-valuenow", /^\d+$/);
+    await widensByMenu(page, column);
+    await widensByMenu(page, page.getByRole("separator", { name: "Width of the table" }));
+  });
+
+  test("the sidebar's edge", async ({ page }) => {
+    await start(page);
+    await widensByMenu(page, page.getByRole("separator", { name: "Sidebar width" }));
   });
 });
