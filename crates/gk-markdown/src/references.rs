@@ -29,6 +29,68 @@ pub struct WikiLink {
     pub heading: Option<String>,
 }
 
+/// Where a wiki link is written in a document, for rewriting it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WikiLinkSpan {
+    /// The bytes of the whole link, `[[` to `]]`.
+    pub range: std::ops::Range<usize>,
+    /// The page and heading it names.
+    pub link: WikiLink,
+    /// The text after `|`, as written (Markdown), if there is one.
+    pub label: Option<String>,
+}
+
+/// Every wiki link in `source`, in reading order, with where it is written.
+/// Links in code are not links, so they aren't listed.
+///
+/// ```
+/// let text = "See [[Release plan#Dates|the dates]] and [[Home]].";
+/// let spans = gk_markdown::wiki_link_spans(text);
+/// assert_eq!(&text[spans[0].range.clone()], "[[Release plan#Dates|the dates]]");
+/// assert_eq!(spans[0].label.as_deref(), Some("the dates"));
+/// assert_eq!(spans[1].link.page, "Home");
+/// ```
+#[must_use]
+pub fn wiki_link_spans(source: &str) -> Vec<WikiLinkSpan> {
+    let arena = Arena::new();
+    let options = crate::options();
+    let root = parse_document(&arena, source, &options);
+    let lines = crate::checklist::LineIndex::new(source);
+    let mut out = Vec::new();
+    for node in root.descendants() {
+        let NodeValue::WikiLink(link) = &node.data().value else {
+            continue;
+        };
+        let pos = node.data().sourcepos;
+        let start = lines.offset(pos.start.line, pos.start.column);
+        let end = (lines.offset(pos.end.line, pos.end.column) + 1).min(source.len());
+        // Only a span that reads as the link is rewritten.
+        let Some(written) = source.get(start..end) else {
+            continue;
+        };
+        if !(written.starts_with("[[") && written.ends_with("]]")) {
+            continue;
+        }
+        let (page, heading) = match link.url.split_once('#') {
+            Some((page, heading)) => (page.trim(), Some(heading.trim().to_owned())),
+            None => (link.url.trim(), None),
+        };
+        let label = written[2..written.len() - 2]
+            .split_once('|')
+            .map(|(_, label)| label.trim().to_owned())
+            .filter(|l| !l.is_empty());
+        out.push(WikiLinkSpan {
+            range: start..end,
+            link: WikiLink {
+                page: page.to_owned(),
+                heading,
+            },
+            label,
+        });
+    }
+    out
+}
+
 /// Finds the task keys and wiki links in `source`.
 ///
 /// ```
@@ -87,4 +149,21 @@ pub(crate) fn inside_link<'a>(node: &'a AstNode<'a>) -> bool {
             NodeValue::Link(_) | NodeValue::Image(_) | NodeValue::WikiLink(_)
         )
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::wiki_link_spans;
+
+    #[test]
+    fn spans_cover_each_link_as_written_and_skip_code() {
+        let text = "# Über\n\n> Ein [[Größe#Maß|die **Maße**]] hier.\n\n`[[Code]]`\n\n- [[Home]]\n";
+        let spans = wiki_link_spans(text);
+        let written: Vec<&str> = spans.iter().map(|s| &text[s.range.clone()]).collect();
+        assert_eq!(written, ["[[Größe#Maß|die **Maße**]]", "[[Home]]"]);
+        assert_eq!(spans[0].link.page, "Größe");
+        assert_eq!(spans[0].link.heading.as_deref(), Some("Maß"));
+        assert_eq!(spans[0].label.as_deref(), Some("die **Maße**"));
+        assert_eq!(spans[1].label, None);
+    }
 }

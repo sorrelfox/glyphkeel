@@ -511,7 +511,10 @@ history-in-use = { $count ->
 
 description-item-gone = The item is gone.
 description-task-or-project = Name either a task or a project.
-description-task-or-comment = Name either a task (key) or a comment.
+wiki-export-what = Name a page to export, or a project to export its whole wiki.
+wiki-brief-agents = Agents can't choose or change the page that briefs them.
+wiki-brief-agents-hint = Ask the person to mark the page in the app or with `glyphkeel wiki put`.
+checklist-one-owner = Name one of a task (key), a comment or a wiki page.
 task-project-gone = The task's project is gone.
 revision-not-found-page-hint = Read the page again; its revision is the one to pass.
 revision-not-found-task-hint = Read the task again; its description_revision is the one to pass.
@@ -535,7 +538,7 @@ conflict-use-text-needs-text = use_text needs the text to save.
 render-one-source = Give exactly one of source, task, comment, project and revision.
 render-count = Render 1 to { $max } texts at once.
 checklist-changed = The checklist changed; please tick it again. Item { $number } reads "{ $actual }", not "{ $expected }".
-checklist-changed-hint = Read the checklist again (get_task with include ["checklist"]).
+checklist-changed-hint = Read the checklist again (get_task or get_wiki_page with include ["checklist"]).
 checklist-item-needs-text = An item needs text.
 checklist-no-item = { $count ->
         [one] There is no item { $number }; the checklist has one.

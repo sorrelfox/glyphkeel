@@ -250,7 +250,8 @@ pub struct ChecklistRemove {
     pub text: String,
 }
 
-/// Changes to the checklist in a task's description or a comment. Numbers
+/// Changes to the checklist in a task's description, a comment or a wiki
+/// page. Numbers
 /// are as read before the change. When an item's number now points at other
 /// text, the item with that text is used if there is exactly one; otherwise
 /// nothing changes.
@@ -263,6 +264,14 @@ pub struct ChecklistUpdateInput {
     /// Or the comment that holds it: its ID.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub comment: Option<String>,
+    /// Or the wiki page that holds it: its title, slug, old slug or ID. A
+    /// change to a page is saved as a new revision of it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub page: Option<String>,
+    /// The project (key or ID) whose wiki holds `page`; needed when the page
+    /// is named by title or slug.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
     /// Items to tick or clear.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub toggle: Vec<ChecklistToggle>,
@@ -278,18 +287,22 @@ pub struct ChecklistUpdateInput {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ChecklistChange {
-    /// The task's key.
+    /// The task's key; for a wiki page, its project's key.
     pub key: String,
     /// The comment's ID, for a comment's checklist.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub comment: Option<String>,
+    /// The page's ID, for a wiki page's checklist.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub page: Option<String>,
     /// The items now.
     pub items: Vec<ChecklistItem>,
     /// Ticked and all items.
     pub checklist: Checklist,
-    /// The task's (or comment's) version now.
+    /// The task's (or comment's) version now; 0 for a wiki page, which
+    /// has revisions instead.
     pub version: i64,
-    /// The description's revision now, for a task.
+    /// The text's revision now, for a task or a wiki page.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub revision: Option<String>,
     /// The history group, for revert and Undo; left out when nothing
@@ -408,7 +421,7 @@ pub(crate) const TASK_RESOLVE_CONFLICT: OpDescriptor = OpDescriptor::of::<TaskRe
 );
 
 pub(crate) const CHECKLIST_UPDATE: OpDescriptor = OpDescriptor::of::<ChecklistUpdate>(Meta {
-    summary: "Tick, clear, add or remove checklist items in a task's description or a comment, by number plus expected text.",
+    summary: "Tick, clear, add or remove checklist items in a task's description, a comment or a wiki page, by number plus expected text.",
     kind: OpKind::Command,
     safety: Safety::Write,
     exposure: Exposure::Data,

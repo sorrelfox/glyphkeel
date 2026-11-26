@@ -173,6 +173,21 @@
   border-bottom: 1px solid var(--border);
 }
 
+/* The formatting toolbar while the page is edited; it wraps under the
+   breadcrumbs when the bar is narrow. */
+.toolbarSlot {
+  display: flex;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  padding-inline-start: 8px;
+  margin-inline-start: 4px;
+  border-inline-start: 1px solid var(--border);
+}
+
+.toolbarSlot:empty {
+  display: none;
+}
+
 .crumbs {
   display: flex;
   flex-wrap: wrap;
@@ -270,6 +285,30 @@
   font-weight: 600;
 }
 
+.tocRow {
+  display: flex;
+  align-items: center;
+  min-inline-size: 0;
+}
+
+.tocRow .toc {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+/* Shown on hover and focus, so the outline stays quiet. */
+.tocCopy {
+  opacity: 0;
+}
+
+.tocCopy:focus-visible {
+  opacity: 1;
+}
+
+.tocRow:hover .tocCopy {
+  opacity: 1;
+}
+
 .asideLink {
   font-size: var(--fs-small);
   text-align: start;
@@ -326,6 +365,16 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+}
+
+.messageField {
+  flex: 0 1 18em;
+  min-inline-size: 8em;
+}
+
+.revisionMessage {
+  display: block;
+  overflow-wrap: anywhere;
 }
 
 /* ---------- history ---------- */

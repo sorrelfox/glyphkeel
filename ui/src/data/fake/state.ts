@@ -151,6 +151,8 @@ export interface FakeRevision {
   createdAt: string;
   /** For a conflict copy: when it was resolved. */
   resolvedAt: string | null;
+  /** A note saved with it. */
+  message?: string;
 }
 
 /** An agent's claim on a task. */
@@ -210,6 +212,8 @@ export interface FakeWikiPage {
   body: string;
   createdAt: string;
   updatedAt: string;
+  /** Whether it is its project's brief for agents. */
+  agentBrief?: boolean;
 }
 
 /** Tasks in the trash: one deletion, with the subtasks that went with it; or wiki pages, with the pages inside. */

@@ -114,6 +114,7 @@ fn main() -> ExitCode {
             files::save_file,
             files::save_export,
             transfer::export_archive,
+            transfer::export_wiki_page,
             transfer::choose_import,
             transfer::import_archive,
             transfer::choose_backup_folder,

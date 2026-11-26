@@ -428,6 +428,7 @@ export class FakeWorkspace {
       current: revision === current,
       kind: revision.kind,
       ...some("resolved_at", revision.resolvedAt),
+      ...some("message", revision.message),
     };
   }
 
@@ -1312,6 +1313,7 @@ export class FakeWorkspace {
       depth,
       children: pages.filter((other) => other.parentId === page.id).length,
       ...some("parent", page.parentId),
+      ...(page.agentBrief === true ? { agent_brief: true } : {}),
       updated_at: page.updatedAt,
     };
   }
@@ -1507,6 +1509,8 @@ export class FakeWorkspace {
       ...some("revision", this.currentRevision(page)?.id),
       ...(include.includes("backlinks") ? { backlinks: this.pageBacklinks(page) } : {}),
       ...(include.includes("references") ? { references: this.pageReferences(page) } : {}),
+      ...(include.includes("checklist") ? { checklist_items: publicChecklist(page.body) } : {}),
+      ...(page.agentBrief === true ? { agent_brief: true } : {}),
       created_at: page.createdAt,
       updated_at: page.updatedAt,
     };
@@ -2622,7 +2626,7 @@ export class FakeWorkspace {
       ];
       return { items, total: items.length };
     },
-    "wiki.update": ({ page: ref, project: projectRef, title, body, edits, parent: parentRef, clear, before, after, at, base_revision }) => {
+    "wiki.update": ({ page: ref, project: projectRef, title, body, edits, parent: parentRef, clear, before, after, at, base_revision, agent_brief, message }) => {
       const page = this.wikiPage(ref, projectRef);
       const project = this.wikiWritable(this.projectKeyOf(page));
       const pages = (this.state.wiki ??= []);
@@ -2655,6 +2659,14 @@ export class FakeWorkspace {
         page.title = trimmed;
         fields.push("title");
       }
+      if (agent_brief !== null && agent_brief !== undefined && agent_brief !== (page.agentBrief === true)) {
+        for (const other of pages) {
+          if (other.projectId === project.id) {
+            other.agentBrief = other === page ? agent_brief : agent_brief ? false : other.agentBrief === true;
+          }
+        }
+        fields.push("agent_brief");
+      }
       let text = body ?? undefined;
       if (edits !== undefined && edits.length > 0) {
         text = page.body;
@@ -2668,6 +2680,10 @@ export class FakeWorkspace {
       let saved: FakeRevision | undefined;
       if (text !== undefined && text !== page.body) {
         saved = this.addPageRevision(page, text, "normal", base_revision ?? this.currentRevision(page)?.id ?? null);
+        const note = message?.trim() ?? "";
+        if (note !== "") {
+          saved.message = note;
+        }
         fields.push("body");
       }
       const given = (value: unknown) => value !== null && value !== undefined;
@@ -2700,6 +2716,18 @@ export class FakeWorkspace {
       const parent = hasParent ? this.wikiPage(parentRef, project.key).id : top_level === true ? null : page.parentId;
       this.movePage(page, parent, { before, after, at: at ?? (parent !== page.parentId && !placed ? "bottom" : undefined) });
       return { output: { page: this.wikiOut(page) }, changes: [{ entity: "wiki_page", id: page.id, fields: ["parent", "rank"], project: project.key }] };
+    },
+    "wiki.export": ({ page: ref, project: projectRef, subpages, path, format }) => {
+      // The sample workspace writes nothing: it says what an export would hold.
+      if (ref === null || ref === undefined) {
+        const project = this.project(projectRef ?? "");
+        const pages = (this.state.wiki ?? []).filter((page) => page.projectId === project.id);
+        return { path: `exports/${path ?? `${project.key.toLowerCase()}-wiki.zip`}`, format: format ?? "zip", pages: pages.length, attachments: 0, size: pages.reduce((sum, one) => sum + one.body.length, 0) };
+      }
+      const page = this.wikiPage(ref, projectRef);
+      const pages = subpages === true ? subtree(this.state.wiki ?? [], page) : [page];
+      const name = path ?? `${page.slug}.zip`;
+      return { path: `exports/${name}`, format: format ?? "zip", pages: pages.length, attachments: 0, size: pages.reduce((sum, one) => sum + one.body.length, 0) };
     },
     "wiki.delete": ({ page: ref, project: projectRef }) => {
       const page = this.wikiPage(ref, projectRef);
@@ -3033,9 +3061,47 @@ export class FakeWorkspace {
       this.touch(task);
       return this.taskChange(task, ["description"]);
     },
-    "checklist.update": ({ key, comment: commentId, toggle, add, remove }) => {
+    "checklist.update": ({ key, comment: commentId, page: pageRef, project: projectRef, toggle, add, remove }) => {
       if ((add?.length ?? 0) > 0 || (remove?.length ?? 0) > 0) {
         fail("invalid", "The sample workspace only ticks and clears items.");
+      }
+      const ticked = (start: string) => {
+        let text = start;
+        for (const wanted of toggle ?? []) {
+          const items = checklistOf(text);
+          const expected = wanted.text.replace(/\s+/g, " ").trim();
+          const numbered = items[wanted.number - 1];
+          const same = items.filter((item) => item.text === expected);
+          const item = numbered?.text === expected ? numbered : same.length === 1 ? same[0] : undefined;
+          if (!item) {
+            fail("conflict", `The checklist changed; please tick it again. Item ${String(wanted.number)} reads "${numbered?.text ?? ""}", not "${expected}".`, {
+              details: { field: "toggle", number: wanted.number },
+            });
+          }
+          text = setChecked(text, item, wanted.checked ?? !item.checked);
+        }
+        return text;
+      };
+      if (pageRef !== null && pageRef !== undefined) {
+        const page = this.wikiPage(pageRef, projectRef);
+        const project = this.wikiWritable(this.projectKeyOf(page));
+        const text = ticked(page.body);
+        const unchanged = text === page.body;
+        if (!unchanged) {
+          this.addPageRevision(page, text, "normal", this.currentRevision(page)?.id ?? null);
+        }
+        const items = publicChecklist(text);
+        return {
+          output: {
+            checklist: { done: items.filter((item) => item.checked).length, total: items.length },
+            items,
+            key: project.key,
+            page: page.id,
+            ...some("revision", this.currentRevision(page)?.id),
+            version: 0,
+          },
+          changes: unchanged ? [] : [{ entity: "wiki_page", id: page.id, fields: ["body"], project: project.key }],
+        };
       }
       const comment = commentId === null || commentId === undefined ? null : this.liveComment(commentId);
       const task = comment ? this.state.tasks.find((candidate) => candidate.id === comment.taskId) : this.task(key ?? "");
@@ -3043,20 +3109,7 @@ export class FakeWorkspace {
         fail("not_found", "There is no such task.");
       }
       this.writable(this.projectOf(task).key);
-      let text = comment ? comment.body : task.description;
-      for (const wanted of toggle ?? []) {
-        const items = checklistOf(text);
-        const expected = wanted.text.replace(/\s+/g, " ").trim();
-        const numbered = items[wanted.number - 1];
-        const same = items.filter((item) => item.text === expected);
-        const item = numbered?.text === expected ? numbered : same.length === 1 ? same[0] : undefined;
-        if (!item) {
-          fail("conflict", `The checklist changed; please tick it again. Item ${String(wanted.number)} reads "${numbered?.text ?? ""}", not "${expected}".`, {
-            details: { field: "toggle", number: wanted.number },
-          });
-        }
-        text = setChecked(text, item, wanted.checked ?? !item.checked);
-      }
+      const text = ticked(comment ? comment.body : task.description);
       const owner = this.keyOf(task);
       const unchanged = text === (comment ? comment.body : task.description);
       if (comment) {

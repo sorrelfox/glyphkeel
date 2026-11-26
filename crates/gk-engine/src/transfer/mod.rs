@@ -32,6 +32,7 @@ mod import;
 mod model;
 mod sink;
 mod source;
+mod wiki_export;
 
 #[cfg(test)]
 mod tests;

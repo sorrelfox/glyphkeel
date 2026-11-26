@@ -21876,7 +21876,7 @@
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
-        "description": "Changes to the checklist in a task's description or a comment. Numbers\nare as read before the change. When an item's number now points at other\ntext, the item with that text is used if there is exactly one; otherwise\nnothing changes.",
+        "description": "Changes to the checklist in a task's description, a comment or a wiki\npage. Numbers\nare as read before the change. When an item's number now points at other\ntext, the item with that text is used if there is exactly one; otherwise\nnothing changes.",
         "properties": {
           "add": {
             "description": "Items to add.",
@@ -21894,6 +21894,20 @@
           },
           "key": {
             "description": "The task whose description holds the checklist: its key or ID.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "page": {
+            "description": "Or the wiki page that holds it: its title, slug, old slug or ID. A\nchange to a page is saved as a new revision of it.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "project": {
+            "description": "The project (key or ID) whose wiki holds `page`; needed when the page\nis named by title or slug.",
             "type": [
               "string",
               "null"
@@ -22003,15 +22017,19 @@
             "type": "array"
           },
           "key": {
-            "description": "The task's key.",
+            "description": "The task's key; for a wiki page, its project's key.",
+            "type": "string"
+          },
+          "page": {
+            "description": "The page's ID, for a wiki page's checklist.",
             "type": "string"
           },
           "revision": {
-            "description": "The description's revision now, for a task.",
+            "description": "The text's revision now, for a task or a wiki page.",
             "type": "string"
           },
           "version": {
-            "description": "The task's (or comment's) version now.",
+            "description": "The task's (or comment's) version now; 0 for a wiki page, which\nhas revisions instead.",
             "format": "int64",
             "type": "integer"
           }
@@ -22027,7 +22045,7 @@
       },
       "output_name": "ChecklistChange",
       "safety": "write",
-      "summary": "Tick, clear, add or remove checklist items in a task's description or a comment, by number plus expected text."
+      "summary": "Tick, clear, add or remove checklist items in a task's description, a comment or a wiki page, by number plus expected text."
     },
     {
       "cli": "task duplicate <key>",
@@ -38147,6 +38165,11 @@
                 "const": "references",
                 "description": "The pages and tasks its text links to.",
                 "type": "string"
+              },
+              {
+                "const": "checklist",
+                "description": "Its checklist items, numbered, for `checklist.update`.",
+                "type": "string"
               }
             ]
           }
@@ -38224,6 +38247,39 @@
             "required": [
               "project",
               "title"
+            ],
+            "type": "object"
+          },
+          "ChecklistItem": {
+            "additionalProperties": false,
+            "description": "One checklist item.",
+            "properties": {
+              "checked": {
+                "description": "Whether it is ticked.",
+                "type": "boolean"
+              },
+              "depth": {
+                "description": "How many items it is nested in.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "number": {
+                "description": "Its number, from 1, in reading order; the reader's checkboxes carry\nthe same number.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "text": {
+                "description": "Its text, without formatting.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "number",
+              "checked",
+              "text",
+              "depth"
             ],
             "type": "object"
           },
@@ -38362,6 +38418,13 @@
           "body": {
             "description": "Its text (Markdown).",
             "type": "string"
+          },
+          "checklist_items": {
+            "description": "Its checklist items, numbered, when asked for with `include`.",
+            "items": {
+              "$ref": "#/$defs/ChecklistItem"
+            },
+            "type": "array"
           },
           "children": {
             "description": "The pages it holds, in order.",
@@ -38587,6 +38650,39 @@
             ],
             "type": "object"
           },
+          "ChecklistItem": {
+            "additionalProperties": false,
+            "description": "One checklist item.",
+            "properties": {
+              "checked": {
+                "description": "Whether it is ticked.",
+                "type": "boolean"
+              },
+              "depth": {
+                "description": "How many items it is nested in.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "number": {
+                "description": "Its number, from 1, in reading order; the reader's checkboxes carry\nthe same number.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "text": {
+                "description": "Its text, without formatting.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "number",
+              "checked",
+              "text",
+              "depth"
+            ],
+            "type": "object"
+          },
           "DescriptionSave": {
             "additionalProperties": false,
             "description": "The result of saving a description.",
@@ -38744,6 +38840,13 @@
               "body": {
                 "description": "Its text (Markdown).",
                 "type": "string"
+              },
+              "checklist_items": {
+                "description": "Its checklist items, numbered, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/ChecklistItem"
+                },
+                "type": "array"
               },
               "children": {
                 "description": "The pages it holds, in order.",
@@ -38989,6 +39092,13 @@
               "null"
             ]
           },
+          "agent_brief": {
+            "description": "Mark it as the project's brief for agents (`true`; another page\nmarked before is unmarked), or unmark it (`false`). Only people can\nchange this, not agents.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
           "at": {
             "anyOf": [
               {
@@ -39122,6 +39232,39 @@
             "required": [
               "project",
               "title"
+            ],
+            "type": "object"
+          },
+          "ChecklistItem": {
+            "additionalProperties": false,
+            "description": "One checklist item.",
+            "properties": {
+              "checked": {
+                "description": "Whether it is ticked.",
+                "type": "boolean"
+              },
+              "depth": {
+                "description": "How many items it is nested in.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "number": {
+                "description": "Its number, from 1, in reading order; the reader's checkboxes carry\nthe same number.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "text": {
+                "description": "Its text, without formatting.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "number",
+              "checked",
+              "text",
+              "depth"
             ],
             "type": "object"
           },
@@ -39282,6 +39425,13 @@
               "body": {
                 "description": "Its text (Markdown).",
                 "type": "string"
+              },
+              "checklist_items": {
+                "description": "Its checklist items, numbered, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/ChecklistItem"
+                },
+                "type": "array"
               },
               "children": {
                 "description": "The pages it holds, in order.",
@@ -39539,6 +39689,39 @@
             ],
             "type": "object"
           },
+          "ChecklistItem": {
+            "additionalProperties": false,
+            "description": "One checklist item.",
+            "properties": {
+              "checked": {
+                "description": "Whether it is ticked.",
+                "type": "boolean"
+              },
+              "depth": {
+                "description": "How many items it is nested in.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "number": {
+                "description": "Its number, from 1, in reading order; the reader's checkboxes carry\nthe same number.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "text": {
+                "description": "Its text, without formatting.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "number",
+              "checked",
+              "text",
+              "depth"
+            ],
+            "type": "object"
+          },
           "DescriptionSave": {
             "additionalProperties": false,
             "description": "The result of saving a description.",
@@ -39696,6 +39879,13 @@
               "body": {
                 "description": "Its text (Markdown).",
                 "type": "string"
+              },
+              "checklist_items": {
+                "description": "Its checklist items, numbered, when asked for with `include`.",
+                "items": {
+                  "$ref": "#/$defs/ChecklistItem"
+                },
+                "type": "array"
               },
               "children": {
                 "description": "The pages it holds, in order.",
@@ -40220,6 +40410,138 @@
       "output_name": "RevisionList",
       "safety": "read",
       "summary": "List the revisions of a wiki page, newest first, conflict copies included; read one with wiki.get and its revision."
+    },
+    {
+      "cli": "wiki export <page>",
+      "exposure": "data",
+      "id": "wiki.export",
+      "input": {
+        "$defs": {
+          "ArchiveFormat": {
+            "description": "How an archive is stored.",
+            "oneOf": [
+              {
+                "const": "zip",
+                "description": "One `.zip` file.",
+                "type": "string"
+              },
+              {
+                "const": "folder",
+                "description": "A folder.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A page, or a whole wiki, to export as Markdown files.",
+        "properties": {
+          "format": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ArchiveFormat"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A `.zip` file (the default) or a folder."
+          },
+          "page": {
+            "description": "The page: its title (any case), slug or ID. Left out: the project's\nwhole wiki, every page in it.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "path": {
+            "description": "Where to write it: a new file or folder. Agents give a plain name,\nwhich goes into the workspace's `exports` folder. Left out: a name\nmade from the page's slug and the date, in the `exports` folder.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "project": {
+            "description": "The project (key or ID); needed unless `page` is an ID.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "subpages": {
+            "description": "Include the pages inside it, each in a folder named after its parent\n(always, for a whole wiki).",
+            "type": "boolean"
+          }
+        },
+        "title": "WikiExportInput",
+        "type": "object"
+      },
+      "input_name": "WikiExportInput",
+      "kind": "command",
+      "mcp_tool": "export_wiki_page",
+      "output": {
+        "$defs": {
+          "ArchiveFormat": {
+            "description": "How an archive is stored.",
+            "oneOf": [
+              {
+                "const": "zip",
+                "description": "One `.zip` file.",
+                "type": "string"
+              },
+              {
+                "const": "folder",
+                "description": "A folder.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A finished page export.",
+        "properties": {
+          "attachments": {
+            "description": "The attached files copied.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "format": {
+            "$ref": "#/$defs/ArchiveFormat",
+            "description": "How it is stored."
+          },
+          "pages": {
+            "description": "The Markdown files written: one per page.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "path": {
+            "description": "The file or folder written.",
+            "type": "string"
+          },
+          "size": {
+            "description": "Its size in bytes.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "path",
+          "format",
+          "pages",
+          "attachments",
+          "size"
+        ],
+        "title": "WikiExportResult",
+        "type": "object"
+      },
+      "output_name": "WikiExportResult",
+      "safety": "write",
+      "summary": "Export a wiki page, optionally with the pages inside it, or a project's whole wiki, as Markdown files with their attachments, in a .zip file or a folder; links between the exported pages and to the attachments become relative links."
     },
     {
       "cli": "wiki backlinks <page>",

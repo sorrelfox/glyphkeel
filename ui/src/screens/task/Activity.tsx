@@ -314,7 +314,7 @@ function CommentsList({ task, readOnly, onOpenTask }: { task: Task; readOnly: bo
 const LABELLED_FIELDS = new Set([
   "title", "description", "status", "type", "priority", "labels", "parent", "start_date", "due_date", "estimate", "progress", "rank", "project",
   "claim", "reminder", "name", "hue", "icon", "modules", "key", "state", "category", "wip_limit", "glyph", "is_default", "slug", "body",
-  "date", "minutes", "note",
+  "date", "minutes", "note", "agent_brief",
 ]);
 
 /** A recorded field's name as people read it; nothing for a field that isn't shown. */

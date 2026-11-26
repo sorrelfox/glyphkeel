@@ -21,6 +21,20 @@ wiki-open-in-wiki = Open in the wiki
 wiki-new-child = New page inside
 wiki-rename = Rename
 wiki-delete = Move to trash
+wiki-brief-set = Use as the agent brief
+wiki-brief-unset = Stop using as the agent brief
+wiki-brief-set-done = Agents now get this page as the project's brief.
+wiki-brief-unset-done = This page no longer briefs agents.
+wiki-export = Export as Markdown…
+wiki-export-all = Export with the pages inside…
+wiki-export-wiki = Export the whole wiki…
+# The name the save dialog suggests for a whole wiki's export, without ".zip".
+wiki-export-file = { $project }-wiki
+wiki-exported =
+    { $count ->
+        [one] Page exported as Markdown
+       *[other] { $count } pages exported as Markdown
+    }
 wiki-deleted = Page moved to the trash
 wiki-move-up = Move up
 wiki-move-down = Move down
@@ -46,6 +60,8 @@ wiki-read-only-note = The wiki is switched off in this project: its pages can be
 wiki-draft-kept = Unsaved changes to this page are kept from earlier.
 wiki-draft-note = Unsaved text is kept on this device until you save · Ctrl+Enter saves · Esc discards
 wiki-discard = Discard
+wiki-save-message = Note about this change
+wiki-save-message-hint = What changed (optional)
 wiki-merged = Saved, merged with a change made meanwhile.
 wiki-conflict-saved = Your edit clashed with another change.
 wiki-conflict-detail = It is kept as a conflict copy; resolve it at the top of the page.
@@ -62,6 +78,8 @@ wiki-missing-page = There is no page “{ $page }” yet.
 
 wiki-aside = About this page
 wiki-outline = On this page
+wiki-copy-heading-link = Copy a link to { $heading }
+wiki-heading-link-copied = Link to the heading copied
 wiki-linked-from = Linked from
 wiki-no-backlinks = No pages link here.
 wiki-tasks-linking = Tasks that link here

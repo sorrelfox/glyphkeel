@@ -132,6 +132,13 @@ const SPECS: &[Spec] = &[
     spec(WIKI, "slug", "wiki_pages", "slug", Enc::Text),
     spec(WIKI, "parent", "wiki_pages", "parent_id", Enc::Id),
     spec(WIKI, "rank", "wiki_pages", "rank", Enc::Text),
+    spec(
+        WIKI,
+        "agent_brief",
+        "wiki_pages",
+        "is_agent_brief",
+        Enc::Bool,
+    ),
 ];
 
 const PRIORITIES: [&str; 5] = ["none", "low", "normal", "high", "urgent"];

@@ -1,22 +1,25 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { AppWindow, ChevronRight, GitCompare, History as HistoryIcon, MoreHorizontal, Pencil, X } from "lucide-react";
+import { AppWindow, ChevronRight, GitCompare, History as HistoryIcon, Link as LinkIcon, MoreHorizontal, Pencil, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button, Menu, MenuTrigger, Popover } from "react-aria-components";
 
 import { classes } from "../../classes";
 import { MenuEntries, type MenuEntry } from "../../components/ContextMenu";
 import { Kbd } from "../../components/Kbd";
+import { Tooltip } from "../../components/Tooltip";
 import { useToasts } from "../../components/Toasts";
 import { useDraft, type Draft } from "../../data/drafts";
-import { useCommand, useOp } from "../../data/hooks";
+import { useCall, useCommand, useOp } from "../../data/hooks";
+import { toggleChecklist } from "../../data/markdown";
 import { splitBacklinks } from "../../data/wiki";
 import { type Backlink, type Reference, type RevisionInfo, type WikiHeading, type WikiPage } from "../../generated/ops";
 import { useT, type Translate } from "../../i18n/I18n";
 import { MarkdownReader } from "../../markdown/Reader";
 import { useMomentFormat } from "../task/Activity";
 import { DiffView } from "../task/DiffView";
+import { useExportPage } from "./exportPage";
 import { MarkdownField } from "../task/MarkdownField";
 import styles from "./Wiki.module.css";
 
@@ -72,6 +75,11 @@ export function PageView(props: PageViewProps) {
   const kept = useOp("draft.get", { kind: "wiki_page", target: pageId }).data?.draft;
   const [draft, setDraft] = useDraft({ kind: "wiki_page", id: pageId }, kept ? [kept] : undefined);
   const editing = mode === "edit" && writable;
+  // While editing, the formatting toolbar sits in the page bar.
+  const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
+  const exportPage = useExportPage();
+  const update = useCommand("wiki.update");
+  const toasts = useToasts();
 
   // `E` edits the page from anywhere in the window but a text field, an open
   // dialog or menu, and a task panel beside the page (which has its own).
@@ -127,6 +135,19 @@ export function PageView(props: PageViewProps) {
     ...(inWindow || !onOpenWindow ? [] : [{ id: "window", label: t("wiki-open-window"), run: () => { onOpenWindow(page); } }]),
     { id: "child", label: t("wiki-new-child"), run: () => { onNewChild(page); }, disabled: !writable },
     { id: "rename", label: t("wiki-rename"), run: () => { onRename(page); }, disabled: !writable },
+    {
+      id: "brief",
+      label: t(page.agent_brief ? "wiki-brief-unset" : "wiki-brief-set"),
+      disabled: !writable,
+      run: () => {
+        const brief = !page.agent_brief;
+        update.mutate({ page: page.id, agent_brief: brief }, { onSuccess: () => { toasts.show({ tone: "info", text: t(brief ? "wiki-brief-set-done" : "wiki-brief-unset-done") }); } });
+      },
+    },
+    "separator",
+    { id: "export", label: t("wiki-export"), run: () => { exportPage({ page, subpages: false }); } },
+    ...((page.children ?? []).length > 0 ? [{ id: "export-all", label: t("wiki-export-all"), run: () => { exportPage({ page, subpages: true }); } }] : []),
+    { id: "export-wiki", label: t("wiki-export-wiki"), run: () => { exportPage({ project: page.project }); } },
     "separator",
     { id: "delete", label: t("wiki-delete"), run: () => { onDelete(page); }, disabled: !writable },
   ];
@@ -148,11 +169,15 @@ export function PageView(props: PageViewProps) {
             </span>
           ))}
           <h2 className={styles.pageTitle}>{page.title}</h2>
+          {page.agent_brief && <span className="chip hue-purple">{t("wiki-agent-brief")}</span>}
         </nav>
+        {editing && <div ref={setToolbarSlot} className={styles.toolbarSlot} data-toolbar-slot="" />}
         <span className="grow" />
-        <span className={classes("meta", styles.hideNarrow)} data-testid="wiki-changed">
-          {t("wiki-changed", { time: moment(page.updated_at) })}
-        </span>
+        {!editing && (
+          <span className={classes("meta", styles.hideNarrow)} data-testid="wiki-changed">
+            {t("wiki-changed", { time: moment(page.updated_at) })}
+          </span>
+        )}
         {!editing && (
           <>
             <Button
@@ -205,6 +230,7 @@ export function PageView(props: PageViewProps) {
         <PageEditor
           page={page}
           kept={draft}
+          toolbarSlot={toolbarSlot}
           onDraft={setDraft}
           onDone={() => {
             setMode("read");
@@ -213,7 +239,7 @@ export function PageView(props: PageViewProps) {
       ) : mode === "history" ? (
         <PageHistory page={page} writable={writable} onClose={() => { setMode("read"); }} />
       ) : (
-        <PageReader page={page} heading={heading} references={references.data?.items} onOpenLink={openLink} onNavigate={onNavigate} onOpenTask={onOpenTask} />
+        <PageReader page={page} writable={writable} heading={heading} references={references.data?.items} onOpenLink={openLink} onNavigate={onNavigate} onOpenTask={onOpenTask} />
       )}
     </section>
   );
@@ -221,6 +247,8 @@ export function PageView(props: PageViewProps) {
 
 interface PageReaderProps {
   page: WikiPage;
+  /** Whether its checkboxes can be ticked. */
+  writable: boolean;
   heading: string | undefined;
   references: readonly Reference[] | undefined;
   onOpenLink: (target: string, heading: string | undefined) => void;
@@ -229,10 +257,12 @@ interface PageReaderProps {
 }
 
 /** The page's text as the reader shows it, beside its outline and links. */
-function PageReader({ page, heading, references, onOpenLink, onNavigate, onOpenTask }: PageReaderProps) {
+function PageReader({ page, writable, heading, references, onOpenLink, onNavigate, onOpenTask }: PageReaderProps) {
   const t = useT();
+  const call = useCall();
   const rendered = useOp("markdown.render", { documents: [{ source: page.body, document_id: `wiki-${page.id}` }] });
   const html = rendered.data?.items[0]?.html;
+  const checklist = rendered.data?.items[0]?.checklist ?? [];
   const scroller = useRef<HTMLDivElement>(null);
   const [currentHeading, setCurrentHeading] = useState<number | null>(null);
   const headings = page.headings ?? [];
@@ -266,7 +296,14 @@ function PageReader({ page, heading, references, onOpenLink, onNavigate, onOpenT
         {page.body.trim() === "" ? (
           <p className="faint">{t("wiki-empty")}</p>
         ) : html === undefined ? null : (
-          <MarkdownReader html={html} label={t("wiki-text", { page: page.title })} references={references} onOpenPage={onOpenLink} onOpenTask={onOpenTask} />
+          <MarkdownReader
+            html={html}
+            label={t("wiki-text", { page: page.title })}
+            references={references}
+            onOpenPage={onOpenLink}
+            onOpenTask={onOpenTask}
+            onToggle={writable ? (click) => toggleChecklist(call, { page: page.id }, checklist, click) : undefined}
+          />
         )}
       </article>
       <PageAside
@@ -298,6 +335,15 @@ interface PageAsideProps {
 /** "On this page", "Linked from", "Tasks that link here" and "Links on this page". */
 function PageAside({ page, headings, currentHeading, references, onHeading, onNavigate, onOpenTask }: PageAsideProps) {
   const t = useT();
+  const toasts = useToasts();
+  const copyText = (text: string) => {
+    navigator.clipboard.writeText(text).then(
+      () => {
+        toasts.show({ tone: "info", text: t("wiki-heading-link-copied"), detail: text });
+      },
+      () => undefined,
+    );
+  };
   const backlinks = useOp("wiki.backlinks", { page: page.id });
   const { pages, tasks } = splitBacklinks(backlinks.data?.items ?? []);
   const outgoing = references ?? [];
@@ -307,18 +353,30 @@ function PageAside({ page, headings, currentHeading, references, onHeading, onNa
         <nav className={styles.asideGroup} aria-label={t("wiki-outline")}>
           <span className={classes("caption", styles.asideCaption)}>{t("wiki-outline")}</span>
           {headings.map((entry, index) => (
-            <button
-              key={`${String(entry.line)}-${entry.text}`}
-              type="button"
-              className={classes(styles.toc, index === currentHeading && styles.tocOn)}
-              data-level={entry.level}
-              aria-current={index === currentHeading ? "location" : undefined}
-              onClick={() => {
-                onHeading(entry, index);
-              }}
-            >
-              {entry.text}
-            </button>
+            <span key={`${String(entry.line)}-${entry.text}`} className={styles.tocRow}>
+              <button
+                type="button"
+                className={classes(styles.toc, index === currentHeading && styles.tocOn)}
+                data-level={entry.level}
+                aria-current={index === currentHeading ? "location" : undefined}
+                onClick={() => {
+                  onHeading(entry, index);
+                }}
+              >
+                {entry.text}
+              </button>
+              <Tooltip text={t("wiki-copy-heading-link", { heading: entry.text })}>
+                <Button
+                  className={classes("btn flat icon sm", styles.tocCopy)}
+                  aria-label={t("wiki-copy-heading-link", { heading: entry.text })}
+                  onPress={() => {
+                    copyText(`[[${page.title}#${entry.text}]]`);
+                  }}
+                >
+                  <LinkIcon className="ic s" aria-hidden="true" />
+                </Button>
+              </Tooltip>
+            </span>
           ))}
         </nav>
       )}
@@ -411,12 +469,13 @@ function useSavePage(page: WikiPage) {
   const update = useCommand("wiki.update");
   return {
     pending: update.isPending,
-    save: (draft: Draft, done: () => void) => {
+    save: (draft: Draft, message: string, done: () => void) => {
       const resolving = draft.resolving;
+      const note = message.trim() === "" ? {} : { message: message.trim() };
       update.mutate(
         resolving === undefined
-          ? { page: page.id, body: draft.text, base_revision: draft.base ?? null }
-          : { page: page.id, resolve_conflict: { action: "use_text", copy: resolving, text: draft.text }, base_revision: draft.base ?? null },
+          ? { page: page.id, body: draft.text, base_revision: draft.base ?? null, ...note }
+          : { page: page.id, resolve_conflict: { action: "use_text", copy: resolving, text: draft.text }, base_revision: draft.base ?? null, ...note },
         {
           onSuccess: (change) => {
             const outcome = change.save?.outcome;
@@ -434,15 +493,18 @@ function useSavePage(page: WikiPage) {
 }
 
 /**
- * The page's editor, with the formatting toolbar. Without a kept draft it
+ * The page's editor, with the formatting toolbar in the page bar (in
+ * `toolbarSlot`). Without a kept draft it
  * starts from the text and revision as they are when it opens, so a save
  * names the revision its text came from: an edit saved meanwhile elsewhere
  * is merged, or kept as a conflict copy.
  */
-function PageEditor({ page, kept, onDraft, onDone }: { page: WikiPage; kept: Draft | undefined; onDraft: (draft: Draft | null) => void; onDone: () => void }) {
+function PageEditor({ page, kept, toolbarSlot, onDraft, onDone }: { page: WikiPage; kept: Draft | undefined; toolbarSlot: HTMLElement | null; onDraft: (draft: Draft | null) => void; onDone: () => void }) {
   const t = useT();
   const [source, setSource] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  // A note saved with the revision, such as why the page changed.
+  const [message, setMessage] = useState("");
   const [opened] = useState<Draft>(() => ({ text: page.body, base: page.revision }));
   const draft = kept ?? opened;
   const { save, pending } = useSavePage(page);
@@ -457,7 +519,7 @@ function PageEditor({ page, kept, onDraft, onDone }: { page: WikiPage; kept: Dra
       onDone();
       return;
     }
-    save(draft, () => {
+    save(draft, message, () => {
       onDraft(null);
       onDone();
     });
@@ -479,6 +541,7 @@ function PageEditor({ page, kept, onDraft, onDone }: { page: WikiPage; kept: Dra
           mode={source ? "source" : "preview"}
           autoFocus
           project={page.project}
+          toolbarSlot={toolbarSlot}
           className={styles.editor}
           onChange={(text) => {
             setConfirming(false);
@@ -503,6 +566,23 @@ function PageEditor({ page, kept, onDraft, onDone }: { page: WikiPage; kept: Dra
               {t("description-source")}
             </Button>
             <span className={classes("faint grow", styles.small)}>{t("wiki-draft-note")}</span>
+            <span className={classes("field", styles.messageField)}>
+              <input
+                value={message}
+                maxLength={500}
+                aria-label={t("wiki-save-message")}
+                placeholder={t("wiki-save-message-hint")}
+                onChange={(event) => {
+                  setMessage(event.target.value);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    submit();
+                  }
+                }}
+              />
+            </span>
             <Button className="btn sm" onPress={cancel}>
               {t("wiki-discard")}
             </Button>
@@ -593,7 +673,10 @@ function PageHistory({ page, writable, onClose }: { page: WikiPage; writable: bo
             <li key={revision.id} className={classes(styles.revisionRow, chosen.includes(revision.id) && styles.chosen)}>
               <label className={styles.revisionPick}>
                 <input type="checkbox" className="check" checked={chosen.includes(revision.id)} onChange={() => { choose(revision.id); }} />
-                <span className="grow">{revisionLine(t, moment, revision)}</span>
+                <span className="grow">
+                  {revisionLine(t, moment, revision)}
+                  {revision.message !== undefined && <span className={classes("muted", styles.revisionMessage)}>{revision.message}</span>}
+                </span>
                 {revision.current && <span className="chip hue-green">{t("description-current")}</span>}
               </label>
             </li>

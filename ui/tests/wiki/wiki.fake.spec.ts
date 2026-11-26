@@ -56,12 +56,43 @@ test("the tree moves pages by dragging and with the keyboard", async ({ page }) 
   await shot(page, "wiki-tree-moved");
 });
 
+test("the drag handle moves a page with the keyboard", async ({ page }) => {
+  const tree = await openWiki(page);
+  // The row's handle is reached with the Right arrow; Enter starts a drag.
+  await tree.getByRole("row", { name: "Release plan" }).click();
+  await page.keyboard.press("ArrowRight");
+  await expect(tree.getByRole("button", { name: /Drag\W+Release plan/ })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("button", { name: /Insert after\W+Release plan/ })).toBeFocused();
+  // The Up arrow walks through the places to drop it, onto pages and between them.
+  const seen: string[] = [];
+  for (let step = 0; step < 20; step += 1) {
+    await page.keyboard.press("ArrowUp");
+    const label = plain((await page.evaluate(() => document.activeElement?.getAttribute("aria-label"))) ?? "");
+    seen.push(label);
+    if (label === "Drop on Architecture") {
+      break;
+    }
+  }
+  expect(seen.at(-1), seen.join(" / ")).toBe("Drop on Architecture");
+  await page.keyboard.press("Enter");
+  await expect(tree.getByRole("row", { name: "Release plan" })).toHaveAttribute("aria-level", "2");
+  expect(await rows(tree)).toEqual(["Home", "Architecture", "Query language", "Storage", "Release plan"]);
+  // Escape gives a drag up: nothing moves.
+  await tree.getByRole("row", { name: "Home" }).click();
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Escape");
+  expect(await rows(tree)).toEqual(["Home", "Architecture", "Query language", "Storage", "Release plan"]);
+});
+
 test("a page shows its outline and links, marks a missing page, and follows links", async ({ page }) => {
   const tree = await openWiki(page);
   await tree.getByRole("row", { name: "Query language" }).click();
   const view = page.getByRole("region", { name: /Wiki page/ });
   await expect(view.getByRole("heading", { name: "Grammar" })).toBeVisible();
-  await expect(view.getByRole("navigation", { name: "On this page" }).getByRole("button")).toHaveText(["Query language", "Grammar", "Examples", "Progress"]);
+  await expect(view.getByRole("navigation", { name: "On this page" }).locator("button[data-level]")).toHaveText(["Query language", "Grammar", "Examples", "Progress"]);
   await expect(view.getByRole("region", { name: "Linked from" }).getByRole("button", { name: "Architecture" })).toBeVisible();
   await expect(view.getByRole("region", { name: "Tasks that link here" })).toContainText("TM-3");
   // Saved views has no page yet: the link is marked.
@@ -97,6 +128,75 @@ test("the editor saves a page with a [[ link chosen from the completion, and the
   await shot(page, "wiki-history");
 });
 
+test("a checkbox on a page is ticked in the reader and saved as a revision", async ({ page }) => {
+  const tree = await openWiki(page);
+  await tree.getByRole("row", { name: "Query language" }).click();
+  const view = page.getByRole("region", { name: /Wiki page/ });
+  const box = view.locator("article").getByRole("checkbox", { name: /Formal grammar/ });
+  await expect(box).not.toBeChecked();
+  await box.click();
+  await expect(box).toBeChecked();
+  await view.getByRole("button", { name: "History" }).click();
+  const diff = view.getByRole("group", { name: "Differences between the two revisions" });
+  await expect(diff.locator("ins").filter({ hasText: "[x] Formal grammar" })).toBeVisible();
+});
+
+test("the formatting toolbar sits in the page bar while editing, and the page menu exports the page", async ({ page }) => {
+  const tree = await openWiki(page);
+  await tree.getByRole("row", { name: "Storage" }).click();
+  const view = page.getByRole("region", { name: /Wiki page/ });
+  await view.getByRole("button", { name: /^Edit/ }).click();
+  const toolbar = view.locator("[data-toolbar-slot]").getByRole("toolbar", { name: "Formatting" });
+  await expect(toolbar).toBeVisible();
+  await expect(view.getByRole("toolbar")).toHaveCount(1);
+  await expect(view.getByRole("textbox", { name: /Text of/ })).toBeFocused();
+  await shot(page, "wiki-editor-toolbar");
+  await page.keyboard.press("Control+End");
+  await page.keyboard.type("\nloud");
+  await page.keyboard.press("Shift+Home");
+  await toolbar.getByRole("button", { name: "Bold" }).click();
+  await view.getByRole("button", { name: "Save" }).click();
+  await expect(view.locator("article strong").filter({ hasText: "loud" })).toBeVisible();
+  await expect(view.locator("[data-toolbar-slot]")).toHaveCount(0);
+
+  await view.getByRole("button", { name: "Page menu" }).click();
+  await page.getByRole("menuitem", { name: "Export as Markdown…" }).click();
+  await expect(page.getByText("Page exported as Markdown")).toBeVisible();
+  // A page with pages inside offers them too.
+  await tree.getByRole("row", { name: "Architecture" }).click();
+  await view.getByRole("button", { name: "Page menu" }).click();
+  await page.getByRole("menuitem", { name: "Export with the pages inside…" }).click();
+  await expect(page.getByRole("region", { name: "Notifications" })).toContainText(/3\W+pages exported as Markdown/);
+});
+
+test("a page becomes the agent brief, a save carries a note, a heading's link is copied, and the whole wiki exports", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  const tree = await openWiki(page);
+  await tree.getByRole("row", { name: "Storage" }).click();
+  const view = page.getByRole("region", { name: /Wiki page/ });
+  await view.getByRole("button", { name: "Page menu" }).click();
+  await page.getByRole("menuitem", { name: "Use as the agent brief" }).click();
+  await expect(tree.getByRole("row", { name: "Storage" })).toContainText("Agent brief");
+  await expect(view.getByRole("navigation", { name: "Place in the wiki" })).toContainText("Agent brief");
+
+  await view.getByRole("button", { name: /^Edit/ }).click();
+  await expect(view.getByRole("textbox", { name: /Text of/ })).toBeFocused();
+  await page.keyboard.press("Control+End");
+  await page.keyboard.type("\nMore.");
+  await view.getByRole("textbox", { name: "Note about this change" }).fill("Explain the file");
+  await view.getByRole("button", { name: "Save" }).click();
+  await view.getByRole("button", { name: "History" }).click();
+  await expect(view.getByRole("list", { name: "Revisions" })).toContainText("Explain the file");
+  await view.getByRole("button", { name: "History" }).click();
+
+  await view.getByRole("navigation", { name: "On this page" }).getByRole("button", { name: /Copy a link to\W+Storage/ }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("[[Storage#Storage]]");
+
+  await view.getByRole("button", { name: "Page menu" }).click();
+  await page.getByRole("menuitem", { name: "Export the whole wiki…" }).click();
+  await expect(page.getByRole("region", { name: "Notifications" })).toContainText(/5\W+pages exported as Markdown/);
+});
+
 test("the task panel lists the pages that link to the task", async ({ page }) => {
   const tree = await openWiki(page);
   await tree.getByRole("row", { name: "Release plan" }).click();
@@ -122,8 +222,8 @@ test.describe("in the pseudo-locale", () => {
     // Project names are sample data, not translated.
     await page.getByRole("row", { name: "Task Manager" }).click();
     await expect(page.getByRole("heading", { name: "Task Manager", level: 1 })).toBeVisible();
-    // The view switcher's fourth button: Board, List, Gantt, Wiki.
-    await page.locator("header .seg button").nth(3).click();
+    // The view switcher's last button: Wiki.
+    await page.locator("header .seg button").last().click();
     // The second tree is the wiki's, after the sidebar's projects.
     await expect(page.getByRole("treegrid")).toHaveCount(2);
     await page.getByRole("treegrid").last().getByRole("row").nth(2).click();

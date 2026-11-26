@@ -32,6 +32,8 @@ interface PageTreeProps {
   onRename: (page: WikiPageSummary) => void;
   onDelete: (page: WikiPageSummary) => void;
   onOpenWindow: (page: WikiPageSummary) => void;
+  /** Exports the page, with the pages inside it when `subpages`. */
+  onExport: (page: WikiPageSummary, subpages: boolean) => void;
 }
 
 /**
@@ -40,7 +42,7 @@ interface PageTreeProps {
  * keys (up and down among its siblings, right into the page above it, left
  * out of its parent). Right-click or the Menu key opens the page menu.
  */
-export function PageTree({ pages, current, writable, onOpen, onMove, onNew, onRename, onDelete, onOpenWindow }: PageTreeProps) {
+export function PageTree({ pages, current, writable, onOpen, onMove, onNew, onRename, onDelete, onOpenWindow, onExport }: PageTreeProps) {
   const t = useT();
   const menu = useContextMenu(t("wiki-page-menu"));
   const [collapsed, setCollapsed] = useState<readonly string[]>([]);
@@ -78,6 +80,9 @@ export function PageTree({ pages, current, writable, onOpen, onMove, onNew, onRe
       const move = keyboardMove(pages, page.id, direction);
       return { id: `move-${direction}`, label: t(`wiki-move-${direction}`), run: () => { if (move) { onMove(move); } }, disabled: !writable || move === null };
     }),
+    "separator",
+    { id: "export", label: t("wiki-export"), run: () => { onExport(page, false); } },
+    ...(page.children > 0 ? [{ id: "export-all", label: t("wiki-export-all"), run: () => { onExport(page, true); } }] : []),
     "separator",
     { id: "delete", label: t("wiki-delete"), run: () => { onDelete(page); }, disabled: !writable },
   ];

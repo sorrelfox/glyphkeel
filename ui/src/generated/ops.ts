@@ -589,11 +589,13 @@ export type ChecklistChange = {
   group?: string;
   /** The items now. */
   items: ChecklistItem[];
-  /** The task's key. */
+  /** The task's key; for a wiki page, its project's key. */
   key: string;
-  /** The description's revision now, for a task. */
+  /** The page's ID, for a wiki page's checklist. */
+  page?: string;
+  /** The text's revision now, for a task or a wiki page. */
   revision?: string;
-  /** The task's (or comment's) version now. */
+  /** The task's (or comment's) version now; 0 for a wiki page, which has revisions instead. */
   version: number;
 };
 
@@ -627,7 +629,7 @@ export type ChecklistToggle = {
   text: string;
 };
 
-/** Changes to the checklist in a task's description or a comment. Numbers are as read before the change. When an item's number now points at other text, the item with that text is used if there is exactly one; otherwise nothing changes. */
+/** Changes to the checklist in a task's description, a comment or a wiki page. Numbers are as read before the change. When an item's number now points at other text, the item with that text is used if there is exactly one; otherwise nothing changes. */
 export type ChecklistUpdateInput = {
   /** Items to add. */
   add?: ChecklistAdd[];
@@ -635,6 +637,10 @@ export type ChecklistUpdateInput = {
   comment?: string | null;
   /** The task whose description holds the checklist: its key or ID. */
   key?: string | null;
+  /** Or the wiki page that holds it: its title, slug, old slug or ID. A change to a page is saved as a new revision of it. */
+  page?: string | null;
+  /** The project (key or ID) whose wiki holds `page`; needed when the page is named by title or slug. */
+  project?: string | null;
   /** Items to remove. */
   remove?: ChecklistRemove[];
   /** Items to tick or clear. */
@@ -3330,6 +3336,34 @@ export type WikiDeleteInput = {
   project?: string | null;
 };
 
+/** A page, or a whole wiki, to export as Markdown files. */
+export type WikiExportInput = {
+  /** A `.zip` file (the default) or a folder. */
+  format?: ArchiveFormat | null;
+  /** The page: its title (any case), slug or ID. Left out: the project's whole wiki, every page in it. */
+  page?: string | null;
+  /** Where to write it: a new file or folder. Agents give a plain name, which goes into the workspace's `exports` folder. Left out: a name made from the page's slug and the date, in the `exports` folder. */
+  path?: string | null;
+  /** The project (key or ID); needed unless `page` is an ID. */
+  project?: string | null;
+  /** Include the pages inside it, each in a folder named after its parent (always, for a whole wiki). */
+  subpages?: boolean;
+};
+
+/** A finished page export. */
+export type WikiExportResult = {
+  /** The attached files copied. */
+  attachments: number;
+  /** How it is stored. */
+  format: ArchiveFormat;
+  /** The Markdown files written: one per page. */
+  pages: number;
+  /** The file or folder written. */
+  path: string;
+  /** Its size in bytes. */
+  size: number;
+};
+
 /** A page field that can be cleared. */
 export type WikiField = "parent";
 
@@ -3406,6 +3440,8 @@ export type WikiPage = {
   backlinks?: Backlink[];
   /** Its text (Markdown). */
   body: string;
+  /** Its checklist items, numbered, when asked for with `include`. */
+  checklist_items?: ChecklistItem[];
   /** The pages it holds, in order. */
   children?: WikiPageRef[];
   /** Edits that clashed with another and wait to be resolved (conflict copies). */
@@ -3469,7 +3505,7 @@ export type WikiPageSummary = {
 };
 
 /** What `wiki.get` adds to a page. */
-export type WikiPart = "backlinks" | "references";
+export type WikiPart = "backlinks" | "references" | "checklist";
 
 /** One page found. */
 export type WikiSearchHit = {
@@ -3519,6 +3555,8 @@ export type WikiTree = {
 export type WikiUpdateInput = {
   /** Place it after this page of the same parent. */
   after?: string | null;
+  /** Mark it as the project's brief for agents (`true`; another page marked before is unmarked), or unmark it (`false`). Only people can change this, not agents. */
+  agent_brief?: boolean | null;
   /** Place it first or last among its parent's pages. */
   at?: Edge | null;
   /** The revision your new text was edited from. If somebody saved in between, the two edits are merged; when they changed the same lines, yours is kept as a conflict copy and the page stays as it is. */
@@ -3663,6 +3701,7 @@ export interface OpMap {
   "wiki.move": { input: WikiMoveInput; output: WikiChange; safety: "write"; kind: "command" };
   "wiki.delete": { input: WikiDeleteInput; output: TrashChange; safety: "trash"; kind: "command" };
   "wiki.history": { input: WikiHistoryInput; output: RevisionList; safety: "read"; kind: "query" };
+  "wiki.export": { input: WikiExportInput; output: WikiExportResult; safety: "write"; kind: "command" };
   "wiki.backlinks": { input: WikiLinksInput; output: BacklinkList; safety: "read"; kind: "query" };
   "wiki.references": { input: WikiLinksInput; output: ReferenceList; safety: "read"; kind: "query" };
   "task.backlinks": { input: TaskLinksInput; output: BacklinkList; safety: "read"; kind: "query" };
@@ -3779,6 +3818,7 @@ export const OP_SAFETY = {
   "wiki.move": "write",
   "wiki.delete": "trash",
   "wiki.history": "read",
+  "wiki.export": "write",
   "wiki.backlinks": "read",
   "wiki.references": "read",
   "task.backlinks": "read",
@@ -3841,7 +3881,7 @@ export function makeOps(call: Call) {
       get: (input: OpMap["board.get"]["input"]) => call("board.get", input),
     },
     checklist: {
-      /** Tick, clear, add or remove checklist items in a task's description or a comment, by number plus expected text. (write) */
+      /** Tick, clear, add or remove checklist items in a task's description, a comment or a wiki page, by number plus expected text. (write) */
       update: (input: OpMap["checklist.update"]["input"] = {}) => call("checklist.update", input),
     },
     comment: {
@@ -4085,6 +4125,8 @@ export function makeOps(call: Call) {
       delete: (input: OpMap["wiki.delete"]["input"]) => call("wiki.delete", input),
       /** List the revisions of a wiki page, newest first, conflict copies included; read one with wiki.get and its revision. (read) */
       history: (input: OpMap["wiki.history"]["input"]) => call("wiki.history", input),
+      /** Export a wiki page, optionally with the pages inside it, or a project's whole wiki, as Markdown files with their attachments, in a .zip file or a folder; links between the exported pages and to the attachments become relative links. (write) */
+      export: (input: OpMap["wiki.export"]["input"] = {}) => call("wiki.export", input),
       /** The wiki pages, task descriptions and comments that link to a wiki page, by its title, slug, an old slug or its ID. (read) */
       backlinks: (input: OpMap["wiki.backlinks"]["input"]) => call("wiki.backlinks", input),
       /** The pages and tasks a wiki page's text links to, in order, each resolved now; links that find nothing are marked. (read) */

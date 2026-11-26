@@ -19,6 +19,7 @@ import { TaskPanel } from "../task/TaskPanel";
 import { NewPageDialog, RenamePageDialog, type NewPageRequest } from "./PageDialogs";
 import { PageTree } from "./PageTree";
 import { PageView } from "./PageView";
+import { useExportPage } from "./exportPage";
 import styles from "./Wiki.module.css";
 
 /** The wiki's place in the window: the page shown, the heading a link named, and a task open beside it. */
@@ -64,6 +65,7 @@ export function WikiScreen() {
   const [fresh, setFresh] = useState<string | null>(null);
   const move = useCommand("wiki.move");
   const remove = useCommand("wiki.delete", { undoable: t("wiki-deleted") });
+  const exportPage = useExportPage();
 
   useStatus({ summary: tree.data ? t("wiki-page-count", { count: tree.data.total }) : "" });
 
@@ -111,6 +113,9 @@ export function WikiScreen() {
         onRename={setRenaming}
         onDelete={trash}
         onOpenWindow={openWindow}
+        onExport={(target, subpages) => {
+          exportPage({ page: target, subpages });
+        }}
       />
       {current !== undefined ? (
         <PageView

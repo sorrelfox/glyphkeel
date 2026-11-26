@@ -74,7 +74,7 @@ const BACKUP_FOLDER_OP: &str = "backup.folder.update";
 /// by the page (setting it back to the default, with no folder, is fine).
 pub(crate) fn page_may_run(op: &str, input: &Value) -> Result<(), OpError> {
     let names = |field: &str| input.get(field).is_some_and(|value| !value.is_null());
-    if matches!(op, "transfer.export" | "transfer.import") && names("path") {
+    if matches!(op, "transfer.export" | "transfer.import" | "wiki.export") && names("path") {
         return Err(OpError::forbidden(format!(
             "{op} takes its path from the file chooser, not from the page."
         )));
@@ -113,6 +113,40 @@ pub(crate) async fn export_archive(
             "projects": projects,
         });
         workspace.call("transfer.export", input, None).map(Some)
+    })
+    .await
+}
+
+/// Exports wiki page `page` (with the pages inside it when `subpages`), or
+/// without a page the whole wiki of `project`, as Markdown files in a
+/// `.zip` file where the person chooses, starting with `name`. Returns the
+/// export's result, or `null` when the person cancelled.
+#[tauri::command]
+pub(crate) async fn export_wiki_page(
+    window: WebviewWindow,
+    workspace: State<'_, Arc<Workspace>>,
+    page: Option<String>,
+    project: Option<String>,
+    subpages: bool,
+    name: String,
+) -> Result<Option<Value>, OpError> {
+    let workspace = Arc::clone(&workspace);
+    let mode = dialog::Mode::Export {
+        name: safe_name(&name),
+        folder: false,
+    };
+    let Some(path) = dialog::choose(&window, mode).await?.into_iter().next() else {
+        return Ok(None);
+    };
+    blocking(move || {
+        let input = json!({
+            "page": page,
+            "project": project,
+            "subpages": subpages,
+            "path": path.to_string_lossy(),
+            "format": "zip",
+        });
+        workspace.call("wiki.export", input, None).map(Some)
     })
     .await
 }
@@ -204,6 +238,14 @@ mod tests {
     fn the_page_never_names_an_archive_path() {
         assert!(page_may_run("transfer.export", &json!({ "path": "/tmp/x.zip" })).is_err());
         assert!(page_may_run("transfer.import", &json!({ "path": "/etc" })).is_err());
+        assert!(
+            page_may_run(
+                "wiki.export",
+                &json!({ "page": "Home", "path": "/tmp/h.zip" })
+            )
+            .is_err()
+        );
+        assert!(page_may_run("wiki.export", &json!({ "page": "Home" })).is_ok());
         assert!(page_may_run("transfer.export", &json!({ "projects": [] })).is_ok());
         assert!(page_may_run("transfer.export", &json!({ "path": null })).is_ok());
         assert!(page_may_run("task.create", &json!({ "path": "x" })).is_ok());

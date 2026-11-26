@@ -59,13 +59,13 @@ export interface CheckboxClick {
  */
 export function toggleChecklist(
   call: Call,
-  owner: { task: string } | { comment: string },
+  owner: { task: string } | { comment: string } | { page: string },
   items: readonly ChecklistItem[],
   click: CheckboxClick,
 ): Promise<ChecklistChange> {
   const item = items.find((candidate) => candidate.number === click.number);
   return call("checklist.update", {
-    ...("task" in owner ? { key: owner.task } : { comment: owner.comment }),
+    ...("task" in owner ? { key: owner.task } : "comment" in owner ? { comment: owner.comment } : { page: owner.page }),
     toggle: [{ number: click.number, text: item?.text ?? "", checked: click.checked }],
   });
 }

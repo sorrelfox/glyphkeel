@@ -235,6 +235,7 @@ pub static CATALOG: &[OpDescriptor] = &[
     wiki::WIKI_MOVE,
     wiki::WIKI_DELETE,
     wiki::WIKI_HISTORY,
+    wiki::WIKI_EXPORT,
     link::WIKI_BACKLINKS,
     link::WIKI_REFERENCES,
     link::TASK_BACKLINKS,
