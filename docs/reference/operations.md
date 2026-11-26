@@ -124,6 +124,7 @@ The safety class decides who may run an operation:
 | `agent.sessions` | read | app, command line, MCP | `get_activity` | `glyphkeel agents sessions` |
 | `agent.policy.update` | app | app, command line | — | `glyphkeel agents policy` |
 | `agent.limits.update` | app | app | — | — |
+| `rules.update` | app | app, command line | — | `glyphkeel project rules <project>` |
 | `history.feed` | read | app, command line, MCP | `get_activity` | `glyphkeel activity` |
 | `history.revert` | write | app, command line, MCP | `revert_changes` | `glyphkeel revert` |
 | `history.undo` | app | app | — | — |
@@ -821,6 +822,14 @@ Change the limits on agent sessions: changes a minute, new tasks a day, and item
 Input: `AgentLimitsPatch`. Output: `SettingsChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 Not available to agents: It sets how much agents may do; an agent that could call it would raise its own limits beyond what the person allowed.
+
+## `rules.update`
+
+Change a project's status rules (fields set, cleared or required when a task enters a status, fields read-only in it, the timer and claims) and its rules for agents (statuses they may not move tasks into, fields they may not change).
+
+Input: `RulesUpdateInput`. Output: `ProjectChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+Not available to agents: It sets what agents may do; an agent that could call it would lift the rules the person set for agents.
 
 ## `history.feed`
 

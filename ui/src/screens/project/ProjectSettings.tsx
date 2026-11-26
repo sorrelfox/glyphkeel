@@ -19,6 +19,7 @@ import { HuePicker } from "./HuePicker";
 import { DeleteQuestion } from "./DeleteProject";
 import { FieldsSettings } from "./FieldsSettings";
 import { IconPicker } from "./IconPicker";
+import { RulesSettings } from "./RulesSettings";
 import styles from "./Project.module.css";
 
 interface ProjectSettingsProps {
@@ -62,6 +63,9 @@ export function ProjectSettings({ projectKey, onClose }: ProjectSettingsProps) {
               <Tab id="fields" className={({ isSelected }) => (isSelected ? "tab on" : "tab")}>
                 {t("project-settings-fields")}
               </Tab>
+              <Tab id="rules" className={({ isSelected }) => (isSelected ? "tab on" : "tab")}>
+                {t("project-settings-rules")}
+              </Tab>
             </TabList>
             <TabPanel id="general" className={classes(styles.panel)}>
               <General project={project.data} onDeleted={onClose} />
@@ -77,6 +81,9 @@ export function ProjectSettings({ projectKey, onClose }: ProjectSettingsProps) {
             </TabPanel>
             <TabPanel id="fields" className={classes(styles.panel)}>
               <FieldsSettings project={project.data} />
+            </TabPanel>
+            <TabPanel id="rules" className={classes(styles.panel)}>
+              <RulesSettings project={project.data} />
             </TabPanel>
           </Tabs>
         )}

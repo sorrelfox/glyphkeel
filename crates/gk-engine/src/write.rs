@@ -71,6 +71,19 @@ impl<'a> WriteCtx<'a> {
             .collect()
     }
 
+    /// The items of `entity` this command has changed so far, in order,
+    /// each with its project and its changed fields.
+    pub(crate) fn changes_of(
+        &self,
+        entity: &str,
+    ) -> Vec<(Id, Option<Id>, BTreeMap<String, FieldChange>)> {
+        self.changes
+            .iter()
+            .filter(|c| c.entity == entity)
+            .map(|c| (c.id, c.project, c.fields.clone()))
+            .collect()
+    }
+
     /// How many items of `entity` this command has created so far.
     pub(crate) fn created_so_far(&self, entity: &str) -> usize {
         self.changes

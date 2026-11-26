@@ -1591,6 +1591,20 @@
         "additionalProperties": false,
         "description": "One project with its configuration.",
         "properties": {
+          "agent_rules": {
+            "additionalProperties": false,
+            "description": "The rules for agents; left out when there are none.",
+            "properties": {
+              "read_only": {
+                "description": "Task fields agents may not change in this project: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
           "children": {
             "description": "The sub-projects' keys, in order.",
             "items": {
@@ -2002,6 +2016,73 @@
                   "description": "Its name.",
                   "type": "string"
                 },
+                "rules": {
+                  "additionalProperties": false,
+                  "description": "Its rules for tasks entering it; left out when it has none.",
+                  "properties": {
+                    "agents_may_not_enter": {
+                      "description": "Agents may not move tasks into the status, nor create tasks in it\n(for example Done, so that a person reviews first).",
+                      "type": "boolean"
+                    },
+                    "clear": {
+                      "description": "Fields cleared when a task enters the status: `start_date`,\n`due_date`, `estimate`, `progress`, `fix_version`, or a custom field\nthat isn't required.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "read_only": {
+                      "description": "Fields that can't change while a task is in the status: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "release_claim": {
+                      "description": "Release an agent's claim when the task enters the status.",
+                      "type": "boolean"
+                    },
+                    "required": {
+                      "description": "Fields that must have a value before a task enters the status:\n`description`, `priority`, `start_date`, `due_date`, `estimate`,\n`labels`, `parent`, `fix_version`, or a custom field.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "set": {
+                      "description": "Fields set when a task enters the status.",
+                      "items": {
+                        "additionalProperties": false,
+                        "description": "One field a status sets when a task enters it.",
+                        "properties": {
+                          "field": {
+                            "description": "The field: `start_date`, `due_date`, `progress`, `priority`, or a\ncustom field as `cf:<id>`.",
+                            "type": "string"
+                          },
+                          "only_if_empty": {
+                            "description": "Only when the field has no value yet (a start date already set is\nkept).",
+                            "type": "boolean"
+                          },
+                          "value": {
+                            "description": "The value as text: `today` for a date, 0 to 100 for progress, a\npriority's name (`high`), or a custom field's value as it is\nwritten (`today` for a date field, one option of a select field).",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "field",
+                          "value"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "stop_timer": {
+                      "description": "Stop the timer when its task enters the status; the time is logged.",
+                      "type": "boolean"
+                    }
+                  },
+                  "type": "object"
+                },
                 "tasks": {
                   "description": "Tasks in this status.",
                   "minimum": 0,
@@ -2323,6 +2404,20 @@
             "additionalProperties": false,
             "description": "The project after the change.",
             "properties": {
+              "agent_rules": {
+                "additionalProperties": false,
+                "description": "The rules for agents; left out when there are none.",
+                "properties": {
+                  "read_only": {
+                    "description": "Task fields agents may not change in this project: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              },
               "children": {
                 "description": "The sub-projects' keys, in order.",
                 "items": {
@@ -2733,6 +2828,73 @@
                     "name": {
                       "description": "Its name.",
                       "type": "string"
+                    },
+                    "rules": {
+                      "additionalProperties": false,
+                      "description": "Its rules for tasks entering it; left out when it has none.",
+                      "properties": {
+                        "agents_may_not_enter": {
+                          "description": "Agents may not move tasks into the status, nor create tasks in it\n(for example Done, so that a person reviews first).",
+                          "type": "boolean"
+                        },
+                        "clear": {
+                          "description": "Fields cleared when a task enters the status: `start_date`,\n`due_date`, `estimate`, `progress`, `fix_version`, or a custom field\nthat isn't required.",
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "read_only": {
+                          "description": "Fields that can't change while a task is in the status: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "release_claim": {
+                          "description": "Release an agent's claim when the task enters the status.",
+                          "type": "boolean"
+                        },
+                        "required": {
+                          "description": "Fields that must have a value before a task enters the status:\n`description`, `priority`, `start_date`, `due_date`, `estimate`,\n`labels`, `parent`, `fix_version`, or a custom field.",
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "set": {
+                          "description": "Fields set when a task enters the status.",
+                          "items": {
+                            "additionalProperties": false,
+                            "description": "One field a status sets when a task enters it.",
+                            "properties": {
+                              "field": {
+                                "description": "The field: `start_date`, `due_date`, `progress`, `priority`, or a\ncustom field as `cf:<id>`.",
+                                "type": "string"
+                              },
+                              "only_if_empty": {
+                                "description": "Only when the field has no value yet (a start date already set is\nkept).",
+                                "type": "boolean"
+                              },
+                              "value": {
+                                "description": "The value as text: `today` for a date, 0 to 100 for progress, a\npriority's name (`high`), or a custom field's value as it is\nwritten (`today` for a date field, one option of a select field).",
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "field",
+                              "value"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "stop_timer": {
+                          "description": "Stop the timer when its task enters the status; the time is logged.",
+                          "type": "boolean"
+                        }
+                      },
+                      "type": "object"
                     },
                     "tasks": {
                       "description": "Tasks in this status.",
@@ -3509,6 +3671,20 @@
             "additionalProperties": false,
             "description": "The project after the change.",
             "properties": {
+              "agent_rules": {
+                "additionalProperties": false,
+                "description": "The rules for agents; left out when there are none.",
+                "properties": {
+                  "read_only": {
+                    "description": "Task fields agents may not change in this project: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              },
               "children": {
                 "description": "The sub-projects' keys, in order.",
                 "items": {
@@ -3919,6 +4095,73 @@
                     "name": {
                       "description": "Its name.",
                       "type": "string"
+                    },
+                    "rules": {
+                      "additionalProperties": false,
+                      "description": "Its rules for tasks entering it; left out when it has none.",
+                      "properties": {
+                        "agents_may_not_enter": {
+                          "description": "Agents may not move tasks into the status, nor create tasks in it\n(for example Done, so that a person reviews first).",
+                          "type": "boolean"
+                        },
+                        "clear": {
+                          "description": "Fields cleared when a task enters the status: `start_date`,\n`due_date`, `estimate`, `progress`, `fix_version`, or a custom field\nthat isn't required.",
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "read_only": {
+                          "description": "Fields that can't change while a task is in the status: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "release_claim": {
+                          "description": "Release an agent's claim when the task enters the status.",
+                          "type": "boolean"
+                        },
+                        "required": {
+                          "description": "Fields that must have a value before a task enters the status:\n`description`, `priority`, `start_date`, `due_date`, `estimate`,\n`labels`, `parent`, `fix_version`, or a custom field.",
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "set": {
+                          "description": "Fields set when a task enters the status.",
+                          "items": {
+                            "additionalProperties": false,
+                            "description": "One field a status sets when a task enters it.",
+                            "properties": {
+                              "field": {
+                                "description": "The field: `start_date`, `due_date`, `progress`, `priority`, or a\ncustom field as `cf:<id>`.",
+                                "type": "string"
+                              },
+                              "only_if_empty": {
+                                "description": "Only when the field has no value yet (a start date already set is\nkept).",
+                                "type": "boolean"
+                              },
+                              "value": {
+                                "description": "The value as text: `today` for a date, 0 to 100 for progress, a\npriority's name (`high`), or a custom field's value as it is\nwritten (`today` for a date field, one option of a select field).",
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "field",
+                              "value"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "stop_timer": {
+                          "description": "Stop the timer when its task enters the status; the time is logged.",
+                          "type": "boolean"
+                        }
+                      },
+                      "type": "object"
                     },
                     "tasks": {
                       "description": "Tasks in this status.",

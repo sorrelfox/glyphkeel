@@ -33,6 +33,8 @@ import { CardView } from "./CardView";
 import { indexCoordinates, pointerThenCenter, step } from "./dnd";
 import { CollapsedLane, Lane, type CardHandlers } from "./Lane";
 import { useToday } from "../../data/zone";
+import { fieldsOfCard } from "../../data/rules";
+import { useEntryReason, useProjectsByKey } from "../../data/useRules";
 import { boardView, isFiltered, moveColumn, NO_FILTERS, positionIn, type BoardView, type Filters } from "./model";
 import { Toolbar } from "./Toolbar";
 import styles from "./Board.module.css";
@@ -117,10 +119,21 @@ function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowO
   const laneKeys = drag ? drag.lanes : lanesNow;
   const activeCard = drag ? cards.get(drag.key) : undefined;
 
-  /** A lane can take the card: open, and its column has a status in the card's project. */
+  const projects = useProjectsByKey([project.key, ...[...cards.values()].map((card) => card.project)]);
+  const entryReason = useEntryReason();
+  /** Why the card can't enter the lane's status yet under the status's rules, if it can't. */
+  const ruleReason = (laneId: string, card: Card | undefined): string | undefined => {
+    const lane = view.lanes.find((candidate) => candidate.column.id === laneId);
+    const status = card === undefined ? undefined : lane?.column.statuses[card.project];
+    if (card === undefined || status === undefined || columnOf[card.key] === laneId) {
+      return undefined;
+    }
+    return entryReason(projects.get(card.project), status, fieldsOfCard(card));
+  };
+  /** A lane can take the card: open, its column has a status in the card's project, and the status's rules let it in. */
   const takes = (laneId: string, card: Card | undefined) => {
     const lane = view.lanes.find((candidate) => candidate.column.id === laneId);
-    return lane !== undefined && !lane.collapsed && card !== undefined && lane.column.statuses[card.project] !== undefined;
+    return lane !== undefined && !lane.collapsed && card !== undefined && lane.column.statuses[card.project] !== undefined && ruleReason(laneId, card) === undefined;
   };
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -299,12 +312,16 @@ function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowO
       {
         id: "move",
         label: t("card-move-to"),
-        submenu: view.lanes.map((lane) => ({
-          id: `move-${lane.column.id}`,
-          label: lane.column.name,
-          disabled: readOnly || columnOf[key] === lane.column.id || lane.column.statuses[card.project] === undefined,
-          run: () => { commit(key, lane.column.id, { at: "bottom" }, [...(lanesNow[lane.column.id] ?? []), key]); },
-        })),
+        submenu: view.lanes.map((lane) => {
+          const reason = ruleReason(lane.column.id, card);
+          return {
+            id: `move-${lane.column.id}`,
+            label: lane.column.name,
+            disabled: readOnly || columnOf[key] === lane.column.id || lane.column.statuses[card.project] === undefined || reason !== undefined,
+            ...(reason === undefined ? {} : { detail: reason }),
+            run: () => { commit(key, lane.column.id, { at: "bottom" }, [...(lanesNow[lane.column.id] ?? []), key]); },
+          };
+        }),
       },
       {
         id: "priority",
@@ -546,6 +563,7 @@ function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowO
                   handlers={handlers}
                   active={drag?.key ?? null}
                   closed={drag !== null && !takes(lane.column.id, activeCard)}
+                  reason={drag === null ? undefined : ruleReason(lane.column.id, activeCard)}
                   hot={drag?.over === lane.column.id}
                   adding={adding === lane.column.id}
                   menu={laneMenu(lane.column.id, index)}

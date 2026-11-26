@@ -1243,8 +1243,9 @@ fn write(
         tx.prepare_cached(
             "INSERT INTO projects (id, parent_id, rank, key, name, name_fold, description,
                description_rev, hue, icon, state, modules, next_number, created_at, updated_at,
-               deleted_at, deleted_group)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
+               deleted_at, deleted_group, agent_rules)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
+                     ?18)",
         )?
         .execute(params![
             b(id),
@@ -1264,6 +1265,7 @@ fn write(
             p.updated_at,
             p.deleted_at,
             plan.group(p.deleted_group.as_ref()),
+            rules_text(p.agent_rules.as_ref(), plan),
         ])?;
         for alias in &proj.file.key_aliases {
             if alias != key && !key_taken(tx, alias)? && ProjectKey::new(alias).is_ok() {
@@ -1276,7 +1278,7 @@ fn write(
         for s in &proj.file.statuses {
             tx.prepare_cached(
                 "INSERT INTO statuses (id, project_id, name, name_fold, category, hue, rank,
-                   wip_limit) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                   wip_limit, rules) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             )?
             .execute(params![
                 b(plan.id(&s.id)),
@@ -1286,7 +1288,8 @@ fn write(
                 s.category,
                 s.hue,
                 s.rank,
-                s.wip_limit
+                s.wip_limit,
+                rules_text(s.rules.as_ref(), plan)
             ])?;
         }
         for t in &proj.file.types {
@@ -1869,4 +1872,14 @@ fn write(
         );
     }
     Ok(())
+}
+
+/// Rules from an archive as stored: JSON objects only, anything else is no
+/// rules. The custom fields they name take the IDs the fields get here.
+fn rules_text(rules: Option<&serde_json::Value>, plan: &Plan) -> Option<String> {
+    let mut rules = rules
+        .filter(|r| r.as_object().is_some_and(|o| !o.is_empty()))?
+        .clone();
+    crate::ops::rules::map_custom_fields(&mut rules, &|id| plan.ids.get(&id).copied());
+    Some(rules.to_string())
 }

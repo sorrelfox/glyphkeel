@@ -31,6 +31,9 @@ import { errorToast, useCall, useCommand } from "../../data/hooks";
 import { useTrashTasks } from "../../data/safety";
 import { useTaskDetails } from "../../data/task";
 import { useT } from "../../i18n/I18n";
+import { useCustomFields } from "../../data/fields";
+import { customFieldId, fieldsOfTask, readOnlyFields } from "../../data/rules";
+import { useEntryReason } from "../../data/useRules";
 import { openTaskWindow } from "../../ipc/taskWindow";
 import { useDayFormat } from "../board/CardView";
 import { useDurations } from "../../data/time";
@@ -160,6 +163,10 @@ function Loaded({
   const spent = task.spent_minutes;
   const left = estimate === null ? null : estimate - spent;
   const statusHue = project.statuses.find((status) => status.id === task.status.id)?.hue ?? "grey";
+  const entryReason = useEntryReason();
+  // Fields the task's status keeps from changing: shown disabled, with the reason below.
+  const locked = readOnlyFields(project, task.status.id);
+  const lockedOr = (field: string) => readOnly || locked.has(field);
 
   return (
     <>
@@ -245,13 +252,13 @@ function Loaded({
         onKeyDown={(event) => {
           const target = event.target as HTMLElement;
           // E edits the description, as in the design, unless the key was typed into something.
-          if (event.key === "e" && !event.ctrlKey && !event.altKey && !event.metaKey && !readOnly && descriptionView.kind !== "edit" && !target.closest("input, textarea, select, [contenteditable], [role=textbox]")) {
+          if (event.key === "e" && !event.ctrlKey && !event.altKey && !event.metaKey && !lockedOr("description") && descriptionView.kind !== "edit" && !target.closest("input, textarea, select, [contenteditable], [role=textbox]")) {
             event.preventDefault();
             setDescriptionView({ kind: "edit" });
           }
         }}
       >
-        <Title task={task} readOnly={readOnly} onSave={(title) => { patch({ title }); }} />
+        <Title task={task} readOnly={lockedOr("title")} onSave={(title) => { patch({ title }); }} />
 
         <div className={styles.actions}>
           <MenuTrigger>
@@ -263,13 +270,17 @@ function Loaded({
             <Popover className="pop menuPopover" placement="bottom start" offset={4}>
               <Menu className="menu" aria-label={t("panel-status-menu")}>
                 <MenuEntries
-                  entries={project.statuses.map((status) => ({
-                    id: status.id,
-                    label: status.name,
-                    checked: status.id === task.status.id,
-                    icon: <span className={`dot hue-${status.hue}`} />,
-                    run: () => { setStatus(status.id); },
-                  }))}
+                  entries={project.statuses.map((status) => {
+                    const reason = status.id === task.status.id ? undefined : entryReason(project, status.id, fieldsOfTask(task));
+                    return {
+                      id: status.id,
+                      label: status.name,
+                      checked: status.id === task.status.id,
+                      icon: <span className={`dot hue-${status.hue}`} />,
+                      ...(reason === undefined ? {} : { disabled: true, detail: reason }),
+                      run: () => { setStatus(status.id); },
+                    };
+                  })}
                 />
               </Menu>
             </Popover>
@@ -292,7 +303,7 @@ function Loaded({
         <div className={styles.props}>
           <Prop label={t("prop-priority")}>
             <MenuTrigger>
-              <Button className="val" isDisabled={readOnly} aria-label={t("prop-priority-value", { value: t(`priority-${task.priority}`) })}>
+              <Button className="val" isDisabled={lockedOr("priority")} aria-label={t("prop-priority-value", { value: t(`priority-${task.priority}`) })}>
                 <PriorityGlyph priority={task.priority} />
                 {t(`priority-${task.priority}`)}
               </Button>
@@ -313,7 +324,7 @@ function Loaded({
           </Prop>
           <Prop label={t("prop-type")}>
             <MenuTrigger>
-              <Button className="val" isDisabled={readOnly} aria-label={t("prop-type-value", { value: task.type.name })}>
+              <Button className="val" isDisabled={lockedOr("type")} aria-label={t("prop-type-value", { value: task.type.name })}>
                 <TypeGlyph glyph={task.type.glyph} />
                 {task.type.name}
               </Button>
@@ -333,16 +344,16 @@ function Loaded({
             </MenuTrigger>
           </Prop>
           <Prop label={t("prop-start")}>
-            <DateValue label={t("prop-start")} value={task.start_date ?? null} readOnly={readOnly} onChange={(day) => { setOrClear("start_date", day); }} />
+            <DateValue label={t("prop-start")} value={task.start_date ?? null} readOnly={lockedOr("start_date")} onChange={(day) => { setOrClear("start_date", day); }} />
           </Prop>
           <Prop label={t("prop-due")}>
-            <DateValue label={t("prop-due")} value={task.due_date ?? null} readOnly={readOnly} closed={task.closed_at !== undefined} relative onChange={(day) => { setOrClear("due_date", day); }} />
+            <DateValue label={t("prop-due")} value={task.due_date ?? null} readOnly={lockedOr("due_date")} closed={task.closed_at !== undefined} relative onChange={(day) => { setOrClear("due_date", day); }} />
           </Prop>
           <Prop label={t("prop-estimate")}>
             <DurationValue
               label={t("prop-estimate")}
               value={estimate}
-              readOnly={readOnly}
+              readOnly={lockedOr("estimate")}
               onChange={(minutes) => { setOrClear("estimate", minutes === null ? null : `${String(minutes)}m`); }}
             />
           </Prop>
@@ -357,10 +368,10 @@ function Loaded({
             </span>
           </Prop>
           <Prop label={t("prop-version")}>
-            <VersionPicker task={task} readOnly={readOnly} onChange={(version) => { setOrClear("fix_version", version); }} />
+            <VersionPicker task={task} readOnly={lockedOr("fix_version")} onChange={(version) => { setOrClear("fix_version", version); }} />
           </Prop>
           <Prop label={t("prop-labels")} wide>
-            <Labels task={task} project={project} readOnly={readOnly} onChange={(labels) => { setOrClear("labels", labels.length === 0 ? null : labels); }} />
+            <Labels task={task} project={project} readOnly={lockedOr("labels")} onChange={(labels) => { setOrClear("labels", labels.length === 0 ? null : labels); }} />
           </Prop>
           <Prop label={t("prop-progress")}>
             {task.checklist.total > 0 ? (
@@ -381,9 +392,11 @@ function Loaded({
           </Prop>
         </div>
 
-        <FieldsSection task={task} readOnly={readOnly} />
+        <LockedNote locked={locked} status={task.status.name} project={task.project} />
 
-        <DescriptionSection task={task} readOnly={readOnly} view={descriptionView} onView={setDescriptionView} onOpenTask={onOpenTask} />
+        <FieldsSection task={task} readOnly={readOnly} locked={locked} />
+
+        <DescriptionSection task={task} readOnly={lockedOr("description")} view={descriptionView} onView={setDescriptionView} onOpenTask={onOpenTask} />
 
         <SubtasksSection task={task} project={project} readOnly={readOnly} onOpenTask={onOpenTask} />
         <LinksSection task={task} project={project} readOnly={readOnly} onOpenTask={onOpenTask} />
@@ -401,6 +414,30 @@ function Loaded({
       </div>
       <Composer task={task} readOnly={readOnly} />
     </>
+  );
+}
+
+/** Says which fields the task's status keeps from changing, so a disabled field never goes unexplained. */
+function LockedNote({ locked, status, project }: { locked: ReadonlySet<string>; status: string; project: string }) {
+  const t = useT();
+  const { locale } = useLocale();
+  const custom = useCustomFields(project);
+  const names = [...locked].flatMap((field) => {
+    const id = customFieldId(field);
+    if (id === undefined) {
+      return [t(`rule-field-${field}`)];
+    }
+    const name = custom.find((each) => each.id === id)?.name;
+    return name === undefined ? [] : [name];
+  });
+  if (names.length === 0) {
+    return null;
+  }
+  const list = new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(names);
+  return (
+    <p className={classes("meta", styles.ruleNote)} role="note">
+      {t("panel-rule-read-only", { status, fields: list, count: names.length })}
+    </p>
   );
 }
 

@@ -31,6 +31,7 @@ pub(crate) mod query;
 pub(crate) mod relation;
 pub(crate) mod reminder;
 pub(crate) mod rollup;
+pub(crate) mod rules;
 pub(crate) mod schedule;
 pub(crate) mod search;
 pub(crate) mod settings;
@@ -57,6 +58,7 @@ pub(crate) fn register(r: &mut Registry) {
     project::register(r);
     custom_field::register(r);
     project_delete::register(r);
+    rules::register(r);
     task::register(r);
     duplicate::register(r);
     claim::register(r);

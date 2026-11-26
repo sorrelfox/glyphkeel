@@ -112,7 +112,7 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
     let pid = id.as_bytes().to_vec();
     let project = tx.query_row(
         "SELECT id, parent_id, rank, key, name, description, description_rev, hue, icon, state,
-                modules, next_number, created_at, updated_at, deleted_at, deleted_group
+                modules, next_number, created_at, updated_at, deleted_at, deleted_group, agent_rules
            FROM projects WHERE id = ?1",
         [&pid],
         |r| {
@@ -134,12 +134,13 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
                 updated_at: r.get(13)?,
                 deleted_at: r.get(14)?,
                 deleted_group: opt_id(r, 15)?,
+                agent_rules: json_of(r.get::<_, Option<String>>(16)?),
             })
         },
     )?;
     let statuses = all(
         tx,
-        "SELECT id, name, category, hue, rank, wip_limit FROM statuses WHERE project_id = ?1
+        "SELECT id, name, category, hue, rank, wip_limit, rules FROM statuses WHERE project_id = ?1
           ORDER BY rank, id",
         &pid,
         |r| {
@@ -150,6 +151,7 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
                 hue: r.get(3)?,
                 rank: r.get(4)?,
                 wip_limit: r.get(5)?,
+                rules: json_of(r.get::<_, Option<String>>(6)?),
             })
         },
     )?;
@@ -641,6 +643,11 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
         files,
         activity,
     })
+}
+
+/// Stored JSON text as a value; none when there is none or it can't be read.
+fn json_of(text: Option<String>) -> Option<serde_json::Value> {
+    text.and_then(|t| serde_json::from_str(&t).ok())
 }
 
 fn modules_of(text: &str) -> Modules {

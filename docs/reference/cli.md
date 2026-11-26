@@ -47,6 +47,7 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel project list` | `project.list` | The project tree in sidebar order, with keys, names and open-task counts; archived projects on request. |
 | `glyphkeel project move <project>` | `project.move` | Move a project under another one (at most 3 levels), to the top level, or among its siblings. |
 | `glyphkeel project rekey <project>` | `project.change_key` | Give a project a new key; the old key and the old task keys keep working. |
+| `glyphkeel project rules <project>` | `rules.update` | Change a project's status rules (fields set, cleared or required when a task enters a status, fields read-only in it, the timer and claims) and its rules for agents (statuses they may not move tasks into, fields they may not change). |
 | `glyphkeel project show <project>` | `project.get` | One project with its statuses (board order, category, WIP limit), task types, labels, modules, sub-projects and counts. |
 | `glyphkeel project unarchive <project>` | `project.unarchive` | Unarchive a project and its sub-projects. |
 | `glyphkeel reminder ack <ids>` | `reminder.acknowledge` | Acknowledge reminders that were shown, so they don't come due again. |

@@ -9,8 +9,8 @@ use serde::de::DeserializeOwned;
 
 use crate::ops::{
     agent, backup, board, bulk, comment, description, draft, field, file, history, link, project,
-    query, schedule, search, settings, task, time, today, transfer, trash, version, view, wiki,
-    workspace,
+    query, rules, schedule, search, settings, task, time, today, transfer, trash, version, view,
+    wiki, workspace,
 };
 use crate::schema;
 
@@ -263,6 +263,7 @@ pub static CATALOG: &[OpDescriptor] = &[
     agent::AGENT_SESSIONS,
     agent::AGENT_POLICY_UPDATE,
     agent::AGENT_LIMITS_UPDATE,
+    rules::RULES_UPDATE,
     history::HISTORY_FEED,
     history::HISTORY_REVERT,
     history::HISTORY_UNDO,

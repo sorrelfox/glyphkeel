@@ -1725,6 +1725,20 @@
       "mcp_tool": "get_project",
       "output": {
         "$defs": {
+          "AgentRules": {
+            "additionalProperties": false,
+            "description": "A project's rules for agents. Everything left out is no rule.",
+            "properties": {
+              "read_only": {
+                "description": "Task fields agents may not change in this project: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
           "Category": {
             "description": "What a status means for the work in it.",
             "oneOf": [
@@ -1951,6 +1965,29 @@
               }
             ]
           },
+          "RuleSet": {
+            "additionalProperties": false,
+            "description": "One field a status sets when a task enters it.",
+            "properties": {
+              "field": {
+                "description": "The field: `start_date`, `due_date`, `progress`, `priority`, or a\ncustom field as `cf:<id>`.",
+                "type": "string"
+              },
+              "only_if_empty": {
+                "description": "Only when the field has no value yet (a start date already set is\nkept).",
+                "type": "boolean"
+              },
+              "value": {
+                "description": "The value as text: `today` for a date, 0 to 100 for progress, a\npriority's name (`high`), or a custom field's value as it is\nwritten (`today` for a date field, one option of a select field).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "field",
+              "value"
+            ],
+            "type": "object"
+          },
           "Status": {
             "additionalProperties": false,
             "description": "A status: one board column.",
@@ -1970,6 +2007,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "rules": {
+                "$ref": "#/$defs/StatusRules",
+                "description": "Its rules for tasks entering it; left out when it has none."
               },
               "tasks": {
                 "description": "Tasks in this status.",
@@ -1991,6 +2032,53 @@
               "hue",
               "tasks"
             ],
+            "type": "object"
+          },
+          "StatusRules": {
+            "additionalProperties": false,
+            "description": "The rules of one status. Everything left out is no rule.",
+            "properties": {
+              "agents_may_not_enter": {
+                "description": "Agents may not move tasks into the status, nor create tasks in it\n(for example Done, so that a person reviews first).",
+                "type": "boolean"
+              },
+              "clear": {
+                "description": "Fields cleared when a task enters the status: `start_date`,\n`due_date`, `estimate`, `progress`, `fix_version`, or a custom field\nthat isn't required.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "read_only": {
+                "description": "Fields that can't change while a task is in the status: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "release_claim": {
+                "description": "Release an agent's claim when the task enters the status.",
+                "type": "boolean"
+              },
+              "required": {
+                "description": "Fields that must have a value before a task enters the status:\n`description`, `priority`, `start_date`, `due_date`, `estimate`,\n`labels`, `parent`, `fix_version`, or a custom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "set": {
+                "description": "Fields set when a task enters the status.",
+                "items": {
+                  "$ref": "#/$defs/RuleSet"
+                },
+                "type": "array"
+              },
+              "stop_timer": {
+                "description": "Stop the timer when its task enters the status; the time is logged.",
+                "type": "boolean"
+              }
+            },
             "type": "object"
           },
           "TaskType": {
@@ -2039,6 +2127,10 @@
         "additionalProperties": false,
         "description": "One project with its configuration.",
         "properties": {
+          "agent_rules": {
+            "$ref": "#/$defs/AgentRules",
+            "description": "The rules for agents; left out when there are none."
+          },
           "children": {
             "description": "The sub-projects' keys, in order.",
             "items": {
@@ -2336,6 +2428,20 @@
       "mcp_tool": "create_project",
       "output": {
         "$defs": {
+          "AgentRules": {
+            "additionalProperties": false,
+            "description": "A project's rules for agents. Everything left out is no rule.",
+            "properties": {
+              "read_only": {
+                "description": "Task fields agents may not change in this project: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
           "Category": {
             "description": "What a status means for the work in it.",
             "oneOf": [
@@ -2505,6 +2611,10 @@
             "additionalProperties": false,
             "description": "One project with its configuration.",
             "properties": {
+              "agent_rules": {
+                "$ref": "#/$defs/AgentRules",
+                "description": "The rules for agents; left out when there are none."
+              },
               "children": {
                 "description": "The sub-projects' keys, in order.",
                 "items": {
@@ -2687,6 +2797,29 @@
               }
             ]
           },
+          "RuleSet": {
+            "additionalProperties": false,
+            "description": "One field a status sets when a task enters it.",
+            "properties": {
+              "field": {
+                "description": "The field: `start_date`, `due_date`, `progress`, `priority`, or a\ncustom field as `cf:<id>`.",
+                "type": "string"
+              },
+              "only_if_empty": {
+                "description": "Only when the field has no value yet (a start date already set is\nkept).",
+                "type": "boolean"
+              },
+              "value": {
+                "description": "The value as text: `today` for a date, 0 to 100 for progress, a\npriority's name (`high`), or a custom field's value as it is\nwritten (`today` for a date field, one option of a select field).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "field",
+              "value"
+            ],
+            "type": "object"
+          },
           "Status": {
             "additionalProperties": false,
             "description": "A status: one board column.",
@@ -2706,6 +2839,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "rules": {
+                "$ref": "#/$defs/StatusRules",
+                "description": "Its rules for tasks entering it; left out when it has none."
               },
               "tasks": {
                 "description": "Tasks in this status.",
@@ -2727,6 +2864,53 @@
               "hue",
               "tasks"
             ],
+            "type": "object"
+          },
+          "StatusRules": {
+            "additionalProperties": false,
+            "description": "The rules of one status. Everything left out is no rule.",
+            "properties": {
+              "agents_may_not_enter": {
+                "description": "Agents may not move tasks into the status, nor create tasks in it\n(for example Done, so that a person reviews first).",
+                "type": "boolean"
+              },
+              "clear": {
+                "description": "Fields cleared when a task enters the status: `start_date`,\n`due_date`, `estimate`, `progress`, `fix_version`, or a custom field\nthat isn't required.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "read_only": {
+                "description": "Fields that can't change while a task is in the status: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "release_claim": {
+                "description": "Release an agent's claim when the task enters the status.",
+                "type": "boolean"
+              },
+              "required": {
+                "description": "Fields that must have a value before a task enters the status:\n`description`, `priority`, `start_date`, `due_date`, `estimate`,\n`labels`, `parent`, `fix_version`, or a custom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "set": {
+                "description": "Fields set when a task enters the status.",
+                "items": {
+                  "$ref": "#/$defs/RuleSet"
+                },
+                "type": "array"
+              },
+              "stop_timer": {
+                "description": "Stop the timer when its task enters the status; the time is logged.",
+                "type": "boolean"
+              }
+            },
             "type": "object"
           },
           "TaskType": {
@@ -3400,6 +3584,20 @@
       "mcp_tool": "update_project",
       "output": {
         "$defs": {
+          "AgentRules": {
+            "additionalProperties": false,
+            "description": "A project's rules for agents. Everything left out is no rule.",
+            "properties": {
+              "read_only": {
+                "description": "Task fields agents may not change in this project: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
           "Category": {
             "description": "What a status means for the work in it.",
             "oneOf": [
@@ -3569,6 +3767,10 @@
             "additionalProperties": false,
             "description": "One project with its configuration.",
             "properties": {
+              "agent_rules": {
+                "$ref": "#/$defs/AgentRules",
+                "description": "The rules for agents; left out when there are none."
+              },
               "children": {
                 "description": "The sub-projects' keys, in order.",
                 "items": {
@@ -3751,6 +3953,29 @@
               }
             ]
           },
+          "RuleSet": {
+            "additionalProperties": false,
+            "description": "One field a status sets when a task enters it.",
+            "properties": {
+              "field": {
+                "description": "The field: `start_date`, `due_date`, `progress`, `priority`, or a\ncustom field as `cf:<id>`.",
+                "type": "string"
+              },
+              "only_if_empty": {
+                "description": "Only when the field has no value yet (a start date already set is\nkept).",
+                "type": "boolean"
+              },
+              "value": {
+                "description": "The value as text: `today` for a date, 0 to 100 for progress, a\npriority's name (`high`), or a custom field's value as it is\nwritten (`today` for a date field, one option of a select field).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "field",
+              "value"
+            ],
+            "type": "object"
+          },
           "Status": {
             "additionalProperties": false,
             "description": "A status: one board column.",
@@ -3770,6 +3995,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "rules": {
+                "$ref": "#/$defs/StatusRules",
+                "description": "Its rules for tasks entering it; left out when it has none."
               },
               "tasks": {
                 "description": "Tasks in this status.",
@@ -3791,6 +4020,53 @@
               "hue",
               "tasks"
             ],
+            "type": "object"
+          },
+          "StatusRules": {
+            "additionalProperties": false,
+            "description": "The rules of one status. Everything left out is no rule.",
+            "properties": {
+              "agents_may_not_enter": {
+                "description": "Agents may not move tasks into the status, nor create tasks in it\n(for example Done, so that a person reviews first).",
+                "type": "boolean"
+              },
+              "clear": {
+                "description": "Fields cleared when a task enters the status: `start_date`,\n`due_date`, `estimate`, `progress`, `fix_version`, or a custom field\nthat isn't required.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "read_only": {
+                "description": "Fields that can't change while a task is in the status: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "release_claim": {
+                "description": "Release an agent's claim when the task enters the status.",
+                "type": "boolean"
+              },
+              "required": {
+                "description": "Fields that must have a value before a task enters the status:\n`description`, `priority`, `start_date`, `due_date`, `estimate`,\n`labels`, `parent`, `fix_version`, or a custom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "set": {
+                "description": "Fields set when a task enters the status.",
+                "items": {
+                  "$ref": "#/$defs/RuleSet"
+                },
+                "type": "array"
+              },
+              "stop_timer": {
+                "description": "Stop the timer when its task enters the status; the time is logged.",
+                "type": "boolean"
+              }
+            },
             "type": "object"
           },
           "TaskType": {
@@ -3944,6 +4220,20 @@
       "mcp_tool": "update_project",
       "output": {
         "$defs": {
+          "AgentRules": {
+            "additionalProperties": false,
+            "description": "A project's rules for agents. Everything left out is no rule.",
+            "properties": {
+              "read_only": {
+                "description": "Task fields agents may not change in this project: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
           "Category": {
             "description": "What a status means for the work in it.",
             "oneOf": [
@@ -4113,6 +4403,10 @@
             "additionalProperties": false,
             "description": "One project with its configuration.",
             "properties": {
+              "agent_rules": {
+                "$ref": "#/$defs/AgentRules",
+                "description": "The rules for agents; left out when there are none."
+              },
               "children": {
                 "description": "The sub-projects' keys, in order.",
                 "items": {
@@ -4295,6 +4589,29 @@
               }
             ]
           },
+          "RuleSet": {
+            "additionalProperties": false,
+            "description": "One field a status sets when a task enters it.",
+            "properties": {
+              "field": {
+                "description": "The field: `start_date`, `due_date`, `progress`, `priority`, or a\ncustom field as `cf:<id>`.",
+                "type": "string"
+              },
+              "only_if_empty": {
+                "description": "Only when the field has no value yet (a start date already set is\nkept).",
+                "type": "boolean"
+              },
+              "value": {
+                "description": "The value as text: `today` for a date, 0 to 100 for progress, a\npriority's name (`high`), or a custom field's value as it is\nwritten (`today` for a date field, one option of a select field).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "field",
+              "value"
+            ],
+            "type": "object"
+          },
           "Status": {
             "additionalProperties": false,
             "description": "A status: one board column.",
@@ -4314,6 +4631,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "rules": {
+                "$ref": "#/$defs/StatusRules",
+                "description": "Its rules for tasks entering it; left out when it has none."
               },
               "tasks": {
                 "description": "Tasks in this status.",
@@ -4335,6 +4656,53 @@
               "hue",
               "tasks"
             ],
+            "type": "object"
+          },
+          "StatusRules": {
+            "additionalProperties": false,
+            "description": "The rules of one status. Everything left out is no rule.",
+            "properties": {
+              "agents_may_not_enter": {
+                "description": "Agents may not move tasks into the status, nor create tasks in it\n(for example Done, so that a person reviews first).",
+                "type": "boolean"
+              },
+              "clear": {
+                "description": "Fields cleared when a task enters the status: `start_date`,\n`due_date`, `estimate`, `progress`, `fix_version`, or a custom field\nthat isn't required.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "read_only": {
+                "description": "Fields that can't change while a task is in the status: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "release_claim": {
+                "description": "Release an agent's claim when the task enters the status.",
+                "type": "boolean"
+              },
+              "required": {
+                "description": "Fields that must have a value before a task enters the status:\n`description`, `priority`, `start_date`, `due_date`, `estimate`,\n`labels`, `parent`, `fix_version`, or a custom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "set": {
+                "description": "Fields set when a task enters the status.",
+                "items": {
+                  "$ref": "#/$defs/RuleSet"
+                },
+                "type": "array"
+              },
+              "stop_timer": {
+                "description": "Stop the timer when its task enters the status; the time is logged.",
+                "type": "boolean"
+              }
+            },
             "type": "object"
           },
           "TaskType": {
@@ -4439,6 +4807,20 @@
       "mcp_tool": "update_project",
       "output": {
         "$defs": {
+          "AgentRules": {
+            "additionalProperties": false,
+            "description": "A project's rules for agents. Everything left out is no rule.",
+            "properties": {
+              "read_only": {
+                "description": "Task fields agents may not change in this project: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
           "Category": {
             "description": "What a status means for the work in it.",
             "oneOf": [
@@ -4608,6 +4990,10 @@
             "additionalProperties": false,
             "description": "One project with its configuration.",
             "properties": {
+              "agent_rules": {
+                "$ref": "#/$defs/AgentRules",
+                "description": "The rules for agents; left out when there are none."
+              },
               "children": {
                 "description": "The sub-projects' keys, in order.",
                 "items": {
@@ -4790,6 +5176,29 @@
               }
             ]
           },
+          "RuleSet": {
+            "additionalProperties": false,
+            "description": "One field a status sets when a task enters it.",
+            "properties": {
+              "field": {
+                "description": "The field: `start_date`, `due_date`, `progress`, `priority`, or a\ncustom field as `cf:<id>`.",
+                "type": "string"
+              },
+              "only_if_empty": {
+                "description": "Only when the field has no value yet (a start date already set is\nkept).",
+                "type": "boolean"
+              },
+              "value": {
+                "description": "The value as text: `today` for a date, 0 to 100 for progress, a\npriority's name (`high`), or a custom field's value as it is\nwritten (`today` for a date field, one option of a select field).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "field",
+              "value"
+            ],
+            "type": "object"
+          },
           "Status": {
             "additionalProperties": false,
             "description": "A status: one board column.",
@@ -4809,6 +5218,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "rules": {
+                "$ref": "#/$defs/StatusRules",
+                "description": "Its rules for tasks entering it; left out when it has none."
               },
               "tasks": {
                 "description": "Tasks in this status.",
@@ -4830,6 +5243,53 @@
               "hue",
               "tasks"
             ],
+            "type": "object"
+          },
+          "StatusRules": {
+            "additionalProperties": false,
+            "description": "The rules of one status. Everything left out is no rule.",
+            "properties": {
+              "agents_may_not_enter": {
+                "description": "Agents may not move tasks into the status, nor create tasks in it\n(for example Done, so that a person reviews first).",
+                "type": "boolean"
+              },
+              "clear": {
+                "description": "Fields cleared when a task enters the status: `start_date`,\n`due_date`, `estimate`, `progress`, `fix_version`, or a custom field\nthat isn't required.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "read_only": {
+                "description": "Fields that can't change while a task is in the status: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "release_claim": {
+                "description": "Release an agent's claim when the task enters the status.",
+                "type": "boolean"
+              },
+              "required": {
+                "description": "Fields that must have a value before a task enters the status:\n`description`, `priority`, `start_date`, `due_date`, `estimate`,\n`labels`, `parent`, `fix_version`, or a custom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "set": {
+                "description": "Fields set when a task enters the status.",
+                "items": {
+                  "$ref": "#/$defs/RuleSet"
+                },
+                "type": "array"
+              },
+              "stop_timer": {
+                "description": "Stop the timer when its task enters the status; the time is logged.",
+                "type": "boolean"
+              }
+            },
             "type": "object"
           },
           "TaskType": {
@@ -4929,6 +5389,20 @@
       "mcp_tool": "update_project",
       "output": {
         "$defs": {
+          "AgentRules": {
+            "additionalProperties": false,
+            "description": "A project's rules for agents. Everything left out is no rule.",
+            "properties": {
+              "read_only": {
+                "description": "Task fields agents may not change in this project: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
           "Category": {
             "description": "What a status means for the work in it.",
             "oneOf": [
@@ -5098,6 +5572,10 @@
             "additionalProperties": false,
             "description": "One project with its configuration.",
             "properties": {
+              "agent_rules": {
+                "$ref": "#/$defs/AgentRules",
+                "description": "The rules for agents; left out when there are none."
+              },
               "children": {
                 "description": "The sub-projects' keys, in order.",
                 "items": {
@@ -5280,6 +5758,29 @@
               }
             ]
           },
+          "RuleSet": {
+            "additionalProperties": false,
+            "description": "One field a status sets when a task enters it.",
+            "properties": {
+              "field": {
+                "description": "The field: `start_date`, `due_date`, `progress`, `priority`, or a\ncustom field as `cf:<id>`.",
+                "type": "string"
+              },
+              "only_if_empty": {
+                "description": "Only when the field has no value yet (a start date already set is\nkept).",
+                "type": "boolean"
+              },
+              "value": {
+                "description": "The value as text: `today` for a date, 0 to 100 for progress, a\npriority's name (`high`), or a custom field's value as it is\nwritten (`today` for a date field, one option of a select field).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "field",
+              "value"
+            ],
+            "type": "object"
+          },
           "Status": {
             "additionalProperties": false,
             "description": "A status: one board column.",
@@ -5299,6 +5800,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "rules": {
+                "$ref": "#/$defs/StatusRules",
+                "description": "Its rules for tasks entering it; left out when it has none."
               },
               "tasks": {
                 "description": "Tasks in this status.",
@@ -5320,6 +5825,53 @@
               "hue",
               "tasks"
             ],
+            "type": "object"
+          },
+          "StatusRules": {
+            "additionalProperties": false,
+            "description": "The rules of one status. Everything left out is no rule.",
+            "properties": {
+              "agents_may_not_enter": {
+                "description": "Agents may not move tasks into the status, nor create tasks in it\n(for example Done, so that a person reviews first).",
+                "type": "boolean"
+              },
+              "clear": {
+                "description": "Fields cleared when a task enters the status: `start_date`,\n`due_date`, `estimate`, `progress`, `fix_version`, or a custom field\nthat isn't required.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "read_only": {
+                "description": "Fields that can't change while a task is in the status: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "release_claim": {
+                "description": "Release an agent's claim when the task enters the status.",
+                "type": "boolean"
+              },
+              "required": {
+                "description": "Fields that must have a value before a task enters the status:\n`description`, `priority`, `start_date`, `due_date`, `estimate`,\n`labels`, `parent`, `fix_version`, or a custom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "set": {
+                "description": "Fields set when a task enters the status.",
+                "items": {
+                  "$ref": "#/$defs/RuleSet"
+                },
+                "type": "array"
+              },
+              "stop_timer": {
+                "description": "Stop the timer when its task enters the status; the time is logged.",
+                "type": "boolean"
+              }
+            },
             "type": "object"
           },
           "TaskType": {
@@ -5419,6 +5971,20 @@
       "mcp_tool": "update_project",
       "output": {
         "$defs": {
+          "AgentRules": {
+            "additionalProperties": false,
+            "description": "A project's rules for agents. Everything left out is no rule.",
+            "properties": {
+              "read_only": {
+                "description": "Task fields agents may not change in this project: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
           "Category": {
             "description": "What a status means for the work in it.",
             "oneOf": [
@@ -5588,6 +6154,10 @@
             "additionalProperties": false,
             "description": "One project with its configuration.",
             "properties": {
+              "agent_rules": {
+                "$ref": "#/$defs/AgentRules",
+                "description": "The rules for agents; left out when there are none."
+              },
               "children": {
                 "description": "The sub-projects' keys, in order.",
                 "items": {
@@ -5770,6 +6340,29 @@
               }
             ]
           },
+          "RuleSet": {
+            "additionalProperties": false,
+            "description": "One field a status sets when a task enters it.",
+            "properties": {
+              "field": {
+                "description": "The field: `start_date`, `due_date`, `progress`, `priority`, or a\ncustom field as `cf:<id>`.",
+                "type": "string"
+              },
+              "only_if_empty": {
+                "description": "Only when the field has no value yet (a start date already set is\nkept).",
+                "type": "boolean"
+              },
+              "value": {
+                "description": "The value as text: `today` for a date, 0 to 100 for progress, a\npriority's name (`high`), or a custom field's value as it is\nwritten (`today` for a date field, one option of a select field).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "field",
+              "value"
+            ],
+            "type": "object"
+          },
           "Status": {
             "additionalProperties": false,
             "description": "A status: one board column.",
@@ -5789,6 +6382,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "rules": {
+                "$ref": "#/$defs/StatusRules",
+                "description": "Its rules for tasks entering it; left out when it has none."
               },
               "tasks": {
                 "description": "Tasks in this status.",
@@ -5810,6 +6407,53 @@
               "hue",
               "tasks"
             ],
+            "type": "object"
+          },
+          "StatusRules": {
+            "additionalProperties": false,
+            "description": "The rules of one status. Everything left out is no rule.",
+            "properties": {
+              "agents_may_not_enter": {
+                "description": "Agents may not move tasks into the status, nor create tasks in it\n(for example Done, so that a person reviews first).",
+                "type": "boolean"
+              },
+              "clear": {
+                "description": "Fields cleared when a task enters the status: `start_date`,\n`due_date`, `estimate`, `progress`, `fix_version`, or a custom field\nthat isn't required.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "read_only": {
+                "description": "Fields that can't change while a task is in the status: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "release_claim": {
+                "description": "Release an agent's claim when the task enters the status.",
+                "type": "boolean"
+              },
+              "required": {
+                "description": "Fields that must have a value before a task enters the status:\n`description`, `priority`, `start_date`, `due_date`, `estimate`,\n`labels`, `parent`, `fix_version`, or a custom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "set": {
+                "description": "Fields set when a task enters the status.",
+                "items": {
+                  "$ref": "#/$defs/RuleSet"
+                },
+                "type": "array"
+              },
+              "stop_timer": {
+                "description": "Stop the timer when its task enters the status; the time is logged.",
+                "type": "boolean"
+              }
+            },
             "type": "object"
           },
           "TaskType": {
@@ -6227,6 +6871,20 @@
       "mcp_tool": "update_project",
       "output": {
         "$defs": {
+          "AgentRules": {
+            "additionalProperties": false,
+            "description": "A project's rules for agents. Everything left out is no rule.",
+            "properties": {
+              "read_only": {
+                "description": "Task fields agents may not change in this project: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
           "Category": {
             "description": "What a status means for the work in it.",
             "oneOf": [
@@ -6396,6 +7054,10 @@
             "additionalProperties": false,
             "description": "One project with its configuration.",
             "properties": {
+              "agent_rules": {
+                "$ref": "#/$defs/AgentRules",
+                "description": "The rules for agents; left out when there are none."
+              },
               "children": {
                 "description": "The sub-projects' keys, in order.",
                 "items": {
@@ -6578,6 +7240,29 @@
               }
             ]
           },
+          "RuleSet": {
+            "additionalProperties": false,
+            "description": "One field a status sets when a task enters it.",
+            "properties": {
+              "field": {
+                "description": "The field: `start_date`, `due_date`, `progress`, `priority`, or a\ncustom field as `cf:<id>`.",
+                "type": "string"
+              },
+              "only_if_empty": {
+                "description": "Only when the field has no value yet (a start date already set is\nkept).",
+                "type": "boolean"
+              },
+              "value": {
+                "description": "The value as text: `today` for a date, 0 to 100 for progress, a\npriority's name (`high`), or a custom field's value as it is\nwritten (`today` for a date field, one option of a select field).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "field",
+              "value"
+            ],
+            "type": "object"
+          },
           "Status": {
             "additionalProperties": false,
             "description": "A status: one board column.",
@@ -6597,6 +7282,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "rules": {
+                "$ref": "#/$defs/StatusRules",
+                "description": "Its rules for tasks entering it; left out when it has none."
               },
               "tasks": {
                 "description": "Tasks in this status.",
@@ -6618,6 +7307,53 @@
               "hue",
               "tasks"
             ],
+            "type": "object"
+          },
+          "StatusRules": {
+            "additionalProperties": false,
+            "description": "The rules of one status. Everything left out is no rule.",
+            "properties": {
+              "agents_may_not_enter": {
+                "description": "Agents may not move tasks into the status, nor create tasks in it\n(for example Done, so that a person reviews first).",
+                "type": "boolean"
+              },
+              "clear": {
+                "description": "Fields cleared when a task enters the status: `start_date`,\n`due_date`, `estimate`, `progress`, `fix_version`, or a custom field\nthat isn't required.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "read_only": {
+                "description": "Fields that can't change while a task is in the status: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "release_claim": {
+                "description": "Release an agent's claim when the task enters the status.",
+                "type": "boolean"
+              },
+              "required": {
+                "description": "Fields that must have a value before a task enters the status:\n`description`, `priority`, `start_date`, `due_date`, `estimate`,\n`labels`, `parent`, `fix_version`, or a custom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "set": {
+                "description": "Fields set when a task enters the status.",
+                "items": {
+                  "$ref": "#/$defs/RuleSet"
+                },
+                "type": "array"
+              },
+              "stop_timer": {
+                "description": "Stop the timer when its task enters the status; the time is logged.",
+                "type": "boolean"
+              }
+            },
             "type": "object"
           },
           "TaskType": {
@@ -6854,6 +7590,20 @@
       "mcp_tool": "update_project",
       "output": {
         "$defs": {
+          "AgentRules": {
+            "additionalProperties": false,
+            "description": "A project's rules for agents. Everything left out is no rule.",
+            "properties": {
+              "read_only": {
+                "description": "Task fields agents may not change in this project: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
           "Category": {
             "description": "What a status means for the work in it.",
             "oneOf": [
@@ -7023,6 +7773,10 @@
             "additionalProperties": false,
             "description": "One project with its configuration.",
             "properties": {
+              "agent_rules": {
+                "$ref": "#/$defs/AgentRules",
+                "description": "The rules for agents; left out when there are none."
+              },
               "children": {
                 "description": "The sub-projects' keys, in order.",
                 "items": {
@@ -7205,6 +7959,29 @@
               }
             ]
           },
+          "RuleSet": {
+            "additionalProperties": false,
+            "description": "One field a status sets when a task enters it.",
+            "properties": {
+              "field": {
+                "description": "The field: `start_date`, `due_date`, `progress`, `priority`, or a\ncustom field as `cf:<id>`.",
+                "type": "string"
+              },
+              "only_if_empty": {
+                "description": "Only when the field has no value yet (a start date already set is\nkept).",
+                "type": "boolean"
+              },
+              "value": {
+                "description": "The value as text: `today` for a date, 0 to 100 for progress, a\npriority's name (`high`), or a custom field's value as it is\nwritten (`today` for a date field, one option of a select field).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "field",
+              "value"
+            ],
+            "type": "object"
+          },
           "Status": {
             "additionalProperties": false,
             "description": "A status: one board column.",
@@ -7224,6 +8001,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "rules": {
+                "$ref": "#/$defs/StatusRules",
+                "description": "Its rules for tasks entering it; left out when it has none."
               },
               "tasks": {
                 "description": "Tasks in this status.",
@@ -7245,6 +8026,53 @@
               "hue",
               "tasks"
             ],
+            "type": "object"
+          },
+          "StatusRules": {
+            "additionalProperties": false,
+            "description": "The rules of one status. Everything left out is no rule.",
+            "properties": {
+              "agents_may_not_enter": {
+                "description": "Agents may not move tasks into the status, nor create tasks in it\n(for example Done, so that a person reviews first).",
+                "type": "boolean"
+              },
+              "clear": {
+                "description": "Fields cleared when a task enters the status: `start_date`,\n`due_date`, `estimate`, `progress`, `fix_version`, or a custom field\nthat isn't required.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "read_only": {
+                "description": "Fields that can't change while a task is in the status: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "release_claim": {
+                "description": "Release an agent's claim when the task enters the status.",
+                "type": "boolean"
+              },
+              "required": {
+                "description": "Fields that must have a value before a task enters the status:\n`description`, `priority`, `start_date`, `due_date`, `estimate`,\n`labels`, `parent`, `fix_version`, or a custom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "set": {
+                "description": "Fields set when a task enters the status.",
+                "items": {
+                  "$ref": "#/$defs/RuleSet"
+                },
+                "type": "array"
+              },
+              "stop_timer": {
+                "description": "Stop the timer when its task enters the status; the time is logged.",
+                "type": "boolean"
+              }
+            },
             "type": "object"
           },
           "TaskType": {
@@ -7391,6 +8219,20 @@
       "mcp_tool": "update_project",
       "output": {
         "$defs": {
+          "AgentRules": {
+            "additionalProperties": false,
+            "description": "A project's rules for agents. Everything left out is no rule.",
+            "properties": {
+              "read_only": {
+                "description": "Task fields agents may not change in this project: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
           "Category": {
             "description": "What a status means for the work in it.",
             "oneOf": [
@@ -7560,6 +8402,10 @@
             "additionalProperties": false,
             "description": "One project with its configuration.",
             "properties": {
+              "agent_rules": {
+                "$ref": "#/$defs/AgentRules",
+                "description": "The rules for agents; left out when there are none."
+              },
               "children": {
                 "description": "The sub-projects' keys, in order.",
                 "items": {
@@ -7742,6 +8588,29 @@
               }
             ]
           },
+          "RuleSet": {
+            "additionalProperties": false,
+            "description": "One field a status sets when a task enters it.",
+            "properties": {
+              "field": {
+                "description": "The field: `start_date`, `due_date`, `progress`, `priority`, or a\ncustom field as `cf:<id>`.",
+                "type": "string"
+              },
+              "only_if_empty": {
+                "description": "Only when the field has no value yet (a start date already set is\nkept).",
+                "type": "boolean"
+              },
+              "value": {
+                "description": "The value as text: `today` for a date, 0 to 100 for progress, a\npriority's name (`high`), or a custom field's value as it is\nwritten (`today` for a date field, one option of a select field).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "field",
+              "value"
+            ],
+            "type": "object"
+          },
           "Status": {
             "additionalProperties": false,
             "description": "A status: one board column.",
@@ -7761,6 +8630,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "rules": {
+                "$ref": "#/$defs/StatusRules",
+                "description": "Its rules for tasks entering it; left out when it has none."
               },
               "tasks": {
                 "description": "Tasks in this status.",
@@ -7782,6 +8655,53 @@
               "hue",
               "tasks"
             ],
+            "type": "object"
+          },
+          "StatusRules": {
+            "additionalProperties": false,
+            "description": "The rules of one status. Everything left out is no rule.",
+            "properties": {
+              "agents_may_not_enter": {
+                "description": "Agents may not move tasks into the status, nor create tasks in it\n(for example Done, so that a person reviews first).",
+                "type": "boolean"
+              },
+              "clear": {
+                "description": "Fields cleared when a task enters the status: `start_date`,\n`due_date`, `estimate`, `progress`, `fix_version`, or a custom field\nthat isn't required.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "read_only": {
+                "description": "Fields that can't change while a task is in the status: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "release_claim": {
+                "description": "Release an agent's claim when the task enters the status.",
+                "type": "boolean"
+              },
+              "required": {
+                "description": "Fields that must have a value before a task enters the status:\n`description`, `priority`, `start_date`, `due_date`, `estimate`,\n`labels`, `parent`, `fix_version`, or a custom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "set": {
+                "description": "Fields set when a task enters the status.",
+                "items": {
+                  "$ref": "#/$defs/RuleSet"
+                },
+                "type": "array"
+              },
+              "stop_timer": {
+                "description": "Stop the timer when its task enters the status; the time is logged.",
+                "type": "boolean"
+              }
+            },
             "type": "object"
           },
           "TaskType": {
@@ -7893,6 +8813,20 @@
       "mcp_tool": "update_project",
       "output": {
         "$defs": {
+          "AgentRules": {
+            "additionalProperties": false,
+            "description": "A project's rules for agents. Everything left out is no rule.",
+            "properties": {
+              "read_only": {
+                "description": "Task fields agents may not change in this project: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
           "Category": {
             "description": "What a status means for the work in it.",
             "oneOf": [
@@ -8062,6 +8996,10 @@
             "additionalProperties": false,
             "description": "One project with its configuration.",
             "properties": {
+              "agent_rules": {
+                "$ref": "#/$defs/AgentRules",
+                "description": "The rules for agents; left out when there are none."
+              },
               "children": {
                 "description": "The sub-projects' keys, in order.",
                 "items": {
@@ -8244,6 +9182,29 @@
               }
             ]
           },
+          "RuleSet": {
+            "additionalProperties": false,
+            "description": "One field a status sets when a task enters it.",
+            "properties": {
+              "field": {
+                "description": "The field: `start_date`, `due_date`, `progress`, `priority`, or a\ncustom field as `cf:<id>`.",
+                "type": "string"
+              },
+              "only_if_empty": {
+                "description": "Only when the field has no value yet (a start date already set is\nkept).",
+                "type": "boolean"
+              },
+              "value": {
+                "description": "The value as text: `today` for a date, 0 to 100 for progress, a\npriority's name (`high`), or a custom field's value as it is\nwritten (`today` for a date field, one option of a select field).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "field",
+              "value"
+            ],
+            "type": "object"
+          },
           "Status": {
             "additionalProperties": false,
             "description": "A status: one board column.",
@@ -8263,6 +9224,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "rules": {
+                "$ref": "#/$defs/StatusRules",
+                "description": "Its rules for tasks entering it; left out when it has none."
               },
               "tasks": {
                 "description": "Tasks in this status.",
@@ -8284,6 +9249,53 @@
               "hue",
               "tasks"
             ],
+            "type": "object"
+          },
+          "StatusRules": {
+            "additionalProperties": false,
+            "description": "The rules of one status. Everything left out is no rule.",
+            "properties": {
+              "agents_may_not_enter": {
+                "description": "Agents may not move tasks into the status, nor create tasks in it\n(for example Done, so that a person reviews first).",
+                "type": "boolean"
+              },
+              "clear": {
+                "description": "Fields cleared when a task enters the status: `start_date`,\n`due_date`, `estimate`, `progress`, `fix_version`, or a custom field\nthat isn't required.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "read_only": {
+                "description": "Fields that can't change while a task is in the status: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "release_claim": {
+                "description": "Release an agent's claim when the task enters the status.",
+                "type": "boolean"
+              },
+              "required": {
+                "description": "Fields that must have a value before a task enters the status:\n`description`, `priority`, `start_date`, `due_date`, `estimate`,\n`labels`, `parent`, `fix_version`, or a custom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "set": {
+                "description": "Fields set when a task enters the status.",
+                "items": {
+                  "$ref": "#/$defs/RuleSet"
+                },
+                "type": "array"
+              },
+              "stop_timer": {
+                "description": "Stop the timer when its task enters the status; the time is logged.",
+                "type": "boolean"
+              }
+            },
             "type": "object"
           },
           "TaskType": {
@@ -8492,6 +9504,20 @@
       "mcp_tool": "update_project",
       "output": {
         "$defs": {
+          "AgentRules": {
+            "additionalProperties": false,
+            "description": "A project's rules for agents. Everything left out is no rule.",
+            "properties": {
+              "read_only": {
+                "description": "Task fields agents may not change in this project: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
           "Category": {
             "description": "What a status means for the work in it.",
             "oneOf": [
@@ -8661,6 +9687,10 @@
             "additionalProperties": false,
             "description": "One project with its configuration.",
             "properties": {
+              "agent_rules": {
+                "$ref": "#/$defs/AgentRules",
+                "description": "The rules for agents; left out when there are none."
+              },
               "children": {
                 "description": "The sub-projects' keys, in order.",
                 "items": {
@@ -8843,6 +9873,29 @@
               }
             ]
           },
+          "RuleSet": {
+            "additionalProperties": false,
+            "description": "One field a status sets when a task enters it.",
+            "properties": {
+              "field": {
+                "description": "The field: `start_date`, `due_date`, `progress`, `priority`, or a\ncustom field as `cf:<id>`.",
+                "type": "string"
+              },
+              "only_if_empty": {
+                "description": "Only when the field has no value yet (a start date already set is\nkept).",
+                "type": "boolean"
+              },
+              "value": {
+                "description": "The value as text: `today` for a date, 0 to 100 for progress, a\npriority's name (`high`), or a custom field's value as it is\nwritten (`today` for a date field, one option of a select field).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "field",
+              "value"
+            ],
+            "type": "object"
+          },
           "Status": {
             "additionalProperties": false,
             "description": "A status: one board column.",
@@ -8862,6 +9915,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "rules": {
+                "$ref": "#/$defs/StatusRules",
+                "description": "Its rules for tasks entering it; left out when it has none."
               },
               "tasks": {
                 "description": "Tasks in this status.",
@@ -8883,6 +9940,53 @@
               "hue",
               "tasks"
             ],
+            "type": "object"
+          },
+          "StatusRules": {
+            "additionalProperties": false,
+            "description": "The rules of one status. Everything left out is no rule.",
+            "properties": {
+              "agents_may_not_enter": {
+                "description": "Agents may not move tasks into the status, nor create tasks in it\n(for example Done, so that a person reviews first).",
+                "type": "boolean"
+              },
+              "clear": {
+                "description": "Fields cleared when a task enters the status: `start_date`,\n`due_date`, `estimate`, `progress`, `fix_version`, or a custom field\nthat isn't required.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "read_only": {
+                "description": "Fields that can't change while a task is in the status: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "release_claim": {
+                "description": "Release an agent's claim when the task enters the status.",
+                "type": "boolean"
+              },
+              "required": {
+                "description": "Fields that must have a value before a task enters the status:\n`description`, `priority`, `start_date`, `due_date`, `estimate`,\n`labels`, `parent`, `fix_version`, or a custom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "set": {
+                "description": "Fields set when a task enters the status.",
+                "items": {
+                  "$ref": "#/$defs/RuleSet"
+                },
+                "type": "array"
+              },
+              "stop_timer": {
+                "description": "Stop the timer when its task enters the status; the time is logged.",
+                "type": "boolean"
+              }
+            },
             "type": "object"
           },
           "TaskType": {
@@ -9138,6 +10242,20 @@
       "mcp_tool": "update_project",
       "output": {
         "$defs": {
+          "AgentRules": {
+            "additionalProperties": false,
+            "description": "A project's rules for agents. Everything left out is no rule.",
+            "properties": {
+              "read_only": {
+                "description": "Task fields agents may not change in this project: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
           "Category": {
             "description": "What a status means for the work in it.",
             "oneOf": [
@@ -9307,6 +10425,10 @@
             "additionalProperties": false,
             "description": "One project with its configuration.",
             "properties": {
+              "agent_rules": {
+                "$ref": "#/$defs/AgentRules",
+                "description": "The rules for agents; left out when there are none."
+              },
               "children": {
                 "description": "The sub-projects' keys, in order.",
                 "items": {
@@ -9489,6 +10611,29 @@
               }
             ]
           },
+          "RuleSet": {
+            "additionalProperties": false,
+            "description": "One field a status sets when a task enters it.",
+            "properties": {
+              "field": {
+                "description": "The field: `start_date`, `due_date`, `progress`, `priority`, or a\ncustom field as `cf:<id>`.",
+                "type": "string"
+              },
+              "only_if_empty": {
+                "description": "Only when the field has no value yet (a start date already set is\nkept).",
+                "type": "boolean"
+              },
+              "value": {
+                "description": "The value as text: `today` for a date, 0 to 100 for progress, a\npriority's name (`high`), or a custom field's value as it is\nwritten (`today` for a date field, one option of a select field).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "field",
+              "value"
+            ],
+            "type": "object"
+          },
           "Status": {
             "additionalProperties": false,
             "description": "A status: one board column.",
@@ -9508,6 +10653,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "rules": {
+                "$ref": "#/$defs/StatusRules",
+                "description": "Its rules for tasks entering it; left out when it has none."
               },
               "tasks": {
                 "description": "Tasks in this status.",
@@ -9529,6 +10678,53 @@
               "hue",
               "tasks"
             ],
+            "type": "object"
+          },
+          "StatusRules": {
+            "additionalProperties": false,
+            "description": "The rules of one status. Everything left out is no rule.",
+            "properties": {
+              "agents_may_not_enter": {
+                "description": "Agents may not move tasks into the status, nor create tasks in it\n(for example Done, so that a person reviews first).",
+                "type": "boolean"
+              },
+              "clear": {
+                "description": "Fields cleared when a task enters the status: `start_date`,\n`due_date`, `estimate`, `progress`, `fix_version`, or a custom field\nthat isn't required.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "read_only": {
+                "description": "Fields that can't change while a task is in the status: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "release_claim": {
+                "description": "Release an agent's claim when the task enters the status.",
+                "type": "boolean"
+              },
+              "required": {
+                "description": "Fields that must have a value before a task enters the status:\n`description`, `priority`, `start_date`, `due_date`, `estimate`,\n`labels`, `parent`, `fix_version`, or a custom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "set": {
+                "description": "Fields set when a task enters the status.",
+                "items": {
+                  "$ref": "#/$defs/RuleSet"
+                },
+                "type": "array"
+              },
+              "stop_timer": {
+                "description": "Stop the timer when its task enters the status; the time is logged.",
+                "type": "boolean"
+              }
+            },
             "type": "object"
           },
           "TaskType": {
@@ -9640,6 +10836,20 @@
       "mcp_tool": "update_project",
       "output": {
         "$defs": {
+          "AgentRules": {
+            "additionalProperties": false,
+            "description": "A project's rules for agents. Everything left out is no rule.",
+            "properties": {
+              "read_only": {
+                "description": "Task fields agents may not change in this project: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
           "Category": {
             "description": "What a status means for the work in it.",
             "oneOf": [
@@ -9809,6 +11019,10 @@
             "additionalProperties": false,
             "description": "One project with its configuration.",
             "properties": {
+              "agent_rules": {
+                "$ref": "#/$defs/AgentRules",
+                "description": "The rules for agents; left out when there are none."
+              },
               "children": {
                 "description": "The sub-projects' keys, in order.",
                 "items": {
@@ -9991,6 +11205,29 @@
               }
             ]
           },
+          "RuleSet": {
+            "additionalProperties": false,
+            "description": "One field a status sets when a task enters it.",
+            "properties": {
+              "field": {
+                "description": "The field: `start_date`, `due_date`, `progress`, `priority`, or a\ncustom field as `cf:<id>`.",
+                "type": "string"
+              },
+              "only_if_empty": {
+                "description": "Only when the field has no value yet (a start date already set is\nkept).",
+                "type": "boolean"
+              },
+              "value": {
+                "description": "The value as text: `today` for a date, 0 to 100 for progress, a\npriority's name (`high`), or a custom field's value as it is\nwritten (`today` for a date field, one option of a select field).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "field",
+              "value"
+            ],
+            "type": "object"
+          },
           "Status": {
             "additionalProperties": false,
             "description": "A status: one board column.",
@@ -10010,6 +11247,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "rules": {
+                "$ref": "#/$defs/StatusRules",
+                "description": "Its rules for tasks entering it; left out when it has none."
               },
               "tasks": {
                 "description": "Tasks in this status.",
@@ -10031,6 +11272,53 @@
               "hue",
               "tasks"
             ],
+            "type": "object"
+          },
+          "StatusRules": {
+            "additionalProperties": false,
+            "description": "The rules of one status. Everything left out is no rule.",
+            "properties": {
+              "agents_may_not_enter": {
+                "description": "Agents may not move tasks into the status, nor create tasks in it\n(for example Done, so that a person reviews first).",
+                "type": "boolean"
+              },
+              "clear": {
+                "description": "Fields cleared when a task enters the status: `start_date`,\n`due_date`, `estimate`, `progress`, `fix_version`, or a custom field\nthat isn't required.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "read_only": {
+                "description": "Fields that can't change while a task is in the status: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "release_claim": {
+                "description": "Release an agent's claim when the task enters the status.",
+                "type": "boolean"
+              },
+              "required": {
+                "description": "Fields that must have a value before a task enters the status:\n`description`, `priority`, `start_date`, `due_date`, `estimate`,\n`labels`, `parent`, `fix_version`, or a custom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "set": {
+                "description": "Fields set when a task enters the status.",
+                "items": {
+                  "$ref": "#/$defs/RuleSet"
+                },
+                "type": "array"
+              },
+              "stop_timer": {
+                "description": "Stop the timer when its task enters the status; the time is logged.",
+                "type": "boolean"
+              }
+            },
             "type": "object"
           },
           "TaskType": {
@@ -10198,6 +11486,20 @@
       "mcp_tool": "update_project",
       "output": {
         "$defs": {
+          "AgentRules": {
+            "additionalProperties": false,
+            "description": "A project's rules for agents. Everything left out is no rule.",
+            "properties": {
+              "read_only": {
+                "description": "Task fields agents may not change in this project: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
           "Category": {
             "description": "What a status means for the work in it.",
             "oneOf": [
@@ -10367,6 +11669,10 @@
             "additionalProperties": false,
             "description": "One project with its configuration.",
             "properties": {
+              "agent_rules": {
+                "$ref": "#/$defs/AgentRules",
+                "description": "The rules for agents; left out when there are none."
+              },
               "children": {
                 "description": "The sub-projects' keys, in order.",
                 "items": {
@@ -10549,6 +11855,29 @@
               }
             ]
           },
+          "RuleSet": {
+            "additionalProperties": false,
+            "description": "One field a status sets when a task enters it.",
+            "properties": {
+              "field": {
+                "description": "The field: `start_date`, `due_date`, `progress`, `priority`, or a\ncustom field as `cf:<id>`.",
+                "type": "string"
+              },
+              "only_if_empty": {
+                "description": "Only when the field has no value yet (a start date already set is\nkept).",
+                "type": "boolean"
+              },
+              "value": {
+                "description": "The value as text: `today` for a date, 0 to 100 for progress, a\npriority's name (`high`), or a custom field's value as it is\nwritten (`today` for a date field, one option of a select field).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "field",
+              "value"
+            ],
+            "type": "object"
+          },
           "Status": {
             "additionalProperties": false,
             "description": "A status: one board column.",
@@ -10568,6 +11897,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "rules": {
+                "$ref": "#/$defs/StatusRules",
+                "description": "Its rules for tasks entering it; left out when it has none."
               },
               "tasks": {
                 "description": "Tasks in this status.",
@@ -10589,6 +11922,53 @@
               "hue",
               "tasks"
             ],
+            "type": "object"
+          },
+          "StatusRules": {
+            "additionalProperties": false,
+            "description": "The rules of one status. Everything left out is no rule.",
+            "properties": {
+              "agents_may_not_enter": {
+                "description": "Agents may not move tasks into the status, nor create tasks in it\n(for example Done, so that a person reviews first).",
+                "type": "boolean"
+              },
+              "clear": {
+                "description": "Fields cleared when a task enters the status: `start_date`,\n`due_date`, `estimate`, `progress`, `fix_version`, or a custom field\nthat isn't required.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "read_only": {
+                "description": "Fields that can't change while a task is in the status: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "release_claim": {
+                "description": "Release an agent's claim when the task enters the status.",
+                "type": "boolean"
+              },
+              "required": {
+                "description": "Fields that must have a value before a task enters the status:\n`description`, `priority`, `start_date`, `due_date`, `estimate`,\n`labels`, `parent`, `fix_version`, or a custom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "set": {
+                "description": "Fields set when a task enters the status.",
+                "items": {
+                  "$ref": "#/$defs/RuleSet"
+                },
+                "type": "array"
+              },
+              "stop_timer": {
+                "description": "Stop the timer when its task enters the status; the time is logged.",
+                "type": "boolean"
+              }
+            },
             "type": "object"
           },
           "TaskType": {
@@ -10763,6 +12143,20 @@
       "mcp_tool": "update_project",
       "output": {
         "$defs": {
+          "AgentRules": {
+            "additionalProperties": false,
+            "description": "A project's rules for agents. Everything left out is no rule.",
+            "properties": {
+              "read_only": {
+                "description": "Task fields agents may not change in this project: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
           "Category": {
             "description": "What a status means for the work in it.",
             "oneOf": [
@@ -10932,6 +12326,10 @@
             "additionalProperties": false,
             "description": "One project with its configuration.",
             "properties": {
+              "agent_rules": {
+                "$ref": "#/$defs/AgentRules",
+                "description": "The rules for agents; left out when there are none."
+              },
               "children": {
                 "description": "The sub-projects' keys, in order.",
                 "items": {
@@ -11114,6 +12512,29 @@
               }
             ]
           },
+          "RuleSet": {
+            "additionalProperties": false,
+            "description": "One field a status sets when a task enters it.",
+            "properties": {
+              "field": {
+                "description": "The field: `start_date`, `due_date`, `progress`, `priority`, or a\ncustom field as `cf:<id>`.",
+                "type": "string"
+              },
+              "only_if_empty": {
+                "description": "Only when the field has no value yet (a start date already set is\nkept).",
+                "type": "boolean"
+              },
+              "value": {
+                "description": "The value as text: `today` for a date, 0 to 100 for progress, a\npriority's name (`high`), or a custom field's value as it is\nwritten (`today` for a date field, one option of a select field).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "field",
+              "value"
+            ],
+            "type": "object"
+          },
           "Status": {
             "additionalProperties": false,
             "description": "A status: one board column.",
@@ -11133,6 +12554,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "rules": {
+                "$ref": "#/$defs/StatusRules",
+                "description": "Its rules for tasks entering it; left out when it has none."
               },
               "tasks": {
                 "description": "Tasks in this status.",
@@ -11154,6 +12579,53 @@
               "hue",
               "tasks"
             ],
+            "type": "object"
+          },
+          "StatusRules": {
+            "additionalProperties": false,
+            "description": "The rules of one status. Everything left out is no rule.",
+            "properties": {
+              "agents_may_not_enter": {
+                "description": "Agents may not move tasks into the status, nor create tasks in it\n(for example Done, so that a person reviews first).",
+                "type": "boolean"
+              },
+              "clear": {
+                "description": "Fields cleared when a task enters the status: `start_date`,\n`due_date`, `estimate`, `progress`, `fix_version`, or a custom field\nthat isn't required.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "read_only": {
+                "description": "Fields that can't change while a task is in the status: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "release_claim": {
+                "description": "Release an agent's claim when the task enters the status.",
+                "type": "boolean"
+              },
+              "required": {
+                "description": "Fields that must have a value before a task enters the status:\n`description`, `priority`, `start_date`, `due_date`, `estimate`,\n`labels`, `parent`, `fix_version`, or a custom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "set": {
+                "description": "Fields set when a task enters the status.",
+                "items": {
+                  "$ref": "#/$defs/RuleSet"
+                },
+                "type": "array"
+              },
+              "stop_timer": {
+                "description": "Stop the timer when its task enters the status; the time is logged.",
+                "type": "boolean"
+              }
+            },
             "type": "object"
           },
           "TaskType": {
@@ -11258,6 +12730,20 @@
       "mcp_tool": "update_project",
       "output": {
         "$defs": {
+          "AgentRules": {
+            "additionalProperties": false,
+            "description": "A project's rules for agents. Everything left out is no rule.",
+            "properties": {
+              "read_only": {
+                "description": "Task fields agents may not change in this project: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
           "Category": {
             "description": "What a status means for the work in it.",
             "oneOf": [
@@ -11427,6 +12913,10 @@
             "additionalProperties": false,
             "description": "One project with its configuration.",
             "properties": {
+              "agent_rules": {
+                "$ref": "#/$defs/AgentRules",
+                "description": "The rules for agents; left out when there are none."
+              },
               "children": {
                 "description": "The sub-projects' keys, in order.",
                 "items": {
@@ -11609,6 +13099,29 @@
               }
             ]
           },
+          "RuleSet": {
+            "additionalProperties": false,
+            "description": "One field a status sets when a task enters it.",
+            "properties": {
+              "field": {
+                "description": "The field: `start_date`, `due_date`, `progress`, `priority`, or a\ncustom field as `cf:<id>`.",
+                "type": "string"
+              },
+              "only_if_empty": {
+                "description": "Only when the field has no value yet (a start date already set is\nkept).",
+                "type": "boolean"
+              },
+              "value": {
+                "description": "The value as text: `today` for a date, 0 to 100 for progress, a\npriority's name (`high`), or a custom field's value as it is\nwritten (`today` for a date field, one option of a select field).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "field",
+              "value"
+            ],
+            "type": "object"
+          },
           "Status": {
             "additionalProperties": false,
             "description": "A status: one board column.",
@@ -11628,6 +13141,10 @@
               "name": {
                 "description": "Its name.",
                 "type": "string"
+              },
+              "rules": {
+                "$ref": "#/$defs/StatusRules",
+                "description": "Its rules for tasks entering it; left out when it has none."
               },
               "tasks": {
                 "description": "Tasks in this status.",
@@ -11649,6 +13166,53 @@
               "hue",
               "tasks"
             ],
+            "type": "object"
+          },
+          "StatusRules": {
+            "additionalProperties": false,
+            "description": "The rules of one status. Everything left out is no rule.",
+            "properties": {
+              "agents_may_not_enter": {
+                "description": "Agents may not move tasks into the status, nor create tasks in it\n(for example Done, so that a person reviews first).",
+                "type": "boolean"
+              },
+              "clear": {
+                "description": "Fields cleared when a task enters the status: `start_date`,\n`due_date`, `estimate`, `progress`, `fix_version`, or a custom field\nthat isn't required.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "read_only": {
+                "description": "Fields that can't change while a task is in the status: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "release_claim": {
+                "description": "Release an agent's claim when the task enters the status.",
+                "type": "boolean"
+              },
+              "required": {
+                "description": "Fields that must have a value before a task enters the status:\n`description`, `priority`, `start_date`, `due_date`, `estimate`,\n`labels`, `parent`, `fix_version`, or a custom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "set": {
+                "description": "Fields set when a task enters the status.",
+                "items": {
+                  "$ref": "#/$defs/RuleSet"
+                },
+                "type": "array"
+              },
+              "stop_timer": {
+                "description": "Stop the timer when its task enters the status; the time is logged.",
+                "type": "boolean"
+              }
+            },
             "type": "object"
           },
           "TaskType": {
@@ -48959,6 +50523,711 @@
       "output_name": "SettingsChange",
       "safety": "app",
       "summary": "Change the limits on agent sessions: changes a minute, new tasks a day, and items moved to the trash per call and per hour. Each is a number or no limit."
+    },
+    {
+      "app_reason": "It sets what agents may do; an agent that could call it would lift the rules the person set for agents.",
+      "cli": "project rules <project>",
+      "exposure": "app",
+      "id": "rules.update",
+      "input": {
+        "$defs": {
+          "AgentRules": {
+            "additionalProperties": false,
+            "description": "A project's rules for agents. Everything left out is no rule.",
+            "properties": {
+              "read_only": {
+                "description": "Task fields agents may not change in this project: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
+          "RuleSet": {
+            "additionalProperties": false,
+            "description": "One field a status sets when a task enters it.",
+            "properties": {
+              "field": {
+                "description": "The field: `start_date`, `due_date`, `progress`, `priority`, or a\ncustom field as `cf:<id>`.",
+                "type": "string"
+              },
+              "only_if_empty": {
+                "description": "Only when the field has no value yet (a start date already set is\nkept).",
+                "type": "boolean"
+              },
+              "value": {
+                "description": "The value as text: `today` for a date, 0 to 100 for progress, a\npriority's name (`high`), or a custom field's value as it is\nwritten (`today` for a date field, one option of a select field).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "field",
+              "value"
+            ],
+            "type": "object"
+          },
+          "StatusRules": {
+            "additionalProperties": false,
+            "description": "The rules of one status. Everything left out is no rule.",
+            "properties": {
+              "agents_may_not_enter": {
+                "description": "Agents may not move tasks into the status, nor create tasks in it\n(for example Done, so that a person reviews first).",
+                "type": "boolean"
+              },
+              "clear": {
+                "description": "Fields cleared when a task enters the status: `start_date`,\n`due_date`, `estimate`, `progress`, `fix_version`, or a custom field\nthat isn't required.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "read_only": {
+                "description": "Fields that can't change while a task is in the status: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "release_claim": {
+                "description": "Release an agent's claim when the task enters the status.",
+                "type": "boolean"
+              },
+              "required": {
+                "description": "Fields that must have a value before a task enters the status:\n`description`, `priority`, `start_date`, `due_date`, `estimate`,\n`labels`, `parent`, `fix_version`, or a custom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "set": {
+                "description": "Fields set when a task enters the status.",
+                "items": {
+                  "$ref": "#/$defs/RuleSet"
+                },
+                "type": "array"
+              },
+              "stop_timer": {
+                "description": "Stop the timer when its task enters the status; the time is logged.",
+                "type": "boolean"
+              }
+            },
+            "type": "object"
+          },
+          "StatusRulesChange": {
+            "additionalProperties": false,
+            "description": "New rules for one status inside [`RulesUpdateInput`].",
+            "properties": {
+              "rules": {
+                "$ref": "#/$defs/StatusRules",
+                "description": "Its rules, replacing the ones it had; empty removes them all."
+              },
+              "status": {
+                "description": "The status: its name or ID.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "status",
+              "rules"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "New rules for a project's statuses and its agents. What is left out\nkeeps its rules; everything is one change with one history group.",
+        "properties": {
+          "agents": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/AgentRules"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The rules for agents, replacing the ones the project had."
+          },
+          "project": {
+            "description": "The project: its key (current or old) or ID.",
+            "type": "string"
+          },
+          "statuses": {
+            "description": "Statuses whose rules to replace.",
+            "items": {
+              "$ref": "#/$defs/StatusRulesChange"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "title": "RulesUpdateInput",
+        "type": "object"
+      },
+      "input_name": "RulesUpdateInput",
+      "kind": "command",
+      "output": {
+        "$defs": {
+          "AgentRules": {
+            "additionalProperties": false,
+            "description": "A project's rules for agents. Everything left out is no rule.",
+            "properties": {
+              "read_only": {
+                "description": "Task fields agents may not change in this project: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
+          "Category": {
+            "description": "What a status means for the work in it.",
+            "oneOf": [
+              {
+                "const": "todo",
+                "description": "Not started.",
+                "type": "string"
+              },
+              {
+                "const": "in_progress",
+                "description": "Being worked on.",
+                "type": "string"
+              },
+              {
+                "const": "done",
+                "description": "Finished; closes the task.",
+                "type": "string"
+              },
+              {
+                "const": "cancelled",
+                "description": "Dropped; closes the task.",
+                "type": "string"
+              }
+            ]
+          },
+          "Glyph": {
+            "description": "The shape that shows a task's type.",
+            "oneOf": [
+              {
+                "const": "task",
+                "description": "A plain task.",
+                "type": "string"
+              },
+              {
+                "const": "bug",
+                "description": "A bug.",
+                "type": "string"
+              },
+              {
+                "const": "feature",
+                "description": "A feature.",
+                "type": "string"
+              },
+              {
+                "const": "milestone",
+                "description": "A milestone.",
+                "type": "string"
+              }
+            ]
+          },
+          "Hue": {
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
+            "oneOf": [
+              {
+                "const": "red",
+                "description": "Red.",
+                "type": "string"
+              },
+              {
+                "const": "orange",
+                "description": "Orange.",
+                "type": "string"
+              },
+              {
+                "const": "yellow",
+                "description": "Yellow.",
+                "type": "string"
+              },
+              {
+                "const": "green",
+                "description": "Green.",
+                "type": "string"
+              },
+              {
+                "const": "teal",
+                "description": "Teal.",
+                "type": "string"
+              },
+              {
+                "const": "blue",
+                "description": "Blue.",
+                "type": "string"
+              },
+              {
+                "const": "purple",
+                "description": "Purple.",
+                "type": "string"
+              },
+              {
+                "const": "pink",
+                "description": "Pink.",
+                "type": "string"
+              },
+              {
+                "const": "grey",
+                "description": "Grey.",
+                "type": "string"
+              }
+            ]
+          },
+          "Label": {
+            "additionalProperties": false,
+            "description": "A label.",
+            "properties": {
+              "hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "Its colour."
+              },
+              "id": {
+                "description": "The label's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "tasks": {
+                "description": "Tasks with this label.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "hue",
+              "tasks"
+            ],
+            "type": "object"
+          },
+          "Modules": {
+            "additionalProperties": false,
+            "description": "Which parts of a project are switched on.",
+            "properties": {
+              "board": {
+                "description": "The board.",
+                "type": "boolean"
+              },
+              "gantt": {
+                "description": "The Gantt chart.",
+                "type": "boolean"
+              },
+              "list": {
+                "description": "The task list.",
+                "type": "boolean"
+              },
+              "time": {
+                "description": "Time tracking.",
+                "type": "boolean"
+              },
+              "wiki": {
+                "description": "The wiki.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "board",
+              "list",
+              "gantt",
+              "wiki",
+              "time"
+            ],
+            "type": "object"
+          },
+          "Project": {
+            "additionalProperties": false,
+            "description": "One project with its configuration.",
+            "properties": {
+              "agent_rules": {
+                "$ref": "#/$defs/AgentRules",
+                "description": "The rules for agents; left out when there are none."
+              },
+              "children": {
+                "description": "The sub-projects' keys, in order.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "description": {
+                "description": "Its description (Markdown).",
+                "type": "string"
+              },
+              "hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "Its colour."
+              },
+              "icon": {
+                "$ref": "#/$defs/ProjectIcon",
+                "description": "Its icon, if one was chosen; without one it shows as a circle."
+              },
+              "id": {
+                "description": "The project's ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "Its key (`TM`).",
+                "type": "string"
+              },
+              "labels": {
+                "description": "The labels, in order.",
+                "items": {
+                  "$ref": "#/$defs/Label"
+                },
+                "type": "array"
+              },
+              "modules": {
+                "$ref": "#/$defs/Modules",
+                "description": "Which parts are switched on."
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "next_label_hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "The colour a new label gets when none is given: the first palette\ncolour no label uses yet, else the least-used one."
+              },
+              "old_keys": {
+                "description": "Keys it had before; they still find it.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "open_tasks": {
+                "description": "Open tasks in this project alone.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "parent": {
+                "description": "The parent's key; left out for a top-level project.",
+                "type": "string"
+              },
+              "path": {
+                "description": "The names from the top-level project down to this one, joined by\n\" / \".",
+                "type": "string"
+              },
+              "state": {
+                "$ref": "#/$defs/ProjectState",
+                "description": "Active or archived."
+              },
+              "statuses": {
+                "description": "The statuses, in board order.",
+                "items": {
+                  "$ref": "#/$defs/Status"
+                },
+                "type": "array"
+              },
+              "total_tasks": {
+                "description": "All tasks in this project alone, open or closed (not in the trash).",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "types": {
+                "description": "The task types, in order.",
+                "items": {
+                  "$ref": "#/$defs/TaskType"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "description": "When it last changed (RFC 3339, UTC).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "key",
+              "name",
+              "path",
+              "description",
+              "hue",
+              "state",
+              "children",
+              "modules",
+              "statuses",
+              "types",
+              "labels",
+              "next_label_hue",
+              "open_tasks",
+              "total_tasks",
+              "created_at",
+              "updated_at"
+            ],
+            "type": "object"
+          },
+          "ProjectIcon": {
+            "description": "An icon that stands for a project instead of its coloured circle, drawn\nin the project's colour. The names are those of the app's icon family\n(Lucide), so each variant's name says what it shows.",
+            "enum": [
+              "folder",
+              "star",
+              "bug",
+              "rocket",
+              "book",
+              "house",
+              "briefcase",
+              "code",
+              "terminal",
+              "globe",
+              "heart",
+              "flag",
+              "zap",
+              "target",
+              "lightbulb",
+              "wrench",
+              "hammer",
+              "palette",
+              "music",
+              "camera",
+              "graduation-cap",
+              "shopping-cart",
+              "wallet",
+              "chart-line",
+              "calendar",
+              "users",
+              "building",
+              "plane",
+              "leaf",
+              "coffee",
+              "gamepad",
+              "puzzle",
+              "shield",
+              "flask-conical",
+              "layers",
+              "package",
+              "compass",
+              "mountain",
+              "sparkles",
+              "database"
+            ],
+            "type": "string"
+          },
+          "ProjectState": {
+            "description": "Whether a project can be changed.",
+            "oneOf": [
+              {
+                "const": "active",
+                "description": "In use.",
+                "type": "string"
+              },
+              {
+                "const": "archived",
+                "description": "Read-only and hidden from the sidebar until unarchived.",
+                "type": "string"
+              }
+            ]
+          },
+          "RuleSet": {
+            "additionalProperties": false,
+            "description": "One field a status sets when a task enters it.",
+            "properties": {
+              "field": {
+                "description": "The field: `start_date`, `due_date`, `progress`, `priority`, or a\ncustom field as `cf:<id>`.",
+                "type": "string"
+              },
+              "only_if_empty": {
+                "description": "Only when the field has no value yet (a start date already set is\nkept).",
+                "type": "boolean"
+              },
+              "value": {
+                "description": "The value as text: `today` for a date, 0 to 100 for progress, a\npriority's name (`high`), or a custom field's value as it is\nwritten (`today` for a date field, one option of a select field).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "field",
+              "value"
+            ],
+            "type": "object"
+          },
+          "Status": {
+            "additionalProperties": false,
+            "description": "A status: one board column.",
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/Category",
+                "description": "What it means for the work in it."
+              },
+              "hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "Its colour."
+              },
+              "id": {
+                "description": "The status's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "rules": {
+                "$ref": "#/$defs/StatusRules",
+                "description": "Its rules for tasks entering it; left out when it has none."
+              },
+              "tasks": {
+                "description": "Tasks in this status.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "wip_limit": {
+                "description": "Most tasks the column should hold; left out when there is no limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "category",
+              "hue",
+              "tasks"
+            ],
+            "type": "object"
+          },
+          "StatusRules": {
+            "additionalProperties": false,
+            "description": "The rules of one status. Everything left out is no rule.",
+            "properties": {
+              "agents_may_not_enter": {
+                "description": "Agents may not move tasks into the status, nor create tasks in it\n(for example Done, so that a person reviews first).",
+                "type": "boolean"
+              },
+              "clear": {
+                "description": "Fields cleared when a task enters the status: `start_date`,\n`due_date`, `estimate`, `progress`, `fix_version`, or a custom field\nthat isn't required.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "read_only": {
+                "description": "Fields that can't change while a task is in the status: `title`,\n`description`, `type`, `priority`, `start_date`, `due_date`,\n`estimate`, `progress`, `labels`, `parent`, `fix_version`, or a\ncustom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "release_claim": {
+                "description": "Release an agent's claim when the task enters the status.",
+                "type": "boolean"
+              },
+              "required": {
+                "description": "Fields that must have a value before a task enters the status:\n`description`, `priority`, `start_date`, `due_date`, `estimate`,\n`labels`, `parent`, `fix_version`, or a custom field.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "set": {
+                "description": "Fields set when a task enters the status.",
+                "items": {
+                  "$ref": "#/$defs/RuleSet"
+                },
+                "type": "array"
+              },
+              "stop_timer": {
+                "description": "Stop the timer when its task enters the status; the time is logged.",
+                "type": "boolean"
+              }
+            },
+            "type": "object"
+          },
+          "TaskType": {
+            "additionalProperties": false,
+            "description": "A task type.",
+            "properties": {
+              "glyph": {
+                "$ref": "#/$defs/Glyph",
+                "description": "Its shape."
+              },
+              "hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "Its colour."
+              },
+              "id": {
+                "description": "The type's ID.",
+                "type": "string"
+              },
+              "is_default": {
+                "description": "Whether new tasks get it unless told otherwise.",
+                "type": "boolean"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "tasks": {
+                "description": "Tasks of this type.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "glyph",
+              "hue",
+              "is_default",
+              "tasks"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A project changed, with the history group of the change.",
+        "properties": {
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "project": {
+            "$ref": "#/$defs/Project",
+            "description": "The project after the change."
+          },
+          "views_rewritten": {
+            "description": "The saved views whose queries were rewritten because a status, type,\nlabel or the project key they name was renamed, or a label they name\nwas deleted, by name; left out when none was.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "title": "ProjectChange",
+        "type": "object"
+      },
+      "output_name": "ProjectChange",
+      "safety": "app",
+      "summary": "Change a project's status rules (fields set, cleared or required when a task enters a status, fields read-only in it, the timer and claims) and its rules for agents (statuses they may not move tasks into, fields they may not change)."
     },
     {
       "cli": "activity",

@@ -533,6 +533,73 @@ pub(crate) fn apply_input(
     Ok(())
 }
 
+// ---------------------------------------------------------------------
+// Status rules
+
+/// Custom field `id` (as a rule writes it, after `cf:`) when tasks of
+/// `project` have it: one of the project's own fields or of every project.
+pub(crate) fn of_project(
+    tx: &Transaction<'_>,
+    project: Id,
+    id: &str,
+) -> Result<Option<FieldRow>, Failure> {
+    let Ok(id) = id.parse::<Id>() else {
+        return Ok(None);
+    };
+    Ok(rows(tx, Some(project))?.into_iter().find(|f| f.id == id))
+}
+
+/// Checks a value a status rule sets in `field`: what people could type in
+/// the field, or `today` for a date. `path` names the value in errors.
+pub(crate) fn check_rule_value(field: &FieldRow, value: &str, path: &str) -> Result<(), Failure> {
+    if field.kind == FieldKind::Date && value == "today" {
+        return Ok(());
+    }
+    core::parse_value(field.kind, value, &field.options, &field.name)
+        .map(|_| ())
+        .map_err(|e| invalid(path, e))
+}
+
+/// What a status rule does to `field` of a task entering the status:
+/// `Some(value)` sets it (`today` is the day `today` for a date), `None`
+/// clears it. Nothing happens to a task of a type the field isn't shown
+/// for, to a required field being cleared, to a value that no longer fits
+/// the field (its options changed), or, with `only_if_empty`, to a field
+/// that has a value.
+pub(crate) fn apply_rule(
+    w: &mut WriteCtx<'_>,
+    task: Id,
+    project: Id,
+    field: &FieldRow,
+    value: Option<&str>,
+    only_if_empty: bool,
+    today: &str,
+) -> Result<(), Failure> {
+    if !field.shown_for(&type_name(w.tx(), task)?) {
+        return Ok(());
+    }
+    let values = match value {
+        None if field.required => return Ok(()),
+        None => Vec::new(),
+        Some(v) => {
+            if only_if_empty && value_of(w.tx(), task, field)?.is_some() {
+                return Ok(());
+            }
+            let text = if field.kind == FieldKind::Date && v == "today" {
+                today
+            } else {
+                v
+            };
+            match core::parse_value(field.kind, text, &field.options, &field.name) {
+                Ok(stored) => vec![stored],
+                Err(_) => return Ok(()),
+            }
+        }
+    };
+    set_values(w, task, project, field, &values)?;
+    Ok(())
+}
+
 /// The task's values, in the fields' order.
 pub(crate) fn task_values(
     tx: &Transaction<'_>,
@@ -692,21 +759,24 @@ pub(crate) fn move_matches(
         .collect())
 }
 
-/// Gives the new sub-project `child` copies of `parent`'s own fields.
-pub(crate) fn copy_to_subproject(w: &WriteCtx<'_>, parent: Id, child: Id) -> Result<(), Failure> {
+/// Gives the new sub-project `child` copies of `parent`'s own fields, and
+/// returns the ID of each copy by the ID of its original.
+pub(crate) fn copy_to_subproject(
+    w: &WriteCtx<'_>,
+    parent: Id,
+    child: Id,
+) -> Result<BTreeMap<Id, Id>, Failure> {
     let own: Vec<FieldRow> = rows(w.tx(), Some(parent))?
         .into_iter()
         .filter(|f| f.project == Some(parent))
         .collect();
+    let mut copies = BTreeMap::new();
     for f in own {
-        insert(
-            w,
-            &f,
-            Some(child),
-            Id::generate_at(u64::try_from(w.now()).unwrap_or(0)),
-        )?;
+        let id = Id::generate_at(u64::try_from(w.now()).unwrap_or(0));
+        insert(w, &f, Some(child), id)?;
+        copies.insert(f.id, id);
     }
-    Ok(())
+    Ok(copies)
 }
 
 fn insert(w: &WriteCtx<'_>, f: &FieldRow, project: Option<Id>, id: Id) -> Result<(), Failure> {

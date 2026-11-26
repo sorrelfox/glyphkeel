@@ -258,7 +258,7 @@ fn active(w: &WriteCtx<'_>, text: &str) -> Result<ProjectRow, Failure> {
     Ok(p)
 }
 
-fn changed(w: &WriteCtx<'_>, id: Id) -> Result<ProjectChange, Failure> {
+pub(crate) fn changed(w: &WriteCtx<'_>, id: Id) -> Result<ProjectChange, Failure> {
     Ok(ProjectChange {
         project: load(w.tx(), id)?,
         views_rewritten: super::view::names(w.tx(), &w.changed_of(super::view::ENTITY))?,
@@ -390,7 +390,8 @@ pub(crate) fn load(tx: &Transaction<'_>, id: Id) -> Result<Project, Failure> {
     let statuses = {
         let mut stmt = tx.prepare_cached(
             "SELECT s.id, s.name, s.category, s.hue, s.wip_limit,
-                    (SELECT count(*) FROM tasks t WHERE t.status_id = s.id AND t.deleted_at IS NULL)
+                    (SELECT count(*) FROM tasks t WHERE t.status_id = s.id AND t.deleted_at IS NULL),
+                    s.rules
                FROM statuses s WHERE s.project_id = ?1 ORDER BY s.rank, s.id",
         )?;
         stmt.query_map([b(id)], |r| {
@@ -403,6 +404,7 @@ pub(crate) fn load(tx: &Transaction<'_>, id: Id) -> Result<Project, Failure> {
                     .get::<_, Option<i64>>(4)?
                     .and_then(|n| u32::try_from(n).ok()),
                 tasks: r.get::<_, i64>(5)?.unsigned_abs(),
+                rules: super::rules::parse(r.get::<_, Option<String>>(6)?.as_deref()),
             })
         })?
         .collect::<Result<Vec<_>, _>>()?
@@ -471,6 +473,7 @@ pub(crate) fn load(tx: &Transaction<'_>, id: Id) -> Result<Project, Failure> {
         statuses,
         types,
         labels,
+        agent_rules: super::rules::agent_rules(tx, id)?,
         next_label_hue,
         open_tasks: open.unsigned_abs(),
         total_tasks: total.unsigned_abs(),
@@ -753,7 +756,8 @@ fn create(w: &mut WriteCtx<'_>, input: ProjectCreateInput) -> Result<ProjectChan
     )?;
     copy_configuration(w, id, parent_id)?;
     if let Some(parent) = parent_id {
-        super::custom_field::copy_to_subproject(w, parent, id)?;
+        let copies = super::custom_field::copy_to_subproject(w, parent, id)?;
+        super::rules::map_project_fields(w.tx(), id, &copies)?;
     }
     super::description::initial(w, super::description::Owner::Project(id), &description)?;
     w.record_field(
@@ -779,7 +783,8 @@ fn copy_configuration(w: &WriteCtx<'_>, id: Id, parent: Option<Id>) -> Result<()
     let new_id = || Id::generate_at(u64::try_from(w.now()).unwrap_or(0));
     if let Some(parent) = parent {
         let mut stmt = tx.prepare(
-            "SELECT name, name_fold, category, hue, rank, wip_limit FROM statuses WHERE project_id = ?1",
+            "SELECT name, name_fold, category, hue, rank, wip_limit, rules FROM statuses
+              WHERE project_id = ?1",
         )?;
         let rows = stmt
             .query_map([b(parent)], |r| {
@@ -790,16 +795,23 @@ fn copy_configuration(w: &WriteCtx<'_>, id: Id, parent: Option<Id>) -> Result<()
                     r.get::<_, String>(3)?,
                     r.get::<_, String>(4)?,
                     r.get::<_, Option<i64>>(5)?,
+                    r.get::<_, Option<String>>(6)?,
                 ))
             })?
             .collect::<Result<Vec<_>, _>>()?;
-        for (name, name_fold, category, hue, rank, wip) in rows {
+        for (name, name_fold, category, hue, rank, wip, rules) in rows {
             tx.execute(
-                "INSERT INTO statuses (id, project_id, name, name_fold, category, hue, rank, wip_limit)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-                params![b(new_id()), b(id), name, name_fold, category, hue, rank, wip],
+                "INSERT INTO statuses (id, project_id, name, name_fold, category, hue, rank, wip_limit,
+                                       rules)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                params![b(new_id()), b(id), name, name_fold, category, hue, rank, wip, rules],
             )?;
         }
+        tx.execute(
+            "UPDATE projects SET agent_rules = (SELECT agent_rules FROM projects WHERE id = ?2)
+              WHERE id = ?1",
+            params![b(id), b(parent)],
+        )?;
         let mut stmt = tx.prepare(
             "SELECT name, name_fold, glyph, hue, rank, is_default FROM task_types WHERE project_id = ?1",
         )?;
