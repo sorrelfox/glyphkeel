@@ -99,6 +99,31 @@ project:
 }
 ```
 
+## Prompts
+
+The server also offers prompts: ready-made requests that many clients show
+as slash commands or in a prompt menu. Each one tells the agent which tools
+to use and what to deliver, and the ones that change something ask you
+first.
+
+| Prompt | What it does |
+|---|---|
+| `plan_my_day` | Proposes a plan for today from what is overdue, due and in progress |
+| `weekly_review` | Reviews the last seven days: finished, stuck, coming up, time logged |
+| `triage_new_tasks` | Proposes a type, priority, labels and version for new tasks, then applies them |
+| `break_down_task` | Splits a task into subtasks of a day or less, then creates them |
+| `write_status_update` | Writes a short status update for a project |
+| `write_release_notes` | Writes release notes for a version of a project |
+| `review_schedule` | Goes through a project's schedule problems and proposes fixes |
+| `summarise_task_history` | Summarises how a task came to where it is |
+
+The arguments (a project, a task, a version) complete as you type. A
+prompt is offered only when the agent may use every tool it needs: a
+read-only agent gets no prompt that changes something. With `--project`, a
+prompt's project is that project when you leave it out.
+[The prompt reference](reference/mcp-prompts.md) has each prompt's
+arguments and full text.
+
 Every change an agent makes is recorded with its session, and Preferences ›
 Agents & CLI lists the sessions, each of which can be reverted. Client
 formats change from time to time; if one of these no longer works, the
