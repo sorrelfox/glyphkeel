@@ -7,6 +7,7 @@ import { FakeError, FakeWorkspace } from "./engine";
 import { addManyLinks, addManyTasks } from "./many";
 import { seed } from "./seed";
 import { addSampleWiki } from "./wiki";
+import { registerFakeWorkspaces, WORKSPACE_NAME } from "./workspaces";
 
 export interface FakeOptions {
   /** The day the sample data is built around, and the clock of changes. */
@@ -39,16 +40,88 @@ export function fakeTransport(options: FakeOptions = {}): Transport & { workspac
   if (options.sampleWiki === true) {
     addSampleWiki(state, today());
   }
-  const workspace = new FakeWorkspace(state, today);
+  // Several workspaces, by name, as the app's data folder holds them; the
+  // sample data is the first, and a new one starts empty.
+  const workspaces = new Map<string, FakeWorkspace>([[state.workspaceName, new FakeWorkspace(state, today)]]);
+  let current = state.workspaceName;
+  const open = () => workspaces.get(current) ?? fail("not_found", "There is no workspace.");
   const listeners = new Set<(event: Changed) => void>();
+  // Everything changed: the page reads it all again.
+  const reopened = () => {
+    const event: Changed = {
+      seq: 0,
+      group: "",
+      origin: { via: "app", actor: { kind: "user", name: "You" } },
+      changes: [{ entity: "workspace", id: "restored", fields: ["*"] }],
+    };
+    setTimeout(() => {
+      for (const listener of listeners) {
+        listener(event);
+      }
+    }, 0);
+  };
+  const view = () => ({
+    current,
+    elsewhere: false,
+    items: [...workspaces.keys()].sort((a, b) => a.localeCompare(b)).map((name) => ({ name, current: name === current })),
+  });
+  const checked = (name: string) => {
+    const trimmed = name.trim();
+    if (!WORKSPACE_NAME.test(trimmed)) {
+      fail("invalid", `"${trimmed}" can't be the name of a workspace.`, { message_id: "workspace-name-invalid", args: { name: trimmed } });
+    }
+    if ([...workspaces.keys()].some((other) => other.toLowerCase() === trimmed.toLowerCase())) {
+      fail("conflict", `There is already a workspace called "${trimmed}".`, { message_id: "workspace-exists", args: { name: trimmed } });
+    }
+    return trimmed;
+  };
+  registerFakeWorkspaces({
+    view,
+    create(name) {
+      const wanted = checked(name);
+      const empty = seed(today());
+      empty.projects = [];
+      empty.tasks = [];
+      empty.relations = [];
+      empty.workspaceName = wanted;
+      workspaces.set(wanted, new FakeWorkspace(empty, today));
+      current = wanted;
+      reopened();
+      return view();
+    },
+    open(name) {
+      if (!workspaces.has(name)) {
+        fail("not_found", `There is no workspace "${name}".`, { message_id: "workspace-not-found", args: { name } });
+      }
+      if (name !== current) {
+        current = name;
+        reopened();
+      }
+      return view();
+    },
+    rename(old, name) {
+      const found = workspaces.get(old) ?? fail("not_found", `There is no workspace "${old}".`, { message_id: "workspace-not-found", args: { name: old } });
+      const wanted = name.trim() === old ? old : checked(name);
+      workspaces.delete(old);
+      workspaces.set(wanted, found);
+      found.rename(wanted);
+      if (current === old) {
+        current = wanted;
+        reopened();
+      }
+      return view();
+    },
+  });
   const wait = () => new Promise<void>((resolve) => setTimeout(resolve, options.latency ?? 0));
 
   return {
-    workspace,
+    get workspace() {
+      return open();
+    },
     async call(op, input) {
       await wait();
       try {
-        const answer = workspace.call(op, structuredClone(input));
+        const answer = open().call(op, structuredClone(input));
         if (answer.changes) {
           const event: Changed = {
             seq: answer.changes.seq,
@@ -80,4 +153,9 @@ export function fakeTransport(options: FakeOptions = {}): Transport & { workspac
       });
     },
   };
+}
+
+/** Throws an error as the app's workspace commands do, with its message's ID for the page's language. */
+function fail(code: "invalid" | "conflict" | "not_found", message: string, details?: { message_id: string; args: Record<string, string> }): never {
+  throw new FakeError(code, message, details ? { details } : {});
 }

@@ -63,7 +63,7 @@ fn file_info(workspace: &Workspace, attachment: &str) -> Result<FileInfo, OpErro
 fn stored_path(workspace: &Workspace, info: &FileInfo) -> Result<PathBuf, OpError> {
     workspace
         .layout()
-        .and_then(|layout| gk_store::file_path(layout, &info.sha256))
+        .and_then(|layout| gk_store::file_path(&layout, &info.sha256))
         .ok_or_else(|| {
             OpError::storage(format!("The stored content of {} is missing.", info.name))
                 .with_hint("Restore the workspace from a backup.")
@@ -141,7 +141,7 @@ pub(crate) fn respond(workspace: &Workspace, method: &str, path: &str) -> Respon
     let Some(layout) = workspace.layout() else {
         return status(StatusCode::SERVICE_UNAVAILABLE);
     };
-    let bytes = match gk_store::read_file(layout, &info.sha256, MAX_IMAGE_BYTES) {
+    let bytes = match gk_store::read_file(&layout, &info.sha256, MAX_IMAGE_BYTES) {
         Ok(bytes) => bytes,
         Err(err) => {
             eprintln!("glyphkeel-app: {SCHEME}: {}: {err}", info.name);

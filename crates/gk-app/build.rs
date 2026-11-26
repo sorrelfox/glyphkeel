@@ -40,6 +40,10 @@ fn main() {
         "set_quick_add_shortcut",
         "cli_status",
         "install_cli",
+        "workspaces",
+        "create_workspace",
+        "open_workspace",
+        "rename_workspace",
         "quit_app",
     ]);
     // On Windows: UTF-8 code page, long paths and per-monitor DPI, besides the

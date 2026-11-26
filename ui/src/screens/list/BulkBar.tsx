@@ -15,6 +15,7 @@ import { applyBulk, previewBulk, type ListNames } from "../../data/list";
 import { useTrashTasks } from "../../data/safety";
 import { type BulkChanges, type BulkResult } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
+import { MoveTasksDialog } from "../task/MoveTasksDialog";
 import styles from "./List.module.css";
 
 interface BulkBarProps {
@@ -47,6 +48,8 @@ export function BulkBar({ keys, names, onClear }: BulkBarProps) {
   const trash = useTrashTasks();
   const [pending, setPending] = useState<Pending | null>(null);
   const [busy, setBusy] = useState(false);
+  // The project the selection is to move to: the move asks what to do with what it has no match for.
+  const [moveTo, setMoveTo] = useState<string | null>(null);
 
   const preview = (changes: BulkChanges, summary: string) => {
     setBusy(true);
@@ -167,7 +170,7 @@ export function BulkBar({ keys, names, onClear }: BulkBarProps) {
             isDisabled={busy}
             onChange={(project) => {
               if (project !== NONE) {
-                preview({ project }, t("list-bulk-summary-move", { value: project }));
+                setMoveTo(project);
               }
             }}
           />
@@ -181,6 +184,18 @@ export function BulkBar({ keys, names, onClear }: BulkBarProps) {
       <Button className="btn flat icon sm" aria-label={t("list-bulk-clear")} onPress={onClear}>
         <X className="ic s" />
       </Button>
+      {moveTo !== null && (
+        <MoveTasksDialog
+          keys={keys}
+          to={moveTo}
+          onClose={(moved) => {
+            setMoveTo(null);
+            if (moved !== undefined) {
+              onClear();
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

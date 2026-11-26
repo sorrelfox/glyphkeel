@@ -310,6 +310,7 @@ place-bad-neighbour = An item can't be placed next to itself or next to one in a
 ## Tasks
 
 task-get-count = Ask for 1 to { $max } tasks at once.
+task-move-check-count = Check 1 to { $max } tasks at once.
 project-no-statuses = Project { $project } has no statuses; add one first.
 project-no-types = Project { $project } has no task types; add one first.
 task-parent-other-project = { $task }'s parent must be in the same project.
@@ -334,6 +335,8 @@ task-open-subtasks = { $count ->
 task-still-blocked = { $task } is still blocked by { $blockers }.
 task-still-blocked-outside = { $task } is still blocked by a task outside the project you work in.
 task-label-left-off = Label "{ $label }" doesn't exist in { $project } and was left off.
+task-status-fallback = Status "{ $status }" doesn't exist in { $project }; the tasks that had it are in "{ $target }" now.
+task-type-fallback = Type "{ $type }" doesn't exist in { $project }; the tasks that had it are of type "{ $target }" now.
 storage-task-no-project = A task needs a project.
 storage-task-no-number = A task needs a number.
 
@@ -676,3 +679,15 @@ thumb-unreadable = the stored file can't be read: { $error }
 ## Drafts
 
 draft-title-long = A draft's title is at most { $max } characters.
+
+## The workspaces in the data folder
+
+workspace-exists = There is already a workspace called "{ $name }".
+workspace-not-found = There is no workspace "{ $name }".
+workspace-name-invalid = "{ $name }" can't be the name of a workspace.
+workspace-name-invalid-hint = Use letters, digits, spaces, "-" and "_", at most 64 characters.
+workspace-in-use = The workspace "{ $name }" is open in another program.
+workspace-in-use-hint = Close it in the app and stop the agents and commands working in it, then try again.
+workspace-rename-failed = The workspace "{ $name }" could not be renamed: { $error }
+workspace-choice-no-folder = There is no folder for the personal settings: no home folder is set.
+workspace-choice-not-saved = The workspace you chose could not be remembered: { $error }

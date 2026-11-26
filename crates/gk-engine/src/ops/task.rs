@@ -18,8 +18,9 @@
 use gk_api::ErrorCode;
 use gk_api::ops::common::{Actor, ActorKind, Category, Glyph, Hue, Priority};
 use gk_api::ops::task::{
-    Checklist, Claim, LabelRef, StatusRef, SubtaskReorderInput, Task, TaskChange, TaskCreate,
-    TaskCreateInput, TaskField, TaskGet, TaskGetInput, TaskList, TaskMove, TaskMoveInput, TaskPart,
+    Checklist, Claim, LabelRef, MoveCheck, MoveMapping, MoveMatch, MovedKey, StatusRef,
+    SubtaskReorderInput, Task, TaskChange, TaskCreate, TaskCreateInput, TaskField, TaskGet,
+    TaskGetInput, TaskList, TaskMove, TaskMoveCheck, TaskMoveCheckInput, TaskMoveInput, TaskPart,
     TaskRef, TaskReorderSubtask, TaskUpdate, TaskUpdateInput, TypeRef,
 };
 use gk_core::{Day, DurationUnits, Id, Rank, StatusCategory, fold};
@@ -41,6 +42,8 @@ use crate::write::WriteCtx;
 const MAX_LEVELS: usize = 5;
 /// Most tasks one read returns.
 const MAX_KEYS: usize = 20;
+/// Most tasks one move check looks at, as many as one bulk change takes.
+const MAX_MOVE_CHECK: usize = 500;
 
 pub(super) fn register(r: &mut Registry) {
     r.query::<TaskGet, _>(desc::<TaskGet>(), |q, input: TaskGetInput| {
@@ -67,6 +70,9 @@ pub(super) fn register(r: &mut Registry) {
     r.command::<TaskCreate, _>(desc::<TaskCreate>(), create);
     r.command::<TaskUpdate, _>(desc::<TaskUpdate>(), update);
     r.command::<TaskMove, _>(desc::<TaskMove>(), move_task);
+    r.query::<TaskMoveCheck, _>(desc::<TaskMoveCheck>(), |q, input: TaskMoveCheckInput| {
+        move_check(q.tx, &input)
+    });
     r.command::<TaskReorderSubtask, _>(desc::<TaskReorderSubtask>(), reorder_subtask);
 }
 
@@ -1330,9 +1336,9 @@ pub(crate) fn move_task(w: &mut WriteCtx<'_>, input: TaskMoveInput) -> Result<Ta
         warnings.extend(move_to_project(
             w,
             &task,
-            &from,
             &to,
             input.status.as_deref(),
+            &input.mapping,
         )?);
     }
     let current = lookup::task_by_id(w.tx(), task.id)?.unwrap_or(task.clone());
@@ -1424,9 +1430,33 @@ pub(crate) fn set_home(
         .as_ref()
         .and_then(Value::as_i64)
         .ok_or_else(|| Failure::Op(messages::storage("storage-task-no-number", &[])))?;
+    // The key the task leaves keeps finding it, also when an undo takes it
+    // back home; the key it takes is nobody's alias any more.
+    let (old_key, old_number): (String, i64) = w.tx().query_row(
+        "SELECT p.key, t.number FROM tasks t JOIN projects p ON p.id = t.project_id
+          WHERE t.id = ?1",
+        [b(id)],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )?;
+    let new_key: String = w.tx().query_row(
+        "SELECT key FROM projects WHERE id = ?1",
+        [b(project_id)],
+        |r| r.get(0),
+    )?;
     w.tx().execute(
         "UPDATE tasks SET project_id = ?2, number = ?3 WHERE id = ?1",
         params![b(id), b(project_id), n],
+    )?;
+    if (old_key.as_str(), old_number) != (new_key.as_str(), n) {
+        w.tx().execute(
+            "INSERT INTO task_key_aliases (project_key, number, task_id) VALUES (?1, ?2, ?3)
+             ON CONFLICT (project_key, number) DO UPDATE SET task_id = excluded.task_id",
+            params![old_key, old_number, b(id)],
+        )?;
+    }
+    w.tx().execute(
+        "DELETE FROM task_key_aliases WHERE project_key = ?1 AND number = ?2",
+        params![new_key, n],
     )?;
     fields::touch(w, TASK, id, "project")?;
     w.record_field(TASK, id, record_under, "project", before_project, project);
@@ -1435,56 +1465,91 @@ pub(crate) fn set_home(
 }
 
 /// Moves `task` and its subtasks from project `from` to `to`: new numbers,
-/// the old keys kept as aliases, statuses, types and labels matched by name.
+/// the old keys kept as aliases, statuses, types and labels matched by
+/// `mapping`, else by name, else the target's defaults, with a warning for
+/// each that had no match.
 fn move_to_project(
     w: &mut WriteCtx<'_>,
     task: &TaskRow,
-    from: &ProjectRow,
     to: &ProjectRow,
     status: Option<&str>,
+    mapping: &MoveMapping,
 ) -> Result<Vec<String>, Failure> {
     let mut warnings = Vec::new();
     let to_statuses = lookup::all(w.tx(), List::Statuses, to.id)?;
     let to_types = lookup::all(w.tx(), List::Types, to.id)?;
     let to_labels = lookup::all(w.tx(), List::Labels, to.id)?;
+    let statuses = Mapped::new(
+        w.tx(),
+        List::Statuses,
+        to,
+        "mapping.statuses",
+        &mapping.statuses,
+        &to_statuses,
+    )?;
+    let types = Mapped::new(
+        w.tx(),
+        List::Types,
+        to,
+        "mapping.types",
+        &mapping.types,
+        &to_types,
+    )?;
+    let labels = Mapped::new(
+        w.tx(),
+        List::Labels,
+        to,
+        "mapping.labels",
+        &mapping.labels,
+        &to_labels,
+    )?;
     let fallback_status = first_status(w.tx(), to)?;
     let fallback_type = default_type(w.tx(), to)?;
+    let name_of = |items: &[lookup::Named], id: Id| {
+        items
+            .iter()
+            .find(|n| n.id == id)
+            .map(|n| n.name.clone())
+            .unwrap_or_default()
+    };
     let root_status = status
         .map(|s| lookup::named(w.tx(), List::Statuses, to, "status", s).map(|n| n.id))
         .transpose()?;
     let pid = Some(to.id);
+    let mut warn = |warning: String| {
+        if !warnings.contains(&warning) {
+            warnings.push(warning);
+        }
+    };
     for id in descendants(w.tx(), task.id)? {
-        let (number, status_name, status_cat, type_name, closed): (
-            i64,
-            String,
-            String,
-            String,
-            Option<i64>,
-        ) = w.tx().query_row(
-            "SELECT t.number, s.name, s.category, y.name, t.closed_at
+        let (status_name, status_cat, type_name, closed): (String, String, String, Option<i64>) =
+            w.tx().query_row(
+                "SELECT s.name, s.category, y.name, t.closed_at
                    FROM tasks t JOIN statuses s ON s.id = t.status_id
                    JOIN task_types y ON y.id = t.type_id WHERE t.id = ?1",
-            [b(id)],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
-        )?;
+                [b(id)],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )?;
         let new_number: i64 = w.tx().query_row(
             "UPDATE projects SET next_number = next_number + 1, updated_at = ?2 WHERE id = ?1
              RETURNING next_number - 1",
             params![b(to.id), w.now()],
             |r| r.get(0),
         )?;
-        w.tx().execute(
-            "INSERT INTO task_key_aliases (project_key, number, task_id) VALUES (?1, ?2, ?3)
-             ON CONFLICT (project_key, number) DO UPDATE SET task_id = excluded.task_id",
-            params![from.key, number, b(id)],
-        )?;
         set_home(w, id, pid, id_value(to.id), Some(Value::from(new_number)))?;
         let new_status = match (id == task.id, root_status) {
             (true, Some(s)) => s,
-            _ => to_statuses
-                .iter()
-                .find(|s| fold(&s.name) == fold(&status_name))
-                .map_or(fallback_status, |s| s.id),
+            _ => statuses.get(&status_name).unwrap_or_else(|| {
+                warn(messages::text(
+                    "task-status-fallback",
+                    &[
+                        ("status", status_name.clone()),
+                        ("project", to.key.clone()),
+                        ("target", name_of(&to_statuses, fallback_status)),
+                    ],
+                ));
+                fallback_status
+            }),
         };
         fields::set(w, TASK, id, pid, "status", id_value(new_status))?;
         let before: StatusCategory = status_cat.parse().unwrap_or(StatusCategory::Todo);
@@ -1493,19 +1558,27 @@ fn move_to_project(
         fields::set(w, TASK, id, pid, "closed_at", closed_after.map(Value::from))?;
         let rank = rank_in_column(w, to.id, new_status, id, Target::Bottom)?;
         fields::set(w, TASK, id, pid, "rank", text(rank.as_str()))?;
-        let new_type = to_types
-            .iter()
-            .find(|t| fold(&t.name) == fold(&type_name))
-            .map_or(fallback_type, |t| t.id);
+        let new_type = types.get(&type_name).unwrap_or_else(|| {
+            warn(messages::text(
+                "task-type-fallback",
+                &[
+                    ("type", type_name.clone()),
+                    ("project", to.key.clone()),
+                    ("target", name_of(&to_types, fallback_type)),
+                ],
+            ));
+            fallback_type
+        });
         fields::set(w, TASK, id, pid, "type", id_value(new_type))?;
         let mut kept = Vec::new();
         for label in task_labels(w.tx(), id)? {
-            match to_labels
-                .iter()
-                .find(|l| fold(&l.name) == fold(&label.name))
-            {
-                Some(l) => kept.push(l.id),
-                None => warnings.push(messages::text(
+            match labels.get(&label.name) {
+                Some(l) => {
+                    if !kept.contains(&l) {
+                        kept.push(l);
+                    }
+                }
+                None => warn(messages::text(
                     "task-label-left-off",
                     &[("label", label.name.clone()), ("project", to.key.clone())],
                 )),
@@ -1517,8 +1590,135 @@ fn move_to_project(
         }
         refresh_text(w, id)?;
     }
-    warnings.dedup();
     Ok(warnings)
+}
+
+/// How the statuses, types or labels of moving tasks find their match in
+/// the target project: the name the mapping gives, else the same name.
+struct Mapped<'a> {
+    /// The mapping, by folded source name, already looked up.
+    given: Vec<(String, Id)>,
+    target: &'a [lookup::Named],
+}
+
+impl<'a> Mapped<'a> {
+    /// Looks up every target the mapping names, so a mistyped one is an
+    /// error even when no moving task needs it.
+    fn new(
+        tx: &Transaction<'_>,
+        list: List,
+        to: &ProjectRow,
+        field: &str,
+        mapping: &std::collections::BTreeMap<String, String>,
+        target: &'a [lookup::Named],
+    ) -> Result<Self, Failure> {
+        let given = mapping
+            .iter()
+            .map(|(from, name)| {
+                lookup::named(tx, list, to, &format!("{field}.{from}"), name)
+                    .map(|n| (fold(from), n.id))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self { given, target })
+    }
+
+    fn get(&self, name: &str) -> Option<Id> {
+        let name = fold(name);
+        self.given
+            .iter()
+            .find(|(from, _)| *from == name)
+            .map(|(_, id)| *id)
+            .or_else(|| {
+                self.target
+                    .iter()
+                    .find(|t| fold(&t.name) == name)
+                    .map(|t| t.id)
+            })
+    }
+}
+
+/// What moving the tasks `input` names to its project would do, changing
+/// nothing.
+fn move_check(tx: &Transaction<'_>, input: &TaskMoveCheckInput) -> Result<MoveCheck, Failure> {
+    if input.keys.is_empty() || input.keys.len() > MAX_MOVE_CHECK {
+        return Err(messages::invalid(
+            "keys",
+            "task-move-check-count",
+            &[("max", MAX_MOVE_CHECK.to_string())],
+        ));
+    }
+    let to = lookup::project(tx, "project", &input.project)?;
+    lookup::ensure_active(&to)?;
+    let to_statuses = lookup::all(tx, List::Statuses, to.id)?;
+    let to_types = lookup::all(tx, List::Types, to.id)?;
+    let to_labels = lookup::all(tx, List::Labels, to.id)?;
+    let mut next: i64 = tx.query_row(
+        "SELECT next_number FROM projects WHERE id = ?1",
+        [b(to.id)],
+        |r| r.get(0),
+    )?;
+    let mut seen = std::collections::HashSet::new();
+    let mut keys = Vec::new();
+    let (mut statuses, mut types, mut labels) = (Vec::new(), Vec::new(), Vec::new());
+    fn count(list: &mut Vec<MoveMatch>, target: &[lookup::Named], name: &str) {
+        let folded = fold(name);
+        match list.iter_mut().find(|m| fold(&m.name) == folded) {
+            Some(m) => m.tasks += 1,
+            None => list.push(MoveMatch {
+                name: name.to_owned(),
+                tasks: 1,
+                target: target
+                    .iter()
+                    .find(|t| fold(&t.name) == folded)
+                    .map(|t| t.name.clone()),
+            }),
+        }
+    }
+    for (i, key) in input.keys.iter().enumerate() {
+        let t = lookup::task(tx, &format!("keys[{i}]"), key)?;
+        if t.project == to.id || seen.contains(&t.id) {
+            continue;
+        }
+        for id in descendants(tx, t.id)? {
+            if !seen.insert(id) {
+                continue;
+            }
+            let (key, status, task_type): (String, String, String) = tx.query_row(
+                "SELECT p.key || '-' || t.number, s.name, y.name
+                   FROM tasks t JOIN projects p ON p.id = t.project_id
+                   JOIN statuses s ON s.id = t.status_id
+                   JOIN task_types y ON y.id = t.type_id WHERE t.id = ?1",
+                [b(id)],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )?;
+            keys.push(MovedKey {
+                from: key,
+                to: format!("{}-{next}", to.key),
+            });
+            next += 1;
+            count(&mut statuses, &to_statuses, &status);
+            count(&mut types, &to_types, &task_type);
+            for label in task_labels(tx, id)? {
+                count(&mut labels, &to_labels, &label.name);
+            }
+        }
+    }
+    let name_of = |items: &[lookup::Named], id: Id| {
+        items
+            .iter()
+            .find(|n| n.id == id)
+            .map(|n| n.name.clone())
+            .unwrap_or_default()
+    };
+    Ok(MoveCheck {
+        project: to.key.clone(),
+        keys,
+        statuses,
+        types,
+        labels,
+        fallback_status: name_of(&to_statuses, first_status(tx, &to)?),
+        fallback_type: name_of(&to_types, default_type(tx, &to)?),
+    })
 }
 
 #[cfg(test)]

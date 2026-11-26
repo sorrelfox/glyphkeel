@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { type ActivityPage, type CommentChange, type CommentList, type FileChange, type FileContent, type ProjectList, type RevertResult, type TaskList } from "../../generated/ops";
+import { type ActivityPage, type CommentChange, type CommentList, type FileChange, type FileContent, type MoveCheck, type ProjectChange, type ProjectList, type RevertResult, type TaskList } from "../../generated/ops";
 import { cardsOf, countsOf, moveOnBoard } from "../board";
 import { type Board, type Project, type TaskChange } from "../catalog";
 import { FakeError, FakeWorkspace } from "./engine";
@@ -344,5 +344,50 @@ describe("task details", () => {
     expect(failure(() => call(ws, "task.claim", { key: claimed[0]?.key })).code).toBe("forbidden");
     call(ws, "task.release", { key: claimed[0]?.key });
     expect(get(ws, claimed[0]?.key ?? "")?.claim).toBeUndefined();
+  });
+});
+
+describe("moving tasks between projects and new project keys", () => {
+  it("moves a task with its subtasks, keeps the old keys and maps what the target lacks", () => {
+    const ws = workspace();
+    const created = call<TaskChange>(ws, "task.create", { project: "TM", title: "Parent" }).task;
+    const parent = call<TaskChange>(ws, "task.update", { key: created.key, labels: ["board"] }).task;
+    const child = call<TaskChange>(ws, "task.create", { project: "TM", title: "Child", parent: parent.key }).task;
+    const check = call<MoveCheck>(ws, "task.move_check", { keys: [parent.key], project: "PER" });
+    expect(check.keys.map((k) => k.from)).toEqual([parent.key, child.key]);
+    expect(check.labels).toEqual([{ name: "board", tasks: 1 }]);
+    // The check changes nothing.
+    expect(call<TaskList>(ws, "task.get", { keys: [parent.key] }).items[0]?.project).toBe("TM");
+
+    const label = call<ProjectChange>(ws, "label.create", { project: "PER", name: "screens" });
+    expect(label.project.key).toBe("PER");
+    const moved = call<TaskChange>(ws, "task.move", { key: parent.key, project: "PER", mapping: { labels: { board: "screens" } } });
+    expect(moved.task.key).toBe(check.keys[0]?.to);
+    expect(moved.task.labels.map((l) => l.name)).toEqual(["screens"]);
+    expect(moved.task.old_keys).toEqual([parent.key]);
+    const sub = call<TaskList>(ws, "task.get", { keys: [child.key] }).items[0];
+    expect(sub?.key).toBe(check.keys[1]?.to);
+    expect(sub?.parent).toBe(moved.task.key);
+
+    // Undo takes it home.
+    ws.call("history.undo", {});
+    expect(call<TaskList>(ws, "task.get", { keys: [parent.key] }).items[0]?.key).toBe(parent.key);
+  });
+
+  it("refuses a mapping to something the target doesn't have", () => {
+    const ws = workspace();
+    const task = call<TaskChange>(ws, "task.create", { project: "TM", title: "One" }).task;
+    expect(failure(() => ws.call("task.move", { key: task.key, project: "PER", mapping: { statuses: { Backlog: "Nope" } } })).code).toBe("not_found");
+  });
+
+  it("gives a project a new key that the old keys keep finding", () => {
+    const ws = workspace();
+    const task = call<TaskChange>(ws, "task.create", { project: "PER", title: "One" }).task;
+    const changed = call<ProjectChange>(ws, "project.change_key", { project: "PER", key: "ME" });
+    expect(changed.project.key).toBe("ME");
+    expect(changed.project.old_keys).toEqual(["PER"]);
+    const found = call<TaskList>(ws, "task.get", { keys: [task.key] }).items[0];
+    expect(found?.key).toBe(task.key.replace("PER-", "ME-"));
+    expect(failure(() => ws.call("project.change_key", { project: "TM", key: "PER" })).code).toBe("conflict");
   });
 });

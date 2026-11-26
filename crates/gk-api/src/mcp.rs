@@ -417,11 +417,25 @@ Example: update_task {\"key\": \"TM-41\", \"description_edits\": [{\"old_text\":
         title: "Move a task",
         description: "Moves a task to another `status` (by name), to a place in its column \
 (`before` or `after` another task's key, or `at`: top or bottom), or to another `project`, where \
-it gets a new key while the old one keeps finding it. Entering a done or cancelled status closes \
-the task. \
+it gets a new key while the old one keeps finding it; its subtasks, comments, files, time and \
+links come along. Statuses, types and labels are matched by name there; check_move first shows \
+which have no match, and `mapping` ({statuses, types, labels}: from the old name to the target's \
+name) says what takes their place. Entering a done or cancelled status closes the task. \
 Example: move_task {\"key\": \"TM-41\", \"status\": \"In progress\", \"at\": \"top\"}",
         main: "task.move",
         covers: &["task.move"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "check_move",
+        toolset: Toolset::Tasks,
+        title: "Check a move to another project",
+        description: "Shows what moving tasks to another project would do, without moving them: \
+the key each task (and subtask) would get, and for each of their statuses, types and labels the \
+target's item of the same name, or none. Pass what has no match as `mapping` to move_task. \
+Example: check_move {\"keys\": [\"TM-41\"], \"project\": \"OPS\"}",
+        main: "task.move_check",
+        covers: &["task.move_check"],
         idempotent: true,
     },
     McpTool {
@@ -1247,6 +1261,7 @@ mod tests {
                 "get_agent_brief",
                 "search_tasks",
                 "get_task",
+                "check_move",
                 "get_description_revision",
                 "get_time_report",
                 "get_reminders",
