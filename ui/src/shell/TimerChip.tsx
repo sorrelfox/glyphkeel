@@ -15,7 +15,8 @@ import styles from "./Shell.module.css";
 
 /**
  * The timer chip in the sidebar, only while a timer runs or is paused: the
- * running time and the task's key, which opens the task; pause or go on;
+ * running time, the task's key and the kind of work, if one is chosen,
+ * which opens the task; pause or go on;
  * stop, which logs the time. It follows the timer wherever it was started,
  * in this window, another one, the command line or an agent. Past the
  * workspace's reminder hours the time turns to the warning colour.
@@ -37,11 +38,19 @@ export function TimerChip() {
   const running = timer.state === "running";
   const long = isLongRunning(seconds, settings.data?.timer_reminder_hours);
   const clock = formatClock(seconds);
+  const kind = timer.work_kind?.name;
+  const message = long ? "timer-chip-open-long" : running ? "timer-chip-open" : "timer-chip-open-paused";
   return (
     <div className={classes(styles.timerChip, long && styles.timerLong)} role="group" aria-label={t("timer-chip-label")} data-timer-chip={timer.task.key}>
       <Button
         className={classes(styles.timerOpen)}
-        aria-label={t(long ? "timer-chip-open-long" : running ? "timer-chip-open" : "timer-chip-open-paused", { time: clock, key: timer.task.key, title: timer.task.title, hours: settings.data?.timer_reminder_hours ?? 8 })}
+        aria-label={t(kind === undefined ? message : `${message}-kind`, {
+          time: clock,
+          key: timer.task.key,
+          title: timer.task.title,
+          hours: settings.data?.timer_reminder_hours ?? 8,
+          ...(kind === undefined ? {} : { kind }),
+        })}
         onPress={() => void navigate({ to: "/open/$key", params: { key: timer.task.key } })}
       >
         <Clock className={classes("ic", running ? "accent" : "muted")} />
@@ -49,7 +58,14 @@ export function TimerChip() {
           <span className={classes("num", styles.timerClock)} data-timer-clock>
             {clock}
           </span>
-          <span className="key truncate">{timer.task.key}</span>
+          <span className={styles.timerTask}>
+            <span className="key">{timer.task.key}</span>
+            {kind !== undefined && (
+              <span className={classes("meta truncate", styles.timerKind)} data-timer-kind>
+                {kind}
+              </span>
+            )}
+          </span>
         </span>
       </Button>
       <Button

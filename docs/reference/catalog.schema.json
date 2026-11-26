@@ -1809,6 +1809,16 @@
                 "const": "milestone",
                 "description": "A milestone.",
                 "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
+                "type": "string"
               }
             ]
           },
@@ -2524,6 +2534,16 @@
                 "const": "milestone",
                 "description": "A milestone.",
                 "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
+                "type": "string"
               }
             ]
           },
@@ -3099,6 +3119,16 @@
               {
                 "const": "milestone",
                 "description": "A milestone.",
+                "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
                 "type": "string"
               }
             ]
@@ -3718,6 +3748,16 @@
               {
                 "const": "milestone",
                 "description": "A milestone.",
+                "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
                 "type": "string"
               }
             ]
@@ -4367,6 +4407,16 @@
                 "const": "milestone",
                 "description": "A milestone.",
                 "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
+                "type": "string"
               }
             ]
           },
@@ -4966,6 +5016,16 @@
                 "const": "milestone",
                 "description": "A milestone.",
                 "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
+                "type": "string"
               }
             ]
           },
@@ -5560,6 +5620,16 @@
                 "const": "milestone",
                 "description": "A milestone.",
                 "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
+                "type": "string"
               }
             ]
           },
@@ -6153,6 +6223,16 @@
               {
                 "const": "milestone",
                 "description": "A milestone.",
+                "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
                 "type": "string"
               }
             ]
@@ -7075,6 +7155,16 @@
                 "const": "milestone",
                 "description": "A milestone.",
                 "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
+                "type": "string"
               }
             ]
           },
@@ -7820,6 +7910,16 @@
                 "const": "milestone",
                 "description": "A milestone.",
                 "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
+                "type": "string"
               }
             ]
           },
@@ -8461,6 +8561,16 @@
                 "const": "milestone",
                 "description": "A milestone.",
                 "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
+                "type": "string"
               }
             ]
           },
@@ -9067,6 +9177,16 @@
                 "const": "milestone",
                 "description": "A milestone.",
                 "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
+                "type": "string"
               }
             ]
           },
@@ -9603,6 +9723,16 @@
                 "const": "milestone",
                 "description": "A milestone.",
                 "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
+                "type": "string"
               }
             ]
           },
@@ -9778,6 +9908,16 @@
               {
                 "const": "milestone",
                 "description": "A milestone.",
+                "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
                 "type": "string"
               }
             ]
@@ -10330,6 +10470,16 @@
                 "const": "milestone",
                 "description": "A milestone.",
                 "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
+                "type": "string"
               }
             ]
           },
@@ -10541,6 +10691,16 @@
               {
                 "const": "milestone",
                 "description": "A milestone.",
+                "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
                 "type": "string"
               }
             ]
@@ -11147,6 +11307,16 @@
               {
                 "const": "milestone",
                 "description": "A milestone.",
+                "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
                 "type": "string"
               }
             ]
@@ -11809,6 +11979,16 @@
               {
                 "const": "milestone",
                 "description": "A milestone.",
+                "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
                 "type": "string"
               }
             ]
@@ -12479,6 +12659,16 @@
                 "const": "milestone",
                 "description": "A milestone.",
                 "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
+                "type": "string"
               }
             ]
           },
@@ -13077,6 +13267,16 @@
               {
                 "const": "milestone",
                 "description": "A milestone.",
+                "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
                 "type": "string"
               }
             ]
@@ -16613,6 +16813,16 @@
                 "const": "milestone",
                 "description": "A milestone.",
                 "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
+                "type": "string"
               }
             ]
           },
@@ -17726,6 +17936,16 @@
               {
                 "const": "milestone",
                 "description": "A milestone.",
+                "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
                 "type": "string"
               }
             ]
@@ -19610,6 +19830,16 @@
                 "const": "milestone",
                 "description": "A milestone.",
                 "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
+                "type": "string"
               }
             ]
           },
@@ -20815,6 +21045,10 @@
               "$ref": "#/$defs/MovedTask"
             },
             "type": "array"
+          },
+          "next_occurrence": {
+            "description": "For a recurring task closed by the change: the key of the next\noccurrence it made. The closed task no longer carries the series.",
+            "type": "string"
           },
           "task": {
             "$ref": "#/$defs/Task",
@@ -21705,6 +21939,16 @@
                 "const": "milestone",
                 "description": "A milestone.",
                 "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
+                "type": "string"
               }
             ]
           },
@@ -22910,6 +23154,10 @@
               "$ref": "#/$defs/MovedTask"
             },
             "type": "array"
+          },
+          "next_occurrence": {
+            "description": "For a recurring task closed by the change: the key of the next\noccurrence it made. The closed task no longer carries the series.",
+            "type": "string"
           },
           "task": {
             "$ref": "#/$defs/Task",
@@ -23615,6 +23863,16 @@
                 "const": "milestone",
                 "description": "A milestone.",
                 "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
+                "type": "string"
               }
             ]
           },
@@ -24821,6 +25079,10 @@
             },
             "type": "array"
           },
+          "next_occurrence": {
+            "description": "For a recurring task closed by the change: the key of the next\noccurrence it made. The closed task no longer carries the series.",
+            "type": "string"
+          },
           "task": {
             "$ref": "#/$defs/Task",
             "description": "The task after the change."
@@ -25261,6 +25523,13 @@
                   "$ref": "#/$defs/TaskField"
                 },
                 "type": "array"
+              },
+              "close_duplicates": {
+                "description": "With `status`: when a task closes, close its open duplicates too\n(`true`) or leave them open without a warning (`false`), as\n`task.move` does.",
+                "type": [
+                  "boolean",
+                  "null"
+                ]
               },
               "due_date": {
                 "description": "The due date, written as for `start_date`.",
@@ -26252,6 +26521,16 @@
                 "const": "milestone",
                 "description": "A milestone.",
                 "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
+                "type": "string"
               }
             ]
           },
@@ -27457,6 +27736,10 @@
               "$ref": "#/$defs/MovedTask"
             },
             "type": "array"
+          },
+          "next_occurrence": {
+            "description": "For a recurring task closed by the change: the key of the next\noccurrence it made. The closed task no longer carries the series.",
+            "type": "string"
           },
           "task": {
             "$ref": "#/$defs/Task",
@@ -28095,6 +28378,16 @@
                 "const": "milestone",
                 "description": "A milestone.",
                 "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
+                "type": "string"
               }
             ]
           },
@@ -29300,6 +29593,10 @@
               "$ref": "#/$defs/MovedTask"
             },
             "type": "array"
+          },
+          "next_occurrence": {
+            "description": "For a recurring task closed by the change: the key of the next\noccurrence it made. The closed task no longer carries the series.",
+            "type": "string"
           },
           "task": {
             "$ref": "#/$defs/Task",
@@ -30175,6 +30472,16 @@
                 "const": "milestone",
                 "description": "A milestone.",
                 "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
+                "type": "string"
               }
             ]
           },
@@ -31380,6 +31687,10 @@
               "$ref": "#/$defs/MovedTask"
             },
             "type": "array"
+          },
+          "next_occurrence": {
+            "description": "For a recurring task closed by the change: the key of the next\noccurrence it made. The closed task no longer carries the series.",
+            "type": "string"
           },
           "task": {
             "$ref": "#/$defs/Task",
@@ -31998,6 +32309,16 @@
                 "const": "milestone",
                 "description": "A milestone.",
                 "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
+                "type": "string"
               }
             ]
           },
@@ -33203,6 +33524,10 @@
               "$ref": "#/$defs/MovedTask"
             },
             "type": "array"
+          },
+          "next_occurrence": {
+            "description": "For a recurring task closed by the change: the key of the next\noccurrence it made. The closed task no longer carries the series.",
+            "type": "string"
           },
           "task": {
             "$ref": "#/$defs/Task",
@@ -33814,6 +34139,16 @@
                 "const": "milestone",
                 "description": "A milestone.",
                 "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
+                "type": "string"
               }
             ]
           },
@@ -35019,6 +35354,10 @@
               "$ref": "#/$defs/MovedTask"
             },
             "type": "array"
+          },
+          "next_occurrence": {
+            "description": "For a recurring task closed by the change: the key of the next\noccurrence it made. The closed task no longer carries the series.",
+            "type": "string"
           },
           "task": {
             "$ref": "#/$defs/Task",
@@ -35681,6 +36020,16 @@
                 "const": "milestone",
                 "description": "A milestone.",
                 "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
+                "type": "string"
               }
             ]
           },
@@ -36886,6 +37235,10 @@
               "$ref": "#/$defs/MovedTask"
             },
             "type": "array"
+          },
+          "next_occurrence": {
+            "description": "For a recurring task closed by the change: the key of the next\noccurrence it made. The closed task no longer carries the series.",
+            "type": "string"
           },
           "task": {
             "$ref": "#/$defs/Task",
@@ -37548,6 +37901,16 @@
                 "const": "milestone",
                 "description": "A milestone.",
                 "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
+                "type": "string"
               }
             ]
           },
@@ -38753,6 +39116,10 @@
               "$ref": "#/$defs/MovedTask"
             },
             "type": "array"
+          },
+          "next_occurrence": {
+            "description": "For a recurring task closed by the change: the key of the next\noccurrence it made. The closed task no longer carries the series.",
+            "type": "string"
           },
           "task": {
             "$ref": "#/$defs/Task",
@@ -40499,6 +40866,10 @@
             "additionalProperties": false,
             "description": "One template in a list, without its content.",
             "properties": {
+              "built_in": {
+                "description": "For a template that comes with Glyphkeel: its key (`software`).",
+                "type": "string"
+              },
               "description": {
                 "description": "What it is for.",
                 "type": "string"
@@ -40654,6 +41025,10 @@
         "additionalProperties": false,
         "description": "A template.",
         "properties": {
+          "built_in": {
+            "description": "For a template that comes with Glyphkeel: its key (`software`). Such\na template is in every workspace and can't be changed or deleted.",
+            "type": "string"
+          },
           "created_at": {
             "description": "When it was made (RFC 3339, UTC).",
             "type": "string"
@@ -40874,6 +41249,16 @@
               {
                 "const": "milestone",
                 "description": "A milestone.",
+                "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
                 "type": "string"
               }
             ]
@@ -41587,6 +41972,10 @@
             "additionalProperties": false,
             "description": "A template.",
             "properties": {
+              "built_in": {
+                "description": "For a template that comes with Glyphkeel: its key (`software`). Such\na template is in every workspace and can't be changed or deleted.",
+                "type": "string"
+              },
               "created_at": {
                 "description": "When it was made (RFC 3339, UTC).",
                 "type": "string"
@@ -41845,6 +42234,16 @@
               {
                 "const": "milestone",
                 "description": "A milestone.",
+                "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
                 "type": "string"
               }
             ]
@@ -42520,6 +42919,10 @@
             "additionalProperties": false,
             "description": "A template.",
             "properties": {
+              "built_in": {
+                "description": "For a template that comes with Glyphkeel: its key (`software`). Such\na template is in every workspace and can't be changed or deleted.",
+                "type": "string"
+              },
               "created_at": {
                 "description": "When it was made (RFC 3339, UTC).",
                 "type": "string"
@@ -42687,6 +43090,10 @@
             "additionalProperties": false,
             "description": "A template.",
             "properties": {
+              "built_in": {
+                "description": "For a template that comes with Glyphkeel: its key (`software`). Such\na template is in every workspace and can't be changed or deleted.",
+                "type": "string"
+              },
               "created_at": {
                 "description": "When it was made (RFC 3339, UTC).",
                 "type": "string"
@@ -42839,6 +43246,36 @@
                 "type": "string"
               }
             ]
+          },
+          "Priority": {
+            "description": "A task's priority.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No priority (the default).",
+                "type": "string"
+              },
+              {
+                "const": "low",
+                "description": "Low.",
+                "type": "string"
+              },
+              {
+                "const": "normal",
+                "description": "Normal.",
+                "type": "string"
+              },
+              {
+                "const": "high",
+                "description": "High.",
+                "type": "string"
+              },
+              {
+                "const": "urgent",
+                "description": "Urgent.",
+                "type": "string"
+              }
+            ]
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -42854,6 +43291,13 @@
           },
           "date": {
             "description": "The day the template's dates count from (a date: `2026-12-01`,\n`next mon`); default today.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "due_date": {
+            "description": "With a task template: the new task's due date instead of the\ntemplate's (a date: `2026-12-01`, or `fri`, `next mon`, `+3d`).",
             "type": [
               "string",
               "null"
@@ -42897,6 +43341,17 @@
               "string",
               "null"
             ]
+          },
+          "priority": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Priority"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "With a task template: the new task's priority instead of the\ntemplate's."
           },
           "project": {
             "description": "A task template: the project the task goes to (default the\ntemplate's), and where a template named by name is looked up.",
@@ -43470,6 +43925,16 @@
               {
                 "const": "milestone",
                 "description": "A milestone.",
+                "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
                 "type": "string"
               }
             ]
@@ -51834,6 +52299,16 @@
                 "const": "milestone",
                 "description": "A milestone.",
                 "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
+                "type": "string"
               }
             ]
           },
@@ -52703,6 +53178,10 @@
                 "description": "Its place in the column.",
                 "type": "string"
               },
+              "recurring": {
+                "description": "Whether it is the open occurrence of a recurring task.",
+                "type": "boolean"
+              },
               "spent_minutes": {
                 "description": "Logged time in minutes.",
                 "format": "int64",
@@ -52950,6 +53429,16 @@
               {
                 "const": "milestone",
                 "description": "A milestone.",
+                "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
                 "type": "string"
               }
             ]
@@ -61912,6 +62401,16 @@
               {
                 "const": "milestone",
                 "description": "A milestone.",
+                "type": "string"
+              },
+              {
+                "const": "epic",
+                "description": "An epic: a large piece of work that holds stories.",
+                "type": "string"
+              },
+              {
+                "const": "story",
+                "description": "A story: a piece of work told from the user's side.",
                 "type": "string"
               }
             ]

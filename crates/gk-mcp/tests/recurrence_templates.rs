@@ -81,7 +81,10 @@ async fn an_agent_sets_a_rule_skips_once_and_uses_a_template() {
         .await,
     );
     assert_eq!(again["task"]["key"], "OP-2", "a retry makes nothing new");
-    let listed = output(&c.call("list_templates", json!({ "project": "OP" })).await);
+    let listed = output(
+        &c.call("list_templates", json!({ "project": "OP", "kind": "task" }))
+            .await,
+    );
     assert_eq!(listed["total"], 1);
     output(&c.call("stop_recurrence", json!({ "key": "OP-1" })).await);
     c.close().await;

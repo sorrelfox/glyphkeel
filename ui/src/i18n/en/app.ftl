@@ -380,6 +380,11 @@ duplicates-body =
         [one] { $key } is marked as the original of { $keys }, which is still open.
        *[other] { $key } is marked as the original of { $count } open tasks: { $keys }.
     }
+duplicates-body-many =
+    { $count ->
+        [one] { $originals } are marked as the originals of { $keys }, which is still open.
+       *[other] { $originals } are marked as the originals of { $count } open tasks: { $keys }.
+    }
 duplicates-close =
     { $count ->
         [one] Close it too
@@ -418,6 +423,8 @@ glyph-task = Task
 glyph-bug = Bug
 glyph-feature = Feature
 glyph-milestone = Milestone
+glyph-epic = Epic
+glyph-story = Story
 label-name = Name
 label-colour = Colour
 label-none = No labels yet.
@@ -937,7 +944,16 @@ timer-nothing-logged = The timer ran under half a minute; no time was logged.
 timer-chip-label = Timer
 timer-chip-open = Timer running, { $time }, on { $key }: { $title }. Open the task
 timer-chip-open-paused = Timer paused at { $time }, on { $key }: { $title }. Open the task
-timer-chip-open-long = Timer running for more than { $hours } hours, { $time }, on { $key }: { $title }. Open the task
+timer-chip-open-long = { $hours ->
+    [one] Timer running for more than an hour, { $time }, on { $key }: { $title }. Open the task
+   *[other] Timer running for more than { $hours } hours, { $time }, on { $key }: { $title }. Open the task
+}
+timer-chip-open-kind = Timer running, { $time }, on { $key }: { $title }, as { $kind }. Open the task
+timer-chip-open-paused-kind = Timer paused at { $time }, on { $key }: { $title }, as { $kind }. Open the task
+timer-chip-open-long-kind = { $hours ->
+    [one] Timer running for more than an hour, { $time }, on { $key }: { $title }, as { $kind }. Open the task
+   *[other] Timer running for more than { $hours } hours, { $time }, on { $key }: { $title }, as { $kind }. Open the task
+}
 
 ## Reminders
 

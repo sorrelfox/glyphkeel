@@ -6,7 +6,7 @@ import { forwardRef, type CSSProperties, type HTMLAttributes } from "react";
 import { useLocale } from "react-aria-components";
 
 import { classes } from "../../classes";
-import { PriorityGlyph, TypeGlyph } from "../../components/Glyphs";
+import { PriorityGlyph, RecurringMark, TypeGlyph } from "../../components/Glyphs";
 import { type Card, type CardField } from "../../data/catalog";
 import { useFieldText } from "../../data/fields";
 import { type CustomField } from "../../generated/ops";
@@ -38,7 +38,8 @@ export function useDayFormat(): (day: string) => string {
 }
 
 /**
- * A task on the board. Rows, each left out when empty: type, key, Blocked,
+ * A task on the board. Rows, each left out when empty: type, key, the
+ * recurring mark, Blocked,
  * an agent's claim and priority; the title; labels; start and due dates,
  * checklist, subtasks, estimate and days in the column, as the personal
  * card fields choose, and the custom fields they name, each as its name and
@@ -146,6 +147,7 @@ export const CardView = forwardRef<HTMLElement, CardViewProps>(function CardView
       <div className={styles.cardTop}>
         <TypeGlyph glyph={card.type.glyph} label={card.type.name} />
         <span className="key">{card.key}</span>
+        {card.recurring === true && <RecurringMark />}
         {card.blocked && !closed && <span className="chip hue-red">{t("card-blocked")}</span>}
         <div className="grow" />
         {card.claim && (

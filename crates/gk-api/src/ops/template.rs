@@ -301,6 +301,10 @@ pub struct Template {
     pub created_at: String,
     /// When it last changed (RFC 3339, UTC).
     pub updated_at: String,
+    /// For a template that comes with Glyphkeel: its key (`software`). Such
+    /// a template is in every workspace and can't be changed or deleted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub built_in: Option<String>,
 }
 
 /// One template in a list, without its content.
@@ -326,6 +330,9 @@ pub struct TemplateSummary {
     /// Tasks it makes (subtasks included), plus a project template's wiki
     /// pages.
     pub items: u32,
+    /// For a template that comes with Glyphkeel: its key (`software`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub built_in: Option<String>,
 }
 
 /// Which templates to list.
@@ -448,6 +455,14 @@ pub struct TemplateApplyInput {
     /// `next mon`); default today.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub date: Option<String>,
+    /// With a task template: the new task's due date instead of the
+    /// template's (a date: `2026-12-01`, or `fri`, `next mon`, `+3d`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub due_date: Option<String>,
+    /// With a task template: the new task's priority instead of the
+    /// template's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub priority: Option<Priority>,
     /// A project template: the new project's name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,

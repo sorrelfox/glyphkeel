@@ -334,6 +334,10 @@ pub struct TaskChange {
     /// The duplicates closed with the task (`close_duplicates`), by key.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub duplicates_closed: Vec<String>,
+    /// For a recurring task closed by the change: the key of the next
+    /// occurrence it made. The closed task no longer carries the series.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_occurrence: Option<String>,
 }
 
 /// Which tasks to read.

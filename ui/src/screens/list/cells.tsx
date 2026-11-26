@@ -30,7 +30,8 @@ export interface CellActions {
   editing: { key: string; column: ColumnId } | null;
   setEditing: (editing: { key: string; column: ColumnId } | null) => void;
   rename: (task: ListedTask, title: string) => void;
-  setStatus: (task: ListedTask, status: string) => void;
+  /** Moves the task to status `status` (an ID); `closing` when that status closes it. */
+  setStatus: (task: ListedTask, status: string, closing: boolean) => void;
   setPriority: (task: ListedTask, priority: Priority) => void;
   setDue: (task: ListedTask, day: string | null) => void;
 }
@@ -210,7 +211,8 @@ function StatusMenu({ task, close }: { task: ListedTask; close: () => void }) {
       onAction={(id) => {
         close();
         if (id !== task.status.id) {
-          actions.setStatus(task, String(id));
+          const category = statuses.find((status) => status.id === id)?.category;
+          actions.setStatus(task, String(id), category === "done" || category === "cancelled");
         }
       }}
     >

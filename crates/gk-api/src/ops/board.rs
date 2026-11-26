@@ -118,6 +118,9 @@ pub struct Card {
     /// The agent that claimed it, while the claim lasts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub claim: Option<Claim>,
+    /// Whether it is the open occurrence of a recurring task.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub recurring: bool,
     /// Its place in the column.
     pub rank: String,
     /// When it entered its status.

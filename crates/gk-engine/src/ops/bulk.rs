@@ -273,6 +273,7 @@ fn apply(
                 } else {
                     BTreeMap::new()
                 },
+                close_duplicates: c.close_duplicates,
                 ..TaskMoveInput::default()
             },
         )?;

@@ -14,7 +14,7 @@ import { useProjects } from "../../data/board";
 import { errorToast, useCall } from "../../data/hooks";
 import { useTemplates } from "../../data/recurrence";
 import { OpFailure } from "../../data/transport";
-import { type TaskChange, type TaskCreateInput, type TemplateApplyInput } from "../../generated/ops";
+import { type TaskChange, type TaskCreateInput, type TemplateApplied, type TemplateApplyInput } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { hideQuickAdd, onQuickAddShown } from "../../ipc/quickAdd";
 import { appWindow } from "../../ipc/window";
@@ -128,8 +128,22 @@ export function QuickAdd() {
     },
   });
 
+  // As for a task: should the engine not read the date, a shorter one is tried.
   const fromTemplate = useMutation({
-    mutationFn: (input: TemplateApplyInput) => call("template.apply", input),
+    mutationFn: async (tries: TemplateApplyInput[]): Promise<TemplateApplied> => {
+      let first: unknown = null;
+      for (const each of tries) {
+        try {
+          return await call("template.apply", each);
+        } catch (error) {
+          first ??= error;
+          if (!unreadDate(error)) {
+            throw error;
+          }
+        }
+      }
+      throw first;
+    },
     onSuccess: async (applied) => {
       const leftOut = applied.left_out ?? [];
       setNote({
@@ -162,12 +176,15 @@ export function QuickAdd() {
     if (parsed.project === undefined) {
       writePref(LAST_PROJECT, project);
     }
+    const dates = parsed.dueText === undefined ? [] : [{ title: parsed.title, dueText: parsed.dueText }, ...(parsed.shorterDates ?? [])];
     if (template !== null) {
-      fromTemplate.mutate({ template, project, ...(parsed.title === "" ? {} : { title: parsed.title }) });
+      // The due date and priority typed inline win over the template's.
+      const base = { template, project, ...(parsed.priority === undefined ? {} : { priority: parsed.priority }) };
+      const titled = (title: string) => (title === "" ? {} : { title });
+      fromTemplate.mutate(dates.length === 0 ? [{ ...base, ...titled(parsed.title) }] : dates.map((date) => ({ ...base, ...titled(date.title), due_date: date.dueText })));
       return;
     }
     const base = { project, ...(parsed.priority === undefined ? {} : { priority: parsed.priority }) };
-    const dates = parsed.dueText === undefined ? [] : [{ title: parsed.title, dueText: parsed.dueText }, ...(parsed.shorterDates ?? [])];
     create.mutate(dates.length === 0 ? [{ ...base, title: parsed.title }] : dates.map((date) => ({ ...base, title: date.title, due_date: date.dueText })));
   };
 
@@ -239,7 +256,7 @@ export function QuickAdd() {
             }}
           />
         )}
-        {parsed.dueText !== undefined && template === null && (
+        {parsed.dueText !== undefined && (
           <span className={classes("chip outline", styles.chip)} data-testid="quick-add-due">
             <CalendarDays className="ic s" aria-hidden="true" />
             {t("quick-add-due", { words: parsed.dueText })}
@@ -256,7 +273,7 @@ export function QuickAdd() {
             </button>
           </span>
         )}
-        {parsed.priority !== undefined && template === null && (
+        {parsed.priority !== undefined && (
           <span className={classes("chip outline", styles.chip)} data-testid="quick-add-priority">
             <Flag className="ic s" aria-hidden="true" />
             {t(`priority-${parsed.priority}`)}

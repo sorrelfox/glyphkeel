@@ -76,7 +76,7 @@ export const PROJECT_ICONS = [
 export const STATUS_CATEGORIES = ["todo", "in_progress", "done", "cancelled"] as const satisfies readonly Category[];
 
 /** The shapes of task types. */
-export const GLYPHS = ["task", "bug", "feature", "milestone"] as const satisfies readonly Glyph[];
+export const GLYPHS = ["task", "bug", "feature", "milestone", "epic", "story"] as const satisfies readonly Glyph[];
 
 /** Priorities, lowest first. */
 export const PRIORITIES = ["none", "low", "normal", "high", "urgent"] as const satisfies readonly Priority[];

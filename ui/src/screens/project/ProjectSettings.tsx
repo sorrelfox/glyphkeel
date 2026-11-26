@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
 import { Button, Tab, TabList, TabPanel, Tabs, useLocale } from "react-aria-components";
@@ -15,14 +15,16 @@ import { useProject } from "../../data/board";
 import { GLYPHS, HUES, MODULES, STATUS_CATEGORIES, type Hue, type Project, type Status } from "../../data/catalog";
 import { useToasts } from "../../components/Toasts";
 import { useCommand, useUndo } from "../../data/hooks";
-import { useTemplates } from "../../data/recurrence";
-import { type TemplateSummary } from "../../generated/ops";
+import { useCustomFields } from "../../data/fields";
+import { useTemplates, useTemplateText } from "../../data/recurrence";
+import { type CustomField, type TemplateSummary } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { HuePicker } from "./HuePicker";
 import { DeleteQuestion } from "./DeleteProject";
 import { FieldsSettings } from "./FieldsSettings";
 import { IconPicker } from "./IconPicker";
 import { RulesSettings } from "./RulesSettings";
+import { TemplateContents } from "./TemplateContents";
 import styles from "./Project.module.css";
 
 interface ProjectSettingsProps {
@@ -622,13 +624,14 @@ function Templates({ project }: { project: Project }) {
   const t = useT();
   const own = useTemplates("task", project.key);
   const workspace = useTemplates("project");
+  const fields = useCustomFields(project.key);
   const create = useCommand("template.create");
   const [name, setName] = useState("");
   const [withTasks, setWithTasks] = useState(false);
   return (
     <div className={styles.form}>
-      <TemplateList title={t("templates-task")} empty={t("templates-none-task")} items={own.data?.items ?? []} />
-      <TemplateList title={t("templates-project")} empty={t("templates-none-project")} items={workspace.data?.items ?? []} />
+      <TemplateList title={t("templates-task")} empty={t("templates-none-task")} items={own.data?.items ?? []} fields={fields} />
+      <TemplateList title={t("templates-project")} empty={t("templates-none-project")} items={workspace.data?.items ?? []} fields={fields} />
       <form
         className={styles.templateSave}
         aria-label={t("template-save-project")}
@@ -663,8 +666,18 @@ function Templates({ project }: { project: Project }) {
   );
 }
 
-function TemplateList({ title, empty, items }: { title: string; empty: string; items: readonly TemplateSummary[] }) {
+function TemplateList({ title, empty, items, fields }: { title: string; empty: string; items: readonly TemplateSummary[]; fields: readonly CustomField[] }) {
   const t = useT();
+  const text = useTemplateText();
+  // The templates whose contents are shown.
+  const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
+  const toggle = (id: string) => {
+    const next = new Set(open);
+    if (!next.delete(id)) {
+      next.add(id);
+    }
+    setOpen(next);
+  };
   const update = useCommand("template.update", { undoable: t("toast-template-changed") });
   const remove = useCommand("template.delete");
   const toasts = useToasts();
@@ -674,10 +687,26 @@ function TemplateList({ title, empty, items }: { title: string; empty: string; i
       <h3 className={styles.templateHead}>{title}</h3>
       {items.length === 0 && <p className="muted">{empty}</p>}
       {items.map((template) => (
-        <div key={template.id} className={styles.templateRow} data-template={template.name}>
-          <SaveField className={classes(styles.growField)} label={t("template-rename", { name: template.name })} value={template.name} onSave={(value) => { if (value.trim() !== "") { update.mutate({ template: template.id, name: value }); } }} />
-          <SaveField className={classes(styles.growField)} label={t("template-describe", { name: template.name })} value={template.description ?? ""} onSave={(value) => { update.mutate({ template: template.id, description: value }); }} />
+        <div key={template.id} className={styles.templateItem}>
+        <div className={styles.templateRow} data-template={template.name}>
+          {template.built_in === undefined ? (
+            <>
+              <SaveField className={classes(styles.growField)} label={t("template-rename", { name: template.name })} value={template.name} onSave={(value) => { if (value.trim() !== "") { update.mutate({ template: template.id, name: value }); } }} />
+              <SaveField className={classes(styles.growField)} label={t("template-describe", { name: template.name })} value={template.description ?? ""} onSave={(value) => { update.mutate({ template: template.id, description: value }); }} />
+            </>
+          ) : (
+            <span className={classes(styles.growField, styles.builtInName)}>
+              <span>{text.name(template)}</span>
+              <span className="meta">{text.description(template)}</span>
+              <span className="chip outline">{t("template-built-in-mark")}</span>
+            </span>
+          )}
           <span className="meta">{t(template.kind === "task" ? "template-items-task" : "template-items-project", { count: template.items })}</span>
+          <Button className="btn flat sm" aria-expanded={open.has(template.id)} aria-label={t("template-contents", { name: text.name(template) })} onPress={() => { toggle(template.id); }}>
+            {open.has(template.id) ? <ChevronUp className="ic s" /> : <ChevronDown className="ic s" />}
+            {t(open.has(template.id) ? "template-hide-contents" : "template-show-contents")}
+          </Button>
+          {template.built_in === undefined && (
           <Button className="btn flat icon sm" aria-label={t("template-delete", { name: template.name })} onPress={() => {
               remove.mutate(
                 { template: template.id },
@@ -691,6 +720,9 @@ function TemplateList({ title, empty, items }: { title: string; empty: string; i
           >
             <Trash2 className="ic s" />
           </Button>
+          )}
+        </div>
+        {open.has(template.id) && <TemplateContents template={template} fields={fields} />}
         </div>
       ))}
     </section>

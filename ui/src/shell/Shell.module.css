@@ -316,6 +316,17 @@
   font-weight: 600;
 }
 
+.timerTask {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.timerKind {
+  min-width: 0;
+}
+
 .timerLong .timerClock,
 .timerLong > .timerOpen > .ic {
   color: var(--warning);

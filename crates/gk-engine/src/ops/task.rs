@@ -454,6 +454,7 @@ pub(crate) fn changed_with(
         description_save: None,
         moved: Vec::new(),
         duplicates_closed: Vec::new(),
+        next_occurrence: None,
     })
 }
 

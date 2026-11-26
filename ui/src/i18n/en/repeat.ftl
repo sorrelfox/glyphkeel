@@ -181,6 +181,44 @@ templates-task = Task templates of this project
 templates-project = Project templates
 templates-none-task = No task templates yet. Save a task as one from its menu.
 templates-none-project = No project templates yet.
+# The project template that comes with Glyphkeel.
+template-built-in-software = Software project
+template-built-in-software-description = Epics, stories, tasks and bugs on a board from the backlog through review to done.
+template-built-in-mark = Comes with Glyphkeel
+template-contents = Contents of { $name }
+template-show-contents = Show what it holds
+template-hide-contents = Hide what it holds
+template-contents-loading = Loading…
+template-task-title = Title
+template-task-type = Type
+template-task-priority = Priority
+template-task-labels = Labels
+template-task-estimate = Estimate
+template-task-start = Starts
+template-task-due = Due
+template-task-in-days = { $days ->
+        [0] On the day it is used
+        [one] One day after it is used
+       *[other] { $days } days after it is used
+    }
+template-task-version = Version
+template-task-fields = Custom fields
+template-task-subtasks = Subtasks
+template-setup-statuses = Statuses
+template-setup-types = Task types
+template-setup-labels = Labels
+template-setup-fields = Custom fields
+template-setup-field-required = { $name } (required)
+template-setup-agent-rules = Rules for agents
+template-setup-agent-read-only = { $count ->
+        [one] Agents may not change one field
+       *[other] Agents may not change { $count } fields
+    }
+template-setup-wip = WIP limit { $limit }
+template-setup-pages = Wiki pages
+template-setup-tasks = Tasks
+template-setup-task-templates = Task templates
+template-nothing = None
 template-rename = Name of { $name }
 template-describe = Description of { $name }
 template-delete = Delete { $name }

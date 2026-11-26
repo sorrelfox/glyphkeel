@@ -31,6 +31,8 @@ use gk_store::{Store, StoreConfig, StoreError, WorkspaceLayout, open_raw};
 
 const CHILD: &str = "GK_STORE_TEST_CHILD";
 const ROWS_PER_COMMIT: i64 = 3;
+/// What a writer prints before each acknowledged group ID.
+const ACK: &str = "ack:";
 
 /// The writer process. Does nothing unless started by the test below.
 #[test]
@@ -70,14 +72,31 @@ fn child_writer() {
                 Ok::<_, StoreError>(())
             })
             .unwrap();
-        writeln!(out, "A {group}").unwrap();
+        writeln!(out, "{ACK}{group}").unwrap();
         out.flush().unwrap();
     }
 }
 
-/// Starts a writer process; its acknowledgements arrive on the returned
-/// channel.
-fn spawn_writer(root: &std::path::Path, commits: u32) -> (Child, mpsc::Receiver<Id>) {
+/// A writer process, the acknowledgements read from its output, and the
+/// thread that reads them.
+struct Writer {
+    child: Child,
+    acks: mpsc::Receiver<Id>,
+    reader: thread::JoinHandle<()>,
+}
+
+impl Writer {
+    /// Waits for the process to end and its output to be read to the end,
+    /// so that every acknowledgement it printed is on the channel.
+    fn finish(mut self) -> (std::process::ExitStatus, Vec<Id>) {
+        let status = self.child.wait().unwrap();
+        self.reader.join().unwrap();
+        (status, self.acks.try_iter().collect())
+    }
+}
+
+/// Starts a writer process; its acknowledgements arrive on its channel.
+fn spawn_writer(root: &std::path::Path, commits: u32) -> Writer {
     let mut child = Command::new(std::env::current_exe().unwrap())
         .args(["--exact", "child_writer", "--nocapture", "--test-threads=1"])
         .env(CHILD, format!("{}|{commits}", root.display()))
@@ -87,15 +106,21 @@ fn spawn_writer(root: &std::path::Path, commits: u32) -> (Child, mpsc::Receiver<
         .unwrap();
     let stdout = child.stdout.take().unwrap();
     let (acks, received) = mpsc::channel();
-    thread::spawn(move || {
+    let reader = thread::spawn(move || {
         for line in BufReader::new(stdout).lines() {
             let Ok(line) = line else { break };
-            if let Some(id) = line.strip_prefix("A ") {
+            // The test harness writes its own words before the first
+            // line, so the mark is looked for anywhere in it.
+            if let Some((_, id)) = line.split_once(ACK) {
                 let _ = acks.send(id.parse().unwrap());
             }
         }
     });
-    (child, received)
+    Writer {
+        child,
+        acks: received,
+        reader,
+    }
 }
 
 #[test]
@@ -119,24 +144,27 @@ fn processes_share_the_workspace_safely() {
         })
         .unwrap();
 
-    let (mut a, acks_a) = spawn_writer(layout.root(), 40);
-    let (mut b, acks_b) = spawn_writer(layout.root(), 40);
-    let (mut victim, acks_victim) = spawn_writer(layout.root(), 100_000);
+    let a = spawn_writer(layout.root(), 40);
+    let b = spawn_writer(layout.root(), 40);
+    let mut victim = spawn_writer(layout.root(), 100_000);
 
     // Kill the victim once it is busy writing.
-    acks_victim.recv_timeout(Duration::from_secs(20)).unwrap();
+    victim.acks.recv_timeout(Duration::from_secs(20)).unwrap();
     thread::sleep(Duration::from_millis(150));
-    victim.kill().unwrap();
-    victim.wait().unwrap();
-    assert!(a.wait().unwrap().success());
-    assert!(b.wait().unwrap().success());
+    victim.child.kill().unwrap();
 
+    // Each writer's output is read to its end before the acknowledgements
+    // are counted: a process can exit before the reading thread has passed
+    // on its last lines.
     let mut acked: Vec<Id> = Vec::new();
-    for acks in [&acks_a, &acks_b, &acks_victim] {
-        acked.extend(acks.try_iter());
+    let (_, from_victim) = victim.finish();
+    acked.extend(from_victim);
+    for writer in [a, b] {
+        let (status, from_writer) = writer.finish();
+        assert!(status.success());
+        assert_eq!(from_writer.len(), 40, "every commit is acknowledged");
+        acked.extend(from_writer);
     }
-    // `acks_victim` lost the one consumed above; it is in the database too.
-    assert!(acked.len() >= 80, "{}", acked.len());
 
     // Let the poller catch up, then stop it.
     let conn = open_raw(&layout.database()).unwrap();

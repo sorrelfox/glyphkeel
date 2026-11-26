@@ -8,9 +8,12 @@
 // open), checklists unticked, dates as days after the day of use.
 
 import {
+  type AgentRules,
   type EntityChange,
+  type FieldBlueprint,
   type OpMap,
   type ProjectBlueprint,
+  type StatusRules,
   type SubtaskBlueprint,
   type TaskBlueprint,
   type Template,
@@ -20,7 +23,7 @@ import {
   type TemplateList,
   type TemplateSummary,
 } from "../../generated/ops";
-import { fieldsFor, parseValue, shownFor, taskValues, type FieldValue } from "./fields";
+import { fieldsFor, fieldsOf, parseValue, shownFor, taskValues, type FieldValue } from "./fields";
 import { type Answer, type FakeHost } from "./host";
 import { dayNumber, plusDays } from "./recurrenceRules";
 import { nextId } from "./seed";
@@ -184,6 +187,67 @@ export function makeTask(host: FakeHost, project: FakeProject, bp: TaskBlueprint
 
 const all = (host: FakeHost) => (host.state().templates ??= []);
 
+/** The templates that come with the program, as the engine has them: in every workspace, never changed. */
+const BUILT_IN: readonly (FakeTemplate & { key: string })[] = [
+  {
+    id: "019ab000-0000-7000-8000-000000000001",
+    key: "software",
+    kind: "project",
+    projectId: null,
+    name: "Software project",
+    description: "Epics, stories, tasks and bugs on a board from the backlog through review to done.",
+    setup: {
+      statuses: [
+        { name: "Backlog", category: "todo", hue: "grey" },
+        { name: "To do", category: "todo", hue: "blue" },
+        { name: "In progress", category: "in_progress", hue: "orange", wip_limit: 5 },
+        { name: "In review", category: "in_progress", hue: "purple", wip_limit: 3 },
+        { name: "Done", category: "done", hue: "green", rules: { stop_timer: true, release_claim: true, agents_may_not_enter: true } },
+        { name: "Won't do", category: "cancelled", hue: "grey" },
+      ],
+      types: [
+        { name: "Story", glyph: "story", hue: "green", is_default: true },
+        { name: "Task", glyph: "task", hue: "blue" },
+        { name: "Bug", glyph: "bug", hue: "red" },
+        { name: "Epic", glyph: "epic", hue: "purple" },
+      ],
+      labels: [
+        { name: "Frontend", hue: "teal" },
+        { name: "Backend", hue: "blue" },
+        { name: "Documentation", hue: "yellow" },
+      ],
+      wiki: [
+        { title: "Overview", body: "## Goal\n\nWhat the software is for, and for whom.\n" },
+        { title: "Releases", body: "## Next release\n\n## Earlier releases\n" },
+      ],
+      task_templates: [
+        { name: "Story", description: "A user story with its acceptance criteria.", task: { title: "Story", type: "Story", description: "As a …, I want … so that ….\n\n## Acceptance criteria\n\n- [ ] \n" } },
+        { name: "Bug report", description: "A bug with the steps that show it.", task: { title: "Bug", type: "Bug", priority: "high", description: "## Steps to reproduce\n\n1. \n\n## Expected\n\n## Actual\n" } },
+      ],
+    },
+    rank: 0,
+    createdAt: "1970-01-01T00:00:00Z",
+    updatedAt: "1970-01-01T00:00:00Z",
+  },
+];
+
+const builtInKey = (template: FakeTemplate) => BUILT_IN.find((each) => each.id === template.id)?.key;
+
+/** The `built_in` key of a template that comes with Glyphkeel, left out for the workspace's own. */
+function builtInField(template: FakeTemplate): { built_in?: string } {
+  const key = builtInKey(template);
+  return key === undefined ? {} : { built_in: key };
+}
+
+function refuseBuiltIn(host: FakeHost, template: FakeTemplate): void {
+  if (builtInKey(template) !== undefined) {
+    host.fail("invalid", `The template "${template.name}" comes with Glyphkeel and can't be changed or deleted.`, {
+      hint: "Make a project from it, change that project, and save it as a template of your own.",
+      details: { path: "template", message_id: "template-built-in", args: { template: template.name } },
+    });
+  }
+}
+
 const projectKey = (host: FakeHost, template: FakeTemplate) => {
   const project = host.state().projects.find((candidate) => candidate.id === template.projectId);
   return project?.key;
@@ -200,9 +264,10 @@ function output(host: FakeHost, template: FakeTemplate): Template {
     ...(template.task ? { task: structuredClone(template.task) } : {}),
     ...(template.setup ? { setup: structuredClone(template.setup) } : {}),
     rank: String(template.rank),
-    created_by: { kind: "user", name: "You" },
+    created_by: { kind: "user", name: builtInKey(template) === undefined ? "You" : "Glyphkeel" },
     created_at: template.createdAt,
     updated_at: template.updatedAt,
+    ...builtInField(template),
   };
 }
 
@@ -217,17 +282,18 @@ function summary(host: FakeHost, template: FakeTemplate): TemplateSummary {
     ...(template.description === "" ? {} : { description: template.description }),
     ...(template.task ? { title: template.task.title } : {}),
     items,
+    ...builtInField(template),
   };
 }
 
 const ordered = (host: FakeHost) => {
   const projects = host.state().projects.map((project) => project.id);
-  return [...all(host)].sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "project" ? -1 : 1) || projects.indexOf(a.projectId ?? "") - projects.indexOf(b.projectId ?? "") || a.rank - b.rank);
+  return [...BUILT_IN, ...all(host)].sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "project" ? -1 : 1) || projects.indexOf(a.projectId ?? "") - projects.indexOf(b.projectId ?? "") || a.rank - b.rank);
 };
 
 /** The template `text` names: its ID, or its name among the project templates and the task templates of `project`. */
 function find(host: FakeHost, text: string, project: string | null | undefined): FakeTemplate {
-  const byId = all(host).find((template) => template.id === text.trim());
+  const byId = [...all(host), ...BUILT_IN].find((template) => template.id === text.trim());
   if (byId) {
     return byId;
   }
@@ -236,6 +302,10 @@ function find(host: FakeHost, text: string, project: string | null | undefined):
   let found = candidates.filter((template) => fold(template.name) === fold(text));
   if (found.length > 1 && scope !== null) {
     found = found.filter((template) => template.kind === "task");
+  }
+  // The workspace's own template wins over a built-in one of its name.
+  if (found.length > 1) {
+    found = found.filter((template) => builtInKey(template) === undefined);
   }
   const [one] = found;
   if (found.length === 1 && one) {
@@ -298,10 +368,36 @@ function setupOf(host: FakeHost, project: FakeProject, tasks: boolean): ProjectB
   };
   walk(null);
   const today = host.today();
+  // The project's own custom fields; the rules name them by their ID here.
+  const own = fieldsOf(host.state()).filter((field) => field.projectId === project.id);
+  const fields: FieldBlueprint[] = own.map((field) => ({
+    id: field.id,
+    name: field.name,
+    kind: field.kind,
+    ...(field.options.length > 0 ? { options: [...field.options] } : {}),
+    ...(field.default === undefined ? {} : { default: structuredClone(field.default) }),
+    ...(field.types.length > 0 ? { types: [...field.types] } : {}),
+    ...(field.required ? { required: true } : {}),
+  }));
+  // Rules name fields as `cf:<id>`: those of the project's own fields get the new project's, the others stay.
+  const rulesOf = (rules: StatusRules | undefined): StatusRules | undefined => (rules && !isEmptyRules(rules) ? structuredClone(rules) : undefined);
+  const agentRules = project.agentRules?.read_only && project.agentRules.read_only.length > 0 ? structuredClone(project.agentRules) : undefined;
   return {
     ...(project.description === "" ? {} : { description: project.description }),
     modules: { ...project.modules },
-    statuses: project.statuses.map((status) => ({ name: status.name, category: status.category, hue: status.hue, ...(status.wip_limit === null ? {} : { wip_limit: status.wip_limit }) })),
+    statuses: project.statuses.map((status) => {
+      const rules = rulesOf(status.rules);
+      return {
+        name: status.name,
+        category: status.category,
+        hue: status.hue,
+        ...(status.wip_limit === null ? {} : { wip_limit: status.wip_limit }),
+        ...(status.wip_min === null || status.wip_min === undefined ? {} : { wip_min: status.wip_min }),
+        ...(rules ? { rules } : {}),
+      };
+    }),
+    ...(fields.length > 0 ? { fields } : {}),
+    ...(agentRules ? { agent_rules: agentRules } : {}),
     types: project.types.map((type) => ({ name: type.name, glyph: type.glyph, hue: type.hue, ...(type.is_default ? { is_default: true } : {}), ...(type.due_offset_days === undefined ? {} : { due_offset_days: type.due_offset_days }) })),
     ...(project.labels.length > 0 ? { labels: project.labels.map((label) => ({ name: label.name, hue: label.hue })) } : {}),
     ...(wiki.length > 0 ? { wiki } : {}),
@@ -314,10 +410,47 @@ function setupOf(host: FakeHost, project: FakeProject, tasks: boolean): ProjectB
   };
 }
 
-/** Gives a new project the set-up's statuses, types, labels and modules. */
-function setUp(project: FakeProject, setup: ProjectBlueprint): void {
+/** Whether a status has no rules at all. */
+function isEmptyRules(rules: StatusRules): boolean {
+  return (
+    (rules.required ?? []).length === 0 &&
+    (rules.read_only ?? []).length === 0 &&
+    (rules.clear ?? []).length === 0 &&
+    (rules.set ?? []).length === 0 &&
+    rules.stop_timer !== true &&
+    rules.release_claim !== true &&
+    rules.agents_may_not_enter !== true
+  );
+}
+
+/** Rules with the template's field IDs (`cf:<id>`) turned into the new project's. */
+function mapRules<T extends StatusRules | AgentRules>(rules: T, copies: ReadonlyMap<string, string>): T {
+  const one = (name: string) => (name.startsWith("cf:") ? `cf:${copies.get(name.slice(3)) ?? name.slice(3)}` : name);
+  const out: Record<string, unknown> = { ...rules };
+  for (const list of ["required", "read_only", "clear"] as const) {
+    const items = (rules as Record<string, unknown>)[list];
+    if (Array.isArray(items)) {
+      out[list] = items.map((item) => one(String(item)));
+    }
+  }
+  const set = (rules as StatusRules).set;
+  if (set) {
+    out["set"] = set.map((each) => ({ ...each, field: one(each.field) }));
+  }
+  return out as T;
+}
+
+/** Gives a new project the set-up's statuses, types, labels, modules, custom fields and rules. */
+function setUp(host: FakeHost, project: FakeProject, setup: ProjectBlueprint): void {
   if (setup.statuses && setup.statuses.length > 0) {
-    project.statuses = setup.statuses.map((status) => ({ id: nextId("st"), name: status.name, category: status.category, hue: status.hue, wip_limit: status.wip_limit ?? null }));
+    project.statuses = setup.statuses.map((status) => ({
+      id: nextId("st"),
+      name: status.name,
+      category: status.category,
+      hue: status.hue,
+      wip_limit: status.wip_limit ?? null,
+      ...(status.wip_min === null || status.wip_min === undefined ? {} : { wip_min: status.wip_min }),
+    }));
   }
   if (setup.types && setup.types.length > 0) {
     project.types = setup.types.map((type) => ({ id: nextId("ty"), name: type.name, glyph: type.glyph, hue: type.hue, is_default: type.is_default === true, ...(type.due_offset_days === null || type.due_offset_days === undefined ? {} : { due_offset_days: type.due_offset_days }) }));
@@ -330,6 +463,32 @@ function setUp(project: FakeProject, setup: ProjectBlueprint): void {
   }
   if (setup.modules) {
     project.modules = { ...setup.modules };
+  }
+  // Fields after the types they show for; rules after the fields they name.
+  const copies = new Map<string, string>();
+  const known = project.types.map((type) => type.name);
+  for (const field of setup.fields ?? []) {
+    const id = nextId("cf");
+    copies.set(field.id, id);
+    fieldsOf(host.state()).push({
+      id,
+      projectId: project.id,
+      name: field.name,
+      kind: field.kind,
+      options: [...(field.options ?? [])],
+      ...(field.default === undefined || field.default === null ? {} : { default: structuredClone(field.default) as FieldValue }),
+      types: (field.types ?? []).filter((name) => known.some((type) => fold(type) === fold(name))),
+      required: field.required === true,
+    });
+  }
+  (setup.statuses ?? []).forEach((status, index) => {
+    const made = project.statuses[index];
+    if (made && status.rules && !isEmptyRules(status.rules)) {
+      made.rules = mapRules(status.rules, copies);
+    }
+  });
+  if (setup.agent_rules?.read_only && setup.agent_rules.read_only.length > 0) {
+    project.agentRules = mapRules(setup.agent_rules, copies);
   }
 }
 
@@ -385,6 +544,7 @@ export function templateHandlers(host: FakeHost): Handlers {
     },
     "template.update": (input): Answer<TemplateChange> | TemplateChange => {
       const template = find(host, input.template, input.project);
+      refuseBuiltIn(host, template);
       const next = { ...template };
       if (input.name !== null && input.name !== undefined) {
         next.name = checkName(host, input.name);
@@ -406,6 +566,7 @@ export function templateHandlers(host: FakeHost): Handlers {
     },
     "template.delete": ({ template: ref, project }): Answer<TemplateChange> => {
       const template = find(host, ref, project);
+      refuseBuiltIn(host, template);
       const before = output(host, template);
       const entity = change(host, template);
       host.state().templates = all(host).filter((other) => other !== template);
@@ -437,7 +598,19 @@ export function templateHandlers(host: FakeHost): Handlers {
           parentId = parent.id;
         }
         const title = input.title === null || input.title === undefined ? null : input.title.trim();
+        // A due date or priority given with the template wins over its own; an unread date makes nothing.
+        const due = input.due_date === null || input.due_date === undefined ? null : host.dayInput(input.due_date, "due_date");
+        const start = bp.start_in_days === null || bp.start_in_days === undefined ? null : plusDays(anchor, bp.start_in_days);
+        if (due !== null && start !== null && start > due) {
+          host.fail("invalid", `The start date ${start} is after the due date ${due}.`, { details: { path: "due_date", message_id: "value-day-start-after-due", args: { start, due } } });
+        }
         const { task, made } = makeTask(host, project, bp, title === "" ? null : title, anchor, parentId, statusId, leftOut);
+        if (due !== null) {
+          task.dueDate = due;
+        }
+        if (input.priority !== null && input.priority !== undefined) {
+          task.priority = input.priority;
+        }
         return {
           output: { task: host.fullTask(task), tasks: made.length, ...(leftOut.length > 0 ? { left_out: leftOut } : {}) },
           changes: made.map((each) => ({ entity: "task", id: each.id, fields: ["*"], project: project.key })),
@@ -448,7 +621,7 @@ export function templateHandlers(host: FakeHost): Handlers {
         host.fail("invalid", "A project template makes a project: give its `name` and `key`.", { details: { path: "name", message_id: "template-project-needs-name" } });
       }
       const project = host.createProject({ name: input.name, key: input.key, parent: input.parent_project ?? null, hue: input.hue ?? null, description: setup.description ?? "" });
-      setUp(project, setup);
+      setUp(host, project, setup);
       if (project.modules.wiki) {
         for (const page of setup.wiki ?? []) {
           host.createPage(project, page.title, page.body ?? "", page.parent ?? null);
