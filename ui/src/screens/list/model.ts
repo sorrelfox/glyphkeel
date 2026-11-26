@@ -6,7 +6,7 @@
 // selections.
 
 import { PRIORITIES } from "../../data/catalog";
-import { type ListGrouping, type QueryToken, type SavedView, type TaskCreateInput, type TextRange } from "../../generated/ops";
+import { type CustomField, type CustomFieldKind, type ListGrouping, type QueryToken, type SavedView, type TaskCreateInput, type TextRange } from "../../generated/ops";
 
 /** Every column the list offers, in their default order. */
 export const COLUMNS = [
@@ -183,9 +183,20 @@ export function nextSort(sort: readonly string[], column: ColumnId, add = false)
 /** The groupings the list offers, in the menu's order; Project only where several projects show. */
 export const GROUPINGS = ["status", "priority", "label", "parent", "due_week", "project"] as const satisfies readonly ListGrouping[];
 
-export function isGrouping(value: string | undefined): value is ListGrouping {
-  return (GROUPINGS as readonly string[]).includes(value ?? "");
+/** What a list is grouped by: a built-in grouping, or a custom field by its query name (`cf.area`). */
+export type Grouping = ListGrouping | `cf.${string}`;
+
+export function isGrouping(value: string | undefined): value is Grouping {
+  return (GROUPINGS as readonly string[]).includes(value ?? "") || isFieldGrouping(value);
 }
+
+/** Whether a grouping is by a custom field. */
+export function isFieldGrouping(value: string | undefined): value is `cf.${string}` {
+  return value !== undefined && value.startsWith("cf.") && value.length > 3;
+}
+
+/** The kinds of custom fields a list can be grouped by. */
+export const GROUPING_FIELD_KINDS: ReadonlySet<CustomFieldKind> = new Set(["select", "multi_select", "boolean"]);
 
 /** One line of a grouped list: a group's header, a task row by its place among all rows, or the line that adds a task to a group. */
 export type ListLine = { kind: "group"; group: number } | { kind: "row"; row: number } | { kind: "add"; group: number };
@@ -378,8 +389,20 @@ export function exportName(view: string | undefined, today: string, extension: "
  * group's status, priority, label, parent or due week (its first day)
  * filled in. Undefined where there is no project to put it in.
  */
-export function groupTaskInput(grouping: ListGrouping, group: { value?: string }, project: string | undefined, title: string): TaskCreateInput | undefined {
+export function groupTaskInput(grouping: Grouping, group: { value?: string }, project: string | undefined, title: string, field?: CustomField): TaskCreateInput | undefined {
   const value = group.value;
+  if (isFieldGrouping(grouping)) {
+    if (project === undefined) {
+      return undefined;
+    }
+    const input: TaskCreateInput = { project, title };
+    if (value === undefined || field === undefined) {
+      return input;
+    }
+    const name = grouping.slice(3);
+    const given = field.kind === "boolean" ? value === "yes" : field.kind === "multi_select" ? [value] : value;
+    return { ...input, fields: { [name]: given } };
+  }
   const parentProject = grouping === "parent" && value !== undefined ? value.slice(0, Math.max(0, value.lastIndexOf("-"))) : "";
   const home = grouping === "project" ? value : parentProject !== "" ? parentProject : project;
   if (home === undefined || home === "") {

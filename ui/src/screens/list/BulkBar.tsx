@@ -11,10 +11,12 @@ import { Select, type SelectOption } from "../../components/Select";
 import { useToasts } from "../../components/Toasts";
 import { PRIORITIES } from "../../data/catalog";
 import { errorToast, useCall, useUndo } from "../../data/hooks";
+import { useFieldText } from "../../data/fields";
 import { applyBulk, previewBulk, type ListNames } from "../../data/list";
 import { useTrashTasks } from "../../data/safety";
-import { type BulkChanges, type BulkResult } from "../../generated/ops";
+import { type BulkChanges, type BulkResult, type CustomField } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
+import { FieldEditor } from "../task/FieldsSection";
 import { MoveTasksDialog } from "../task/MoveTasksDialog";
 import styles from "./List.module.css";
 
@@ -22,6 +24,8 @@ interface BulkBarProps {
   /** The selected tasks. */
   keys: readonly string[];
   names: ListNames;
+  /** The custom fields of the list's tasks. */
+  fields?: readonly CustomField[];
   onClear: () => void;
 }
 
@@ -35,11 +39,11 @@ interface Pending {
 const NONE = "";
 
 /**
- * The bar over a selection: change the status, priority or labels of every
- * selected task, or move them to another project. Each change is previewed
- * first (how many tasks change), then made as one Undo step.
+ * The bar over a selection: change the status, priority, labels or a custom
+ * field of every selected task, or move them to another project. Each change
+ * is previewed first (how many tasks change), then made as one Undo step.
  */
-export function BulkBar({ keys, names, onClear }: BulkBarProps) {
+export function BulkBar({ keys, names, fields = [], onClear }: BulkBarProps) {
   const t = useT();
   const call = useCall();
   const toasts = useToasts();
@@ -50,6 +54,9 @@ export function BulkBar({ keys, names, onClear }: BulkBarProps) {
   const [busy, setBusy] = useState(false);
   // The project the selection is to move to: the move asks what to do with what it has no match for.
   const [moveTo, setMoveTo] = useState<string | null>(null);
+  // The custom field being set for every selected task, and its value so far.
+  const [editing, setEditing] = useState<{ field: CustomField; value: unknown } | null>(null);
+  const fieldText = useFieldText();
 
   const preview = (changes: BulkChanges, summary: string) => {
     setBusy(true);
@@ -89,6 +96,20 @@ export function BulkBar({ keys, names, onClear }: BulkBarProps) {
   const addLabelOptions = [placeholder(t("list-bulk-add-label")), ...names.labels.map((name) => ({ id: name, label: name }))];
   const removeLabelOptions = [placeholder(t("list-bulk-remove-label")), ...names.labels.map((name) => ({ id: name, label: name }))];
   const projectOptions = [placeholder(t("list-bulk-move")), ...names.projects.map((key) => ({ id: key, label: key }))];
+  // Field names are the person's own words; several projects' fields of one query name are one choice.
+  const fieldChoices = [...new Map(fields.map((field) => [field.query_name, field])).values()];
+  const fieldOptions = [placeholder(t("list-bulk-field")), ...fieldChoices.map((field) => ({ id: field.query_name, label: field.name }))];
+  // A field is named by its query name, which fields of the same name share across projects.
+  const fieldKey = (field: CustomField) => field.query_name.replace(/^cf\./, "");
+  const setField = (field: CustomField, value: unknown) => {
+    const empty = value === undefined || value === null || (Array.isArray(value) && value.length === 0) || value === "";
+    const changes: BulkChanges = { fields: { [fieldKey(field)]: empty ? null : value } };
+    setEditing(null);
+    preview(
+      changes,
+      empty ? t("list-bulk-summary-field-clear", { field: field.name }) : t("list-bulk-summary-field", { field: field.name, value: fieldText(field.kind, value) }),
+    );
+  };
 
   return (
     <div className={classes("toolbar", styles.bulkBar)} role="toolbar" aria-label={t("list-bulk-label")} data-testid="bulk-bar">
@@ -109,6 +130,36 @@ export function BulkBar({ keys, names, onClear }: BulkBarProps) {
           </Button>
           <Button className="btn primary sm" onPress={apply} isDisabled={busy || pending.preview.changed === 0}>
             {t("list-bulk-apply", { count: pending.preview.changed })}
+          </Button>
+        </>
+      ) : editing ? (
+        <>
+          <span className={styles.bulkPreview}>{editing.field.name}</span>
+          <span className={styles.bulkField} data-testid="bulk-field-editor">
+            <FieldEditor
+              field={editing.field}
+              value={editing.value}
+              readOnly={busy}
+              onChange={(value) => {
+                setEditing({ field: editing.field, value });
+              }}
+            />
+          </span>
+          <div className="grow" />
+          <Button className="btn sm" onPress={() => { setEditing(null); }} isDisabled={busy}>
+            {t("dialog-cancel")}
+          </Button>
+          {!editing.field.required && (
+            <Button className="btn sm" onPress={() => { setField(editing.field, null); }} isDisabled={busy}>
+              {t("list-bulk-field-clear")}
+            </Button>
+          )}
+          <Button
+            className="btn primary sm"
+            onPress={() => { setField(editing.field, editing.value); }}
+            isDisabled={busy || editing.value === undefined || editing.value === null}
+          >
+            {t("list-bulk-field-set")}
           </Button>
         </>
       ) : (
@@ -162,6 +213,21 @@ export function BulkBar({ keys, names, onClear }: BulkBarProps) {
               }
             }}
           />
+          {fieldChoices.length > 0 && (
+            <Select
+              label={t("list-bulk-field")}
+              className={styles.bulkSelect}
+              options={fieldOptions}
+              value={NONE}
+              isDisabled={busy}
+              onChange={(name) => {
+                const field = fieldChoices.find((each) => each.query_name === name);
+                if (field !== undefined) {
+                  setEditing({ field, value: field.kind === "boolean" ? true : undefined });
+                }
+              }}
+            />
+          )}
           <Select
             label={t("list-bulk-move")}
             className={styles.bulkSelect}

@@ -81,7 +81,7 @@ import { customRuleField, isEmpty as isEmptyRules } from "../rules";
 import { formatDuration, parseDuration } from "../duration";
 import { BUILT_IN_PRESETS, planCsv } from "./csv";
 import { decodeBase64, materialize, recordedFields, sniff } from "./details";
-import { applyValues, createField, deleteField, fieldOut, fieldsFor, fieldsOf, findField, listedValues, moveMatches, moveValues, placeField, queryFields, taskValues, updateField } from "./fields";
+import { applyValues, createField, deleteField, fieldOut, fieldsFor, fieldsOf, fillRequired, findField, lackingRequired, listedValues, moveMatches, moveValues, placeField, queryFields, shownFor as shownFieldFor, taskValues, updateField } from "./fields";
 import { checklistOf, escapeHtml, merge3, publicChecklist, renderFake, setChecked, unifiedDiff } from "./markdown";
 import { newProject, nextFileId, nextId, nextUuid, SAMPLE_AGENT } from "./seed";
 import { type FakeComment, type FakeFile, type FakeProject, type FakeRelation, type FakeReminder, type FakeRevision, type FakeState, type FakeStatus, type FakeTask, type FakeTimeEntry, type FakeWikiPage, type FakeWorkKind } from "./state";
@@ -616,6 +616,14 @@ export class FakeWorkspace {
     };
   }
 
+  /** A card with its values of the custom fields `shown` (query names), as the board gives them. */
+  private boardCard(task: FakeTask, shown: readonly string[]): Card {
+    const card = this.card(task);
+    const values = shown.length === 0 ? undefined : listedValues(this.state, task);
+    const fields = Object.fromEntries(Object.entries(values ?? {}).filter(([name]) => shown.includes(name)));
+    return Object.keys(fields).length === 0 ? card : { ...card, fields };
+  }
+
   private fullTask(task: FakeTask): Task {
     const project = this.projectOf(task);
     const status = this.statusIn(project, task.statusId);
@@ -698,6 +706,8 @@ export class FakeWorkspace {
     const cutoff = this.today().getTime() - layout.hide_done_after_days * 86_400_000;
     let hiddenColumns = 0;
     let hiddenTasks = 0;
+    // The custom fields the cards show, by query name.
+    const cardFields = layout.card_fields.filter((field) => field.startsWith("cf.")).map((field) => field.slice(3));
     for (const column of ordered) {
       const statusIds = new Set(Object.values(column.statuses));
       const all = tasks.filter((task) => statusIds.has(task.statusId));
@@ -713,7 +723,7 @@ export class FakeWorkspace {
         hiddenColumns += 1;
         hiddenTasks += all.length;
       } else {
-        column.cards = shown.map((task) => this.card(task));
+        column.cards = shown.map((task) => this.boardCard(task, cardFields));
       }
     }
     return {
@@ -2086,7 +2096,10 @@ export class FakeWorkspace {
         changes.push(...answer.changes);
       }
     };
-    const shown = (task: ListedTask) => ({
+    // The custom fields the change names, shown as `cf.<query name>` like the engine's preview.
+    const named = Object.keys(input.changes.fields ?? {}).map((name) => name.replace(/^cf\./i, "").toLowerCase());
+    const shown = (task: ListedTask): Record<string, string> => ({
+      ...Object.fromEntries(named.map((name) => [`cf.${name}`, fieldText(task.fields?.[name])])),
       status: task.status.name,
       priority: task.priority,
       labels: task.labels.map((label) => label.name).join(", "),
@@ -2115,13 +2128,14 @@ export class FakeWorkspace {
           ...(change.add_labels && change.add_labels.length > 0 ? { add_labels: change.add_labels } : {}),
           ...(change.remove_labels && change.remove_labels.length > 0 ? { remove_labels: change.remove_labels } : {}),
           ...(change.clear && change.clear.length > 0 ? { clear: change.clear } : {}),
+          ...(change.fields && Object.keys(change.fields).length > 0 ? { fields: change.fields } : {}),
         };
         if (Object.keys(update).length > 1) {
           take(this.handlers["task.update"]?.(update));
         }
         const task = this.listed(this.task(key));
         const after = shown(task);
-        const fields = (Object.keys(after) as (keyof typeof after)[]).filter((field) => after[field] !== before[field]);
+        const fields = Object.keys(after).filter((field) => after[field] !== before[field]);
         items.push({
           key: task.key,
           title: task.title,
@@ -3608,6 +3622,11 @@ export class FakeWorkspace {
         titleOf: (key) => tasks.find((task) => task.key === key)?.title ?? this.listedTasks().find((task) => task.key === key)?.title,
         projectName: (key) => this.state.projects.find((candidate) => candidate.key === key)?.name,
         weekStart: (day) => weekStart(day, this.state.settings.week_start),
+        field: (name) => {
+          const fields = queryFields(this.state);
+          const found = fields.find((each) => each.queryName === name);
+          return found && { kind: found.kind, options: found.options };
+        },
       };
       return this.runQuery(() => searchTasks(tasks, input, this.queryNames(), { archived: this.archivedKeys(), scoped: scope !== null, statusOrder: order, cache: results, groupInfo }));
     },
@@ -3873,6 +3892,8 @@ export class FakeWorkspace {
         this.resolveConflict(task, input.resolve_conflict.copy, input.resolve_conflict.action, input.resolve_conflict.text ?? null);
         fields.push("description");
       }
+      const typeBefore = task.typeId;
+      const valuesBefore = task.fields;
       if (input.type !== null && input.type !== undefined) {
         task.typeId = this.typeIn(project, input.type).id;
         fields.push("type");
@@ -3928,6 +3949,20 @@ export class FakeWorkspace {
       }
       if (input.fields !== undefined && applyValues(this.state, task, this.typeRef(task).name, input.fields, false, fail)) {
         fields.push("fields");
+      }
+      if (fields.includes("type")) {
+        try {
+          fillRequired(this.state, task, this.typeRef(task).name, this.keyOf(task), project.key, fail);
+        } catch (error: unknown) {
+          // Refused: the task keeps its type and values.
+          task.typeId = typeBefore;
+          if (valuesBefore === undefined) {
+            delete task.fields;
+          } else {
+            task.fields = valuesBefore;
+          }
+          throw error;
+        }
       }
       if (fields.length === 0) {
         return { output: { task: this.fullTask(task), ...some("description_save", save) }, changes: [] };
@@ -4171,7 +4206,7 @@ export class FakeWorkspace {
       this.touch(sub, false);
       return { output: { task: this.withParts(parent, ["subtasks"]) }, changes: [{ entity: "task", id: sub.id, fields: ["subtask_rank"], project: this.projectOf(sub).key }] };
     },
-    "task.move": ({ key, status, project: toProject, mapping, expected_version, before, after, at, close_duplicates }) => {
+    "task.move": ({ key, status, project: toProject, mapping, expected_version, before, after, at, close_duplicates, fields: values }) => {
       const task = this.task(key);
       const from = this.writable(this.projectOf(task).key);
       if (expected_version !== null && expected_version !== undefined && expected_version !== task.version) {
@@ -4180,9 +4215,27 @@ export class FakeWorkspace {
       const fields: string[] = [];
       const warnings: string[] = [];
       const to = toProject === null || toProject === undefined ? from : this.writable(toProject);
+      // A move refused for a required field changes nothing, as in the engine.
+      const stateBefore = to === from ? undefined : structuredClone(this.state);
       const moved = to === from ? [] : this.moveToProject(task, to, status ?? null, mapping ?? {}, warnings);
       if (moved.length > 0) {
         fields.push("project", "number", "status", "type", "labels", "rank");
+        try {
+          for (const one of moved) {
+            const type = this.typeRef(one).name;
+            // Values go to the task and its subtasks, each where its type shows the field.
+            const own = Object.fromEntries(Object.entries(values ?? {}).filter(([ref]) => shownFieldFor(findField(fieldsFor(this.state, to.id), ref, fail, `fields.${ref}`), type)));
+            applyValues(this.state, one, type, own, false, fail);
+            fillRequired(this.state, one, type, this.keyOf(one), to.key, fail);
+          }
+        } catch (error: unknown) {
+          if (stateBefore !== undefined) {
+            this.state = stateBefore;
+          }
+          throw error;
+        }
+      } else if (values && Object.keys(values).length > 0) {
+        fail("invalid", "Custom field values go with a move to another project; to change them in place, edit the task.", { details: { path: "fields", message_id: "task-move-fields-without-project" } });
       }
       const project = to;
       const target = status === null || status === undefined ? this.statusIn(project, task.statusId) : this.statusIn(project, status);
@@ -4282,6 +4335,17 @@ export class FakeWorkspace {
             const found = check.versions.find((each) => each.name === planned.name);
             if (found === undefined) {
               check.versions.push({ name: planned.name, tasks: 1, ...some("target", kept ? planned.name : undefined) });
+            } else {
+              found.tasks += 1;
+            }
+          }
+          const newType = to.types.find((each) => fold(each.name) === fold(this.typeRef(one).name)) ?? this.fallbackType(to);
+          const kept = new Set(fieldsFor(this.state, to.id).filter((field) => moveMatches(this.state, one, to.id).some((match) => match.target === field.name)).map((field) => field.id));
+          for (const field of lackingRequired(this.state, one, to.id, newType.name, kept)) {
+            const required = (check.required_fields ??= []);
+            const found = required.find((each) => each.name === field.name);
+            if (found === undefined) {
+              required.push({ name: field.name, tasks: 1, has_default: field.default !== undefined });
             } else {
               found.tasks += 1;
             }
@@ -4695,4 +4759,15 @@ function arrange(columns: readonly Column[], order: readonly string[]): Column[]
     result.splice(previous ? result.indexOf(previous) + 1 : 0, 0, column);
   });
   return result;
+}
+
+/** A custom field's value as a bulk preview shows it: options joined, as the engine does. */
+function fieldText(value: unknown): string {
+  if (value === undefined || value === null) {
+    return "";
+  }
+  if (Array.isArray(value)) {
+    return value.map((each) => fieldText(each)).join(", ");
+  }
+  return typeof value === "string" ? value : JSON.stringify(value);
 }

@@ -10,6 +10,9 @@
 ## Lists
 
 list-limit = Ask for 1 to { $max } items at once.
+list-group-field-and-grouping = Group by a field or by a custom field, not both.
+list-group-field-unknown = There is no custom field "{ $field }" to group by.
+list-group-field-kind = Lists can be grouped by select and yes/no fields; { $field } is neither.
 list-cursor = This is not a cursor from an earlier page.
 
 ## Search
@@ -448,6 +451,7 @@ link-not-found-hint = get_task with include ["links"] lists a task's links.
 board-column-not-found = The board of { $project } has no column "{ $column }".
 board-hide-done-range = Use 0 to { $max } days.
 board-card-field = Cards can't show "{ $field }".
+board-card-custom-field = { $project } has no custom field "{ $field }" to show on cards.
 view-field-name = Each entry is a field name of 1 to { $max } characters.
 list-layout-columns = A list layout names at most { $max } columns.
 list-layout-width = A column is { $min } to { $max } pixels wide.
@@ -575,6 +579,13 @@ field-given-twice = { $field } is given twice.
 field-not-for-type = { $field } is shown only for tasks of the types { $types }, not { $type }.
 field-required = { $field } is required; give it a value.
 field-left-off = The custom field "{ $field }" doesn't exist in { $project }; its value was left off.
+task-move-fields-without-project = Custom field values go with a move to another project; to change them in place, edit the task.
+field-required-after-change = { $task } needs a value for { $field }, which { $project } requires for tasks of the type { $type }.
+field-required-after-change-hint = { $more ->
+        [0] Give it a value in the same change, or give the field a default in the project's settings.
+        [one] Give it and one more required field a value in the same change, or give the fields defaults in the project's settings.
+       *[other] Give it and { $more } more required fields a value in the same change, or give the fields defaults in the project's settings.
+    }
 
 ## Time zones
 

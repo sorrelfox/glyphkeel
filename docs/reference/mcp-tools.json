@@ -12645,7 +12645,7 @@
       "covers": [
         "task.search"
       ],
-      "description": "Lists the tasks matching a query, a page at a time, with totals of estimates and logged time. The query language: `is:open`, `status:\"In progress\"`, `label:bug,crash` (any of), `-label:wontfix` (not; includes tasks without labels), `priority>=high`, `due<+7d`, `updated>-3d`, `created:this-month`, `during:2026-12-01..2026-12-31` (start to due overlaps), the history with `was:status:Review` (had that value at any time), `changed:due>-7d` (changed in the last week) and `changed-by:agent`, `estimate:1h..4h`, `has:due`, `parent:TM-12`, `project:TM/*` (with sub-projects), `(a OR b)`, words and \"phrases\" for full text, a bare key `TM-41`, and `sort:due,-priority`. Dates: 2026-12-31, today, +7d, -1m, this-week, next-month. A mistake comes back as `invalid` with the place and a suggestion. Use the `query` it echoes when you need the normal form; page with `cursor`. Example: search_tasks {\"query\": \"is:open label:bug due<+7d sort:due\", \"limit\": 20}",
+      "description": "Lists the tasks matching a query, a page at a time, with totals of estimates and logged time. The query language: `is:open`, `status:\"In progress\"`, `label:bug,crash` (any of), `-label:wontfix` (not; includes tasks without labels), `priority>=high`, `due<+7d`, `updated>-3d`, `created:this-month`, `during:2026-12-01..2026-12-31` (start to due overlaps), the history with `was:status:Review` (had that value at any time), `changed:due>-7d` (changed in the last week) and `changed-by:agent`, custom fields as `cf.story-points>3` (also in `was:cf.area:Backend` and `changed:cf.area`), `estimate:1h..4h`, `has:due`, `parent:TM-12`, `project:TM/*` (with sub-projects), `(a OR b)`, words and \"phrases\" for full text, a bare key `TM-41`, and `sort:due,-priority`. Dates: 2026-12-31, today, +7d, -1m, this-week, next-month. A mistake comes back as `invalid` with the place and a suggestion. Use the `query` it echoes when you need the normal form; page with `cursor`. Example: search_tasks {\"query\": \"is:open label:bug due<+7d sort:due\", \"limit\": 20}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "Which tasks to list.",
@@ -12688,6 +12688,10 @@
                 "type": "string"
               }
             ]
+          },
+          "group_by_field": {
+            "description": "Groups the rows by a custom field instead (`cf.<name>`): a select\nfield by its option, in the field's order (a multi-select by its\nfirst option), a yes/no field by `yes` and `no` (no value counts as\nno). Not with `group_by`.",
+            "type": "string"
           },
           "include_subprojects": {
             "default": false,
@@ -12787,7 +12791,7 @@
                   "type": "string"
                 },
                 "value": {
-                  "description": "What its tasks share: the status, label or project name, the\npriority (`urgent` … `none`), the parent's key, or the first day of\nthe due week (`YYYY-MM-DD`); left out for the tasks without one.",
+                  "description": "What its tasks share: the status, label or project name, the\npriority (`urgent` … `none`), the parent's key, the first day of\nthe due week (`YYYY-MM-DD`), or a custom field's option or `yes` or\n`no`; left out for the tasks without one.",
                   "type": "string"
                 }
               },
@@ -19844,7 +19848,7 @@
       "covers": [
         "task.move"
       ],
-      "description": "Moves a task to another `status` (by name), to a place in its column (`before` or `after` another task's key, or `at`: top or bottom), or to another `project`, where it gets a new key while the old one keeps finding it; its subtasks, comments, files, time and links come along. Statuses, types and labels are matched by name there; check_move first shows which have no match, and `mapping` ({statuses, types, labels}: from the old name to the target's name) says what takes their place. Custom field values go to the target's field of the same name and kind; others are left off, with a warning. Entering a done or cancelled status closes the task; `close_duplicates: true` closes the open tasks marked as its duplicates in the same change (left out, a warning names them). Example: move_task {\"key\": \"TM-41\", \"status\": \"In progress\", \"at\": \"top\"}",
+      "description": "Moves a task to another `status` (by name), to a place in its column (`before` or `after` another task's key, or `at`: top or bottom), or to another `project`, where it gets a new key while the old one keeps finding it; its subtasks, comments, files, time and links come along. Statuses, types and labels are matched by name there; check_move first shows which have no match, and `mapping` ({statuses, types, labels}: from the old name to the target's name) says what takes their place. Custom field values go to the target's field of the same name and kind; others are left off, with a warning. A required custom field of the target that the task would lack takes its default, else the move is refused unless `fields` ({name: value}) gives it. Entering a done or cancelled status closes the task; `close_duplicates: true` closes the open tasks marked as its duplicates in the same change (left out, a warning names them). Example: move_task {\"key\": \"TM-41\", \"status\": \"In progress\", \"at\": \"top\"}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "Where to move a task: another status, another place in its column, or\nanother project.",
@@ -19879,6 +19883,11 @@
           "expected_version": {
             "description": "Refuse the move unless the task still has this version.",
             "type": "integer"
+          },
+          "fields": {
+            "additionalProperties": true,
+            "description": "With `project`: custom field values the task and its subtasks get in\nthat project (each where its type shows the field), by field name,\nquery name or ID, as for `task.update`; for a required field they\nwould otherwise have no value of.",
+            "type": "object"
           },
           "key": {
             "description": "The task: its key or ID.",
@@ -21981,7 +21990,7 @@
       "covers": [
         "task.move_check"
       ],
-      "description": "Shows what moving tasks to another project would do, without moving them: the key each task (and subtask) would get, and for each of their statuses, types and labels the target's item of the same name, or none. Pass what has no match as `mapping` to move_task. `fields` lists their custom fields with the target's field that would keep the values (same name and kind), or none when the values would be left off. Example: check_move {\"keys\": [\"TM-41\"], \"project\": \"OPS\"}",
+      "description": "Shows what moving tasks to another project would do, without moving them: the key each task (and subtask) would get, and for each of their statuses, types and labels the target's item of the same name, or none. Pass what has no match as `mapping` to move_task. `fields` lists their custom fields with the target's field that would keep the values (same name and kind), or none when the values would be left off. `required_fields` lists the target's required custom fields the tasks would lack: `has_default: false` means move_task needs a value for them in `fields`. Example: check_move {\"keys\": [\"TM-41\"], \"project\": \"OPS\"}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "Tasks that might move to another project, to see first what the move\nwould do.",
@@ -22101,6 +22110,35 @@
           "project": {
             "description": "The target project's key.",
             "type": "string"
+          },
+          "required_fields": {
+            "description": "The target's required custom fields (shown for the type a task would\nhave there) that moving tasks would have no value of. A field with a\ndefault gives it; without one the move is refused unless `fields`\ngives a value.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A required custom field of the target project that moving tasks would\nhave no value of.",
+              "properties": {
+                "has_default": {
+                  "description": "Whether the field's default would fill it; otherwise the move needs\na value for it.",
+                  "type": "boolean"
+                },
+                "name": {
+                  "description": "The field's name.",
+                  "type": "string"
+                },
+                "tasks": {
+                  "description": "How many of the moving tasks would lack it.",
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "name",
+                "tasks",
+                "has_default"
+              ],
+              "type": "object"
+            },
+            "type": "array"
           },
           "statuses": {
             "description": "The statuses the tasks have now.",
@@ -22405,7 +22443,7 @@
         "task.update",
         "task.move"
       ],
-      "description": "Makes the same change to many tasks, chosen by `keys` or by a `query`: `status`, `type`, `priority`, `labels` (replace), `add_labels`, `remove_labels`, `parent`, `start_date` and `due_date` (also `fri`, `+3d`), `shift_start` and `shift_due` (`+2d`, `-1w`), `estimate`, `project`, and `clear`. It is a preview unless `dry_run: false`: first call it to see every task and what would change, then call it again with `dry_run: false` and the preview's `count` as `expected_count`; if the tasks now number otherwise it stops. At most 100 tasks in the standard profile, 500 in full. The whole change is one history group, so one revert_changes undoes it. Only make bulk changes the person asked for. Example: bulk_update_tasks {\"query\": \"project:TM label:old is:open\", \"changes\": {\"add_labels\": [\"triage\"]}}",
+      "description": "Makes the same change to many tasks, chosen by `keys` or by a `query`: `status`, `type`, `priority`, `labels` (replace), `add_labels`, `remove_labels`, `parent`, `start_date` and `due_date` (also `fri`, `+3d`), `shift_start` and `shift_due` (`+2d`, `-1w`), `estimate`, `project`, custom `fields` ({name: value}, `null` clears), and `clear`. It is a preview unless `dry_run: false`: first call it to see every task and what would change, then call it again with `dry_run: false` and the preview's `count` as `expected_count`; if the tasks now number otherwise it stops. At most 100 tasks in the standard profile, 500 in full. The whole change is one history group, so one revert_changes undoes it. Only make bulk changes the person asked for. Example: bulk_update_tasks {\"query\": \"project:TM label:old is:open\", \"changes\": {\"add_labels\": [\"triage\"]}}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "A bulk change.",
@@ -22477,6 +22515,11 @@
               "estimate": {
                 "description": "The estimate, as a duration (`1d 4h`, `90m`).",
                 "type": "string"
+              },
+              "fields": {
+                "additionalProperties": true,
+                "description": "Custom field values to set, by field name, query name or ID, as for\n`task.update`; `null` clears one. Each task's project must have the\nfield.",
+                "type": "object"
               },
               "fix_version": {
                 "description": "Plan them for the version of this name (in each task's project,\nor shared with it).",
@@ -44694,6 +44737,11 @@
                         "description": "The estimate in minutes.",
                         "type": "integer"
                       },
+                      "fields": {
+                        "additionalProperties": true,
+                        "description": "Its values of the custom fields the layout shows on cards, by query\nname (without `cf.`); left out when it has none of them.",
+                        "type": "object"
+                      },
                       "file_count": {
                         "description": "How many files are attached to it and to its comments.",
                         "minimum": 0,
@@ -45131,7 +45179,7 @@
             "description": "The layout the board was built with.",
             "properties": {
               "card_fields": {
-                "description": "The fields shown on cards.",
+                "description": "The fields shown on cards; custom fields as `cf.<query name>`.",
                 "items": {
                   "type": "string"
                 },
@@ -45269,7 +45317,7 @@
         "description": "Changes to a board layout; fields left out keep their value.",
         "properties": {
           "card_fields": {
-            "description": "The fields shown on cards.",
+            "description": "The fields shown on cards: `type`, `priority`, `due`, `start`,\n`labels`, `checklist`, `subtasks`, `estimate`, `days_in_column`,\n`updated`, `key`, and custom fields of the project as\n`cf.<query name>`.",
             "items": {
               "type": "string"
             },
@@ -45403,7 +45451,7 @@
             "description": "The layout after the change.",
             "properties": {
               "card_fields": {
-                "description": "The fields shown on cards.",
+                "description": "The fields shown on cards; custom fields as `cf.<query name>`.",
                 "items": {
                   "type": "string"
                 },
@@ -49398,6 +49446,11 @@
                   "description": "Its own due date.",
                   "type": "string"
                 },
+                "fields": {
+                  "additionalProperties": true,
+                  "description": "Its custom field values by query name (without `cf.`); left out\nwhen it has none.",
+                  "type": "object"
+                },
                 "id": {
                   "description": "The task's ID.",
                   "type": "string"
@@ -49675,6 +49728,11 @@
                 "closed": {
                   "description": "Whether it is closed.",
                   "type": "boolean"
+                },
+                "fields": {
+                  "additionalProperties": true,
+                  "description": "Its custom field values by query name (without `cf.`); left out\nwhen it has none.",
+                  "type": "object"
                 },
                 "id": {
                   "description": "The task's ID.",

@@ -424,7 +424,84 @@ fn write_values(w: &WriteCtx<'_>, task: Id, field: Id, values: &[Stored]) -> Res
             params![b(task), b(field), stored_sql(v)],
         )?;
     }
+    if is_searched(w.tx(), field)? {
+        reindex(w.tx(), task)?;
+    }
     fields::touch(w, TASK, task, "custom_field")
+}
+
+/// The kinds of fields whose values the search index holds.
+const SEARCHED_KINDS: &str = "('text', 'markdown', 'url')";
+
+/// Whether the values of `field` are in the search index.
+fn is_searched(tx: &Transaction<'_>, field: Id) -> Result<bool, Failure> {
+    Ok(tx
+        .query_row(
+            &format!("SELECT kind IN {SEARCHED_KINDS} FROM custom_fields WHERE id = ?1"),
+            [b(field)],
+            |r| r.get::<_, bool>(0),
+        )
+        .optional()?
+        .unwrap_or(false))
+}
+
+/// The words of `task`'s text, Markdown and link fields, one value a line
+/// in the task panel's order, for the search index (empty without any).
+pub(crate) fn search_text(tx: &Transaction<'_>, task: Id) -> Result<String, Failure> {
+    let mut stmt = tx.prepare_cached(&format!(
+        "SELECT f.kind, v.value FROM custom_values v JOIN custom_fields f ON f.id = v.field_id
+          WHERE v.task_id = ?1 AND f.kind IN {SEARCHED_KINDS}
+          ORDER BY f.project_id IS NOT NULL, f.rank, f.id"
+    ))?;
+    let lines = stmt
+        .query_map([b(task)], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(lines
+        .into_iter()
+        .map(|(kind, text)| {
+            if kind == FieldKind::Markdown.as_str() {
+                gk_markdown::plain_text(&text)
+            } else {
+                text
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n"))
+}
+
+/// The text the search index holds for a task: its description's words,
+/// then those of its text fields.
+pub(crate) fn indexed_body(tx: &Transaction<'_>, task: Id, plain: &str) -> Result<String, Failure> {
+    let extra = search_text(tx, task)?;
+    Ok(match (plain.is_empty(), extra.is_empty()) {
+        (_, true) => plain.to_owned(),
+        (true, false) => extra,
+        (false, false) => format!("{plain}\n{extra}"),
+    })
+}
+
+/// Brings the search index's text of `task` up to date with its values,
+/// when the task is in the index.
+pub(crate) fn reindex(tx: &Transaction<'_>, task: Id) -> Result<(), Failure> {
+    let description: Option<String> = tx
+        .query_row(
+            "SELECT t.description FROM tasks t JOIN search_docs d
+                ON d.kind = 'task' AND d.entity_id = t.id WHERE t.id = ?1",
+            [b(task)],
+            |r| r.get(0),
+        )
+        .optional()?;
+    let Some(description) = description else {
+        return Ok(());
+    };
+    let body = indexed_body(tx, task, &gk_markdown::plain_text(&description))?;
+    tx.execute(
+        "UPDATE search_docs SET body = ?2 WHERE kind = 'task' AND entity_id = ?1 AND body <> ?2",
+        params![b(task), body],
+    )?;
+    Ok(())
 }
 
 /// Gives `task` exactly these values of `field` and records the change.
@@ -453,7 +530,7 @@ fn set_values(
 }
 
 /// The type name of `task`.
-fn type_name(tx: &Transaction<'_>, task: Id) -> Result<String, Failure> {
+pub(crate) fn type_name(tx: &Transaction<'_>, task: Id) -> Result<String, Failure> {
     Ok(tx.query_row(
         "SELECT y.name FROM tasks t JOIN task_types y ON y.id = t.type_id WHERE t.id = ?1",
         [b(task)],
@@ -529,6 +606,36 @@ pub(crate) fn apply_input(
                 None => {}
             }
         }
+    }
+    Ok(())
+}
+
+/// Gives a task that just moved to `project` (with its subtasks) the
+/// values a move names: each field the project has, where the task's type
+/// shows it; others are left to the task's subtasks of other types.
+pub(crate) fn apply_moved_input(
+    w: &mut WriteCtx<'_>,
+    task: Id,
+    project: &ProjectRow,
+    input: &BTreeMap<String, Value>,
+) -> Result<(), Failure> {
+    let all = rows(w.tx(), Some(project.id))?;
+    let task_type = type_name(w.tx(), task)?;
+    for (key, value) in input {
+        let path = format!("fields.{key}");
+        let field = named(&all, key).ok_or_else(|| not_found(&all, &path, key))?;
+        if !field.shown_for(&task_type) {
+            continue;
+        }
+        let values = parse_input(field, value, &path)?;
+        if values.is_empty() && field.required {
+            return Err(messages::invalid(
+                &path,
+                "field-required",
+                &[("field", field.name.clone())],
+            ));
+        }
+        set_values(w, task, project.id, field, &values)?;
     }
     Ok(())
 }
@@ -980,6 +1087,77 @@ pub(crate) fn move_matches(
     Ok(carry_plan(tx, task, &target)?
         .into_iter()
         .map(|(old, _, new)| (old.name, new.map(|f| f.name.clone())))
+        .collect())
+}
+
+/// The required fields among `fields` shown for tasks of type `type_name`
+/// that a task holding values of the fields `held` has no value of.
+fn lacking<'a>(fields: &'a [FieldRow], type_name: &str, held: &[Id]) -> Vec<&'a FieldRow> {
+    fields
+        .iter()
+        .filter(|f| f.required && f.shown_for(type_name) && !held.contains(&f.id))
+        .collect()
+}
+
+/// The fields `task` has a value of.
+fn held(tx: &Transaction<'_>, task: Id) -> Result<Vec<Id>, Failure> {
+    let mut stmt =
+        tx.prepare_cached("SELECT DISTINCT field_id FROM custom_values WHERE task_id = ?1")?;
+    let ids = stmt
+        .query_map([b(task)], |r| id_at(r, 0))?
+        .collect::<Result<_, _>>()?;
+    Ok(ids)
+}
+
+/// After `task` (of `project`) took another type or moved to another
+/// project: every required field shown for its type that it has no value
+/// of gets the field's default. Returns the names of those without a
+/// default, which the task still lacks, in the panel's order.
+pub(crate) fn fill_required(
+    w: &mut WriteCtx<'_>,
+    task: Id,
+    project: Id,
+) -> Result<Vec<String>, Failure> {
+    let all = rows(w.tx(), Some(project))?;
+    if !all.iter().any(|f| f.required) {
+        return Ok(Vec::new());
+    }
+    let task_type = type_name(w.tx(), task)?;
+    let held = held(w.tx(), task)?;
+    let mut missing = Vec::new();
+    for field in lacking(&all, &task_type, &held) {
+        match &field.default {
+            Some(d) => {
+                let values = parse_input(field, d, "fields")?;
+                set_values(w, task, project, field, &values)?;
+            }
+            None => missing.push(field.name.clone()),
+        }
+    }
+    Ok(missing)
+}
+
+/// For a move check: the required fields of project `to`, shown for tasks
+/// of type `type_name` (the type `task` would have there), that `task`
+/// would have no value of after the move, each with whether it has a
+/// default.
+pub(crate) fn move_required(
+    tx: &Transaction<'_>,
+    task: Id,
+    to: &ProjectRow,
+    type_name: &str,
+) -> Result<Vec<(String, bool)>, Failure> {
+    let target = rows(tx, Some(to.id))?;
+    if !target.iter().any(|f| f.required) {
+        return Ok(Vec::new());
+    }
+    let kept: Vec<Id> = carry_plan(tx, task, &target)?
+        .into_iter()
+        .filter_map(|(_, _, new)| new.map(|f| f.id))
+        .collect();
+    Ok(lacking(&target, type_name, &kept)
+        .into_iter()
+        .map(|f| (f.name.clone(), f.default.is_some()))
         .collect())
 }
 
@@ -1525,6 +1703,7 @@ fn rewrite_views(
         (true, None) => return Ok(()),
     };
     super::view::rewrite_views(w, scope, query, column)?;
+    super::board::rewrite_card_fields(w, scope, column)?;
     Ok(())
 }
 
@@ -1764,8 +1943,8 @@ fn delete(
         stmt.query_map([b(row.id)], |r| id_at(r, 0))?
             .collect::<Result<_, _>>()?
     };
-    for task in tasks {
-        fields::touch(w, TASK, task, "custom_field")?;
+    for task in &tasks {
+        fields::touch(w, TASK, *task, "custom_field")?;
     }
     w.record_field(
         ENTITY,
@@ -1790,8 +1969,14 @@ fn delete(
         &|src| gk_query::rename::remove_field(src, &q),
         &|c| is_column_of(c, &q).then_some(None),
     )?;
+    let searched = is_searched(w.tx(), row.id)?;
     w.tx()
         .execute("DELETE FROM custom_fields WHERE id = ?1", [b(row.id)])?;
+    if searched {
+        for task in &tasks {
+            reindex(w.tx(), *task)?;
+        }
+    }
     let mut change = changed(w, row.id, count)?;
     change.field = None;
     Ok(change)

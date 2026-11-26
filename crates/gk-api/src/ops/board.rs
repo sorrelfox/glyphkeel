@@ -49,7 +49,7 @@ pub struct BoardLayout {
     /// Cards closed more than this many days ago are hidden behind "Show
     /// older"; 0 shows every card.
     pub hide_done_after_days: u32,
-    /// The fields shown on cards.
+    /// The fields shown on cards; custom fields as `cf.<query name>`.
     pub card_fields: Vec<String>,
     /// Whether the sub-projects' tasks are on the board too.
     pub include_subprojects: bool,
@@ -131,6 +131,10 @@ pub struct Card {
     pub version: i64,
     /// The task's ID.
     pub id: String,
+    /// Its values of the custom fields the layout shows on cards, by query
+    /// name (without `cf.`); left out when it has none of them.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub fields: BTreeMap<String, serde_json::Value>,
 }
 
 /// One column: a status, or with sub-projects, every status of that name.
@@ -241,7 +245,10 @@ pub struct LayoutUpdateInput {
     /// Hide cards closed more than this many days ago; 0 shows all.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hide_done_after_days: Option<u32>,
-    /// The fields shown on cards.
+    /// The fields shown on cards: `type`, `priority`, `due`, `start`,
+    /// `labels`, `checklist`, `subtasks`, `estimate`, `days_in_column`,
+    /// `updated`, `key`, and custom fields of the project as
+    /// `cf.<query name>`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub card_fields: Option<Vec<String>>,
     /// Show the sub-projects' tasks too.

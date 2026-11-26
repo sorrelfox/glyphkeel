@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { Bot, CalendarClock, CalendarDays, Clock, Hourglass, MessageSquare, Paperclip, SquareCheck, Timer, Workflow } from "lucide-react";
+import { Bot, CalendarClock, CalendarDays, Check, Clock, Hourglass, MessageSquare, Paperclip, SquareCheck, Timer, Workflow } from "lucide-react";
 import { forwardRef, type CSSProperties, type HTMLAttributes } from "react";
 import { useLocale } from "react-aria-components";
 
 import { classes } from "../../classes";
 import { PriorityGlyph, TypeGlyph } from "../../components/Glyphs";
 import { type Card, type CardField } from "../../data/catalog";
+import { useFieldText } from "../../data/fields";
+import { type CustomField } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { useDurations } from "../../data/time";
 import { dueState } from "./model";
@@ -16,6 +18,8 @@ import styles from "./Board.module.css";
 interface CardViewProps extends HTMLAttributes<HTMLElement> {
   card: Card;
   fields: readonly string[];
+  /** The custom fields of the board's project, for the `cf.` entries of `fields`. */
+  custom?: readonly CustomField[];
   compact: boolean;
   today: string;
   selected?: boolean;
@@ -37,16 +41,17 @@ export function useDayFormat(): (day: string) => string {
  * A task on the board. Rows, each left out when empty: type, key, Blocked,
  * an agent's claim and priority; the title; labels; start and due dates,
  * checklist, subtasks, estimate and days in the column, as the personal
- * card fields choose; then comments, files and time spent, when there are
- * any.
+ * card fields choose, and the custom fields they name, each as its name and
+ * value; then comments, files and time spent, when there are any.
  */
 export const CardView = forwardRef<HTMLElement, CardViewProps>(function CardView(
-  { card, fields, compact, today, selected = false, ghost = false, lifted = false, className, ...rest },
+  { card, fields, custom = [], compact, today, selected = false, ghost = false, lifted = false, className, ...rest },
   ref,
 ) {
   const t = useT();
   const day = useDayFormat();
   const { format: duration } = useDurations();
+  const fieldText = useFieldText();
   const show = (field: CardField) => !compact && fields.includes(field);
   const closed = card.closed_at !== undefined;
   const due = dueState(card.due_date, closed, today);
@@ -88,6 +93,26 @@ export const CardView = forwardRef<HTMLElement, CardViewProps>(function CardView
         {days}
       </span>
     ),
+    ...(compact
+      ? []
+      : fields
+          .filter((name) => name.startsWith("cf."))
+          .map((name) => {
+            const field = custom.find((f) => f.query_name === name);
+            const value = card.fields?.[name.slice(3)];
+            if (field === undefined || value === undefined || value === null) {
+              return false;
+            }
+            const text = fieldText(field.kind, value);
+            return (
+              <span key={name} className={classes("meta", styles.cardField)} aria-label={t("card-custom-field", { field: field.name, value: text })}>
+                <span className={styles.cardFieldName} aria-hidden="true">
+                  {field.name}
+                </span>
+                {field.kind === "boolean" && value === true ? <Check className="ic" aria-hidden="true" /> : <span aria-hidden="true">{text}</span>}
+              </span>
+            );
+          })),
     // The engine's card fields don't list these: they show whenever there are any.
     !compact && card.comment_count > 0 && (
       <span key="comments" className="meta" aria-label={t("card-comments", { count: card.comment_count })}>

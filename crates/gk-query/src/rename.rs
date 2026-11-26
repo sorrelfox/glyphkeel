@@ -211,6 +211,34 @@ fn names_custom(written: &str, query_name: &str) -> bool {
     }
 }
 
+/// The field a condition's values belong to: the field itself, or for
+/// `was:cf.area` the custom field. `changed:` holds dates or field names,
+/// not values.
+fn value_field(p: &Predicate) -> Option<&str> {
+    match fields::split_history(&p.field) {
+        Some((fields::History::Was, inner)) => Some(inner),
+        Some((fields::History::Changed, _)) => None,
+        None if is_changed_list(p) => None,
+        None => Some(&p.field),
+    }
+}
+
+/// Whether the condition is `changed:<fields>`, which lists field names.
+fn is_changed_list(p: &Predicate) -> bool {
+    fields::find(&p.field).is_some_and(|f| f.ty == FieldType::Changed)
+}
+
+/// Whether the condition looks at the custom field `query_name`: on it,
+/// on its history (`was:cf.area:…`, `changed:cf.area>…`), or with it among
+/// the fields of `changed:`.
+fn uses_custom(p: &Predicate, query_name: &str) -> bool {
+    match fields::split_history(&p.field) {
+        Some((_, inner)) => names_custom(inner, query_name),
+        None if is_changed_list(p) => false,
+        None => names_custom(&p.field, query_name),
+    }
+}
+
 /// `src` with the custom field `old` (a query name) written as `cf.<new>`
 /// in every condition and sort key that names it. `None` when nothing
 /// names it or the text doesn't parse.
@@ -221,7 +249,20 @@ pub fn rename_field(src: &str, old: &str, new: &str) -> Option<String> {
     let written = format!("{}{new}", fields::CUSTOM_PREFIX);
     if let Some(filter) = &query.filter {
         each_pred(filter, &mut |p| {
-            if names_custom(&p.field, old) {
+            if let Some((_, inner)) = fields::split_history(&p.field) {
+                if names_custom(inner, old) {
+                    let end = p.field_span.end;
+                    edits.push((Span::new(end - inner.len(), end), written.clone()));
+                }
+            } else if is_changed_list(p) {
+                for v in &p.values {
+                    if let ValueKind::Word { text, .. } = &v.kind
+                        && names_custom(text, old)
+                    {
+                        edits.push((v.span, written.clone()));
+                    }
+                }
+            } else if names_custom(&p.field, old) {
                 edits.push((p.field_span, written.clone()));
             }
         });
@@ -245,7 +286,7 @@ pub fn rename_option(src: &str, field: &str, old: &str, new: &str) -> Option<Str
     let mut edits: Vec<(Span, String)> = Vec::new();
     if let Some(filter) = &query.filter {
         each_pred(filter, &mut |p| {
-            if !names_custom(&p.field, field) {
+            if !value_field(p).is_some_and(|f| names_custom(f, field)) {
                 return;
             }
             for v in &p.values {
@@ -268,12 +309,17 @@ pub fn remove_field(src: &str, field: &str) -> Option<String> {
     let query = parse(src).ok()?;
     let mut removed = false;
     let filter = query.filter.clone().and_then(|f| {
-        prune(f, &mut |p| {
-            if names_custom(&p.field, field) {
+        prune_values(f, &mut |p| {
+            if uses_custom(p, field) {
                 removed = true;
-                false
-            } else {
-                true
+                p.values.clear();
+            } else if is_changed_list(p) {
+                let before = p.values.len();
+                p.values.retain(|v| match &v.kind {
+                    ValueKind::Word { text, .. } => !names_custom(text, field),
+                    ValueKind::Range(..) => true,
+                });
+                removed |= p.values.len() != before;
             }
         })
     });
@@ -301,7 +347,7 @@ pub fn remove_option(src: &str, field: &str, option: &str) -> Option<String> {
     let mut removed = false;
     let filter = query.filter.clone().and_then(|f| {
         prune_values(f, &mut |p| {
-            if !names_custom(&p.field, field) {
+            if !value_field(p).is_some_and(|f| names_custom(f, field)) {
                 return;
             }
             let before = p.values.len();
@@ -343,15 +389,6 @@ fn each_pred(e: &Expr, f: &mut dyn FnMut(&Predicate)) {
         Expr::Pred(p) => f(p),
         Expr::Text(_) | Expr::Key(_) => {}
     }
-}
-
-/// `e` without the conditions `keep` refuses; `None` when nothing is left.
-fn prune(e: Expr, keep: &mut dyn FnMut(&Predicate) -> bool) -> Option<Expr> {
-    prune_values(e, &mut |p: &mut Predicate| {
-        if !keep(p) {
-            p.values.clear();
-        }
-    })
 }
 
 /// `e` after `change` edited the values of each condition; a condition
@@ -472,6 +509,41 @@ mod tests {
         assert_eq!(
             remove_option("cf.area:front", "area", "front").as_deref(),
             Some("")
+        );
+    }
+
+    #[test]
+    fn custom_fields_are_renamed_and_removed_in_history_conditions() {
+        assert_eq!(
+            rename_field(
+                "was:cf.points:3 changed:status,cf.points changed:cf.Points>-7d",
+                "points",
+                "size"
+            )
+            .as_deref(),
+            Some("was:cf.size:3 changed:status,cf.size changed:cf.size>-7d")
+        );
+        assert_eq!(
+            rename_option(
+                "was:cf.area:front changed:cf.area:today",
+                "area",
+                "front",
+                "Front end"
+            )
+            .as_deref(),
+            Some("was:cf.area:\"Front end\" changed:cf.area:today")
+        );
+        assert_eq!(
+            remove_field(
+                "was:cf.points:3 changed:status,cf.points changed:cf.points>-7d is:open",
+                "points"
+            )
+            .as_deref(),
+            Some("changed:status is:open")
+        );
+        assert_eq!(
+            remove_option("was:cf.area:front,back", "area", "front").as_deref(),
+            Some("was:cf.area:back")
         );
     }
 

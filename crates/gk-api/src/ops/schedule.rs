@@ -133,6 +133,10 @@ pub struct ScheduledTask {
     pub version: i64,
     /// The task's ID.
     pub id: String,
+    /// Its custom field values by query name (without `cf.`); left out
+    /// when it has none.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub fields: BTreeMap<String, serde_json::Value>,
 }
 
 /// A task without dates, for the Unscheduled lane.
@@ -167,6 +171,10 @@ pub struct UnscheduledTask {
     pub version: i64,
     /// The task's ID.
     pub id: String,
+    /// Its custom field values by query name (without `cf.`); left out
+    /// when it has none.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub fields: BTreeMap<String, serde_json::Value>,
 }
 
 /// A finish-to-start dependency: a `blocks` link between two shown tasks.

@@ -9,10 +9,12 @@ import { ProjectMark } from "../../components/ProjectMark";
 import { Select, type SelectOption } from "../../components/Select";
 import { useToasts } from "../../components/Toasts";
 import { useProject } from "../../data/board";
+import { useCustomFields } from "../../data/fields";
 import { errorToast, useCall, useOp, useUndo } from "../../data/hooks";
 import { applyBulk, previewBulk } from "../../data/list";
 import { type MoveCheck, type MoveMapping, type MoveMatch, type Project } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
+import { FieldEditor } from "./FieldsSection";
 import styles from "../project/Project.module.css";
 
 /** The choice of a label that the target project has no match for: leave it off. */
@@ -49,6 +51,8 @@ export function MoveTasksDialog({ keys, from, to, onClose }: MoveTasksDialogProp
   const check = useOp("task.move_check", { keys: [...keys], project: target }, { enabled: target !== "" });
   const project = useProject(target === "" ? undefined : target);
   const [choices, setChoices] = useState<Choices>({ statuses: {}, types: {}, labels: {} });
+  // Values for the target's required custom fields the tasks would lack, by field name.
+  const [values, setValues] = useState<Record<string, unknown>>({});
   const [busy, setBusy] = useState(false);
 
   const shown = check.data && project.data && check.data.project === project.data.key ? { check: check.data, project: project.data } : null;
@@ -58,6 +62,8 @@ export function MoveTasksDialog({ keys, from, to, onClose }: MoveTasksDialogProp
       return;
     }
     const mapping = mappingOf(shown.check, choices);
+    const fields = Object.fromEntries(Object.entries(values).filter(([, value]) => value !== undefined && value !== null));
+    const given = Object.keys(fields).length > 0 ? { fields } : {};
     const done = (key: string | undefined, text: string) => {
       setBusy(false);
       toasts.show({ tone: "info", text, action: { label: t("toast-undo"), run: undo } });
@@ -70,12 +76,12 @@ export function MoveTasksDialog({ keys, from, to, onClose }: MoveTasksDialogProp
     setBusy(true);
     const [only] = keys;
     if (keys.length === 1 && only !== undefined) {
-      call("task.move", { key: only, project: shown.project.key, ...(isEmpty(mapping) ? {} : { mapping }) }).then((change) => {
+      call("task.move", { key: only, project: shown.project.key, ...(isEmpty(mapping) ? {} : { mapping }), ...given }).then((change) => {
         done(change.task.key, t("move-to-done", { key: change.task.key }));
       }, failed);
       return;
     }
-    const changes = { project: shown.project.key, ...(isEmpty(mapping) ? {} : { mapping }) };
+    const changes = { project: shown.project.key, ...(isEmpty(mapping) ? {} : { mapping }), ...given };
     previewBulk(call, keys, changes)
       .then((preview) => applyBulk(call, keys, changes, preview.count))
       .then((result) => {
@@ -121,6 +127,7 @@ export function MoveTasksDialog({ keys, from, to, onClose }: MoveTasksDialogProp
               onChange={(key) => {
                 setTarget(key);
                 setChoices({ statuses: {}, types: {}, labels: {} });
+                setValues({});
               }}
             />
           )}
@@ -132,6 +139,7 @@ export function MoveTasksDialog({ keys, from, to, onClose }: MoveTasksDialogProp
           </p>
         )}
         {shown && <Plan roots={keys.length} check={shown.check} project={shown.project} choices={choices} onChoose={setChoices} />}
+        {shown && <RequiredFields check={shown.check} project={shown.project} values={values} onChange={setValues} />}
       </div>
     </Dialog>
   );
@@ -210,6 +218,59 @@ function Plan({ roots, check, project, choices, onChoose }: { roots: number; che
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * The target's required custom fields the tasks would have no value of: a
+ * field with a default gives it; for the others the person gives the value
+ * the tasks get there. Field names are the person's own words.
+ */
+function RequiredFields({ check, project, values, onChange }: { check: MoveCheck; project: Project; values: Readonly<Record<string, unknown>>; onChange: (values: Record<string, unknown>) => void }) {
+  const t = useT();
+  const fields = useCustomFields(project.key);
+  const required = check.required_fields ?? [];
+  if (required.length === 0) {
+    return null;
+  }
+  const filled = required.filter((each) => each.has_default);
+  const needed = required.filter((each) => !each.has_default);
+  return (
+    <div data-testid="move-required-fields">
+      {filled.length > 0 && (
+        <>
+          <p className="meta">{t("move-to-required-defaults", { project: project.key })}</p>
+          <ul>
+            {filled.map((each) => (
+              <li key={each.name}>{t("move-to-fields-row", { name: each.name, count: each.tasks })}</li>
+            ))}
+          </ul>
+        </>
+      )}
+      {needed.length > 0 && (
+        <fieldset className={styles.form}>
+          <legend className="caption">{t("move-to-required", { project: project.key })}</legend>
+          {needed.map((each) => {
+            const field = fields.find((candidate) => candidate.name === each.name);
+            return (
+              <div key={each.name} className={styles.formRow}>
+                <span className={styles.formLabel}>{t("move-to-fields-row", { name: each.name, count: each.tasks })}</span>
+                {field && (
+                  <FieldEditor
+                    field={field}
+                    value={values[each.name]}
+                    readOnly={false}
+                    onChange={(value) => {
+                      onChange({ ...values, [each.name]: value });
+                    }}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </fieldset>
+      )}
+    </div>
   );
 }
 

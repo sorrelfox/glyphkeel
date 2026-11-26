@@ -472,6 +472,13 @@ pub(crate) fn rewrite_views(
             }
         }
         record.columns = columns;
+        // A custom field the rows are grouped by is named like a column.
+        if let Some(group) = record.group_by.clone()
+            && let Some(new) = column(&group)
+        {
+            record.group_by = new;
+            touched = true;
+        }
         if touched {
             record.updated_at = w.now();
             set(w, id, Some(&record))?;

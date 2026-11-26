@@ -19,7 +19,10 @@
 //!   or create a task into a status agents may not enter;
 //! - a task entering a status (created in it or moved to it) gets the
 //!   status's actions (fields set or cleared, the timer stopped, a claim
-//!   released), and then must have every field the status requires.
+//!   released), and then must have every field the status requires;
+//! - a task that took another type or moved to another project must have a
+//!   value of every required custom field shown for its type (a field's
+//!   default fills it), as a new task must.
 //!
 //! Commands that change the configuration or put back earlier states
 //! (history, import, trash, projects, statuses, types, labels) are not
@@ -603,8 +606,36 @@ pub(crate) fn enforce(w: &mut WriteCtx<'_>) -> Result<(), Failure> {
             let automatic = created && w.is_automatic(task);
             enter(w, task, &now, agent, automatic)?;
         }
+        let differs = |field: &str| changed.get(field).is_some_and(|c| c.before != c.after);
+        if !created && (differs("type") || differs("project")) {
+            required_fields(w, task, &now)?;
+        }
     }
     Ok(())
+}
+
+/// A task took another type or moved to another project: the required
+/// custom fields shown for its type get their defaults, and one still
+/// without a value refuses the change, as on creating the task.
+fn required_fields(w: &mut WriteCtx<'_>, task: Id, now: &TaskFacts) -> Result<(), Failure> {
+    let missing = super::custom_field::fill_required(w, task, now.project)?;
+    let Some(first) = missing.first() else {
+        return Ok(());
+    };
+    let args = [
+        ("task", now.key.clone()),
+        ("field", first.clone()),
+        ("type", super::custom_field::type_name(w.tx(), task)?),
+        ("project", now.project_key.clone()),
+    ];
+    let error = messages::invalid_at(
+        &format!("fields.{first}"),
+        "field-required-after-change",
+        &args,
+    )
+    .with_detail("missing", Value::from(missing.clone()));
+    let more = (missing.len() - 1).to_string();
+    Err(messages::hint(error, "field-required-after-change-hint", &[("more", more)]).into())
 }
 
 /// Holds a task that command `w` just created to the rules of its status,

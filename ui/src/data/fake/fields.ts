@@ -240,6 +240,33 @@ export function applyValues(state: FakeState, task: FakeTask, type: string, inpu
   return changed;
 }
 
+/** The required fields of project `projectId` shown for `type` that `task` has no value of. */
+export function lackingRequired(state: FakeState, task: FakeTask, projectId: string, type: string, held: ReadonlySet<string> = new Set(Object.keys(task.fields ?? {}))): FakeField[] {
+  return fieldsFor(state, projectId).filter((field) => field.required && shownFor(field, type) && !held.has(field.id));
+}
+
+/**
+ * After a task took another type or moved to another project, as the engine
+ * does: required fields it lacks get their default, and one without a default
+ * refuses the change.
+ */
+export function fillRequired(state: FakeState, task: FakeTask, type: string, key: string, projectKey: string, fail: Fail): void {
+  const missing: string[] = [];
+  for (const field of lackingRequired(state, task, task.projectId, type)) {
+    if (field.default === undefined) {
+      missing.push(field.name);
+    } else {
+      task.fields = { ...(task.fields ?? {}), [field.id]: field.default };
+    }
+  }
+  const first = missing[0];
+  if (first !== undefined) {
+    fail("invalid", `${key} needs a value for ${first}, which ${projectKey} requires for tasks of the type ${type}.`, {
+      details: { path: `fields.${first}`, message_id: "field-required-after-change", args: { task: key, field: first, type, project: projectKey }, missing },
+    });
+  }
+}
+
 /** A task's values, in the fields' order. */
 export function taskValues(state: FakeState, task: FakeTask): CustomFieldValue[] {
   return fieldsFor(state, task.projectId).flatMap((field) => {

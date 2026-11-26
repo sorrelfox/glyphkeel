@@ -560,6 +560,8 @@ card-checklist = { $done } of { $total } checklist items done
 card-subtasks = { $done } of { $total } subtasks done
 card-start = Starts { $day }
 card-estimate = { $time } estimated
+# A custom field on a card: its name (the person's own words) and its value.
+card-custom-field = { $field }: { $value }
 card-days-in-column =
     { $count ->
         [one] 1 day in this column
@@ -698,6 +700,9 @@ move-to-fields-row =
         [one] { $name } (1 task)
        *[other] { $name } ({ $count } tasks)
     }
+# The target project requires these custom fields; $project is its key.
+move-to-required = { $project } requires these fields; give the moving tasks a value:
+move-to-required-defaults = { $project } requires these fields; the moving tasks get their defaults:
 move-to-versions-left-off = { $project } can't plan tasks for these versions, so they are taken off:
 # $name is a version the tasks are planned for; $count how many of them.
 move-to-versions-row =

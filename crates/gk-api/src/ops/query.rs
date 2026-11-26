@@ -190,6 +190,12 @@ pub struct TaskSearchInput {
     /// query's order), and the result names the groups with their counts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group_by: Option<ListGrouping>,
+    /// Groups the rows by a custom field instead (`cf.<name>`): a select
+    /// field by its option, in the field's order (a multi-select by its
+    /// first option), a yes/no field by `yes` and `no` (no value counts as
+    /// no). Not with `group_by`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group_by_field: Option<String>,
 }
 
 /// What a list's rows are grouped by.
@@ -215,8 +221,9 @@ pub enum ListGrouping {
 #[serde(deny_unknown_fields)]
 pub struct ListGroup {
     /// What its tasks share: the status, label or project name, the
-    /// priority (`urgent` … `none`), the parent's key, or the first day of
-    /// the due week (`YYYY-MM-DD`); left out for the tasks without one.
+    /// priority (`urgent` … `none`), the parent's key, the first day of
+    /// the due week (`YYYY-MM-DD`), or a custom field's option or `yes` or
+    /// `no`; left out for the tasks without one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub value: Option<String>,
     /// The parent's title or the project's name, for grouping by parent or

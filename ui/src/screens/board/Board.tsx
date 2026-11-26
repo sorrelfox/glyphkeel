@@ -35,6 +35,7 @@ import { indexCoordinates, pointerThenCenter, step } from "./dnd";
 import { CollapsedLane, Lane, type CardHandlers } from "./Lane";
 import { useToday } from "../../data/zone";
 import { fieldsOfCard } from "../../data/rules";
+import { useCustomFields } from "../../data/fields";
 import { useEntryReason, useProjectsByKey } from "../../data/useRules";
 import { boardView, isFiltered, moveColumn, NO_FILTERS, positionIn, type BoardView, type Filters } from "./model";
 import { Toolbar } from "./Toolbar";
@@ -108,6 +109,7 @@ function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowO
   const create = useCreateTask();
   const apply = useApplyTemplate();
   const templates = useTemplates("task", project.key);
+  const customFields = useCustomFields(project.key);
   const update = useUpdateTask();
   const menu = useContextMenu(t("card-menu"));
   const trash = useTrashTasks();
@@ -393,6 +395,7 @@ function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowO
   const handlers: CardHandlers = {
     selected,
     fields: layout.card_fields,
+    custom: customFields,
     compact: cardSize === "compact",
     today,
     onSelect: setSelected,
@@ -613,7 +616,7 @@ function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowO
             )}
           </div>
           <DragOverlay dropAnimation={{ duration: 160 }}>
-            {activeCard ? <CardView card={activeCard} fields={layout.card_fields} compact={cardSize === "compact"} today={today} lifted /> : null}
+            {activeCard ? <CardView card={activeCard} fields={layout.card_fields} custom={customFields} compact={cardSize === "compact"} today={today} lifted /> : null}
           </DragOverlay>
         </DndContext>
         {menu.menu}

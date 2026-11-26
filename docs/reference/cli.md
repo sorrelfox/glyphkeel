@@ -76,7 +76,7 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel status edit` | `status.update` | Rename or recolour a status, change its category or its WIP limit. |
 | `glyphkeel status move` | `status.reorder` | Move a status in the project's board order. |
 | `glyphkeel task backlinks <key>` | `task.backlinks` | The wiki pages, other tasks' descriptions and comments that mention a task by its key (current or old). |
-| `glyphkeel task bulk` | `task.bulk_update` | Make the same change to many tasks chosen by key or query (status, type, priority, labels, parent, dates set or shifted, estimate, project), previewed first, as one change for Undo and revert. |
+| `glyphkeel task bulk` | `task.bulk_update` | Make the same change to many tasks chosen by key or query (status, type, priority, labels, parent, dates set or shifted, estimate, custom fields, project), previewed first, as one change for Undo and revert. |
 | `glyphkeel task check <key>` | `checklist.update` | Tick, clear, add or remove checklist items in a task's description, a comment or a wiki page, by number plus expected text. |
 | `glyphkeel task claim <key>` | `task.claim` | Claim a task for your agent session for a while, so other agents leave it alone; moves it into progress. |
 | `glyphkeel task create` | `task.create` | Create a task from a title alone or with its fields; it gets the project's next key. |

@@ -18,10 +18,10 @@
 use gk_api::ErrorCode;
 use gk_api::ops::common::{Actor, ActorKind, Category, Glyph, Hue, Priority};
 use gk_api::ops::task::{
-    Checklist, Claim, LabelRef, MoveCheck, MoveMapping, MoveMatch, MovedKey, StatusRef,
-    SubtaskReorderInput, Task, TaskChange, TaskCreate, TaskCreateInput, TaskField, TaskGet,
-    TaskGetInput, TaskList, TaskMove, TaskMoveCheck, TaskMoveCheckInput, TaskMoveInput, TaskPart,
-    TaskRef, TaskReorderSubtask, TaskUpdate, TaskUpdateInput, TypeRef,
+    Checklist, Claim, LabelRef, MoveCheck, MoveMapping, MoveMatch, MoveRequiredField, MovedKey,
+    StatusRef, SubtaskReorderInput, Task, TaskChange, TaskCreate, TaskCreateInput, TaskField,
+    TaskGet, TaskGetInput, TaskList, TaskMove, TaskMoveCheck, TaskMoveCheckInput, TaskMoveInput,
+    TaskPart, TaskRef, TaskReorderSubtask, TaskUpdate, TaskUpdateInput, TypeRef,
 };
 use gk_core::{Day, DurationUnits, Id, Rank, StatusCategory, fold};
 use gk_store::rusqlite::{OptionalExtension, Transaction, params};
@@ -166,12 +166,13 @@ pub(crate) fn refresh_text(w: &WriteCtx<'_>, task: Id) -> Result<(), Failure> {
             i64::try_from(total).unwrap_or(i64::MAX)
         ],
     )?;
+    let body = super::custom_field::indexed_body(w.tx(), task, &analysis.plain_text)?;
     w.tx().execute(
         "INSERT INTO search_docs (kind, entity_id, task_id, project_id, title, body, updated_at)
          VALUES ('task', ?1, ?1, ?2, ?3, ?4, ?5)
          ON CONFLICT (kind, entity_id) DO UPDATE SET project_id = excluded.project_id,
            title = excluded.title, body = excluded.body, updated_at = excluded.updated_at",
-        params![b(task), project, title, analysis.plain_text, w.now()],
+        params![b(task), project, title, body, w.now()],
     )?;
     Ok(())
 }
@@ -1411,6 +1412,22 @@ pub(crate) fn move_task(w: &mut WriteCtx<'_>, input: TaskMoveInput) -> Result<Ta
             input.status.as_deref(),
             &input.mapping,
         )?);
+        if !input.fields.is_empty() {
+            for id in descendants(w.tx(), task.id)? {
+                super::custom_field::apply_moved_input(w, id, &to, &input.fields)?;
+            }
+        }
+    } else if !input.fields.is_empty() {
+        if input.project.is_none() {
+            return Err(messages::invalid(
+                "fields",
+                "task-move-fields-without-project",
+                &[],
+            ));
+        }
+        // Already in that project (a bulk move of tasks from several): the
+        // values are set as an edit would set them.
+        super::custom_field::apply_input(w, task.id, &from, &input.fields, false)?;
     }
     let current = lookup::task_by_id(w.tx(), task.id)?.unwrap_or(task.clone());
     let status = match &input.status {
@@ -1823,6 +1840,8 @@ fn move_check(tx: &Transaction<'_>, input: &TaskMoveCheckInput) -> Result<MoveCh
     let (mut statuses, mut types, mut labels) = (Vec::new(), Vec::new(), Vec::new());
     let mut fields: Vec<MoveMatch> = Vec::new();
     let mut versions: Vec<MoveMatch> = Vec::new();
+    let mut required_fields: Vec<MoveRequiredField> = Vec::new();
+    let fallback_type = default_type(tx, &to)?;
     fn count(list: &mut Vec<MoveMatch>, target: &[lookup::Named], name: &str) {
         let folded = fold(name);
         match list.iter_mut().find(|m| fold(&m.name) == folded) {
@@ -1861,6 +1880,22 @@ fn move_check(tx: &Transaction<'_>, input: &TaskMoveCheckInput) -> Result<MoveCh
             next += 1;
             count(&mut statuses, &to_statuses, &status);
             count(&mut types, &to_types, &task_type);
+            let new_type = to_types
+                .iter()
+                .find(|t| fold(&t.name) == fold(&task_type))
+                .or_else(|| to_types.iter().find(|t| t.id == fallback_type))
+                .map(|t| t.name.clone())
+                .unwrap_or_default();
+            for (name, has_default) in super::custom_field::move_required(tx, id, &to, &new_type)? {
+                match required_fields.iter_mut().find(|r| r.name == name) {
+                    Some(r) => r.tasks += 1,
+                    None => required_fields.push(MoveRequiredField {
+                        name,
+                        tasks: 1,
+                        has_default,
+                    }),
+                }
+            }
             for label in task_labels(tx, id)? {
                 count(&mut labels, &to_labels, &label.name);
             }
@@ -1912,8 +1947,9 @@ fn move_check(tx: &Transaction<'_>, input: &TaskMoveCheckInput) -> Result<MoveCh
         labels,
         fields,
         versions,
+        required_fields,
         fallback_status: name_of(&to_statuses, first_status(tx, &to)?),
-        fallback_type: name_of(&to_types, default_type(tx, &to)?),
+        fallback_type: name_of(&to_types, fallback_type),
     })
 }
 

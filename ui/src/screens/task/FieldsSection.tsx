@@ -55,7 +55,7 @@ export function FieldsSection({ task, readOnly, locked }: { task: Task; readOnly
   );
 }
 
-interface EditorProps {
+export interface EditorProps {
   field: CustomField;
   value: unknown;
   readOnly: boolean;
@@ -65,7 +65,8 @@ interface EditorProps {
 
 const NONE = "\u0000none";
 
-function FieldEditor({ field, value, readOnly, onChange }: EditorProps) {
+/** The editor of one custom field's value, by its kind. */
+export function FieldEditor({ field, value, readOnly, onChange }: EditorProps) {
   const t = useT();
   switch (field.kind) {
     case "boolean":

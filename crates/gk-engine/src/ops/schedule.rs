@@ -564,13 +564,14 @@ fn get(q: &QueryCtx<'_>, input: ScheduleInput) -> Result<Schedule, Failure> {
             dependents: u32::try_from(dependents).unwrap_or(u32::MAX),
             version: r.version,
             id: id.to_string(),
+            fields: super::custom_field::listed_values(q.tx, *id)?,
         });
     }
     let unscheduled: Vec<UnscheduledTask> = undated
         .iter()
         .map(|id| {
             let r = &rows[id];
-            UnscheduledTask {
+            Ok(UnscheduledTask {
                 key: r.key(),
                 title: r.title.clone(),
                 project: r.project_key.clone(),
@@ -583,9 +584,10 @@ fn get(q: &QueryCtx<'_>, input: ScheduleInput) -> Result<Schedule, Failure> {
                 milestone: r.milestone,
                 version: r.version,
                 id: id.to_string(),
-            }
+                fields: super::custom_field::listed_values(q.tx, *id)?,
+            })
         })
-        .collect();
+        .collect::<Result<_, Failure>>()?;
 
     // Links between the tasks shown.
     let out: HashSet<Id> = ordered

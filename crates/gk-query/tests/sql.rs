@@ -116,6 +116,19 @@ fn the_history() {
 }
 
 #[test]
+fn the_history_of_custom_fields() {
+    insta::assert_snapshot!(golden(
+        &[
+            "was:cf.area:\"front END\" -was:cf.approved:yes",
+            "was:cf.points:3 was:cf.ticket=ABC-1",
+            "changed:status,cf.points",
+            "changed:cf.review-on>-7d",
+        ],
+        None,
+    ));
+}
+
+#[test]
 fn a_span_of_days() {
     insta::assert_snapshot!(golden(
         &[

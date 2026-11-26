@@ -9,7 +9,7 @@ import { Button, Menu, MenuItem, MenuTrigger, Popover } from "react-aria-compone
 
 import { useTrashTasks } from "../../data/safety";
 import { useCreateTask } from "../../data/board";
-import { useGroupText } from "./GroupName";
+import { groupingField, useGroupText } from "./GroupName";
 import { useAppearance } from "../../appearance/AppearanceProvider";
 import { classes } from "../../classes";
 import { Kbd } from "../../components/Kbd";
@@ -20,7 +20,7 @@ import { keysOf } from "../../actions/actions";
 import { errorToast, useCall, useCommand } from "../../data/hooks";
 import { allRows, defaultView, LIST_PAGE, toCsv, toJson, useListLayout, useListNames, useListRows, useParsedQuery, useQueryFields, useSavedViews, useUnfilteredCount, type ListScope } from "../../data/list";
 import { useDurationUnits } from "../../data/time";
-import { type CustomField, type ListedTask, type ListGroup, type ListGrouping, type ListLayout, type QueryProblem, type SavedView } from "../../generated/ops";
+import { type CustomField, type ListedTask, type ListGroup, type ListLayout, type QueryProblem, type SavedView } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { saveExport } from "../../ipc/exportFile";
 import { useStatus, useTimerTask } from "../../shell/context";
@@ -30,7 +30,7 @@ import { CellContext, type CellActions } from "./cells";
 import { Chips } from "./Chips";
 import { SaveControls, useViewCommands, ViewPicker } from "./ViewMenu";
 import { ListTable } from "./ListTable";
-import { changedFrom, clickRow, COLUMNS, exportName, FIXED_COLUMNS, GROUPINGS, groupTaskInput, isCustomColumn, isGrouping, listLines, moveColumn, nextSort, NO_SELECTION, removeRanges, viewColumns, withSort, type ColumnId, type Selection } from "./model";
+import { changedFrom, clickRow, COLUMNS, exportName, FIXED_COLUMNS, GROUPINGS, GROUPING_FIELD_KINDS, groupTaskInput, isCustomColumn, isGrouping, listLines, moveColumn, nextSort, NO_SELECTION, removeRanges, viewColumns, withSort, type ColumnId, type Grouping, type Selection } from "./model";
 import { useCustomFields } from "../../data/fields";
 import styles from "./List.module.css";
 
@@ -101,7 +101,7 @@ function LoadedList({ project, views, layout, openTask, onOpen }: LoadedListProp
   const [ownColumns, setOwnColumns] = useState<readonly string[]>(layout.columns);
   const [widths, setWidths] = useState<Readonly<Record<string, number>>>(layout.widths);
   const [columns, setColumns] = useState<ColumnId[]>(() => viewColumns(initial, workspaceWide, layout.columns));
-  const [groupBy, setGroupBy] = useState<ListGrouping | undefined>(isGrouping(initial?.group_by) ? initial.group_by : undefined);
+  const [groupBy, setGroupBy] = useState<Grouping | undefined>(isGrouping(initial?.group_by) ? initial.group_by : undefined);
   // The groups the person folded away, per grouping, kept by the engine with the layout.
   const [folded, setFolded] = useState<Readonly<Record<string, readonly string[]>>>(layout.collapsed ?? {});
   const collapsed: ReadonlySet<string> = new Set(groupBy === undefined ? [] : (folded[groupBy] ?? []));
@@ -146,6 +146,7 @@ function LoadedList({ project, views, layout, openTask, onOpen }: LoadedListProp
   // Each open group ends with a "+" line that adds a task with its value,
   // where there is a project to put it in.
   const adds = groupBy !== undefined && (project !== undefined || groupBy === "project" || groupBy === "parent");
+  const groupField = groupingField(groupBy, customFields);
   const linesOf = (groups: readonly ListGroup[] | undefined, total: number) =>
     listLines(
       total,
@@ -230,15 +231,15 @@ function LoadedList({ project, views, layout, openTask, onOpen }: LoadedListProp
     keepLayout.mutate({ ...(project === undefined ? {} : { project }), widths: { [column]: width } });
   };
 
-  const group = (next: ListGrouping | undefined) => {
+  const group = (next: Grouping | undefined) => {
     setGroupBy(next);
   };
 
   const createTask = useCreateTask();
-  const groupText = useGroupText();
+  const groupText = useGroupText(customFields);
   /** Adds a task with a group's value, from the "+" line at the group's end. */
   const addToGroup = async (target: ListGroup, title: string) => {
-    const input = groupBy === undefined ? undefined : groupTaskInput(groupBy, target, project, title);
+    const input = groupBy === undefined ? undefined : groupTaskInput(groupBy, target, project, title, groupField);
     if (input === undefined) {
       return;
     }
@@ -473,7 +474,7 @@ function LoadedList({ project, views, layout, openTask, onOpen }: LoadedListProp
               </Switch>
             </div>
           )}
-          <GroupMenu value={groupBy} withProject={workspaceWide || includeSubprojects} onChange={group} />
+          <GroupMenu value={groupBy} withProject={workspaceWide || includeSubprojects} fields={customFields} onChange={group} />
           <ColumnMenu columns={columns} fields={customFields} onChange={changeColumns} />
           <MenuTrigger>
             <Button className="btn flat">
@@ -535,6 +536,7 @@ function LoadedList({ project, views, layout, openTask, onOpen }: LoadedListProp
           <BulkBar
             keys={selectedKeys}
             names={names}
+            fields={customFields}
             onClear={() => {
               setSelection(NO_SELECTION);
             }}
@@ -584,10 +586,13 @@ function LoadedList({ project, views, layout, openTask, onOpen }: LoadedListProp
 }
 
 /** "Group: Status": how the rows are grouped, or not at all. */
-function GroupMenu({ value, withProject, onChange }: { value: ListGrouping | undefined; withProject: boolean; onChange: (grouping: ListGrouping | undefined) => void }) {
+function GroupMenu({ value, withProject, fields, onChange }: { value: Grouping | undefined; withProject: boolean; fields: readonly CustomField[]; onChange: (grouping: Grouping | undefined) => void }) {
   const t = useT();
-  const choices = GROUPINGS.filter((grouping) => grouping !== "project" || withProject);
-  const name = (grouping: ListGrouping | undefined) => t(grouping === undefined ? "list-group-by-none" : `list-group-by-${grouping}`);
+  // Custom fields of a kind a list groups by: their names are the person's own words.
+  const custom = [...new Map(fields.filter((field) => GROUPING_FIELD_KINDS.has(field.kind)).map((field) => [field.query_name, field] as const)).values()];
+  const choices: Grouping[] = [...GROUPINGS.filter((grouping) => grouping !== "project" || withProject), ...custom.map((field) => field.query_name as Grouping)];
+  const name = (grouping: Grouping | undefined) =>
+    grouping === undefined ? t("list-group-by-none") : grouping.startsWith("cf.") ? (custom.find((field) => field.query_name === grouping)?.name ?? grouping) : t(`list-group-by-${grouping}`);
   return (
     <MenuTrigger>
       <Button className="btn flat" aria-label={t("list-group-button", { grouping: name(value) })}>
