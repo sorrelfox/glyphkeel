@@ -88,7 +88,7 @@
   height: var(--h-row);
   margin-top: 8px;
   padding-block: 0;
-  padding-inline: 16px 8px;
+  padding-inline: 16px 12px; /* 12 px at the end: clear of the sidebar's resize handle */
 }
 
 .projectTree {
@@ -107,18 +107,34 @@
   margin-inline-start: auto;
 }
 
+/* 24 px wide, a pointer target of that size, centred on the sidebar's edge;
+   the buttons on either side (the sidebar's "New project", the header bar's
+   first) keep 12 px from the edge, so it covers none of them. The line it
+   draws when focused is 2 px, on the edge. */
 .splitter {
   position: relative;
   z-index: 1;
   flex: none;
-  width: 6px;
-  margin: 0 -3px;
+  inline-size: 24px;
+  margin-inline: -12px;
   cursor: col-resize;
+  touch-action: none;
+}
+
+.splitter::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 11px;
+  inline-size: var(--focus-w);
 }
 
 .splitter:focus-visible {
-  outline: var(--focus-w) solid var(--focus);
-  outline-offset: -2px;
+  outline: none;
+}
+
+.splitter:focus-visible::after {
+  background: var(--focus);
 }
 
 /* ---------- main column ---------- */
@@ -135,7 +151,7 @@
   align-items: center;
   gap: 6px;
   padding-block: 0;
-  padding-inline: 8px 10px;
+  padding-inline: 12px 10px; /* 12 px at the start: clear of the sidebar's resize handle */
   outline: none;
 }
 

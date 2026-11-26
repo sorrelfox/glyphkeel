@@ -473,7 +473,6 @@ function PageAside({ page, writable, headings, currentHeading, references, onHea
 }
 
 function BacklinkRow({ link, onNavigate, onOpenTask }: { link: Backlink; onNavigate: (id: string, heading?: string) => void; onOpenTask: (key: string) => void }) {
-  const t = useT();
   if (link.page) {
     const target = link.page;
     return (
@@ -484,8 +483,8 @@ function BacklinkRow({ link, onNavigate, onOpenTask }: { link: Backlink; onNavig
   }
   const key = link.task ?? "";
   return (
-    <button type="button" className={styles.asideTask} data-backlink={key} aria-label={t("wiki-open-task", { key, title: link.title })} onClick={() => { onOpenTask(key); }}>
-      <span className="key">{key}</span>
+    <button type="button" className={styles.asideTask} data-backlink={key} onClick={() => { onOpenTask(key); }}>
+      <span className="key">{key}</span>{" "}
       <span className="muted truncate">{link.title}</span>
     </button>
   );
@@ -505,8 +504,8 @@ function ReferenceRow({ reference, onNavigate, onOpenTask }: { reference: Refere
   if (reference.kind === "task" && reference.task !== undefined) {
     const key = reference.task;
     return (
-      <button type="button" className={styles.asideTask} data-reference={key} aria-label={t("wiki-open-task", { key, title: reference.title ?? "" })} onClick={() => { onOpenTask(key); }}>
-        <span className="key">{key}</span>
+      <button type="button" className={styles.asideTask} data-reference={key} onClick={() => { onOpenTask(key); }}>
+        <span className="key">{key}</span>{" "}
         <span className="muted truncate">{reference.title}</span>
       </button>
     );

@@ -174,7 +174,7 @@ describe("what links to a task", () => {
     render(<App start={{ titleBar: "app", locale: "en-US" }} client={createClient(transport)} path="/projects/TM?task=TM-1" />);
     const panel = await screen.findByRole("complementary", { name: (name) => plain(name).startsWith("Task TM-1") });
     const section = await within(panel).findByRole("region", { name: "Linked from" });
-    const link = await within(section).findByRole("button", { name: (name) => plain(name) === "Open the wiki page Release plan" });
+    const link = await within(section).findByRole("button", { name: (name) => plain(name) === "Release plan Wiki page" });
     fireEvent.click(link);
     expect(await page("Release plan")).toBeDefined();
   });

@@ -6,7 +6,7 @@
 // closely enough for the screens (code is skipped), and the order of pages
 // among their siblings.
 
-import { nextId } from "./seed";
+import { nextId, nextUuid } from "./seed";
 import { type FakeState, type FakeWikiPage } from "./state";
 
 /** One link in a text, as written. */
@@ -133,7 +133,8 @@ See also [[Release plan#Dates]] and [[Saved views]].
 /**
  * Sample pages for the wiki of Task Manager: a small tree with headings,
  * links between pages, a link to a page that doesn't exist yet, and task
- * keys; one task's description links back to a page.
+ * keys; one task's description links back to a page, and another task's
+ * description and a comment name that task.
  */
 export function addSampleWiki(state: FakeState, today: Date): void {
   const project = state.projects.find((candidate) => candidate.key === "TM");
@@ -162,5 +163,16 @@ export function addSampleWiki(state: FakeState, today: Date): void {
   const task = state.tasks.find((candidate) => candidate.projectId === project.id && candidate.number === 3);
   if (task) {
     task.description = `${task.description}${task.description === "" ? "" : "\n\n"}Written up in [[Query language#Grammar]].`;
+    // Another task's description and a comment name it, so its "Linked from" lists all three kinds.
+    const others = state.tasks.filter((candidate) => candidate.projectId === project.id && candidate.id !== task.id);
+    const described = others.find((candidate) => candidate.number === 4);
+    if (described) {
+      described.description = `${described.description}${described.description === "" ? "" : "\n\n"}Needs the parser from TM-3.`;
+    }
+    const commented = others.find((candidate) => candidate.number === 5);
+    if (commented) {
+      const createdAt = at(1);
+      state.comments.push({ id: nextUuid(), taskId: commented.id, body: "The dates here follow TM-3.", author: { kind: "user", name: "You" }, via: "app", createdAt, editedAt: null, version: 1, revisions: [], replyTo: null, deletedAt: null });
+    }
   }
 }

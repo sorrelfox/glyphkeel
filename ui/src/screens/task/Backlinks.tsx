@@ -54,16 +54,20 @@ export function BacklinksSection({ taskKey, onOpenTask }: { taskKey: string; onO
         const kind = link.page ? "page" : link.comment !== undefined ? "comment" : "task";
         return (
           <div key={`${kind}-${link.page?.id ?? link.comment ?? link.task ?? ""}`} className={classes("item", styles.row)} data-backlink={kind}>
+            {/* Named by what it shows: the key, the title and where the link is. */}
             <Button
               className={classes(styles.rowMain)}
-              aria-label={t(`backlinks-open-${kind}`, { title: link.title, key: link.task ?? "" })}
               onPress={() => {
                 open(link);
               }}
             >
               {kind === "page" ? <BookOpen className="ic s muted" /> : kind === "comment" ? <MessageSquare className="ic s muted" /> : <FileText className="ic s muted" />}
-              {link.task !== undefined && <span className="key">{link.task}</span>}
-              <span className="truncate grow">{link.title}</span>
+              {link.task !== undefined && (
+                <>
+                  <span className="key">{link.task}</span>{" "}
+                </>
+              )}
+              <span className="truncate grow">{link.title}</span>{" "}
               <span className={classes("faint", styles.small)}>{t(`backlinks-kind-${kind}`)}</span>
             </Button>
           </div>

@@ -6,8 +6,9 @@ import { appendFileSync } from "node:fs";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
-// axe-core on every screen and main dialog of the sample workspace, in the
-// light and the dark theme, against the WCAG 2.2 A and AA rules. A finding
+// axe-core on every screen and main dialog of the sample workspace, in every
+// theme and with more than the default accents, against the WCAG 2.2 A and
+// AA rules. A finding
 // fails the test unless it is one of the accepted exceptions below, each with
 // its reason. GK_A11Y_LOG names a file that gets every finding and every item
 // axe leaves for review, one JSON line each.
@@ -78,6 +79,17 @@ const SCREENS: Screen[] = [
   { name: "board", open: openProject },
   { name: "task panel", open: openTask },
   {
+    // The three kinds of "Linked from" row: a wiki page, a description, a comment.
+    name: "task panel with links to it",
+    path: "/?wiki",
+    open: async (page) => {
+      await openProject(page);
+      await page.locator('section[data-lane] [data-card="TM-3"]').dblclick();
+      const section = page.getByRole("complementary", { name: /^Task / }).getByRole("region", { name: "Linked from" });
+      await expect(section.getByRole("button")).toHaveCount(3);
+    },
+  },
+  {
     name: "move dialog",
     open: async (page) => {
       await openTask(page);
@@ -97,6 +109,16 @@ const SCREENS: Screen[] = [
       await expect(page.getByRole("treegrid", { name: "Pages" }).getByRole("row").first()).toBeVisible();
       await page.getByRole("treegrid", { name: "Pages" }).getByRole("row").first().click();
       await expect(page.getByRole("region", { name: /Wiki page/ })).toBeVisible();
+    },
+  },
+  {
+    // A page that other pages and tasks link to, and that links to a task.
+    name: "wiki page with links",
+    path: "/?wiki",
+    open: async (page) => {
+      await view(page, "Wiki");
+      await page.getByRole("treegrid", { name: "Pages" }).getByRole("row", { name: "Query language" }).click();
+      await expect(page.getByRole("region", { name: "Tasks that link here" }).getByRole("button").first()).toBeVisible();
     },
   },
   { name: "roadmap", open: async (page) => { await view(page, "Roadmap"); await expect(page.getByRole("article").first()).toBeVisible(); } },
@@ -167,15 +189,44 @@ function accepted(rule: string, target: string): boolean {
   return EXCEPTIONS.some((exception) => exception.rule === rule && target.includes(exception.target));
 }
 
-for (const scheme of ["light", "dark"] as const) {
-  test.describe(`${scheme} theme`, () => {
-    test.use({ colorScheme: scheme, locale: "en-US" });
+interface Look {
+  name: string;
+  scheme: "light" | "dark";
+  /** What the appearance settings hold; nothing: follow the desktop. */
+  appearance?: { theme: string; accent?: string };
+  theme: string;
+  accent: string;
+}
+
+/**
+ * The themes, each with the accent it suggests, and two more accents: the
+ * darkest fill on a light theme, and one on a dark theme, where accent text
+ * sits on an accent-tinted selection.
+ */
+const LOOKS: Look[] = [
+  { name: "light theme", scheme: "light", theme: "light", accent: "blue" },
+  { name: "dark theme", scheme: "dark", theme: "dark", accent: "blue" },
+  { name: "sand theme", scheme: "light", appearance: { theme: "sand" }, theme: "sand", accent: "orange" },
+  { name: "slate theme", scheme: "dark", appearance: { theme: "slate" }, theme: "slate", accent: "teal" },
+  { name: "light theme, amber accent", scheme: "light", appearance: { theme: "light", accent: "amber" }, theme: "light", accent: "amber" },
+  { name: "dark theme, purple accent", scheme: "dark", appearance: { theme: "dark", accent: "purple" }, theme: "dark", accent: "purple" },
+];
+
+for (const look of LOOKS) {
+  test.describe(look.name, () => {
+    test.use({ colorScheme: look.scheme, locale: "en-US" });
 
     for (const screen of SCREENS) {
       test(`${screen.name} has no WCAG 2.2 AA violations`, async ({ page }) => {
         await page.clock.setFixedTime(new Date(`${TODAY}T10:00:00`));
+        if (look.appearance) {
+          await page.addInitScript((appearance) => {
+            window.localStorage.setItem("glyphkeel.appearance", JSON.stringify(appearance));
+          }, look.appearance);
+        }
         await page.goto(screen.path ?? "/");
-        await expect(page.locator("html")).toHaveAttribute("data-theme", scheme);
+        await expect(page.locator("html")).toHaveAttribute("data-theme", look.theme);
+        await expect(page.locator("html")).toHaveAttribute("data-accent", look.accent);
         await screen.open(page);
         // Let transitions settle, so colours are measured at rest.
         await page.waitForTimeout(250);
@@ -185,7 +236,7 @@ for (const scheme of ["light", "dark"] as const) {
         expect(ran).toContain("target-size");
         for (const review of results.incomplete) {
           for (const node of review.nodes) {
-            log({ screen: screen.name, scheme, review: review.id, target: node.target.join(" "), html: node.html.slice(0, 200), summary: node.failureSummary });
+            log({ screen: screen.name, look: look.name, review: review.id, target: node.target.join(" "), html: node.html.slice(0, 200), summary: node.failureSummary });
           }
         }
         const found: string[] = [];
@@ -193,7 +244,7 @@ for (const scheme of ["light", "dark"] as const) {
           for (const node of violation.nodes) {
             const target = node.target.join(" ");
             if (!accepted(violation.id, target)) {
-              log({ screen: screen.name, scheme, rule: violation.id, impact: violation.impact, target, html: node.html.slice(0, 300), summary: node.failureSummary });
+              log({ screen: screen.name, look: look.name, rule: violation.id, impact: violation.impact, target, html: node.html.slice(0, 300), summary: node.failureSummary });
               found.push(`[${violation.impact ?? "?"}] ${violation.id}: ${target} — ${node.failureSummary?.split("\n").slice(1, 3).join(" ") ?? ""}`);
             }
           }
