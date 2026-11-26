@@ -26,10 +26,14 @@ use std::time::Instant;
 
 use anyhow::{Context, Result, bail};
 
+use crate::windows::WinSuite;
+
 const HELP: &str = "\
 Usage: cargo xtask ci [--suite S[,S…]] [--distro D[,D…]] [--engine E] [--rebuild]
                       [--cache-dir DIR] [--package-release N] [--ui-flows F[,F…]]
                       [--pseudo-locale L] [--perf-enforce]
+       cargo xtask ci --distro windows-cross [--suite S[,S…]] [--engine E] [--rebuild]
+                      [--cache-dir DIR] [--release-dir DIR]
        cargo xtask ci --here [--suite S[,S…]] [--package-release N] [--ui-flows F[,F…]]
                       [--pseudo-locale L]
        cargo xtask ci --list
@@ -43,6 +47,10 @@ Options:
                 Default: every distribution. For `packages`, `offline` and
                 `perf` these are the distributions the packages are installed
                 on; they are always built on ubuntu-22.04.
+                `windows-cross` is the Windows build, cross-compiled from
+                Linux and run under Wine. It is never part of the default,
+                runs on its own and has suites of its own (see `--list`;
+                default: all of them).
   --engine E    `podman` or `docker`. Default: podman when it is installed,
                 docker otherwise.
   --rebuild     Rebuild the images from scratch, without the layer cache.
@@ -64,6 +72,10 @@ Options:
                 Without it results over budget are only reported. The
                 suite fails either way when the app or its web view dies
                 or a result is missing.
+  --release-dir DIR
+                Copy the Windows installer to DIR/<version>/windows/
+                (windows-cross `nsis` suite only). Without it the installer
+                stays in the build cache.
   --here        Run the suites on this machine, without containers. This is
                 what runs inside each container.
   --list        List the suites and distributions.
@@ -750,6 +762,12 @@ struct Options {
     pseudo_locale: String,
     /// Whether the `perf` suite fails on a result over budget.
     perf_enforce: bool,
+    /// Whether the Windows cross build runs instead of the distributions.
+    windows: bool,
+    /// The suites of the Windows cross build.
+    win_suites: Vec<WinSuite>,
+    /// Where the Windows installer is copied, under `<version>/windows/`.
+    release_dir: Option<PathBuf>,
     here: bool,
     list: bool,
     help: bool,
@@ -767,10 +785,16 @@ impl Options {
             ui_flows: Vec::new(),
             pseudo_locale: PSEUDO_LOCALE.to_owned(),
             perf_enforce: false,
+            windows: false,
+            win_suites: Vec::new(),
+            release_dir: None,
             here: false,
             list: false,
             help: false,
         };
+        // Suite names are resolved once the distributions are known: the
+        // Windows cross build has suites of its own.
+        let mut suite_names = Vec::new();
         let mut args = args.iter();
         while let Some(arg) = args.next() {
             let (flag, inline) = match arg.split_once('=') {
@@ -789,14 +813,20 @@ impl Options {
             match flag {
                 "--suite" => {
                     for name in value()?.split(',') {
-                        push_unique(&mut options.suites, Suite::parse(name.trim())?);
+                        push_unique(&mut suite_names, name.trim().to_owned());
                     }
                 }
                 "--distro" => {
                     for name in value()?.split(',') {
-                        push_unique(&mut options.distros, Distro::parse(name.trim())?);
+                        let name = name.trim();
+                        if name == crate::windows::NAME {
+                            options.windows = true;
+                        } else {
+                            push_unique(&mut options.distros, Distro::parse(name)?);
+                        }
                     }
                 }
+                "--release-dir" => options.release_dir = Some(PathBuf::from(value()?)),
                 "--engine" => {
                     options.engine = Some(match value()?.as_str() {
                         "podman" => Engine::Podman,
@@ -838,11 +868,36 @@ impl Options {
                 other => bail!("unknown option `{other}`\n\n{HELP}"),
             }
         }
-        if options.suites.is_empty() {
-            options.suites = Suite::DEFAULT.to_vec();
+        if options.windows {
+            if !options.distros.is_empty() {
+                bail!(
+                    "`{}` runs on its own, with suites of its own; run the other \
+                     distributions separately",
+                    crate::windows::NAME
+                );
+            }
+            for name in &suite_names {
+                push_unique(&mut options.win_suites, WinSuite::parse(name)?);
+            }
+            if options.win_suites.is_empty() {
+                options.win_suites = WinSuite::ALL.to_vec();
+            }
+        } else {
+            for name in &suite_names {
+                push_unique(&mut options.suites, Suite::parse(name)?);
+            }
+            if options.suites.is_empty() {
+                options.suites = Suite::DEFAULT.to_vec();
+            }
+            if options.distros.is_empty() {
+                options.distros = Distro::ALL.to_vec();
+            }
         }
-        if options.distros.is_empty() {
-            options.distros = Distro::ALL.to_vec();
+        if options.release_dir.is_some() && !options.win_suites.contains(&WinSuite::Nsis) {
+            bail!(
+                "`--release-dir` applies to the `nsis` suite of `{}` only",
+                crate::windows::NAME
+            );
         }
         if options.package_release.is_some() && !options.suites.contains(&Suite::Package) {
             bail!("`--package-release` applies to the `package` suite only");
@@ -895,6 +950,9 @@ pub(crate) fn run(root: &Path, args: &[String]) -> Result<bool> {
         list();
         return Ok(true);
     }
+    if options.windows && options.here {
+        return crate::windows::run_here(root, &options.win_suites, options.release_dir.as_deref());
+    }
     if options.here {
         return run_here(
             root,
@@ -909,6 +967,19 @@ pub(crate) fn run(root: &Path, args: &[String]) -> Result<bool> {
         None => Engine::detect()?,
     };
     let pins = Pins::read(root)?;
+    if options.windows {
+        return crate::windows::run_in_container(
+            root,
+            engine,
+            &pins,
+            &crate::windows::HostOptions {
+                suites: &options.win_suites,
+                rebuild: options.rebuild,
+                cache_dir: options.cache_dir.as_deref(),
+                release_dir: options.release_dir.as_deref(),
+            },
+        );
+    }
     let (host, inside): (Vec<Suite>, Vec<Suite>) =
         options.suites.iter().partition(|suite| suite.on_host());
     let mut failed = Vec::new();
@@ -974,6 +1045,13 @@ fn list() {
     eprintln!("Distributions (default: all):");
     for distro in Distro::ALL {
         eprintln!("  {}", distro.name());
+    }
+    eprintln!(
+        "  {} (on its own, never by default; its suites, default all, in this order):",
+        crate::windows::NAME
+    );
+    for suite in WinSuite::ALL {
+        eprintln!("    {:<8} {}", suite.name(), suite.about());
     }
     eprintln!("UI flows of the ui suite (default: all, in this order):");
     for flow in Flow::ALL {
@@ -1090,15 +1168,26 @@ pub(crate) fn build_image(
     pins: &Pins,
     rebuild: bool,
 ) -> Result<bool> {
+    build_named_image(root, engine, distro.name(), pins, rebuild)
+}
+
+/// Builds `ci/containers/<name>.Containerfile` as the image `<prefix>:<name>`.
+pub(crate) fn build_named_image(
+    root: &Path,
+    engine: Engine,
+    name: &str,
+    pins: &Pins,
+    rebuild: bool,
+) -> Result<bool> {
     let context = root.join("ci/containers");
-    let file = context.join(format!("{}.Containerfile", distro.name()));
+    let file = context.join(format!("{name}.Containerfile"));
     let mut cmd = Command::new(engine.program());
     cmd.arg("build")
         .args(NO_CORE_DUMPS)
         .arg("--file")
         .arg(&file)
         .arg("--tag")
-        .arg(distro.image())
+        .arg(format!("{}:{name}", prefix()))
         .arg("--build-arg")
         .arg(format!("RUST_TOOLCHAIN={}", pins.rust))
         .arg("--build-arg")
@@ -1133,16 +1222,27 @@ const FORWARDED_ENV: [&str; 2] = ["CARGO_BUILD_JOBS", "CARGO_TERM_COLOR"];
 /// The build caches of one distribution, as `--volume` arguments: named
 /// volumes by default, or directories under `cache_dir`.
 fn cache_volumes(distro: Distro, cache_dir: Option<&Path>) -> Result<Vec<String>> {
-    let mounts = [
-        (format!("target-{}", distro.name()), "/work/target"),
-        ("cargo-registry".to_owned(), "/usr/local/cargo/registry"),
-        ("pnpm-store".to_owned(), "/pnpm-store"),
-    ];
+    named_volumes(
+        &[
+            (format!("target-{}", distro.name()), "/work/target"),
+            ("cargo-registry".to_owned(), "/usr/local/cargo/registry"),
+            ("pnpm-store".to_owned(), "/pnpm-store"),
+        ],
+        cache_dir,
+    )
+}
+
+/// Caches as `--volume` arguments: each name mounted at its path, as a named
+/// volume `<prefix>-<name>`, or the directory `cache_dir/<name>`.
+pub(crate) fn named_volumes(
+    mounts: &[(String, &str)],
+    cache_dir: Option<&Path>,
+) -> Result<Vec<String>> {
     let mut volumes = Vec::new();
     for (name, target) in mounts {
         let source = match cache_dir {
             Some(dir) => {
-                let dir = dir.join(&name);
+                let dir = dir.join(name);
                 fs::create_dir_all(&dir)
                     .with_context(|| format!("cannot create {}", dir.display()))?;
                 let dir = fs::canonicalize(&dir)
@@ -1199,6 +1299,19 @@ pub(crate) fn run_in_container(
     let source = root
         .to_str()
         .context("the repository path is not valid UTF-8")?;
+    let mut cmd = container_command(engine, source);
+    for volume in cache_volumes(distro, cache_dir)? {
+        cmd.arg("--volume").arg(volume);
+    }
+    cmd.arg(distro.image()).args(["sh", "-c", &script]);
+    run_with_files(cmd, files.as_deref())
+}
+
+/// The start of a `run` command for a CI container: removed afterwards,
+/// no core dumps, the source at /src read-only, the pnpm store at
+/// /pnpm-store and the forwarded variables. Volumes, the image and the
+/// command follow.
+pub(crate) fn container_command(engine: Engine, source: &str) -> Command {
     let mut cmd = Command::new(engine.program());
     cmd.args(["run", "--rm", "--init", "--interactive"])
         .args(NO_CORE_DUMPS)
@@ -1206,9 +1319,6 @@ pub(crate) fn run_in_container(
         .args(["--security-opt", "label=disable"])
         .arg("--volume")
         .arg(format!("{source}:/src:ro"));
-    for volume in cache_volumes(distro, cache_dir)? {
-        cmd.arg("--volume").arg(volume);
-    }
     cmd.args(["--env", "PNPM_CONFIG_STORE_DIR=/pnpm-store"]);
     for name in FORWARDED_ENV {
         // `--env NAME` without a value passes the host's value on.
@@ -1216,7 +1326,12 @@ pub(crate) fn run_in_container(
             cmd.args(["--env", name]);
         }
     }
-    cmd.arg(distro.image()).args(["sh", "-c", &script]);
+    cmd
+}
+
+/// Runs a container command, giving it the list of source files on standard
+/// input (NUL-separated) when there is one.
+pub(crate) fn run_with_files(mut cmd: Command, files: Option<&[PathBuf]>) -> Result<bool> {
     let shown = format!("{cmd:?}");
     let mut child = cmd
         .stdin(Stdio::piped())
@@ -1224,7 +1339,7 @@ pub(crate) fn run_in_container(
         .with_context(|| format!("cannot run {shown}"))?;
     {
         let mut stdin = child.stdin.take().context("no standard input")?;
-        for file in files.iter().flatten() {
+        for file in files.into_iter().flatten() {
             let name = file
                 .to_str()
                 .with_context(|| format!("{} is not valid UTF-8", file.display()))?;
@@ -1247,12 +1362,7 @@ fn copy_script(
     flows: &[&str],
     pseudo_locale: Option<&str>,
 ) -> String {
-    let copy = if from_list {
-        "tar -C /src --null --files-from=- -cf - | tar -C /work -xf -"
-    } else {
-        "tar -C /src --exclude=./.git --exclude=./target --exclude=./node_modules \
-         --exclude=./ui/node_modules --exclude=./ui/dist -cf - . | tar -C /work -xf -"
-    };
+    let copy = copy_command(from_list);
     let release = package_release
         .map(|release| format!(" --package-release {release}"))
         .unwrap_or_default();
@@ -1268,6 +1378,17 @@ fn copy_script(
         "set -e; {copy}; exec cargo xtask ci --here --suite {}{release}{flows}{locale} </dev/null",
         suites.join(",")
     )
+}
+
+/// The shell command that copies the source from /src into /work: the files
+/// listed on standard input, or the whole tree without the build output.
+pub(crate) fn copy_command(from_list: bool) -> &'static str {
+    if from_list {
+        "tar -C /src --null --files-from=- -cf - | tar -C /work -xf -"
+    } else {
+        "tar -C /src --exclude=./.git --exclude=./target --exclude=./node_modules \
+         --exclude=./ui/node_modules --exclude=./ui/dist -cf - . | tar -C /work -xf -"
+    }
 }
 
 pub(crate) fn status(cmd: &mut Command) -> Result<bool> {
@@ -1383,6 +1504,59 @@ mod tests {
         let options = parse(&["--distro=ubuntu-22.04,debian-12", "--engine", "docker"]).unwrap();
         assert_eq!(options.distros, [Distro::Ubuntu2204, Distro::Debian12]);
         assert_eq!(options.engine, Some(Engine::Docker));
+    }
+
+    #[test]
+    fn the_windows_cross_build_runs_on_its_own_with_its_own_suites() {
+        use crate::windows::WinSuite;
+        let options = parse(&["--distro", "windows-cross"]).unwrap();
+        assert!(options.windows);
+        assert_eq!(options.win_suites, WinSuite::ALL);
+        assert!(options.distros.is_empty(), "no Linux distribution runs");
+        assert!(options.suites.is_empty());
+        let options = parse(&[
+            "--distro=windows-cross",
+            "--suite",
+            "smoke,test",
+            "--suite=smoke",
+            "--cache-dir",
+            "c",
+        ])
+        .unwrap();
+        assert_eq!(options.win_suites, [WinSuite::Smoke, WinSuite::Test]);
+        let options = parse(&[
+            "--suite",
+            "nsis",
+            "--distro",
+            "windows-cross",
+            "--release-dir",
+            "/r",
+        ])
+        .unwrap();
+        assert_eq!(options.release_dir, Some(PathBuf::from("/r")));
+        let options = parse(&["--here", "--distro", "windows-cross", "--suite", "build"]).unwrap();
+        assert!(options.here);
+        // Never part of the default run.
+        assert!(!parse(&[]).unwrap().windows);
+        assert!(parse(&["--distro", "windows-cross,fedora"]).is_err());
+        assert!(parse(&["--distro", "windows-cross", "--suite", "rust"]).is_err());
+        assert!(
+            parse(&["--suite", "smoke"]).is_err(),
+            "a Windows suite only"
+        );
+        assert!(
+            parse(&[
+                "--distro",
+                "windows-cross",
+                "--suite",
+                "smoke",
+                "--release-dir",
+                "r"
+            ])
+            .is_err()
+        );
+        assert!(parse(&["--suite", "package", "--release-dir", "r"]).is_err());
+        assert!(parse(&["--distro", "windows-cross", "--ui-flows", "list"]).is_err());
     }
 
     #[test]
