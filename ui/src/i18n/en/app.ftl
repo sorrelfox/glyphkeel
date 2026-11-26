@@ -131,6 +131,9 @@ preferences-run-in-background = Keep running in the background
 preferences-run-in-background-about = Closing the last window keeps Glyphkeel running for reminders and the timer, with an icon in the tray. Quit ends it.
 preferences-autostart = Start when you log in
 preferences-autostart-about = With background mode on, Glyphkeel starts with only its tray icon, for reminders; otherwise its window opens.
+# On Windows.
+preferences-autostart-windows = Start when you sign in
+preferences-autostart-windows-about = With background mode on, Glyphkeel starts with only its icon in the notification area, for reminders; otherwise its window opens. The Startup apps list in Windows Settings can turn it off too.
 preferences-rendering = Rendering
 preferences-safe-rendering = Safe rendering
 preferences-safe-rendering-about = Draws without the graphics card. Turn it on if windows stay blank, white or flicker. Scrolling is less smooth and Glyphkeel uses more memory.
@@ -199,6 +202,8 @@ key-ctrl = Ctrl
 key-alt = Alt
 key-shift = Shift
 key-super = Super
+# The Windows logo key, in shortcut hints on Windows.
+key-windows = Win
 key-escape = Esc
 key-delete = Delete
 key-enter = Enter

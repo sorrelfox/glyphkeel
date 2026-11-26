@@ -210,6 +210,7 @@ export function Shell({ titleBar, openGallery, firstRun = false }: ShellProps) {
                 view={view}
                 project={view === "project" ? projectKey : undefined}
                 width={sidebarWidth}
+                titleBar={titleBar}
                 onNewProject={setNewProject}
                 onProjectSettings={setSettingsOf}
                 onExportProject={(key) => {
