@@ -10,8 +10,9 @@ import { defineConfig, devices } from "@playwright/test";
 //
 // The pseudo-locale exists only in development builds, so this runs the
 // development server on sample data (`--mode fake`). The tests skip when the
-// page doesn't show the locale.
-const PORT = 5411;
+// page doesn't show the locale. GK_PSEUDO_PORT moves the server off its
+// usual port.
+const PORT = Number(process.env["GK_PSEUDO_PORT"] ?? 5411);
 const LOCALE = process.env["GK_PSEUDO_LOCALE"] ?? "en-XA";
 
 export default defineConfig({
