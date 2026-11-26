@@ -9,6 +9,7 @@ mod codegen;
 mod deps;
 mod headers;
 mod installed;
+mod windows;
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -21,8 +22,9 @@ Usage: cargo xtask <command> [options]
 Commands:
   help                Show this message.
   ci [options]        Run check suites in containers (Podman, or Docker when
-                      Podman is missing), one image per distribution. See
-                      `cargo xtask ci --help`.
+                      Podman is missing), one image per distribution, and
+                      the Windows build cross-compiled and run under Wine
+                      (`--distro windows-cross`). See `cargo xtask ci --help`.
   check-headers       Check that every source file starts with the licence
                       header.
   check-bundle [DIR]  Check that the release UI (default: ui/dist) names no
