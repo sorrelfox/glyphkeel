@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { BookOpen, ChartGantt, ChevronDown, Columns3, List, Menu as MenuIcon, Minus, PanelLeft, Plus, Square, X } from "lucide-react";
+import { BookOpen, CalendarDays, ChartGantt, ChevronDown, Columns3, List, Menu as MenuIcon, Minus, PanelLeft, Plus, Square, X } from "lucide-react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { Button, Menu, MenuTrigger, Popover } from "react-aria-components";
 
@@ -161,15 +161,16 @@ function ProjectButton({ project, onSettings, onNewSubproject }: ProjectButtonPr
   );
 }
 
-/** Board, List, Gantt and Wiki. Board and List exist so far; the others are dimmed. */
+/** Board, List, Calendar, Gantt and Wiki. Gantt and Wiki don't exist yet and are dimmed. */
 function ViewSwitcher({ project }: { project: string }) {
   const t = useT();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
-  const current = pathname.endsWith("/list") ? "list" : "board";
+  const current = pathname.endsWith("/list") ? "list" : pathname.endsWith("/calendar") ? "calendar" : "board";
   const views = [
     { id: "board", icon: <Columns3 className="ic" />, ready: true },
     { id: "list", icon: <List className="ic" />, ready: true },
+    { id: "calendar", icon: <CalendarDays className="ic" />, ready: true },
     { id: "gantt", icon: <ChartGantt className="ic" />, ready: false },
     { id: "wiki", icon: <BookOpen className="ic" />, ready: false },
   ];
@@ -186,6 +187,8 @@ function ViewSwitcher({ project }: { project: string }) {
           onClick={() => {
             if (view.id === "list") {
               void navigate({ to: "/projects/$key/list", params: { key: project } });
+            } else if (view.id === "calendar") {
+              void navigate({ to: "/projects/$key/calendar", params: { key: project } });
             } else if (view.id === "board") {
               void navigate({ to: "/projects/$key", params: { key: project } });
             }

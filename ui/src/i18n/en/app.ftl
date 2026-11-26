@@ -223,6 +223,7 @@ startup-ipc-fallback = The window can't reach the app over its own channel and h
 view-board = Board
 view-list = List
 view-gantt = Gantt
+view-calendar = Calendar
 view-wiki = Wiki
 header-views = Project views
 # The project button in the header bar; it opens the project menu.
