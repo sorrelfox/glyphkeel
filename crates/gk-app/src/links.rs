@@ -71,7 +71,23 @@ mod system {
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(windows)]
+mod system {
+    use gk_api::OpError;
+    use tauri::AppHandle;
+
+    /// Hands the address to the default browser or mail program.
+    pub(crate) async fn open(_app: &AppHandle, uri: &str) -> Result<(), OpError> {
+        let uri = uri.to_owned();
+        crate::files::blocking(move || {
+            crate::platform::windows::open_url(&uri)
+                .map_err(|e| OpError::storage(format!("No program opened the link: {e}.")))
+        })
+        .await
+    }
+}
+
+#[cfg(not(any(target_os = "linux", windows)))]
 mod system {
     use gk_api::OpError;
     use tauri::AppHandle;

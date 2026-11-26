@@ -43,6 +43,14 @@ zbus = { workspace = true }
 ashpd = { workspace = true }
 futures-util = { workspace = true }
 
+# Single instance, toasts, opening links and files, file choosers and the
+# confirmation dialog on Windows.
+[target.'cfg(windows)'.dependencies]
+tauri-plugin-single-instance = { workspace = true }
+tauri-plugin-opener = { workspace = true }
+tauri-winrt-notification = { workspace = true }
+rfd = { workspace = true }
+
 [dev-dependencies]
 schemars = { workspace = true }
 tempfile = { workspace = true }

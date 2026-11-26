@@ -13,7 +13,6 @@ mod background;
 mod cli_tool;
 mod files;
 mod graphics;
-#[cfg(target_os = "linux")]
 mod instance;
 mod ipc;
 mod links;
@@ -26,6 +25,7 @@ mod navigation;
 mod notifications;
 mod open_links;
 mod page;
+mod platform;
 mod quick_add;
 mod reminders;
 mod shortcut;
@@ -33,6 +33,8 @@ mod spell;
 mod start;
 mod task_window;
 mod title_bar;
+#[cfg(any(windows, test))]
+mod toasts;
 mod transfer;
 #[cfg(target_os = "linux")]
 mod webkit;
@@ -83,16 +85,21 @@ fn main() -> ExitCode {
             }
         }
     };
+    // On Windows a later start is handed over by the single-instance plugin,
+    // registered first below.
     #[cfg(not(target_os = "linux"))]
-    let (first_links, first_quick_add) = (
-        Vec::<String>::new(),
-        std::env::args().any(|arg| arg == "--quick-add"),
-    );
+    let (first_links, first_quick_add) = {
+        let this_start = instance::this_start();
+        (this_start.links, this_start.quick_add)
+    };
 
     let title_bar = TitleBar::from_env();
     let app_settings = AppSettings::load();
     let background_mode = BackgroundMode::new(app_settings.stored().background);
-    let built = tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(windows)]
+    let builder = builder.plugin(platform::windows::single_instance());
+    let built = builder
         .manage(Shown::default())
         .manage(open_links::OpenLinks::default())
         .manage(files::Drops::default())
@@ -285,7 +292,7 @@ fn open_workspace(app: &AppHandle) -> Workspace {
 }
 
 /// Handles later starts of the app on the main thread, in the order they
-/// arrive.
+/// arrive (on Linux; the single-instance plugin does it on Windows).
 #[cfg(target_os = "linux")]
 fn forward_activations(
     app: AppHandle,
@@ -303,7 +310,8 @@ fn forward_activations(
     });
 }
 
-#[cfg(target_os = "linux")]
+/// Does what a later start of the app asks for. Call on the main thread.
+#[cfg(any(target_os = "linux", windows))]
 fn on_activation(app: &AppHandle, activation: instance::Activation) {
     if activation.quick_add {
         quick_add::show(app, activation.token);
@@ -341,14 +349,31 @@ fn notifier(app: &AppHandle) -> Arc<dyn reminders::Notifier> {
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+/// Where reminders show on Windows: toasts, whose click brings the task
+/// forward in the main window.
+#[cfg(windows)]
+fn notifier(app: &AppHandle) -> Arc<dyn reminders::Notifier> {
+    let handle = app.clone();
+    let on_open: toasts::OnOpen = Box::new(move |task| {
+        let app = handle.clone();
+        let _ = handle.run_on_main_thread(move || {
+            background::show_main(&app, Some(task), None);
+        });
+    });
+    let system = platform::windows::Toasts::new(app.config().identifier.clone());
+    Arc::new(toasts::ToastNotifier::new(system, on_open))
+}
+
+#[cfg(not(any(target_os = "linux", windows)))]
 fn notifier(_app: &AppHandle) -> Arc<dyn reminders::Notifier> {
     Arc::new(LogNotifier)
 }
 
 /// Reminders without a notification server: written to the log.
+#[cfg(not(windows))]
 struct LogNotifier;
 
+#[cfg(not(windows))]
 impl reminders::Notifier for LogNotifier {
     fn show(&self, notice: &reminders::Notice) {
         eprintln!("glyphkeel-app: reminder: {}: {}", notice.title, notice.body);

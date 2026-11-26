@@ -121,6 +121,18 @@ tauri-plugin-global-shortcut = "=2.4.1"
 # The WebKitGTK bindings Tauri itself uses, to switch off web-view features
 # the app never needs (Linux only).
 webkit2gtk = "=2.0.2"
+# The app's desktop integration on Windows. The page gets no commands or
+# scripts from them: only the single-instance plugin is registered, and it
+# has none; the others are called from Rust.
+# - A second start hands its arguments to the running app, which may then
+#   come forward.
+tauri-plugin-single-instance = "=2.5.5"
+# - Links and attached files open in their default programs.
+tauri-plugin-opener = "=2.5.4"
+# - Reminders as toasts, whose click opens the task.
+tauri-winrt-notification = "=0.8.1"
+# - The system's file and folder choosers and its message box (TaskDialog).
+rfd = { version = "=0.16.1", default-features = false, features = ["common-controls-v6"] }
 # The async runtime: the MCP server uses only the single-threaded parts; the
 # development bridge adds its own features in its manifest.
 tokio = { version = "1.54.1", default-features = false, features = ["rt", "time", "macros"] }

@@ -29,6 +29,10 @@ confirm-agent-raise-refused = Agents may do no more than before: the change was 
 confirm-agent-limits-raise = Raise the limits on agents? Every agent connected through MCP may then make more changes, create more tasks or move more items to the trash than before.
 confirm-agent-limits-refused = The limits on agents stay as they were: the change was not confirmed.
 
+## Notifications of reminders
+
+notification-open = Open
+
 ## The command-line tool
 
 cli-install-nothing = There is no command-line tool to install: the shell finds it already, or it didn't come with the app.

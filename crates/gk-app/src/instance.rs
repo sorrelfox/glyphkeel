@@ -3,35 +3,49 @@
 
 //! One running app per session.
 //!
-//! The first process owns the app's name on the session bus and serves the
-//! standard `org.freedesktop.Application` interface there. A second start
-//! finds the name taken, hands its links and its activation token to the
-//! first process, and exits before it opens any window.
+//! On Linux, the first process owns the app's name on the session bus and
+//! serves the standard `org.freedesktop.Application` interface there. A
+//! second start finds the name taken, hands its links and its activation
+//! token to the first process, and exits before it opens any window.
 //!
 //! The activation token matters on Wayland: without it the compositor may
 //! refuse to bring the running window forward. Tauri's single-instance plugin
 //! passes only the arguments, so the hand-off is done here.
+//!
+//! On Windows, Tauri's single-instance plugin does the hand-off: a second
+//! start sends its arguments to the running app, lets it come to the front,
+//! and exits. What those arguments ask for is read here, the same way on
+//! every platform.
 
+#[cfg(target_os = "linux")]
 use std::collections::HashMap;
+#[cfg(target_os = "linux")]
 use std::sync::mpsc::{self, Receiver, Sender};
 
+#[cfg(target_os = "linux")]
 use zbus::blocking::Connection;
+#[cfg(target_os = "linux")]
 use zbus::blocking::connection::Builder;
+#[cfg(target_os = "linux")]
 use zbus::interface;
+#[cfg(target_os = "linux")]
 use zbus::zvariant::{OwnedValue, Value};
 
 /// The app's well-known bus name. Development builds use their own, so they
 /// can run next to an installed release.
+#[cfg(target_os = "linux")]
 const BUS_NAME: &str = if cfg!(debug_assertions) {
     "io.github.sorrelfox.Glyphkeel.Devel"
 } else {
     "io.github.sorrelfox.Glyphkeel"
 };
+#[cfg(target_os = "linux")]
 const OBJECT_PATH: &str = if cfg!(debug_assertions) {
     "/io/github/sorrelfox/Glyphkeel/Devel"
 } else {
     "/io/github/sorrelfox/Glyphkeel"
 };
+#[cfg(target_os = "linux")]
 const INTERFACE: &str = "org.freedesktop.Application";
 
 /// What a later start asked the running app to do.
@@ -60,9 +74,11 @@ impl Activation {
 /// The argument that asks for the quick-add window, and its action name on
 /// the bus.
 pub(crate) const QUICK_ADD: &str = "--quick-add";
+#[cfg(target_os = "linux")]
 const QUICK_ADD_ACTION: &str = "quick-add";
 
 /// The outcome of trying to become the running app.
+#[cfg(target_os = "linux")]
 pub(crate) enum Claim {
     /// This process is the running app. `activations` brings the requests of
     /// later starts, in order. Keep `bus` alive as long as the app runs:
@@ -78,6 +94,7 @@ pub(crate) enum Claim {
 }
 
 /// Becomes the running app, or hands `activation` to the one that runs.
+#[cfg(target_os = "linux")]
 pub(crate) fn claim(activation: &Activation) -> Claim {
     let (sender, activations) = mpsc::channel();
     let built = Builder::session()
@@ -102,6 +119,7 @@ pub(crate) fn claim(activation: &Activation) -> Claim {
     }
 }
 
+#[cfg(target_os = "linux")]
 fn forward(activation: &Activation) -> zbus::Result<()> {
     let connection = Connection::session()?;
     let mut platform_data: HashMap<&str, Value<'_>> = HashMap::new();
@@ -145,13 +163,30 @@ pub(crate) fn this_start() -> Activation {
         .iter()
         .find_map(|name| std::env::var(name).ok().filter(|value| !value.is_empty()));
     Activation {
-        links: links_in(&args),
         token,
+        ..from_args(&args)
+    }
+}
+
+/// The request in a start's arguments (without the program's own name).
+pub(crate) fn from_args(args: &[String]) -> Activation {
+    Activation {
+        links: links_in(args),
+        token: None,
         quick_add: args.iter().any(|arg| arg == QUICK_ADD),
         background: args
             .iter()
             .any(|arg| arg == crate::autostart::BACKGROUND_ARG),
     }
+}
+
+/// What a later start asks of the running app, from its whole command line
+/// as the single-instance plugin passes it (the program first); `None` when
+/// it asks for nothing.
+#[cfg(any(windows, test))]
+pub(crate) fn later_start(command_line: &[String]) -> Option<Activation> {
+    let activation = from_args(command_line.get(1..).unwrap_or_default());
+    (!activation.asks_nothing()).then_some(activation)
 }
 
 /// The app's own links among the arguments.
@@ -162,10 +197,12 @@ pub(crate) fn links_in(args: &[String]) -> Vec<String> {
         .collect()
 }
 
+#[cfg(target_os = "linux")]
 struct Application {
     sender: Sender<Activation>,
 }
 
+#[cfg(target_os = "linux")]
 impl Application {
     fn send(
         &self,
@@ -192,6 +229,7 @@ impl Application {
     }
 }
 
+#[cfg(target_os = "linux")]
 #[interface(name = "org.freedesktop.Application")]
 impl Application {
     fn activate(&self, platform_data: HashMap<String, OwnedValue>) {
@@ -216,7 +254,7 @@ impl Application {
 
 #[cfg(test)]
 mod tests {
-    use super::{Activation, links_in};
+    use super::{Activation, from_args, later_start, links_in};
 
     #[test]
     fn a_start_with_the_system_asks_a_running_app_for_nothing() {
@@ -246,5 +284,32 @@ mod tests {
             ["glyphkeel://open/TM-41", "glyphkeel://open/TM-2"]
         );
         assert!(links_in(&[]).is_empty());
+    }
+
+    #[test]
+    fn a_later_start_asks_for_its_links_or_quick_add() {
+        let line = |args: &[&str]| -> Vec<String> {
+            std::iter::once("C:\\Glyphkeel\\glyphkeel-app.exe")
+                .chain(args.iter().copied())
+                .map(String::from)
+                .collect()
+        };
+        let open = later_start(&line(&["glyphkeel://open/TM-1"])).unwrap();
+        assert_eq!(open.links, ["glyphkeel://open/TM-1"]);
+        assert!(!open.quick_add);
+        assert_eq!(open.token, None);
+        assert!(later_start(&line(&["--quick-add"])).unwrap().quick_add);
+        // A plain second start brings the window forward.
+        assert_eq!(later_start(&line(&[])).unwrap(), from_args(&[]));
+        // Started with the system while the app runs: nothing to do.
+        assert_eq!(later_start(&line(&["--background"])), None);
+        // The program's own name is never taken for a link.
+        assert!(
+            later_start(&["glyphkeel://open/TM-9".to_owned()])
+                .unwrap()
+                .links
+                .is_empty()
+        );
+        assert!(later_start(&[]).is_some());
     }
 }
