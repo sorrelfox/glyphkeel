@@ -87,7 +87,8 @@ impl Engine {
                 let stamp = crate::time::rfc3339(self.now_ms())
                     .replace([':', '.'], "")
                     .replace('-', "");
-                let name = format!("{slug}-{}", &stamp[..15]);
+                // A long slug is cut to fit a file name.
+                let name = format!("{}-{}", gk_core::portable_file_name(&slug), &stamp[..15]);
                 let name = match format {
                     ArchiveFormat::Zip => format!("{name}.zip"),
                     ArchiveFormat::Folder => name,
@@ -353,8 +354,10 @@ fn add_file(
     if paths.contains_key(&id) {
         return;
     }
-    let (stem, ext) = split_name(&safe_name(name));
-    let path = free_path(used, &format!("{FILES_DIR}/"), &stem, &ext);
+    // No hidden files: a leading dot goes.
+    let name = name.trim().trim_start_matches('.');
+    let name = if name.is_empty() { "file" } else { name };
+    let path = free_path(used, &format!("{FILES_DIR}/"), name, "");
     paths.insert(id, path.clone());
     files.push(File { path, sha256 });
 }
@@ -460,50 +463,15 @@ fn project_attachment(
         .optional()?)
 }
 
-/// `dir` + `stem` + `ext`, with `-2`, `-3`… after the stem when taken.
+/// `dir` + `stem` + `ext` as a name that is valid on every system, with
+/// `-2`, `-3`… after the stem when taken.
 fn free_path(used: &mut BTreeSet<String>, dir: &str, stem: &str, ext: &str) -> String {
     let stem = if stem.is_empty() { "page" } else { stem };
-    let mut n = 1;
-    loop {
-        let path = if n == 1 {
-            format!("{dir}{stem}{ext}")
-        } else {
-            format!("{dir}{stem}-{n}{ext}")
-        };
+    let name = gk_core::unique_file_name(&format!("{stem}{ext}"), |name| {
         // Ignoring case, for file systems that do.
-        if used.insert(path.to_lowercase()) {
-            return path;
-        }
-        n += 1;
-    }
-}
-
-/// A file name that is safe in any archive and file system.
-fn safe_name(name: &str) -> String {
-    let cleaned: String = name
-        .chars()
-        .map(|c| {
-            if c.is_control() || matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') {
-                '_'
-            } else {
-                c
-            }
-        })
-        .collect();
-    let trimmed = cleaned.trim().trim_start_matches('.');
-    if trimmed.is_empty() {
-        "file".to_owned()
-    } else {
-        trimmed.chars().take(120).collect()
-    }
-}
-
-/// `name` split before its extension (`.png`), which keeps its dot.
-fn split_name(name: &str) -> (String, String) {
-    match name.rfind('.') {
-        Some(i) if i > 0 => (name[..i].to_owned(), name[i..].to_owned()),
-        _ => (name.to_owned(), String::new()),
-    }
+        used.insert(format!("{dir}{name}").to_lowercase())
+    });
+    format!("{dir}{name}")
 }
 
 /// `to` (a path in the export) as seen from the file `from`.
@@ -566,7 +534,9 @@ fn escape_label(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{anchor, encode, relative, safe_name, split_name};
+    use std::collections::BTreeSet;
+
+    use super::{anchor, encode, free_path, relative};
 
     #[test]
     fn paths_between_exported_files_are_relative() {
@@ -585,8 +555,23 @@ mod tests {
         );
         assert_eq!(anchor("Dates & times"), "dates--times");
         assert_eq!(anchor("Größe"), "gr%C3%B6%C3%9Fe");
-        assert_eq!(safe_name("../a:b.png"), "_a_b.png");
-        assert_eq!(split_name("a.tar.gz"), ("a.tar".into(), ".gz".into()));
-        assert_eq!(split_name(".hidden"), (".hidden".into(), String::new()));
+    }
+
+    #[test]
+    fn exported_names_are_valid_on_every_system_and_unique() {
+        let mut used = BTreeSet::new();
+        assert_eq!(free_path(&mut used, "", "con", ".md"), "_con.md");
+        assert_eq!(free_path(&mut used, "", "CON", ".md"), "_CON-2.md");
+        assert_eq!(free_path(&mut used, "_con/", "aux", ".md"), "_con/_aux.md");
+        assert_eq!(
+            free_path(&mut used, "files/", "a:b.png", ""),
+            "files/a_b.png"
+        );
+        assert_eq!(
+            free_path(&mut used, "files/", "a?b.png", ""),
+            "files/a_b-2.png"
+        );
+        assert_eq!(free_path(&mut used, "", "x", ".md"), "x.md");
+        assert_eq!(free_path(&mut used, "", "x", ".md"), "x-2.md");
     }
 }

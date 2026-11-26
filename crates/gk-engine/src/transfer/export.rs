@@ -488,18 +488,30 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
             ))
         },
     )?;
+    // Each page's file name: its slug made valid on every system, unique
+    // among the pages next to it ignoring case.
+    let mut taken = HashSet::new();
     let slugs: BTreeMap<String, (Option<String>, String)> = pages
         .iter()
-        .map(|(p, _)| (p.id.clone(), (p.parent_id.clone(), p.slug.clone())))
+        .map(|(p, _)| {
+            let name = gk_core::unique_file_name(&p.slug, |name| {
+                taken.insert((p.parent_id.clone(), name.to_lowercase()))
+            });
+            (p.id.clone(), (p.parent_id.clone(), name))
+        })
         .collect();
     let mut wiki = Vec::new();
     for (mut page, body) in pages {
-        let mut parts = vec![page.slug.clone()];
+        let mut parts = vec![
+            slugs
+                .get(&page.id)
+                .map_or_else(|| page.slug.clone(), |(_, name)| name.clone()),
+        ];
         let mut at = page.parent_id.clone();
         while let Some(parent) = at {
             match slugs.get(&parent) {
-                Some((up, slug)) if parts.len() < 16 => {
-                    parts.push(slug.clone());
+                Some((up, name)) if parts.len() < 16 => {
+                    parts.push(name.clone());
                     at = up.clone();
                 }
                 _ => break,

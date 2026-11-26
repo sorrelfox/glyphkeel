@@ -19,6 +19,7 @@ pub mod link;
 pub mod merge;
 pub mod message;
 pub mod palette;
+pub mod portable;
 pub mod progress;
 pub mod rank;
 pub mod schedule;
@@ -41,6 +42,10 @@ pub use link::{LinkKind, Relation};
 pub use merge::{Edit, EditError, Merge, apply_edits, merge3, unified_diff};
 pub use message::Message;
 pub use palette::{PALETTE, suggest_hue};
+pub use portable::{
+    PORTABLE_NAME_MAX_BYTES, is_windows_device, numbered_file_name, portable_file_name,
+    unique_file_name,
+};
 pub use progress::{SubtaskProgress, progress, subtask_progress};
 pub use rank::{Rank, RankError};
 pub use schedule::{Dates, Dependency, Graph, Shift, ShiftError, shift_dependents};

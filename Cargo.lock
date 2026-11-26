@@ -1708,6 +1708,7 @@ dependencies = [
  "ashpd",
  "futures-util",
  "gk-api",
+ "gk-core",
  "gk-engine",
  "gk-store",
  "gtk",

@@ -1090,6 +1090,97 @@ fn a_page_exports_with_its_subpages_and_files_as_plain_markdown() {
 }
 
 #[test]
+fn exported_names_are_valid_on_windows_and_import_back() {
+    let ws = open();
+    ws.page("CON", "See [[a:b]] and [[con#Part]].\n");
+    ws.child("aux", "CON");
+    ws.page("a:b", "");
+    for name in ["nul.txt", "a:b?.txt", "a_b_.txt"] {
+        ws.call(
+            "file.attach",
+            json!({
+                "project": "TM",
+                "page": "a:b",
+                "name": name,
+                "data_base64": gk_core::base64_encode(name.as_bytes()),
+            }),
+        );
+    }
+
+    let out = ws._dir.path().join("out");
+    let done = ws.call(
+        "wiki.export",
+        json!({ "project": "TM", "path": out.to_string_lossy(), "format": "folder" }),
+    );
+    assert_eq!(done["pages"], 3, "{done}");
+    let mut names = Vec::new();
+    for entry in walk(&out) {
+        let rel = entry
+            .strip_prefix(&out)
+            .unwrap()
+            .to_string_lossy()
+            .replace('\\', "/");
+        names.push(rel);
+    }
+    names.sort();
+    assert_eq!(
+        names,
+        [
+            "_con",
+            "_con.md",
+            "_con/_aux.md",
+            "a-b.md",
+            "files",
+            "files/_nul.txt",
+            "files/a_b_-2.txt",
+            "files/a_b_.txt",
+        ]
+    );
+    for name in &names {
+        for part in name.split('/') {
+            assert_eq!(gk_core::portable_file_name(part), *part, "{name}");
+        }
+    }
+    assert_eq!(
+        std::fs::read_to_string(out.join("_con.md")).unwrap(),
+        "See [a:b](a-b.md) and [con § Part](#part).\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(out.join("files/_nul.txt")).unwrap(),
+        "nul.txt"
+    );
+
+    // The folder imports back under the names it had.
+    ws.call("project.create", json!({ "name": "Back", "key": "BK" }));
+    let back = ws.call(
+        "wiki.import",
+        json!({ "project": "BK", "path": out.to_string_lossy() }),
+    );
+    assert_eq!(back["pages"], 3, "{back}");
+    assert!(back.get("renamed").is_none(), "{back}");
+    let titles: Vec<String> = ws.call("wiki.list", json!({ "project": "BK" }))["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| p["title"].as_str().unwrap().to_owned())
+        .collect();
+    assert_eq!(titles, ["con", "aux", "a-b"]);
+}
+
+/// Every file and folder below `root`.
+fn walk(root: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let mut out = Vec::new();
+    for entry in std::fs::read_dir(root).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            out.extend(walk(&path));
+        }
+        out.push(path);
+    }
+    out
+}
+
+#[test]
 fn one_page_per_project_is_the_agent_brief_and_only_people_choose_it() {
     let ws = open();
     ws.page("Conventions", "Use small commits.\n");

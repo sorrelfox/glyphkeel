@@ -347,6 +347,106 @@ fn an_agent_imports_and_exports_only_in_the_exports_folder() {
     assert_eq!(check["taken_keys"], json!(["TM"]));
 }
 
+/// Every file and folder below `root`, as paths with `/`.
+fn listing(root: &Path) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(at) = stack.pop() {
+        for entry in std::fs::read_dir(&at).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                stack.push(path.clone());
+            }
+            let rel = path.strip_prefix(root).unwrap().to_string_lossy();
+            out.push(rel.replace('\\', "/"));
+        }
+    }
+    out.sort();
+    out
+}
+
+#[test]
+fn archives_use_names_windows_accepts_and_older_ones_still_import() {
+    let dir = TempDir::new().unwrap();
+    let e = open(dir.path(), "W");
+    call(
+        &e,
+        "project.create",
+        json!({ "name": "Console", "key": "CON" }),
+    );
+    call(
+        &e,
+        "task.create",
+        json!({ "project": "CON", "title": "A", "description": "Text." }),
+    );
+    call(
+        &e,
+        "wiki.create",
+        json!({ "project": "CON", "title": "NUL", "body": "Page." }),
+    );
+    call(
+        &e,
+        "wiki.create",
+        json!({ "project": "CON", "title": "com1", "parent": "NUL" }),
+    );
+    let out = dir.path().join("out");
+    call(
+        &e,
+        "transfer.export",
+        json!({ "path": out.to_string_lossy(), "format": "folder" }),
+    );
+    let names = listing(&out);
+    for name in &names {
+        for part in name.split('/') {
+            assert_eq!(gk_core::portable_file_name(part), part, "{names:?}");
+        }
+    }
+    for expected in [
+        "projects/_CON/project.json",
+        "projects/_CON/tasks/CON-1.md",
+        "projects/_CON/wiki/_nul.md",
+        "projects/_CON/wiki/_nul/_com1.md",
+    ] {
+        assert!(names.iter().any(|n| n == expected), "{expected}: {names:?}");
+    }
+
+    let other = open(dir.path(), "Other");
+    let done = call(
+        &other,
+        "transfer.import",
+        json!({ "path": out.to_string_lossy() }),
+    );
+    assert_eq!(done["counts"]["projects"], 1, "{done}");
+    assert_eq!(
+        count(
+            &other,
+            "SELECT count(*) FROM wiki_pages WHERE slug IN ('nul', 'com1')"
+        ),
+        2
+    );
+
+    // An archive written before used the key as it is. Windows can't hold
+    // such a folder at all ("Bad device type"), so only elsewhere.
+    if cfg!(windows) {
+        return;
+    }
+    std::fs::rename(out.join("projects/_CON"), out.join("projects/CON")).unwrap();
+    let manifest = std::fs::read_to_string(out.join("manifest.json")).unwrap();
+    std::fs::write(
+        out.join("manifest.json"),
+        manifest.replace("projects/_CON", "projects/CON"),
+    )
+    .unwrap();
+    let third = open(dir.path(), "Third");
+    let done = call(
+        &third,
+        "transfer.import",
+        json!({ "path": out.to_string_lossy() }),
+    );
+    assert_eq!(done["counts"]["projects"], 1, "{done}");
+    assert_eq!(count(&third, "SELECT count(*) FROM tasks"), 1);
+}
+
 /// Data set L: run with `cargo test -p gk-engine --release --test transfer -- --ignored`.
 #[test]
 #[ignore = "a timing run on the large data set"]

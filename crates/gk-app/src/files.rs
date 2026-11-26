@@ -476,52 +476,10 @@ pub(crate) fn on_drag_drop<R: Runtime>(window: &Window<R>, event: &DragDropEvent
 // ---------- opening and saving ----------
 
 /// The last part of a stored file name, safe as a file name of its own on
-/// this platform.
+/// every system, the same on each (see [`gk_core::portable_file_name`]).
 pub(crate) fn safe_name(name: &str) -> String {
-    safe_name_for(name, cfg!(windows))
-}
-
-/// Device names Windows reserves in every folder, with any extension.
-const WINDOWS_DEVICES: &[&str] = &[
-    "con", "prn", "aux", "nul", "conin$", "conout$", "com0", "com1", "com2", "com3", "com4",
-    "com5", "com6", "com7", "com8", "com9", "lpt0", "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6",
-    "lpt7", "lpt8", "lpt9",
-];
-
-/// [`safe_name`], with Windows' rules when `windows`: no `:` (it would name
-/// a stream of another file), none of `<>"|?*`, no trailing dots or spaces
-/// (Windows drops them, so `x.exe.` would become `x.exe`), and no device
-/// names.
-fn safe_name_for(name: &str, windows: bool) -> String {
-    let base = Path::new(name)
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    let mut cleaned: String = base
-        .chars()
-        .map(|c| {
-            if c.is_control()
-                || matches!(c, '/' | '\\')
-                || (windows && matches!(c, ':' | '<' | '>' | '"' | '|' | '?' | '*'))
-            {
-                '_'
-            } else {
-                c
-            }
-        })
-        .collect();
-    if windows {
-        cleaned.truncate(cleaned.trim_end_matches(['.', ' ']).len());
-        let stem = cleaned.split('.').next().unwrap_or_default().trim_end();
-        if WINDOWS_DEVICES.contains(&stem.to_lowercase().as_str()) {
-            cleaned.insert(0, '_');
-        }
-    }
-    if cleaned.trim_matches('.').is_empty() {
-        "file".to_owned()
-    } else {
-        cleaned
-    }
+    let last = name.rsplit(['/', '\\']).next().unwrap_or_default();
+    gk_core::portable_file_name(last)
 }
 
 /// Types that Windows runs, installs, mounts or lets change the system when
@@ -1233,28 +1191,22 @@ mod tests {
     fn saved_and_opened_copies_get_a_plain_file_name() {
         assert_eq!(safe_name("report.pdf"), "report.pdf");
         assert_eq!(safe_name("../../etc/passwd"), "passwd");
+        assert_eq!(safe_name("C:\\Users\\me\\a.txt"), "a.txt");
         assert_eq!(safe_name(".."), "file");
+        assert_eq!(safe_name("..."), "file");
         assert_eq!(safe_name("a\u{7}b.txt"), "a_b.txt");
-        for windows in [false, true] {
-            assert_eq!(safe_name_for("report.pdf", windows), "report.pdf");
-            assert_eq!(safe_name_for("../../etc/passwd", windows), "passwd");
-            assert_eq!(safe_name_for("...", windows), "file");
-        }
     }
 
     #[test]
-    fn copies_on_windows_follow_its_file_name_rules() {
+    fn copies_follow_windows_file_name_rules_everywhere() {
         // A colon would name a stream of `a.txt`; the others aren't allowed.
-        assert_eq!(safe_name_for("a.txt:evil.exe", true), "a.txt_evil.exe");
-        assert_eq!(safe_name_for("what?<x>|\"*\".md", true), "what__x_____.md");
+        assert_eq!(safe_name("a.txt:evil.exe"), "a.txt_evil.exe");
+        assert_eq!(safe_name("what?<x>|\"*\".md"), "what__x_____.md");
         // Windows drops trailing dots and spaces, so they go first.
-        assert_eq!(safe_name_for("run.exe. . ", true), "run.exe");
-        assert_eq!(safe_name_for("CON.txt", true), "_CON.txt");
-        assert_eq!(safe_name_for("lpt1", true), "_lpt1");
-        assert_eq!(safe_name_for("console.txt", true), "console.txt");
-        // Elsewhere these names are fine as they are.
-        assert_eq!(safe_name_for("ab:c. ", false), "ab:c. ");
-        assert_eq!(safe_name_for("CON.txt", false), "CON.txt");
+        assert_eq!(safe_name("run.exe. . "), "run.exe");
+        assert_eq!(safe_name("CON.txt"), "_CON.txt");
+        assert_eq!(safe_name("lpt1"), "_lpt1");
+        assert_eq!(safe_name("console.txt"), "console.txt");
     }
 
     #[test]
@@ -1277,7 +1229,7 @@ mod tests {
             assert!(windows_risky(name), "{name}");
         }
         // The trailing dot is gone by the time the copy is named.
-        assert!(windows_risky(&safe_name_for("x.hta.", true)));
+        assert!(windows_risky(&safe_name("x.hta.")));
         for name in ["x.pdf", "x.png", "x.docx", "notes.txt", "hta", "x.url.txt"] {
             assert!(!windows_risky(name), "{name}");
         }
