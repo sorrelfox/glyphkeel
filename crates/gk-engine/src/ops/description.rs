@@ -1240,6 +1240,9 @@ fn checklist_update(
     if input.toggle.is_empty() && input.add.is_empty() && input.remove.is_empty() {
         return Err(messages::with("checklist-nothing-to-change", &[], OpError::invalid).into());
     }
+    if input.page.is_some() && (input.key.is_some() || input.comment.is_some()) {
+        return Err(messages::with("checklist-one-owner", &[], OpError::invalid).into());
+    }
     match (&input.key, &input.comment) {
         (Some(key), None) => {
             let task = lookup::task(w.tx(), "key", key)?;
@@ -1266,6 +1269,7 @@ fn checklist_update(
             Ok(ChecklistChange {
                 key: lookup::task_key(w.tx(), task.project, task.number)?,
                 comment: None,
+                page: None,
                 items: checklist_items(&text),
                 checklist: Checklist {
                     done: u32::try_from(done).unwrap_or(0),
@@ -1305,6 +1309,7 @@ fn checklist_update(
             Ok(ChecklistChange {
                 key,
                 comment: Some(c.id.to_string()),
+                page: None,
                 checklist: Checklist {
                     done: u32::try_from(done).unwrap_or(0),
                     total: u32::try_from(items.len()).unwrap_or(0),
@@ -1315,7 +1320,45 @@ fn checklist_update(
                 group: w.group_if_changed(),
             })
         }
-        _ => Err(messages::with("description-task-or-comment", &[], OpError::invalid).into()),
+        (None, None) if input.page.is_some() => {
+            let page = super::wiki::find_page(
+                w.tx(),
+                input.project.as_deref(),
+                "page",
+                input.page.as_deref().unwrap_or_default(),
+            )?;
+            let project = lookup::project_by_id(w.tx(), page.project)?
+                .ok_or_else(|| Failure::Op(messages::not_found("wiki-page-gone", &[])))?;
+            lookup::ensure_active(&project)?;
+            lookup::ensure_wiki_on(w.tx(), &project)?;
+            let owner = Owner::Wiki(page.id);
+            let current = stored(w.tx(), owner)?;
+            let text = edit_checklist(&current.text, &input)?;
+            let rev = if text == current.text {
+                current.rev
+            } else {
+                gk_core::check_markdown("body", &text)
+                    .map_err(|e| super::task::invalid("body", e))?;
+                let saved = save(w, owner, Some(project.id), &text, None, "normal")?;
+                saved.revision.and_then(|r| r.parse().ok())
+            };
+            let items = checklist_items(&text);
+            let done = items.iter().filter(|i| i.checked).count();
+            Ok(ChecklistChange {
+                key: project.key.clone(),
+                comment: None,
+                page: Some(page.id.to_string()),
+                checklist: Checklist {
+                    done: u32::try_from(done).unwrap_or(0),
+                    total: u32::try_from(items.len()).unwrap_or(0),
+                },
+                items,
+                version: 0,
+                revision: rev.map(|r| r.to_string()),
+                group: w.group_if_changed(),
+            })
+        }
+        _ => Err(messages::with("checklist-one-owner", &[], OpError::invalid).into()),
     }
 }
 

@@ -64,6 +64,16 @@ export function MarkdownReader({ html, onToggle, onOpenTask, references, onOpenP
     latest.current = { imageSource, t };
   });
 
+  // Whether the checkboxes take clicks changes without drawing the text
+  // again, so links found in it stay the same elements.
+  const takesClicks = useRef(toggleable);
+  useLayoutEffect(() => {
+    takesClicks.current = toggleable;
+    for (const box of root.current?.querySelectorAll<HTMLInputElement>("input[data-item]") ?? []) {
+      box.disabled = !toggleable;
+    }
+  }, [toggleable]);
+
   // Insert and draw again when the text or the theme changes.
   useLayoutEffect(() => {
     const element = root.current;
@@ -74,7 +84,7 @@ export function MarkdownReader({ html, onToggle, onOpenTask, references, onOpenP
     const generation = drawing.current;
     insertSanitized(element, html, "reader");
     for (const box of element.querySelectorAll<HTMLInputElement>("input[data-item]")) {
-      box.disabled = !toggleable;
+      box.disabled = !takesClicks.current;
     }
     markMissing(element, missing === null ? null : new Set(missing.split("\n")), latest.current.t);
     void drawReader(element, {
@@ -82,7 +92,7 @@ export function MarkdownReader({ html, onToggle, onOpenTask, references, onOpenP
       imageSource: (attachment) => latest.current.imageSource(attachment),
       current: () => drawing.current === generation && element.isConnected,
     });
-  }, [html, theme, toggleable, missing]);
+  }, [html, theme, missing]);
 
   const toggle = (box: HTMLInputElement) => {
     const number = Number(box.dataset.item);

@@ -157,6 +157,8 @@ pub enum WikiPart {
     Backlinks,
     /// The pages and tasks its text links to.
     References,
+    /// Its checklist items, numbered, for `checklist.update`.
+    Checklist,
 }
 
 /// A page to read.
@@ -231,6 +233,9 @@ pub struct WikiPage {
     /// What its text links to, in order, when asked for with `include`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub references: Option<Vec<Reference>>,
+    /// Its checklist items, numbered, when asked for with `include`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checklist_items: Option<Vec<crate::ops::description::ChecklistItem>>,
     /// When it was created (RFC 3339, UTC).
     pub created_at: String,
     /// When it last changed.
@@ -323,6 +328,11 @@ pub struct WikiUpdateInput {
     /// Place it first or last among its parent's pages.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub at: Option<Edge>,
+    /// Mark it as the project's brief for agents (`true`; another page
+    /// marked before is unmarked), or unmark it (`false`). Only people can
+    /// change this, not agents.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_brief: Option<bool>,
     /// Fields to clear.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub clear: Vec<WikiField>,
@@ -532,3 +542,62 @@ pub(crate) const WIKI_MOVE: OpDescriptor = OpDescriptor::of::<WikiMove>(write(
     "wiki move <page>",
     "WikiMoveInput",
 ));
+
+/// A page, or a whole wiki, to export as Markdown files.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WikiExportInput {
+    /// The page: its title (any case), slug or ID. Left out: the project's
+    /// whole wiki, every page in it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub page: Option<String>,
+    /// The project (key or ID); needed unless `page` is an ID.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
+    /// Include the pages inside it, each in a folder named after its parent
+    /// (always, for a whole wiki).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub subpages: bool,
+    /// Where to write it: a new file or folder. Agents give a plain name,
+    /// which goes into the workspace's `exports` folder. Left out: a name
+    /// made from the page's slug and the date, in the `exports` folder.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    /// A `.zip` file (the default) or a folder.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub format: Option<crate::ops::transfer::ArchiveFormat>,
+}
+
+/// A finished page export.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WikiExportResult {
+    /// The file or folder written.
+    pub path: String,
+    /// How it is stored.
+    pub format: crate::ops::transfer::ArchiveFormat,
+    /// The Markdown files written: one per page.
+    pub pages: u64,
+    /// The attached files copied.
+    pub attachments: u64,
+    /// Its size in bytes.
+    pub size: u64,
+}
+
+op!(
+    /// A page, and optionally the pages inside it, as Markdown files.
+    WikiExport,
+    "wiki.export",
+    WikiExportInput,
+    WikiExportResult
+);
+
+pub(crate) const WIKI_EXPORT: OpDescriptor = OpDescriptor::of::<WikiExport>(Meta {
+    summary: "Export a wiki page, optionally with the pages inside it, or a project's whole wiki, as Markdown files with their attachments, in a .zip file or a folder; links between the exported pages and to the attachments become relative links.",
+    kind: OpKind::Command,
+    safety: Safety::Write,
+    exposure: Exposure::Data,
+    cli: Some("wiki export <page>"),
+    input_name: "WikiExportInput",
+    output_name: "WikiExportResult",
+});

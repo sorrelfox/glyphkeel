@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Glyphkeel contributors
 
 import { Suspense, useEffect, useRef, type Ref } from "react";
+import { createPortal } from "react-dom";
 
 import { classes } from "../../classes";
 import { useToasts } from "../../components/Toasts";
@@ -37,6 +38,11 @@ interface MarkdownFieldProps {
   attachTo?: string | undefined;
   /** The project whose wiki pages `[[` offers first; by default the project of `attachTo`. */
   project?: string | undefined;
+  /**
+   * Where the formatting toolbar goes instead of above the text, such as a
+   * page's bar: an element elsewhere in the window (null until it is there).
+   */
+  toolbarSlot?: HTMLElement | null | undefined;
 }
 
 /** Markdown that refers to an attachment: an image shows in the text, another file is a link. */
@@ -74,7 +80,7 @@ export function editorDropAt(x: number, y: number, task: string): ((markdown: st
  * to save or send and Escape to give up, and the formatting toolbar above
  * the text. The editor loads on first use.
  */
-export function MarkdownField({ label, value, onChange, onSubmit, onCancel, mode = "preview", autoFocus = false, readOnly = false, compact = false, plain = false, className, ref, attachTo, project }: MarkdownFieldProps) {
+export function MarkdownField({ label, value, onChange, onSubmit, onCancel, mode = "preview", autoFocus = false, readOnly = false, compact = false, plain = false, className, ref, attachTo, project, toolbarSlot }: MarkdownFieldProps) {
   const t = useT();
   const call = useCall();
   const toasts = useToasts();
@@ -112,6 +118,23 @@ export function MarkdownField({ label, value, onChange, onSubmit, onCancel, mode
       ref.current = handle;
     }
   };
+  const toolbar = (
+    <FormatToolbar
+      compact={compact}
+      bare={toolbarSlot !== undefined}
+      isDisabled={readOnly}
+      onFormat={(kind) => {
+        editor.current?.format(kind);
+      }}
+    >
+      <LinkButtons
+        isDisabled={readOnly}
+        onLink={(kind) => {
+          editor.current?.startLink(kind);
+        }}
+      />
+    </FormatToolbar>
+  );
   return (
     <div
       ref={box}
@@ -136,22 +159,8 @@ export function MarkdownField({ label, value, onChange, onSubmit, onCancel, mode
         }
       }}
     >
-      {!plain && (
-        <FormatToolbar
-          compact={compact}
-          isDisabled={readOnly}
-          onFormat={(kind) => {
-            editor.current?.format(kind);
-          }}
-        >
-          <LinkButtons
-            isDisabled={readOnly}
-            onLink={(kind) => {
-              editor.current?.startLink(kind);
-            }}
-          />
-        </FormatToolbar>
-      )}
+      {!plain && toolbarSlot === undefined && toolbar}
+      {!plain && toolbarSlot && createPortal(toolbar, toolbarSlot)}
       <Suspense fallback={<p className={classes("faint", styles.small)}>{t("editor-loading")}</p>}>
         <MarkdownEditor
           ref={setEditor}

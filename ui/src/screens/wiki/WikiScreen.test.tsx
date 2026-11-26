@@ -84,7 +84,10 @@ describe("the wiki screen", () => {
     const { tree } = await renderWiki();
     const view = await openPage(tree, "Query language");
     const outline = within(view).getByRole("navigation", { name: "On this page" });
-    expect(within(outline).getAllByRole("button").map((button) => button.textContent)).toEqual(["Query language", "Grammar", "Examples", "Progress"]);
+    const headings = within(outline).getAllByRole("button").filter((button) => button.dataset.level !== undefined);
+    expect(headings.map((button) => button.textContent)).toEqual(["Query language", "Grammar", "Examples", "Progress"]);
+    // Each heading has a button that copies a link to it.
+    expect(within(outline).getAllByRole("button", { name: /^Copy a link to/ })).toHaveLength(4);
     const linked = within(view).getByRole("region", { name: "Linked from" });
     expect(await within(linked).findByRole("button", { name: "Architecture" })).toBeDefined();
     const tasks = within(view).getByRole("region", { name: "Tasks that link here" });

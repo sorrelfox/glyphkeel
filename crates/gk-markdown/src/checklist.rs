@@ -219,14 +219,14 @@ fn item_text<'a>(item: &'a AstNode<'a>) -> String {
 
 /// Maps the parser's line and column (both from 1, the column counted in
 /// bytes) to byte offsets in the source.
-struct LineIndex {
+pub(crate) struct LineIndex {
     starts: Vec<usize>,
     len: usize,
 }
 
 impl LineIndex {
     /// Lines end at `\n`, `\r\n` or a lone `\r`, as in the parser.
-    fn new(source: &str) -> Self {
+    pub(crate) fn new(source: &str) -> Self {
         let bytes = source.as_bytes();
         let mut starts = vec![0];
         let mut i = 0;
@@ -258,7 +258,7 @@ impl LineIndex {
             .unwrap_or(self.len)
     }
 
-    fn offset(&self, line: usize, column: usize) -> usize {
+    pub(crate) fn offset(&self, line: usize, column: usize) -> usize {
         self.starts[line.saturating_sub(1).min(self.starts.len() - 1)] + column.saturating_sub(1)
     }
 }

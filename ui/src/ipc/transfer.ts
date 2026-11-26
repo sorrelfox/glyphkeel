@@ -10,7 +10,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import { OpFailure, toCallError } from "../data/transport";
-import { type Call, type ExportResult, type ImportResult, type KeyChange } from "../generated/ops";
+import { type Call, type ExportResult, type ImportResult, type KeyChange, type WikiExportResult } from "../generated/ops";
 import { inApp } from "./files";
 
 /** Runs an app command; its refusals become failures like the engine's. */
@@ -41,6 +41,22 @@ export function exportArchive(call: Call, request: ExportRequest): Promise<Expor
     return command<ExportResult | null>("export_archive", { projects: [...request.projects], folder: request.folder, name: request.name });
   }
   return call("transfer.export", { projects: [...request.projects], format: request.folder ? "folder" : "zip" });
+}
+
+/**
+ * What to export from a wiki: a page by its ID (with the pages inside it
+ * when `subpages`), or a project's whole wiki; and the name the chooser
+ * suggests.
+ */
+export type PageExportRequest = ({ page: string; subpages: boolean } | { project: string }) & { name: string };
+
+/** Exports a wiki page, or a whole wiki, as Markdown files in a `.zip` file where the person chooses; null when they cancelled the chooser. */
+export function exportWikiPage(call: Call, request: PageExportRequest): Promise<WikiExportResult | null> {
+  const input = "page" in request ? { page: request.page, subpages: request.subpages } : { project: request.project };
+  if (choosesFiles()) {
+    return command<WikiExportResult | null>("export_wiki_page", { page: null, project: null, subpages: false, ...input, name: request.name });
+  }
+  return call("wiki.export", input);
 }
 
 /** An archive chosen for an import: in the app, its token; in a browser, its name in the exports folder. */

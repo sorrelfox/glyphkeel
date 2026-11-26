@@ -42,6 +42,8 @@ const COMPACT: readonly (readonly FormatKind[])[] = [
 interface FormatToolbarProps {
   /** The full set, or the composer's short one. */
   compact?: boolean;
+  /** Without its own border and background, for a bar elsewhere (a page's bar). */
+  bare?: boolean;
   /** Runs a command on the editor; the text keeps the focus. */
   onFormat: (kind: FormatKind) => void;
   isDisabled?: boolean;
@@ -54,10 +56,10 @@ interface FormatToolbarProps {
  * text through the editor, as its shortcut does, and its tooltip names the
  * shortcut. The buttons don't take the focus, so the selection stays.
  */
-export function FormatToolbar({ compact = false, onFormat, isDisabled = false, children }: FormatToolbarProps) {
+export function FormatToolbar({ compact = false, bare = false, onFormat, isDisabled = false, children }: FormatToolbarProps) {
   const t = useT();
   return (
-    <Toolbar className={classes(styles.toolbar, compact && styles.compact)} aria-label={t("editor-toolbar")}>
+    <Toolbar className={classes(styles.toolbar, compact && styles.compact, bare && styles.bare)} aria-label={t("editor-toolbar")}>
       {(compact ? COMPACT : FULL).map((group) => (
         <Group key={group.join(" ")} className={classes(styles.group)}>
           {group.map((kind) => {

@@ -60,7 +60,7 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel status move` | `status.reorder` | Move a status in the project's board order. |
 | `glyphkeel task backlinks <key>` | `task.backlinks` | The wiki pages, other tasks' descriptions and comments that mention a task by its key (current or old). |
 | `glyphkeel task bulk` | `task.bulk_update` | Make the same change to many tasks chosen by key or query (status, type, priority, labels, parent, dates set or shifted, estimate, project), previewed first, as one change for Undo and revert. |
-| `glyphkeel task check <key>` | `checklist.update` | Tick, clear, add or remove checklist items in a task's description or a comment, by number plus expected text. |
+| `glyphkeel task check <key>` | `checklist.update` | Tick, clear, add or remove checklist items in a task's description, a comment or a wiki page, by number plus expected text. |
 | `glyphkeel task claim <key>` | `task.claim` | Claim a task for your agent session for a while, so other agents leave it alone; moves it into progress. |
 | `glyphkeel task create` | `task.create` | Create a task from a title alone or with its fields; it gets the project's next key. |
 | `glyphkeel task delete <keys>` | `task.delete` | Move tasks to the trash, each with its subtasks; they can be restored from there. |
@@ -96,6 +96,7 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel view list` | `view.list` | The saved views of a project or of the whole workspace: name, query, columns, order, grouping, totals and which is the default. |
 | `glyphkeel wiki backlinks <page>` | `wiki.backlinks` | The wiki pages, task descriptions and comments that link to a wiki page, by its title, slug, an old slug or its ID. |
 | `glyphkeel wiki delete <page>` | `wiki.delete` | Move a wiki page, with the pages inside it, to the trash; links to it stop resolving until it is restored. |
+| `glyphkeel wiki export <page>` | `wiki.export` | Export a wiki page, optionally with the pages inside it, or a project's whole wiki, as Markdown files with their attachments, in a .zip file or a folder; links between the exported pages and to the attachments become relative links. |
 | `glyphkeel wiki get <page>` | `wiki.get` | One wiki page with its text, revision, headings, place in the tree and, on request, what links to it; or an older revision of it. |
 | `glyphkeel wiki history <page>` | `wiki.history` | List the revisions of a wiki page, newest first, conflict copies included; read one with wiki.get and its revision. |
 | `glyphkeel wiki list` | `wiki.list` | A project's wiki pages as a tree: titles, slugs, nesting and when each changed. |

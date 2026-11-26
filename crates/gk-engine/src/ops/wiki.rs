@@ -21,10 +21,10 @@ use std::collections::HashMap;
 
 use gk_api::ops::description::{RevisionList, SaveOutcome};
 use gk_api::ops::wiki::{
-    WikiChange, WikiCreate, WikiCreateInput, WikiField, WikiGet, WikiGetInput, WikiHeading,
-    WikiHistory, WikiHistoryInput, WikiList, WikiListInput, WikiMatch, WikiMove, WikiMoveInput,
-    WikiPage, WikiPageRef, WikiPageSummary, WikiPart, WikiSearch, WikiSearchHit, WikiSearchInput,
-    WikiSearchResult, WikiTree, WikiUpdate, WikiUpdateInput,
+    WikiChange, WikiCreate, WikiCreateInput, WikiExport, WikiField, WikiGet, WikiGetInput,
+    WikiHeading, WikiHistory, WikiHistoryInput, WikiList, WikiListInput, WikiMatch, WikiMove,
+    WikiMoveInput, WikiPage, WikiPageRef, WikiPageSummary, WikiPart, WikiSearch, WikiSearchHit,
+    WikiSearchInput, WikiSearchResult, WikiTree, WikiUpdate, WikiUpdateInput,
 };
 use gk_core::{Id, PageTitleError, TextError, fold};
 use gk_store::rusqlite::{OptionalExtension, Row, Transaction, params};
@@ -57,6 +57,9 @@ pub(super) fn register(r: &mut Registry) {
     r.command::<WikiCreate, _>(desc::<WikiCreate>(), create);
     r.command::<WikiUpdate, _>(desc::<WikiUpdate>(), update);
     r.command::<WikiMove, _>(desc::<WikiMove>(), move_op);
+    r.engine_op::<WikiExport, _>(desc::<WikiExport>(), |engine, ctx, input| {
+        engine.export_wiki_page(ctx, &input)
+    });
     r.query::<WikiHistory, _>(desc::<WikiHistory>(), |q, input: WikiHistoryInput| {
         let page = find(q.tx, input.project.as_deref(), "page", &input.page)?;
         let items = description::revisions(q.tx, Owner::Wiki(page.id))?;
@@ -293,7 +296,7 @@ fn ancestors(tx: &Transaction<'_>, mut parent: Option<Id>) -> Result<Vec<PageRow
 
 /// The live pages directly inside `parent` (`None`: the top) of
 /// `project`, in order.
-fn children(
+pub(crate) fn children(
     tx: &Transaction<'_>,
     project: Id,
     parent: Option<Id>,
@@ -490,6 +493,9 @@ fn page_out(
         |r| r.get(0),
     )?;
     let path = ancestors(tx, p.parent)?;
+    let checklist_items = include
+        .contains(&WikiPart::Checklist)
+        .then(|| description::checklist_items(&body));
     Ok(WikiPage {
         title: p.title.clone(),
         slug: p.slug.clone(),
@@ -516,6 +522,7 @@ fn page_out(
         } else {
             None
         },
+        checklist_items,
         created_at: rfc3339(p.created_at),
         updated_at: rfc3339(p.updated_at),
         id: p.id.to_string(),
@@ -1031,6 +1038,10 @@ fn update(w: &mut WriteCtx<'_>, input: WikiUpdateInput) -> Result<WikiChange, Fa
         input.at,
     )?;
 
+    if let Some(brief) = input.agent_brief {
+        set_brief(w, &project, &page, brief)?;
+    }
+
     let mut save = None;
     if let Some(body) = &input.body {
         gk_core::check_markdown("body", body).map_err(|e| super::task::invalid("body", e))?;
@@ -1083,6 +1094,61 @@ fn update(w: &mut WriteCtx<'_>, input: WikiUpdateInput) -> Result<WikiChange, Fa
         }
     }
     changed(w, page.id, save)
+}
+
+/// Marks `page` as its project's brief for agents, unmarking the page
+/// marked before, or unmarks it. Agents can't change the brief, which
+/// instructs them.
+fn set_brief(
+    w: &mut WriteCtx<'_>,
+    project: &ProjectRow,
+    page: &PageRow,
+    brief: bool,
+) -> Result<(), Failure> {
+    if w.caller().is_agent() {
+        return Err(Failure::Op(messages::hint(
+            messages::tag(
+                gk_api::OpError::forbidden(messages::text("wiki-brief-agents", &[])),
+                "wiki-brief-agents",
+                &[],
+            ),
+            "wiki-brief-agents-hint",
+            &[],
+        )));
+    }
+    if brief == page.agent_brief {
+        return Ok(());
+    }
+    if brief {
+        let before: Option<Vec<u8>> = w
+            .tx()
+            .query_row(
+                "SELECT id FROM wiki_pages
+                  WHERE project_id = ?1 AND is_agent_brief = 1 AND id <> ?2",
+                params![b(project.id), b(page.id)],
+                |r| r.get(0),
+            )
+            .optional()?;
+        if let Some(before) = before.and_then(|id| Id::from_slice(&id).ok()) {
+            fields::set(
+                w,
+                WIKI,
+                before,
+                Some(project.id),
+                "agent_brief",
+                Some(Value::Bool(false)),
+            )?;
+        }
+    }
+    fields::set(
+        w,
+        WIKI,
+        page.id,
+        Some(project.id),
+        "agent_brief",
+        Some(Value::Bool(brief)),
+    )?;
+    Ok(())
 }
 
 /// Moves `page` (with the pages inside it) into `new_parent` (`Some(None)`:

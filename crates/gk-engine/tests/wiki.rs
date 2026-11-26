@@ -924,6 +924,10 @@ fn pages_change_only_while_the_wiki_is_switched_on() {
             json!({ "project": "TM", "page": "Kept", "title": "Renamed" }),
         ),
         ("wiki.delete", json!({ "project": "TM", "page": "Kept" })),
+        (
+            "checklist.update",
+            json!({ "project": "TM", "page": "Kept", "add": [{ "text": "One" }] }),
+        ),
     ] {
         let err = ws.fails(op, input);
         assert_eq!(err.code, ErrorCode::Forbidden, "{op}: {err:?}");
@@ -941,4 +945,189 @@ fn pages_change_only_while_the_wiki_is_switched_on() {
         json!({ "project": "TM", "page": "Kept", "title": "Renamed" }),
     );
     assert_eq!(ws.titles(), ["Renamed"]);
+}
+
+#[test]
+fn checkboxes_on_a_page_are_ticked_as_a_new_revision_that_undo_takes_back() {
+    let ws = open();
+    let page = ws.page("Launch", "# Launch\n\n- [ ] Write notes\n- [ ] Tag\n");
+    let first = page["revision"].as_str().unwrap().to_owned();
+    let got = ws.call(
+        "wiki.get",
+        json!({ "project": "TM", "page": "Launch", "include": ["checklist"] }),
+    );
+    assert_eq!(got["checklist_items"][1]["text"], "Tag");
+
+    let change = ws.call(
+        "checklist.update",
+        json!({
+            "project": "TM",
+            "page": "Launch",
+            "toggle": [{ "number": 2, "text": "Tag", "checked": true }],
+        }),
+    );
+    assert_eq!(change["page"], page["id"]);
+    assert_eq!(change["key"], "TM");
+    assert_eq!(change["checklist"], json!({ "done": 1, "total": 2 }));
+    assert!(change["group"].is_string(), "{change}");
+    let after = ws.get("Launch");
+    assert_eq!(after["body"], "# Launch\n\n- [ ] Write notes\n- [x] Tag\n");
+    assert_eq!(after["revision"], change["revision"]);
+    assert_ne!(after["revision"].as_str(), Some(first.as_str()));
+    let history = ws.call("wiki.history", json!({ "project": "TM", "page": "Launch" }));
+    assert_eq!(history["items"].as_array().unwrap().len(), 2, "{history}");
+
+    // By ID, without the project; a stale text is refused.
+    let err = ws.fails(
+        "checklist.update",
+        json!({ "page": page["id"], "toggle": [{ "number": 1, "text": "Gone" }] }),
+    );
+    assert_eq!(err.code, ErrorCode::Conflict, "{err:?}");
+
+    ws.call("history.undo", json!({}));
+    assert_eq!(
+        ws.get("Launch")["body"],
+        "# Launch\n\n- [ ] Write notes\n- [ ] Tag\n"
+    );
+
+    // One owner only.
+    let err = ws.fails(
+        "checklist.update",
+        json!({ "key": "TM-1", "page": "Launch", "add": [{ "text": "x" }] }),
+    );
+    assert_eq!(err.details["message_id"], "checklist-one-owner", "{err:?}");
+}
+
+#[test]
+fn a_page_exports_with_its_subpages_and_files_as_plain_markdown() {
+    let ws = open();
+    ws.call(
+        "task.create",
+        json!({ "project": "TM", "title": "Has a file" }),
+    );
+    let file = ws.call(
+        "file.attach",
+        json!({ "task": "TM-1", "name": "plan v2.txt", "data_base64": gk_core::base64_encode(b"abc") }),
+    )["file"]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    ws.page(
+        "Home",
+        "# Top\n\nSee [[Child#Second part|the part]], [[Elsewhere]] and [[#Top]].\n\n`[[Child]]`\n",
+    );
+    ws.page("Elsewhere", "Not exported.\n");
+    ws.call(
+        "wiki.create",
+        json!({
+            "project": "TM",
+            "title": "Child",
+            "parent": "Home",
+            "body": format!("Back to [[Home]]; [notes](gk-file://{file}).\n"),
+        }),
+    );
+    ws.child("Grandchild", "Child");
+
+    let out = ws._dir.path().join("out");
+    let done = ws.call(
+        "wiki.export",
+        json!({
+            "project": "TM",
+            "page": "Home",
+            "subpages": true,
+            "path": out.to_string_lossy(),
+            "format": "folder",
+        }),
+    );
+    assert_eq!(done["pages"], 3, "{done}");
+    assert_eq!(done["attachments"], 1, "{done}");
+    let read = |p: &str| std::fs::read_to_string(out.join(p)).unwrap();
+    assert_eq!(
+        read("home.md"),
+        "# Top\n\nSee [the part](home/child.md#second-part), [[Elsewhere]] and [Top](#top).\n\n`[[Child]]`\n"
+    );
+    assert_eq!(
+        read("home/child.md"),
+        "Back to [Home](../home.md); [notes](../files/plan%20v2.txt).\n"
+    );
+    assert_eq!(read("home/child/grandchild.md"), "");
+    assert_eq!(read("files/plan v2.txt"), "abc");
+
+    // Without sub-pages, one file in a zip in the exports folder.
+    let alone = ws.call("wiki.export", json!({ "project": "TM", "page": "Home" }));
+    assert_eq!(alone["pages"], 1, "{alone}");
+    assert_eq!(alone["format"], "zip");
+    let path = alone["path"].as_str().unwrap();
+    assert!(path.ends_with(".zip") && path.contains("home-"), "{path}");
+    assert!(std::path::Path::new(path).starts_with(ws.layout.exports_dir()));
+
+    // The whole wiki: every page, the tree as folders.
+    let all = ws._dir.path().join("all");
+    let done = ws.call(
+        "wiki.export",
+        json!({ "project": "TM", "path": all.to_string_lossy(), "format": "folder" }),
+    );
+    assert_eq!(done["pages"], 4, "{done}");
+    assert_eq!(
+        std::fs::read_to_string(all.join("home.md")).unwrap(),
+        "# Top\n\nSee [the part](home/child.md#second-part), [Elsewhere](elsewhere.md) and [Top](#top).\n\n`[[Child]]`\n"
+    );
+    assert!(all.join("home/child/grandchild.md").is_file());
+    let err = ws.fails("wiki.export", json!({}));
+    assert_eq!(err.details["message_id"], "wiki-export-what", "{err:?}");
+
+    // An agent names a plain file only.
+    let agent = agent_of(&ws.engine, "Helper");
+    let err = ws
+        .engine
+        .call(
+            &agent,
+            "wiki.export",
+            json!({ "project": "TM", "page": "Home", "path": "/tmp/x.zip" }),
+        )
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::Invalid, "{err:?}");
+}
+
+#[test]
+fn one_page_per_project_is_the_agent_brief_and_only_people_choose_it() {
+    let ws = open();
+    ws.page("Conventions", "Use small commits.\n");
+    ws.page("Rules", "Write tests.\n");
+    ws.call(
+        "wiki.update",
+        json!({ "project": "TM", "page": "Conventions", "agent_brief": true }),
+    );
+    assert_eq!(ws.get("Conventions")["agent_brief"], true);
+    let brief = ws.call("project.brief", json!({ "project": "TM" }));
+    assert!(brief.to_string().contains("Use small commits."), "{brief}");
+
+    // Marking another page moves the mark; Undo moves it back.
+    ws.call(
+        "wiki.update",
+        json!({ "project": "TM", "page": "Rules", "agent_brief": true }),
+    );
+    assert_eq!(ws.get("Conventions").get("agent_brief"), None);
+    assert_eq!(ws.get("Rules")["agent_brief"], true);
+    ws.call("history.undo", json!({}));
+    assert_eq!(ws.get("Conventions")["agent_brief"], true);
+    assert_eq!(ws.get("Rules").get("agent_brief"), None);
+
+    let agent = agent_of(&ws.engine, "Helper");
+    let err = ws
+        .engine
+        .call(
+            &agent,
+            "wiki.update",
+            json!({ "project": "TM", "page": "Rules", "agent_brief": true }),
+        )
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::Forbidden, "{err:?}");
+    assert_eq!(err.details["message_id"], "wiki-brief-agents");
+
+    ws.call(
+        "wiki.update",
+        json!({ "project": "TM", "page": "Conventions", "agent_brief": false }),
+    );
+    assert_eq!(ws.get("Conventions").get("agent_brief"), None);
 }

@@ -97,6 +97,7 @@ The safety class decides who may run an operation:
 | `wiki.move` | write | app, command line, MCP | `update_wiki_page` | `glyphkeel wiki move <page>` |
 | `wiki.delete` | trash | app, command line, MCP | `delete_wiki_page` | `glyphkeel wiki delete <page>` |
 | `wiki.history` | read | app, command line, MCP | `get_wiki_history` | `glyphkeel wiki history <page>` |
+| `wiki.export` | write | app, command line, MCP | `export_wiki_page` | `glyphkeel wiki export <page>` |
 | `wiki.backlinks` | read | app, command line, MCP | `get_wiki_page` | `glyphkeel wiki backlinks <page>` |
 | `wiki.references` | read | app, command line, MCP | `get_wiki_page` | `glyphkeel wiki references <page>` |
 | `task.backlinks` | read | app, command line, MCP | `get_task` | `glyphkeel task backlinks <key>` |
@@ -325,7 +326,7 @@ Input: `TaskResolveInput`. Output: `TaskChange`. Schemas: [catalog.schema.json](
 
 ## `checklist.update`
 
-Tick, clear, add or remove checklist items in a task's description or a comment, by number plus expected text.
+Tick, clear, add or remove checklist items in a task's description, a comment or a wiki page, by number plus expected text.
 
 Input: `ChecklistUpdateInput`. Output: `ChecklistChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
@@ -632,6 +633,12 @@ Input: `WikiDeleteInput`. Output: `TrashChange`. Schemas: [catalog.schema.json](
 List the revisions of a wiki page, newest first, conflict copies included; read one with wiki.get and its revision.
 
 Input: `WikiHistoryInput`. Output: `RevisionList`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `wiki.export`
+
+Export a wiki page, optionally with the pages inside it, or a project's whole wiki, as Markdown files with their attachments, in a .zip file or a folder; links between the exported pages and to the attachments become relative links.
+
+Input: `WikiExportInput`. Output: `WikiExportResult`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `wiki.backlinks`
 

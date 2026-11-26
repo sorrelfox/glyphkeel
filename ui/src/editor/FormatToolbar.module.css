@@ -31,3 +31,10 @@
   padding-block: 1px;
   border-block-end-color: transparent;
 }
+
+/* In a bar of its own, such as a wiki page's bar while it is edited. */
+.bare {
+  padding: 0;
+  border-block-end: none;
+  background: transparent;
+}
