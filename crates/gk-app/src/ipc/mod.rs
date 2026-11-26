@@ -20,6 +20,8 @@ use serde_json::Value;
 use tauri::ipc::Channel;
 use tauri::{Runtime, State, WebviewWindow};
 
+#[cfg(windows)]
+pub(crate) use confirm::MessageBox;
 pub(crate) use confirm::native as native_confirmation;
 pub(crate) use location::from_env as location_from_env;
 pub(crate) use workspace::Workspace;

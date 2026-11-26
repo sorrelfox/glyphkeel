@@ -14,6 +14,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use zbus::blocking::{Connection, MessageIterator};
 use zbus::zvariant::Value;
 
+use crate::messages::text;
 use crate::reminders::{Notice, Notifier};
 
 const DESTINATION: &str = "org.freedesktop.Notifications";
@@ -24,8 +25,6 @@ const APP_NAME: &str = "Glyphkeel";
 const DESKTOP_ENTRY: &str = "io.github.sorrelfox.Glyphkeel";
 /// The action keys: `default` is a click on the notification itself.
 const OPEN_ACTIONS: [&str; 2] = ["default", "open"];
-// English until the Rust side reads the message files the page uses.
-const OPEN_LABEL: &str = "Open";
 /// The most notifications remembered for their action.
 const KEPT: usize = 64;
 
@@ -78,8 +77,9 @@ impl DesktopNotifier {
 
     /// Shows `notice`; answers the server's ID for it.
     pub(crate) fn notify(&self, notice: &Notice) -> zbus::Result<u32> {
+        let open = text("notification-open", &[]);
         let actions: Vec<&str> = if notice.task.is_some() {
-            vec![OPEN_ACTIONS[0], OPEN_LABEL, OPEN_ACTIONS[1], OPEN_LABEL]
+            vec![OPEN_ACTIONS[0], &open, OPEN_ACTIONS[1], &open]
         } else {
             Vec::new()
         };

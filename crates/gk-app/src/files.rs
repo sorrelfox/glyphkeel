@@ -475,27 +475,125 @@ pub(crate) fn on_drag_drop<R: Runtime>(window: &Window<R>, event: &DragDropEvent
 
 // ---------- opening and saving ----------
 
-/// The last part of a stored file name, safe as a file name of its own.
+/// The last part of a stored file name, safe as a file name of its own on
+/// this platform.
 pub(crate) fn safe_name(name: &str) -> String {
+    safe_name_for(name, cfg!(windows))
+}
+
+/// Device names Windows reserves in every folder, with any extension.
+const WINDOWS_DEVICES: &[&str] = &[
+    "con", "prn", "aux", "nul", "conin$", "conout$", "com0", "com1", "com2", "com3", "com4",
+    "com5", "com6", "com7", "com8", "com9", "lpt0", "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6",
+    "lpt7", "lpt8", "lpt9",
+];
+
+/// [`safe_name`], with Windows' rules when `windows`: no `:` (it would name
+/// a stream of another file), none of `<>"|?*`, no trailing dots or spaces
+/// (Windows drops them, so `x.exe.` would become `x.exe`), and no device
+/// names.
+fn safe_name_for(name: &str, windows: bool) -> String {
     let base = Path::new(name)
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
-    let cleaned: String = base
+    let mut cleaned: String = base
         .chars()
         .map(|c| {
-            if c.is_control() || matches!(c, '/' | '\\') {
+            if c.is_control()
+                || matches!(c, '/' | '\\')
+                || (windows && matches!(c, ':' | '<' | '>' | '"' | '|' | '?' | '*'))
+            {
                 '_'
             } else {
                 c
             }
         })
         .collect();
+    if windows {
+        cleaned.truncate(cleaned.trim_end_matches(['.', ' ']).len());
+        let stem = cleaned.split('.').next().unwrap_or_default().trim_end();
+        if WINDOWS_DEVICES.contains(&stem.to_lowercase().as_str()) {
+            cleaned.insert(0, '_');
+        }
+    }
     if cleaned.trim_matches('.').is_empty() {
         "file".to_owned()
     } else {
         cleaned
     }
+}
+
+/// Types that Windows runs, installs, mounts or lets change the system when
+/// opened, beyond the programs and scripts the engine already marks as
+/// such.
+const WINDOWS_RISKY: &[&str] = &[
+    "ade",
+    "adp",
+    "appref-ms",
+    "application",
+    "appx",
+    "appxbundle",
+    "chm",
+    "cpl",
+    "crt",
+    "dll",
+    "diagcab",
+    "drv",
+    "gadget",
+    "hlp",
+    "hta",
+    "img",
+    "inf",
+    "iso",
+    "mde",
+    "msc",
+    "msh",
+    "mshxml",
+    "msix",
+    "msixbundle",
+    "msp",
+    "mst",
+    "ocx",
+    "pif",
+    "ps1xml",
+    "ps2",
+    "psc1",
+    "psd1",
+    "psm1",
+    "pyc",
+    "pyw",
+    "reg",
+    "scf",
+    "searchconnector-ms",
+    "settingcontent-ms",
+    "library-ms",
+    "sys",
+    "url",
+    "vbe",
+    "vhd",
+    "vhdx",
+    "website",
+    "ws",
+    "wsc",
+    "wsh",
+    "xbap",
+    "xll",
+];
+
+/// Whether Windows would run or install file `name` (a name from
+/// [`safe_name`]) rather than show it.
+fn windows_risky(name: &str) -> bool {
+    name.rsplit_once('.').is_some_and(|(_, extension)| {
+        WINDOWS_RISKY.contains(&extension.to_ascii_lowercase().as_str())
+    })
+}
+
+/// Whether file `name` may be opened in its default program here: never
+/// what the engine marks as a program or script, and on Windows also none
+/// of the types Windows runs or installs.
+fn may_open(name: &str, kind: &str) -> bool {
+    kind != "executable" && !(cfg!(windows) && windows_risky(&safe_name(name)))
 }
 
 /// Opens an attached file in the desktop's default app, from a copy in the
@@ -510,7 +608,7 @@ pub(crate) async fn open_file(
     let workspace = Arc::clone(&workspace);
     let copy = blocking(move || {
         let info = file_info(&workspace, &attachment)?;
-        if info.kind == "executable" {
+        if !may_open(&info.name, &info.kind) {
             return Err(OpError::forbidden(format!(
                 "{} can run programs, so it isn't opened.",
                 info.name
@@ -636,6 +734,105 @@ fn decode_base64(text: &str) -> Option<Vec<u8>> {
 
 // ---------- the platform's dialogs and launcher ----------
 
+/// What the person chooses in a file chooser.
+pub(crate) enum Mode {
+    /// Choose files to read.
+    Open,
+    /// Choose where to write, starting with this name.
+    Save(String),
+    /// Choose where to write an export archive (a `.zip` file, or a new
+    /// folder when `folder`), starting with this name.
+    Export { name: String, folder: bool },
+    /// Choose an archive to import: a `.zip` file, or a folder.
+    Import { folder: bool },
+    /// Choose the folder backups go to.
+    BackupFolder,
+    /// Choose a folder of Markdown files to import into the wiki.
+    WikiFolder,
+}
+
+/// What kind of chooser a [`Mode`] shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Choose {
+    /// Several files to read.
+    Files,
+    /// One file to read.
+    File,
+    /// Where to write a file, asking before it replaces one.
+    Save,
+    /// A folder.
+    Folder,
+}
+
+/// A file chooser as every platform shows it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Spec {
+    pub(crate) choose: Choose,
+    /// Message IDs of the title and of the confirming button.
+    pub(crate) title: &'static str,
+    /// (The system's chooser on Windows names its own button.)
+    pub(crate) accept: &'static str,
+    /// The name to start with, when saving.
+    pub(crate) name: Option<String>,
+    /// Whether only `.zip` archives are shown.
+    pub(crate) zip_only: bool,
+}
+
+impl Mode {
+    pub(crate) fn spec(self) -> Spec {
+        let spec = |choose, title, accept| Spec {
+            choose,
+            title,
+            accept,
+            name: None,
+            zip_only: false,
+        };
+        match self {
+            Mode::Open => spec(Choose::Files, "chooser-attach-title", "chooser-attach"),
+            Mode::Save(name) => Spec {
+                name: Some(name),
+                ..spec(Choose::Save, "chooser-save-title", "chooser-save")
+            },
+            Mode::Export {
+                name,
+                folder: false,
+            } => Spec {
+                name: Some(name),
+                zip_only: true,
+                ..spec(Choose::Save, "chooser-export-title", "chooser-export")
+            },
+            // A new folder is named like a file; the export creates it.
+            Mode::Export { name, folder: true } => Spec {
+                name: Some(name),
+                ..spec(
+                    Choose::Save,
+                    "chooser-export-folder-title",
+                    "chooser-export",
+                )
+            },
+            Mode::Import { folder: false } => Spec {
+                zip_only: true,
+                ..spec(Choose::File, "chooser-import-title", "chooser-import")
+            },
+            Mode::Import { folder: true } => spec(
+                Choose::Folder,
+                "chooser-import-folder-title",
+                "chooser-import",
+            ),
+            Mode::BackupFolder => spec(
+                Choose::Folder,
+                "chooser-backup-folder-title",
+                "chooser-backup-folder",
+            ),
+            Mode::WikiFolder => spec(
+                Choose::Folder,
+                "chooser-wiki-folder-title",
+                "chooser-import",
+            ),
+        }
+    }
+}
+
 #[cfg(target_os = "linux")]
 pub(crate) mod dialog {
     use std::cell::RefCell;
@@ -646,23 +843,9 @@ pub(crate) mod dialog {
     use gtk::{FileChooserAction, FileChooserNative, ResponseType};
     use tauri::WebviewWindow;
 
+    pub(crate) use super::Mode;
+    use super::{Choose, Spec};
     use crate::messages::text;
-
-    pub(crate) enum Mode {
-        /// Choose files to read.
-        Open,
-        /// Choose where to write, starting with this name.
-        Save(String),
-        /// Choose where to write an export archive (a `.zip` file, or a new
-        /// folder when `folder`), starting with this name.
-        Export { name: String, folder: bool },
-        /// Choose an archive to import: a `.zip` file, or a folder.
-        Import { folder: bool },
-        /// Choose the folder backups go to.
-        BackupFolder,
-        /// Choose a folder of Markdown files to import into the wiki.
-        WikiFolder,
-    }
 
     /// Shows GTK's native file chooser (the desktop portal's, where there is
     /// one) over `window`, and waits for the answer. Cancel gives no paths.
@@ -680,48 +863,17 @@ pub(crate) mod dialog {
 
     fn show(window: &WebviewWindow, mode: Mode, answer: std::sync::mpsc::Sender<Vec<PathBuf>>) {
         let parent = window.gtk_window().ok();
-        let (title, accept, action) = match &mode {
-            Mode::Open => (
-                "chooser-attach-title",
-                "chooser-attach",
-                FileChooserAction::Open,
-            ),
-            Mode::Save(_) => (
-                "chooser-save-title",
-                "chooser-save",
-                FileChooserAction::Save,
-            ),
-            Mode::Export { folder: false, .. } => (
-                "chooser-export-title",
-                "chooser-export",
-                FileChooserAction::Save,
-            ),
-            // A new folder is named like a file; the export creates it.
-            Mode::Export { folder: true, .. } => (
-                "chooser-export-folder-title",
-                "chooser-export",
-                FileChooserAction::Save,
-            ),
-            Mode::Import { folder: false } => (
-                "chooser-import-title",
-                "chooser-import",
-                FileChooserAction::Open,
-            ),
-            Mode::Import { folder: true } => (
-                "chooser-import-folder-title",
-                "chooser-import",
-                FileChooserAction::SelectFolder,
-            ),
-            Mode::BackupFolder => (
-                "chooser-backup-folder-title",
-                "chooser-backup-folder",
-                FileChooserAction::SelectFolder,
-            ),
-            Mode::WikiFolder => (
-                "chooser-wiki-folder-title",
-                "chooser-import",
-                FileChooserAction::SelectFolder,
-            ),
+        let Spec {
+            choose,
+            title,
+            accept,
+            name,
+            zip_only,
+        } = mode.spec();
+        let action = match choose {
+            Choose::Files | Choose::File => FileChooserAction::Open,
+            Choose::Save => FileChooserAction::Save,
+            Choose::Folder => FileChooserAction::SelectFolder,
         };
         let dialog = FileChooserNative::new(
             Some(&text(title, &[])),
@@ -731,28 +883,21 @@ pub(crate) mod dialog {
             Some(&text("chooser-cancel", &[])),
         );
         dialog.set_modal(true);
-        let zip_filter = || {
+        if choose == Choose::Files {
+            dialog.set_select_multiple(true);
+        }
+        if let Some(name) = name {
+            dialog.set_current_name(&name);
+        }
+        if zip_only {
             let filter = gtk::FileFilter::new();
             filter.set_name(Some(&text("chooser-zip-filter", &[])));
             filter.add_pattern("*.zip");
             filter.add_mime_type("application/zip");
-            filter
-        };
-        match mode {
-            Mode::Open => dialog.set_select_multiple(true),
-            Mode::Save(name) => {
-                dialog.set_current_name(&name);
-                dialog.set_do_overwrite_confirmation(true);
-            }
-            Mode::Export { name, folder } => {
-                dialog.set_current_name(&name);
-                if !folder {
-                    dialog.add_filter(zip_filter());
-                }
-                dialog.set_do_overwrite_confirmation(true);
-            }
-            Mode::Import { folder: false } => dialog.add_filter(zip_filter()),
-            Mode::Import { folder: true } | Mode::BackupFolder | Mode::WikiFolder => {}
+            dialog.add_filter(filter);
+        }
+        if choose == Choose::Save {
+            dialog.set_do_overwrite_confirmation(true);
         }
         // The dialog lives until it answers; then the answer is sent once.
         let keep = RefCell::new(Some((dialog.clone(), answer)));
@@ -770,25 +915,20 @@ pub(crate) mod dialog {
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(windows)]
+pub(crate) mod dialog {
+    pub(crate) use super::Mode;
+    pub(crate) use crate::platform::windows::choose;
+}
+
+#[cfg(not(any(target_os = "linux", windows)))]
 pub(crate) mod dialog {
     use std::path::PathBuf;
 
     use gk_api::OpError;
     use tauri::WebviewWindow;
 
-    #[expect(
-        dead_code,
-        reason = "the fields are read once this platform has a file chooser"
-    )]
-    pub(crate) enum Mode {
-        Open,
-        Save(String),
-        Export { name: String, folder: bool },
-        Import { folder: bool },
-        BackupFolder,
-        WikiFolder,
-    }
+    pub(crate) use super::Mode;
 
     pub(crate) async fn choose(
         _window: &WebviewWindow,
@@ -837,7 +977,30 @@ mod system {
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(windows)]
+mod system {
+    use std::path::Path;
+
+    use gk_api::OpError;
+    use tauri::AppHandle;
+
+    /// Opens `path` in the default program for its type. The copy is first
+    /// marked as coming from elsewhere, so that Windows and the program
+    /// treat it with the care they give a download.
+    pub(crate) async fn open(_app: &AppHandle, path: &Path) -> Result<(), OpError> {
+        let path = path.to_owned();
+        super::blocking(move || {
+            crate::platform::windows::mark_as_downloaded(&path);
+            crate::platform::windows::open_path(&path).map_err(|e| {
+                OpError::storage(format!("No app opened the file: {e}."))
+                    .with_hint("Save it and open it yourself.")
+            })
+        })
+        .await
+    }
+}
+
+#[cfg(not(any(target_os = "linux", windows)))]
 mod system {
     use std::path::Path;
 
@@ -1072,5 +1235,138 @@ mod tests {
         assert_eq!(safe_name("../../etc/passwd"), "passwd");
         assert_eq!(safe_name(".."), "file");
         assert_eq!(safe_name("a\u{7}b.txt"), "a_b.txt");
+        for windows in [false, true] {
+            assert_eq!(safe_name_for("report.pdf", windows), "report.pdf");
+            assert_eq!(safe_name_for("../../etc/passwd", windows), "passwd");
+            assert_eq!(safe_name_for("...", windows), "file");
+        }
+    }
+
+    #[test]
+    fn copies_on_windows_follow_its_file_name_rules() {
+        // A colon would name a stream of `a.txt`; the others aren't allowed.
+        assert_eq!(safe_name_for("a.txt:evil.exe", true), "a.txt_evil.exe");
+        assert_eq!(safe_name_for("what?<x>|\"*\".md", true), "what__x_____.md");
+        // Windows drops trailing dots and spaces, so they go first.
+        assert_eq!(safe_name_for("run.exe. . ", true), "run.exe");
+        assert_eq!(safe_name_for("CON.txt", true), "_CON.txt");
+        assert_eq!(safe_name_for("lpt1", true), "_lpt1");
+        assert_eq!(safe_name_for("console.txt", true), "console.txt");
+        // Elsewhere these names are fine as they are.
+        assert_eq!(safe_name_for("ab:c. ", false), "ab:c. ");
+        assert_eq!(safe_name_for("CON.txt", false), "CON.txt");
+    }
+
+    #[test]
+    fn types_that_windows_runs_or_installs_are_never_opened_there() {
+        for name in [
+            "x.hta",
+            "x.msc",
+            "x.CPL",
+            "x.reg",
+            "x.url",
+            "x.iso",
+            "x.vhdx",
+            "x.chm",
+            "x.settingcontent-ms",
+            "x.appref-ms",
+            "x.psm1",
+            "x.msix",
+            "x.library-ms",
+        ] {
+            assert!(windows_risky(name), "{name}");
+        }
+        // The trailing dot is gone by the time the copy is named.
+        assert!(windows_risky(&safe_name_for("x.hta.", true)));
+        for name in ["x.pdf", "x.png", "x.docx", "notes.txt", "hta", "x.url.txt"] {
+            assert!(!windows_risky(name), "{name}");
+        }
+        assert!(!may_open("run.exe", "executable"));
+        assert!(may_open("report.pdf", "document"));
+        assert_eq!(may_open("x.hta", "document"), !cfg!(windows));
+    }
+
+    #[test]
+    fn every_chooser_has_its_kind_title_and_filter() {
+        let spec = Mode::Open.spec();
+        assert_eq!(
+            (
+                spec.choose,
+                spec.title,
+                spec.accept,
+                spec.name,
+                spec.zip_only
+            ),
+            (
+                Choose::Files,
+                "chooser-attach-title",
+                "chooser-attach",
+                None,
+                false
+            )
+        );
+        let spec = Mode::Save("a.pdf".into()).spec();
+        assert_eq!(
+            (spec.choose, spec.name.as_deref(), spec.zip_only),
+            (Choose::Save, Some("a.pdf"), false)
+        );
+        let spec = Mode::Export {
+            name: "x.zip".into(),
+            folder: false,
+        }
+        .spec();
+        assert_eq!(
+            (spec.choose, spec.title, spec.zip_only),
+            (Choose::Save, "chooser-export-title", true)
+        );
+        let spec = Mode::Export {
+            name: "x".into(),
+            folder: true,
+        }
+        .spec();
+        assert_eq!(
+            (spec.choose, spec.title, spec.zip_only),
+            (Choose::Save, "chooser-export-folder-title", false)
+        );
+        let spec = Mode::Import { folder: false }.spec();
+        assert_eq!((spec.choose, spec.zip_only), (Choose::File, true));
+        for (mode, title) in [
+            (Mode::Import { folder: true }, "chooser-import-folder-title"),
+            (Mode::BackupFolder, "chooser-backup-folder-title"),
+            (Mode::WikiFolder, "chooser-wiki-folder-title"),
+        ] {
+            let spec = mode.spec();
+            assert_eq!(
+                (spec.choose, spec.title, spec.zip_only),
+                (Choose::Folder, title, false)
+            );
+        }
+        // Every title, button and filter has its message.
+        for mode in [
+            Mode::Open,
+            Mode::Save(String::new()),
+            Mode::Export {
+                name: String::new(),
+                folder: false,
+            },
+            Mode::Export {
+                name: String::new(),
+                folder: true,
+            },
+            Mode::Import { folder: false },
+            Mode::Import { folder: true },
+            Mode::BackupFolder,
+            Mode::WikiFolder,
+        ] {
+            let spec = mode.spec();
+            for id in [
+                spec.title,
+                spec.accept,
+                "chooser-zip-filter",
+                "chooser-cancel",
+            ] {
+                assert_ne!(crate::messages::text(id, &[]), id);
+            }
+        }
     }
 }

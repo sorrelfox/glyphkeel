@@ -5,9 +5,10 @@
 //! most an agent may do or the limits on agents.
 //!
 //! The engine asks inside the call, before the transaction, and the call
-//! waits for the answer. The dialog is GTK's own, shown by Rust over the
-//! window: script in the page can neither see nor answer it, and no answer
-//! the page passes in can stand in for it.
+//! waits for the answer. The dialog is the system's own (GTK's on Linux, a
+//! task dialog on Windows), shown by Rust over the window: script in the page
+//! can neither see nor answer it, and no answer the page passes in can stand
+//! in for it.
 
 use std::sync::Arc;
 
@@ -19,7 +20,7 @@ use crate::messages::text;
 
 /// What the dialog says: its title, the question and the confirming button.
 #[cfg_attr(
-    not(any(target_os = "linux", test)),
+    not(any(target_os = "linux", windows, test)),
     expect(dead_code, reason = "no native dialog shows it on this platform yet")
 )]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -33,7 +34,7 @@ pub(crate) struct Wording {
 /// The dialog's words for `op` with its `input`, from the app's messages:
 /// what exactly is deleted or replaced, named from the input.
 #[cfg_attr(
-    not(any(target_os = "linux", test)),
+    not(any(target_os = "linux", windows, test)),
     expect(dead_code, reason = "no native dialog shows it on this platform yet")
 )]
 pub(crate) fn wording(op: &str, summary: &str, input: &Value) -> Wording {
@@ -119,10 +120,63 @@ fn ask(app: &AppHandle, request: &ConfirmRequest) -> bool {
     answered.recv().unwrap_or(false)
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(windows)]
+fn ask(app: &AppHandle, request: &ConfirmRequest) -> bool {
+    let wording = wording(request.op.id, request.op.summary, &request.input);
+    ask_with(
+        &crate::platform::windows::TaskDialog::new(app.clone()),
+        &wording,
+    )
+}
+
+#[cfg(not(any(target_os = "linux", windows)))]
 fn ask(_app: &AppHandle, _request: &ConfirmRequest) -> bool {
     // No native dialog on this platform yet: refuse rather than guess.
     false
+}
+
+/// A message box of the system's with two buttons, the first one the
+/// default.
+#[cfg(any(windows, test))]
+pub(crate) trait MessageBox {
+    /// Shows the box and waits; answers the label of the button pressed, or
+    /// `None` when the box went away without one (Escape, closed, failed).
+    fn show(&self, title: &str, body: &str, buttons: [&str; 2]) -> Option<String>;
+}
+
+/// Asks with `wording` in `message_box`. Cancel comes first, so Enter on an
+/// untouched box cancels, as on Linux. Only the confirming button confirms.
+#[cfg(any(windows, test))]
+pub(crate) fn ask_with(message_box: &impl MessageBox, wording: &Wording) -> bool {
+    let cancel = access_keys(&wording.cancel);
+    let accept = access_keys(&wording.accept);
+    if cancel == accept {
+        // Two buttons that look the same can't be told apart: refuse.
+        return false;
+    }
+    message_box
+        .show(&wording.title, &wording.body, [&cancel, &accept])
+        .is_some_and(|pressed| pressed == accept)
+}
+
+/// A button label with GTK's access key (`_Delete`) written as Windows
+/// writes it (`&Delete`); `__` is an underscore, and a `&` stays one.
+#[cfg(any(windows, test))]
+pub(crate) fn access_keys(label: &str) -> String {
+    let mut out = String::with_capacity(label.len() + 1);
+    let mut chars = label.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '_' if chars.peek() == Some(&'_') => {
+                chars.next();
+                out.push('_');
+            }
+            '_' if chars.peek().is_some() => out.push('&'),
+            '&' => out.push_str("&&"),
+            c => out.push(c),
+        }
+    }
+    out
 }
 
 #[cfg(target_os = "linux")]
@@ -173,9 +227,73 @@ mod dialog {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
+
     use serde_json::json;
 
-    use super::wording;
+    use super::{MessageBox, Wording, access_keys, ask_with, wording};
+
+    /// Presses the button it is told to, and keeps what it showed.
+    struct Fake {
+        press: Option<usize>,
+        shown: RefCell<Vec<(String, String, [String; 2])>>,
+    }
+
+    impl Fake {
+        fn pressing(press: Option<usize>) -> Self {
+            Self {
+                press,
+                shown: RefCell::new(Vec::new()),
+            }
+        }
+    }
+
+    impl MessageBox for Fake {
+        fn show(&self, title: &str, body: &str, buttons: [&str; 2]) -> Option<String> {
+            self.shown.borrow_mut().push((
+                title.to_owned(),
+                body.to_owned(),
+                buttons.map(str::to_owned),
+            ));
+            self.press.map(|at| buttons[at].to_owned())
+        }
+    }
+
+    #[test]
+    fn the_message_box_confirms_only_with_its_confirming_button() {
+        let words = wording("backup.delete", "", &json!({ "name": "manual-x" }));
+        let cancel = Fake::pressing(Some(0));
+        assert!(!ask_with(&cancel, &words));
+        let (title, body, buttons) = cancel.shown.borrow()[0].clone();
+        assert_eq!(title, "This can't be undone");
+        assert!(body.contains("“manual-x”"), "{body}");
+        // Cancel first, as the default button.
+        assert_eq!(buttons, ["&Cancel", "&Delete for good"]);
+        assert!(ask_with(&Fake::pressing(Some(1)), &words));
+        assert!(!ask_with(&Fake::pressing(None), &words));
+    }
+
+    #[test]
+    fn buttons_that_look_the_same_never_confirm() {
+        let same = Wording {
+            title: "t".into(),
+            body: "b".into(),
+            accept: "_OK".into(),
+            cancel: "_OK".into(),
+        };
+        let fake = Fake::pressing(Some(1));
+        assert!(!ask_with(&fake, &same));
+        assert!(fake.shown.borrow().is_empty());
+    }
+
+    #[test]
+    fn access_keys_are_written_the_windows_way() {
+        assert_eq!(access_keys("_Delete for good"), "&Delete for good");
+        assert_eq!(access_keys("Save __as"), "Save _as");
+        assert_eq!(access_keys("Fish & _chips"), "Fish && &chips");
+        assert_eq!(access_keys("trailing_"), "trailing_");
+        assert_eq!(access_keys(""), "");
+    }
 
     #[test]
     fn the_dialog_names_what_goes_for_good() {
