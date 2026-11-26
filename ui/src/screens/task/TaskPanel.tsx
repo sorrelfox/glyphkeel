@@ -36,6 +36,7 @@ import { useDurations } from "../../data/time";
 import { useToday } from "../../data/zone";
 import { dueState } from "../board/model";
 import { ActivityTabs, Composer, useMomentFormat } from "./Activity";
+import { BacklinksSection } from "./Backlinks";
 import { DescriptionSection, type DescriptionView } from "./Description";
 import { FilesSection, useFileDrop } from "./Files";
 import { LinksSection, SubtasksSection } from "./Sections";
@@ -364,6 +365,7 @@ function Loaded({
 
         <SubtasksSection task={task} project={project} readOnly={readOnly} onOpenTask={onOpenTask} />
         <LinksSection task={task} project={project} readOnly={readOnly} onOpenTask={onOpenTask} />
+        <BacklinksSection taskKey={task.key} onOpenTask={onOpenTask} />
         <FilesSection task={task.key} files={task.files ?? []} readOnly={readOnly} />
         <ActivityTabs
           task={task}

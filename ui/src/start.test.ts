@@ -40,6 +40,12 @@ describe("readStart", () => {
     expect(readStart(windowWith({ task: "../TM-41", open: 41 }))).toEqual({ titleBar: "app", locale: "fr-FR" });
   });
 
+  it("takes a wiki window's page, when it looks like a page ID", () => {
+    expect(readStart(windowWith({ wiki: "01a1ee56-5e01-7406-9f8b-e8c1fe48b90b" })).wiki).toBe("01a1ee56-5e01-7406-9f8b-e8c1fe48b90b");
+    expect(readStart(windowWith({ wiki: "../etc" })).wiki).toBeUndefined();
+    expect(readStart(windowWith({ wiki: 7 })).wiki).toBeUndefined();
+  });
+
   it("offers the first-run set-up when the app made the workspace, or the address asks for it outside the app", () => {
     expect(readStart(windowWith({ firstRun: true })).firstRun).toBe(true);
     expect(readStart(windowWith({ firstRun: "yes" })).firstRun).toBeUndefined();

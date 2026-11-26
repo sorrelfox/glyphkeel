@@ -8,6 +8,7 @@ reader-diagram = Diagram
 reader-diagram-error = The diagram can't be drawn: { $error }
 reader-external-image = External image: { $name }. Open in browser
 reader-wiki-link = Wiki page { $page }
+reader-wiki-missing = There is no page “{ $page }” yet.
 reader-checkbox = Checklist item
 
 ## Descriptions: editing, conflict copies and history

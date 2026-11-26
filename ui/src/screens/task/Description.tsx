@@ -128,6 +128,8 @@ function DescriptionReader({ task, readOnly, onOpenTask }: { task: Task; readOnl
   const t = useT();
   const call = useCall();
   const rendered = useRenderedDescription(task.key);
+  // Links to wiki pages that don't exist (yet) show as such.
+  const references = useOp("task.references", { key: task.key }).data?.items.filter((reference) => reference.comment === undefined);
   const item = rendered.data?.items[0];
   if (task.description === "") {
     return <p className="faint">{t("panel-no-description")}</p>;
@@ -140,6 +142,7 @@ function DescriptionReader({ task, readOnly, onOpenTask }: { task: Task; readOnl
       html={item.html}
       label={t("panel-description")}
       onOpenTask={onOpenTask}
+      references={references}
       onToggle={readOnly ? undefined : (click) => toggleChecklist(call, { task: task.key }, item.checklist, click)}
     />
   );

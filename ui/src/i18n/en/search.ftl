@@ -46,4 +46,3 @@ wiki-not-found = There is no wiki page “{ $page }”.
 wiki-updated = Changed { $time }
 wiki-empty = This page has no text yet.
 wiki-text = Text of { $page }
-wiki-read-only = Wiki pages open read only here; editing them comes with the wiki’s own screens.

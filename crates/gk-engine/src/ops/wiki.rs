@@ -810,6 +810,20 @@ fn free_slug(tx: &Transaction<'_>, project: Id, title: &str, page: Id) -> Result
     }
 }
 
+/// Lets a live page take `slug`: a redirect from a renamed page gives way to
+/// a page of that name. A redirect to a page in the trash stays, so that the
+/// old links find that page again once it is restored and the slug is free
+/// (a live page with the slug comes first while it exists).
+fn release_redirect(tx: &Transaction<'_>, project: Id, slug: &str) -> Result<(), Failure> {
+    tx.execute(
+        "DELETE FROM wiki_redirects
+          WHERE project_id = ?1 AND slug = ?2
+            AND page_id IN (SELECT id FROM wiki_pages WHERE deleted_at IS NULL)",
+        params![b(project), slug],
+    )?;
+    Ok(())
+}
+
 /// The parent page `text` names in `project`, checked for loops and depth
 /// when `moving` (with the pages below it) goes inside it.
 fn parent_for(
@@ -917,11 +931,7 @@ fn create(w: &mut WriteCtx<'_>, input: WikiCreateInput) -> Result<WikiChange, Fa
 
     let id = Id::generate_at(u64::try_from(w.now()).unwrap_or(0));
     let slug = free_slug(w.tx(), project.id, &title, id)?;
-    // A redirect from a renamed page gives way to a page of that name.
-    w.tx().execute(
-        "DELETE FROM wiki_redirects WHERE project_id = ?1 AND slug = ?2",
-        params![b(project.id), slug],
-    )?;
+    release_redirect(w.tx(), project.id, &slug)?;
     let list: Vec<(Id, String)> = siblings.iter().map(|s| (s.id, s.rank.clone())).collect();
     let ranks = lookup::place(&list, id, target)?;
     let own = ranks
@@ -999,10 +1009,7 @@ fn update(w: &mut WriteCtx<'_>, input: WikiUpdateInput) -> Result<WikiChange, Fa
                      VALUES (?1, ?2, ?3)",
                     params![b(project.id), page.slug, b(page.id)],
                 )?;
-                w.tx().execute(
-                    "DELETE FROM wiki_redirects WHERE project_id = ?1 AND slug = ?2",
-                    params![b(project.id), slug],
-                )?;
+                release_redirect(w.tx(), project.id, &slug)?;
                 fields::set(w, WIKI, page.id, Some(project.id), "slug", text(&slug))?;
             }
             reindex(w, page.id)?;

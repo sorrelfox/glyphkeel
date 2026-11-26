@@ -1,0 +1,443 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+   Copyright (C) 2026 Glyphkeel contributors */
+
+/* The wiki: the page tree, the page and its aside, from the design's wiki screen. */
+
+.layout {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+.windowScreen {
+  display: flex;
+  height: 100vh;
+  min-height: 0;
+  background: var(--bg);
+}
+
+.small {
+  font-size: var(--fs-small);
+}
+
+.empty {
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+}
+
+.notice {
+  margin: 24px;
+}
+
+/* ---------- page tree ---------- */
+
+.treePane {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  inline-size: clamp(200px, 22%, 320px);
+  min-height: 0;
+  border-inline-end: 1px solid var(--border);
+}
+
+.treeHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--h-toolbar);
+  padding-inline: 14px 8px;
+  font-weight: 600;
+}
+
+.treeScroll {
+  flex: 1 1 0;
+  min-height: 0;
+  padding: 0 8px 8px;
+  overflow: auto;
+}
+
+.tree {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  outline: none;
+}
+
+.treeItem {
+  outline: none;
+  border-radius: var(--r-m);
+}
+
+.treeItem[data-focus-visible] {
+  outline: var(--focus-w) solid var(--focus);
+  outline-offset: -2px;
+}
+
+.treeItem[data-dragging] {
+  opacity: 0.5;
+}
+
+/* A line where a dragged page would go, before or after a row. */
+.treeItem[data-drop-target] {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.tree [role="row"][data-drop-target] {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.treeRow {
+  gap: 6px;
+  padding-inline-start: 4px;
+  cursor: default;
+}
+
+/* 16 px indent per level, as the design's tree rows. */
+.treeItem[aria-level="2"] .treeRow {
+  padding-inline-start: 20px;
+}
+
+.treeItem[aria-level="3"] .treeRow {
+  padding-inline-start: 36px;
+}
+
+.treeItem[aria-level="4"] .treeRow {
+  padding-inline-start: 52px;
+}
+
+.treeItem[aria-level="5"] .treeRow {
+  padding-inline-start: 68px;
+}
+
+.dropTarget {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.chevron {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  aspect-ratio: 1;
+  border-radius: var(--r-s);
+  transition: transform var(--dur-fast) var(--ease);
+}
+
+.closed {
+  transform: rotate(-90deg);
+}
+
+.dragHandle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  border-radius: var(--r-s);
+  opacity: 0;
+  cursor: grab;
+}
+
+.treeRow:hover .dragHandle,
+.dragHandle[data-focus-visible] {
+  opacity: 1;
+}
+
+.treeEmpty {
+  margin: 4px 14px;
+  font-size: var(--fs-small);
+}
+
+/* ---------- page ---------- */
+
+.page {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--surface);
+}
+
+.pageBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--h-toolbar);
+  padding-block: 6px;
+  padding-inline: 24px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.crumbButton {
+  margin: 0;
+}
+
+.pageTitle {
+  margin: 0;
+  padding-inline: 6px;
+  font-size: var(--fs);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.banner {
+  flex-wrap: wrap;
+  padding-block: 4px;
+  padding-inline: 24px 12px;
+}
+
+.conflictBanner {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+.pageScroll {
+  display: flex;
+  flex: 1 1 0;
+  gap: 40px;
+  min-height: 0;
+  padding-block: 28px 40px;
+  padding-inline: 24px;
+  overflow: auto;
+}
+
+.article {
+  flex: 1 1 0;
+  min-width: 0;
+  max-inline-size: 760px;
+}
+
+.aside {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 20px;
+  inline-size: clamp(160px, 24%, 240px);
+}
+
+.asideGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.asideCaption {
+  margin-block-end: 4px;
+}
+
+.toc {
+  padding-block: 3px;
+  padding-inline: 10px 0;
+  border: 0;
+  border-inline-start: 2px solid var(--border);
+  background: none;
+  color: var(--fg-muted);
+  font-size: var(--fs-small);
+  text-align: start;
+}
+
+.toc[data-level="3"] {
+  padding-inline-start: 20px;
+}
+
+.toc[data-level="4"],
+.toc[data-level="5"],
+.toc[data-level="6"] {
+  padding-inline-start: 30px;
+}
+
+.tocOn {
+  border-inline-start-color: var(--accent);
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.asideLink {
+  font-size: var(--fs-small);
+  text-align: start;
+}
+
+.asideTask {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--fs-small);
+  text-align: start;
+}
+
+.asideTask:hover .muted {
+  color: var(--fg);
+}
+
+.asideMissing {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--fg-muted);
+}
+
+/* ---------- editor ---------- */
+
+.editorPane {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+  padding-block: 16px;
+  padding-inline: 24px;
+  overflow: auto;
+}
+
+.editorColumn {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  max-inline-size: 860px;
+}
+
+.editor [class~="cm-editor"] {
+  min-height: 40vh;
+  max-height: none;
+}
+
+.editorBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ---------- history ---------- */
+
+.historyLayout {
+  display: flex;
+  flex: 1 1 0;
+  gap: 32px;
+  min-height: 0;
+  padding-block: 20px 40px;
+  padding-inline: 24px;
+  overflow: auto;
+}
+
+.historyDiff {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  max-inline-size: 860px;
+}
+
+.historyHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.historyList {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 8px;
+  inline-size: clamp(200px, 30%, 320px);
+}
+
+.revisionList {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.revisionRow {
+  border-radius: var(--r-m);
+}
+
+.revisionRow:hover {
+  background: var(--hover);
+}
+
+.chosen {
+  background: var(--selected);
+}
+
+.revisionPick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--h-control);
+  padding: 2px 8px;
+  font-size: var(--fs-small);
+  cursor: default;
+}
+
+.revisionBody {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--r-m);
+  background: var(--sunken);
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- dialogs ---------- */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  inline-size: min(480px, 80vw);
+}
+
+.formRow {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.formLabel {
+  color: var(--fg-muted);
+}
+
+.error {
+  margin: 0;
+  color: var(--danger);
+}
+
+/* A narrow window: the tree and the aside give way to the page. */
+@media (width <= 760px) {
+  .hideNarrow,
+  .aside {
+    display: none;
+  }
+}
+
+@media (width <= 560px) {
+  .treePane {
+    display: none;
+  }
+}

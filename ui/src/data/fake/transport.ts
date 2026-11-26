@@ -6,6 +6,7 @@ import { type Transport } from "../transport";
 import { FakeError, FakeWorkspace } from "./engine";
 import { addManyTasks } from "./many";
 import { seed } from "./seed";
+import { addSampleWiki } from "./wiki";
 
 export interface FakeOptions {
   /** The day the sample data is built around, and the clock of changes. */
@@ -14,6 +15,8 @@ export interface FakeOptions {
   latency?: number;
   /** Plain tasks added to the sample data, for long lists. */
   extraTasks?: number;
+  /** Sample wiki pages in Task Manager, for the wiki's screens. */
+  sampleWiki?: boolean;
 }
 
 /**
@@ -27,6 +30,9 @@ export function fakeTransport(options: FakeOptions = {}): Transport & { workspac
   const state = seed(today());
   if (options.extraTasks !== undefined && options.extraTasks > 0) {
     addManyTasks(state, options.extraTasks);
+  }
+  if (options.sampleWiki === true) {
+    addSampleWiki(state, today());
   }
   const workspace = new FakeWorkspace(state, today);
   const listeners = new Set<(event: Changed) => void>();

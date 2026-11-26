@@ -36,6 +36,7 @@ mod title_bar;
 mod transfer;
 #[cfg(target_os = "linux")]
 mod webkit;
+mod wiki_window;
 mod window_state;
 
 use std::process::ExitCode;
@@ -119,6 +120,7 @@ fn main() -> ExitCode {
             links::open_link,
             open_links::watch_open_links,
             task_window::open_task_window,
+            wiki_window::open_wiki_window,
             app_settings::app_settings,
             app_settings::update_app_settings,
             app_settings::set_ui_pref,

@@ -161,18 +161,18 @@ function ProjectButton({ project, onSettings, onNewSubproject }: ProjectButtonPr
   );
 }
 
-/** Board, List, Calendar, Gantt and Wiki. Gantt and Wiki don't exist yet and are dimmed. */
+/** Board, List, Calendar, Gantt and Wiki. Gantt doesn't exist yet and is dimmed. */
 function ViewSwitcher({ project }: { project: string }) {
   const t = useT();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
-  const current = pathname.endsWith("/list") ? "list" : pathname.endsWith("/calendar") ? "calendar" : "board";
+  const current = pathname.endsWith("/list") ? "list" : pathname.endsWith("/calendar") ? "calendar" : pathname.endsWith("/wiki") ? "wiki" : "board";
   const views = [
     { id: "board", icon: <Columns3 className="ic" />, ready: true },
     { id: "list", icon: <List className="ic" />, ready: true },
     { id: "calendar", icon: <CalendarDays className="ic" />, ready: true },
     { id: "gantt", icon: <ChartGantt className="ic" />, ready: false },
-    { id: "wiki", icon: <BookOpen className="ic" />, ready: false },
+    { id: "wiki", icon: <BookOpen className="ic" />, ready: true },
   ];
   return (
     <div className="seg" role="group" aria-label={t("header-views")}>
@@ -189,6 +189,8 @@ function ViewSwitcher({ project }: { project: string }) {
               void navigate({ to: "/projects/$key/list", params: { key: project } });
             } else if (view.id === "calendar") {
               void navigate({ to: "/projects/$key/calendar", params: { key: project } });
+            } else if (view.id === "wiki") {
+              void navigate({ to: "/projects/$key/wiki", params: { key: project } });
             } else if (view.id === "board") {
               void navigate({ to: "/projects/$key", params: { key: project } });
             }

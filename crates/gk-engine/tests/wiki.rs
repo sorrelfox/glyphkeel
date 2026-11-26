@@ -678,6 +678,49 @@ fn links_survive_renames_moves_and_a_trip_through_the_trash() {
 }
 
 #[test]
+fn a_page_in_the_trash_keeps_its_old_address_when_a_new_page_takes_it() {
+    let ws = open();
+    let plan = ws.page("Release plan", BASE);
+    let id = plan["id"].as_str().unwrap().to_owned();
+    ws.page("Index", "See [[Release plan]].\n");
+    ws.call(
+        "wiki.update",
+        json!({ "project": "TM", "page": "Release plan", "title": "Roadmap" }),
+    );
+    ws.call("wiki.delete", json!({ "project": "TM", "page": "Roadmap" }));
+
+    // A new page of the old name takes the address while it exists.
+    let other = ws.page("Release plan", "");
+    assert_eq!(other["slug"], "release-plan");
+    assert_eq!(ws.get("release-plan")["id"], other["id"]);
+    ws.call(
+        "wiki.delete",
+        json!({ "project": "TM", "page": "Release plan" }),
+    );
+
+    // Back from the trash, the renamed page answers to its old address and
+    // the link written before the rename finds it again.
+    ws.call("trash.restore", json!({ "items": [id] }));
+    assert_eq!(ws.get("release-plan")["id"], id.as_str());
+    assert_eq!(ws.get("Release plan")["title"], "Roadmap");
+    let references = ws.call(
+        "wiki.references",
+        json!({ "project": "TM", "page": "Index" }),
+    );
+    assert_eq!(references["items"][0]["found"], true);
+    assert_eq!(references["items"][0]["page"]["id"], id.as_str());
+    let backlinks = ws.call("wiki.backlinks", json!({ "page": id }));
+    assert_eq!(backlinks["items"][0]["title"], "Index");
+
+    // A third page of that name: the title finds it, while the address
+    // (still held by the page in the trash) stays with the restored page.
+    let third = ws.page("Release plan", "");
+    assert_eq!(third["slug"], "release-plan-2");
+    assert_eq!(ws.get("Release plan")["id"], third["id"]);
+    assert_eq!(ws.get("release-plan")["id"], id.as_str());
+}
+
+#[test]
 fn a_link_can_name_a_page_of_another_project() {
     let ws = open();
     ws.call("project.create", json!({ "name": "Lab", "key": "LAB" }));

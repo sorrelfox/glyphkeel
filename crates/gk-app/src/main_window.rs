@@ -40,6 +40,7 @@ pub(crate) fn open(
         title_bar,
         locale: start::locale_from_env(),
         task: None,
+        wiki: None,
         open: first_task,
         prefs: app
             .try_state::<crate::app_settings::AppSettings>()

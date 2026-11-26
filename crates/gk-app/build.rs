@@ -23,6 +23,7 @@ fn main() {
         "open_link",
         "watch_open_links",
         "open_task_window",
+        "open_wiki_window",
         "app_settings",
         "update_app_settings",
         "set_ui_pref",

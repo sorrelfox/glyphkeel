@@ -141,7 +141,13 @@ export function Shell({ titleBar, openGallery, firstRun = false }: ShellProps) {
     projectView:
       view === "project" && projectKey !== undefined
         ? (next) => {
-            void navigate(next === "list" ? { to: "/projects/$key/list", params: { key: projectKey } } : { to: "/projects/$key", params: { key: projectKey } });
+            void navigate(
+              next === "list"
+                ? { to: "/projects/$key/list", params: { key: projectKey } }
+                : next === "wiki"
+                  ? { to: "/projects/$key/wiki", params: { key: projectKey } }
+                  : { to: "/projects/$key", params: { key: projectKey } },
+            );
           }
         : null,
     toggleSidebar: () => {
