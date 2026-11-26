@@ -28,6 +28,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use icu_collator::options::CollatorOptions;
 use icu_collator::{CollatorBorrowed, CollatorPreferences};
+use rusqlite::config::DbConfig;
 use rusqlite::{Connection, OpenFlags};
 
 use crate::error::Result;
@@ -40,6 +41,13 @@ pub const COLLATION: &str = "gk_unicode";
 
 /// Size the WAL file is cut back to after a checkpoint, in bytes.
 pub const JOURNAL_SIZE_LIMIT: i64 = 32 * 1024 * 1024;
+
+/// Prepared statements each connection keeps for reuse. One command can
+/// run a few dozen different statements per task it touches (a task's
+/// row, its labels, search entry, history, rules); with the library's
+/// default of 16 they push each other out and every call parses its SQL
+/// again.
+pub(crate) const STATEMENT_CACHE: usize = 256;
 
 /// What a connection is for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -85,6 +93,14 @@ pub(crate) fn open(path: &Path, purpose: Purpose, busy_budget: Duration) -> Resu
         conn.execute_batch("PRAGMA query_only = ON;")?;
     }
     conn.create_collation(COLLATION, collate)?;
+    conn.set_prepared_statement_cache_capacity(STATEMENT_CACHE);
+    // One plan per statement, whatever values are bound. Without it SQLite
+    // compiles a cached statement again whenever a bound value might
+    // change its plan (with the statistics this build keeps, nearly every
+    // lookup by a bound ID), which costs more than running it. Queries
+    // that need a partial index whose condition compares with a constant
+    // write that constant into their SQL.
+    conn.set_db_config(DbConfig::SQLITE_DBCONFIG_ENABLE_QPSG, true)?;
     Ok(conn)
 }
 

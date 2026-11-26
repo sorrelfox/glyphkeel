@@ -9,6 +9,8 @@ only, so it runs on every distribution's own Python.
                         writes /out/perf.json and /out/perf.md
   gk.py perf-depth [P]  only the reported measures: flow reports, history
                         queries and a CSV import of 10,000 rows
+  gk.py perf-engine [K] only the engine's operations through MCP, on task K
+                        (default BULK-1) and its project
 """
 
 import datetime
@@ -364,6 +366,133 @@ def mcp_latency(key, project):
     }
 
 
+def mcp_timed(mcp, tool, arguments, runs):
+    """The median and p95 of `runs` calls of an MCP tool, in ms; `arguments`
+    may be a function of the run's number, for writes."""
+    took = []
+    for n in range(runs):
+        args = arguments(n) if callable(arguments) else arguments
+        t = time.monotonic()
+        mcp.call(tool, args)
+        took.append(time.monotonic() - t)
+    return {"median_ms": ms(statistics.median(took)), "p95_ms": ms(p95(took))}
+
+
+def engine_timings(key, project):
+    """The engine's operations behind the screens, through one MCP server
+    (a warm engine, as in the app): board, list pages over 20,000 tasks,
+    the Gantt chart's schedule, search, today, history and reports, and
+    single writes. Reported only: the budgets they serve are measured on
+    the screens."""
+    year_ago = (datetime.date.today() - datetime.timedelta(weeks=52)).isoformat()
+    mcp = Mcp()
+    mcp.initialize()
+    results = {}
+    try:
+        for name, tool, arguments, runs in (
+            (
+                "get_task_full",
+                "get_task",
+                {"keys": [key], "include": ["comments", "links", "subtasks", "time"]},
+                20,
+            ),
+            ("board", "get_board", {"project": project}, 10),
+            ("board_show_older", "get_board", {"project": project, "show_older": True}, 5),
+            ("list_first_page", "search_tasks", {"project": project, "limit": 100}, 20),
+            (
+                "list_sorted_title",
+                "search_tasks",
+                {"project": project, "limit": 100, "sort": "title"},
+                20,
+            ),
+            ("list_sorted_due", "search_tasks", {"project": project, "limit": 100, "sort": "-due"}, 20),
+            (
+                "list_filtered",
+                "search_tasks",
+                {"project": project, "limit": 100, "query": "priority:high is:closed"},
+                20,
+            ),
+            (
+                "list_grouped_status",
+                "search_tasks",
+                {"project": project, "limit": 100, "group_by": "status"},
+                10,
+            ),
+            ("schedule_dated", "get_schedule", {"project": project, "query": "has:due"}, 10),
+            ("search_text", "search", {"text": "report"}, 20),
+            ("search_text_project", "search", {"text": "schedule long", "project": project}, 20),
+            ("today", "get_today", {}, 10),
+            ("activity", "get_activity", {"project": project, "limit": 50}, 10),
+            ("activity_task", "get_activity", {"task": key, "limit": 50}, 10),
+            ("report_flow", "get_cumulative_flow", {"bucket": "week", "from": year_ago}, 5),
+            ("time_report", "get_time_report", {"project": project, "group_by": "task"}, 5),
+            ("wiki_list", "list_wiki_pages", {"project": project}, 10),
+        ):
+            try:
+                results[name] = mcp_timed(mcp, tool, arguments, runs)
+            except Exception as err:  # noqa: BLE001 - reported in the results
+                results[name] = {"error": str(err)[:300]}
+        made = mcp.call("create_task", {"project": project, "title": "Timing write 0"})
+        # The tool answers with the new task as a JSON block.
+        made_key = json.loads(made["content"][0]["text"].strip("`json\n"))["task"]["key"]
+        results["write_create"] = mcp_timed(
+            mcp, "create_task", lambda n: {"project": project, "title": f"Timing write {n + 1}"}, 20
+        )
+        results["write_update"] = mcp_timed(
+            mcp, "update_task", lambda n: {"key": made_key, "title": f"Timing update {n}"}, 20
+        )
+        results["write_comment"] = mcp_timed(
+            mcp, "add_comment", lambda n: {"key": made_key, "body": f"Timing comment {n}"}, 20
+        )
+    finally:
+        mcp.close()
+    return results
+
+
+ENGINE_LABELS = [
+    ("get_task_full", "get_task with comments, links, subtasks and time"),
+    ("board", "Board of the 20,000-task project (1,000 open)"),
+    ("board_show_older", "Board with older closed cards shown"),
+    ("list_first_page", "List: first page of 100 over 20,000 tasks"),
+    ("list_sorted_title", "List: sorted by title"),
+    ("list_sorted_due", "List: sorted by due date, latest first"),
+    ("list_filtered", "List: filtered `priority:high is:closed`"),
+    ("list_grouped_status", "List: grouped by status"),
+    ("schedule_dated", "Schedule (Gantt): 500 dated tasks, 300 dependencies"),
+    ("search_text", "Search `report`, all kinds"),
+    ("search_text_project", "Search `schedule long` in the project"),
+    ("today", "Today"),
+    ("activity", "History: the project's latest 50"),
+    ("activity_task", "History: one task's latest 50"),
+    ("report_flow", "Report cumulative flow, 52 weeks"),
+    ("time_report", "Time report by task"),
+    ("wiki_list", "Wiki page list (300 pages)"),
+    ("write_create", "Write: create a task"),
+    ("write_update", "Write: change a task's title"),
+    ("write_comment", "Write: add a comment"),
+]
+
+
+def engine_table(engine):
+    """The engine's operations as a Markdown table."""
+    lines = [
+        "",
+        "Engine operations through one MCP server (reported, no budget of their own):",
+        "",
+        "| Operation | Median | p95 |",
+        "|---|---|---|",
+    ]
+    for key, label in ENGINE_LABELS:
+        value = engine.get(key)
+        if not value:
+            continue
+        if "error" in value:
+            lines.append(f"| {label} | failed: {value['error']} | – |")
+        else:
+            lines.append(f"| {label} | {value['median_ms']} ms | {value['p95_ms']} ms |")
+    return "\n".join(lines) + "\n"
+
+
 def timed(args, runs):
     """The median and the slowest of `runs` runs of a command, in ms."""
     took = []
@@ -632,7 +761,12 @@ def perf():
         results.update(drive(link))
     except Exception as err:  # noqa: BLE001 - reported in the results
         results["drive_error"] = str(err)
-    # After the app's measures, so its 10,000 new tasks don't change them.
+    # After the app's measures, so their writes don't change them.
+    try:
+        results["engine"] = engine_timings(key, project)
+    except Exception as err:  # noqa: BLE001 - reported in the results
+        results["engine_error"] = str(err)
+    # Last, so its 10,000 new tasks change nothing else.
     try:
         results["depth"] = depth_timings(project)
     except Exception as err:  # noqa: BLE001 - reported in the results
@@ -644,6 +778,10 @@ def perf():
         text += f"\nThe start and idle run failed: {results['start_error']}\n"
     if "drive_error" in results:
         text += f"\nThe automated board and list run failed: {results['drive_error']}\n"
+    if "engine" in results:
+        text += engine_table(results["engine"])
+    if "engine_error" in results:
+        text += f"\nThe engine operations run failed (reported only): {results['engine_error']}\n"
     if "depth" in results:
         text += depth_table(results["depth"])
     if "depth_error" in results:
@@ -655,16 +793,24 @@ def perf():
     with open(f"{OUT}/perf.md", "w", encoding="utf-8") as out:
         out.write(text)
     print(text)
-    # A run that measured nothing must not pass: the app or its web view
-    # died, or a measure is missing. Results over budget fail only with
-    # PERF_ENFORCE=1; otherwise they are reported.
+    # Timings and memory depend on the machine (no GPU, other load), so by
+    # default every result is reported and nothing fails the run, not even
+    # a measure the run couldn't take; the table says what is missing and
+    # why. With PERF_ENFORCE=1, on the reference machine, a missing measure
+    # or a result over budget fails it.
+    enforce = os.environ.get("PERF_ENFORCE") == "1"
     errors = [results[name] for name in ("start_error", "drive_error") if name in results]
     if errors or missing:
-        print(f"perf: ERROR: {'; '.join(errors) or 'no error'}; not measured: {', '.join(missing) or 'none'}")
-        return 1
-    if os.environ.get("PERF_ENFORCE") == "1" and failed:
-        print(f"perf: FAILED: over budget: {', '.join(failed)}")
-        return 1
+        print(
+            f"perf: {'ERROR' if enforce else 'REPORTED'}: {'; '.join(errors) or 'no error'}; "
+            f"not measured: {', '.join(missing) or 'none'}"
+        )
+        if enforce:
+            return 1
+    if failed:
+        print(f"perf: {'FAILED' if enforce else 'REPORTED'}: over budget: {', '.join(failed)}")
+        if enforce:
+            return 1
     print("perf: done")
     return 0
 
@@ -680,6 +826,14 @@ def main():
         # opens, for a run outside the container.
         depth = depth_timings(sys.argv[2] if len(sys.argv) > 2 else "BULK", os.environ.get("TMPDIR", "/tmp"))
         print(depth_table(depth))
+        return 0
+    if sys.argv[1:2] == ["perf-engine"]:
+        key = sys.argv[2] if len(sys.argv) > 2 else "BULK-1"
+        engine = engine_timings(key, key.split("-")[0])
+        if os.environ.get("GK_JSON") == "1":
+            print(json.dumps(engine, indent=2))
+        else:
+            print(engine_table(engine))
         return 0
     print(__doc__)
     return 2

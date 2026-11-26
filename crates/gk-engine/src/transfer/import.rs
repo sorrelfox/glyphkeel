@@ -1176,6 +1176,98 @@ fn b(id: Id) -> Vec<u8> {
 
 /// Writes every record of `parsed` as `plan` says, inside the command.
 #[allow(clippy::too_many_lines)]
+/// One entry of the search index.
+struct SearchDoc<'a> {
+    kind: &'static str,
+    entity: Id,
+    task: Option<Id>,
+    project: Id,
+    title: &'a str,
+    body: &'a str,
+    updated_at: i64,
+}
+
+/// Search entries written a batch per statement. The full-text index
+/// writes out its pending terms whenever a later statement of the
+/// transaction begins; entries written one by one between the import's
+/// other rows each became a tiny index segment, and merging those took
+/// half of a large import.
+#[derive(Default)]
+struct SearchBatch {
+    rows: Vec<Value>,
+    bytes: usize,
+    written: usize,
+}
+
+impl SearchBatch {
+    /// About how much text one statement takes.
+    const BYTES: usize = 8 << 20;
+    /// From this many entries the index is merged into one segment at the
+    /// end (see [`SearchBatch::finish`]).
+    const MERGE_FROM: usize = 1_000;
+
+    fn push(&mut self, tx: &Transaction<'_>, doc: SearchDoc<'_>) -> Result<(), Failure> {
+        let hex = |id: Id| Value::String(hex_of(id.as_bytes()));
+        self.bytes += doc.title.len() + doc.body.len() + 64;
+        self.rows.push(json!([
+            doc.kind,
+            hex(doc.entity),
+            doc.task.map_or(Value::Null, hex),
+            hex(doc.project),
+            doc.title,
+            doc.body,
+            doc.updated_at
+        ]));
+        if self.bytes >= Self::BYTES {
+            self.flush(tx)?;
+        }
+        Ok(())
+    }
+
+    fn flush(&mut self, tx: &Transaction<'_>) -> Result<(), Failure> {
+        if self.rows.is_empty() {
+            return Ok(());
+        }
+        self.written += self.rows.len();
+        let rows = Value::Array(std::mem::take(&mut self.rows)).to_string();
+        self.bytes = 0;
+        tx.prepare_cached(
+            "INSERT INTO search_docs (kind, entity_id, task_id, project_id, title, body, updated_at)
+             SELECT value ->> 0, unhex(value ->> 1), unhex(value ->> 2), unhex(value ->> 3),
+                    value ->> 4, value ->> 5, value ->> 6
+               FROM json_each(?1) ORDER BY key",
+        )?
+        .execute([rows])?;
+        Ok(())
+    }
+
+    /// Writes what is left; after many entries, merges each index into one
+    /// segment. A large batch leaves a large segment at the index's lowest
+    /// level, where every later small write would merge into it again and
+    /// again (a 10,000-row CSV import after the import of data set L took
+    /// five times as long). Merged, it sits above them.
+    fn finish(mut self, tx: &Transaction<'_>) -> Result<(), Failure> {
+        self.flush(tx)?;
+        if self.written >= Self::MERGE_FROM {
+            tx.execute_batch(
+                "INSERT INTO fts_words (fts_words) VALUES ('optimize');
+                 INSERT INTO fts_grams (fts_grams) VALUES ('optimize');",
+            )?;
+        }
+        Ok(())
+    }
+}
+
+fn hex_of(bytes: &[u8]) -> String {
+    use std::fmt::Write as _;
+    bytes
+        .iter()
+        .fold(String::with_capacity(bytes.len() * 2), |mut s, b| {
+            let _ = write!(s, "{b:02x}");
+            s
+        })
+}
+
 fn write(
     w: &mut WriteCtx<'_>,
     parsed: &Parsed,
@@ -1194,6 +1286,7 @@ fn write(
         })
         .sum();
     report(progress, TransferPhase::Writing, 0, total);
+    let mut search = SearchBatch::default();
     let mut done = 0u64;
     let mut tick = |n: u64| {
         done += n;
@@ -1514,22 +1607,9 @@ fn write(
                 t.version,
                 plan.opt(t.series_id.as_ref()),
             ])?;
-            if t.deleted_at.is_none() && p.deleted_at.is_none() {
-                tx.prepare_cached(
-                    "INSERT INTO search_docs (kind, entity_id, task_id, project_id, title, body,
-                       updated_at) VALUES ('task', ?1, ?1, ?2, ?3, ?4, ?5)",
-                )?
-                .execute(params![
-                    b(tid),
-                    b(id),
-                    t.title,
-                    analysis.plain,
-                    t.updated_at
-                ])?;
-            }
             tick(1);
         }
-        for t in &proj.tasks {
+        for (ti, t) in proj.tasks.iter().enumerate() {
             let tid = plan.id(&t.id);
             if let Some(parent) = &t.parent_id {
                 tx.prepare_cached("UPDATE tasks SET parent_id = ?2 WHERE id = ?1")?
@@ -1542,8 +1622,27 @@ fn write(
                 .execute(params![b(tid), b(plan.id(l))])?;
             }
             super::custom_fields::write_values(tx, tid, &t.custom_values, &|t| plan.id(t))?;
-            if !t.custom_values.is_empty() {
-                crate::ops::custom_field::reindex(tx, tid)?;
+            if t.deleted_at.is_none() && p.deleted_at.is_none() {
+                // The text the search finds: the description, and the
+                // task's field values once they are in.
+                let plain = &texts.tasks[pi][ti].plain;
+                let body = if t.custom_values.is_empty() {
+                    plain.clone()
+                } else {
+                    crate::ops::custom_field::indexed_body(tx, tid, plain)?
+                };
+                search.push(
+                    tx,
+                    SearchDoc {
+                        kind: "task",
+                        entity: tid,
+                        task: Some(tid),
+                        project: id,
+                        title: &t.title,
+                        body: &body,
+                        updated_at: t.updated_at,
+                    },
+                )?;
             }
             for alias in &t.key_aliases {
                 if let Ok(old) = alias.parse::<gk_core::TaskKey>() {
@@ -1632,18 +1731,18 @@ fn write(
             if let Some((title, true)) = live_tasks.get(&c.task_id)
                 && c.deleted_at.is_none()
             {
-                tx.prepare_cached(
-                    "INSERT INTO search_docs (kind, entity_id, task_id, project_id, title, body,
-                       updated_at) VALUES ('comment', ?1, ?2, ?3, ?4, ?5, ?6)",
-                )?
-                .execute(params![
-                    b(cid),
-                    b(plan.id(&c.task_id)),
-                    b(id),
-                    title,
-                    texts.comments[pi][ci].0,
-                    c.edited_at.unwrap_or(c.created_at)
-                ])?;
+                search.push(
+                    tx,
+                    SearchDoc {
+                        kind: "comment",
+                        entity: cid,
+                        task: Some(plan.id(&c.task_id)),
+                        project: id,
+                        title,
+                        body: &texts.comments[pi][ci].0,
+                        updated_at: c.edited_at.unwrap_or(c.created_at),
+                    },
+                )?;
             }
             tick(1);
         }
@@ -1783,17 +1882,18 @@ fn write(
                     .pages
                     .get(&page.current_rev)
                     .map_or("", |(plain, _)| plain.as_str());
-                tx.prepare_cached(
-                    "INSERT INTO search_docs (kind, entity_id, task_id, project_id, title, body,
-                       updated_at) VALUES ('wiki', ?1, NULL, ?2, ?3, ?4, ?5)",
-                )?
-                .execute(params![
-                    b(plan.id(&page.id)),
-                    b(id),
-                    page.title,
-                    body,
-                    page.updated_at
-                ])?;
+                search.push(
+                    tx,
+                    SearchDoc {
+                        kind: "wiki",
+                        entity: plan.id(&page.id),
+                        task: None,
+                        project: id,
+                        title: &page.title,
+                        body,
+                        updated_at: page.updated_at,
+                    },
+                )?;
             }
         }
 
@@ -1839,21 +1939,23 @@ fn write(
                 && let Some((_, true)) = live_tasks.get(task)
                 && a.deleted_at.is_none()
             {
-                tx.prepare_cached(
-                    "INSERT INTO search_docs (kind, entity_id, task_id, project_id, title, body,
-                       updated_at) VALUES ('file', ?1, ?2, ?3, ?4, '', ?5)",
-                )?
-                .execute(params![
-                    b(aid),
-                    b(plan.id(task)),
-                    b(id),
-                    a.file_name,
-                    a.created_at
-                ])?;
+                search.push(
+                    tx,
+                    SearchDoc {
+                        kind: "file",
+                        entity: aid,
+                        task: Some(plan.id(task)),
+                        project: id,
+                        title: &a.file_name,
+                        body: "",
+                        updated_at: a.created_at,
+                    },
+                )?;
             }
         }
         imported.push(id);
     }
+    search.finish(tx)?;
 
     // Tasks' versions, once every project's versions are in: a version
     // that isn't in the archive is left off.

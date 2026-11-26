@@ -965,11 +965,8 @@ pub(crate) fn task_values(
     task: Id,
 ) -> Result<Vec<CustomFieldValue>, Failure> {
     let project: Option<Vec<u8>> = tx
-        .query_row(
-            "SELECT project_id FROM tasks WHERE id = ?1",
-            [b(task)],
-            |r| r.get(0),
-        )
+        .prepare_cached("SELECT project_id FROM tasks WHERE id = ?1")?
+        .query_row([b(task)], |r| r.get(0))
         .optional()?;
     let Some(project) = project.and_then(|p| Id::from_slice(&p).ok()) else {
         return Ok(Vec::new());

@@ -258,33 +258,37 @@ fn board(q: &QueryCtx<'_>, input: BoardGetInput) -> Result<Board, Failure> {
             .copied()
             .unwrap_or(layout.sort_mode);
         let mut cards = Vec::new();
+        let mut older = 0;
         for status in column.statuses.values() {
             let status: Id = status
                 .parse()
                 .map_err(|_| Failure::Op(messages::storage("storage-status-id", &[])))?;
-            cards.extend(cards_of(q.tx, status, q.now)?);
+            cards.extend(cards_of(q.tx, status, q.now, cutoff)?);
+            older += older_of(q.tx, status, cutoff)?;
         }
-        if !custom.is_empty() {
-            for (card, _) in &mut cards {
-                card_values(q.tx, card, &custom)?;
-            }
-        }
-        column.count = cards.len() as u64;
+        column.count = cards.len() as u64 + older;
         column.over_limit = column
             .wip_limit
             .is_some_and(|l| column.count > u64::from(l));
         column.under_minimum = column.wip_min.is_some_and(|m| column.count < u64::from(m));
-        if let Some(cutoff) = cutoff {
-            let before = cards.len();
-            cards.retain(|(_, closed)| closed.is_none_or(|t| t >= cutoff));
-            column.older = (before - cards.len()) as u64;
-        }
+        column.older = older;
         sort(&mut cards, column.sort_mode);
         if column.hidden {
             hidden_columns += 1;
             hidden_tasks += column.count;
         } else {
-            column.cards = cards.into_iter().map(|(c, _)| c).collect();
+            // Only the cards shown get their labels, progress, parent and
+            // field values: older closed cards and hidden columns can hold
+            // most of a large project.
+            let mut shown = Vec::with_capacity(cards.len());
+            for (mut card, _) in cards {
+                finish_card(q.tx, &mut card)?;
+                if !custom.is_empty() {
+                    card_values(q.tx, &mut card, &custom)?;
+                }
+                shown.push(card);
+            }
+            column.cards = shown;
         }
     }
     Ok(Board {
@@ -299,10 +303,30 @@ fn board(q: &QueryCtx<'_>, input: BoardGetInput) -> Result<Board, Failure> {
     })
 }
 
+/// How many live cards of `status` closed before `cutoff`, which the
+/// board leaves out.
+fn older_of(tx: &Transaction<'_>, status: Id, cutoff: Option<i64>) -> Result<u64, Failure> {
+    let Some(cutoff) = cutoff else {
+        return Ok(0);
+    };
+    let n: i64 = tx
+        .prepare_cached(
+            "SELECT count(*) FROM tasks t
+              WHERE t.project_id = (SELECT project_id FROM statuses WHERE id = ?1)
+                AND t.status_id = ?1 AND t.deleted_at IS NULL AND t.closed_at < ?2",
+        )?
+        .query_row(params![b(status), cutoff], |r| r.get(0))?;
+    Ok(u64::try_from(n).unwrap_or(0))
+}
+
+/// The live cards of `status`, without those closed before `cutoff`, in
+/// rank order. A status belongs to one project; naming it lets the board
+/// index find the column's tasks without reading the others.
 fn cards_of(
     tx: &Transaction<'_>,
     status: Id,
     now: i64,
+    cutoff: Option<i64>,
 ) -> Result<Vec<(Card, Option<i64>)>, Failure> {
     use super::recurrence::RECURRING_SQL;
     let mut stmt = tx.prepare_cached(&format!(
@@ -313,11 +337,13 @@ fn cards_of(
                 t.spent_min, t.claim_session, t.claim_name, t.claim_until, {RECURRING_SQL}
            FROM tasks t JOIN projects p ON p.id = t.project_id
            JOIN task_types y ON y.id = t.type_id
-          WHERE t.status_id = ?1 AND t.deleted_at IS NULL
+          WHERE t.project_id = (SELECT project_id FROM statuses WHERE id = ?1)
+            AND t.status_id = ?1 AND t.deleted_at IS NULL
+            AND (?2 IS NULL OR t.closed_at IS NULL OR t.closed_at >= ?2)
           ORDER BY t.rank, t.id"
     ))?;
     let rows = stmt
-        .query_map([b(status)], |r| {
+        .query_map(params![b(status), cutoff], |r| {
             let closed: Option<i64> = r.get(17)?;
             Ok((
                 Card {
@@ -362,23 +388,25 @@ fn cards_of(
             ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
-    let mut out = Vec::with_capacity(rows.len());
-    for (mut card, closed) in rows {
-        let id: Id = card
-            .id
-            .parse()
-            .map_err(|_| Failure::Op(messages::storage("storage-task-id", &[])))?;
-        card.labels = task_labels(tx, id)?;
-        card.progress_percent = super::rollup::progress(tx, id)?;
-        if let Some(parent) = card.parent.take()
-            && let Ok(parent) = parent.parse::<Id>()
-            && let Some(row) = lookup::task_by_id(tx, parent)?
-        {
-            card.parent = Some(lookup::task_key(tx, row.project, row.number)?);
-        }
-        out.push((card, closed));
+    Ok(rows)
+}
+
+/// Gives a card read by [`cards_of`] its labels, its progress and its
+/// parent's key (in place of the parent's ID).
+fn finish_card(tx: &Transaction<'_>, card: &mut Card) -> Result<(), Failure> {
+    let id: Id = card
+        .id
+        .parse()
+        .map_err(|_| Failure::Op(messages::storage("storage-task-id", &[])))?;
+    card.labels = task_labels(tx, id)?;
+    card.progress_percent = super::rollup::progress(tx, id)?;
+    if let Some(parent) = card.parent.take()
+        && let Ok(parent) = parent.parse::<Id>()
+        && let Some(row) = lookup::task_by_id(tx, parent)?
+    {
+        card.parent = Some(lookup::task_key(tx, row.project, row.number)?);
     }
-    Ok(out)
+    Ok(())
 }
 
 /// Gives `card` its values of the custom fields `shown` (query names).

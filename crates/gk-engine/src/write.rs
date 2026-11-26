@@ -4,7 +4,7 @@
 //! What a command handler works with inside its write transaction, and how
 //! its changes become history rows.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use gk_api::ops::history::FieldChange;
 use gk_api::{Changed, EntityChange, Origin};
@@ -36,6 +36,10 @@ pub struct WriteCtx<'a> {
     tx: &'a Transaction<'a>,
     meta: &'a CommandMeta,
     changes: Vec<PendingChange>,
+    /// Where each item's entry is in `changes`, by item ID (a few
+    /// entities may share an ID). Commands that touch thousands of items,
+    /// such as imports, would otherwise search the record on every change.
+    positions: HashMap<Id, Vec<usize>>,
     /// While [`WriteCtx::attempt`] runs: how to take back each change to
     /// the record, newest last.
     journal: Option<Vec<Undo>>,
@@ -80,6 +84,7 @@ impl<'a> WriteCtx<'a> {
             tx,
             meta,
             changes: Vec::new(),
+            positions: HashMap::new(),
             journal: None,
             automatic: Vec::new(),
         }
@@ -214,16 +219,16 @@ impl<'a> WriteCtx<'a> {
         before: Option<Value>,
         after: Option<Value>,
     ) {
-        let index = match self
-            .changes
-            .iter()
-            .position(|c| c.entity == entity && c.id == id)
-        {
+        let index = match self.position(entity, id) {
             Some(i) => i,
             None => {
                 if before == after {
                     return;
                 }
+                self.positions
+                    .entry(id)
+                    .or_default()
+                    .push(self.changes.len());
                 self.changes.push(PendingChange {
                     entity: entity.to_owned(),
                     id,
@@ -262,12 +267,42 @@ impl<'a> WriteCtx<'a> {
         }
         if change.fields.is_empty() {
             let removed = self.changes.remove(index);
+            self.reindex();
             if let Some(j) = &mut self.journal {
                 j.push(Undo::Removed {
                     index,
                     change: removed,
                 });
             }
+        }
+    }
+
+    /// Where the entry of `entity`/`id` is in the record of changes.
+    fn position(&self, entity: &str, id: Id) -> Option<usize> {
+        self.positions
+            .get(&id)?
+            .iter()
+            .copied()
+            .find(|&i| self.changes[i].entity == entity)
+    }
+
+    /// Forgets the position of the last entry, which was just taken out.
+    fn forget_last(&mut self, id: Id) {
+        let last = self.changes.len();
+        if let Some(at) = self.positions.get_mut(&id) {
+            at.retain(|&i| i != last);
+            if at.is_empty() {
+                self.positions.remove(&id);
+            }
+        }
+    }
+
+    /// Rebuilds the positions after entries moved (rare: a field changed
+    /// back to where it started, or a step was taken back).
+    fn reindex(&mut self) {
+        self.positions.clear();
+        for (i, c) in self.changes.iter().enumerate() {
+            self.positions.entry(c.id).or_default().push(i);
         }
     }
 
@@ -285,6 +320,7 @@ impl<'a> WriteCtx<'a> {
             .tx
             .execute_batch("ROLLBACK TO preview; RELEASE preview");
         self.changes = recorded;
+        self.reindex();
         undone?;
         result
     }
@@ -313,7 +349,9 @@ impl<'a> WriteCtx<'a> {
                 for step in journal.into_iter().rev() {
                     match step {
                         Undo::Pushed => {
-                            self.changes.pop();
+                            if let Some(c) = self.changes.pop() {
+                                self.forget_last(c.id);
+                            }
                         }
                         Undo::Field { index, field, old } => {
                             if let Some(c) = self.changes.get_mut(index) {
@@ -329,6 +367,7 @@ impl<'a> WriteCtx<'a> {
                         }
                         Undo::Removed { index, change } => {
                             self.changes.insert(index, change);
+                            self.reindex();
                         }
                     }
                 }

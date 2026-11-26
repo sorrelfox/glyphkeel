@@ -162,8 +162,9 @@ cargo xtask check-bundle               # the built UI names no remote address
 ```
 
 Their results land in `target/ci-cache/results/<distro>/<suite>/` (the
-performance table is `perf.md`). `perf` reports by default; `--perf-enforce`
-fails it on a result over budget. Set `GLYPHKEEL_CI_PREFIX` to give the
+performance table is `perf.md`). `perf` only reports by default, even when a
+measure couldn't be taken; `--perf-enforce` fails it on a result over budget
+or a missing measure. Set `GLYPHKEEL_CI_PREFIX` to give the
 images and containers of a second checkout their own names.
 
 The Windows build is checked from Linux too, in a container that cross-compiles

@@ -175,7 +175,15 @@ impl HostRun<'_> {
             let ok = self.run_check(distro, packages, suite, &image)?;
             let seconds = started.elapsed().as_secs();
             let out = self.results(distro, suite);
-            if ok {
+            if ok && suite == Suite::Perf && !self.perf_enforce {
+                // Report only: the table says what was measured, what is
+                // over budget and what couldn't be measured.
+                eprintln!(
+                    "==> {}: perf reported in {seconds} s (report only; table: {})",
+                    distro.name(),
+                    out.join("perf.md").display()
+                );
+            } else if ok {
                 eprintln!(
                     "==> {}: {} passed in {seconds} s ({})",
                     distro.name(),

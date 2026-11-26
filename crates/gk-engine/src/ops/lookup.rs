@@ -64,11 +64,10 @@ pub(crate) fn project_by_id(tx: &Transaction<'_>, id: Id) -> Result<Option<Proje
         return Ok(None);
     }
     Ok(tx
-        .query_row(
-            &format!("SELECT {PROJECT_COLUMNS} FROM projects WHERE id = ?1 AND deleted_at IS NULL"),
-            [b(id)],
-            project_row,
-        )
+        .prepare_cached(&format!(
+            "SELECT {PROJECT_COLUMNS} FROM projects WHERE id = ?1 AND deleted_at IS NULL"
+        ))?
+        .query_row([b(id)], project_row)
         .optional()?)
 }
 
@@ -87,13 +86,10 @@ pub(crate) fn project(
     }
     if let Ok(key) = ProjectKey::parse_lenient(text) {
         let found = tx
-            .query_row(
-                &format!(
-                    "SELECT {PROJECT_COLUMNS} FROM projects WHERE key = ?1 AND deleted_at IS NULL"
-                ),
-                [key.as_str()],
-                project_row,
-            )
+            .prepare_cached(&format!(
+                "SELECT {PROJECT_COLUMNS} FROM projects WHERE key = ?1 AND deleted_at IS NULL"
+            ))?
+            .query_row([key.as_str()], project_row)
             .optional()?;
         if let Some(p) = found
             && crate::scope::allows(tx, p.id)?
@@ -101,11 +97,8 @@ pub(crate) fn project(
             return Ok(p);
         }
         let alias: Option<Vec<u8>> = tx
-            .query_row(
-                "SELECT project_id FROM project_key_aliases WHERE key = ?1",
-                [key.as_str()],
-                |r| r.get(0),
-            )
+            .prepare_cached("SELECT project_id FROM project_key_aliases WHERE key = ?1")?
+            .query_row([key.as_str()], |r| r.get(0))
             .optional()?;
         if let Some(id) = alias.and_then(|b| Id::from_slice(&b).ok())
             && let Some(p) = project_by_id(tx, id)?
@@ -305,25 +298,21 @@ pub(crate) fn task(tx: &Transaction<'_>, field: &str, text: &str) -> Result<Task
         let number = i64::from(key.number());
         if let Ok(p) = project(tx, field, key.project().as_str()) {
             let found = tx
-                .query_row(
-                    &format!(
-                        "SELECT {TASK_COLUMNS} FROM tasks
+                .prepare_cached(&format!(
+                    "SELECT {TASK_COLUMNS} FROM tasks
                           WHERE project_id = ?1 AND number = ?2 AND deleted_at IS NULL"
-                    ),
-                    params![b(p.id), number],
-                    task_row,
-                )
+                ))?
+                .query_row(params![b(p.id), number], task_row)
                 .optional()?;
             if let Some(t) = found {
                 return Ok(t);
             }
         }
         let alias: Option<Vec<u8>> = tx
-            .query_row(
+            .prepare_cached(
                 "SELECT task_id FROM task_key_aliases WHERE project_key = ?1 AND number = ?2",
-                params![key.project().as_str(), number],
-                |r| r.get(0),
-            )
+            )?
+            .query_row(params![key.project().as_str(), number], |r| r.get(0))
             .optional()?;
         if let Some(id) = alias.and_then(|b| Id::from_slice(&b).ok())
             && let Some(t) = task_by_id(tx, id)?

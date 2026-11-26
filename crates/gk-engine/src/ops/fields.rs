@@ -266,16 +266,14 @@ pub(crate) fn touch(w: &WriteCtx<'_>, entity: &str, id: Id, field: &str) -> Resu
     let id = id.as_bytes().as_slice();
     match entity {
         PROJECT => {
-            w.tx().execute(
-                "UPDATE projects SET updated_at = ?2 WHERE id = ?1",
-                params![id, w.now()],
-            )?;
+            w.tx()
+                .prepare_cached("UPDATE projects SET updated_at = ?2 WHERE id = ?1")?
+                .execute(params![id, w.now()])?;
         }
         WIKI => {
-            w.tx().execute(
-                "UPDATE wiki_pages SET updated_at = ?2 WHERE id = ?1",
-                params![id, w.now()],
-            )?;
+            w.tx()
+                .prepare_cached("UPDATE wiki_pages SET updated_at = ?2 WHERE id = ?1")?
+                .execute(params![id, w.now()])?;
         }
         TASK => {
             let entered = if field == "status" {
@@ -283,13 +281,11 @@ pub(crate) fn touch(w: &WriteCtx<'_>, entity: &str, id: Id, field: &str) -> Resu
             } else {
                 ""
             };
-            w.tx().execute(
-                &format!(
-                    "UPDATE tasks SET version = version + 1, edited_at = ?2, updated_at = ?2{entered}
-                      WHERE id = ?1"
-                ),
-                params![id, w.now()],
-            )?;
+            let sql = format!(
+                "UPDATE tasks SET version = version + 1, edited_at = ?2, updated_at = ?2{entered}
+                  WHERE id = ?1"
+            );
+            w.tx().prepare_cached(&sql)?.execute(params![id, w.now()])?;
         }
         _ => {}
     }

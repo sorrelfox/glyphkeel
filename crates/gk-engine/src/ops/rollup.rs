@@ -22,12 +22,13 @@ pub(crate) fn progress(tx: &Transaction<'_>, id: Id) -> Result<u8, Failure> {
 
 fn progress_at(tx: &Transaction<'_>, id: Id, depth: usize) -> Result<u8, Failure> {
     let row: Option<(Option<i64>, bool, i64, i64)> = tx
-        .query_row(
+        .prepare_cached(
             "SELECT progress_override, closed_at IS NOT NULL, checklist_done, checklist_total
                FROM tasks WHERE id = ?1",
-            [b(id)],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
-        )
+        )?
+        .query_row([b(id)], |r| {
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+        })
         .optional()?;
     let Some((by_hand, closed, done, total)) = row else {
         return Ok(0);

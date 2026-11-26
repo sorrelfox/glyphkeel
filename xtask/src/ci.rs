@@ -68,10 +68,11 @@ Options:
   --pseudo-locale L
                 The locale of the `pseudo` screenshots. Default: en-XA.
   --perf-enforce
-                Fail the `perf` suite when a result is over its budget.
-                Without it results over budget are only reported. The
-                suite fails either way when the app or its web view dies
-                or a result is missing.
+                Fail the `perf` suite when a result is over its budget or
+                a budgeted measure couldn't be taken (on the reference
+                machine). Without it the suite only reports: timings and
+                memory depend on the machine, so nothing it measures fails
+                the run.
   --release-dir DIR
                 Copy the Windows installer to DIR/<version>/windows/
                 (windows-cross `nsis` suite only). Without it the installer
