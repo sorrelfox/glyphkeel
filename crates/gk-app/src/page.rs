@@ -97,4 +97,102 @@ mod tests {
             "build windows with page::window, without incognito: {offenders:?}"
         );
     }
+
+    fn capability(text: &str) -> (Vec<String>, Vec<String>) {
+        let value: serde_json::Value = serde_json::from_str(text).unwrap();
+        let list = |key: &str| {
+            value[key]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|v| v.as_str().unwrap().to_owned())
+                .collect::<Vec<_>>()
+        };
+        (list("windows"), list("permissions"))
+    }
+
+    /// Each window gets only what its page needs: a task or wiki window,
+    /// which shows text that may come from anywhere, can't reach the
+    /// commands that concern the whole app.
+    #[test]
+    fn each_kind_of_window_has_its_own_least_capability() {
+        let (main_windows, main) = capability(include_str!("../capabilities/main.json"));
+        let (item_windows, item) = capability(include_str!("../capabilities/item-windows.json"));
+        let (quick_windows, quick) = capability(include_str!("../capabilities/quick-add.json"));
+        assert_eq!(main_windows, ["main"]);
+        assert_eq!(item_windows, ["task-*", "wiki-*"]);
+        assert_eq!(quick_windows, [crate::quick_add::LABEL]);
+        for permission in &item {
+            assert!(main.contains(permission), "{permission} is not in main");
+        }
+        for app_wide in [
+            "allow-workspaces",
+            "allow-create-workspace",
+            "allow-open-workspace",
+            "allow-rename-workspace",
+            "allow-install-cli",
+            "allow-cli-status",
+            "allow-set-autostart",
+            "allow-restart-app",
+            "allow-update-app-settings",
+            "allow-set-quick-add-shortcut",
+            "allow-choose-backup-folder",
+            "allow-choose-import",
+            "allow-import-archive",
+            "allow-export-archive",
+            "allow-choose-csv",
+            "allow-import-csv",
+            "allow-choose-wiki-folder",
+            "allow-import-wiki-folder",
+            "allow-watch-open-links",
+            "allow-quit-app",
+        ] {
+            assert!(main.contains(&app_wide.to_owned()), "{app_wide}");
+            assert!(!item.contains(&app_wide.to_owned()), "{app_wide}");
+            assert!(!quick.contains(&app_wide.to_owned()), "{app_wide}");
+        }
+        // No capability reaches beyond the app's own commands and the few
+        // window calls of the header bar.
+        for permission in main.iter().chain(&item).chain(&quick) {
+            assert!(
+                permission.starts_with("allow-") || permission.starts_with("core:window:allow-"),
+                "{permission}"
+            );
+        }
+    }
+
+    /// Every command the app declares is granted to some window, and every
+    /// permission names a declared command.
+    #[test]
+    fn capabilities_name_only_declared_commands() {
+        let build = include_str!("../build.rs");
+        let list = &build[build.find(".commands(&[").unwrap()..];
+        let list = &list[..list.find("]);").unwrap()];
+        let declared: Vec<String> = list
+            .split('"')
+            .skip(1)
+            .step_by(2)
+            .map(|name| format!("allow-{}", name.replace('_', "-")))
+            .collect();
+        let mut granted = Vec::new();
+        for text in [
+            include_str!("../capabilities/main.json"),
+            include_str!("../capabilities/item-windows.json"),
+            include_str!("../capabilities/quick-add.json"),
+        ] {
+            granted.extend(capability(text).1);
+        }
+        for command in &declared {
+            assert!(
+                granted.contains(command),
+                "{command} is granted to no window"
+            );
+        }
+        for permission in granted.iter().filter(|p| !p.starts_with("core:")) {
+            assert!(
+                declared.contains(permission),
+                "{permission} is not a declared command"
+            );
+        }
+    }
 }

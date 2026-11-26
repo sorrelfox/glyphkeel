@@ -5,8 +5,8 @@
 //!
 //! The page never names a path: Rust shows the native file chooser, keeps
 //! the chosen archive for the import under a token, and runs the
-//! operation with the path itself. The `op` command refuses these two
-//! operations with a path from the page.
+//! operation with the path itself. The `op` command refuses every
+//! operation of [`CHOSEN_PATHS`] with a path from the page.
 
 use std::collections::VecDeque;
 use std::path::PathBuf;
@@ -19,6 +19,7 @@ use tauri::{State, WebviewWindow};
 
 use crate::files::{blocking, dialog, safe_name};
 use crate::ipc::Workspace;
+use crate::messages::text;
 
 /// Archives chosen for an import that the page may still name, newest last.
 const KEPT_CHOICES: usize = 4;
@@ -66,33 +67,40 @@ pub(crate) struct ChosenArchive {
     name: String,
 }
 
-/// The operation that sets the folder backups go to.
-const BACKUP_FOLDER_OP: &str = "backup.folder.update";
+/// The inputs of operations that name a file or a folder on the person's
+/// computer, as `(operation, field)`. The page never fills them in: the app
+/// shows the system's chooser and runs the operation itself, with the path
+/// the person chose. A page that could name a path would make the engine
+/// read or write any file the person can (attaching `~/.ssh/id_ed25519` and
+/// then reading it back, say). A test checks every input of the catalog
+/// against this list, so a new path field can't be missed.
+pub(crate) const CHOSEN_PATHS: &[(&str, &str)] = &[
+    ("transfer.export", "path"),
+    ("transfer.import", "path"),
+    ("transfer.import_csv", "path"),
+    ("wiki.export", "path"),
+    ("wiki.import", "path"),
+    ("file.attach", "path"),
+    // Setting it back to the default, with no folder, is fine.
+    ("backup.folder.update", "folder"),
+];
 
 /// Whether the page may run `op` with `input` through the `op` command:
-/// not an export or import that names a path, and no backup folder named
-/// by the page (setting it back to the default, with no folder, is fine).
+/// never with a path or a folder of [`CHOSEN_PATHS`] that the page names
+/// itself.
 pub(crate) fn page_may_run(op: &str, input: &Value) -> Result<(), OpError> {
     let names = |field: &str| input.get(field).is_some_and(|value| !value.is_null());
-    if matches!(
-        op,
-        "transfer.export"
-            | "transfer.import"
-            | "transfer.import_csv"
-            | "wiki.export"
-            | "wiki.import"
-    ) && names("path")
-    {
-        return Err(OpError::forbidden(format!(
-            "{op} takes its path from the file chooser, not from the page."
-        )));
+    let refused = CHOSEN_PATHS
+        .iter()
+        .find(|(o, field)| *o == op && names(field));
+    match refused {
+        Some((op, field)) => Err(OpError::forbidden(text(
+            "page-path-refused",
+            &[("op", (*op).to_owned()), ("field", (*field).to_owned())],
+        ))
+        .with_detail("path", *field)),
+        None => Ok(()),
     }
-    if op == BACKUP_FOLDER_OP && names("folder") {
-        return Err(OpError::forbidden(format!(
-            "{op} takes its folder from the folder chooser, not from the page."
-        )));
-    }
-    Ok(())
 }
 
 /// Exports `projects` (all when empty) to a `.zip` file, or to a new
@@ -257,7 +265,9 @@ pub(crate) async fn choose_backup_folder(
     };
     blocking(move || {
         let input = json!({ "folder": path.to_string_lossy() });
-        workspace.call(BACKUP_FOLDER_OP, input, None).map(Some)
+        workspace
+            .call("backup.folder.update", input, None)
+            .map(Some)
     })
     .await
 }
@@ -366,6 +376,93 @@ mod tests {
         assert!(page_may_run("task.create", &json!({ "path": "x" })).is_ok());
         assert!(page_may_run("backup.folder.update", &json!({ "folder": "/mnt" })).is_err());
         assert!(page_may_run("backup.folder.update", &json!({})).is_ok());
+    }
+
+    /// The page attaches what it has in hand (pasted, dragged from the page)
+    /// as Base64; a path would let it read any of the person's files.
+    #[test]
+    fn the_page_never_names_a_file_to_attach() {
+        let refused = page_may_run(
+            "file.attach",
+            &json!({ "task": "TM-1", "path": "/home/me/.ssh/id_ed25519" }),
+        )
+        .unwrap_err();
+        assert_eq!(refused.code, gk_api::ErrorCode::Forbidden);
+        assert!(
+            refused.message.contains("file.attach"),
+            "{}",
+            refused.message
+        );
+        assert!(
+            page_may_run(
+                "file.attach",
+                &json!({ "task": "TM-1", "name": "a.txt", "data_base64": "aGk=" })
+            )
+            .is_ok()
+        );
+    }
+
+    /// Words in an input field's name that say it may be a place on disk.
+    const PATH_WORDS: &[&str] = &["path", "folder", "dir", "file_name", "location"];
+
+    /// Fields with such a name that are not a place on disk: the field and
+    /// what it is instead.
+    const NOT_ON_DISK: &[(&str, &str, &str)] = &[];
+
+    /// The top-level fields of an input schema, also those of each variant.
+    fn fields(schema: &serde_json::Value, out: &mut Vec<String>) {
+        if let Some(props) = schema.get("properties").and_then(|p| p.as_object()) {
+            out.extend(props.keys().cloned());
+        }
+        for key in ["anyOf", "oneOf", "allOf"] {
+            for variant in schema
+                .get(key)
+                .and_then(|v| v.as_array())
+                .into_iter()
+                .flatten()
+            {
+                fields(variant, out);
+            }
+        }
+    }
+
+    /// Every operation's input that could name a file or a folder is either
+    /// refused from the page or known not to be one.
+    #[test]
+    fn every_path_in_the_catalog_is_chosen_by_the_person() {
+        let mut missing = Vec::new();
+        for desc in gk_api::CATALOG {
+            let schema = (desc.input_schema)().to_value();
+            let mut names = Vec::new();
+            fields(&schema, &mut names);
+            for name in names {
+                let lower = name.to_ascii_lowercase();
+                if !PATH_WORDS.iter().any(|w| lower.contains(w)) {
+                    continue;
+                }
+                let chosen = super::CHOSEN_PATHS.contains(&(desc.id, name.as_str()));
+                let known = NOT_ON_DISK
+                    .iter()
+                    .any(|(op, field, _)| *op == desc.id && *field == name);
+                if !chosen && !known {
+                    missing.push(format!("{}.{name}", desc.id));
+                }
+            }
+        }
+        assert!(
+            missing.is_empty(),
+            "add these to CHOSEN_PATHS (or NOT_ON_DISK with the reason): {missing:?}"
+        );
+        for (op, field) in super::CHOSEN_PATHS {
+            let desc =
+                gk_api::descriptor(op).unwrap_or_else(|| panic!("{op} is not in the catalog"));
+            let mut names = Vec::new();
+            fields(&(desc.input_schema)().to_value(), &mut names);
+            assert!(
+                names.iter().any(|n| n == field),
+                "{op} has no input {field}"
+            );
+        }
     }
 
     #[test]

@@ -67,6 +67,27 @@ function themeVariables(): Record<string, string> {
 }
 
 /**
+ * Settings a diagram's own `%%{init: …}%%` may not change, besides
+ * Mermaid's own list: the strict mode, and everything that becomes CSS in
+ * the diagram's style element. A diagram comes from text that may come
+ * from anywhere; raw CSS from it could restyle the whole page.
+ */
+export const MERMAID_SECURE = [
+  "secure",
+  "securityLevel",
+  "startOnLoad",
+  "maxTextSize",
+  "maxEdges",
+  "suppressErrorRendering",
+  "htmlLabels",
+  "themeCSS",
+  "themeVariables",
+  "fontFamily",
+  "altFontFamily",
+  "dompurifyConfig",
+];
+
+/**
  * Loads Mermaid in its strict mode, themed by the app's tokens. Labels are
  * SVG text: the sanitizer removes the HTML labels Mermaid would put in
  * `foreignObject`.
@@ -78,7 +99,7 @@ async function loadMermaid(): Promise<Mermaid> {
   const key = JSON.stringify(variables);
   if (key !== mermaidTheme) {
     mermaidTheme = key;
-    mermaid.initialize({ startOnLoad: false, securityLevel: "strict", htmlLabels: false, theme: "base", themeVariables: variables });
+    mermaid.initialize({ startOnLoad: false, securityLevel: "strict", htmlLabels: false, theme: "base", themeVariables: variables, secure: MERMAID_SECURE });
   }
   return mermaid;
 }

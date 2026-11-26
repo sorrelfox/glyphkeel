@@ -42,6 +42,8 @@ cli-install-failed = The link { $path } could not be made: { $reason }
 ## File choosers
 
 chooser-cancel = _Cancel
+# The page asked for an operation with a file or folder it named itself; only the system's chooser may name one.
+page-path-refused = { $op } takes its { $field } from the system's chooser, not from the page.
 chooser-attach-title = Attach files
 chooser-attach = _Attach
 chooser-save-title = Save a copy

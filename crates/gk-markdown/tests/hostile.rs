@@ -211,3 +211,18 @@ fn random_mixtures_stay_safe() {
     }
     assert!(bad.is_empty(), "{}", bad.join("\n"));
 }
+
+/// A link or image address is written as it was checked, without the
+/// spaces around it, so what the page follows is exactly what passed.
+#[test]
+fn addresses_are_written_as_checked() {
+    let html = gk_markdown::render(
+        "<a href=\" #top \">a</a> <a href=\"  https://example.org/ \">b</a> \
+         <img src=\" gk-file://a1 \" alt=\"i\">",
+        &gk_markdown::RenderOptions::new("t"),
+    );
+    assert!(html.contains("href=\"#top\""), "{html}");
+    assert!(html.contains("href=\"https://example.org/\""), "{html}");
+    assert!(html.contains("src=\"gk-file://a1\""), "{html}");
+    assert!(!html.contains("href=\" "), "{html}");
+}

@@ -547,11 +547,15 @@ fn windows_risky(name: &str) -> bool {
     })
 }
 
-/// Whether file `name` may be opened in its default program here: never
-/// what the engine marks as a program or script, and on Windows also none
-/// of the types Windows runs or installs.
-fn may_open(name: &str, kind: &str) -> bool {
-    kind != "executable" && !(cfg!(windows) && windows_risky(&safe_name(name)))
+/// Whether file `name` of type `mime` may be opened in its default program
+/// here: never what the engine marked as a program or script when it was
+/// attached, nor what it would mark as one today (the list of risky types
+/// grows; a file attached before keeps its old kind), and on Windows also
+/// none of the types Windows runs or installs.
+fn may_open(name: &str, mime: &str, kind: &str) -> bool {
+    kind != "executable"
+        && gk_core::kind_of(mime, name) != gk_core::FileKind::Executable
+        && !(cfg!(windows) && windows_risky(&safe_name(name)))
 }
 
 /// Opens an attached file in the desktop's default app, from a copy in the
@@ -566,7 +570,7 @@ pub(crate) async fn open_file(
     let workspace = Arc::clone(&workspace);
     let copy = blocking(move || {
         let info = file_info(&workspace, &attachment)?;
-        if !may_open(&info.name, &info.kind) {
+        if !may_open(&info.name, &info.mime, &info.kind) {
             return Err(OpError::forbidden(format!(
                 "{} can run programs, so it isn't opened.",
                 info.name
@@ -1236,9 +1240,19 @@ mod tests {
         for name in ["x.pdf", "x.png", "x.docx", "notes.txt", "hta", "x.url.txt"] {
             assert!(!windows_risky(name), "{name}");
         }
-        assert!(!may_open("run.exe", "executable"));
-        assert!(may_open("report.pdf", "document"));
-        assert_eq!(may_open("x.hta", "document"), !cfg!(windows));
+        assert!(!may_open(
+            "run.exe",
+            "application/octet-stream",
+            "executable"
+        ));
+        assert!(may_open("report.pdf", "application/pdf", "document"));
+        assert_eq!(
+            may_open("x.hta", "application/octet-stream", "document"),
+            !cfg!(windows)
+        );
+        // Attached before its type counted as risky: still not opened.
+        assert!(!may_open("start.desktop", "text/plain", "text"));
+        assert!(!may_open("page.html", "text/html", "text"));
     }
 
     #[test]

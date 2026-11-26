@@ -225,9 +225,14 @@ fn filter_attribute(
                 || is_web_url(trimmed)
                 || has_scheme(trimmed, "mailto")
                 || is_attachment_link(value);
-            allowed.then(|| value.to_owned())
+            // The address as the page reads it: browsers drop the spaces
+            // around it too, so what was checked is what is written.
+            allowed.then(|| trimmed.to_owned())
         }
-        ("img", "src") => has_scheme(value.trim(), IMAGE_SCHEME).then(|| value.to_owned()),
+        ("img", "src") => {
+            let trimmed = value.trim();
+            has_scheme(trimmed, IMAGE_SCHEME).then(|| trimmed.to_owned())
+        }
         ("input", "type") => Some("checkbox".to_owned()),
         ("input", "disabled") => Some(String::new()),
         (_, "id") => {

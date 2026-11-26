@@ -1,0 +1,4 @@
+Summary,Issue key,Status,Priority,Assignee,Created,Due date,Description
+"Fix, it",TM-1,Open,High,me,2026-01-02 10:00,2026-02-01,"multi
+line ""quoted"""
+Second,TM-2,Done,Low,,02/03/2026,,=cmd|x
