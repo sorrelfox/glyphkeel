@@ -649,6 +649,7 @@ fn hit(tx: &Transaction<'_>, entry: &Entry, terms: &[Term]) -> Result<SearchHit,
                 status: None,
                 category: None,
                 slug: None,
+                page: None,
                 updated_at: rfc3339(updated),
                 id: id.to_string(),
             })
@@ -670,6 +671,7 @@ fn hit(tx: &Transaction<'_>, entry: &Entry, terms: &[Term]) -> Result<SearchHit,
                 status: Some(status),
                 category: Some(category),
                 slug: None,
+                page: None,
                 updated_at: rfc3339(updated),
                 id: id.to_string(),
             })
@@ -707,15 +709,25 @@ fn hit(tx: &Transaction<'_>, entry: &Entry, terms: &[Term]) -> Result<SearchHit,
                 }
                 None => (None, None, None),
             };
-            let slug = if kind == SearchKind::Wiki {
+            let page: Option<Id> = if kind == SearchKind::File {
                 tx.query_row(
-                    "SELECT slug FROM wiki_pages WHERE id = ?1",
+                    "SELECT owner_id FROM attachments WHERE id = ?1 AND owner_kind = 'wiki_page'",
                     [b(f.entity)],
-                    |r| r.get(0),
+                    |r| id_at(r, 0),
                 )
                 .optional()?
             } else {
                 None
+            };
+            let slug = match (kind, page) {
+                (SearchKind::Wiki, _) | (SearchKind::File, Some(_)) => tx
+                    .query_row(
+                        "SELECT slug FROM wiki_pages WHERE id = ?1",
+                        [b(page.unwrap_or(f.entity))],
+                        |r| r.get(0),
+                    )
+                    .optional()?,
+                _ => None,
             };
             Ok(SearchHit {
                 kind,
@@ -733,6 +745,7 @@ fn hit(tx: &Transaction<'_>, entry: &Entry, terms: &[Term]) -> Result<SearchHit,
                 status,
                 category,
                 slug,
+                page: page.map(|p| p.to_string()),
                 updated_at: rfc3339(f.updated_at),
                 id: f.entity.to_string(),
             })

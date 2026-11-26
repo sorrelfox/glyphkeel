@@ -3,6 +3,10 @@
 
 //! Attached files and the file store.
 //!
+//! A file belongs to a task, a comment or a wiki page. It is live while it
+//! and what it belongs to are: a page's files go to the trash, come back
+//! and are purged with the page.
+//!
 //! Attaching reads and checks the file outside the write transaction: its
 //! size against the workspace's limit, its type from its bytes, an image's
 //! size from its header. The bytes go into the file store under their
@@ -101,10 +105,15 @@ pub(super) fn register(r: &mut Registry) {
     });
     r.command::<FileDelete, _>(desc::<FileDelete>(), |w, input: FileRef| {
         let id = find(w.tx(), &input.attachment)?;
-        let owner = owner_task(w.tx(), id)?;
-        ensure_active(w.tx(), owner)?;
-        let project = task_project(w.tx(), owner)?;
-        set_live(w, id, Some(project), "trashed", Some(Value::Bool(true)))?;
+        let owner = owner_of(w.tx(), id)?;
+        ensure_writable(w.tx(), &owner)?;
+        set_live(
+            w,
+            id,
+            Some(owner.project),
+            "trashed",
+            Some(Value::Bool(true)),
+        )?;
         changed(w, id)
     });
 }
@@ -141,6 +150,8 @@ fn row(r: &Row<'_>) -> gk_store::rusqlite::Result<(Attachment, String, Id)> {
                 .and_then(|v| u32::try_from(v).ok()),
             task: String::new(),
             comment: None,
+            page: None,
+            project: None,
             added_by: gk_api::ops::common::Actor {
                 kind: if actor_kind == "agent" {
                     gk_api::ops::common::ActorKind::Agent
@@ -156,11 +167,23 @@ fn row(r: &Row<'_>) -> gk_store::rusqlite::Result<(Attachment, String, Id)> {
     ))
 }
 
-/// Fills in the task key and comment of an attachment row.
+/// Fills in the task key and comment, or the page, of an attachment row.
 fn owned(
     tx: &Transaction<'_>,
     (mut a, owner_kind, owner): (Attachment, String, Id),
 ) -> Result<Attachment, Failure> {
+    if owner_kind == "wiki_page" {
+        a.page = Some(owner.to_string());
+        a.project = tx
+            .query_row(
+                "SELECT p.key FROM wiki_pages w JOIN projects p ON p.id = w.project_id
+                  WHERE w.id = ?1",
+                [b(owner)],
+                |r| r.get(0),
+            )
+            .optional()?;
+        return Ok(a);
+    }
     let task = if owner_kind == "comment" {
         a.comment = Some(owner.to_string());
         tx.query_row(
@@ -209,7 +232,12 @@ pub(crate) fn of_comment(tx: &Transaction<'_>, comment: Id) -> Result<Vec<Attach
     owned_by(tx, "comment", comment)
 }
 
-/// The live attachment `text` names (its ID), on a live task.
+/// The live files attached to wiki page `page`, oldest first.
+pub(crate) fn of_page(tx: &Transaction<'_>, page: Id) -> Result<Vec<Attachment>, Failure> {
+    owned_by(tx, "wiki_page", page)
+}
+
+/// The live attachment `text` names (its ID), on a live task or page.
 fn find(tx: &Transaction<'_>, text: &str) -> Result<Id, Failure> {
     let missing = || {
         Failure::Op(messages::hint(
@@ -230,15 +258,31 @@ fn find(tx: &Transaction<'_>, text: &str) -> Result<Id, Failure> {
     if live != Some(true) {
         return Err(missing());
     }
-    let task = owner_task(tx, id)?;
-    if lookup::task_by_id(tx, task)?.is_none() {
+    let owner = owner_of(tx, id)?;
+    let seen = match (owner.task, owner.page) {
+        (Some(task), _) => lookup::task_by_id(tx, task)?.is_some(),
+        (None, Some(page)) => super::wiki::by_id(tx, page)?.is_some(),
+        (None, None) => false,
+    };
+    if !seen {
         return Err(missing());
     }
     Ok(id)
 }
 
-/// The task an attachment belongs to, directly or through its comment.
-fn owner_task(tx: &Transaction<'_>, id: Id) -> Result<Id, Failure> {
+/// What an attachment belongs to: a task (directly or through one of its
+/// comments) or a wiki page, and the project of either.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Owned {
+    /// The task, for a file on a task or a comment.
+    pub(crate) task: Option<Id>,
+    /// The page, for a file on a wiki page.
+    pub(crate) page: Option<Id>,
+    pub(crate) project: Id,
+}
+
+/// What attachment `id` belongs to.
+pub(crate) fn owner_of(tx: &Transaction<'_>, id: Id) -> Result<Owned, Failure> {
     let (kind, owner): (String, Vec<u8>) = tx.query_row(
         "SELECT owner_kind, owner_id FROM attachments WHERE id = ?1",
         [b(id)],
@@ -246,14 +290,37 @@ fn owner_task(tx: &Transaction<'_>, id: Id) -> Result<Id, Failure> {
     )?;
     let owner =
         Id::from_slice(&owner).map_err(|e| Failure::Store(StoreError::Corrupt(e.to_string())))?;
-    if kind == "comment" {
-        Ok(tx.query_row(
-            "SELECT task_id FROM comments WHERE id = ?1",
-            [b(owner)],
-            |r| id_at(r, 0),
-        )?)
-    } else {
-        Ok(owner)
+    match kind.as_str() {
+        "wiki_page" => Ok(Owned {
+            task: None,
+            page: Some(owner),
+            project: tx.query_row(
+                "SELECT project_id FROM wiki_pages WHERE id = ?1",
+                [b(owner)],
+                |r| id_at(r, 0),
+            )?,
+        }),
+        "project" => Ok(Owned {
+            task: None,
+            page: None,
+            project: owner,
+        }),
+        _ => {
+            let task = if kind == "comment" {
+                tx.query_row(
+                    "SELECT task_id FROM comments WHERE id = ?1",
+                    [b(owner)],
+                    |r| id_at(r, 0),
+                )?
+            } else {
+                owner
+            };
+            Ok(Owned {
+                task: Some(task),
+                page: None,
+                project: task_project(tx, task)?,
+            })
+        }
     }
 }
 
@@ -270,6 +337,21 @@ fn ensure_active(tx: &Transaction<'_>, task: Id) -> Result<(), Failure> {
         .ok_or_else(|| Failure::Op(messages::not_found("file-task-gone", &[])))?;
     if let Some(p) = lookup::project_by_id(tx, t.project)? {
         lookup::ensure_active(&p)?;
+    }
+    Ok(())
+}
+
+/// Refuses changes to the files of what `owner` names while its project
+/// is archived, or for a page, while the project's wiki is off.
+fn ensure_writable(tx: &Transaction<'_>, owner: &Owned) -> Result<(), Failure> {
+    if let Some(task) = owner.task {
+        return ensure_active(tx, task);
+    }
+    if let Some(p) = lookup::project_by_id(tx, owner.project)? {
+        lookup::ensure_active(&p)?;
+        if owner.page.is_some() {
+            lookup::ensure_wiki_on(tx, &p)?;
+        }
     }
     Ok(())
 }
@@ -343,8 +425,20 @@ fn limit_error(size: u64, max_mb: u32) -> OpError {
 }
 
 fn prepare(engine: &crate::engine::Engine, input: &FileAttachInput) -> Result<Prepared, OpError> {
-    if input.task.is_some() == input.comment.is_some() {
+    let owners = [
+        input.task.is_some(),
+        input.comment.is_some(),
+        input.page.is_some(),
+    ];
+    if owners.iter().filter(|o| **o).count() != 1 {
         return Err(messages::with("file-attach-to-what", &[], OpError::invalid));
+    }
+    if input.project.is_some() && input.page.is_none() {
+        return Err(messages::invalid_at(
+            "project",
+            "file-project-for-page",
+            &[],
+        ));
     }
     let max_mb = engine
         .store()
@@ -418,20 +512,30 @@ fn prepare(engine: &crate::engine::Engine, input: &FileAttachInput) -> Result<Pr
 /// already. A failure is only logged: the thumbnail is made again when
 /// asked for.
 fn make_thumbnail(engine: &crate::engine::Engine, prepared: &Prepared) {
+    cache_thumbnail(engine, &prepared.sha256, prepared.mime, &prepared.bytes);
+}
+
+/// Caches the thumbnail of the image `sha256` (of type `mime`, content
+/// `bytes`), unless the cache has it already or it is not an image the
+/// thumbnails are made for. A failure is only logged.
+pub(crate) fn cache_thumbnail(
+    engine: &crate::engine::Engine,
+    sha256: &str,
+    mime: &str,
+    bytes: &[u8],
+) {
     let layout = &engine.env().layout;
-    if !crate::thumbs::supported(prepared.mime)
-        || gk_store::thumb_path(layout, &prepared.sha256).is_some()
-    {
+    if !crate::thumbs::supported(mime) || gk_store::thumb_path(layout, sha256).is_some() {
         return;
     }
-    if let Err(e) = crate::thumbs::cache(layout, &prepared.sha256, prepared.mime, &prepared.bytes) {
-        tracing::warn!(sha256 = %prepared.sha256, "no thumbnail: {e}");
+    if let Err(e) = crate::thumbs::cache(layout, sha256, mime, bytes) {
+        tracing::warn!(sha256 = %sha256, "no thumbnail: {e}");
     }
 }
 
 /// Makes sure the stored file `sha256` exists for a row about to point at
 /// it, writing it again from `bytes` if it was removed meanwhile.
-fn ensure_stored(w: &WriteCtx<'_>, sha256: &str, bytes: &[u8]) -> Result<(), Failure> {
+pub(crate) fn ensure_stored(w: &WriteCtx<'_>, sha256: &str, bytes: &[u8]) -> Result<(), Failure> {
     if !gk_store::has_file(w.layout(), sha256, bytes.len() as u64) {
         gk_store::store_file(w.layout(), bytes).map_err(|e| {
             Failure::Op(messages::storage(
@@ -455,7 +559,8 @@ fn ensure_stored(w: &WriteCtx<'_>, sha256: &str, bytes: &[u8]) -> Result<(), Fai
 pub(crate) struct NewAttachment<'a> {
     pub(crate) owner_kind: &'a str,
     pub(crate) owner: Id,
-    pub(crate) task: Id,
+    /// The task whose time of change it bumps; none for a page's file.
+    pub(crate) task: Option<Id>,
     pub(crate) project: Id,
     pub(crate) name: &'a str,
     pub(crate) mime: &'a str,
@@ -490,7 +595,9 @@ pub(crate) fn insert(w: &mut WriteCtx<'_>, a: &NewAttachment<'_>) -> Result<Id, 
         ],
     )?;
     reindex(w, id)?;
-    bump(w, a.task)?;
+    if let Some(task) = a.task {
+        bump(w, task)?;
+    }
     let pid = Some(a.project);
     w.record_field(ENTITY, id, pid, "created", None, Some(Value::Bool(true)));
     w.record_field(ENTITY, id, pid, "name", None, text(a.name));
@@ -525,7 +632,7 @@ pub(crate) fn copy_to(w: &mut WriteCtx<'_>, from: Id, to: Id, project: Id) -> Re
             &NewAttachment {
                 owner_kind: "task",
                 owner: to,
-                task: to,
+                task: Some(to),
                 project,
                 name: &name,
                 mime: &mime,
@@ -544,21 +651,34 @@ fn attach(
     input: &FileAttachInput,
     p: &Prepared,
 ) -> Result<FileChange, Failure> {
-    let (owner_kind, owner, task) = match (&input.task, &input.comment) {
-        (Some(key), _) => {
+    let (owner_kind, owner, task, project) = match (&input.task, &input.comment, &input.page) {
+        (Some(key), _, _) => {
             let t = lookup::task(w.tx(), "task", key)?;
-            ("task", t.id, t.id)
+            ensure_active(w.tx(), t.id)?;
+            ("task", t.id, Some(t.id), t.project)
         }
-        (None, Some(comment)) => {
+        (None, Some(comment), _) => {
             let c = super::comment::find(w.tx(), comment)?;
-            ("comment", c.id, c.task)
+            ensure_active(w.tx(), c.task)?;
+            let project = task_project(w.tx(), c.task)?;
+            ("comment", c.id, Some(c.task), project)
         }
-        (None, None) => {
+        (None, None, Some(page)) => {
+            let page = super::wiki::find_page(w.tx(), input.project.as_deref(), "page", page)?;
+            ensure_writable(
+                w.tx(),
+                &Owned {
+                    task: None,
+                    page: Some(page.id),
+                    project: page.project,
+                },
+            )?;
+            ("wiki_page", page.id, None, page.project)
+        }
+        (None, None, None) => {
             return Err(messages::with("file-task-or-comment", &[], OpError::invalid).into());
         }
     };
-    ensure_active(w.tx(), task)?;
-    let project = task_project(w.tx(), task)?;
     ensure_stored(w, &p.sha256, &p.bytes)?;
     let id = insert(
         w,
@@ -604,15 +724,15 @@ fn reindex(w: &WriteCtx<'_>, id: Id) -> Result<(), Failure> {
         .optional()?;
     match row {
         Some((name, true)) => {
-            let task = owner_task(w.tx(), id)?;
-            let project = task_project(w.tx(), task)?;
+            let owner = owner_of(w.tx(), id)?;
+            let (task, project) = (owner.task.map(b), owner.project);
             w.tx().execute(
                 "INSERT INTO search_docs (kind, entity_id, task_id, project_id, title, body,
                                           updated_at)
                  VALUES ('file', ?1, ?2, ?3, ?4, '', ?5)
                  ON CONFLICT (kind, entity_id) DO UPDATE SET title = excluded.title,
                    updated_at = excluded.updated_at",
-                params![b(id), b(task), b(project), name, w.now()],
+                params![b(id), task, b(project), name, w.now()],
             )?;
         }
         _ => {
@@ -678,7 +798,9 @@ pub(crate) fn set_live(
         )?;
     }
     reindex(w, id)?;
-    bump(w, owner_task(w.tx(), id)?)?;
+    if let Some(task) = owner_of(w.tx(), id)?.task {
+        bump(w, task)?;
+    }
     w.record_field(ENTITY, id, project, field, before, value);
     Ok(())
 }

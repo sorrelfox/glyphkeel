@@ -10,7 +10,7 @@ import { useCall } from "../../data/hooks";
 import { useLinkCompletion } from "../../data/linking";
 import { useBlockRenderer } from "../../data/markdown";
 import { type Attachment } from "../../generated/ops";
-import { attachBrowserFiles } from "../../ipc/files";
+import { attachBrowserFiles, ownerKey, type FileOwner } from "../../ipc/files";
 import { MarkdownEditor, type EditorMode, type MarkdownEditorHandle } from "../../editor";
 import { FormatToolbar } from "../../editor/FormatToolbar";
 import { LinkButtons } from "../../editor/LinkButtons";
@@ -34,9 +34,9 @@ interface MarkdownFieldProps {
   plain?: boolean;
   className?: string | undefined;
   ref?: Ref<MarkdownEditorHandle>;
-  /** The task that files pasted or dropped on the editor are attached to; they go in the text as links. */
-  attachTo?: string | undefined;
-  /** The project whose wiki pages `[[` offers first; by default the project of `attachTo`. */
+  /** The task or wiki page that files pasted or dropped on the editor are attached to; they go in the text as links. */
+  attachTo?: FileOwner | undefined;
+  /** The project whose wiki pages `[[` offers first; by default the project of the task `attachTo`. */
   project?: string | undefined;
   /**
    * Where the formatting toolbar goes instead of above the text, such as a
@@ -52,18 +52,18 @@ export function attachmentMarkdown(file: Pick<Attachment, "id" | "name" | "kind"
 }
 
 /** The editors that take files dropped from the desktop, by their element. */
-const dropEditors = new WeakMap<Element, { task: string; editor: () => MarkdownEditorHandle | null }>();
+const dropEditors = new WeakMap<Element, { owner: string; editor: () => MarkdownEditorHandle | null }>();
 
 /**
  * Where the Markdown of files dropped from the desktop at a point of the
- * window goes: the editor under the point, when it takes files for `task`.
+ * window goes: the editor under the point, when it takes files for `owner`.
  * In the app, desktop drops reach the page as one event of the window, not
  * as the editor's own drop; the caller attaches the files, then inserts.
  */
-export function editorDropAt(x: number, y: number, task: string): ((markdown: string) => void) | null {
+export function editorDropAt(x: number, y: number, owner: FileOwner): ((markdown: string) => void) | null {
   const element = document.elementFromPoint(x, y)?.closest("[data-drop-editor]");
   const target = element ? dropEditors.get(element) : undefined;
-  const editor = target?.task === task ? target.editor() : null;
+  const editor = target?.owner === ownerKey(owner) ? target.editor() : null;
   if (!editor) {
     return null;
   }
@@ -96,20 +96,21 @@ export function MarkdownField({ label, value, onChange, onSubmit, onCancel, mode
   };
   const renderBlock = useBlockRenderer();
   // Wiki links point at pages of the task's own project (or the page's).
-  const completion = useLinkCompletion(project ?? (attachTo === undefined ? undefined : attachTo.slice(0, attachTo.lastIndexOf("-")) || undefined));
+  const completion = useLinkCompletion(project ?? (typeof attachTo === "string" ? attachTo.slice(0, attachTo.lastIndexOf("-")) || undefined : undefined));
   const box = useRef<HTMLDivElement>(null);
   const editor = useRef<MarkdownEditorHandle | null>(null);
   const takesFiles = attachTo !== undefined && !readOnly;
+  const owner = attachTo === undefined ? undefined : ownerKey(attachTo);
   useEffect(() => {
     const element = box.current;
-    if (!element || !takesFiles) {
+    if (!element || owner === undefined || readOnly) {
       return;
     }
-    dropEditors.set(element, { task: attachTo, editor: () => editor.current });
+    dropEditors.set(element, { owner, editor: () => editor.current });
     return () => {
       dropEditors.delete(element);
     };
-  }, [attachTo, takesFiles]);
+  }, [owner, readOnly]);
   const setEditor = (handle: MarkdownEditorHandle | null) => {
     editor.current = handle;
     if (typeof ref === "function") {

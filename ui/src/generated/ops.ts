@@ -229,11 +229,15 @@ export type Attachment = {
   mime: string;
   /** The file name. */
   name: string;
+  /** The wiki page's ID, for a file attached to a page. */
+  page?: string;
+  /** The project's key, for a file attached to a wiki page. */
+  project?: string;
   /** The content's SHA-256. */
   sha256: string;
   /** The size in bytes. */
   size: number;
-  /** The task's key. */
+  /** The task's key; empty for a file on a wiki page. */
   task: string;
   /** An image's width in pixels. */
   width?: number;
@@ -985,8 +989,12 @@ export type FileAttachInput = {
   data_base64?: string | null;
   /** The file name; default: the path's last part. */
   name?: string | null;
+  /** The wiki page to attach it to: its title (any case), slug or ID. */
+  page?: string | null;
   /** The path of a local file to read. */
   path?: string | null;
+  /** The page's project (key or ID); needed unless `page` is an ID. */
+  project?: string | null;
   /** The task to attach it to: its key or ID. */
   task?: string | null;
 };
@@ -2088,6 +2096,8 @@ export type SearchHit = {
   kind: SearchKind;
   /** Where it matched; results are grouped by it, best first. */
   matched_in: MatchedIn;
+  /** The wiki page's ID, for a file attached to a page. */
+  page?: string;
   /** The project's key. */
   project: string;
   /** The wiki page's slug. */
@@ -3336,7 +3346,7 @@ export type WikiDeleteInput = {
   project?: string | null;
 };
 
-/** A page, or a whole wiki, to export as Markdown files. */
+/** A page, or a whole wiki, to export as Markdown files or web pages. */
 export type WikiExportInput = {
   /** A `.zip` file (the default) or a folder. */
   format?: ArchiveFormat | null;
@@ -3348,6 +3358,8 @@ export type WikiExportInput = {
   project?: string | null;
   /** Include the pages inside it, each in a folder named after its parent (always, for a whole wiki). */
   subpages?: boolean;
+  /** Markdown files (the default) or web pages. */
+  text_format?: WikiTextFormat | null;
 };
 
 /** A finished page export. */
@@ -3356,7 +3368,7 @@ export type WikiExportResult = {
   attachments: number;
   /** How it is stored. */
   format: ArchiveFormat;
-  /** The Markdown files written: one per page. */
+  /** The pages written: one Markdown file or web page each. */
   pages: number;
   /** The file or folder written. */
   path: string;
@@ -3369,7 +3381,7 @@ export type WikiField = "parent";
 
 /** A page to read. */
 export type WikiGetInput = {
-  /** What to add: `backlinks`, `references`. */
+  /** What to add: `backlinks`, `references`, `checklist`, `files`. */
   include?: WikiPart[];
   /** The page: its title (any case), slug or ID. */
   page: string;
@@ -3395,6 +3407,44 @@ export type WikiHistoryInput = {
   page: string;
   /** The project (key or ID); needed unless `page` is an ID. */
   project?: string | null;
+};
+
+/** A folder of Markdown files to import as wiki pages. */
+export type WikiImportInput = {
+  /** Only check the folder and say what would be imported. */
+  dry_run?: boolean;
+  /** The page to put the imported pages in (title, slug or ID); left out: at the top of the wiki. */
+  parent?: string | null;
+  /** The folder (or a `.zip` file of one). Agents give a plain name of one in the workspace's `exports` folder. */
+  path: string;
+  /** The project whose wiki the pages go to (key or ID). */
+  project: string;
+};
+
+/** A page that got another title than its file's name. */
+export type WikiImportRename = {
+  /** The file or folder in the import. */
+  path: string;
+  /** The page's title. */
+  title: string;
+};
+
+/** What a folder import made, or would make. */
+export type WikiImportResult = {
+  /** The files attached to the pages: the images and other files the texts link to. */
+  attachments: number;
+  /** Whether this was only a check. */
+  dry_run: boolean;
+  /** The history group, for revert and Undo (moving every imported page to the trash); left out on a dry run. */
+  group?: string;
+  /** The pages made: one per Markdown file, and one per folder without its own file. */
+  pages: number;
+  /** Pages whose title was taken, with the title they got instead. */
+  renamed?: WikiImportRename[];
+  /** Files in the folder that were left out: neither Markdown nor linked from a page (paths in the folder). */
+  skipped?: string[];
+  /** The pages made at the top of the import, in order. */
+  top?: WikiPageRef[];
 };
 
 /** A wiki page whose links to read. */
@@ -3450,8 +3500,12 @@ export type WikiPage = {
   created_at: string;
   /** Whether `body` is the current text (false when an older revision was asked for). */
   current: boolean;
+  /** The files attached to it, oldest first, when asked for with `include`. */
+  files?: Attachment[];
   /** The headings of `body`, for links to a heading. */
   headings?: WikiHeading[];
+  /** Whether it is the wiki's home page, the page the wiki opens on. */
+  home?: boolean;
   /** The page's ID. */
   id: string;
   /** The parent page; left out for a page at the top. */
@@ -3490,6 +3544,8 @@ export type WikiPageSummary = {
   children: number;
   /** How many pages it is nested in. */
   depth: number;
+  /** Whether it is the wiki's home page, the page the wiki opens on. */
+  home?: boolean;
   /** The page's ID. */
   id: string;
   /** The parent page's ID; left out for a page at the top. */
@@ -3505,7 +3561,7 @@ export type WikiPageSummary = {
 };
 
 /** What `wiki.get` adds to a page. */
-export type WikiPart = "backlinks" | "references" | "checklist";
+export type WikiPart = "backlinks" | "references" | "checklist" | "files";
 
 /** One page found. */
 export type WikiSearchHit = {
@@ -3543,6 +3599,9 @@ export type WikiSearchResult = {
   total: number;
 };
 
+/** What a wiki export writes for each page. */
+export type WikiTextFormat = "markdown" | "html";
+
 /** A project's pages as a tree: each page followed by the pages it holds, in their order. */
 export type WikiTree = {
   /** The pages, in tree order. */
@@ -3569,6 +3628,8 @@ export type WikiUpdateInput = {
   clear?: WikiField[];
   /** Targeted changes to the text instead of a new one: each `old_text` must occur exactly once. */
   edits?: TextEdit[];
+  /** Make it the wiki's home page (`true`; the page that was the home page before stops being it), or stop it being the home page (`false`). Without a home page the wiki opens on its first page. */
+  home?: boolean | null;
   /** A note saved with the new revision. */
   message?: string | null;
   /** The page: its title (any case), slug or ID. */
@@ -3702,6 +3763,7 @@ export interface OpMap {
   "wiki.delete": { input: WikiDeleteInput; output: TrashChange; safety: "trash"; kind: "command" };
   "wiki.history": { input: WikiHistoryInput; output: RevisionList; safety: "read"; kind: "query" };
   "wiki.export": { input: WikiExportInput; output: WikiExportResult; safety: "write"; kind: "command" };
+  "wiki.import": { input: WikiImportInput; output: WikiImportResult; safety: "write"; kind: "command" };
   "wiki.backlinks": { input: WikiLinksInput; output: BacklinkList; safety: "read"; kind: "query" };
   "wiki.references": { input: WikiLinksInput; output: ReferenceList; safety: "read"; kind: "query" };
   "task.backlinks": { input: TaskLinksInput; output: BacklinkList; safety: "read"; kind: "query" };
@@ -3819,6 +3881,7 @@ export const OP_SAFETY = {
   "wiki.delete": "trash",
   "wiki.history": "read",
   "wiki.export": "write",
+  "wiki.import": "write",
   "wiki.backlinks": "read",
   "wiki.references": "read",
   "task.backlinks": "read",
@@ -3917,7 +3980,7 @@ export function makeOps(call: Call) {
       read: (input: OpMap["file.read"]["input"]) => call("file.read", input),
       /** A small PNG of an attached PNG, JPEG, GIF or WebP image, at most 256 pixels wide and high, from the workspace's cache; made when the image is attached, and again when the cache has lost it. (read) */
       thumbnail: (input: OpMap["file.thumbnail"]["input"]) => call("file.thumbnail", input),
-      /** Attach a local file, or Base64 data with a name, to a task or a comment. (write) */
+      /** Attach a local file, or Base64 data with a name, to a task, a comment or a wiki page. (write) */
       attach: (input: OpMap["file.attach"]["input"] = {}) => call("file.attach", input),
       /** Move an attached file to the trash. (trash) */
       delete: (input: OpMap["file.delete"]["input"]) => call("file.delete", input),
@@ -4117,7 +4180,7 @@ export function makeOps(call: Call) {
       get: (input: OpMap["wiki.get"]["input"]) => call("wiki.get", input),
       /** Create a wiki page with a title unique in its project, optionally inside another page and with its text. (write) */
       create: (input: OpMap["wiki.create"]["input"]) => call("wiki.create", input),
-      /** Change a wiki page: its text (whole, with a base revision, or by targeted edits), title, parent or place; or resolve a conflict copy. (write) */
+      /** Change a wiki page: its text (whole, with a base revision, or by targeted edits), title, parent or place, whether it is the home page; or resolve a conflict copy. (write) */
       update: (input: OpMap["wiki.update"]["input"]) => call("wiki.update", input),
       /** Move a wiki page, with the pages inside it, into another parent page or to the top, and to a place among its siblings; refuses moves into itself; links to it keep working. (write) */
       move: (input: OpMap["wiki.move"]["input"]) => call("wiki.move", input),
@@ -4125,8 +4188,10 @@ export function makeOps(call: Call) {
       delete: (input: OpMap["wiki.delete"]["input"]) => call("wiki.delete", input),
       /** List the revisions of a wiki page, newest first, conflict copies included; read one with wiki.get and its revision. (read) */
       history: (input: OpMap["wiki.history"]["input"]) => call("wiki.history", input),
-      /** Export a wiki page, optionally with the pages inside it, or a project's whole wiki, as Markdown files with their attachments, in a .zip file or a folder; links between the exported pages and to the attachments become relative links. (write) */
+      /** Export a wiki page, optionally with the pages inside it, or a project's whole wiki, as Markdown files or web pages with their attachments, in a .zip file or a folder; links between the exported pages and to the attachments become relative links. (write) */
       export: (input: OpMap["wiki.export"]["input"] = {}) => call("wiki.export", input),
+      /** Import a folder of Markdown files as wiki pages: sub-folders become pages inside pages, relative links between the files and `[[…]]` links become wiki links, and linked images and files are attached to their pages; one change that Undo takes back. (write) */
+      import: (input: OpMap["wiki.import"]["input"]) => call("wiki.import", input),
       /** The wiki pages, task descriptions and comments that link to a wiki page, by its title, slug, an old slug or its ID. (read) */
       backlinks: (input: OpMap["wiki.backlinks"]["input"]) => call("wiki.backlinks", input),
       /** The pages and tasks a wiki page's text links to, in order, each resolved now; links that find nothing are marked. (read) */

@@ -13,18 +13,21 @@
 //! - Pages nest at most [`MAX_DEPTH`] deep, within one project.
 //! - The text is saved as revisions through `description.rs`, with the
 //!   same base revision, merge and conflict-copy rules as descriptions.
-//! - History records `created`, `title`, `slug`, `parent`, `rank` and the
-//!   text as `body` (`{"revision": ID}`), so Undo and revert work on all of
-//!   them.
+//! - History records `created`, `title`, `slug`, `parent`, `rank`,
+//!   `agent_brief`, `home` and the text as `body` (`{"revision": ID}`), so
+//!   Undo and revert work on all of them.
+//! - At most one page per project is the home page, which the wiki opens
+//!   on. A page in the trash keeps the mark (only live pages show it), so
+//!   it is the home page again when it comes back.
 
 use std::collections::HashMap;
 
 use gk_api::ops::description::{RevisionList, SaveOutcome};
 use gk_api::ops::wiki::{
     WikiChange, WikiCreate, WikiCreateInput, WikiExport, WikiField, WikiGet, WikiGetInput,
-    WikiHeading, WikiHistory, WikiHistoryInput, WikiList, WikiListInput, WikiMatch, WikiMove,
-    WikiMoveInput, WikiPage, WikiPageRef, WikiPageSummary, WikiPart, WikiSearch, WikiSearchHit,
-    WikiSearchInput, WikiSearchResult, WikiTree, WikiUpdate, WikiUpdateInput,
+    WikiHeading, WikiHistory, WikiHistoryInput, WikiImport, WikiList, WikiListInput, WikiMatch,
+    WikiMove, WikiMoveInput, WikiPage, WikiPageRef, WikiPageSummary, WikiPart, WikiSearch,
+    WikiSearchHit, WikiSearchInput, WikiSearchResult, WikiTree, WikiUpdate, WikiUpdateInput,
 };
 use gk_core::{Id, PageTitleError, TextError, fold};
 use gk_store::rusqlite::{OptionalExtension, Row, Transaction, params};
@@ -42,7 +45,7 @@ use crate::time::rfc3339;
 use crate::write::WriteCtx;
 
 /// How deep pages nest: a page at the top has depth 0.
-const MAX_DEPTH: u32 = 8;
+pub(crate) const MAX_DEPTH: u32 = 8;
 /// Results of a page search unless asked otherwise.
 const DEFAULT_SEARCH_LIMIT: u32 = 20;
 /// The most pages whose headings one search reads.
@@ -59,6 +62,9 @@ pub(super) fn register(r: &mut Registry) {
     r.command::<WikiMove, _>(desc::<WikiMove>(), move_op);
     r.engine_op::<WikiExport, _>(desc::<WikiExport>(), |engine, ctx, input| {
         engine.export_wiki_page(ctx, &input)
+    });
+    r.engine_op::<WikiImport, _>(desc::<WikiImport>(), |engine, ctx, input| {
+        engine.import_wiki_folder(ctx, &input)
     });
     r.query::<WikiHistory, _>(desc::<WikiHistory>(), |q, input: WikiHistoryInput| {
         let page = find(q.tx, input.project.as_deref(), "page", &input.page)?;
@@ -83,12 +89,13 @@ pub(crate) struct PageRow {
     pub(crate) slug: String,
     rank: String,
     agent_brief: bool,
+    home: bool,
     created_at: i64,
     updated_at: i64,
 }
 
 const PAGE_COLUMNS: &str = "id, project_id, parent_id, title, slug, rank, is_agent_brief,
-    created_at, updated_at";
+    created_at, updated_at, is_home";
 
 fn page_row(r: &Row<'_>) -> gk_store::rusqlite::Result<PageRow> {
     Ok(PageRow {
@@ -101,6 +108,7 @@ fn page_row(r: &Row<'_>) -> gk_store::rusqlite::Result<PageRow> {
         agent_brief: r.get(6)?,
         created_at: r.get(7)?,
         updated_at: r.get(8)?,
+        home: r.get(9)?,
     })
 }
 
@@ -260,7 +268,7 @@ fn project_of(tx: &Transaction<'_>, page: &PageRow) -> Result<ProjectRow, Failur
 }
 
 /// How many pages `id` is nested in.
-fn depth(tx: &Transaction<'_>, mut parent: Option<Id>) -> Result<u32, Failure> {
+pub(crate) fn depth(tx: &Transaction<'_>, mut parent: Option<Id>) -> Result<u32, Failure> {
     let mut depth = 0;
     while let Some(p) = parent {
         depth += 1;
@@ -277,6 +285,11 @@ fn depth(tx: &Transaction<'_>, mut parent: Option<Id>) -> Result<u32, Failure> {
             .flatten();
     }
     Ok(depth)
+}
+
+/// The IDs of the pages above `parent`, outermost first.
+pub(crate) fn ancestor_ids(tx: &Transaction<'_>, parent: Option<Id>) -> Result<Vec<Id>, Failure> {
+    Ok(ancestors(tx, parent)?.iter().map(|p| p.id).collect())
 }
 
 /// The pages above `parent`, outermost first.
@@ -352,6 +365,7 @@ fn summary(p: &PageRow, project: &str, depth: u32, children: u32) -> WikiPageSum
         depth,
         children,
         agent_brief: p.agent_brief,
+        home: p.home,
         updated_at: rfc3339(p.updated_at),
         id: p.id.to_string(),
     }
@@ -512,6 +526,7 @@ fn page_out(
         body,
         conflict_copies: u32::try_from(conflicts).unwrap_or(0),
         agent_brief: p.agent_brief,
+        home: p.home,
         backlinks: if include.contains(&WikiPart::Backlinks) {
             Some(super::links::page_backlinks(tx, p)?)
         } else {
@@ -523,6 +538,11 @@ fn page_out(
             None
         },
         checklist_items,
+        files: if include.contains(&WikiPart::Files) {
+            Some(super::file::of_page(tx, p.id)?)
+        } else {
+            None
+        },
         created_at: rfc3339(p.created_at),
         updated_at: rfc3339(p.updated_at),
         id: p.id.to_string(),
@@ -542,7 +562,7 @@ fn get(q: &QueryCtx<'_>, input: WikiGetInput) -> Result<WikiPage, Failure> {
 fn pages_in(tx: &Transaction<'_>, project: Option<&ProjectRow>) -> Result<Vec<PageRow>, Failure> {
     let sql = format!(
         "SELECT w.id, w.project_id, w.parent_id, w.title, w.slug, w.rank, w.is_agent_brief,
-                w.created_at, w.updated_at
+                w.created_at, w.updated_at, w.is_home
            FROM wiki_pages w JOIN projects p ON p.id = w.project_id
           WHERE w.deleted_at IS NULL AND p.deleted_at IS NULL AND {}
           ORDER BY w.updated_at DESC, w.id",
@@ -913,6 +933,19 @@ fn place(
 }
 
 fn create(w: &mut WriteCtx<'_>, input: WikiCreateInput) -> Result<WikiChange, Failure> {
+    let project = input.project.clone();
+    let change = create_page(w, input)?;
+    let project = lookup::project(w.tx(), "project", &project)?;
+    super::draft::clear(w, gk_api::ops::draft::DraftKind::NewWikiPage, project.id)?;
+    Ok(change)
+}
+
+/// Creates a page as `wiki.create` does, leaving the person's draft of a
+/// new page alone.
+pub(crate) fn create_page(
+    w: &mut WriteCtx<'_>,
+    input: WikiCreateInput,
+) -> Result<WikiChange, Failure> {
     let project = lookup::project(w.tx(), "project", &input.project)?;
     lookup::ensure_active(&project)?;
     lookup::ensure_wiki_on(w.tx(), &project)?;
@@ -985,7 +1018,6 @@ fn create(w: &mut WriteCtx<'_>, input: WikiCreateInput) -> Result<WikiChange, Fa
         None,
         Some(Value::Bool(true)),
     );
-    super::draft::clear(w, gk_api::ops::draft::DraftKind::NewWikiPage, project.id)?;
     reindex(w, id)?;
     changed(w, id, None)
 }
@@ -1040,6 +1072,9 @@ fn update(w: &mut WriteCtx<'_>, input: WikiUpdateInput) -> Result<WikiChange, Fa
 
     if let Some(brief) = input.agent_brief {
         set_brief(w, &project, &page, brief)?;
+    }
+    if let Some(home) = input.home {
+        set_home(w, &project, &page, home)?;
     }
 
     let mut save = None;
@@ -1147,6 +1182,56 @@ fn set_brief(
         Some(project.id),
         "agent_brief",
         Some(Value::Bool(brief)),
+    )?;
+    Ok(())
+}
+
+/// Gives page `id`, made in this change without a text, its first text,
+/// and indexes it.
+pub(crate) fn first_text(w: &mut WriteCtx<'_>, id: Id, body: &str) -> Result<(), Failure> {
+    gk_core::check_markdown("body", body).map_err(|e| super::task::invalid("body", e))?;
+    description::initial(w, Owner::Wiki(id), body)?;
+    reindex(w, id)
+}
+
+/// Makes `page` its project's home page, so that the page that was it
+/// before stops being it, or makes it an ordinary page again.
+fn set_home(
+    w: &mut WriteCtx<'_>,
+    project: &ProjectRow,
+    page: &PageRow,
+    home: bool,
+) -> Result<(), Failure> {
+    if home == page.home {
+        return Ok(());
+    }
+    if home {
+        let before: Option<Id> = w
+            .tx()
+            .query_row(
+                "SELECT id FROM wiki_pages WHERE project_id = ?1 AND is_home = 1 AND id <> ?2",
+                params![b(project.id), b(page.id)],
+                |r| id_at(r, 0),
+            )
+            .optional()?;
+        if let Some(before) = before {
+            fields::set(
+                w,
+                WIKI,
+                before,
+                Some(project.id),
+                "home",
+                Some(Value::Bool(false)),
+            )?;
+        }
+    }
+    fields::set(
+        w,
+        WIKI,
+        page.id,
+        Some(project.id),
+        "home",
+        Some(Value::Bool(home)),
     )?;
     Ok(())
 }
@@ -1279,7 +1364,8 @@ pub(crate) fn set_live(
             return Err(messages::conflict("wiki-holds-pages", &[]).into());
         }
         w.tx().execute(
-            "UPDATE wiki_pages SET deleted_at = ?2, deleted_group = ?3, is_agent_brief = 0
+            "UPDATE wiki_pages SET deleted_at = ?2, deleted_group = ?3, is_agent_brief = 0,
+                                   is_home = 0
               WHERE id = ?1",
             params![b(id), w.now(), b(w.group())],
         )?;

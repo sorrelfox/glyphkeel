@@ -160,12 +160,18 @@ test("the formatting toolbar sits in the page bar while editing, and the page me
   await expect(view.locator("[data-toolbar-slot]")).toHaveCount(0);
 
   await view.getByRole("button", { name: "Page menu" }).click();
-  await page.getByRole("menuitem", { name: "Export as Markdown…" }).click();
+  await page.getByRole("menuitem", { name: "Export…" }).click();
+  let dialog = page.getByRole("dialog", { name: /Export\W+Storage/ });
+  await expect(dialog.getByRole("radio", { name: "With the pages inside" })).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Export" }).click();
   await expect(page.getByText("Page exported as Markdown")).toBeVisible();
   // A page with pages inside offers them too.
   await tree.getByRole("row", { name: "Architecture" }).click();
   await view.getByRole("button", { name: "Page menu" }).click();
-  await page.getByRole("menuitem", { name: "Export with the pages inside…" }).click();
+  await page.getByRole("menuitem", { name: "Export…" }).click();
+  dialog = page.getByRole("dialog", { name: /Export\W+Architecture/ });
+  await dialog.getByRole("radio", { name: "With the pages inside" }).click();
+  await dialog.getByRole("button", { name: "Export" }).click();
   await expect(page.getByRole("region", { name: "Notifications" })).toContainText(/3\W+pages exported as Markdown/);
 });
 
@@ -193,8 +199,44 @@ test("a page becomes the agent brief, a save carries a note, a heading's link is
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("[[Storage#Storage]]");
 
   await view.getByRole("button", { name: "Page menu" }).click();
-  await page.getByRole("menuitem", { name: "Export the whole wiki…" }).click();
-  await expect(page.getByRole("region", { name: "Notifications" })).toContainText(/5\W+pages exported as Markdown/);
+  await page.getByRole("menuitem", { name: "Export…" }).click();
+  const dialog = page.getByRole("dialog", { name: /Export\W+Storage/ });
+  await dialog.getByRole("radio", { name: "The whole wiki" }).click();
+  await dialog.getByRole("radio", { name: "Web pages" }).click();
+  await shot(page, "wiki-export-dialog");
+  await dialog.getByRole("button", { name: "Export" }).click();
+  await expect(page.getByRole("region", { name: "Notifications" })).toContainText(/5\W+pages exported as web pages/);
+});
+
+test("the wiki opens on its home page, a page takes files, and a folder imports as pages that Undo takes back", async ({ page }) => {
+  const tree = await openWiki(page);
+  await tree.getByRole("row", { name: "Storage" }).click();
+  const view = page.getByRole("region", { name: /Wiki page/ });
+  await view.getByRole("button", { name: "Page menu" }).click();
+  await page.getByRole("menuitem", { name: "Make this the home page" }).click();
+  await expect(tree.getByRole("row", { name: "Storage" }).locator("[data-home]")).toHaveCount(1);
+  await expect(view.getByRole("navigation", { name: "Place in the wiki" })).toContainText("Home page");
+  // Back to the wiki from elsewhere: it opens on the home page.
+  await page.getByRole("group", { name: "Views" }).getByRole("button", { name: "Board" }).click();
+  await page.getByRole("group", { name: "Views" }).getByRole("button", { name: "Wiki" }).click();
+  await expect(page.getByRole("region", { name: /Wiki page\W+Storage/ })).toBeVisible();
+
+  // A file chosen for the page is attached to it and listed beside it.
+  await view.locator("input[data-attach-field]").setInputFiles({ name: "layout.txt", mimeType: "text/plain", buffer: Buffer.from("pages and files") });
+  await expect(view.getByRole("button", { name: /Open\W+layout\.txt/ })).toBeVisible();
+  await shot(page, "wiki-page-files");
+
+  await page.getByRole("complementary", { name: "Pages" }).getByRole("button", { name: "Import a folder of Markdown files…" }).click();
+  const dialog = page.getByRole("dialog", { name: "Import a folder of Markdown files" });
+  await dialog.getByRole("textbox", { name: "Folder in the exports folder" }).fill("notes");
+  await dialog.getByRole("button", { name: "Check" }).click();
+  await expect(dialog.getByTestId("wiki-import-summary")).toContainText(/2\W+pages\W+and one attached file/);
+  await shot(page, "wiki-import-dialog");
+  await dialog.getByRole("button", { name: /Import\W+2\W+pages/ }).click();
+  await expect(tree.getByRole("row", { name: "Meeting notes" })).toBeVisible();
+  await expect(page.getByRole("region", { name: /Wiki page\W+Meeting notes/ })).toBeVisible();
+  await page.getByRole("region", { name: "Notifications" }).getByRole("button", { name: "Undo" }).click();
+  await expect(tree.getByRole("row", { name: "Meeting notes" })).toHaveCount(0);
 });
 
 test("the task panel lists the pages that link to the task", async ({ page }) => {

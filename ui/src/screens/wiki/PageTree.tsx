@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { ChevronDown, GripVertical, Plus } from "lucide-react";
+import { ChevronDown, FolderInput, GripVertical, House, Plus } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Button, Tree, TreeItem, TreeItemContent, useDragAndDrop, type Key } from "react-aria-components";
 
@@ -32,8 +32,10 @@ interface PageTreeProps {
   onRename: (page: WikiPageSummary) => void;
   onDelete: (page: WikiPageSummary) => void;
   onOpenWindow: (page: WikiPageSummary) => void;
-  /** Exports the page, with the pages inside it when `subpages`. */
-  onExport: (page: WikiPageSummary, subpages: boolean) => void;
+  /** Asks how to export the page. */
+  onExport: (page: WikiPageSummary) => void;
+  /** Imports a folder of Markdown files, inside `parent` or at the top. */
+  onImport: (parent: WikiPageSummary | null) => void;
 }
 
 /**
@@ -42,7 +44,7 @@ interface PageTreeProps {
  * keys (up and down among its siblings, right into the page above it, left
  * out of its parent). Right-click or the Menu key opens the page menu.
  */
-export function PageTree({ pages, current, writable, onOpen, onMove, onNew, onRename, onDelete, onOpenWindow, onExport }: PageTreeProps) {
+export function PageTree({ pages, current, writable, onOpen, onMove, onNew, onRename, onDelete, onOpenWindow, onExport, onImport }: PageTreeProps) {
   const t = useT();
   const menu = useContextMenu(t("wiki-page-menu"));
   const [collapsed, setCollapsed] = useState<readonly string[]>([]);
@@ -81,8 +83,8 @@ export function PageTree({ pages, current, writable, onOpen, onMove, onNew, onRe
       return { id: `move-${direction}`, label: t(`wiki-move-${direction}`), run: () => { if (move) { onMove(move); } }, disabled: !writable || move === null };
     }),
     "separator",
-    { id: "export", label: t("wiki-export"), run: () => { onExport(page, false); } },
-    ...(page.children > 0 ? [{ id: "export-all", label: t("wiki-export-all"), run: () => { onExport(page, true); } }] : []),
+    { id: "export", label: t("wiki-export"), run: () => { onExport(page); } },
+    { id: "import", label: t("wiki-import-into"), run: () => { onImport(page); }, disabled: !writable },
     "separator",
     { id: "delete", label: t("wiki-delete"), run: () => { onDelete(page); }, disabled: !writable },
   ];
@@ -107,6 +109,13 @@ export function PageTree({ pages, current, writable, onOpen, onMove, onNew, onRe
                 <span className={styles.chevron} />
               )}
               <span className="truncate grow">{page.title}</span>
+              {page.home === true && (
+                <Tooltip text={t("wiki-home")}>
+                  <span className={styles.homeMark} aria-label={t("wiki-home")} role="img" data-home="">
+                    <House className="ic s muted" aria-hidden="true" />
+                  </span>
+                </Tooltip>
+              )}
               {page.agent_brief === true && <span className="chip hue-purple">{t("wiki-agent-brief")}</span>}
               {writable && (
                 <Button slot="drag" className={classes(styles.dragHandle)} aria-label={t("wiki-drag", { page: page.title })}>
@@ -127,6 +136,11 @@ export function PageTree({ pages, current, writable, onOpen, onMove, onNew, onRe
     <aside className={styles.treePane} aria-label={t("wiki-pages")}>
       <div className={styles.treeHead}>
         <span className="grow">{t("wiki-pages")}</span>
+        <Tooltip text={t("wiki-import")}>
+          <Button className="btn flat icon sm" aria-label={t("wiki-import")} isDisabled={!writable} onPress={() => { onImport(null); }}>
+            <FolderInput className="ic s" />
+          </Button>
+        </Tooltip>
         <Tooltip text={t("wiki-new-page")}>
           <Button className="btn flat icon sm" aria-label={t("wiki-new-page")} isDisabled={!writable} onPress={() => { onNew(null); }}>
             <Plus className="ic s" />

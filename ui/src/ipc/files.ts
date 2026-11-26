@@ -4,7 +4,8 @@
 // Attached files and the desktop. In the app, Rust shows the file chooser,
 // takes files dropped on the window, opens and saves files, and serves
 // images through `gk-file:`; the page only ever names the task, never a
-// path. In a plain browser (the development bridge, the sample data, tests)
+// path. Files belong to a task or to a wiki page. In a plain browser (the
+// development bridge, the sample data, tests)
 // files come from the page's own file field and drops, as Base64, and
 // images are shown from their content.
 
@@ -17,6 +18,19 @@ import { OpFailure, toCallError } from "../data/transport";
 export interface Attached {
   files: FileChange[];
   failed: { name: string; error: CallError }[];
+}
+
+/** What files are attached to: a task by its key, or a wiki page by its ID. */
+export type FileOwner = string | { page: string };
+
+/** The owner as the engine's and the app's inputs name it. */
+export function ownerInput(owner: FileOwner): { task: string } | { page: string } {
+  return typeof owner === "string" ? { task: owner } : { page: owner.page };
+}
+
+/** The owner as one string, for the elements that take a drop: the task's key, or `page:` and the page's ID. */
+export function ownerKey(owner: FileOwner): string {
+  return typeof owner === "string" ? owner : `page:${owner.page}`;
 }
 
 /** Whether the desktop app is there to show dialogs and open files. */
@@ -43,9 +57,9 @@ export function thumbnailUrl(attachment: string): string {
   return `${imageUrl(attachment)}/thumb`;
 }
 
-/** Lets the person choose files in the system's dialog and attaches them to `task`. */
-export function chooseAndAttach(task: string): Promise<Attached> {
-  return command<Attached>("attach_files", { task });
+/** Lets the person choose files in the system's dialog and attaches them to `owner`. */
+export function chooseAndAttach(owner: FileOwner): Promise<Attached> {
+  return command<Attached>("attach_files", ownerInput(owner));
 }
 
 /** Reads a file of the page's own as Base64. */
@@ -64,12 +78,12 @@ function base64Of(file: Blob): Promise<string> {
 }
 
 /** Attaches files the page holds (from its file field or a drop in a browser), one call each. */
-export async function attachBrowserFiles(call: Call, task: string, files: readonly File[]): Promise<Attached> {
+export async function attachBrowserFiles(call: Call, owner: FileOwner, files: readonly File[]): Promise<Attached> {
   const attached: Attached = { files: [], failed: [] };
   for (const file of files) {
     try {
       const data = await base64Of(file);
-      attached.files.push(await call("file.attach", { task, name: file.name, data_base64: data, client_request_id: crypto.randomUUID() }));
+      attached.files.push(await call("file.attach", { ...ownerInput(owner), name: file.name, data_base64: data, client_request_id: crypto.randomUUID() }));
     } catch (error: unknown) {
       attached.failed.push({ name: file.name, error: error instanceof OpFailure ? error.error : toCallError(error) });
     }
@@ -120,12 +134,12 @@ export function onDesktopDrop(listener: (event: DesktopDrop) => void): () => voi
   };
 }
 
-/** Attaches the files of a desktop drop to `task`. */
-export function attachDrop(drop: number, task: string): Promise<Attached> {
-  return command<Attached>("attach_drop", { drop, task });
+/** Attaches the files of a desktop drop to `owner`. */
+export function attachDrop(drop: number, owner: FileOwner): Promise<Attached> {
+  return command<Attached>("attach_drop", { drop, ...ownerInput(owner) });
 }
 
-/** The task whose panel is at a point of the window, if any. */
+/** What takes files dropped at a point of the window, if anything: a task's panel or a wiki page ({@link ownerKey}). */
 export function dropTargetAt(x: number, y: number): string | null {
   const element = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-drop-task]");
   return element?.dataset.dropTask ?? null;

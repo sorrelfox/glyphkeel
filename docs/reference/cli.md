@@ -27,7 +27,7 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel description history` | `description.history` | List the revisions of a task's or project's description, newest first, conflict copies included. |
 | `glyphkeel description show <revision>` | `description.revision` | One description revision with its text, and the differences from another revision on request. |
 | `glyphkeel export` | `transfer.export` | Export projects, or the whole workspace, to an archive of JSON and Markdown files with the attachments. |
-| `glyphkeel file attach` | `file.attach` | Attach a local file, or Base64 data with a name, to a task or a comment. |
+| `glyphkeel file attach` | `file.attach` | Attach a local file, or Base64 data with a name, to a task, a comment or a wiki page. |
 | `glyphkeel file cat <attachment>` | `file.read` | An attached file's content: text for text files, Base64 for images, otherwise only its details. |
 | `glyphkeel file delete <attachment>` | `file.delete` | Move an attached file to the trash. |
 | `glyphkeel file show <attachment>` | `file.get` | An attached file's name, type, size and owner. |
@@ -96,13 +96,14 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel view list` | `view.list` | The saved views of a project or of the whole workspace: name, query, columns, order, grouping, totals and which is the default. |
 | `glyphkeel wiki backlinks <page>` | `wiki.backlinks` | The wiki pages, task descriptions and comments that link to a wiki page, by its title, slug, an old slug or its ID. |
 | `glyphkeel wiki delete <page>` | `wiki.delete` | Move a wiki page, with the pages inside it, to the trash; links to it stop resolving until it is restored. |
-| `glyphkeel wiki export <page>` | `wiki.export` | Export a wiki page, optionally with the pages inside it, or a project's whole wiki, as Markdown files with their attachments, in a .zip file or a folder; links between the exported pages and to the attachments become relative links. |
+| `glyphkeel wiki export <page>` | `wiki.export` | Export a wiki page, optionally with the pages inside it, or a project's whole wiki, as Markdown files or web pages with their attachments, in a .zip file or a folder; links between the exported pages and to the attachments become relative links. |
 | `glyphkeel wiki get <page>` | `wiki.get` | One wiki page with its text, revision, headings, place in the tree and, on request, what links to it; or an older revision of it. |
 | `glyphkeel wiki history <page>` | `wiki.history` | List the revisions of a wiki page, newest first, conflict copies included; read one with wiki.get and its revision. |
+| `glyphkeel wiki import <path>` | `wiki.import` | Import a folder of Markdown files as wiki pages: sub-folders become pages inside pages, relative links between the files and `[[…]]` links become wiki links, and linked images and files are attached to their pages; one change that Undo takes back. |
 | `glyphkeel wiki list` | `wiki.list` | A project's wiki pages as a tree: titles, slugs, nesting and when each changed. |
 | `glyphkeel wiki move <page>` | `wiki.move` | Move a wiki page, with the pages inside it, into another parent page or to the top, and to a place among its siblings; refuses moves into itself; links to it keep working. |
 | `glyphkeel wiki new` | `wiki.create` | Create a wiki page with a title unique in its project, optionally inside another page and with its text. |
-| `glyphkeel wiki put <page>` | `wiki.update` | Change a wiki page: its text (whole, with a base revision, or by targeted edits), title, parent or place; or resolve a conflict copy. |
+| `glyphkeel wiki put <page>` | `wiki.update` | Change a wiki page: its text (whole, with a base revision, or by targeted edits), title, parent or place, whether it is the home page; or resolve a conflict copy. |
 | `glyphkeel wiki references <page>` | `wiki.references` | The pages and tasks a wiki page's text links to, in order, each resolved now; links that find nothing are marked. |
 | `glyphkeel wiki search <text>` | `wiki.search` | Find wiki pages by title, heading or text, for example to link one; `Page#Heading` lists a page's headings. |
 | `glyphkeel workspace` | `workspace.get` | The open workspace: its name and ID, the schema and program versions, who is asking with which rights, the settings, the limits on agents and a short guide. |

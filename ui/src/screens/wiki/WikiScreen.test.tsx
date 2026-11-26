@@ -202,4 +202,56 @@ describe("a wiki window", () => {
     fireEvent.click(await within(view).findByRole("link", { name: "Release plan" }));
     expect(await page("Release plan")).toBeDefined();
   });
+
+  it("opens on the home page, which the page menu chooses", async () => {
+    const { transport } = await renderWiki("/projects/TM/wiki", async (fake) => {
+      await fake.call("wiki.update", { project: "TM", page: "Storage", home: true });
+    });
+    const storage = await page("Storage");
+    expect(within(storage).getByText("Home page")).toBeDefined();
+    fireEvent.click(within(storage).getByRole("button", { name: "Page menu" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Stop using as the home page" }));
+    await waitFor(async () => {
+      expect((await stored(transport, "Storage")).home).toBeUndefined();
+    });
+  });
+
+  it("attaches files chosen for a page and lists them in its aside", async () => {
+    const { transport, tree } = await renderWiki();
+    const view = await openPage(tree, "Storage");
+    const field = await waitFor(() => {
+      const input = view.querySelector<HTMLInputElement>("input[data-attach-field]");
+      expect(input).not.toBeNull();
+      return input as HTMLInputElement;
+    });
+    const file = new File(["hello"], "notes.txt", { type: "text/plain" });
+    fireEvent.change(field, { target: { files: [file] } });
+    expect(await within(view).findByRole("button", { name: (name) => plain(name).startsWith("Open notes.txt") })).toBeDefined();
+    const saved = (await transport.call("wiki.get", { project: "TM", page: "Storage", include: ["files"] })) as WikiPage;
+    expect(saved.files?.map((one) => one.name)).toEqual(["notes.txt"]);
+    expect(saved.files?.[0]?.page).toBe(saved.id);
+  });
+
+  it("exports a page as web pages and imports a folder as pages that Undo takes back", async () => {
+    const { transport, tree } = await renderWiki();
+    const view = await openPage(tree, "Home");
+    fireEvent.click(within(view).getByRole("button", { name: "Page menu" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Export…" }));
+    const exporting = await screen.findByRole("dialog", { name: (name) => plain(name) === "Export Home" });
+    fireEvent.click(within(exporting).getByRole("radio", { name: "Web pages" }));
+    fireEvent.click(within(exporting).getByRole("button", { name: "Export" }));
+    expect(await screen.findByText("Page exported as a web page")).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "Import a folder of Markdown files…" }));
+    const importing = await screen.findByRole("dialog", { name: "Import a folder of Markdown files" });
+    fireEvent.change(within(importing).getByRole("textbox", { name: "Folder in the exports folder" }), { target: { value: "notes" } });
+    fireEvent.click(within(importing).getByRole("button", { name: "Check" }));
+    expect(plain((await within(importing).findByTestId("wiki-import-summary")).textContent)).toContain("2 pages and one attached file.");
+    fireEvent.click(within(importing).getByRole("button", { name: (name) => plain(name) === "Import 2 pages" }));
+    expect(await screen.findByText((_content, element) => element?.tagName !== "SECTION" && plain(element?.textContent) === "2 pages imported")).toBeDefined();
+    await waitFor(async () => {
+      expect(await titles(transport)).toContain("Ideas");
+    });
+    await page("Meeting notes");
+  });
 });

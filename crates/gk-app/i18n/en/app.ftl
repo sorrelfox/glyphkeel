@@ -51,6 +51,7 @@ chooser-import = _Choose
 chooser-zip-filter = Archives (.zip)
 chooser-backup-folder-title = Choose a folder for backups
 chooser-backup-folder = _Choose
+chooser-wiki-folder-title = Import a folder of Markdown files into the wiki
 
 ## The tray icon of background mode
 

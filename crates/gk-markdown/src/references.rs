@@ -91,6 +91,84 @@ pub fn wiki_link_spans(source: &str) -> Vec<WikiLinkSpan> {
     out
 }
 
+/// Where a Markdown link (`[text](url)`) or image (`![alt](url)`) is
+/// written, for rewriting it. Only links written inline are listed, not
+/// reference links or autolinks.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LinkSpan {
+    /// The bytes of the whole link, `[` (or `![`) to `)`.
+    pub range: std::ops::Range<usize>,
+    /// The bytes of the text between the brackets.
+    pub text: std::ops::Range<usize>,
+    /// The bytes of the destination as written (without `<` and `>`).
+    pub destination: std::ops::Range<usize>,
+    /// The destination as parsed: escapes and entities resolved.
+    pub url: String,
+    /// Whether it is an image.
+    pub image: bool,
+}
+
+/// Every inline link and image in `source`, in reading order, with where it
+/// is written. Links in code are not links, so they aren't listed.
+///
+/// ```
+/// let text = "See [the plan](plan.md#dates) and ![chart](img/c.png \"Chart\").";
+/// let spans = gk_markdown::link_spans(text);
+/// assert_eq!(&text[spans[0].destination.clone()], "plan.md#dates");
+/// assert_eq!(&text[spans[0].text.clone()], "the plan");
+/// assert!(spans[1].image);
+/// assert_eq!(spans[1].url, "img/c.png");
+/// assert_eq!(&text[spans[1].range.clone()], "![chart](img/c.png \"Chart\")");
+/// ```
+#[must_use]
+pub fn link_spans(source: &str) -> Vec<LinkSpan> {
+    let arena = Arena::new();
+    let options = crate::options();
+    let root = parse_document(&arena, source, &options);
+    let lines = crate::checklist::LineIndex::new(source);
+    let mut out = Vec::new();
+    for node in root.descendants() {
+        let (url, image) = match &node.data().value {
+            NodeValue::Link(link) => (link.url.clone(), false),
+            NodeValue::Image(link) => (link.url.clone(), true),
+            _ => continue,
+        };
+        let pos = node.data().sourcepos;
+        let start = lines.offset(pos.start.line, pos.start.column);
+        let end = (lines.offset(pos.end.line, pos.end.column) + 1).min(source.len());
+        let Some(written) = source.get(start..end) else {
+            continue;
+        };
+        let opening = if image { "![" } else { "[" };
+        if !(written.starts_with(opening) && written.ends_with(')')) {
+            continue;
+        }
+        let Some(close) = written.rfind("](") else {
+            continue;
+        };
+        let inside = &written[close + 2..written.len() - 1];
+        let lead = inside.len() - inside.trim_start().len();
+        let rest = &inside[lead..];
+        let (from, len) = if let Some(quoted) = rest.strip_prefix('<') {
+            match quoted.find('>') {
+                Some(n) => (lead + 1, n),
+                None => continue,
+            }
+        } else {
+            (lead, rest.find(char::is_whitespace).unwrap_or(rest.len()))
+        };
+        let dest_start = start + close + 2 + from;
+        out.push(LinkSpan {
+            range: start..end,
+            text: start + opening.len()..start + close,
+            destination: dest_start..dest_start + len,
+            url,
+            image,
+        });
+    }
+    out
+}
+
 /// Finds the task keys and wiki links in `source`.
 ///
 /// ```

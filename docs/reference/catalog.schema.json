@@ -1324,6 +1324,10 @@
                 "$ref": "#/$defs/MatchedIn",
                 "description": "Where it matched; results are grouped by it, best first."
               },
+              "page": {
+                "description": "The wiki page's ID, for a file attached to a page.",
+                "type": "string"
+              },
               "project": {
                 "description": "The project's key.",
                 "type": "string"
@@ -12551,6 +12555,14 @@
                 "description": "The file name.",
                 "type": "string"
               },
+              "page": {
+                "description": "The wiki page's ID, for a file attached to a page.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The project's key, for a file attached to a wiki page.",
+                "type": "string"
+              },
               "sha256": {
                 "description": "The content's SHA-256.",
                 "type": "string"
@@ -12562,7 +12574,7 @@
                 "type": "integer"
               },
               "task": {
-                "description": "The task's key.",
+                "description": "The task's key; empty for a file on a wiki page.",
                 "type": "string"
               },
               "width": {
@@ -13990,6 +14002,14 @@
                 "description": "The file name.",
                 "type": "string"
               },
+              "page": {
+                "description": "The wiki page's ID, for a file attached to a page.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The project's key, for a file attached to a wiki page.",
+                "type": "string"
+              },
               "sha256": {
                 "description": "The content's SHA-256.",
                 "type": "string"
@@ -14001,7 +14021,7 @@
                 "type": "integer"
               },
               "task": {
-                "description": "The task's key.",
+                "description": "The task's key; empty for a file on a wiki page.",
                 "type": "string"
               },
               "width": {
@@ -15651,6 +15671,14 @@
                 "description": "The file name.",
                 "type": "string"
               },
+              "page": {
+                "description": "The wiki page's ID, for a file attached to a page.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The project's key, for a file attached to a wiki page.",
+                "type": "string"
+              },
               "sha256": {
                 "description": "The content's SHA-256.",
                 "type": "string"
@@ -15662,7 +15690,7 @@
                 "type": "integer"
               },
               "task": {
-                "description": "The task's key.",
+                "description": "The task's key; empty for a file on a wiki page.",
                 "type": "string"
               },
               "width": {
@@ -17100,6 +17128,14 @@
                 "description": "The file name.",
                 "type": "string"
               },
+              "page": {
+                "description": "The wiki page's ID, for a file attached to a page.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The project's key, for a file attached to a wiki page.",
+                "type": "string"
+              },
               "sha256": {
                 "description": "The content's SHA-256.",
                 "type": "string"
@@ -17111,7 +17147,7 @@
                 "type": "integer"
               },
               "task": {
-                "description": "The task's key.",
+                "description": "The task's key; empty for a file on a wiki page.",
                 "type": "string"
               },
               "width": {
@@ -19081,6 +19117,14 @@
                 "description": "The file name.",
                 "type": "string"
               },
+              "page": {
+                "description": "The wiki page's ID, for a file attached to a page.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The project's key, for a file attached to a wiki page.",
+                "type": "string"
+              },
               "sha256": {
                 "description": "The content's SHA-256.",
                 "type": "string"
@@ -19092,7 +19136,7 @@
                 "type": "integer"
               },
               "task": {
-                "description": "The task's key.",
+                "description": "The task's key; empty for a file on a wiki page.",
                 "type": "string"
               },
               "width": {
@@ -20507,6 +20551,14 @@
                 "description": "The file name.",
                 "type": "string"
               },
+              "page": {
+                "description": "The wiki page's ID, for a file attached to a page.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The project's key, for a file attached to a wiki page.",
+                "type": "string"
+              },
               "sha256": {
                 "description": "The content's SHA-256.",
                 "type": "string"
@@ -20518,7 +20570,7 @@
                 "type": "integer"
               },
               "task": {
-                "description": "The task's key.",
+                "description": "The task's key; empty for a file on a wiki page.",
                 "type": "string"
               },
               "width": {
@@ -22170,6 +22222,14 @@
                 "description": "The file name.",
                 "type": "string"
               },
+              "page": {
+                "description": "The wiki page's ID, for a file attached to a page.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The project's key, for a file attached to a wiki page.",
+                "type": "string"
+              },
               "sha256": {
                 "description": "The content's SHA-256.",
                 "type": "string"
@@ -22181,7 +22241,7 @@
                 "type": "integer"
               },
               "task": {
-                "description": "The task's key.",
+                "description": "The task's key; empty for a file on a wiki page.",
                 "type": "string"
               },
               "width": {
@@ -23576,6 +23636,14 @@
                 "description": "The file name.",
                 "type": "string"
               },
+              "page": {
+                "description": "The wiki page's ID, for a file attached to a page.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The project's key, for a file attached to a wiki page.",
+                "type": "string"
+              },
               "sha256": {
                 "description": "The content's SHA-256.",
                 "type": "string"
@@ -23587,7 +23655,7 @@
                 "type": "integer"
               },
               "task": {
-                "description": "The task's key.",
+                "description": "The task's key; empty for a file on a wiki page.",
                 "type": "string"
               },
               "width": {
@@ -24975,6 +25043,14 @@
                 "description": "The file name.",
                 "type": "string"
               },
+              "page": {
+                "description": "The wiki page's ID, for a file attached to a page.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The project's key, for a file attached to a wiki page.",
+                "type": "string"
+              },
               "sha256": {
                 "description": "The content's SHA-256.",
                 "type": "string"
@@ -24986,7 +25062,7 @@
                 "type": "integer"
               },
               "task": {
-                "description": "The task's key.",
+                "description": "The task's key; empty for a file on a wiki page.",
                 "type": "string"
               },
               "width": {
@@ -26417,6 +26493,14 @@
                 "description": "The file name.",
                 "type": "string"
               },
+              "page": {
+                "description": "The wiki page's ID, for a file attached to a page.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The project's key, for a file attached to a wiki page.",
+                "type": "string"
+              },
               "sha256": {
                 "description": "The content's SHA-256.",
                 "type": "string"
@@ -26428,7 +26512,7 @@
                 "type": "integer"
               },
               "task": {
-                "description": "The task's key.",
+                "description": "The task's key; empty for a file on a wiki page.",
                 "type": "string"
               },
               "width": {
@@ -27859,6 +27943,14 @@
                 "description": "The file name.",
                 "type": "string"
               },
+              "page": {
+                "description": "The wiki page's ID, for a file attached to a page.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The project's key, for a file attached to a wiki page.",
+                "type": "string"
+              },
               "sha256": {
                 "description": "The content's SHA-256.",
                 "type": "string"
@@ -27870,7 +27962,7 @@
                 "type": "integer"
               },
               "task": {
-                "description": "The task's key.",
+                "description": "The task's key; empty for a file on a wiki page.",
                 "type": "string"
               },
               "width": {
@@ -29776,6 +29868,14 @@
                 "description": "The file name.",
                 "type": "string"
               },
+              "page": {
+                "description": "The wiki page's ID, for a file attached to a page.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The project's key, for a file attached to a wiki page.",
+                "type": "string"
+              },
               "sha256": {
                 "description": "The content's SHA-256.",
                 "type": "string"
@@ -29787,7 +29887,7 @@
                 "type": "integer"
               },
               "task": {
-                "description": "The task's key.",
+                "description": "The task's key; empty for a file on a wiki page.",
                 "type": "string"
               },
               "width": {
@@ -30099,6 +30199,14 @@
                 "description": "The file name.",
                 "type": "string"
               },
+              "page": {
+                "description": "The wiki page's ID, for a file attached to a page.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The project's key, for a file attached to a wiki page.",
+                "type": "string"
+              },
               "sha256": {
                 "description": "The content's SHA-256.",
                 "type": "string"
@@ -30110,7 +30218,7 @@
                 "type": "integer"
               },
               "task": {
-                "description": "The task's key.",
+                "description": "The task's key; empty for a file on a wiki page.",
                 "type": "string"
               },
               "width": {
@@ -30416,6 +30524,14 @@
                 "description": "The file name.",
                 "type": "string"
               },
+              "page": {
+                "description": "The wiki page's ID, for a file attached to a page.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The project's key, for a file attached to a wiki page.",
+                "type": "string"
+              },
               "sha256": {
                 "description": "The content's SHA-256.",
                 "type": "string"
@@ -30427,7 +30543,7 @@
                 "type": "integer"
               },
               "task": {
-                "description": "The task's key.",
+                "description": "The task's key; empty for a file on a wiki page.",
                 "type": "string"
               },
               "width": {
@@ -30720,6 +30836,14 @@
                 "description": "The file name.",
                 "type": "string"
               },
+              "page": {
+                "description": "The wiki page's ID, for a file attached to a page.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The project's key, for a file attached to a wiki page.",
+                "type": "string"
+              },
               "sha256": {
                 "description": "The content's SHA-256.",
                 "type": "string"
@@ -30731,7 +30855,7 @@
                 "type": "integer"
               },
               "task": {
-                "description": "The task's key.",
+                "description": "The task's key; empty for a file on a wiki page.",
                 "type": "string"
               },
               "width": {
@@ -37831,6 +37955,10 @@
                 "minimum": 0,
                 "type": "integer"
               },
+              "home": {
+                "description": "Whether it is the wiki's home page, the page the wiki opens on.",
+                "type": "boolean"
+              },
               "id": {
                 "description": "The page's ID.",
                 "type": "string"
@@ -38033,6 +38161,10 @@
                 "minimum": 0,
                 "type": "integer"
               },
+              "home": {
+                "description": "Whether it is the wiki's home page, the page the wiki opens on.",
+                "type": "boolean"
+              },
               "id": {
                 "description": "The page's ID.",
                 "type": "string"
@@ -38170,6 +38302,11 @@
                 "const": "checklist",
                 "description": "Its checklist items, numbered, for `checklist.update`.",
                 "type": "string"
+              },
+              {
+                "const": "files",
+                "description": "The files attached to it.",
+                "type": "string"
               }
             ]
           }
@@ -38179,7 +38316,7 @@
         "description": "A page to read.",
         "properties": {
           "include": {
-            "description": "What to add: `backlinks`, `references`.",
+            "description": "What to add: `backlinks`, `references`, `checklist`, `files`.",
             "items": {
               "$ref": "#/$defs/WikiPart"
             },
@@ -38215,6 +38352,120 @@
       "mcp_tool": "get_wiki_page",
       "output": {
         "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person or agent."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person or an agent.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              }
+            ]
+          },
+          "Attachment": {
+            "additionalProperties": false,
+            "description": "One attached file.",
+            "properties": {
+              "added_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who attached it."
+              },
+              "comment": {
+                "description": "The comment's ID, for a file attached to a comment.",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was attached (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "height": {
+                "description": "An image's height in pixels.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "The attachment's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/FileKind",
+                "description": "What it holds."
+              },
+              "mime": {
+                "description": "The media type, read from the content.",
+                "type": "string"
+              },
+              "name": {
+                "description": "The file name.",
+                "type": "string"
+              },
+              "page": {
+                "description": "The wiki page's ID, for a file attached to a page.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The project's key, for a file attached to a wiki page.",
+                "type": "string"
+              },
+              "sha256": {
+                "description": "The content's SHA-256.",
+                "type": "string"
+              },
+              "size": {
+                "description": "The size in bytes.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "task": {
+                "description": "The task's key; empty for a file on a wiki page.",
+                "type": "string"
+              },
+              "width": {
+                "description": "An image's width in pixels.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "mime",
+              "kind",
+              "size",
+              "sha256",
+              "task",
+              "added_by",
+              "created_at"
+            ],
+            "type": "object"
+          },
           "Backlink": {
             "additionalProperties": false,
             "description": "A text that links somewhere: a wiki page, a task's description or a\ncomment on a task.",
@@ -38282,6 +38533,31 @@
               "depth"
             ],
             "type": "object"
+          },
+          "FileKind": {
+            "description": "What a file holds, which decides how it is shown.",
+            "oneOf": [
+              {
+                "const": "image",
+                "description": "A picture shown inline.",
+                "type": "string"
+              },
+              {
+                "const": "text",
+                "description": "Text in UTF-8.",
+                "type": "string"
+              },
+              {
+                "const": "executable",
+                "description": "A program or script: only ever saved, never opened or shown.",
+                "type": "string"
+              },
+              {
+                "const": "other",
+                "description": "Anything else.",
+                "type": "string"
+              }
+            ]
           },
           "Reference": {
             "additionalProperties": false,
@@ -38447,12 +38723,23 @@
             "description": "Whether `body` is the current text (false when an older revision was\nasked for).",
             "type": "boolean"
           },
+          "files": {
+            "description": "The files attached to it, oldest first, when asked for with\n`include`.",
+            "items": {
+              "$ref": "#/$defs/Attachment"
+            },
+            "type": "array"
+          },
           "headings": {
             "description": "The headings of `body`, for links to a heading.",
             "items": {
               "$ref": "#/$defs/WikiHeading"
             },
             "type": "array"
+          },
+          "home": {
+            "description": "Whether it is the wiki's home page, the page the wiki opens on.",
+            "type": "boolean"
           },
           "id": {
             "description": "The page's ID.",
@@ -38615,6 +38902,120 @@
       "mcp_tool": "create_wiki_page",
       "output": {
         "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person or agent."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person or an agent.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              }
+            ]
+          },
+          "Attachment": {
+            "additionalProperties": false,
+            "description": "One attached file.",
+            "properties": {
+              "added_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who attached it."
+              },
+              "comment": {
+                "description": "The comment's ID, for a file attached to a comment.",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was attached (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "height": {
+                "description": "An image's height in pixels.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "The attachment's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/FileKind",
+                "description": "What it holds."
+              },
+              "mime": {
+                "description": "The media type, read from the content.",
+                "type": "string"
+              },
+              "name": {
+                "description": "The file name.",
+                "type": "string"
+              },
+              "page": {
+                "description": "The wiki page's ID, for a file attached to a page.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The project's key, for a file attached to a wiki page.",
+                "type": "string"
+              },
+              "sha256": {
+                "description": "The content's SHA-256.",
+                "type": "string"
+              },
+              "size": {
+                "description": "The size in bytes.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "task": {
+                "description": "The task's key; empty for a file on a wiki page.",
+                "type": "string"
+              },
+              "width": {
+                "description": "An image's width in pixels.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "mime",
+              "kind",
+              "size",
+              "sha256",
+              "task",
+              "added_by",
+              "created_at"
+            ],
+            "type": "object"
+          },
           "Backlink": {
             "additionalProperties": false,
             "description": "A text that links somewhere: a wiki page, a task's description or a\ncomment on a task.",
@@ -38704,6 +39105,31 @@
               "outcome"
             ],
             "type": "object"
+          },
+          "FileKind": {
+            "description": "What a file holds, which decides how it is shown.",
+            "oneOf": [
+              {
+                "const": "image",
+                "description": "A picture shown inline.",
+                "type": "string"
+              },
+              {
+                "const": "text",
+                "description": "Text in UTF-8.",
+                "type": "string"
+              },
+              {
+                "const": "executable",
+                "description": "A program or script: only ever saved, never opened or shown.",
+                "type": "string"
+              },
+              {
+                "const": "other",
+                "description": "Anything else.",
+                "type": "string"
+              }
+            ]
           },
           "Reference": {
             "additionalProperties": false,
@@ -38869,12 +39295,23 @@
                 "description": "Whether `body` is the current text (false when an older revision was\nasked for).",
                 "type": "boolean"
               },
+              "files": {
+                "description": "The files attached to it, oldest first, when asked for with\n`include`.",
+                "items": {
+                  "$ref": "#/$defs/Attachment"
+                },
+                "type": "array"
+              },
               "headings": {
                 "description": "The headings of `body`, for links to a heading.",
                 "items": {
                   "$ref": "#/$defs/WikiHeading"
                 },
                 "type": "array"
+              },
+              "home": {
+                "description": "Whether it is the wiki's home page, the page the wiki opens on.",
+                "type": "boolean"
               },
               "id": {
                 "description": "The page's ID.",
@@ -39145,6 +39582,13 @@
             },
             "type": "array"
           },
+          "home": {
+            "description": "Make it the wiki's home page (`true`; the page that was the home\npage before stops being it), or stop it being the home page\n(`false`). Without a home page the wiki opens on its first page.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
           "message": {
             "description": "A note saved with the new revision.",
             "type": [
@@ -39200,6 +39644,120 @@
       "mcp_tool": "update_wiki_page",
       "output": {
         "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person or agent."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person or an agent.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              }
+            ]
+          },
+          "Attachment": {
+            "additionalProperties": false,
+            "description": "One attached file.",
+            "properties": {
+              "added_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who attached it."
+              },
+              "comment": {
+                "description": "The comment's ID, for a file attached to a comment.",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was attached (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "height": {
+                "description": "An image's height in pixels.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "The attachment's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/FileKind",
+                "description": "What it holds."
+              },
+              "mime": {
+                "description": "The media type, read from the content.",
+                "type": "string"
+              },
+              "name": {
+                "description": "The file name.",
+                "type": "string"
+              },
+              "page": {
+                "description": "The wiki page's ID, for a file attached to a page.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The project's key, for a file attached to a wiki page.",
+                "type": "string"
+              },
+              "sha256": {
+                "description": "The content's SHA-256.",
+                "type": "string"
+              },
+              "size": {
+                "description": "The size in bytes.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "task": {
+                "description": "The task's key; empty for a file on a wiki page.",
+                "type": "string"
+              },
+              "width": {
+                "description": "An image's width in pixels.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "mime",
+              "kind",
+              "size",
+              "sha256",
+              "task",
+              "added_by",
+              "created_at"
+            ],
+            "type": "object"
+          },
           "Backlink": {
             "additionalProperties": false,
             "description": "A text that links somewhere: a wiki page, a task's description or a\ncomment on a task.",
@@ -39289,6 +39847,31 @@
               "outcome"
             ],
             "type": "object"
+          },
+          "FileKind": {
+            "description": "What a file holds, which decides how it is shown.",
+            "oneOf": [
+              {
+                "const": "image",
+                "description": "A picture shown inline.",
+                "type": "string"
+              },
+              {
+                "const": "text",
+                "description": "Text in UTF-8.",
+                "type": "string"
+              },
+              {
+                "const": "executable",
+                "description": "A program or script: only ever saved, never opened or shown.",
+                "type": "string"
+              },
+              {
+                "const": "other",
+                "description": "Anything else.",
+                "type": "string"
+              }
+            ]
           },
           "Reference": {
             "additionalProperties": false,
@@ -39454,12 +40037,23 @@
                 "description": "Whether `body` is the current text (false when an older revision was\nasked for).",
                 "type": "boolean"
               },
+              "files": {
+                "description": "The files attached to it, oldest first, when asked for with\n`include`.",
+                "items": {
+                  "$ref": "#/$defs/Attachment"
+                },
+                "type": "array"
+              },
               "headings": {
                 "description": "The headings of `body`, for links to a heading.",
                 "items": {
                   "$ref": "#/$defs/WikiHeading"
                 },
                 "type": "array"
+              },
+              "home": {
+                "description": "Whether it is the wiki's home page, the page the wiki opens on.",
+                "type": "boolean"
               },
               "id": {
                 "description": "The page's ID.",
@@ -39567,7 +40161,7 @@
       },
       "output_name": "WikiChange",
       "safety": "write",
-      "summary": "Change a wiki page: its text (whole, with a base revision, or by targeted edits), title, parent or place; or resolve a conflict copy."
+      "summary": "Change a wiki page: its text (whole, with a base revision, or by targeted edits), title, parent or place, whether it is the home page; or resolve a conflict copy."
     },
     {
       "cli": "wiki move <page>",
@@ -39654,6 +40248,120 @@
       "mcp_tool": "update_wiki_page",
       "output": {
         "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person or agent."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person or an agent.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              }
+            ]
+          },
+          "Attachment": {
+            "additionalProperties": false,
+            "description": "One attached file.",
+            "properties": {
+              "added_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who attached it."
+              },
+              "comment": {
+                "description": "The comment's ID, for a file attached to a comment.",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was attached (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "height": {
+                "description": "An image's height in pixels.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "The attachment's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/FileKind",
+                "description": "What it holds."
+              },
+              "mime": {
+                "description": "The media type, read from the content.",
+                "type": "string"
+              },
+              "name": {
+                "description": "The file name.",
+                "type": "string"
+              },
+              "page": {
+                "description": "The wiki page's ID, for a file attached to a page.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The project's key, for a file attached to a wiki page.",
+                "type": "string"
+              },
+              "sha256": {
+                "description": "The content's SHA-256.",
+                "type": "string"
+              },
+              "size": {
+                "description": "The size in bytes.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "task": {
+                "description": "The task's key; empty for a file on a wiki page.",
+                "type": "string"
+              },
+              "width": {
+                "description": "An image's width in pixels.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "mime",
+              "kind",
+              "size",
+              "sha256",
+              "task",
+              "added_by",
+              "created_at"
+            ],
+            "type": "object"
+          },
           "Backlink": {
             "additionalProperties": false,
             "description": "A text that links somewhere: a wiki page, a task's description or a\ncomment on a task.",
@@ -39743,6 +40451,31 @@
               "outcome"
             ],
             "type": "object"
+          },
+          "FileKind": {
+            "description": "What a file holds, which decides how it is shown.",
+            "oneOf": [
+              {
+                "const": "image",
+                "description": "A picture shown inline.",
+                "type": "string"
+              },
+              {
+                "const": "text",
+                "description": "Text in UTF-8.",
+                "type": "string"
+              },
+              {
+                "const": "executable",
+                "description": "A program or script: only ever saved, never opened or shown.",
+                "type": "string"
+              },
+              {
+                "const": "other",
+                "description": "Anything else.",
+                "type": "string"
+              }
+            ]
           },
           "Reference": {
             "additionalProperties": false,
@@ -39908,12 +40641,23 @@
                 "description": "Whether `body` is the current text (false when an older revision was\nasked for).",
                 "type": "boolean"
               },
+              "files": {
+                "description": "The files attached to it, oldest first, when asked for with\n`include`.",
+                "items": {
+                  "$ref": "#/$defs/Attachment"
+                },
+                "type": "array"
+              },
               "headings": {
                 "description": "The headings of `body`, for links to a heading.",
                 "items": {
                   "$ref": "#/$defs/WikiHeading"
                 },
                 "type": "array"
+              },
+              "home": {
+                "description": "Whether it is the wiki's home page, the page the wiki opens on.",
+                "type": "boolean"
               },
               "id": {
                 "description": "The page's ID.",
@@ -40431,11 +41175,26 @@
                 "type": "string"
               }
             ]
+          },
+          "WikiTextFormat": {
+            "description": "What a wiki export writes for each page.",
+            "oneOf": [
+              {
+                "const": "markdown",
+                "description": "Markdown files (`.md`), as the pages are written.",
+                "type": "string"
+              },
+              {
+                "const": "html",
+                "description": "Web pages (`.html`) that open in any browser without the app,\nrendered as the wiki shows them, with an `index.html` listing the\npages when there are several.",
+                "type": "string"
+              }
+            ]
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
-        "description": "A page, or a whole wiki, to export as Markdown files.",
+        "description": "A page, or a whole wiki, to export as Markdown files or web pages.",
         "properties": {
           "format": {
             "anyOf": [
@@ -40472,6 +41231,17 @@
           "subpages": {
             "description": "Include the pages inside it, each in a folder named after its parent\n(always, for a whole wiki).",
             "type": "boolean"
+          },
+          "text_format": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/WikiTextFormat"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Markdown files (the default) or web pages."
           }
         },
         "title": "WikiExportInput",
@@ -40513,7 +41283,7 @@
             "description": "How it is stored."
           },
           "pages": {
-            "description": "The Markdown files written: one per page.",
+            "description": "The pages written: one Markdown file or web page each.",
             "format": "uint64",
             "minimum": 0,
             "type": "integer"
@@ -40541,7 +41311,150 @@
       },
       "output_name": "WikiExportResult",
       "safety": "write",
-      "summary": "Export a wiki page, optionally with the pages inside it, or a project's whole wiki, as Markdown files with their attachments, in a .zip file or a folder; links between the exported pages and to the attachments become relative links."
+      "summary": "Export a wiki page, optionally with the pages inside it, or a project's whole wiki, as Markdown files or web pages with their attachments, in a .zip file or a folder; links between the exported pages and to the attachments become relative links."
+    },
+    {
+      "cli": "wiki import <path>",
+      "exposure": "data",
+      "id": "wiki.import",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A folder of Markdown files to import as wiki pages.",
+        "properties": {
+          "dry_run": {
+            "description": "Only check the folder and say what would be imported.",
+            "type": "boolean"
+          },
+          "parent": {
+            "description": "The page to put the imported pages in (title, slug or ID); left out:\nat the top of the wiki.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "path": {
+            "description": "The folder (or a `.zip` file of one). Agents give a plain name of\none in the workspace's `exports` folder.",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project whose wiki the pages go to (key or ID).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project",
+          "path"
+        ],
+        "title": "WikiImportInput",
+        "type": "object"
+      },
+      "input_name": "WikiImportInput",
+      "kind": "command",
+      "mcp_tool": "import_wiki_pages",
+      "output": {
+        "$defs": {
+          "WikiImportRename": {
+            "additionalProperties": false,
+            "description": "A page that got another title than its file's name.",
+            "properties": {
+              "path": {
+                "description": "The file or folder in the import.",
+                "type": "string"
+              },
+              "title": {
+                "description": "The page's title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "title"
+            ],
+            "type": "object"
+          },
+          "WikiPageRef": {
+            "additionalProperties": false,
+            "description": "Another page, as a page names its parent and children.",
+            "properties": {
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "slug": {
+                "description": "Its slug.",
+                "type": "string"
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "slug",
+              "id"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "What a folder import made, or would make.",
+        "properties": {
+          "attachments": {
+            "description": "The files attached to the pages: the images and other files the\ntexts link to.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "dry_run": {
+            "description": "Whether this was only a check.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo (moving every imported page\nto the trash); left out on a dry run.",
+            "type": "string"
+          },
+          "pages": {
+            "description": "The pages made: one per Markdown file, and one per folder without\nits own file.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "renamed": {
+            "description": "Pages whose title was taken, with the title they got instead.",
+            "items": {
+              "$ref": "#/$defs/WikiImportRename"
+            },
+            "type": "array"
+          },
+          "skipped": {
+            "description": "Files in the folder that were left out: neither Markdown nor linked\nfrom a page (paths in the folder).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "top": {
+            "description": "The pages made at the top of the import, in order.",
+            "items": {
+              "$ref": "#/$defs/WikiPageRef"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "dry_run",
+          "pages",
+          "attachments"
+        ],
+        "title": "WikiImportResult",
+        "type": "object"
+      },
+      "output_name": "WikiImportResult",
+      "safety": "write",
+      "summary": "Import a folder of Markdown files as wiki pages: sub-folders become pages inside pages, relative links between the files and `[[…]]` links become wiki links, and linked images and files are attached to their pages; one change that Undo takes back."
     },
     {
       "cli": "wiki backlinks <page>",
@@ -41192,6 +42105,14 @@
             "description": "The file name.",
             "type": "string"
           },
+          "page": {
+            "description": "The wiki page's ID, for a file attached to a page.",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project's key, for a file attached to a wiki page.",
+            "type": "string"
+          },
           "sha256": {
             "description": "The content's SHA-256.",
             "type": "string"
@@ -41203,7 +42124,7 @@
             "type": "integer"
           },
           "task": {
-            "description": "The task's key.",
+            "description": "The task's key; empty for a file on a wiki page.",
             "type": "string"
           },
           "width": {
@@ -41328,6 +42249,14 @@
                 "description": "The file name.",
                 "type": "string"
               },
+              "page": {
+                "description": "The wiki page's ID, for a file attached to a page.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The project's key, for a file attached to a wiki page.",
+                "type": "string"
+              },
               "sha256": {
                 "description": "The content's SHA-256.",
                 "type": "string"
@@ -41339,7 +42268,7 @@
                 "type": "integer"
               },
               "task": {
-                "description": "The task's key.",
+                "description": "The task's key; empty for a file on a wiki page.",
                 "type": "string"
               },
               "width": {
@@ -41528,8 +42457,22 @@
               "null"
             ]
           },
+          "page": {
+            "description": "The wiki page to attach it to: its title (any case), slug or ID.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "path": {
             "description": "The path of a local file to read.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "project": {
+            "description": "The page's project (key or ID); needed unless `page` is an ID.",
             "type": [
               "string",
               "null"
@@ -41623,6 +42566,14 @@
                 "description": "The file name.",
                 "type": "string"
               },
+              "page": {
+                "description": "The wiki page's ID, for a file attached to a page.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The project's key, for a file attached to a wiki page.",
+                "type": "string"
+              },
               "sha256": {
                 "description": "The content's SHA-256.",
                 "type": "string"
@@ -41634,7 +42585,7 @@
                 "type": "integer"
               },
               "task": {
-                "description": "The task's key.",
+                "description": "The task's key; empty for a file on a wiki page.",
                 "type": "string"
               },
               "width": {
@@ -41710,7 +42661,7 @@
       },
       "output_name": "FileChange",
       "safety": "write",
-      "summary": "Attach a local file, or Base64 data with a name, to a task or a comment."
+      "summary": "Attach a local file, or Base64 data with a name, to a task, a comment or a wiki page."
     },
     {
       "cli": "file delete <attachment>",
@@ -41809,6 +42760,14 @@
                 "description": "The file name.",
                 "type": "string"
               },
+              "page": {
+                "description": "The wiki page's ID, for a file attached to a page.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The project's key, for a file attached to a wiki page.",
+                "type": "string"
+              },
               "sha256": {
                 "description": "The content's SHA-256.",
                 "type": "string"
@@ -41820,7 +42779,7 @@
                 "type": "integer"
               },
               "task": {
-                "description": "The task's key.",
+                "description": "The task's key; empty for a file on a wiki page.",
                 "type": "string"
               },
               "width": {

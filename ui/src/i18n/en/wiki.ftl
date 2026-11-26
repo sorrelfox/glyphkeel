@@ -25,15 +25,25 @@ wiki-brief-set = Use as the agent brief
 wiki-brief-unset = Stop using as the agent brief
 wiki-brief-set-done = Agents now get this page as the project's brief.
 wiki-brief-unset-done = This page no longer briefs agents.
-wiki-export = Export as Markdown…
-wiki-export-all = Export with the pages inside…
-wiki-export-wiki = Export the whole wiki…
+wiki-home = Home page
+wiki-home-set = Make this the home page
+wiki-home-unset = Stop using as the home page
+wiki-home-set-done = The wiki now opens on this page.
+wiki-home-unset-done = The wiki opens on its first page again.
+wiki-export = Export…
+wiki-import = Import a folder of Markdown files…
+wiki-import-into = Import a folder into this page…
 # The name the save dialog suggests for a whole wiki's export, without ".zip".
 wiki-export-file = { $project }-wiki
 wiki-exported =
     { $count ->
         [one] Page exported as Markdown
        *[other] { $count } pages exported as Markdown
+    }
+wiki-exported-html =
+    { $count ->
+        [one] Page exported as a web page
+       *[other] { $count } pages exported as web pages
     }
 wiki-deleted = Page moved to the trash
 wiki-move-up = Move up
@@ -46,6 +56,7 @@ wiki-collapse = Hide the pages inside { $page }
 wiki-agent-brief = Agent brief
 wiki-empty-text = This project has no wiki pages yet.
 wiki-empty-off = This project has no wiki pages, and its wiki is switched off.
+wiki-files-drop-here = Drop to attach to { $page }
 
 ## A page
 
@@ -109,3 +120,55 @@ backlinks-kind-comment = Comment
 backlinks-open-page = Open the wiki page { $title }
 backlinks-open-task = Open { $key }: { $title }
 backlinks-open-comment = Open { $key }, where a comment links here: { $title }
+
+## Export and folder import
+
+wiki-export-title = Export { $page }
+wiki-export-scope = What to export
+wiki-export-scope-page = This page
+wiki-export-scope-subpages = With the pages inside
+wiki-export-scope-wiki = The whole wiki
+wiki-export-format = Export as
+wiki-export-format-markdown = Markdown files
+wiki-export-format-html = Web pages
+wiki-export-markdown-about = Markdown files that read well in other editors, with the attached files. Links between the exported pages become relative links.
+wiki-export-html-about = Web pages that open in any browser without the app, with the attached files and a list of the pages. Links between the exported pages keep working.
+wiki-import-title = Import a folder of Markdown files
+wiki-import-into-title = Import a folder into { $page }
+wiki-import-about = Each Markdown file becomes a page, and each sub-folder a page that holds the pages of its files. Links between the files become wiki links, and the pictures and files they link to are attached to their pages. Existing pages stay as they are.
+wiki-import-choose = Choose a folder…
+# In a browser without the app: a folder in the workspace's exports folder.
+wiki-import-name = Folder in the exports folder
+wiki-import-checking = Checking the folder…
+wiki-importing = Importing…
+wiki-import-summary = What the import makes
+wiki-import-makes =
+    { $pages ->
+        [one] One page
+       *[other] { $pages } pages
+    } { $files ->
+        [0] and no attached files.
+        [one] and one attached file.
+       *[other] and { $files } attached files.
+    }
+wiki-import-start =
+    { $count ->
+        [one] Import one page
+       *[other] Import { $count } pages
+    }
+wiki-import-renamed =
+    { $count ->
+        [one] One title is taken already, so the page gets a number:
+       *[other] { $count } titles are taken already, so their pages get a number:
+    }
+wiki-import-renamed-one = { $path } → { $title }
+wiki-import-skipped =
+    { $count ->
+        [one] One file is left out: it is neither Markdown nor linked from a page.
+       *[other] { $count } files are left out: they are neither Markdown nor linked from a page.
+    }
+wiki-imported =
+    { $count ->
+        [one] One page imported
+       *[other] { $count } pages imported
+    }

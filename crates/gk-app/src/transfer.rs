@@ -74,7 +74,11 @@ const BACKUP_FOLDER_OP: &str = "backup.folder.update";
 /// by the page (setting it back to the default, with no folder, is fine).
 pub(crate) fn page_may_run(op: &str, input: &Value) -> Result<(), OpError> {
     let names = |field: &str| input.get(field).is_some_and(|value| !value.is_null());
-    if matches!(op, "transfer.export" | "transfer.import" | "wiki.export") && names("path") {
+    if matches!(
+        op,
+        "transfer.export" | "transfer.import" | "wiki.export" | "wiki.import"
+    ) && names("path")
+    {
         return Err(OpError::forbidden(format!(
             "{op} takes its path from the file chooser, not from the page."
         )));
@@ -118,9 +122,10 @@ pub(crate) async fn export_archive(
 }
 
 /// Exports wiki page `page` (with the pages inside it when `subpages`), or
-/// without a page the whole wiki of `project`, as Markdown files in a
-/// `.zip` file where the person chooses, starting with `name`. Returns the
-/// export's result, or `null` when the person cancelled.
+/// without a page the whole wiki of `project`, as Markdown files (or web
+/// pages when `html`) in a `.zip` file where the person chooses, starting
+/// with `name`. Returns the export's result, or `null` when the person
+/// cancelled.
 #[tauri::command]
 pub(crate) async fn export_wiki_page(
     window: WebviewWindow,
@@ -129,6 +134,7 @@ pub(crate) async fn export_wiki_page(
     project: Option<String>,
     subpages: bool,
     name: String,
+    html: Option<bool>,
 ) -> Result<Option<Value>, OpError> {
     let workspace = Arc::clone(&workspace);
     let mode = dialog::Mode::Export {
@@ -145,6 +151,7 @@ pub(crate) async fn export_wiki_page(
             "subpages": subpages,
             "path": path.to_string_lossy(),
             "format": "zip",
+            "text_format": if html == Some(true) { "html" } else { "markdown" },
         });
         workspace.call("wiki.export", input, None).map(Some)
     })
@@ -175,6 +182,56 @@ pub(crate) async fn choose_import(
         token: choices.keep(path),
         name,
     }))
+}
+
+/// Lets the person choose a folder of Markdown files to import into a
+/// wiki. Returns its token for [`import_wiki_folder`] and its name, or
+/// `null` when the person cancelled.
+#[tauri::command]
+pub(crate) async fn choose_wiki_folder(
+    window: WebviewWindow,
+    choices: State<'_, Arc<ImportChoices>>,
+) -> Result<Option<ChosenArchive>, OpError> {
+    let Some(path) = dialog::choose(&window, dialog::Mode::WikiFolder)
+        .await?
+        .into_iter()
+        .next()
+    else {
+        return Ok(None);
+    };
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    Ok(Some(ChosenArchive {
+        token: choices.keep(path),
+        name,
+    }))
+}
+
+/// Checks (`dry_run`) or imports the folder chosen under `token` as pages
+/// of `project`'s wiki, inside page `parent` when given.
+#[tauri::command]
+pub(crate) async fn import_wiki_folder(
+    workspace: State<'_, Arc<Workspace>>,
+    choices: State<'_, Arc<ImportChoices>>,
+    token: String,
+    project: String,
+    parent: Option<String>,
+    dry_run: bool,
+) -> Result<Value, OpError> {
+    let path = choices.path(&token)?;
+    let workspace = Arc::clone(&workspace);
+    blocking(move || {
+        let input = json!({
+            "project": project,
+            "path": path.to_string_lossy(),
+            "parent": parent,
+            "dry_run": dry_run,
+        });
+        workspace.call("wiki.import", input, None)
+    })
+    .await
 }
 
 /// Lets the person choose the folder backups go to, in the native folder
@@ -246,6 +303,7 @@ mod tests {
             .is_err()
         );
         assert!(page_may_run("wiki.export", &json!({ "page": "Home" })).is_ok());
+        assert!(page_may_run("wiki.import", &json!({ "project": "TM", "path": "/home" })).is_err());
         assert!(page_may_run("transfer.export", &json!({ "projects": [] })).is_ok());
         assert!(page_may_run("transfer.export", &json!({ "path": null })).is_ok());
         assert!(page_may_run("task.create", &json!({ "path": "x" })).is_ok());

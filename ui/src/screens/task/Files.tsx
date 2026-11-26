@@ -21,8 +21,10 @@ import {
   thumbnailUrl,
   onDesktopDrop,
   openAttachment,
+  ownerKey,
   saveAttachment,
   type Attached,
+  type FileOwner,
 } from "../../ipc/files";
 import { attachmentMarkdown, editorDropAt } from "./MarkdownField";
 import styles from "./TaskPanel.module.css";
@@ -57,11 +59,11 @@ function useReportAttached(): (attached: Attached) => void {
 }
 
 /**
- * Attaching files to a task: in the app, the system's file chooser; in a
- * browser, the page's own file field. Returns the button's action and the
- * hidden field to render.
+ * Attaching files to a task or a wiki page: in the app, the system's file
+ * chooser; in a browser, the page's own file field. Returns the button's
+ * action and the hidden field to render.
  */
-export function useAttach(task: string): { attach: () => void; field: ReactNode; busy: boolean } {
+export function useAttach(owner: FileOwner): { attach: () => void; field: ReactNode; busy: boolean } {
   const t = useT();
   const call = useCall();
   const toasts = useToasts();
@@ -80,7 +82,7 @@ export function useAttach(task: string): { attach: () => void; field: ReactNode;
     busy,
     attach: () => {
       if (inApp()) {
-        run(chooseAndAttach(task));
+        run(chooseAndAttach(owner));
       } else {
         input.current?.click();
       }
@@ -91,13 +93,13 @@ export function useAttach(task: string): { attach: () => void; field: ReactNode;
         type="file"
         multiple
         hidden
-        data-attach-field={task}
+        data-attach-field={ownerKey(owner)}
         aria-label={t("files-attach")}
         onChange={(event) => {
           const files = [...(event.target.files ?? [])];
           event.target.value = "";
           if (files.length > 0) {
-            run(attachBrowserFiles(call, task, files));
+            run(attachBrowserFiles(call, owner, files));
           }
         }}
       />
@@ -106,17 +108,19 @@ export function useAttach(task: string): { attach: () => void; field: ReactNode;
 }
 
 /**
- * Files dragged onto the panel: from the desktop through the app's drop
- * handler (the app keeps the paths), or in a browser as the page's own
- * files. Returns whether files are over the panel, and the handlers for a
- * browser.
+ * Files dragged onto a task's panel or a wiki page: from the desktop through
+ * the app's drop handler (the app keeps the paths), or in a browser as the
+ * page's own files. The element that takes them carries `data-drop-task`
+ * with {@link ownerKey}. Returns whether files are over it, and the handlers
+ * for a browser.
  */
-export function useFileDrop(task: string, enabled: boolean) {
+export function useFileDrop(owner: FileOwner, enabled: boolean) {
   const t = useT();
   const call = useCall();
   const toasts = useToasts();
   const report = useReportAttached();
   const [over, setOver] = useState(false);
+  const key = ownerKey(owner);
 
   useEffect(() => {
     if (!enabled || !inApp()) {
@@ -127,16 +131,17 @@ export function useFileDrop(task: string, enabled: boolean) {
         setOver(false);
         return;
       }
-      const here = dropTargetAt(event.x, event.y) === task;
+      const target: FileOwner = key.startsWith("page:") ? { page: key.slice("page:".length) } : key;
+      const here = dropTargetAt(event.x, event.y) === key;
       if (event.kind !== "drop") {
         setOver(here);
         return;
       }
       setOver(false);
       if (here) {
-        // Dropped on an editor of this task, the files also go in its text as links, as when pasted.
-        const insert = editorDropAt(event.x, event.y, task);
-        attachDrop(event.id, task).then(
+        // Dropped on an editor of this task or page, the files also go in its text as links, as when pasted.
+        const insert = editorDropAt(event.x, event.y, target);
+        attachDrop(event.id, target).then(
           (attached) => {
             report(attached);
             if (insert && attached.files.length > 0) {
@@ -149,7 +154,7 @@ export function useFileDrop(task: string, enabled: boolean) {
         );
       }
     });
-  }, [enabled, task, t, toasts, report]);
+  }, [enabled, key, t, toasts, report]);
 
   const hasFiles = (event: DragEvent) => event.dataTransfer.types.includes("Files");
   const handlers =
@@ -173,7 +178,7 @@ export function useFileDrop(task: string, enabled: boolean) {
             event.preventDefault();
             setOver(false);
             const files = [...event.dataTransfer.files];
-            attachBrowserFiles(call, task, files).then(report, (error: unknown) => {
+            attachBrowserFiles(call, owner, files).then(report, (error: unknown) => {
               toasts.show(errorToast(t, error));
             });
           },
@@ -327,8 +332,8 @@ export function FileRow({ file, readOnly }: { file: Attachment; readOnly: boolea
   );
 }
 
-/** The task's files, with Attach in the section's header. */
-export function FilesSection({ task, files, readOnly }: { task: string; files: readonly Attachment[]; readOnly: boolean }) {
+/** The files of a task (its key) or a wiki page (`{ page }`), with Attach in the section's header. */
+export function FilesSection({ task, files, readOnly }: { task: FileOwner; files: readonly Attachment[]; readOnly: boolean }) {
   const t = useT();
   const { attach, field, busy } = useAttach(task);
   return (

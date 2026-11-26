@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { AppWindow, ChevronRight, GitCompare, History as HistoryIcon, Link as LinkIcon, MoreHorizontal, Pencil, X } from "lucide-react";
+import { AppWindow, ChevronRight, GitCompare, History as HistoryIcon, House, Link as LinkIcon, MoreHorizontal, Pencil, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button, Menu, MenuTrigger, Popover } from "react-aria-components";
 
@@ -16,11 +16,13 @@ import { toggleChecklist } from "../../data/markdown";
 import { splitBacklinks } from "../../data/wiki";
 import { type Backlink, type Reference, type RevisionInfo, type WikiHeading, type WikiPage } from "../../generated/ops";
 import { useT, type Translate } from "../../i18n/I18n";
+import { ownerKey } from "../../ipc/files";
 import { MarkdownReader } from "../../markdown/Reader";
 import { useMomentFormat } from "../task/Activity";
 import { DiffView } from "../task/DiffView";
-import { useExportPage } from "./exportPage";
+import { FilesSection, useFileDrop } from "../task/Files";
 import { MarkdownField } from "../task/MarkdownField";
+import { ExportPageDialog } from "./TransferDialogs";
 import styles from "./Wiki.module.css";
 
 /** `E`: Edit. */
@@ -68,7 +70,7 @@ export function PageView(props: PageViewProps) {
   const { pageId, writable, heading, startEditing = false, inWindow = false, onNavigate, onCreateMissing, onOpenTask, onRename, onDelete, onNewChild, onOpenWindow } = props;
   const t = useT();
   const moment = useMomentFormat();
-  const found = useOp("wiki.get", { page: pageId });
+  const found = useOp("wiki.get", { page: pageId, include: ["files"] });
   const references = useOp("wiki.references", { page: pageId });
   const page = found.data;
   const [mode, setMode] = useState<PageMode>(startEditing && writable ? "edit" : "read");
@@ -77,9 +79,12 @@ export function PageView(props: PageViewProps) {
   const editing = mode === "edit" && writable;
   // While editing, the formatting toolbar sits in the page bar.
   const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
-  const exportPage = useExportPage();
+  const [exporting, setExporting] = useState(false);
   const update = useCommand("wiki.update");
   const toasts = useToasts();
+  // Files dropped on the page are attached to it.
+  const owner = { page: pageId };
+  const drop = useFileDrop(owner, writable && found.data !== undefined);
 
   // `E` edits the page from anywhere in the window but a text field, an open
   // dialog or menu, and a task panel beside the page (which has its own).
@@ -144,19 +149,28 @@ export function PageView(props: PageViewProps) {
         update.mutate({ page: page.id, agent_brief: brief }, { onSuccess: () => { toasts.show({ tone: "info", text: t(brief ? "wiki-brief-set-done" : "wiki-brief-unset-done") }); } });
       },
     },
+    {
+      id: "home",
+      label: t(page.home ? "wiki-home-unset" : "wiki-home-set"),
+      disabled: !writable,
+      run: () => {
+        const home = !page.home;
+        update.mutate({ page: page.id, home }, { onSuccess: () => { toasts.show({ tone: "info", text: t(home ? "wiki-home-set-done" : "wiki-home-unset-done") }); } });
+      },
+    },
     "separator",
-    { id: "export", label: t("wiki-export"), run: () => { exportPage({ page, subpages: false }); } },
-    ...((page.children ?? []).length > 0 ? [{ id: "export-all", label: t("wiki-export-all"), run: () => { exportPage({ page, subpages: true }); } }] : []),
-    { id: "export-wiki", label: t("wiki-export-wiki"), run: () => { exportPage({ project: page.project }); } },
+    { id: "export", label: t("wiki-export"), run: () => { setExporting(true); } },
     "separator",
     { id: "delete", label: t("wiki-delete"), run: () => { onDelete(page); }, disabled: !writable },
   ];
 
   return (
     <section
-      className={styles.page}
+      className={classes(styles.page, drop.over && styles.dropping)}
       aria-label={t("wiki-page-label", { page: page.title })}
       data-wiki-page={page.id}
+      data-drop-task={ownerKey(owner)}
+      {...drop.handlers}
     >
       <div className={styles.pageBar}>
         <nav className={styles.crumbs} aria-label={t("wiki-breadcrumbs")}>
@@ -169,6 +183,12 @@ export function PageView(props: PageViewProps) {
             </span>
           ))}
           <h2 className={styles.pageTitle}>{page.title}</h2>
+          {page.home && (
+            <span className="chip hue-blue">
+              <House className="ic s" aria-hidden="true" />
+              {t("wiki-home")}
+            </span>
+          )}
           {page.agent_brief && <span className="chip hue-purple">{t("wiki-agent-brief")}</span>}
         </nav>
         {editing && <div ref={setToolbarSlot} className={styles.toolbarSlot} data-toolbar-slot="" />}
@@ -241,6 +261,19 @@ export function PageView(props: PageViewProps) {
       ) : (
         <PageReader page={page} writable={writable} heading={heading} references={references.data?.items} onOpenLink={openLink} onNavigate={onNavigate} onOpenTask={onOpenTask} />
       )}
+      {drop.over && (
+        <div className={styles.dropNote} role="status">
+          {t("wiki-files-drop-here", { page: page.title })}
+        </div>
+      )}
+      {exporting && (
+        <ExportPageDialog
+          page={{ id: page.id, slug: page.slug, title: page.title, project: page.project, hasChildren: (page.children ?? []).length > 0 }}
+          onClose={() => {
+            setExporting(false);
+          }}
+        />
+      )}
     </section>
   );
 }
@@ -308,6 +341,7 @@ function PageReader({ page, writable, heading, references, onOpenLink, onNavigat
       </article>
       <PageAside
         page={page}
+        writable={writable}
         headings={headings}
         currentHeading={currentHeading}
         references={references}
@@ -324,6 +358,8 @@ function PageReader({ page, writable, heading, references, onOpenLink, onNavigat
 
 interface PageAsideProps {
   page: WikiPage;
+  /** Whether files may be attached and removed. */
+  writable: boolean;
   headings: readonly WikiHeading[];
   currentHeading: number | null;
   references: readonly Reference[] | undefined;
@@ -332,8 +368,8 @@ interface PageAsideProps {
   onOpenTask: (key: string) => void;
 }
 
-/** "On this page", "Linked from", "Tasks that link here" and "Links on this page". */
-function PageAside({ page, headings, currentHeading, references, onHeading, onNavigate, onOpenTask }: PageAsideProps) {
+/** "On this page", "Files", "Linked from", "Tasks that link here" and "Links on this page". */
+function PageAside({ page, writable, headings, currentHeading, references, onHeading, onNavigate, onOpenTask }: PageAsideProps) {
   const t = useT();
   const toasts = useToasts();
   const copyText = (text: string) => {
@@ -380,6 +416,9 @@ function PageAside({ page, headings, currentHeading, references, onHeading, onNa
           ))}
         </nav>
       )}
+      <div className={styles.asideFiles} data-page-files="">
+        <FilesSection task={{ page: page.id }} files={page.files ?? []} readOnly={!writable} />
+      </div>
       <section className={styles.asideGroup} aria-label={t("wiki-linked-from")}>
         <span className={classes("caption", styles.asideCaption)}>{t("wiki-linked-from")}</span>
         {backlinks.data && pages.length === 0 && <span className={classes("faint", styles.small)}>{t("wiki-no-backlinks")}</span>}
@@ -541,6 +580,7 @@ function PageEditor({ page, kept, toolbarSlot, onDraft, onDone }: { page: WikiPa
           mode={source ? "source" : "preview"}
           autoFocus
           project={page.project}
+          attachTo={{ page: page.id }}
           toolbarSlot={toolbarSlot}
           className={styles.editor}
           onChange={(text) => {
