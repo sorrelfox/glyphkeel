@@ -44,12 +44,14 @@ ashpd = { workspace = true }
 futures-util = { workspace = true }
 
 # Single instance, toasts, opening links and files, file choosers and the
-# confirmation dialog on Windows.
+# confirmation dialog on Windows; starting with the system and the
+# command-line tool's status, through the registry.
 [target.'cfg(windows)'.dependencies]
 tauri-plugin-single-instance = { workspace = true }
 tauri-plugin-opener = { workspace = true }
 tauri-winrt-notification = { workspace = true }
 rfd = { workspace = true }
+winreg = { workspace = true }
 
 [dev-dependencies]
 schemars = { workspace = true }

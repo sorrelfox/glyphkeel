@@ -75,3 +75,4 @@ autostart-reason = Start Glyphkeel when you log in, so that reminders come on ti
 autostart-no-home = There is no home folder to keep the autostart entry in.
 autostart-failed = The autostart entry { $path } could not be changed: { $reason }
 autostart-portal-failed = The desktop did not let Glyphkeel start with the system: { $reason }
+autostart-run-key-failed = Glyphkeel could not change its place among the apps that start when you sign in: { $reason }

@@ -13,6 +13,11 @@
 //! Hunspell dictionary (on Fedora the `hunspell-en-US` package, on Debian and
 //! Ubuntu `hunspell-en-us`), looked up in the usual folders. Without one,
 //! nothing is marked.
+//!
+//! On Windows there are no system Hunspell dictionaries, and WebView2's own
+//! checker uses the system's spelling for every language the person has
+//! installed. There the answer says so (`webView`), nothing is looked up, and
+//! the page turns the web view's checker on instead.
 
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -103,6 +108,22 @@ pub(crate) struct SpellCheck {
     misspelt: Vec<(u32, u32)>,
     /// Whether a dictionary was found; without one nothing is marked.
     available: bool,
+    /// The web view checks spelling itself (on Windows): the page turns its
+    /// checker on and sends nothing more.
+    #[serde(rename = "webView", skip_serializing_if = "std::ops::Not::not")]
+    web_view: bool,
+}
+
+/// Whether the web view's own checker does the work on this platform.
+const WEB_VIEW_CHECKS: bool = cfg!(windows);
+
+/// The answer where the web view checks spelling itself.
+fn left_to_the_web_view() -> SpellCheck {
+    SpellCheck {
+        misspelt: Vec::new(),
+        available: false,
+        web_view: true,
+    }
 }
 
 /// Whether a character belongs to a word.
@@ -180,16 +201,21 @@ pub(crate) async fn spell_check(chunks: Vec<(u32, String)>) -> Result<SpellCheck
     if chunks.iter().map(|(_, text)| text.len()).sum::<usize>() > MAX_TEXT {
         return Err("too much text to check at once".to_owned());
     }
+    if WEB_VIEW_CHECKS {
+        return Ok(left_to_the_web_view());
+    }
     // Reading the dictionary takes a moment the first time; never on the
     // main thread.
     tauri::async_runtime::spawn_blocking(move || match dictionary() {
         Some(dictionary) => SpellCheck {
             misspelt: check_with(dictionary, &chunks),
             available: true,
+            web_view: false,
         },
         None => SpellCheck {
             misspelt: Vec::new(),
             available: false,
+            web_view: false,
         },
     })
     .await
@@ -199,7 +225,7 @@ pub(crate) async fn spell_check(chunks: Vec<(u32, String)>) -> Result<SpellCheck
 /// Suggestions for one word, best first.
 #[tauri::command]
 pub(crate) async fn spell_suggest(word: String) -> Result<Vec<String>, String> {
-    if word.len() > 200 {
+    if word.len() > 200 || WEB_VIEW_CHECKS {
         return Ok(Vec::new());
     }
     tauri::async_runtime::spawn_blocking(move || {
@@ -247,6 +273,24 @@ mod tests {
             (100, "teh don’t Grüße".to_owned()),
         ];
         assert_eq!(check_with(&dictionary, &chunks), vec![(10, 17), (100, 103)]);
+    }
+
+    #[test]
+    fn the_answer_says_when_the_web_view_checks_itself() {
+        let json = serde_json::to_value(left_to_the_web_view()).expect("serializes");
+        assert_eq!(
+            json,
+            serde_json::json!({"misspelt": [], "available": false, "webView": true})
+        );
+        let own = SpellCheck {
+            misspelt: vec![(0, 3)],
+            available: true,
+            web_view: false,
+        };
+        assert_eq!(
+            serde_json::to_value(own).expect("serializes"),
+            serde_json::json!({"misspelt": [[0, 3]], "available": true})
+        );
     }
 
     #[test]

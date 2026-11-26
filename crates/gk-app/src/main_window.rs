@@ -51,7 +51,15 @@ pub(crate) fn open(
             .is_some_and(|workspace| workspace.created()),
     };
 
-    let window = page::window(app, LABEL, &start)
+    let builder = page::window(app, LABEL, &start);
+    // Where GTK isn't there to place the window, Tauri does, while a screen
+    // still shows the stored place.
+    #[cfg(not(target_os = "linux"))]
+    let builder = match window_state::track::position(app, &geometry) {
+        Some((x, y)) => builder.position(x, y),
+        None => builder,
+    };
+    let window = builder
         .title("Glyphkeel")
         .inner_size(geometry.width, geometry.height)
         .min_inner_size(MIN_SIZE.0, MIN_SIZE.1)
@@ -88,7 +96,9 @@ pub(crate) fn open(
         }
     }
     #[cfg(not(target_os = "linux"))]
-    let _ = state_file;
+    if let Some(path) = state_file {
+        window_state::track::follow(&window, geometry, path);
+    }
 
     Ok(window)
 }

@@ -60,7 +60,19 @@ impl StartData {
     pub(crate) fn script(&self) -> String {
         // Serializing these plain fields can't fail; an empty object would
         // only make the page use its defaults.
-        let json = serde_json::to_string(self).unwrap_or_else(|_| "{}".to_owned());
+        /// The data with the platform, for what the page does differently
+        /// there (window buttons, key names): `linux` or `windows`.
+        #[derive(Serialize)]
+        struct WithPlatform<'a> {
+            #[serde(flatten)]
+            data: &'a StartData,
+            platform: &'static str,
+        }
+        let json = serde_json::to_string(&WithPlatform {
+            data: self,
+            platform: std::env::consts::OS,
+        })
+        .unwrap_or_else(|_| "{}".to_owned());
         format!(
             "Object.defineProperty(window, \"__GLYPHKEEL_START__\", {{ value: Object.freeze({json}) }});"
         )
@@ -222,7 +234,10 @@ mod tests {
         .script();
         assert_eq!(
             script,
-            r#"Object.defineProperty(window, "__GLYPHKEEL_START__", { value: Object.freeze({"titleBar":"system","locale":"de-DE"}) });"#
+            format!(
+                r#"Object.defineProperty(window, "__GLYPHKEEL_START__", {{ value: Object.freeze({{"titleBar":"system","locale":"de-DE","platform":"{}"}}) }});"#,
+                std::env::consts::OS
+            )
         );
     }
 

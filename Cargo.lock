@@ -1725,6 +1725,7 @@ dependencies = [
  "tauri-winrt-notification",
  "tempfile",
  "webkit2gtk",
+ "winreg",
  "zbus",
 ]
 
