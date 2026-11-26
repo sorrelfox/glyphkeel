@@ -136,7 +136,10 @@ describe("project settings", () => {
     await waitFor(() => {
       expect(row()?.querySelector('[data-mark="rocket"]')).not.toBeNull();
     });
-    expect(document.querySelector('header [data-mark="rocket"]')).not.toBeNull();
+    // The header reads the project on its own, so it may follow a moment later.
+    await waitFor(() => {
+      expect(document.querySelector('header [data-mark="rocket"]')).not.toBeNull();
+    });
     fireEvent.click(within(icons).getByRole("radio", { name: "Circle" }));
     await waitFor(() => {
       expect(row()?.querySelector('[data-mark="circle"]')).not.toBeNull();

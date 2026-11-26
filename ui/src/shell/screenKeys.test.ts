@@ -9,13 +9,26 @@ import { createBundle } from "../i18n/i18n";
 import { SCREEN_KEYS, screenOf } from "./screenKeys";
 
 describe("the keys screens handle themselves", () => {
-  it("are found for the wiki, the Gantt chart and the calendar", () => {
+  it("are found for the board, the list, the wiki, the Gantt chart and the calendar", () => {
     expect(screenOf("/projects/TM/wiki")).toBe("wiki");
     expect(screenOf("/projects/TM/gantt")).toBe("gantt");
     expect(screenOf("/projects/TM/calendar")).toBe("calendar");
-    expect(screenOf("/projects/TM")).toBeNull();
-    expect(screenOf("/projects/TM/list")).toBeNull();
+    expect(screenOf("/projects/TM")).toBe("board");
+    expect(screenOf("/projects/TM/list")).toBe("list");
+    expect(screenOf("/all")).toBe("list");
+    expect(screenOf("/projects/TM/roadmap")).toBeNull();
     expect(screenOf("/")).toBeNull();
+  });
+
+  it("are not also window actions in the keymap", () => {
+    const windowKeys = new Set(Object.values(DEFAULT_KEYMAP).flat());
+    for (const screen of ["board", "list"] as const) {
+      for (const entry of SCREEN_KEYS[screen]) {
+        for (const keys of entry.keys) {
+          expect(windowKeys.has(keys), `${screen} ${keys}`).toBe(false);
+        }
+      }
+    }
   });
 
   it("have messages and keys that parse", () => {

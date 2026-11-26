@@ -354,7 +354,7 @@ pub static FIELDS: &[Field] = &[
         NAME_OPS,
         false,
         false,
-        "label names",
+        "label names, or none",
     ),
     field(
         "version",

@@ -154,6 +154,8 @@ fn filters() {
             "created:this-month author:agent",
             "parent:TM-12",
             "parent:none",
+            "label:none",
+            "label:bug,none",
             "claimed:\"Build Bot\"",
             "TM-41",
             "title:\"login page\" title=Exact",

@@ -1,6 +1,6 @@
 ---
 source: crates/gk-query/tests/sql.rs
-expression: "golden(&[\"\", \"is:open due<+7d\", \"label:bug,crash -status:Done updated>-3d\",\n\"type:Feature priority>=High sort:due,-priority\", \"project:TM/* is:overdue\",\n\"(label:bug OR type:Bug) is:open -is:blocked\", \"estimate:1h..4h -has:start\",\n\"created:this-month author:agent\", \"parent:TM-12\", \"parent:none\",\n\"claimed:\\\"Build Bot\\\"\", \"TM-41\", \"title:\\\"login page\\\" title=Exact\",\n\"category:closed progress>=50% comments>0\", \"due:none,today remaining<1h\",\n\"blocks:any relates:TM-2 under:TM-1\",], None,)"
+expression: "golden(&[\"\", \"is:open due<+7d\", \"label:bug,crash -status:Done updated>-3d\",\n\"type:Feature priority>=High sort:due,-priority\", \"project:TM/* is:overdue\",\n\"(label:bug OR type:Bug) is:open -is:blocked\", \"estimate:1h..4h -has:start\",\n\"created:this-month author:agent\", \"parent:TM-12\", \"parent:none\",\n\"label:none\", \"label:bug,none\", \"claimed:\\\"Build Bot\\\"\", \"TM-41\",\n\"title:\\\"login page\\\" title=Exact\",\n\"category:closed progress>=50% comments>0\", \"due:none,today remaining<1h\",\n\"blocks:any relates:TM-2 under:TM-1\",], None,)"
 ---
 -- 
 SELECT t.id FROM tasks t JOIN projects p ON p.id = t.project_id JOIN statuses s ON s.id = t.status_id JOIN task_types y ON y.id = t.type_id WHERE t.deleted_at IS NULL AND p.deleted_at IS NULL AND p.state = 'active' ORDER BY s.rank ASC NULLS LAST, t.rank ASC NULLS LAST, p.key ASC, t.number ASC LIMIT ? OFFSET ?
@@ -41,6 +41,14 @@ SELECT t.id FROM tasks t JOIN projects p ON p.id = t.project_id JOIN statuses s 
 -- parent:none
 SELECT t.id FROM tasks t JOIN projects p ON p.id = t.project_id JOIN statuses s ON s.id = t.status_id JOIN task_types y ON y.id = t.type_id WHERE t.deleted_at IS NULL AND p.deleted_at IS NULL AND p.state = 'active' AND coalesce((t.parent_id IS NULL), 0) ORDER BY s.rank ASC NULLS LAST, t.rank ASC NULLS LAST, p.key ASC, t.number ASC LIMIT ? OFFSET ?
 -- params: 50, 0
+
+-- label:none
+SELECT t.id FROM tasks t JOIN projects p ON p.id = t.project_id JOIN statuses s ON s.id = t.status_id JOIN task_types y ON y.id = t.type_id WHERE t.deleted_at IS NULL AND p.deleted_at IS NULL AND p.state = 'active' AND coalesce((NOT EXISTS (SELECT 1 FROM task_labels tl WHERE tl.task_id = t.id)), 0) ORDER BY s.rank ASC NULLS LAST, t.rank ASC NULLS LAST, p.key ASC, t.number ASC LIMIT ? OFFSET ?
+-- params: 50, 0
+
+-- label:bug,none
+SELECT t.id FROM tasks t JOIN projects p ON p.id = t.project_id JOIN statuses s ON s.id = t.status_id JOIN task_types y ON y.id = t.type_id WHERE t.deleted_at IS NULL AND p.deleted_at IS NULL AND p.state = 'active' AND coalesce((EXISTS (SELECT 1 FROM task_labels tl JOIN labels l ON l.id = tl.label_id WHERE tl.task_id = t.id AND l.name_fold IN (?)) OR NOT EXISTS (SELECT 1 FROM task_labels tl WHERE tl.task_id = t.id)), 0) ORDER BY s.rank ASC NULLS LAST, t.rank ASC NULLS LAST, p.key ASC, t.number ASC LIMIT ? OFFSET ?
+-- params: "bug", 50, 0
 
 -- claimed:"Build Bot"
 SELECT t.id FROM tasks t JOIN projects p ON p.id = t.project_id JOIN statuses s ON s.id = t.status_id JOIN task_types y ON y.id = t.type_id WHERE t.deleted_at IS NULL AND p.deleted_at IS NULL AND p.state = 'active' AND coalesce((t.claim_session IS NOT NULL AND t.claim_until > ? AND t.claim_name COLLATE NOCASE IN (?)), 0) ORDER BY s.rank ASC NULLS LAST, t.rank ASC NULLS LAST, p.key ASC, t.number ASC LIMIT ? OFFSET ?

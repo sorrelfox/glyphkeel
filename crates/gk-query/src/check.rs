@@ -122,8 +122,13 @@ pub enum Cond {
     Categories(Vec<&'static str>),
     /// Of one of these types.
     Types(Vec<NameRef>),
-    /// Has any of these labels.
-    Labels(Vec<NameRef>),
+    /// Has any of these labels, or (`none`) no label at all.
+    Labels {
+        /// The labels.
+        names: Vec<NameRef>,
+        /// Tasks without labels match.
+        none: bool,
+    },
     /// Planned for a version of one of these names, or (`none`) for none.
     Versions {
         /// The versions.
@@ -457,7 +462,7 @@ fn collect_names(f: &Filter, out: &mut Vec<NameUse>) {
         Filter::Cond(c) => match c {
             Cond::Statuses(n) => names(NameKind::Status, n, out),
             Cond::Types(n) => names(NameKind::Type, n, out),
-            Cond::Labels(n) => names(NameKind::Label, n, out),
+            Cond::Labels { names: n, .. } => names(NameKind::Label, n, out),
             Cond::Versions { names: n, .. } => names(NameKind::Version, n, out),
             Cond::Was(w) => match w {
                 WasTest::Statuses(n) => names(NameKind::Status, n, out),
@@ -1117,12 +1122,14 @@ fn condition(
                 .map(|v| name_ref(v, field))
                 .collect::<Result<_, _>>()?,
         ),
-        FieldType::Label => Cond::Labels(
-            values
+        FieldType::Label => Cond::Labels {
+            names: values
                 .iter()
+                .filter(|v| !is_none(v))
                 .map(|v| name_ref(v, field))
                 .collect::<Result<_, _>>()?,
-        ),
+            none: values.iter().any(is_none),
+        },
         FieldType::Version => Cond::Versions {
             names: values
                 .iter()
@@ -1701,6 +1708,31 @@ mod tests {
 
     fn err(src: &str) -> QueryError {
         run(src).expect_err(src)
+    }
+
+    #[test]
+    fn none_on_labels_means_no_label_and_names_nothing() {
+        let labels = |src: &str| match run(src).unwrap_or_else(|e| panic!("{src}: {e:?}")) {
+            Checked {
+                filter: Some(Filter::Cond(Cond::Labels { names, none })),
+                ..
+            } => (
+                names.into_iter().map(|n| n.folded).collect::<Vec<_>>(),
+                none,
+            ),
+            other => panic!("{src}: {other:?}"),
+        };
+        assert_eq!(labels("label:none"), (Vec::new(), true));
+        assert_eq!(labels("labels:NONE"), (Vec::new(), true));
+        assert_eq!(labels("label:bug,none"), (vec!["bug".to_owned()], true));
+        assert_eq!(labels("label:bug"), (vec!["bug".to_owned()], false));
+        // A quoted "none" is a label of that name.
+        assert_eq!(labels("label:\"none\""), (vec!["none".to_owned()], false));
+        assert!(run("label:none").unwrap().names().is_empty());
+        assert!(matches!(
+            run("-label:none").unwrap().filter,
+            Some(Filter::Not(_))
+        ));
     }
 
     #[test]

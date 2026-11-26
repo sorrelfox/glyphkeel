@@ -57,6 +57,28 @@ test("change a project's key; its tasks take the new key", async ({ page }) => {
   await expect(page.locator(`section[data-lane] [data-card="${key.replace("PER-", "ME-")}"]`)).toBeVisible();
 });
 
+test("move a project under another one from its menu, then back to the top level", async ({ page }) => {
+  await page.goto("/");
+  await openBoard(page, /Home lab/);
+  const tree = page.getByRole("treegrid").or(page.getByRole("tree")).first();
+  const homeLab = tree.getByRole("row", { name: /Home lab/ });
+  await expect(homeLab).toHaveAttribute("aria-level", "1");
+
+  await page.getByRole("button", { name: /Home lab.*project menu/ }).click();
+  await page.getByRole("menuitem", { name: "Move to" }).click();
+  // It is at the top level already.
+  await expect(page.getByRole("menuitem", { name: "Top level" })).toBeDisabled();
+  await page.getByRole("menuitem", { name: "Personal", exact: true }).click();
+  await expect(homeLab).toHaveAttribute("aria-level", "2");
+  await expect(page.getByRole("button", { name: /Home lab.*project menu/ })).toContainText("Personal");
+
+  // From the sidebar's menu, back to the top level.
+  await homeLab.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Move to" }).click();
+  await page.getByRole("menuitem", { name: "Top level" }).click();
+  await expect(homeLab).toHaveAttribute("aria-level", "1");
+});
+
 test("make another workspace, work in it, and switch back", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("row", { name: /Task Manager/ }).first()).toBeVisible();

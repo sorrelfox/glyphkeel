@@ -224,6 +224,18 @@ screen-key-gantt-zoom-out = Zoom out
 screen-key-calendar-open-day = Go into the day's tasks
 screen-key-calendar-move-day = Move the task by a day
 screen-key-calendar-move-week = Move the task by a week
+screen-key-board-select = Move between cards
+screen-key-board-open = Open the selected card
+screen-key-board-pick-up = Pick up the card; the arrow keys move it, Space drops it, Escape cancels
+screen-key-board-trash = Move the task to the trash
+screen-key-board-menu = Open the card's menu
+screen-key-list-move = Move between rows
+screen-key-list-open = Open the task
+screen-key-list-select = Select or clear the row
+screen-key-list-select-all = Select all
+screen-key-list-clear = Clear the selection
+screen-key-list-rename = Edit the title
+screen-key-list-trash = Move the selected tasks to the trash
 
 ## Key names in shortcut hints
 
@@ -245,6 +257,7 @@ key-page-up = Page Up
 key-page-down = Page Down
 key-home = Home
 key-end = End
+key-menu = Menu
 
 ## Appearance
 
@@ -295,6 +308,9 @@ project-new-subproject = New sub-project…
 project-settings = Project settings…
 project-archive = Archive
 project-unarchive = Unarchive
+project-move-to = Move to
+# In the project menu's "Move to": make the project a top-level one.
+project-move-top-level = Top level
 project-new-title = New project
 project-new-subproject-title = New sub-project of { $parent }
 project-create = Create project
@@ -369,6 +385,7 @@ module-time = Time tracking
 toast-project-changed = Project changed
 toast-project-key-changed = Project key changed
 toast-project-archived = Project archived
+toast-project-moved = Project moved
 dialog-cancel = Cancel
 duplicates-title =
     { $count ->

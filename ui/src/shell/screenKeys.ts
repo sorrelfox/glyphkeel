@@ -8,7 +8,7 @@
  */
 
 /** The screens with keys of their own. */
-export type KeyedScreen = "wiki" | "gantt" | "calendar";
+export type KeyedScreen = "board" | "list" | "wiki" | "gantt" | "calendar";
 
 export interface ScreenKey {
   /** The message ID of what the keys do. */
@@ -18,6 +18,22 @@ export interface ScreenKey {
 }
 
 export const SCREEN_KEYS: Readonly<Record<KeyedScreen, readonly ScreenKey[]>> = {
+  board: [
+    { label: "screen-key-board-select", keys: ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"] },
+    { label: "screen-key-board-open", keys: ["Enter"] },
+    { label: "screen-key-board-pick-up", keys: ["Space"] },
+    { label: "screen-key-board-trash", keys: ["Delete"] },
+    { label: "screen-key-board-menu", keys: ["ContextMenu", "Shift+F10"] },
+  ],
+  list: [
+    { label: "screen-key-list-move", keys: ["ArrowUp", "ArrowDown", "Home", "End"] },
+    { label: "screen-key-list-open", keys: ["Enter"] },
+    { label: "screen-key-list-select", keys: ["Space"] },
+    { label: "screen-key-list-select-all", keys: ["Ctrl+A"] },
+    { label: "screen-key-list-clear", keys: ["Escape"] },
+    { label: "screen-key-list-rename", keys: ["F2"] },
+    { label: "screen-key-list-trash", keys: ["Delete"] },
+  ],
   wiki: [
     { label: "screen-key-wiki-edit", keys: ["E"] },
     { label: "screen-key-wiki-move-sibling", keys: ["Alt+ArrowUp", "Alt+ArrowDown"] },
@@ -42,6 +58,12 @@ export const SCREEN_KEYS: Readonly<Record<KeyedScreen, readonly ScreenKey[]>> = 
 
 /** The screen with keys of its own at a route's path, if any. */
 export function screenOf(pathname: string): KeyedScreen | null {
+  if (/^\/projects\/[^/]+\/?$/.test(pathname)) {
+    return "board";
+  }
+  if (/^\/projects\/[^/]+\/list\/?$/.test(pathname) || /^\/all\/?$/.test(pathname)) {
+    return "list";
+  }
   if (/^\/projects\/[^/]+\/wiki(\/|$)/.test(pathname) || /^\/wiki\//.test(pathname)) {
     return "wiki";
   }
