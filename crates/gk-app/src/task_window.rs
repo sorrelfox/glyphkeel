@@ -73,6 +73,7 @@ fn open(app: &AppHandle, key: &str) -> tauri::Result<WebviewWindow> {
         title_bar: TitleBar::System,
         locale: start::locale_from_env(),
         task: Some(key.to_owned()),
+        wiki: None,
         open: None,
         prefs: app
             .try_state::<crate::app_settings::AppSettings>()
@@ -80,9 +81,21 @@ fn open(app: &AppHandle, key: &str) -> tauri::Result<WebviewWindow> {
         quick_add: false,
         first_run: false,
     };
-    let window = page::window(app, label(key), &start)
-        .title(key)
-        .inner_size(SIZE.0, SIZE.1)
+    build(app, label(key), &start, key, SIZE)
+}
+
+/// Makes a window of its own for one item (a task, a wiki page), hidden
+/// until its page has drawn.
+pub(crate) fn build(
+    app: &AppHandle,
+    label: String,
+    start: &StartData,
+    title: &str,
+    size: (f64, f64),
+) -> tauri::Result<WebviewWindow> {
+    let window = page::window(app, label, start)
+        .title(title)
+        .inner_size(size.0, size.1)
         .min_inner_size(MIN_SIZE.0, MIN_SIZE.1)
         .decorations(true)
         .visible(false)
@@ -97,7 +110,7 @@ fn open(app: &AppHandle, key: &str) -> tauri::Result<WebviewWindow> {
     Ok(window)
 }
 
-/// Shows a task window and gives it the focus.
+/// Shows a task or wiki window and gives it the focus.
 pub(crate) fn show<R: Runtime>(window: &WebviewWindow<R>) {
     for result in [window.unminimize(), window.show(), window.set_focus()] {
         if let Err(err) = result {

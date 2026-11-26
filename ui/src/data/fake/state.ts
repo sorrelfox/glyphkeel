@@ -141,6 +141,7 @@ export interface FakeFile {
 /** One saved text of a task's description. */
 export interface FakeRevision {
   id: string;
+  /** The task's ID, or the wiki page's. */
   taskId: string;
   body: string;
   kind: RevisionKind;
@@ -197,22 +198,25 @@ export interface FakeReminder {
   acknowledged: boolean;
 }
 
-/** A wiki page; its text is kept whole, without revisions. */
+/** A wiki page; its revisions are kept with the descriptions', under its ID. */
 export interface FakeWikiPage {
   id: string;
   projectId: string;
   title: string;
   slug: string;
+  /** Slugs it had before a rename, which still find it. */
+  oldSlugs?: string[];
   parentId: string | null;
   body: string;
   createdAt: string;
   updatedAt: string;
 }
 
-/** Tasks in the trash: one deletion, with the subtasks that went with it. */
+/** Tasks in the trash: one deletion, with the subtasks that went with it; or wiki pages, with the pages inside. */
 export interface FakeTrashed {
   entry: TrashEntry;
   tasks: FakeTask[];
+  pages?: FakeWikiPage[];
 }
 
 export interface FakeState {

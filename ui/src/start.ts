@@ -11,6 +11,8 @@ export interface StartData {
   locale: string;
   /** In a task window: its task, shown alone. */
   task?: string;
+  /** In a wiki window: its page's ID, the page shown alone. */
+  wiki?: string;
   /** A task to open first, from the link the app was started with. */
   open?: string;
   /** The quick-add window: its page shows the quick-add field alone. */
@@ -22,7 +24,7 @@ export interface StartData {
 declare global {
   interface Window {
     /** Set by the app's initialization script; absent in a plain browser. */
-    readonly __GLYPHKEEL_START__?: { titleBar?: unknown; locale?: unknown; task?: unknown; open?: unknown; prefs?: unknown; quickAdd?: unknown; firstRun?: unknown };
+    readonly __GLYPHKEEL_START__?: { titleBar?: unknown; locale?: unknown; task?: unknown; wiki?: unknown; open?: unknown; prefs?: unknown; quickAdd?: unknown; firstRun?: unknown };
   }
 }
 
@@ -38,6 +40,9 @@ export function readStart(win: Window = window): StartData {
   const start: StartData = { titleBar, locale };
   if (isTaskKey(given.task)) {
     start.task = given.task;
+  }
+  if (isPageId(given.wiki)) {
+    start.wiki = given.wiki;
   }
   if (isTaskKey(given.open)) {
     start.open = given.open;
@@ -55,6 +60,11 @@ export function readStart(win: Window = window): StartData {
 /** A task key such as `TM-41`. */
 export function isTaskKey(value: unknown): value is string {
   return typeof value === "string" && /^[A-Z][A-Z0-9]{1,9}-\d{1,12}$/.test(value);
+}
+
+/** A wiki page's ID as a window names it: letters, digits and hyphens. */
+export function isPageId(value: unknown): value is string {
+  return typeof value === "string" && /^[0-9A-Za-z-]{1,64}$/.test(value);
 }
 
 /** The project key of a task key: `TM` of `TM-41`. */

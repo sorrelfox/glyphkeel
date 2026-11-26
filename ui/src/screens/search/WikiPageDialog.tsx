@@ -1,12 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
+import { useNavigate } from "@tanstack/react-router";
+import { AppWindow, BookOpen } from "lucide-react";
 import { useEffect, useRef } from "react";
+import { Button } from "react-aria-components";
 
 import { Dialog } from "../../components/Dialog";
-import { useOp } from "../../data/hooks";
+import { useToasts } from "../../components/Toasts";
+import { errorToast, useOp } from "../../data/hooks";
 import { useWikiPage, type WikiPageName } from "../../data/wiki";
 import { useT } from "../../i18n/I18n";
+import { openWikiWindow } from "../../ipc/wikiWindow";
+import { usePageOpener } from "../../markdown/pageLinks";
 import { MarkdownReader } from "../../markdown/Reader";
 import { useMomentFormat } from "../task/Activity";
 import styles from "./Search.module.css";
@@ -21,8 +27,8 @@ interface WikiPageDialogProps {
 
 /**
  * A wiki page, read only, in a dialog: its place in the tree, its text as
- * the reader shows it, and when it last changed. The wiki's own screens,
- * with editing, come later.
+ * the reader shows it, and when it last changed. From here it opens in the
+ * project's wiki (in the main window) or in a window of its own.
  */
 export default function WikiPageDialog({ page, heading, onClose, onOpenTask }: WikiPageDialogProps) {
   const t = useT();
@@ -33,6 +39,9 @@ export default function WikiPageDialog({ page, heading, onClose, onOpenTask }: W
   const html = rendered.data?.items[0]?.html;
   const moment = useMomentFormat();
   const body = useRef<HTMLDivElement>(null);
+  const opener = usePageOpener();
+  const navigate = useNavigate();
+  const toasts = useToasts();
 
   // Scroll to the heading the link names, once the text is in.
   useEffect(() => {
@@ -82,7 +91,33 @@ export default function WikiPageDialog({ page, heading, onClose, onOpenTask }: W
                 />
               )
             )}
-            <p className={styles.wikiNote}>{t("wiki-read-only")}</p>
+            <p className={styles.wikiNote}>
+              {opener ? (
+                <Button
+                  className="btn sm"
+                  onPress={() => {
+                    onClose();
+                    opener({ id: wiki.id, project: wiki.project, heading });
+                  }}
+                >
+                  <BookOpen className="ic s" />
+                  {t("wiki-open-in-wiki")}
+                </Button>
+              ) : (
+                <Button
+                  className="btn sm"
+                  onPress={() => {
+                    onClose();
+                    openWikiWindow(wiki.id, () => void navigate({ to: "/wiki/$id", params: { id: wiki.id }, search: heading === undefined ? {} : { heading } })).catch((error: unknown) => {
+                      toasts.show(errorToast(t, error));
+                    });
+                  }}
+                >
+                  <AppWindow className="ic s" />
+                  {t("wiki-open-window")}
+                </Button>
+              )}
+            </p>
           </>
         )}
       </div>

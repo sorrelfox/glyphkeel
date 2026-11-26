@@ -10,9 +10,10 @@ import {
   useNavigate,
   useRouteContext,
 } from "@tanstack/react-router";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 
 import { onOpenLink } from "./ipc/openLinks";
+import { PageOpener, type PageTarget } from "./markdown/pageLinks";
 import { windowReady, type Transport } from "./ipc/ready";
 import { BoardScreen } from "./screens/board/BoardScreen";
 import { OpenTaskScreen, TaskWindowScreen } from "./screens/task/TaskWindow";
@@ -23,6 +24,8 @@ import { TrashScreen } from "./screens/safety/TrashScreen";
 import { QuickAdd } from "./screens/quick-add/QuickAdd";
 import { SearchScreen, searchParams } from "./screens/search/SearchScreen";
 import { TodayScreen } from "./screens/today/TodayScreen";
+import { wikiSearch, WikiScreen } from "./screens/wiki/WikiScreen";
+import { WikiWindowScreen } from "./screens/wiki/WikiWindow";
 import { offersFirstRun } from "./shell/FirstRun";
 import { Shell } from "./shell/Shell";
 import { StartupFailure } from "./shell/StartupFailure";
@@ -108,6 +111,22 @@ export const projectListRoute = createRoute({
 /** The quick-add window: one field, without the board and the sidebar. */
 const quickAddRoute = createRoute({ getParentRoute: () => rootRoute, path: QUICK_ADD_PATH, component: QuickAdd });
 
+/** A project's wiki: the page tree and one page; `task` is a task open beside it. */
+export const wikiRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: "/projects/$key/wiki",
+  validateSearch: wikiSearch,
+  component: WikiScreen,
+});
+
+/** A wiki window: one page, without the tree and the sidebar. */
+const wikiWindowRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/wiki/$id",
+  validateSearch: (search: Record<string, unknown>): { heading?: string } => (typeof search.heading === "string" && search.heading !== "" ? { heading: search.heading } : {}),
+  component: WikiWindowScreen,
+});
+
 /** A task window: one task, without the board and the sidebar. */
 const taskWindowRoute = createRoute({ getParentRoute: () => rootRoute, path: "/task/$key", component: TaskWindowScreen });
 
@@ -119,15 +138,16 @@ const routeTree = rootRoute.addChildren([
   editorPlaygroundRoute,
   quickAddRoute,
   taskWindowRoute,
-  shellRoute.addChildren([todayRoute, searchRoute, allTasksRoute, timeReportRoute, trashRoute, activityRoute, boardRoute, projectListRoute, openTaskRoute]),
+  wikiWindowRoute,
+  shellRoute.addChildren([todayRoute, searchRoute, allTasksRoute, timeReportRoute, trashRoute, activityRoute, boardRoute, projectListRoute, wikiRoute, openTaskRoute]),
 ]);
 
 /**
  * The first screen: a development page or the quick-add page from its path
- * (browser tests); the quick-add window's field; a task window's task; the
+ * (browser tests); the quick-add window's field; a task or wiki window's item; the
  * task of the link the app was started with; else Today.
  */
-export function initialPath(pathname: string, start: Pick<StartData, "task" | "open" | "quickAdd"> = {}): string {
+export function initialPath(pathname: string, start: Pick<StartData, "task" | "wiki" | "open" | "quickAdd"> = {}): string {
   for (const path of [GALLERY_PATH, EDITOR_PLAYGROUND_PATH, QUICK_ADD_PATH]) {
     if (pathname.startsWith(path)) {
       return path;
@@ -138,6 +158,9 @@ export function initialPath(pathname: string, start: Pick<StartData, "task" | "o
   }
   if (start.task !== undefined) {
     return `/task/${start.task}`;
+  }
+  if (start.wiki !== undefined) {
+    return `/wiki/${start.wiki}`;
   }
   if (start.open !== undefined) {
     return `/open/${start.open}`;
@@ -178,7 +201,16 @@ function ShellScreen() {
   // Links handed to the running app open their task here, in the main window.
   useEffect(() => onOpenLink((key) => void navigate({ to: "/open/$key", params: { key } })), [navigate]);
   const [firstRun] = useState(() => offersFirstRun(start));
-  return <Shell titleBar={start.titleBar} firstRun={firstRun} openGallery={import.meta.env.DEV ? () => void navigate({ to: GALLERY_PATH }) : undefined} />;
+  // A wiki link in any text of the main window opens its page in the project's wiki.
+  const openPage = useCallback(
+    (page: PageTarget) => void navigate({ to: "/projects/$key/wiki", params: { key: page.project }, search: { page: page.id, ...(page.heading === undefined ? {} : { heading: page.heading }) } }),
+    [navigate],
+  );
+  return (
+    <PageOpener value={openPage}>
+      <Shell titleBar={start.titleBar} firstRun={firstRun} openGallery={import.meta.env.DEV ? () => void navigate({ to: GALLERY_PATH }) : undefined} />
+    </PageOpener>
+  );
 }
 
 function GalleryScreen() {

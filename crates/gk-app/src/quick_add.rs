@@ -66,6 +66,7 @@ fn create(app: &AppHandle) -> tauri::Result<WebviewWindow> {
         title_bar: TitleBar::System,
         locale: start::locale_from_env(),
         task: None,
+        wiki: None,
         open: None,
         prefs: app.try_state::<AppSettings>().map(|settings| settings.ui()),
         quick_add: true,

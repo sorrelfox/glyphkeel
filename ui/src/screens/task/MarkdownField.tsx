@@ -35,6 +35,8 @@ interface MarkdownFieldProps {
   ref?: Ref<MarkdownEditorHandle>;
   /** The task that files pasted or dropped on the editor are attached to; they go in the text as links. */
   attachTo?: string | undefined;
+  /** The project whose wiki pages `[[` offers first; by default the project of `attachTo`. */
+  project?: string | undefined;
 }
 
 /** Markdown that refers to an attachment: an image shows in the text, another file is a link. */
@@ -72,7 +74,7 @@ export function editorDropAt(x: number, y: number, task: string): ((markdown: st
  * to save or send and Escape to give up, and the formatting toolbar above
  * the text. The editor loads on first use.
  */
-export function MarkdownField({ label, value, onChange, onSubmit, onCancel, mode = "preview", autoFocus = false, readOnly = false, compact = false, plain = false, className, ref, attachTo }: MarkdownFieldProps) {
+export function MarkdownField({ label, value, onChange, onSubmit, onCancel, mode = "preview", autoFocus = false, readOnly = false, compact = false, plain = false, className, ref, attachTo, project }: MarkdownFieldProps) {
   const t = useT();
   const call = useCall();
   const toasts = useToasts();
@@ -87,8 +89,8 @@ export function MarkdownField({ label, value, onChange, onSubmit, onCancel, mode
     return attached.files.map((change) => attachmentMarkdown(change.file)).join(" ");
   };
   const renderBlock = useBlockRenderer();
-  // Wiki links point at pages of the task's own project.
-  const completion = useLinkCompletion(attachTo === undefined ? undefined : attachTo.slice(0, attachTo.lastIndexOf("-")) || undefined);
+  // Wiki links point at pages of the task's own project (or the page's).
+  const completion = useLinkCompletion(project ?? (attachTo === undefined ? undefined : attachTo.slice(0, attachTo.lastIndexOf("-")) || undefined));
   const box = useRef<HTMLDivElement>(null);
   const editor = useRef<MarkdownEditorHandle | null>(null);
   const takesFiles = attachTo !== undefined && !readOnly;

@@ -8,9 +8,10 @@ import { useAppearance } from "../appearance/AppearanceProvider";
 import { useToasts } from "../components/Toasts";
 import { requestComment } from "../data/commentLinks";
 import { useImageSource, type CheckboxClick } from "../data/markdown";
-import { splitTarget } from "../data/wiki";
+import { referenceIndex, splitTarget } from "../data/wiki";
+import { type Reference } from "../generated/ops";
 import { errorToast, useOp } from "../data/hooks";
-import { useT } from "../i18n/I18n";
+import { useT, type Translate } from "../i18n/I18n";
 import { openAttachment } from "../ipc/files";
 import { openLink } from "../ipc/links";
 import { attachmentOf, drawReader } from "./draw";
@@ -26,6 +27,10 @@ interface MarkdownReaderProps {
   /** Tick or clear an item; the promise settles when the engine has answered. Without it, checkboxes are read-only. */
   onToggle?: ((click: CheckboxClick) => Promise<unknown>) | undefined;
   onOpenTask: (key: string) => void;
+  /** Where the text's links point now (`wiki.references`, `task.references`): links to pages that don't exist are marked. */
+  references?: readonly Reference[] | undefined;
+  /** Opens the page a wiki link names; without it, the page opens read only in a dialog. */
+  onOpenPage?: ((target: string, heading: string | undefined) => void) | undefined;
   /** The smaller text of comments. */
   compact?: boolean;
   className?: string | undefined;
@@ -39,7 +44,7 @@ interface MarkdownReaderProps {
  * card on hover; a link to a comment scrolls to it), wiki links open their page read only, other links open in the
  * browser, and external images wait as buttons.
  */
-export function MarkdownReader({ html, onToggle, onOpenTask, compact = false, className, label }: MarkdownReaderProps) {
+export function MarkdownReader({ html, onToggle, onOpenTask, references, onOpenPage, compact = false, className, label }: MarkdownReaderProps) {
   const t = useT();
   const toasts = useToasts();
   const root = useRef<HTMLDivElement>(null);
@@ -51,6 +56,9 @@ export function MarkdownReader({ html, onToggle, onOpenTask, compact = false, cl
   const [wiki, setWiki] = useState<string | null>(null);
   const latest = useRef({ imageSource, t });
   const toggleable = onToggle !== undefined;
+  // Which page links find nothing now, as one string, so that a new answer with the same result draws nothing again.
+  const index = referenceIndex(references);
+  const missing = references === undefined ? null : [...index.values()].filter((reference) => !reference.found).map((reference) => reference.target.trim().toLocaleLowerCase()).sort().join("\n");
 
   useEffect(() => {
     latest.current = { imageSource, t };
@@ -68,12 +76,13 @@ export function MarkdownReader({ html, onToggle, onOpenTask, compact = false, cl
     for (const box of element.querySelectorAll<HTMLInputElement>("input[data-item]")) {
       box.disabled = !toggleable;
     }
+    markMissing(element, missing === null ? null : new Set(missing.split("\n")), latest.current.t);
     void drawReader(element, {
       text: (id, args) => latest.current.t(id, args),
       imageSource: (attachment) => latest.current.imageSource(attachment),
       current: () => drawing.current === generation && element.isConnected,
     });
-  }, [html, theme, toggleable]);
+  }, [html, theme, toggleable, missing]);
 
   const toggle = (box: HTMLInputElement) => {
     const number = Number(box.dataset.item);
@@ -108,7 +117,12 @@ export function MarkdownReader({ html, onToggle, onOpenTask, compact = false, cl
         }
         onOpenTask(ref);
       } else if (link.dataset.wiki !== undefined) {
-        setWiki(link.dataset.wiki);
+        const { title, heading } = splitTarget(link.dataset.wiki);
+        if (onOpenPage) {
+          onOpenPage(title, heading);
+        } else {
+          setWiki(link.dataset.wiki);
+        }
       } else if (attachmentOf(href) !== null) {
         // A link to an attached file opens it in the desktop's app for it.
         openAttachment(attachmentOf(href) ?? "").catch((error: unknown) => {
@@ -203,6 +217,23 @@ export function MarkdownReader({ html, onToggle, onOpenTask, compact = false, cl
       )}
     </div>
   );
+}
+
+/**
+ * Marks the wiki links whose page doesn't exist (now): `missing` holds their
+ * targets, folded; null when that isn't known, which marks nothing.
+ */
+function markMissing(element: HTMLElement, missing: ReadonlySet<string> | null, t: Translate): void {
+  for (const link of element.querySelectorAll<HTMLAnchorElement>("a[data-wiki]")) {
+    const { title } = splitTarget(link.dataset.wiki ?? "");
+    if (missing?.has(title.toLocaleLowerCase()) === true) {
+      link.dataset.missing = "";
+      link.setAttribute("aria-description", t("reader-wiki-missing", { page: title }));
+    } else {
+      delete link.dataset.missing;
+      link.removeAttribute("aria-description");
+    }
+  }
 }
 
 /** The card a task key shows on hover or focus: its title and status. */

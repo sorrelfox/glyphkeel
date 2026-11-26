@@ -65,6 +65,8 @@ import {
   type Via,
   type WikiPage,
   type WikiPageSummary,
+  type Backlink,
+  type Reference,
 } from "../../generated/ops";
 import { PROJECT_ICONS, suggestHue } from "../catalog";
 import { formatDuration, parseDuration } from "../duration";
@@ -73,6 +75,7 @@ import { checklistOf, merge3, publicChecklist, renderFake, setChecked, unifiedDi
 import { newProject, nextFileId, nextId, nextUuid, SAMPLE_AGENT } from "./seed";
 import { type FakeComment, type FakeFile, type FakeProject, type FakeRelation, type FakeReminder, type FakeRevision, type FakeState, type FakeTask, type FakeTimeEntry, type FakeWikiPage } from "./state";
 import { naturalDay, nextDay, searchAll, searchWiki, slugOf, headingsOf } from "./overview";
+import { linksIn, placePage, subtree, type TextLink } from "./wiki";
 import { createView, deleteView, listViews, matchingKeys, parseQuery, queryError, searchTasks, updateView, type GroupInfo, type QueryNames } from "./query";
 import { addDays, localDay, MAX_ENTRY_MINUTES, momentOf, reminderAt, reminderOut, sortDue, timeEntryOut, timerElapsedMs, timerOut, unitsOf, weekStart, workDay } from "./time";
 
@@ -404,12 +407,12 @@ export class FakeWorkspace {
 
   // ---------- descriptions ----------
 
-  private revisionsOf(task: FakeTask): FakeRevision[] {
+  private revisionsOf(task: { id: string }): FakeRevision[] {
     return this.state.revisions.filter((revision) => revision.taskId === task.id);
   }
 
   /** The revision the description is at now. */
-  private currentRevision(task: FakeTask): FakeRevision | undefined {
+  private currentRevision(task: { id: string }): FakeRevision | undefined {
     return this.revisionsOf(task)
       .filter((revision) => revision.kind !== "conflict")
       .at(-1);
@@ -1276,6 +1279,25 @@ export class FakeWorkspace {
     );
   }
 
+  /** Puts a page (with the pages inside it) under `parentId`, at a place among its siblings; never into itself. */
+  private movePage(page: FakeWikiPage, parentId: string | null, place: Place): void {
+    const pages = (this.state.wiki ??= []);
+    if (parentId !== null && subtree(pages, page).some((inside) => inside.id === parentId)) {
+      fail("invalid", "A page can't go inside itself or a page inside it.", { details: { path: "parent", message_id: "wiki-parent-loop", args: {} } });
+    }
+    const sibling = (ref: string | null | undefined, path: string) => {
+      if (ref === null || ref === undefined) {
+        return undefined;
+      }
+      const found = this.wikiPage(ref, this.projectKeyOf(page));
+      if (found.parentId !== parentId || found === page) {
+        fail("invalid", `"${ref}" is not a page beside it.`, { details: { path, message_id: "wiki-sibling-not-found", args: { page: ref } } });
+      }
+      return found.id;
+    };
+    placePage(pages, page, parentId, { before: sibling(place.before, "before"), after: sibling(place.after, "after"), at: place.at ?? undefined });
+  }
+
   private wikiSummary(page: FakeWikiPage): WikiPageSummary {
     const pages = this.state.wiki ?? [];
     let depth = 0;
@@ -1305,12 +1327,159 @@ export class FakeWorkspace {
     }
     const project = this.project(projectRef);
     return (
-      pages.find((page) => page.projectId === project.id && (fold(page.title) === fold(ref) || page.slug === ref)) ??
+      this.pageIn(project, ref) ??
       fail("not_found", `Project ${project.key} has no page "${ref}".`, { details: { message_id: "wiki-page-not-found", args: { project: project.key, page: ref } } })
     );
   }
 
-  private wikiOut(page: FakeWikiPage): WikiPage {
+  /** The live page of `project` a link or an input names: title (any case), slug or old slug. */
+  private pageIn(project: FakeProject, ref: string): FakeWikiPage | undefined {
+    const pages = (this.state.wiki ?? []).filter((page) => page.projectId === project.id);
+    const wanted = ref.trim();
+    const slug = slugOf(wanted, []);
+    return (
+      pages.find((page) => fold(page.title) === fold(wanted)) ??
+      pages.find((page) => page.slug === wanted.toLowerCase() || page.slug === slug) ??
+      pages.find((page) => (page.oldSlugs ?? []).includes(slug))
+    );
+  }
+
+  /** The page a link in a text of `project` names: in that project, or `KEY:Page` in another. */
+  private linkedPage(project: FakeProject, target: string): FakeWikiPage | undefined {
+    const own = this.pageIn(project, target);
+    if (own) {
+      return own;
+    }
+    const colon = target.indexOf(":");
+    const other = colon < 0 ? undefined : this.state.projects.find((candidate) => candidate.key === target.slice(0, colon).trim().toUpperCase());
+    return other ? this.pageIn(other, target.slice(colon + 1)) : undefined;
+  }
+
+  /** A task named by a link, or nothing. */
+  private linkedTask(key: string): FakeTask | undefined {
+    try {
+      return this.task(key);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** A project whose wiki pages may change: active, with the wiki switched on. */
+  private wikiWritable(ref: string): FakeProject {
+    const project = this.writable(ref);
+    if (!project.modules.wiki) {
+      fail("forbidden", `The wiki is switched off in project ${project.key}, so its pages can't be changed.`, {
+        hint: "Switch the wiki on in the project's settings first.",
+        details: { message_id: "project-wiki-off", args: { project: project.key }, hint_id: "project-wiki-off-hint", hint_args: {} },
+      });
+    }
+    return project;
+  }
+
+  private projectKeyOf(page: FakeWikiPage): string {
+    return this.state.projects.find((project) => project.id === page.projectId)?.key ?? "";
+  }
+
+  /** Writes a new revision of a page and makes it the text. */
+  private addPageRevision(page: FakeWikiPage, body: string, kind: RevisionKind, base: string | null): FakeRevision {
+    const revision: FakeRevision = { id: nextId("r"), taskId: page.id, body, kind, base, author: this.byAgent ? { kind: "agent", name: SAMPLE_AGENT } : { kind: "user", name: "You" }, createdAt: this.today().toISOString(), resolvedAt: null };
+    this.state.revisions.push(revision);
+    page.body = body;
+    page.updatedAt = revision.createdAt;
+    return revision;
+  }
+
+  /** Every live text with its links: pages, task descriptions, comments. */
+  private linkingTexts(): { source: Backlink; projectId: string; order: number; taskId?: string; pageId?: string; links: TextLink[] }[] {
+    const archived = this.archivedKeys();
+    const texts: { source: Backlink; projectId: string; order: number; taskId?: string; pageId?: string; links: TextLink[] }[] = [];
+    for (const page of this.state.wiki ?? []) {
+      const project = this.projectKeyOf(page);
+      if (!archived.has(project)) {
+        texts.push({ source: { project, title: page.title, page: { id: page.id, slug: page.slug, title: page.title } }, projectId: page.projectId, order: 0, pageId: page.id, links: linksIn(page.body) });
+      }
+    }
+    for (const task of this.state.tasks) {
+      const project = this.projectOf(task);
+      if (!archived.has(project.key)) {
+        texts.push({ source: { project: project.key, title: task.title, task: this.keyOf(task) }, projectId: project.id, order: 1, taskId: task.id, links: linksIn(task.description) });
+      }
+    }
+    for (const comment of this.state.comments) {
+      const task = this.state.tasks.find((candidate) => candidate.id === comment.taskId);
+      if (comment.deletedAt === null && task && !archived.has(this.projectOf(task).key)) {
+        texts.push({ source: { project: this.projectOf(task).key, title: task.title, task: this.keyOf(task), comment: comment.id }, projectId: task.projectId, order: 2, taskId: task.id, links: linksIn(comment.body) });
+      }
+    }
+    return texts;
+  }
+
+  /** The texts that link to a page or a task: pages by title, then descriptions by key, then comments. */
+  private backlinksTo(matches: (link: TextLink, projectId: string) => boolean, except: { pageId?: string; taskId?: string }): Backlink[] {
+    const found: { order: number; source: Backlink }[] = [];
+    for (const text of this.linkingTexts()) {
+      if ((except.pageId !== undefined && text.pageId === except.pageId) || (except.taskId !== undefined && text.taskId === except.taskId)) {
+        continue;
+      }
+      const first = text.links.find((link) => matches(link, text.projectId));
+      if (first) {
+        found.push({ order: text.order, source: { ...text.source, ...some("heading", first.heading) } });
+      }
+    }
+    const byKey = (key: string | undefined) => {
+      const [project = "", number = "0"] = (key ?? "").split("-");
+      return [project, Number(number)] as const;
+    };
+    return found
+      .sort((a, b) => {
+        if (a.order !== b.order) {
+          return a.order - b.order;
+        }
+        if (a.order === 0) {
+          return a.source.title.localeCompare(b.source.title);
+        }
+        if (a.order === 1) {
+          const [ap, an] = byKey(a.source.task);
+          const [bp, bn] = byKey(b.source.task);
+          return ap.localeCompare(bp) || an - bn;
+        }
+        return 0;
+      })
+      .map((entry) => entry.source);
+  }
+
+  /** What one text's links point at now. */
+  private referencesOf(links: readonly TextLink[], project: FakeProject, comment?: string): Reference[] {
+    return links.map((link): Reference => {
+      if (link.kind === "task") {
+        const task = this.linkedTask(link.target);
+        return { kind: "task", target: link.target, found: task !== undefined, ...some("comment", comment), ...(task ? { task: this.keyOf(task), title: task.title, project: this.projectOf(task).key } : {}) };
+      }
+      const page = this.linkedPage(project, link.target);
+      return {
+        kind: "page",
+        target: link.target,
+        found: page !== undefined,
+        ...some("heading", link.heading),
+        ...some("comment", comment),
+        ...(page ? { page: { id: page.id, slug: page.slug, title: page.title }, title: page.title, project: this.projectKeyOf(page) } : {}),
+      };
+    });
+  }
+
+  private pageBacklinks(page: FakeWikiPage): Backlink[] {
+    return this.backlinksTo((link, projectId) => {
+      const project = this.state.projects.find((candidate) => candidate.id === projectId);
+      return link.kind === "page" && project !== undefined && this.linkedPage(project, link.target)?.id === page.id;
+    }, { pageId: page.id });
+  }
+
+  private pageReferences(page: FakeWikiPage): Reference[] {
+    const project = this.state.projects.find((candidate) => candidate.id === page.projectId);
+    return project ? this.referencesOf(linksIn(page.body), project) : [];
+  }
+
+  private wikiOut(page: FakeWikiPage, include: readonly string[] = []): WikiPage {
     const pages = this.state.wiki ?? [];
     const ref = (other: FakeWikiPage) => ({ id: other.id, slug: other.slug, title: other.title });
     const path: FakeWikiPage[] = [];
@@ -1335,7 +1504,9 @@ export class FakeWorkspace {
       ...(parent ? { parent: ref(parent) } : {}),
       path: path.map(ref),
       children: pages.filter((other) => other.parentId === page.id).map(ref),
-      ...(page.body === "" ? {} : { revision: `${page.id}-r` }),
+      ...some("revision", this.currentRevision(page)?.id),
+      ...(include.includes("backlinks") ? { backlinks: this.pageBacklinks(page) } : {}),
+      ...(include.includes("references") ? { references: this.pageReferences(page) } : {}),
       created_at: page.createdAt,
       updated_at: page.updatedAt,
     };
@@ -2133,6 +2304,22 @@ export class FakeWorkspace {
         if (!deletion) {
           fail("not_found", `There is nothing in the trash with the ID ${id}.`);
         }
+        if (deletion.pages) {
+          const root = deletion.pages[0];
+          const holder = root?.parentId ?? null;
+          if (holder !== null && !(this.state.wiki ?? []).some((page) => page.id === holder)) {
+            fail("conflict", "This page can't come back on its own: the page that held it is in the trash too.", { details: { message_id: "trash-restore-page-first", args: {} } });
+          }
+          const clash = deletion.pages.find((page) => (this.state.wiki ?? []).some((other) => other.projectId === page.projectId && fold(other.title) === fold(page.title)));
+          if (clash) {
+            fail("conflict", `Another page is called "${clash.title}" now.`, { hint: "Rename that page first." });
+          }
+          (this.state.wiki ??= []).push(...deletion.pages);
+          this.state.trash = (this.state.trash ?? []).filter((candidate) => candidate !== deletion);
+          items.push(deletion.entry);
+          changes.push(...deletion.pages.map((page) => ({ entity: "wiki_page", id: page.id, fields: ["trashed"], project: deletion.entry.project ?? "" })));
+          continue;
+        }
         const parent = deletion.tasks[0]?.parentId;
         if (parent !== null && parent !== undefined && !this.state.tasks.some((task) => task.id === parent)) {
           fail("conflict", "This can't come back on its own: its task is in the trash too.", { hint: "Restore what holds it first; that brings it back too." });
@@ -2147,7 +2334,10 @@ export class FakeWorkspace {
     "trash.purge": ({ items: ids, all }) => {
       const chosen = (this.state.trash ?? []).filter((deletion) => all === true || (ids ?? []).includes(deletion.entry.id));
       this.state.trash = (this.state.trash ?? []).filter((deletion) => !chosen.includes(deletion));
-      const changes = chosen.flatMap((deletion) => deletion.tasks.map((task) => ({ entity: "task", id: task.id, fields: ["purged"], project: deletion.entry.project ?? "" })));
+      const changes = chosen.flatMap((deletion) => [
+        ...deletion.tasks.map((task) => ({ entity: "task", id: task.id, fields: ["purged"], project: deletion.entry.project ?? "" })),
+        ...(deletion.pages ?? []).map((page) => ({ entity: "wiki_page", id: page.id, fields: ["purged"], project: deletion.entry.project ?? "" })),
+      ]);
       return { output: { items: chosen.map((deletion) => deletion.entry), total: changes.length }, changes };
     },
     "agent.limits.update": (patch) => {
@@ -2390,9 +2580,150 @@ export class FakeWorkspace {
       const hits = searchWiki(pages, input);
       return { items: hits.slice(0, Math.min(Math.max(input.limit ?? 20, 1), 200)), total: hits.length };
     },
-    "wiki.get": ({ page: ref, project }) => this.wikiOut(this.wikiPage(ref, project)),
-    "wiki.create": ({ project: ref, title, body, parent: parentRef }) => {
-      const project = this.writable(ref);
+    "wiki.get": ({ page: ref, project, revision: revisionId, include }) => {
+      const page = this.wikiPage(ref, project);
+      const out = this.wikiOut(page, include ?? []);
+      if (revisionId === null || revisionId === undefined) {
+        return out;
+      }
+      const revision = this.revision(revisionId);
+      if (revision.taskId !== page.id) {
+        fail("invalid", `Revision ${revisionId} is not one of this page's.`, { details: { path: "revision" } });
+      }
+      return { ...out, body: revision.body, headings: headingsOf(revision.body), revision: revision.id, current: revision === this.currentRevision(page) };
+    },
+    "wiki.history": ({ page: ref, project }) => {
+      const page = this.wikiPage(ref, project);
+      const current = this.currentRevision(page);
+      const items = this.revisionsOf(page)
+        .reverse()
+        .map((revision) => this.revisionInfo(revision, current));
+      return { items, total: items.length };
+    },
+    "wiki.backlinks": ({ page: ref, project }) => {
+      const items = this.pageBacklinks(this.wikiPage(ref, project));
+      return { items, total: items.length };
+    },
+    "wiki.references": ({ page: ref, project }) => {
+      const items = this.pageReferences(this.wikiPage(ref, project));
+      return { items, total: items.length };
+    },
+    "task.backlinks": ({ key }) => {
+      const task = this.task(key);
+      const items = this.backlinksTo((link) => link.kind === "task" && this.linkedTask(link.target)?.id === task.id, { taskId: task.id });
+      return { items, total: items.length };
+    },
+    "task.references": ({ key }) => {
+      const task = this.task(key);
+      const project = this.projectOf(task);
+      const items = [
+        ...this.referencesOf(linksIn(task.description), project),
+        ...this.state.comments.filter((comment) => comment.taskId === task.id && comment.deletedAt === null).flatMap((comment) => this.referencesOf(linksIn(comment.body), project, comment.id)),
+      ];
+      return { items, total: items.length };
+    },
+    "wiki.update": ({ page: ref, project: projectRef, title, body, edits, parent: parentRef, clear, before, after, at, base_revision }) => {
+      const page = this.wikiPage(ref, projectRef);
+      const project = this.wikiWritable(this.projectKeyOf(page));
+      const pages = (this.state.wiki ??= []);
+      if (body !== null && body !== undefined && edits !== undefined && edits.length > 0) {
+        fail("invalid", "Give a new text or edits, not both.", { details: { path: "edits", message_id: "wiki-body-and-edits", args: {} } });
+      }
+      if (parentRef !== null && parentRef !== undefined && (clear ?? []).includes("parent")) {
+        fail("invalid", "Give a parent or clear it, not both.", { details: { path: "clear", message_id: "wiki-parent-and-clear", args: {} } });
+      }
+      const fields: string[] = [];
+      if (title !== null && title !== undefined && title.trim() !== page.title) {
+        const trimmed = title.trim();
+        if (trimmed === "") {
+          fail("invalid", "A page needs a title.", { details: { path: "title", message_id: "wiki-title-empty", args: {} } });
+        }
+        const clash = pages.find((other) => other !== page && other.projectId === project.id && fold(other.title) === fold(trimmed));
+        if (clash) {
+          fail("conflict", `Project ${project.key} already has a page called "${clash.title}".`, { details: { field: "title", message_id: "wiki-title-taken", args: { project: project.key, title: clash.title } } });
+        }
+        const slug = slugOf(trimmed, pages.filter((other) => other !== page && other.projectId === project.id).map((other) => other.slug));
+        if (slug !== page.slug) {
+          page.oldSlugs = [...(page.oldSlugs ?? []).filter((old) => old !== slug), page.slug];
+          for (const other of pages) {
+            if (other !== page && other.projectId === project.id) {
+              other.oldSlugs = (other.oldSlugs ?? []).filter((old) => old !== slug);
+            }
+          }
+          page.slug = slug;
+        }
+        page.title = trimmed;
+        fields.push("title");
+      }
+      let text = body ?? undefined;
+      if (edits !== undefined && edits.length > 0) {
+        text = page.body;
+        for (const edit of edits) {
+          if (text.split(edit.old_text).length !== 2) {
+            fail("invalid", `"${edit.old_text}" must occur exactly once.`, { details: { path: "edits" } });
+          }
+          text = text.replace(edit.old_text, edit.new_text);
+        }
+      }
+      let saved: FakeRevision | undefined;
+      if (text !== undefined && text !== page.body) {
+        saved = this.addPageRevision(page, text, "normal", base_revision ?? this.currentRevision(page)?.id ?? null);
+        fields.push("body");
+      }
+      const given = (value: unknown) => value !== null && value !== undefined;
+      const moves = given(parentRef) || (clear ?? []).includes("parent") || given(before) || given(after) || given(at);
+      if (moves) {
+        const parent = parentRef === null || parentRef === undefined ? ((clear ?? []).includes("parent") ? null : page.parentId) : this.wikiPage(parentRef, project.key).id;
+        this.movePage(page, parent, { before, after, at });
+        fields.push("parent");
+      }
+      if (fields.length === 0) {
+        return { page: this.wikiOut(page), save: { outcome: "unchanged" as const } };
+      }
+      page.updatedAt = this.today().toISOString();
+      return {
+        output: { page: this.wikiOut(page), ...(saved ? { save: { outcome: "saved" as const, revision: saved.id } } : {}) },
+        changes: [{ entity: "wiki_page", id: page.id, fields, project: project.key }],
+      };
+    },
+    "wiki.move": ({ page: ref, project: projectRef, parent: parentRef, top_level, before, after, at }) => {
+      const page = this.wikiPage(ref, projectRef);
+      const project = this.wikiWritable(this.projectKeyOf(page));
+      const hasParent = parentRef !== null && parentRef !== undefined;
+      if (hasParent && top_level === true) {
+        fail("invalid", "Give a parent or move it to the top, not both.", { details: { path: "top_level", message_id: "wiki-parent-and-top", args: {} } });
+      }
+      const placed = (before !== null && before !== undefined) || (after !== null && after !== undefined) || (at !== null && at !== undefined);
+      if (!hasParent && top_level !== true && !placed) {
+        fail("invalid", "Say where to move the page.", { details: { path: "parent", message_id: "wiki-move-nowhere", args: {} } });
+      }
+      const parent = hasParent ? this.wikiPage(parentRef, project.key).id : top_level === true ? null : page.parentId;
+      this.movePage(page, parent, { before, after, at: at ?? (parent !== page.parentId && !placed ? "bottom" : undefined) });
+      return { output: { page: this.wikiOut(page) }, changes: [{ entity: "wiki_page", id: page.id, fields: ["parent", "rank"], project: project.key }] };
+    },
+    "wiki.delete": ({ page: ref, project: projectRef }) => {
+      const page = this.wikiPage(ref, projectRef);
+      const project = this.wikiWritable(this.projectKeyOf(page));
+      const pages = (this.state.wiki ??= []);
+      const gone = subtree(pages, page);
+      const at = this.today().toISOString();
+      const entry: TrashEntry = {
+        contains: gone.length - 1,
+        deleted_at: at,
+        deleted_by: { kind: "user", name: "You" },
+        group: "",
+        id: page.id,
+        kind: "wiki_page",
+        project: project.key,
+        purge_at: new Date(this.today().getTime() + this.state.settings.trash_days * 86_400_000).toISOString(),
+        title: page.title,
+      };
+      (this.state.trash ??= []).push({ entry, tasks: [], pages: gone });
+      this.state.wiki = pages.filter((candidate) => !gone.includes(candidate));
+      return { output: { items: [entry], total: gone.length }, changes: gone.map((each) => ({ entity: "wiki_page", id: each.id, fields: ["trashed"], project: project.key })) };
+    },
+    "wiki.create": ({ project: ref, title, body, parent: parentRef, before, after, at }) => {
+      const project = this.wikiWritable(ref);
       const pages = (this.state.wiki ??= []);
       const trimmed = title.trim();
       if (trimmed === "") {
@@ -2409,11 +2740,15 @@ export class FakeWorkspace {
         title: trimmed,
         slug: slugOf(trimmed, pages.filter((other) => other.projectId === project.id).map((other) => other.slug)),
         parentId: parent?.id ?? null,
-        body: body ?? "",
+        body: "",
         createdAt: now,
         updatedAt: now,
       };
-      pages.push(page);
+      this.movePage(page, parent?.id ?? null, { before, after, at });
+      if ((body ?? "") !== "") {
+        this.addPageRevision(page, body ?? "", "normal", null);
+        page.updatedAt = now;
+      }
       return { output: { page: this.wikiOut(page) }, changes: [{ entity: "wiki_page", id: page.id, fields: ["created"], project: project.key }] };
     },
     "query.parse": ({ query, fields }) => parseQuery(query, this.queryNames(), fields === true),
@@ -2768,7 +3103,8 @@ export class FakeWorkspace {
     "description.revision": ({ revision: id, diff_from }) => {
       const revision = this.revision(id);
       const task = this.state.tasks.find((candidate) => candidate.id === revision.taskId);
-      const current = task && this.currentRevision(task);
+      const page = (this.state.wiki ?? []).find((candidate) => candidate.id === revision.taskId);
+      const current = task ? this.currentRevision(task) : page && this.currentRevision(page);
       const from = diff_from === null || diff_from === undefined ? null : this.revision(diff_from);
       if (from && from.taskId !== revision.taskId) {
         fail("invalid", "Both revisions must belong to the same description.", { details: { path: "diff_from" } });
@@ -2776,7 +3112,7 @@ export class FakeWorkspace {
       return {
         body: revision.body,
         ...some("diff", from && unifiedDiff(from.body, revision.body, from.id, revision.id)),
-        owner: task ? this.keyOf(task) : "",
+        owner: task ? this.keyOf(task) : (page?.title ?? ""),
         revision: this.revisionInfo(revision, current),
       };
     },

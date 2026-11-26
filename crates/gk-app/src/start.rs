@@ -34,6 +34,9 @@ pub(crate) struct StartData {
     /// A task window's task: the page shows that task alone.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) task: Option<String>,
+    /// A wiki window's page, by its ID: the page shows that page alone.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) wiki: Option<String>,
     /// The task to open first, from a `glyphkeel://open/<KEY>` link the app
     /// was started with.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -150,7 +153,7 @@ pub(crate) fn window_ready(
         // Shown now if it was asked for while its page loaded.
         crate::quick_add::on_ready(&window);
     } else {
-        // Task windows come forward each time they are opened.
+        // Task and wiki windows come forward each time they are opened.
         crate::task_window::show(&window);
     }
     Ready { transport }
@@ -210,6 +213,7 @@ mod tests {
             title_bar: TitleBar::System,
             locale: Some("de-DE".into()),
             task: None,
+            wiki: None,
             open: None,
             prefs: None,
             quick_add: false,
@@ -228,6 +232,7 @@ mod tests {
             title_bar: TitleBar::System,
             locale: None,
             task: Some("TM-41".into()),
+            wiki: None,
             open: None,
             prefs: None,
             quick_add: false,
@@ -243,6 +248,7 @@ mod tests {
             title_bar: TitleBar::System,
             locale: None,
             task: None,
+            wiki: None,
             open: None,
             prefs: None,
             quick_add: true,

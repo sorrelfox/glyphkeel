@@ -44,8 +44,9 @@ describe("initialPath", () => {
     expect(initialPath("/index.html")).toBe("/");
   });
 
-  it("opens a task window's task, or the task of the link the app was started with", () => {
+  it("opens a task or wiki window's item, or the task of the link the app was started with", () => {
     expect(initialPath("/index.html", { task: "TM-41" })).toBe("/task/TM-41");
     expect(initialPath("/index.html", { open: "TM-41" })).toBe("/open/TM-41");
+    expect(initialPath("/index.html", { wiki: "01a1ee56-5e01-7406-9f8b-e8c1fe48b90b" })).toBe("/wiki/01a1ee56-5e01-7406-9f8b-e8c1fe48b90b");
   });
 });

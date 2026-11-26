@@ -161,17 +161,17 @@ function ProjectButton({ project, onSettings, onNewSubproject }: ProjectButtonPr
   );
 }
 
-/** Board, List, Gantt and Wiki. Board and List exist so far; the others are dimmed. */
+/** Board, List, Gantt and Wiki. Gantt doesn't exist yet and is dimmed. */
 function ViewSwitcher({ project }: { project: string }) {
   const t = useT();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
-  const current = pathname.endsWith("/list") ? "list" : "board";
+  const current = pathname.endsWith("/list") ? "list" : pathname.endsWith("/wiki") ? "wiki" : "board";
   const views = [
     { id: "board", icon: <Columns3 className="ic" />, ready: true },
     { id: "list", icon: <List className="ic" />, ready: true },
     { id: "gantt", icon: <ChartGantt className="ic" />, ready: false },
-    { id: "wiki", icon: <BookOpen className="ic" />, ready: false },
+    { id: "wiki", icon: <BookOpen className="ic" />, ready: true },
   ];
   return (
     <div className="seg" role="group" aria-label={t("header-views")}>
@@ -186,6 +186,8 @@ function ViewSwitcher({ project }: { project: string }) {
           onClick={() => {
             if (view.id === "list") {
               void navigate({ to: "/projects/$key/list", params: { key: project } });
+            } else if (view.id === "wiki") {
+              void navigate({ to: "/projects/$key/wiki", params: { key: project } });
             } else if (view.id === "board") {
               void navigate({ to: "/projects/$key", params: { key: project } });
             }
