@@ -18,6 +18,7 @@ import { windowReady, type Transport } from "./ipc/ready";
 import { BoardScreen } from "./screens/board/BoardScreen";
 import { OpenTaskScreen, TaskWindowScreen } from "./screens/task/TaskWindow";
 import { AllTasksListScreen, ProjectListScreen } from "./screens/list/ListScreen";
+import { FlowReportsScreen } from "./screens/reports/FlowReports";
 import { TimeReportScreen } from "./screens/time/TimeReport";
 import { ActivityScreen } from "./screens/safety/ActivityScreen";
 import { TrashScreen } from "./screens/safety/TrashScreen";
@@ -36,6 +37,7 @@ const Gallery = lazy(() => import("./dev/Gallery"));
 const EditorPlayground = lazy(() => import("./editor/dev/EditorPlayground"));
 const CalendarScreen = lazy(() => import("./screens/calendar/CalendarScreen").then((module) => ({ default: module.CalendarScreen })));
 const GanttScreen = lazy(() => import("./screens/gantt/GanttScreen").then((module) => ({ default: module.GanttScreen })));
+const RoadmapScreen = lazy(() => import("./screens/roadmap/RoadmapScreen").then((module) => ({ default: module.RoadmapScreen })));
 
 /** The path that opens the gallery directly, for the browser tests. */
 export const GALLERY_PATH = "/dev/themes";
@@ -86,6 +88,8 @@ const allTasksRoute = createRoute({ getParentRoute: () => shellRoute, path: "/al
 
 /** The time report: logged time over a range of days. */
 const timeReportRoute = createRoute({ getParentRoute: () => shellRoute, path: "/time", component: TimeReportScreen });
+/** The flow reports: created against closed, cumulative flow, cycle time. */
+const reportsRoute = createRoute({ getParentRoute: () => shellRoute, path: "/reports", component: FlowReportsScreen });
 
 /** The trash: deleted items, to restore or delete for good. */
 const trashRoute = createRoute({ getParentRoute: () => shellRoute, path: "/trash", component: TrashScreen });
@@ -126,6 +130,14 @@ export const projectGanttRoute = createRoute({
   component: LazyGanttScreen,
 });
 
+/** A project's roadmap: its versions with their progress and tasks; loaded on first use. */
+export const projectRoadmapRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: "/projects/$key/roadmap",
+  validateSearch: taskSearch,
+  component: LazyRoadmapScreen,
+});
+
 /** The quick-add window: one field, without the board and the sidebar. */
 const quickAddRoute = createRoute({ getParentRoute: () => rootRoute, path: QUICK_ADD_PATH, component: QuickAdd });
 
@@ -157,7 +169,7 @@ const routeTree = rootRoute.addChildren([
   quickAddRoute,
   taskWindowRoute,
   wikiWindowRoute,
-  shellRoute.addChildren([todayRoute, searchRoute, allTasksRoute, timeReportRoute, trashRoute, activityRoute, boardRoute, projectListRoute, projectCalendarRoute, projectGanttRoute, wikiRoute, openTaskRoute]),
+  shellRoute.addChildren([todayRoute, searchRoute, allTasksRoute, timeReportRoute, reportsRoute, trashRoute, activityRoute, boardRoute, projectListRoute, projectCalendarRoute, projectGanttRoute, projectRoadmapRoute, wikiRoute, openTaskRoute]),
 ]);
 
 /**
@@ -252,6 +264,14 @@ function LazyGanttScreen() {
   return (
     <Suspense>
       <GanttScreen />
+    </Suspense>
+  );
+}
+
+function LazyRoadmapScreen() {
+  return (
+    <Suspense>
+      <RoadmapScreen />
     </Suspense>
   );
 }

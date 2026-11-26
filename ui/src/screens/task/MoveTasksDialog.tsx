@@ -137,7 +137,7 @@ export function MoveTasksDialog({ keys, from, to, onClose }: MoveTasksDialogProp
   );
 }
 
-/** The new keys, a choice for each status, type and label without a match, and the custom fields whose values are left off. */
+/** The new keys, a choice for each status, type and label without a match, and the custom fields whose values are left off, and the versions taken off. */
 function Plan({ roots, check, project, choices, onChoose }: { roots: number; check: MoveCheck; project: Project; choices: Choices; onChoose: (choices: Choices) => void }) {
   const t = useT();
   const [first] = check.keys;
@@ -158,6 +158,7 @@ function Plan({ roots, check, project, choices, onChoose }: { roots: number; che
   const headings: Record<Kind, string> = { statuses: t("move-to-map-statuses"), types: t("move-to-map-types"), labels: t("move-to-map-labels") };
   const kinds = (["statuses", "types", "labels"] as const).filter((kind) => missing[kind].length > 0);
   const lost = check.fields.filter((match) => match.target === undefined);
+  const unplanned = check.versions.filter((match) => match.target === undefined);
   return (
     <>
       <p data-testid="move-keys">
@@ -194,6 +195,16 @@ function Plan({ roots, check, project, choices, onChoose }: { roots: number; che
           <ul>
             {lost.map((match) => (
               <li key={match.name}>{t("move-to-fields-row", { name: match.name, count: match.tasks })}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {unplanned.length > 0 && (
+        <div data-testid="move-versions-left-off">
+          <p className="meta">{t("move-to-versions-left-off", { project: project.key })}</p>
+          <ul>
+            {unplanned.map((match) => (
+              <li key={match.name}>{t("move-to-versions-row", { name: match.name, count: match.tasks })}</li>
             ))}
           </ul>
         </div>

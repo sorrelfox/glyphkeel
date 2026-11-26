@@ -144,6 +144,12 @@ export type AgentPolicyPatch = {
   max_profile: Profile;
 };
 
+/** A project's rules for agents. Everything left out is no rule. */
+export type AgentRules = {
+  /** Task fields agents may not change in this project: `title`, `description`, `type`, `priority`, `start_date`, `due_date`, `estimate`, `progress`, `labels`, `parent`, `fix_version`, or a custom field. */
+  read_only?: string[];
+};
+
 /** One run of `glyphkeel mcp`. */
 export type AgentSession = {
   /** The client's own ID (`claude-code`), when it sent one. */
@@ -414,6 +420,8 @@ export type BulkChanges = {
   due_date?: string | null;
   /** The estimate, as a duration (`1d 4h`, `90m`). */
   estimate?: string | null;
+  /** Plan them for the version of this name (in each task's project, or shared with it). */
+  fix_version?: string | null;
   /** Replace the labels with these. */
   labels?: string[] | null;
   /** With `project`: which status, type or label of that project stands in for one it has no match for. */
@@ -798,6 +806,47 @@ export type ConflictResolution = {
   text?: string | null;
 };
 
+/** When the next occurrence is made. */
+export type CreateWhen = "on_close" | "ahead";
+
+/** Tasks created against tasks closed, per period. */
+export type CreatedClosedReport = {
+  /** The length of a period. */
+  bucket: FlowBucket;
+  /** Closings over the whole range. */
+  closed: number;
+  /** Tasks created over the whole range. */
+  created: number;
+  /** The report as CSV text, when asked for. */
+  csv?: string;
+  /** The first day. */
+  from: string;
+  /** The periods, oldest first. */
+  items: CreatedClosedRow[];
+  /** Open tasks just before `from`. */
+  open_before: number;
+  /** Reopenings over the whole range. */
+  reopened: number;
+  /** The last day, included. */
+  to: string;
+};
+
+/** One period of tasks created against tasks closed. */
+export type CreatedClosedRow = {
+  /** Times a task was closed in the period. */
+  closed: number;
+  /** Tasks created in the period. */
+  created: number;
+  /** The period's last day, included. */
+  end: string;
+  /** Open tasks at the end of the period. */
+  open: number;
+  /** Times a closed task was opened again in the period. */
+  reopened: number;
+  /** The period's first day. */
+  start: string;
+};
+
 /** One column of the file and where it goes. */
 export type CsvColumn = {
   /** Its place, from 0. */
@@ -816,7 +865,7 @@ export type CsvColumn = {
 export type CsvColumnMapping = {
   /** The column's name in the header row, ignoring case. Every column with this name goes to the same place; their values are taken together (Jira writes one `Labels` column per label). */
   column: string;
-  /** The target: `title`, `description`, `status`, `type`, `priority`, `labels`, `start_date`, `due_date`, `estimate`, `spent` (time logged on the import day), `comment`, `key` (the row's key or ID in the other tool, for references), `parent` (a key or ID, of a row of the file or a task here), `blocks`, `blocked_by`, `relates`, `duplicates`, `duplicated_by`, `clones`, `cloned_by`, `relations` (Redmine's "Blocks #12, Related to #13"), `field.<name>` for a custom field, or `ignore`. */
+  /** The target: `title`, `description`, `status`, `type`, `priority`, `labels`, `fix_version` (an open version of the project, by name), `start_date`, `due_date`, `estimate`, `spent` (time logged on the import day), `comment`, `key` (the row's key or ID in the other tool, for references), `parent` (a key or ID, of a row of the file or a task here), `blocks`, `blocked_by`, `relates`, `duplicates`, `duplicated_by`, `clones`, `cloned_by`, `relations` (Redmine's "Blocks #12, Related to #13"), `field.<name>` for a custom field, or `ignore`. */
   to: string;
   /** For `estimate` and `spent`: the unit of the numbers. */
   unit?: CsvUnit | null;
@@ -1062,6 +1111,34 @@ export type CsvValueMaps = {
   types?: Record<string, string>;
 };
 
+/** How many tasks were in each status at the end of each period. */
+export type CumulativeFlowReport = {
+  /** The bands in workflow order: by category, then by board order. */
+  bands: FlowBand[];
+  /** The length of a period. */
+  bucket: FlowBucket;
+  /** The report as CSV text, when asked for. */
+  csv?: string;
+  /** The first day. */
+  from: string;
+  /** What the bands are. */
+  group_by: FlowGroupBy;
+  /** The periods, oldest first. */
+  items: CumulativeFlowRow[];
+  /** The last day, included. */
+  to: string;
+};
+
+/** The tasks in each band at the end of one period. */
+export type CumulativeFlowRow = {
+  /** The number of tasks in each band, in the order of `bands`. */
+  counts: number[];
+  /** The period's last day, included. */
+  end: string;
+  /** The period's first day. */
+  start: string;
+};
+
 /** A custom field. */
 export type CustomField = {
   /** The value new tasks get; left out when there is none. */
@@ -1198,6 +1275,56 @@ export type CustomFieldValue = {
   query_name: string;
   /** The value: a string, a number, `true`/`false`, or a list of options for a multi-select field. */
   value: unknown;
+};
+
+/** Cycle and lead time of the tasks closed over a range of days. */
+export type CycleTimeReport = {
+  /** The length of a period. */
+  bucket: FlowBucket;
+  /** One line per task as CSV text, when asked for. */
+  csv?: string;
+  /** Cycle time over the whole range. */
+  cycle: FlowStats;
+  /** The first day. */
+  from: string;
+  /** The periods, oldest first. */
+  items: CycleTimeRow[];
+  /** Lead time over the whole range. */
+  lead: FlowStats;
+  /** The tasks, by closing time, when asked for. */
+  tasks?: CycleTimeTask[];
+  /** The last day, included. */
+  to: string;
+};
+
+/** Cycle and lead time of the tasks closed in one period. */
+export type CycleTimeRow = {
+  /** Cycle time of the tasks closed in the period that were in progress. */
+  cycle: FlowStats;
+  /** The period's last day, included. */
+  end: string;
+  /** Lead time of the tasks closed in the period. */
+  lead: FlowStats;
+  /** The period's first day. */
+  start: string;
+};
+
+/** One task closed in the period. */
+export type CycleTimeTask = {
+  /** When it was last closed (RFC 3339, UTC). */
+  closed_at: string;
+  /** The day it was last closed, in the personal time zone. */
+  closed_day: string;
+  /** Days from the first move into progress to the last close; left out when the task was never in progress. */
+  cycle_days?: number;
+  /** The task's key. */
+  key: string;
+  /** Days from its creation to the last close. */
+  lead_days: number;
+  /** How often it was opened again after a close. */
+  reopened: number;
+  /** Its title. */
+  title: string;
 };
 
 /** A range of days, both included. */
@@ -1373,6 +1500,24 @@ export type ExportResult = {
   size: number;
 };
 
+/** A custom field of a project template: one of the project's own. */
+export type FieldBlueprint = {
+  /** The value new tasks get. */
+  default?: unknown;
+  /** Its ID in the template, which the rules name; the new project's field gets a new one. */
+  id: string;
+  /** What it holds. */
+  kind: CustomFieldKind;
+  /** Its name. */
+  name: string;
+  /** The options of a select field, in order. */
+  options?: string[];
+  /** Whether new tasks need a value. */
+  required?: boolean;
+  /** The task types it shows for, by name; empty: every type. */
+  types?: string[];
+};
+
 /** One field's change. A side is left out when the field had no value. */
 export type FieldChange = {
   /** The value after. */
@@ -1435,6 +1580,75 @@ export type FileRef = {
   /** The attachment's ID. */
   attachment: string;
 };
+
+/** One band of the cumulative flow. */
+export type FlowBand = {
+  /** The status's category. */
+  category: Category;
+  /** The status's colour; left out for categories. */
+  hue?: Hue;
+  /** The band's key: the status name in lower case, or the category. */
+  key: string;
+  /** The status's name as written; the category's name for categories. */
+  name: string;
+};
+
+/** How long each period of a flow report is. */
+export type FlowBucket = "day" | "week" | "month";
+
+/** What the bands of the cumulative flow are. */
+export type FlowGroupBy = "status" | "category";
+
+/** Which tasks and which days a flow report covers. */
+export type FlowReportInput = {
+  /** Created against closed and cycle time only: count only what `me` (the local user), `agent` (any agent) or the person or agent of that name did: creating a task, closing or reopening it. */
+  actor?: string | null;
+  /** The length of a period: `day`, `week` (default) or `month`. At most 1,000 periods. */
+  bucket?: FlowBucket | null;
+  /** Also return the report as CSV text (comma-separated, a header line, CRLF line ends). */
+  csv?: boolean;
+  /** Only tasks planned for this version: a name (every version of that name) or an ID. */
+  fix_version?: string | null;
+  /** The first day: `YYYY-MM-DD`, `today` or `yesterday`; default twelve periods before `to` (30 days, 12 weeks or 12 months). */
+  from?: string | null;
+  /** Cumulative flow only: bands by `status` (default) or `category`. */
+  group_by?: FlowGroupBy | null;
+  /** With `project`: its sub-projects' tasks too; default true. */
+  include_subprojects?: boolean | null;
+  /** Only tasks with this label, by name. */
+  label?: string | null;
+  /** Only this project: a key or ID. */
+  project?: string | null;
+  /** Only tasks that match this query (the task query language), as they are now. */
+  query?: string | null;
+  /** Cycle time only: also list every task closed in the period. */
+  tasks?: boolean;
+  /** The last day, included; default today. */
+  to?: string | null;
+  /** Only tasks of this type, by name. */
+  type?: string | null;
+};
+
+/** Summary figures of a set of durations, in days (two decimals). The percentiles interpolate between the nearest values. */
+export type FlowStats = {
+  /** How many tasks the figures cover. */
+  count: number;
+  /** The longest. */
+  max?: number;
+  /** The mean; left out without tasks. */
+  mean?: number;
+  /** The shortest. */
+  min?: number;
+  /** The median. */
+  p50?: number;
+  /** The 85th percentile. */
+  p85?: number;
+  /** The 95th percentile. */
+  p95?: number;
+};
+
+/** The unit a rule repeats in. */
+export type Frequency = "day" | "week" | "month" | "year";
 
 /** How the Gantt chart groups its rows. */
 export type GanttGrouping = "parent" | "label" | "status" | "claim" | "none";
@@ -1556,6 +1770,14 @@ export type Label = {
   name: string;
   /** Tasks with this label. */
   tasks: number;
+};
+
+/** A label of a project template. */
+export type LabelBlueprint = {
+  /** Its colour. */
+  hue: Hue;
+  /** Its name. */
+  name: string;
 };
 
 /** Adds, changes or removes a label inside [`ProjectUpdateInput`]. */
@@ -1760,6 +1982,8 @@ export type ListedTask = {
   fields?: Record<string, unknown>;
   /** How many files are attached to it and to its comments. */
   file_count: number;
+  /** The version it is planned for. */
+  fix_version?: VersionRef;
   /** The task's ID. */
   id: string;
   /** The task's key. */
@@ -1776,6 +2000,8 @@ export type ListedTask = {
   project: string;
   /** Its place in its status column. */
   rank: string;
+  /** Whether it is the open occurrence of a recurring task. */
+  recurring?: boolean;
   /** Estimate minus logged time, in minutes; only with an estimate. */
   remaining_minutes?: number;
   /** Logged time in minutes. */
@@ -1845,6 +2071,8 @@ export type MoveCheck = {
   statuses: MoveMatch[];
   /** Their types. */
   types: MoveMatch[];
+  /** The versions they are planned for. The target is the same version when the target project can plan tasks for it; absent when the move would take it off. */
+  versions: MoveMatch[];
 };
 
 /** What tasks moving to another project take there in place of the statuses, types and labels of their own project. Each map goes from a name in the task's project to a name in the target project (any case). A name left out keeps the target's item of the same name; without one, a status becomes the target's first status, a type its default type, and a label is left off. Every change says which. */
@@ -1889,6 +2117,16 @@ export type MovedTask = {
   start_date?: string;
 };
 
+/** A task template inside a project template. */
+export type NamedBlueprint = {
+  /** What it is for. */
+  description?: string;
+  /** The task template's name. */
+  name: string;
+  /** The task. */
+  task: TaskBlueprint;
+};
+
 /** An operation failed. The message says what happened, the hint what to do next; both are written for the reader, person or agent. */
 export type OpError = {
   /** What kind of failure. */
@@ -1909,6 +2147,16 @@ export type Origin = {
   session?: string;
   /** The program: the app, the command line or MCP. */
   via: Via;
+};
+
+/** A wiki page of a project template. */
+export type PageBlueprint = {
+  /** Its text (Markdown). */
+  body?: string;
+  /** The title of the page it sits in; that page comes earlier in the list. */
+  parent?: string | null;
+  /** Its title. */
+  title: string;
 };
 
 /** A query as the query field shows it. */
@@ -1939,6 +2187,8 @@ export type Profile = "read-only" | "standard" | "full";
 
 /** One project with its configuration. */
 export type Project = {
+  /** The rules for agents; left out when there are none. */
+  agent_rules?: AgentRules;
   /** The sub-projects' keys, in order. */
   children: string[];
   /** When it was created (RFC 3339, UTC). */
@@ -1979,6 +2229,30 @@ export type Project = {
   types: TaskType[];
   /** When it last changed (RFC 3339, UTC). */
   updated_at: string;
+};
+
+/** A project's set-up. */
+export type ProjectBlueprint = {
+  /** The rules for agents. */
+  agent_rules?: AgentRules;
+  /** The project's description (Markdown). */
+  description?: string;
+  /** The project's own custom fields, in order. */
+  fields?: FieldBlueprint[];
+  /** The labels, in order. */
+  labels?: LabelBlueprint[];
+  /** Which parts are switched on; default all. */
+  modules?: Modules | null;
+  /** The statuses, in board order; empty: the default statuses. */
+  statuses?: StatusBlueprint[];
+  /** Task templates the new project gets. */
+  task_templates?: NamedBlueprint[];
+  /** Tasks to start with; their dates count from the day the project is made. */
+  tasks?: TaskBlueprint[];
+  /** The task types, in order; empty: the default types. */
+  types?: TypeBlueprint[];
+  /** Wiki pages, parents before their children. */
+  wiki?: PageBlueprint[];
 };
 
 /** A project changed, with the history group of the change. */
@@ -2224,6 +2498,133 @@ export type RecentTask = {
   task: ListedTask;
 };
 
+/** A task's series, as tasks carry it. */
+export type Recurrence = {
+  /** The key of the series' current occurrence; left out when it is in the trash. */
+  current?: string;
+  /** Whether the series has ended: stopped, or no dates left. */
+  ended: boolean;
+  /** Occurrences made or passed over so far, the first included. */
+  made: number;
+  /** The date of the next occurrence still to come; left out when the rule has no more, or when it counts from completion and the current one is open. */
+  next_date?: string;
+  /** The rule. */
+  rule: RecurrenceRule;
+  /** The series' ID. */
+  series: string;
+  /** The rule in words, for people. */
+  summary: string;
+  /** The title new occurrences get. */
+  title: string;
+};
+
+/** A task's series after a change. */
+export type RecurrenceChange = {
+  /** The task's due date now (it moves when an occurrence is skipped). */
+  due_date?: string;
+  /** The history group, for revert and Undo; left out when nothing changed. */
+  group?: string;
+  /** The series now; left out when the task stopped repeating. */
+  recurrence?: Recurrence;
+  /** The task's key. */
+  task: string;
+};
+
+/** The next dates of a rule. */
+export type RecurrencePreview = {
+  /** The next dates from the start (from completion: counted from the start as if each was done on its date). */
+  dates: string[];
+  /** The rule as read. */
+  rule: RecurrenceRule;
+  /** The rule in words, for people. */
+  summary: string;
+};
+
+/** A recurrence rule, as outputs carry it. */
+export type RecurrenceRule = {
+  /** At most this many occurrences, the first included. */
+  count?: number;
+  /** When the next occurrence is made. */
+  create: CreateWhen;
+  /** With `create: ahead`: this many days before its date (0 to 365). */
+  days_ahead?: number;
+  /** The unit. */
+  every: Frequency;
+  /** From the calendar or from completion. */
+  from: RepeatFrom;
+  /** Every this many units, 1 to 999. */
+  interval: number;
+  /** Yearly: the month, 1 to 12. */
+  month?: number;
+  /** Monthly and yearly: the day of the month, 1 to 31, or -1 for the last day (the 31st is the last day in shorter months). */
+  month_day?: number;
+  /** The first possible day, `YYYY-MM-DD`; the pattern counts from it. */
+  starts: string;
+  /** The last possible day. */
+  until?: string;
+  /** Monthly and yearly: the first to fifth (1–5) or last (-1) `weekday` of the month, instead of a day of the month. */
+  week_of_month?: number;
+  /** With `week_of_month`: the weekday. */
+  weekday?: Weekday;
+  /** Weekly: the weekdays, Monday first. */
+  weekdays?: Weekday[];
+};
+
+/** What a run made. */
+export type RecurrenceRun = {
+  /** The new occurrences. */
+  created: TaskRef[];
+  /** The history group, for revert and Undo; left out when nothing was made. */
+  group?: string;
+  /** When the next occurrence comes due (RFC 3339, UTC): local midnight of its day in the person's time zone; left out when none waits. */
+  next_at?: string;
+};
+
+/** Makes the occurrences whose time has come. */
+export type RecurrenceRunInput = Record<string, never>;
+
+/** Makes a task recurring, or changes its series. */
+export type RecurrenceSetInput = {
+  /** At most this many occurrences, 1 to 10000. */
+  count?: number | null;
+  /** When the next occurrence is made; default when this one is closed. */
+  create?: CreateWhen | null;
+  /** With `create: ahead`: this many days before its date, 0 to 365. */
+  days_ahead?: number | null;
+  /** The unit. */
+  every?: Frequency | null;
+  /** From the calendar (default) or from completion. */
+  from?: RepeatFrom | null;
+  /** Every this many units, 1 to 999; default 1. */
+  interval?: number | null;
+  /** The task: its key or ID. */
+  key: string;
+  /** Yearly: the month, 1 to 12. */
+  month?: number | null;
+  /** Monthly and yearly: the day of the month, 1 to 31, or -1 for the last. */
+  month_day?: number | null;
+  /** The first possible day; default the task's due date, else its start date, else today. */
+  starts?: string | null;
+  /** The rule in words (`every monday`); fields given as well override it. Leave the rule out to keep the series' rule. */
+  text?: string | null;
+  /** The last possible day. */
+  until?: string | null;
+  /** Make this task's current details (title, description, type, priority, labels, estimate, subtasks, dates) those of the occurrences still to come. A new series always starts from them. */
+  update_details?: boolean;
+  /** Monthly and yearly: 1 to 5 or -1 (last), with `weekday`. */
+  week_of_month?: number | null;
+  /** With `week_of_month`: the weekday. */
+  weekday?: Weekday | null;
+  /** Weekly: the weekdays; default the start's. */
+  weekdays?: Weekday[];
+};
+
+/** Names a recurring task. */
+export type RecurrenceTaskInput = {
+  /** The task: its key or ID. */
+  key: string;
+};
+
 /** One link in a text, resolved now. */
 export type Reference = {
   /** The comment the link is in, when it is not in the description. */
@@ -2393,6 +2794,9 @@ export type Rendered = {
   version?: number;
 };
 
+/** What the next date is counted from. */
+export type RepeatFrom = "schedule" | "completion";
+
 /** What to revert: history groups, or everything an agent session changed. */
 export type RevertInput = {
   /** Only report what would be reverted. */
@@ -2456,6 +2860,60 @@ export type RevisionList = {
   items: RevisionInfo[];
   /** How many. */
   total: number;
+};
+
+/** A rule given field by field or in words; shared by `recurrence.set` and `recurrence.preview`. */
+export type RulePreviewInput = {
+  /** At most this many occurrences, 1 to 10000. */
+  count?: number | null;
+  /** When the next occurrence is made; default when the current one is closed. */
+  create?: CreateWhen | null;
+  /** With `create: ahead`: this many days before its date, 0 to 365. */
+  days_ahead?: number | null;
+  /** The unit; needed without `text`. */
+  every?: Frequency | null;
+  /** From the calendar (default) or from completion. */
+  from?: RepeatFrom | null;
+  /** Every this many units, 1 to 999; default 1. */
+  interval?: number | null;
+  /** How many dates to show, 1 to 50; default 5. */
+  limit?: number | null;
+  /** Yearly: the month, 1 to 12. */
+  month?: number | null;
+  /** Monthly and yearly: the day of the month, 1 to 31, or -1 for the last. */
+  month_day?: number | null;
+  /** The first possible day (a date: `2026-12-01`, `today`, `next mon`); default the task's due date, else its start date, else today. */
+  starts?: string | null;
+  /** The rule in words (`every 2 weeks on mon and thu`); fields given as well override it. */
+  text?: string | null;
+  /** The last possible day. */
+  until?: string | null;
+  /** Monthly and yearly: 1 to 5 or -1 (last), with `weekday`. */
+  week_of_month?: number | null;
+  /** With `week_of_month`: the weekday. */
+  weekday?: Weekday | null;
+  /** Weekly: the weekdays; default the start's. */
+  weekdays?: Weekday[];
+};
+
+/** One field a status sets when a task enters it. */
+export type RuleSet = {
+  /** The field: `start_date`, `due_date`, `progress`, `priority`, or a custom field as `cf:<id>`. */
+  field: string;
+  /** Only when the field has no value yet (a start date already set is kept). */
+  only_if_empty?: boolean;
+  /** The value as text: `today` for a date, 0 to 100 for progress, a priority's name (`high`), or a custom field's value as it is written (`today` for a date field, one option of a select field). */
+  value: string;
+};
+
+/** New rules for a project's statuses and its agents. What is left out keeps its rules; everything is one change with one history group. */
+export type RulesUpdateInput = {
+  /** The rules for agents, replacing the ones the project had. */
+  agents?: AgentRules | null;
+  /** The project: its key (current or old) or ID. */
+  project: string;
+  /** Statuses whose rules to replace. */
+  statuses?: StatusRulesChange[];
 };
 
 /** What became of a description that was saved. */
@@ -2607,6 +3065,8 @@ export type ScheduledTask = {
   project: string;
   /** Why its dates can't be changed; left out when they can. */
   read_only?: ReadOnlyReason;
+  /** Whether it is the open occurrence of a recurring task. */
+  recurring?: boolean;
   /** How the chart draws it. */
   shape: ScheduleShape;
   /** Its own start date. */
@@ -2769,10 +3229,26 @@ export type Status = {
   id: string;
   /** Its name. */
   name: string;
+  /** Its rules for tasks entering it; left out when it has none. */
+  rules?: StatusRules;
   /** Tasks in this status. */
   tasks: number;
   /** Most tasks the column should hold; left out when there is no limit. */
   wip_limit?: number;
+};
+
+/** A status of a project template. */
+export type StatusBlueprint = {
+  /** What it means for the work in it. */
+  category: Category;
+  /** Its colour. */
+  hue: Hue;
+  /** Its name. */
+  name: string;
+  /** Its rules; custom fields are named as `cf:` and the ID their [`FieldBlueprint`] has in the template. */
+  rules?: StatusRules;
+  /** Most tasks the column should hold. */
+  wip_limit?: number | null;
 };
 
 /** Changes to a status, a task type or a label inside [`ProjectUpdateInput`]. Without `status`/`type`/`label` (`name`) it adds one; with `remove` it deletes the named one; otherwise it changes it. */
@@ -2858,6 +3334,32 @@ export type StatusReorderInput = {
   status: string;
 };
 
+/** The rules of one status. Everything left out is no rule. */
+export type StatusRules = {
+  /** Agents may not move tasks into the status, nor create tasks in it (for example Done, so that a person reviews first). */
+  agents_may_not_enter?: boolean;
+  /** Fields cleared when a task enters the status: `start_date`, `due_date`, `estimate`, `progress`, `fix_version`, or a custom field that isn't required. */
+  clear?: string[];
+  /** Fields that can't change while a task is in the status: `title`, `description`, `type`, `priority`, `start_date`, `due_date`, `estimate`, `progress`, `labels`, `parent`, `fix_version`, or a custom field. */
+  read_only?: string[];
+  /** Release an agent's claim when the task enters the status. */
+  release_claim?: boolean;
+  /** Fields that must have a value before a task enters the status: `description`, `priority`, `start_date`, `due_date`, `estimate`, `labels`, `parent`, `fix_version`, or a custom field. */
+  required?: string[];
+  /** Fields set when a task enters the status. */
+  set?: RuleSet[];
+  /** Stop the timer when its task enters the status; the time is logged. */
+  stop_timer?: boolean;
+};
+
+/** New rules for one status inside [`RulesUpdateInput`]. */
+export type StatusRulesChange = {
+  /** Its rules, replacing the ones it had; empty removes them all. */
+  rules: StatusRules;
+  /** The status: its name or ID. */
+  status: string;
+};
+
 /** Changes to a status; fields left out keep their value. */
 export type StatusUpdateInput = {
   /** A new category. Tasks in it close or reopen with it. */
@@ -2874,6 +3376,32 @@ export type StatusUpdateInput = {
   status: string;
   /** A new WIP limit, 1 or more. */
   wip_limit?: number | null;
+};
+
+/** A subtask of a [`TaskBlueprint`]. */
+export type SubtaskBlueprint = {
+  /** The description (Markdown); its checklist items start unticked. */
+  description?: string;
+  /** The due date: days after the day the template is used. */
+  due_in_days?: number | null;
+  /** The estimate, in minutes. */
+  estimate_minutes?: number | null;
+  /** Custom field values by field name. */
+  fields?: Record<string, unknown>;
+  /** The version it is planned for, by name, while it is open. */
+  fix_version?: string | null;
+  /** Labels, by name. */
+  labels?: string[];
+  /** The priority; left out for none. */
+  priority?: Priority;
+  /** The start date: days after the day the template is used. */
+  start_in_days?: number | null;
+  /** The title, 1 to 500 characters. */
+  title: string;
+  /** The type, by name; default the project's default type. */
+  type?: string | null;
+  /** The subtask it sits under: its place in `subtasks` (from 0), an earlier one; left out for a subtask of the task itself. */
+  under?: number | null;
 };
 
 /** Where to put a subtask among its parent's subtasks. Subtasks keep an order of their own, apart from their places on the board. */
@@ -2934,6 +3462,8 @@ export type Task = {
   file_count: number;
   /** The files attached to it, when asked for with `include`. */
   files?: Attachment[];
+  /** The version (release) it is planned for. */
+  fix_version?: VersionRef;
   /** The task's ID. */
   id: string;
   /** The task's key (`TM-41`). */
@@ -2956,6 +3486,8 @@ export type Task = {
   project: string;
   /** Its place in its status column. */
   rank: string;
+  /** Its series, for a recurring task: the rule, the next date and the details new occurrences get. */
+  recurrence?: Recurrence;
   /** What its description and comments link to, when asked for with `include`. */
   references?: Reference[];
   /** Its personal reminder, when asked for with `include` and it has one. */
@@ -2986,6 +3518,32 @@ export type Task = {
   updated_at: string;
   /** Goes up by one with every change; pass it as `expected_version` to make sure nobody changed the task since you read it. */
   version: number;
+};
+
+/** A task to start from. */
+export type TaskBlueprint = {
+  /** The description (Markdown); its checklist items start unticked. */
+  description?: string;
+  /** The due date: this many days after the day the template is used. */
+  due_in_days?: number | null;
+  /** The estimate, in minutes. */
+  estimate_minutes?: number | null;
+  /** Custom field values by field name, as `task.create` takes them. Fields the project doesn't have are left out. */
+  fields?: Record<string, unknown>;
+  /** The version it is planned for, by name; left out when the project has no open version by that name. */
+  fix_version?: string | null;
+  /** Labels, by name. */
+  labels?: string[];
+  /** The priority; left out for none. */
+  priority?: Priority;
+  /** The start date: this many days after the day the template is used (negative: before). */
+  start_in_days?: number | null;
+  /** Its subtasks at every level, each after the one it sits under, in order. */
+  subtasks?: SubtaskBlueprint[];
+  /** The title, 1 to 500 characters. */
+  title: string;
+  /** The type, by name; default the project's default type. */
+  type?: string | null;
 };
 
 /** A task changed, with the history group of the change. */
@@ -3034,6 +3592,8 @@ export type TaskCreateInput = {
   estimate?: string | null;
   /** Custom field values, by field name, query name or ID (see `field.list`): a string, a number, `true`/`false`, or a list of options for a multi-select field. Fields with a default get it unless given here; a required field needs a value. */
   fields?: Record<string, unknown>;
+  /** The version it is planned for (name or ID): an open version of the project or one shared with it. */
+  fix_version?: string | null;
   /** Labels, by name or ID. */
   labels?: string[];
   /** The parent task, for a subtask (same project, at most 5 levels). */
@@ -3073,7 +3633,7 @@ export type TaskDuplicateInput = {
 };
 
 /** A task field that can be cleared. */
-export type TaskField = "description" | "parent" | "start_date" | "due_date" | "estimate" | "progress" | "labels";
+export type TaskField = "description" | "parent" | "start_date" | "due_date" | "estimate" | "progress" | "labels" | "fix_version";
 
 /** Which tasks to read. */
 export type TaskGetInput = {
@@ -3208,6 +3768,8 @@ export type TaskSearchResult = {
 
 /** A task type. */
 export type TaskType = {
+  /** New tasks of this type are due this many days after the day they are made, unless given a due date; left out when they get none. */
+  due_offset_days?: number;
   /** Its shape. */
   glyph: Glyph;
   /** Its colour. */
@@ -3242,6 +3804,8 @@ export type TaskUpdateInput = {
   expected_version?: number | null;
   /** Custom field values to set, by field name, query name or ID: a string, a number, `true`/`false`, a list of options for a multi-select field, or `null` to clear the value. */
   fields?: Record<string, unknown>;
+  /** Plan it for this version (name or ID): an open version of the project or one shared with it. */
+  fix_version?: string | null;
   /** The task: its key or ID. */
   key: string;
   /** Replace the labels with these. */
@@ -3266,6 +3830,165 @@ export type TaskUpdateInput = {
   title?: string | null;
   /** A new type. */
   type?: string | null;
+};
+
+/** A template. */
+export type Template = {
+  /** When it was made (RFC 3339, UTC). */
+  created_at: string;
+  /** Who made it. */
+  created_by: Actor;
+  /** What it is for. */
+  description?: string;
+  /** The template's ID. */
+  id: string;
+  /** What it makes. */
+  kind: TemplateKind;
+  /** Its name. */
+  name: string;
+  /** The project's key, for a task template. */
+  project?: string;
+  /** Its place in the list. */
+  rank: string;
+  /** A project template's set-up, as `setup` of `template.create` takes it (a project blueprint). */
+  setup?: unknown;
+  /** A task template's task, as `task` of `template.create` takes it (a task blueprint). */
+  task?: unknown;
+  /** When it last changed (RFC 3339, UTC). */
+  updated_at: string;
+};
+
+/** What using a template made. */
+export type TemplateApplied = {
+  /** The history group, for revert and Undo. */
+  group?: string;
+  /** Names of statuses, types and labels the template named that the project lacks; they were left out. */
+  left_out?: string[];
+  /** The new project, for a project template. */
+  project?: Project;
+  /** The new task, for a task template. */
+  task?: Task;
+  /** How many tasks were made, subtasks included. */
+  tasks: number;
+};
+
+/** Uses a template. */
+export type TemplateApplyInput = {
+  /** Your own ID for this request; repeating it within 24 hours returns the first answer instead of using the template twice. */
+  client_request_id?: string | null;
+  /** The day the template's dates count from (a date: `2026-12-01`, `next mon`); default today. */
+  date?: string | null;
+  /** A project template: its colour. */
+  hue?: Hue | null;
+  /** A project template: the new project's key. */
+  key?: string | null;
+  /** A project template: the new project's name. */
+  name?: string | null;
+  /** A task template: make it a subtask of this task. */
+  parent?: string | null;
+  /** A project template: the parent project, for a sub-project. */
+  parent_project?: string | null;
+  /** A task template: the project the task goes to (default the template's), and where a template named by name is looked up. */
+  project?: string | null;
+  /** A task template: the status; default the project's first. */
+  status?: string | null;
+  /** The template: its name or ID. */
+  template: string;
+  /** A task template: the title instead of the template's. */
+  title?: string | null;
+};
+
+/** A template after a change. */
+export type TemplateChange = {
+  /** Whether it was deleted. */
+  deleted?: boolean;
+  /** The history group, for revert and Undo; left out when nothing changed. */
+  group?: string;
+  /** The template (before it was deleted, for a deletion). */
+  template: Template;
+};
+
+/** A new template. */
+export type TemplateCreateInput = {
+  /** What it is for, at most 1000 characters. */
+  description?: string | null;
+  /** Make a project template from this project (key or ID): its statuses, types, labels, modules, description, wiki pages and task templates. */
+  from_project?: string | null;
+  /** Make it from this task (key or ID), with its subtasks; dates become days after the day it was created. */
+  from_task?: string | null;
+  /** With `from_project`: also its open top-level tasks with their subtasks (at most 500 tasks). */
+  include_tasks?: boolean;
+  /** What it makes; default: a task, or what `from_task`/`from_project` names. */
+  kind?: TemplateKind | null;
+  /** The name, 1 to 100 characters, unique among task templates of the project or among project templates, ignoring case. */
+  name: string;
+  /** For a task template: its project (key or ID); default the project of `from_task`. */
+  project?: string | null;
+  /** The set-up, for a project template not made from a project. */
+  setup?: ProjectBlueprint | null;
+  /** The task, for a task template not made from a task. */
+  task?: TaskBlueprint | null;
+};
+
+/** What a template makes. */
+export type TemplateKind = "task" | "project";
+
+/** Templates. */
+export type TemplateList = {
+  /** The templates: project templates first, then task templates by project, each in order. */
+  items: TemplateSummary[];
+  /** How many. */
+  total: number;
+};
+
+/** Which templates to list. */
+export type TemplateListInput = {
+  /** Only templates of this kind. */
+  kind?: TemplateKind | null;
+  /** Task templates of this project (key or ID); left out: of every project. */
+  project?: string | null;
+};
+
+/** Names a template. */
+export type TemplateRef = {
+  /** For a task template named by name: its project (key or ID). */
+  project?: string | null;
+  /** The template: its name or ID. */
+  template: string;
+};
+
+/** One template in a list, without its content. */
+export type TemplateSummary = {
+  /** What it is for. */
+  description?: string;
+  /** The template's ID. */
+  id: string;
+  /** Tasks it makes (subtasks included), plus a project template's wiki pages. */
+  items: number;
+  /** What it makes. */
+  kind: TemplateKind;
+  /** Its name. */
+  name: string;
+  /** The project's key, for a task template. */
+  project?: string;
+  /** A task template's title; a project template's number of tasks and pages is in `items`. */
+  title?: string;
+};
+
+/** Changes to a template; fields left out keep their value. */
+export type TemplateUpdateInput = {
+  /** A new description; empty removes it. */
+  description?: string | null;
+  /** A new name. */
+  name?: string | null;
+  /** For a task template named by name: its project. */
+  project?: string | null;
+  /** A project template's new set-up. */
+  setup?: ProjectBlueprint | null;
+  /** A task template's new task. */
+  task?: TaskBlueprint | null;
+  /** The template: its name or ID. */
+  template: string;
 };
 
 /** A targeted change to a text: `old_text` must occur exactly once. */
@@ -3644,6 +4367,20 @@ export type TrashRestoreInput = {
   items: string[];
 };
 
+/** A task type of a project template. */
+export type TypeBlueprint = {
+  /** New tasks of this type are due this many days after they are made. */
+  due_offset_days?: number | null;
+  /** Its shape. */
+  glyph: Glyph;
+  /** Its colour. */
+  hue: Hue;
+  /** Whether new tasks get it. */
+  is_default?: boolean;
+  /** Its name. */
+  name: string;
+};
+
 /** Adds, changes or removes a task type inside [`ProjectUpdateInput`]. */
 export type TypeChange = {
   /** Place it after this type. */
@@ -3652,6 +4389,10 @@ export type TypeChange = {
   at?: Edge | null;
   /** Place it before this type. */
   before?: string | null;
+  /** New tasks of this type get no due date of their own. */
+  clear_due_offset?: boolean;
+  /** New tasks of this type are due this many days (0 to 3650) after the day they are made, unless given a due date. */
+  due_offset_days?: number | null;
   /** Its shape. */
   glyph?: Glyph | null;
   /** Its colour. */
@@ -3670,6 +4411,8 @@ export type TypeChange = {
 
 /** A new task type. */
 export type TypeCreateInput = {
+  /** New tasks of this type are due this many days (0 to 3650) after the day they are made, unless given a due date. */
+  due_offset_days?: number | null;
   /** Its shape; default: task. */
   glyph?: Glyph | null;
   /** Its colour; default: grey. */
@@ -3710,6 +4453,10 @@ export type TypeUpdateInput = {
   at?: Edge | null;
   /** Place it before this type. */
   before?: string | null;
+  /** New tasks of this type get no due date of their own. */
+  clear_due_offset?: boolean;
+  /** New tasks of this type are due this many days (0 to 3650) after the day they are made, unless given a due date. */
+  due_offset_days?: number | null;
   /** A new shape. */
   glyph?: Glyph | null;
   /** A new colour. */
@@ -3763,6 +4510,189 @@ export type UnscheduledTask = {
   title: string;
   /** Its version, for `expected_version`. */
   version: number;
+};
+
+/** A version. */
+export type Version = {
+  /** When it was created (RFC 3339, UTC). */
+  created_at: string;
+  /** What it is for: plain text. */
+  description?: string;
+  /** When it is due (`YYYY-MM-DD`). */
+  due_date?: string;
+  /** Its ID. */
+  id: string;
+  /** Whether it belongs to an ancestor project and is shared with this one, when listed for a project. */
+  inherited?: boolean;
+  /** Its name, unique in its project (ignoring case). */
+  name: string;
+  /** Its progress. */
+  progress: VersionProgress;
+  /** The key of the project it belongs to. */
+  project: string;
+  /** Its place among the project's versions. */
+  rank: string;
+  /** Which projects can plan tasks for it. */
+  sharing: VersionSharing;
+  /** When work on it starts (`YYYY-MM-DD`). */
+  start_date?: string;
+  /** Where it stands. */
+  status: VersionStatus;
+  /** Its tasks, when asked for: top-level first by board order. */
+  tasks?: VersionTask[];
+  /** When it last changed. */
+  updated_at: string;
+};
+
+/** A version after a change. */
+export type VersionChange = {
+  /** Whether it was deleted. */
+  deleted?: boolean;
+  /** The history group, for revert and Undo; left out when nothing changed. */
+  group?: string;
+  /** The keys of the tasks whose version changed with it: moved on when it closed, or cleared by a deletion or new sharing. */
+  tasks_changed?: string[];
+  /** The version after the change (before it, for a deletion). */
+  version: Version;
+  /** The saved views whose query was rewritten because they named the version (renamed or deleted), by name. */
+  views_rewritten?: string[];
+};
+
+/** A new version. */
+export type VersionCreateInput = {
+  /** What it is for: plain text, up to 4,000 characters. */
+  description?: string | null;
+  /** When it is due: `YYYY-MM-DD`, or `today`, `fri`, `+2w`, `dec 1`. */
+  due_date?: string | null;
+  /** Its name, up to 100 characters, unique in the project. */
+  name: string;
+  /** The project (key or ID). */
+  project: string;
+  /** Which projects can plan tasks for it; default: only its own. */
+  sharing?: VersionSharing | null;
+  /** When work starts: `YYYY-MM-DD`, or `today`, `fri`, `+2w`, `dec 1`. */
+  start_date?: string | null;
+  /** Where it stands; default: open. */
+  status?: VersionStatus | null;
+};
+
+/** Which version to delete. */
+export type VersionDeleteInput = {
+  /** With a name: the version's project (key or ID). */
+  project?: string | null;
+  /** The version: its ID, or its name. */
+  version: string;
+};
+
+/** A version field that can be cleared. */
+export type VersionField = "description" | "start_date" | "due_date";
+
+/** One version to read. */
+export type VersionGetInput = {
+  /** With a name: the project (key or ID); its own versions come first, then those shared with it. */
+  project?: string | null;
+  /** The version: its ID, or its name. */
+  version: string;
+};
+
+/** Versions: by due date (those without one last), then by their order. */
+export type VersionList = {
+  /** The versions. */
+  items: Version[];
+  /** How many. */
+  total: number;
+  /** With `include_tasks`: the project's open tasks planned for no version. */
+  unplanned?: number;
+};
+
+/** Which versions to list. */
+export type VersionListInput = {
+  /** Include each version's tasks, for the roadmap. */
+  include_tasks?: boolean;
+  /** Leave out the versions ancestors share with the project. */
+  own_only?: boolean;
+  /** The project (key or ID): its own versions and those its ancestors share with it. */
+  project: string;
+  /** Only versions with these statuses; default: all. */
+  status?: VersionStatus[];
+};
+
+/** How far a version has come. */
+export type VersionProgress = {
+  /** How many of them are closed. */
+  closed: number;
+  /** The tasks' estimates added up, in minutes. */
+  estimate_minutes: number;
+  /** Done, in percent: each task's progress weighted by its estimate; closed tasks count as 100 %, unestimated ones get the average weight. */
+  percent: number;
+  /** The time logged on them, in minutes. */
+  spent_minutes: number;
+  /** The tasks planned for it (not in the trash). */
+  total: number;
+};
+
+/** A version as a task shows it. */
+export type VersionRef = {
+  /** Its due date (`YYYY-MM-DD`). */
+  due_date?: string;
+  /** Its ID. */
+  id: string;
+  /** Its name. */
+  name: string;
+  /** The key of the project it belongs to. */
+  project: string;
+  /** Where it stands. */
+  status: VersionStatus;
+};
+
+/** Which projects can plan tasks for a version. */
+export type VersionSharing = "none" | "descendants";
+
+/** Where a version stands. */
+export type VersionStatus = "open" | "locked" | "closed";
+
+/** A task of a version, as the roadmap lists it. */
+export type VersionTask = {
+  /** Whether it is closed (done or cancelled). */
+  closed: boolean;
+  /** Its ID. */
+  id: string;
+  /** Its key. */
+  key: string;
+  /** Its progress in percent. */
+  progress_percent: number;
+  /** Its project's key. */
+  project: string;
+  /** Its status. */
+  status: StatusRef;
+  /** Its title. */
+  title: string;
+  /** Its type's name. */
+  type: string;
+};
+
+/** Changes to a version; fields left out keep their value. */
+export type VersionUpdateInput = {
+  /** Fields to clear. */
+  clear?: VersionField[];
+  /** A new description. */
+  description?: string | null;
+  /** A new due date. */
+  due_date?: string | null;
+  /** When closing it: plan its open tasks for this other open version (its name or ID) instead, or `none` to plan them for no version. Left out, open tasks stay in the closed version. */
+  move_open_tasks_to?: string | null;
+  /** A new name; saved views that name the old one are rewritten. */
+  name?: string | null;
+  /** With a name: the version's project (key or ID). */
+  project?: string | null;
+  /** New sharing. Tasks of projects that no longer see the version lose it. */
+  sharing?: VersionSharing | null;
+  /** A new start date. */
+  start_date?: string | null;
+  /** A new status. */
+  status?: VersionStatus | null;
+  /** The version: its ID, or its name. */
+  version: string;
 };
 
 /** The program a change came through. */
@@ -3862,6 +4792,9 @@ export type ViewUpdateInput = {
 
 /** The first day of the week. */
 export type WeekStart = "monday" | "saturday" | "sunday";
+
+/** A day of the week. */
+export type Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 
 /** A page changed, with the history group of the change. */
 export type WikiChange = {
@@ -4269,6 +5202,11 @@ export interface OpMap {
   "label.create": { input: LabelCreateInput; output: ProjectChange; safety: "write"; kind: "command" };
   "label.update": { input: LabelUpdateInput; output: ProjectChange; safety: "write"; kind: "command" };
   "label.delete": { input: LabelDeleteInput; output: ProjectChange; safety: "permanent"; kind: "command" };
+  "version.list": { input: VersionListInput; output: VersionList; safety: "read"; kind: "query" };
+  "version.get": { input: VersionGetInput; output: Version; safety: "read"; kind: "query" };
+  "version.create": { input: VersionCreateInput; output: VersionChange; safety: "write"; kind: "command" };
+  "version.update": { input: VersionUpdateInput; output: VersionChange; safety: "write"; kind: "command" };
+  "version.delete": { input: VersionDeleteInput; output: VersionChange; safety: "write"; kind: "command" };
   "field.list": { input: CustomFieldListInput; output: CustomFieldList; safety: "read"; kind: "query" };
   "field.create": { input: CustomFieldCreateInput; output: CustomFieldChange; safety: "write"; kind: "command" };
   "field.update": { input: CustomFieldUpdateInput; output: CustomFieldChange; safety: "write"; kind: "command" };
@@ -4289,6 +5227,17 @@ export interface OpMap {
   "task.release": { input: TaskReleaseInput; output: TaskChange; safety: "write"; kind: "command" };
   "relation.add": { input: RelationInput; output: TaskChange; safety: "write"; kind: "command" };
   "relation.remove": { input: RelationInput; output: TaskChange; safety: "write"; kind: "command" };
+  "recurrence.set": { input: RecurrenceSetInput; output: RecurrenceChange; safety: "write"; kind: "command" };
+  "recurrence.clear": { input: RecurrenceTaskInput; output: RecurrenceChange; safety: "write"; kind: "command" };
+  "recurrence.skip": { input: RecurrenceTaskInput; output: RecurrenceChange; safety: "write"; kind: "command" };
+  "recurrence.preview": { input: RulePreviewInput; output: RecurrencePreview; safety: "read"; kind: "query" };
+  "recurrence.run": { input: RecurrenceRunInput; output: RecurrenceRun; safety: "write"; kind: "command" };
+  "template.list": { input: TemplateListInput; output: TemplateList; safety: "read"; kind: "query" };
+  "template.get": { input: TemplateRef; output: Template; safety: "read"; kind: "query" };
+  "template.create": { input: TemplateCreateInput; output: TemplateChange; safety: "write"; kind: "command" };
+  "template.update": { input: TemplateUpdateInput; output: TemplateChange; safety: "write"; kind: "command" };
+  "template.delete": { input: TemplateRef; output: TemplateChange; safety: "write"; kind: "command" };
+  "template.apply": { input: TemplateApplyInput; output: TemplateApplied; safety: "write"; kind: "command" };
   "description.history": { input: DescriptionHistoryInput; output: RevisionList; safety: "read"; kind: "query" };
   "description.revision": { input: DescriptionRevisionInput; output: RevisionDetail; safety: "read"; kind: "query" };
   "markdown.render": { input: RenderInput; output: RenderOutput; safety: "read"; kind: "query" };
@@ -4304,6 +5253,9 @@ export interface OpMap {
   "time.update": { input: TimeUpdateInput; output: TimeEntryChange; safety: "write"; kind: "command" };
   "time.delete": { input: TimeEntryRef; output: TimeEntryChange; safety: "trash"; kind: "command" };
   "time.report": { input: TimeReportInput; output: TimeReport; safety: "read"; kind: "query" };
+  "report.created_closed": { input: FlowReportInput; output: CreatedClosedReport; safety: "read"; kind: "query" };
+  "report.cumulative_flow": { input: FlowReportInput; output: CumulativeFlowReport; safety: "read"; kind: "query" };
+  "report.cycle_time": { input: FlowReportInput; output: CycleTimeReport; safety: "read"; kind: "query" };
   "timer.get": { input: TimerGetInput; output: TimerStatus; safety: "read"; kind: "query" };
   "timer.start": { input: TimerStartInput; output: TimerChange; safety: "write"; kind: "command" };
   "timer.pause": { input: TimerPauseInput; output: TimerChange; safety: "write"; kind: "command" };
@@ -4349,6 +5301,7 @@ export interface OpMap {
   "agent.sessions": { input: AgentSessionsInput; output: AgentSessionList; safety: "read"; kind: "query" };
   "agent.policy.update": { input: AgentPolicyPatch; output: SettingsChange; safety: "app"; kind: "command" };
   "agent.limits.update": { input: AgentLimitsPatch; output: SettingsChange; safety: "app"; kind: "command" };
+  "rules.update": { input: RulesUpdateInput; output: ProjectChange; safety: "app"; kind: "command" };
   "history.feed": { input: ActivityQuery; output: ActivityPage; safety: "read"; kind: "query" };
   "history.revert": { input: RevertInput; output: RevertResult; safety: "write"; kind: "command" };
   "history.undo": { input: UndoInput; output: UndoResult; safety: "app"; kind: "command" };
@@ -4399,6 +5352,11 @@ export const OP_SAFETY = {
   "label.create": "write",
   "label.update": "write",
   "label.delete": "permanent",
+  "version.list": "read",
+  "version.get": "read",
+  "version.create": "write",
+  "version.update": "write",
+  "version.delete": "write",
   "field.list": "read",
   "field.create": "write",
   "field.update": "write",
@@ -4419,6 +5377,17 @@ export const OP_SAFETY = {
   "task.release": "write",
   "relation.add": "write",
   "relation.remove": "write",
+  "recurrence.set": "write",
+  "recurrence.clear": "write",
+  "recurrence.skip": "write",
+  "recurrence.preview": "read",
+  "recurrence.run": "write",
+  "template.list": "read",
+  "template.get": "read",
+  "template.create": "write",
+  "template.update": "write",
+  "template.delete": "write",
+  "template.apply": "write",
   "description.history": "read",
   "description.revision": "read",
   "markdown.render": "read",
@@ -4434,6 +5403,9 @@ export const OP_SAFETY = {
   "time.update": "write",
   "time.delete": "trash",
   "time.report": "read",
+  "report.created_closed": "read",
+  "report.cumulative_flow": "read",
+  "report.cycle_time": "read",
   "timer.get": "read",
   "timer.start": "write",
   "timer.pause": "write",
@@ -4479,6 +5451,7 @@ export const OP_SAFETY = {
   "agent.sessions": "read",
   "agent.policy.update": "app",
   "agent.limits.update": "app",
+  "rules.update": "app",
   "history.feed": "read",
   "history.revert": "write",
   "history.undo": "app",
@@ -4658,6 +5631,18 @@ export function makeOps(call: Call) {
       /** Read a task query for the query field: highlighted pieces, the chips of the condition builder, the normal form and the first mistake with its place. (read) */
       parse: (input: OpMap["query.parse"]["input"]) => call("query.parse", input),
     },
+    recurrence: {
+      /** Make a task recurring, change its rule, or (`update_details`) make its current details those of the occurrences to come. (write) */
+      set: (input: OpMap["recurrence.set"]["input"]) => call("recurrence.set", input),
+      /** Stop a task repeating: it stays, and no more occurrences are made. (write) */
+      clear: (input: OpMap["recurrence.clear"]["input"]) => call("recurrence.clear", input),
+      /** Pass over a recurring task's current occurrence: its dates move to the next date of the rule. (write) */
+      skip: (input: OpMap["recurrence.skip"]["input"]) => call("recurrence.skip", input),
+      /** Read a recurrence rule, in words or by fields, and list its next dates. (read) */
+      preview: (input: OpMap["recurrence.preview"]["input"] = {}) => call("recurrence.preview", input),
+      /** Make the occurrences of series that are made ahead whose day has come; the app does this by itself. (write) */
+      run: (input: OpMap["recurrence.run"]["input"] = {}) => call("recurrence.run", input),
+    },
     relation: {
       /** Link two tasks (blocks, relates, duplicates, clones, or make one a subtask of the other). (write) */
       add: (input: OpMap["relation.add"]["input"]) => call("relation.add", input),
@@ -4673,6 +5658,18 @@ export function makeOps(call: Call) {
       due: (input: OpMap["reminder.due"]["input"] = {}) => call("reminder.due", input),
       /** Acknowledge reminders that were shown, so they don't come due again. (write) */
       acknowledge: (input: OpMap["reminder.acknowledge"]["input"]) => call("reminder.acknowledge", input),
+    },
+    report: {
+      /** Tasks created against tasks closed and reopened per day, week or month, with the open tasks at the end of each period; from the history, with optional CSV. (read) */
+      createdClosed: (input: OpMap["report.created_closed"]["input"] = {}) => call("report.created_closed", input),
+      /** How many tasks were in each status (or category) at the end of each day, week or month; from the history, with optional CSV. (read) */
+      cumulativeFlow: (input: OpMap["report.cumulative_flow"]["input"] = {}) => call("report.cumulative_flow", input),
+      /** Cycle time (first move into progress to the last close) and lead time (creation to the last close) of the tasks closed over a range of days, with percentiles per period; optional task list and CSV. (read) */
+      cycleTime: (input: OpMap["report.cycle_time"]["input"] = {}) => call("report.cycle_time", input),
+    },
+    rules: {
+      /** Change a project's status rules (fields set, cleared or required when a task enters a status, fields read-only in it, the timer and claims) and its rules for agents (statuses they may not move tasks into, fields they may not change). (app) */
+      update: (input: OpMap["rules.update"]["input"]) => call("rules.update", input),
     },
     schedule: {
       /** The schedule of a project or a query for the Gantt chart: dated tasks as a tree with summary ranges for parents, milestones, the tasks without dates, blocks links as finish-to-start dependencies, and problems such as a task starting before its blocker ends. (read) */
@@ -4732,6 +5729,20 @@ export function makeOps(call: Call) {
       /** The pages and tasks a task's description and comments link to, in order, each resolved now; links that find nothing are marked. (read) */
       references: (input: OpMap["task.references"]["input"]) => call("task.references", input),
     },
+    template: {
+      /** The project templates and the task templates of a project or of every project. (read) */
+      list: (input: OpMap["template.list"]["input"] = {}) => call("template.list", input),
+      /** One template with its content. (read) */
+      get: (input: OpMap["template.get"]["input"]) => call("template.get", input),
+      /** Make a task template (from a task, or given) or a project template (from a project, or given). (write) */
+      create: (input: OpMap["template.create"]["input"]) => call("template.create", input),
+      /** Change a template's name, description or content. (write) */
+      update: (input: OpMap["template.update"]["input"]) => call("template.update", input),
+      /** Delete a template; it can be brought back with revert. What was made from it stays. (write) */
+      delete: (input: OpMap["template.delete"]["input"]) => call("template.delete", input),
+      /** Use a template: a task template makes a task with its subtasks; a project template makes a project with its set-up, pages and tasks. (write) */
+      apply: (input: OpMap["template.apply"]["input"]) => call("template.apply", input),
+    },
     time: {
       /** Log time on a task: a duration, the day of the work (default today) and a note. (write) */
       log: (input: OpMap["time.log"]["input"]) => call("time.log", input),
@@ -4761,7 +5772,7 @@ export function makeOps(call: Call) {
       export: (input: OpMap["transfer.export"]["input"] = {}) => call("transfer.export", input),
       /** Import an archive as new projects; checks it completely first and never changes existing data. (write) */
       import: (input: OpMap["transfer.import"]["input"]) => call("transfer.import", input),
-      /** Import tasks from a CSV file into a project, with a column mapping or a preset (Jira and Redmine exports are built in); a dry run reports every row's outcome, and the import is one change that Undo takes back. (write) */
+      /** Import tasks from a CSV file into a project, with a column mapping or a preset (Jira and Redmine exports are built in); a dry run reports every row's outcome, and the import is one change that Undo takes back. Status rules hold for each task as for task.create; repeating tasks are not imported. (write) */
       importCsv: (input: OpMap["transfer.import_csv"]["input"]) => call("transfer.import_csv", input),
     },
     trash: {
@@ -4779,6 +5790,18 @@ export function makeOps(call: Call) {
       update: (input: OpMap["type.update"]["input"]) => call("type.update", input),
       /** Delete a task type; its tasks get another type. Can't be undone. (permanent) */
       delete: (input: OpMap["type.delete"]["input"]) => call("type.delete", input),
+    },
+    version: {
+      /** The versions of a project and those its ancestors share with it, with status, dates and progress; with their tasks for the roadmap. (read) */
+      list: (input: OpMap["version.list"]["input"]) => call("version.list", input),
+      /** One version with its progress and its tasks. (read) */
+      get: (input: OpMap["version.get"]["input"]) => call("version.get", input),
+      /** Create a version of a project: name, description, status, start and due dates, and whether its sub-projects can use it. (write) */
+      create: (input: OpMap["version.create"]["input"]) => call("version.create", input),
+      /** Rename a version, change its description, dates, sharing or status, or close it and move its open tasks to another version. (write) */
+      update: (input: OpMap["version.update"]["input"]) => call("version.update", input),
+      /** Delete a version; its tasks are planned for no version. Revert brings both back. (write) */
+      delete: (input: OpMap["version.delete"]["input"]) => call("version.delete", input),
     },
     view: {
       /** The saved views of a project or of the whole workspace: name, query, columns, order, grouping, totals and which is the default. (read) */

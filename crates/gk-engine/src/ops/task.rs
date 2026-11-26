@@ -39,7 +39,7 @@ use crate::time::rfc3339;
 use crate::write::WriteCtx;
 
 /// Most levels of subtasks: a task and four levels below it.
-const MAX_LEVELS: usize = 5;
+pub(crate) const MAX_LEVELS: usize = 5;
 /// Most tasks one read returns.
 const MAX_KEYS: usize = 20;
 /// Most tasks one move check looks at, as many as one bulk change takes.
@@ -262,6 +262,7 @@ pub(crate) fn load(
                 labels: Vec::new(),
                 fields: Vec::new(),
                 parent: None,
+                fix_version: None,
                 description: r.get(3)?,
                 description_revision: opt_id_at(r, 36)?.map(|id| id.to_string()),
                 conflict_copies: count(r.get(37)?),
@@ -297,6 +298,7 @@ pub(crate) fn load(
                 backlinks: None,
                 references: None,
                 reminder: None,
+                recurrence: None,
                 rank: r.get(19)?,
                 old_keys: Vec::new(),
                 created_by: Actor {
@@ -330,6 +332,8 @@ pub(crate) fn load(
         task.parent = Some(lookup::task_key(tx, project, number)?);
     }
     task.labels = task_labels(tx, id)?;
+    task.recurrence = super::recurrence::of_task(tx, id)?;
+    task.fix_version = super::version::of_task(tx, id)?;
     task.fields = super::custom_field::task_values(tx, id)?;
     task.progress_percent = super::rollup::progress(tx, id)?;
     if task.subtask_count.total > 0 {
@@ -564,7 +568,7 @@ pub(crate) fn resolve_labels(
 
 /// The levels from the top task down to `id` (1 for a task without a
 /// parent).
-fn level_of(tx: &Transaction<'_>, id: Id) -> Result<usize, Failure> {
+pub(crate) fn level_of(tx: &Transaction<'_>, id: Id) -> Result<usize, Failure> {
     let mut level = 1;
     let mut next = Some(id);
     while let Some(current) = next {
@@ -909,6 +913,11 @@ pub(crate) fn create(w: &mut WriteCtx<'_>, input: TaskCreateInput) -> Result<Tas
         None => default_type(w.tx(), &project)?,
     };
     let labels = resolve_labels(w.tx(), &project, "labels", &input.labels)?;
+    let fix_version = input
+        .fix_version
+        .as_deref()
+        .map(|v| super::version::resolve_for_task(w.tx(), &project, "fix_version", v))
+        .transpose()?;
     let parent = match &input.parent {
         Some(p) => {
             let parent = lookup::task(w.tx(), "parent", p)?;
@@ -928,6 +937,10 @@ pub(crate) fn create(w: &mut WriteCtx<'_>, input: TaskCreateInput) -> Result<Tas
         .map(|d| date_input(w, "due_date", d))
         .transpose()?;
     gk_core::check_date_range(start, due).map_err(|e| invalid("start_date", e))?;
+    let due = match due {
+        Some(d) => Some(d.to_string()),
+        None => type_due_date(w, task_type, start.map(|d| d.to_string()).as_deref())?,
+    };
     let units = units(w.tx())?;
     let estimate = input
         .estimate
@@ -954,15 +967,50 @@ pub(crate) fn create(w: &mut WriteCtx<'_>, input: TaskCreateInput) -> Result<Tas
             priority: priority_index(input.priority.unwrap_or_default()),
             parent,
             start_date: start.map(|d| d.to_string()),
-            due_date: due.map(|d| d.to_string()),
+            due_date: due,
             estimate,
             progress: None,
             labels,
             target,
         },
     )?;
+    if fix_version.is_some() {
+        super::version::set_task(w, id, project.id, fix_version)?;
+    }
     super::custom_field::apply_input(w, id, &project, &input.fields, true)?;
     changed(w, id, Vec::new())
+}
+
+/// The due date a new task of type `task_type` gets when none is given:
+/// the type's number of days after today, in the person's time zone; none
+/// when the type sets none or the start date comes after it.
+pub(crate) fn type_due_date(
+    w: &WriteCtx<'_>,
+    task_type: Id,
+    start: Option<&str>,
+) -> Result<Option<String>, Failure> {
+    let days: Option<i64> = w
+        .tx()
+        .query_row(
+            "SELECT due_offset_days FROM task_types WHERE id = ?1",
+            [b(task_type)],
+            |r| r.get(0),
+        )
+        .optional()?
+        .flatten();
+    let Some(days) = days else {
+        return Ok(None);
+    };
+    let due = w
+        .zone()
+        .day_of(w.now())
+        .add_days(days)
+        .map_err(|e| invalid("due_date", e))?
+        .to_string();
+    Ok(match start {
+        Some(s) if s > due.as_str() => None,
+        _ => Some(due),
+    })
 }
 
 /// The fields of a task about to be written.
@@ -1133,6 +1181,11 @@ pub(crate) fn update(w: &mut WriteCtx<'_>, input: TaskUpdateInput) -> Result<Tas
             TaskField::Labels,
             "labels",
         ),
+        (
+            input.fix_version.is_some(),
+            TaskField::FixVersion,
+            "fix_version",
+        ),
     ] {
         if given && clears(field) {
             return Err(messages::invalid(
@@ -1239,6 +1292,16 @@ pub(crate) fn update(w: &mut WriteCtx<'_>, input: TaskUpdateInput) -> Result<Tas
         let remove = resolve_labels(w.tx(), &project, "remove_labels", &input.remove_labels)?;
         ids.retain(|l| !remove.contains(l));
         set_labels(w, id, project.id, &ids)?;
+    }
+    if let Some(v) = &input.fix_version {
+        let current = fields::read(w.tx(), TASK, id, super::version::TASK_FIELD)?;
+        let version = super::version::resolve_for_task(w.tx(), &project, "fix_version", v)?;
+        if current != id_value(version) {
+            super::version::set_task(w, id, project.id, Some(version))?;
+        }
+    }
+    if clears(TaskField::FixVersion) {
+        super::version::set_task(w, id, project.id, None)?;
     }
     if let Some(p) = &input.parent {
         let parent = lookup::task(w.tx(), "parent", p)?;
@@ -1591,9 +1654,16 @@ fn move_to_project(
             }
         }
         set_labels(w, id, to.id, &kept)?;
+        if let Some(key) = super::version::drop_unreachable_task(w, id, to.id)? {
+            warn(messages::text(
+                "task-version-left-off",
+                &[("version", key), ("project", to.key.clone())],
+            ));
+        }
         for warning in super::custom_field::follow_move(w, id, to)? {
             warn(warning);
         }
+        super::recurrence::follow_move(w, id, to.id)?;
         if id == task.id && task.parent.is_some() {
             set_parent(w, id, to.id, None)?;
         }
@@ -1670,6 +1740,7 @@ fn move_check(tx: &Transaction<'_>, input: &TaskMoveCheckInput) -> Result<MoveCh
     let mut keys = Vec::new();
     let (mut statuses, mut types, mut labels) = (Vec::new(), Vec::new(), Vec::new());
     let mut fields: Vec<MoveMatch> = Vec::new();
+    let mut versions: Vec<MoveMatch> = Vec::new();
     fn count(list: &mut Vec<MoveMatch>, target: &[lookup::Named], name: &str) {
         let folded = fold(name);
         match list.iter_mut().find(|m| fold(&m.name) == folded) {
@@ -1711,6 +1782,16 @@ fn move_check(tx: &Transaction<'_>, input: &TaskMoveCheckInput) -> Result<MoveCh
             for label in task_labels(tx, id)? {
                 count(&mut labels, &to_labels, &label.name);
             }
+            if let Some((name, kept)) = super::version::move_match(tx, id, to.id)? {
+                match versions.iter_mut().find(|m| m.name == name) {
+                    Some(m) => m.tasks += 1,
+                    None => versions.push(MoveMatch {
+                        target: kept.then(|| name.clone()),
+                        name,
+                        tasks: 1,
+                    }),
+                }
+            }
             for (name, target) in super::custom_field::move_matches(tx, id, &to)? {
                 let folded = fold(&name);
                 match fields
@@ -1748,6 +1829,7 @@ fn move_check(tx: &Transaction<'_>, input: &TaskMoveCheckInput) -> Result<MoveCh
         types,
         labels,
         fields,
+        versions,
         fallback_status: name_of(&to_statuses, first_status(tx, &to)?),
         fallback_type: name_of(&to_types, default_type(tx, &to)?),
     })

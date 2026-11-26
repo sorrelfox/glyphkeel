@@ -19,12 +19,13 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 use super::model::{
-    Activity, AgentSession, Attachment, Comment, Manifest, ProjectFile, Revision, Task, TimeEntry,
-    WikiPage,
+    Activity, AgentSession, Attachment, Comment, Manifest, ProjectFile, Revision, Task,
+    TemplateLine, TimeEntry, WikiPage,
 };
 use super::source::{Source, safe_path};
 use super::{
-    FORMAT_NAME, FORMAT_VERSION, Limits, Progress, Rejected, plain_project_dir, project_dir, report,
+    FORMAT_NAME, FORMAT_VERSION, Limits, Progress, Rejected, TEMPLATES, plain_project_dir,
+    project_dir, report,
 };
 use crate::context::Context;
 use crate::engine::Engine;
@@ -65,6 +66,8 @@ pub(crate) struct Proj {
 pub(crate) struct Parsed {
     pub(crate) manifest: Manifest,
     pub(crate) sessions: Vec<AgentSession>,
+    /// The workspace's project templates.
+    pub(crate) templates: Vec<TemplateLine>,
     /// Parents before their sub-projects.
     pub(crate) projects: Vec<Proj>,
     /// Stored files by SHA-256, with their sizes.
@@ -104,7 +107,7 @@ fn is_hash(s: &str) -> bool {
 fn classify(path: &str, keys: &HashMap<String, String>) -> Option<Class> {
     match path {
         MANIFEST => return Some(Class::Manifest),
-        SESSIONS => return Some(Class::Sessions),
+        SESSIONS | TEMPLATES => return Some(Class::Sessions),
         FIXTURES => return Some(Class::Fixtures),
         _ => {}
     }
@@ -262,6 +265,10 @@ pub(crate) fn read(
         Some(bytes) => lines(SESSIONS, &bytes, limits, &mut records)?,
         None => Vec::new(),
     };
+    let templates = match texts.remove(TEMPLATES) {
+        Some(bytes) => lines(TEMPLATES, &bytes, limits, &mut records)?,
+        None => Vec::new(),
+    };
     let mut projects = Vec::new();
     for mp in &manifest.projects {
         // The folder the manifest names: checked to be the key's.
@@ -313,6 +320,7 @@ pub(crate) fn read(
     let mut parsed = Parsed {
         manifest,
         sessions,
+        templates,
         projects,
         blobs,
     };
@@ -441,6 +449,32 @@ fn check(parsed: &mut Parsed) -> Result<(), Rejected> {
             rank_ok(&pj, 1, &l.rank)?;
             gk_core::Hue::from_str(&l.hue).map_err(|_| color(&pj, 1, &l.hue))?;
             labels.insert(l.id.clone());
+        }
+        let mut version_names = HashSet::new();
+        for v in &proj.file.versions {
+            unique(&pj, 1, &v.id)?;
+            rank_ok(&pj, 1, &v.rank)?;
+            let dates_ok = [&v.start_date, &v.due_date].iter().all(|d| {
+                d.as_deref()
+                    .is_none_or(|d| d.parse::<gk_core::Day>().is_ok())
+            }) && (v.start_date.is_none()
+                || v.due_date.is_none()
+                || v.start_date <= v.due_date);
+            if v.name.trim().is_empty()
+                || v.name.chars().count() > 100
+                || v.description.chars().count() > 4000
+                || !matches!(v.status.as_str(), "open" | "locked" | "closed")
+                || !matches!(v.sharing.as_str(), "none" | "descendants")
+                || !dates_ok
+                || !version_names.insert(fold(&v.name))
+            {
+                return Err(bad_with(
+                    pj.clone(),
+                    1,
+                    "transfer-invalid-version",
+                    &[("version", &v.name)],
+                ));
+            }
         }
         for v in &proj.file.views {
             unique(&pj, 1, &v.id)?;
@@ -833,6 +867,9 @@ pub(crate) fn plan(
         }
         Ok(())
     };
+    for t in &parsed.templates {
+        replace("templates", &t.id)?;
+    }
     for p in &parsed.projects {
         replace("projects", &p.file.project.id)?;
         for s in &p.file.statuses {
@@ -844,8 +881,17 @@ pub(crate) fn plan(
         for l in &p.file.labels {
             replace("labels", &l.id)?;
         }
+        for v in &p.file.versions {
+            replace("versions", &v.id)?;
+        }
         for v in &p.file.views {
             replace("saved_views", &v.id)?;
+        }
+        for t in &p.file.templates {
+            replace("templates", &t.id)?;
+        }
+        for r in &p.file.series {
+            replace("task_series", &r.id)?;
         }
         for t in &p.tasks {
             replace("tasks", &t.id)?;
@@ -1179,6 +1225,9 @@ fn write(
             ])?;
         }
     }
+    for t in &parsed.templates {
+        insert_template(tx, plan, t, None)?;
+    }
 
     // Top-level projects go after the workspace's own.
     let last_top: Option<String> = tx
@@ -1214,8 +1263,9 @@ fn write(
         tx.prepare_cached(
             "INSERT INTO projects (id, parent_id, rank, key, name, name_fold, description,
                description_rev, hue, icon, state, modules, next_number, created_at, updated_at,
-               deleted_at, deleted_group)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
+               deleted_at, deleted_group, agent_rules)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
+                     ?18)",
         )?
         .execute(params![
             b(id),
@@ -1235,6 +1285,7 @@ fn write(
             p.updated_at,
             p.deleted_at,
             plan.group(p.deleted_group.as_ref()),
+            rules_text(p.agent_rules.as_ref(), plan),
         ])?;
         for alias in &proj.file.key_aliases {
             if alias != key && !key_taken(tx, alias)? && ProjectKey::new(alias).is_ok() {
@@ -1247,7 +1298,7 @@ fn write(
         for s in &proj.file.statuses {
             tx.prepare_cached(
                 "INSERT INTO statuses (id, project_id, name, name_fold, category, hue, rank,
-                   wip_limit) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                   wip_limit, rules) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             )?
             .execute(params![
                 b(plan.id(&s.id)),
@@ -1257,13 +1308,14 @@ fn write(
                 s.category,
                 s.hue,
                 s.rank,
-                s.wip_limit
+                s.wip_limit,
+                rules_text(s.rules.as_ref(), plan)
             ])?;
         }
         for t in &proj.file.types {
             tx.prepare_cached(
                 "INSERT INTO task_types (id, project_id, name, name_fold, glyph, hue, rank,
-                   is_default) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                   is_default, due_offset_days) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             )?
             .execute(params![
                 b(plan.id(&t.id)),
@@ -1273,7 +1325,8 @@ fn write(
                 t.glyph,
                 t.hue,
                 t.rank,
-                t.is_default
+                t.is_default,
+                t.due_offset_days.filter(|d| (0..=3650).contains(d))
             ])?;
         }
         for l in &proj.file.labels {
@@ -1288,6 +1341,27 @@ fn write(
                 fold(&l.name),
                 l.hue,
                 l.rank
+            ])?;
+        }
+        for v in &proj.file.versions {
+            tx.prepare_cached(
+                "INSERT INTO versions (id, project_id, name, name_fold, description, status,
+                   start_date, due_date, sharing, rank, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            )?
+            .execute(params![
+                b(plan.id(&v.id)),
+                b(id),
+                v.name,
+                fold(&v.name),
+                v.description,
+                v.status,
+                v.start_date,
+                v.due_date,
+                v.sharing,
+                v.rank,
+                v.created_at,
+                v.updated_at
             ])?;
         }
         super::custom_fields::write_fields(tx, &proj.file.custom_fields, id, &|t| plan.id(t), now)?;
@@ -1316,6 +1390,27 @@ fn write(
                 v.created_at,
                 v.updated_at
             ])?;
+        }
+        for t in &proj.file.templates {
+            insert_template(tx, plan, t, Some(id))?;
+        }
+        for r in &proj.file.series {
+            let record = crate::ops::recurrence::Record {
+                project: id.to_string(),
+                rule: serde_json::from_value(r.rule.clone())
+                    .map_err(|e| Failure::Store(gk_store::StoreError::Corrupt(e.to_string())))?,
+                pattern: serde_json::from_value(r.pattern.clone())
+                    .map_err(|e| Failure::Store(gk_store::StoreError::Corrupt(e.to_string())))?,
+                current: r.current_task.as_ref().map(|c| plan.id(c).to_string()),
+                next_date: r.next_date.clone(),
+                made: r.made,
+                ended_at: r.ended_at,
+                created_at: r.created_at,
+                created_by_kind: r.created_by_kind.clone(),
+                created_by_name: r.created_by_name.clone(),
+                updated_at: r.updated_at,
+            };
+            crate::ops::recurrence::insert_row(tx, plan.id(&r.id), &record)?;
         }
         for l in &proj.file.layouts {
             tx.prepare_cached(
@@ -1377,10 +1472,10 @@ fn write(
                    subtask_rank, start_date, due_date, estimate_min, progress_override,
                    checklist_done, checklist_total, spent_min, claim_session, claim_name,
                    claim_until, created_at, created_by_kind, created_by_name, edited_at,
-                   updated_at, closed_at, deleted_at, deleted_group, version)
+                   updated_at, closed_at, deleted_at, deleted_group, version, series_id)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
                    ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31,
-                   ?32)",
+                   ?32, ?33)",
             )?
             .execute(params![
                 b(tid),
@@ -1415,6 +1510,7 @@ fn write(
                 t.deleted_at,
                 plan.group(t.deleted_group.as_ref()),
                 t.version,
+                plan.opt(t.series_id.as_ref()),
             ])?;
             if t.deleted_at.is_none() && p.deleted_at.is_none() {
                 tx.prepare_cached(
@@ -1742,6 +1838,26 @@ fn write(
         imported.push(id);
     }
 
+    // Tasks' versions, once every project's versions are in: a version
+    // that isn't in the archive is left off.
+    let archive_versions: HashSet<&String> = parsed
+        .projects
+        .iter()
+        .flat_map(|p| p.file.versions.iter().map(|v| &v.id))
+        .collect();
+    for proj in &parsed.projects {
+        for t in &proj.tasks {
+            if let Some(v) = t
+                .fix_version_id
+                .as_ref()
+                .filter(|v| archive_versions.contains(v))
+            {
+                tx.prepare_cached("UPDATE tasks SET fix_version_id = ?2 WHERE id = ?1")?
+                    .execute(params![b(plan.id(&t.id)), b(plan.id(v))])?;
+            }
+        }
+    }
+
     // History, in its original order across the archive.
     let mut rows: Vec<(&Activity, Id)> = parsed
         .projects
@@ -1799,4 +1915,56 @@ fn write(
         );
     }
     Ok(())
+}
+
+/// Inserts an archive's template; a project template whose name the
+/// workspace has already is left out.
+fn insert_template(
+    tx: &Transaction<'_>,
+    plan: &Plan,
+    t: &TemplateLine,
+    project: Option<Id>,
+) -> Result<(), Failure> {
+    use gk_api::ops::template::TemplateKind;
+    let kind = if project.is_some() {
+        TemplateKind::Task
+    } else {
+        TemplateKind::Project
+    };
+    if project.is_none() {
+        let taken: Option<i64> = tx
+            .query_row(
+                "SELECT 1 FROM templates WHERE kind = 'project' AND name_fold = ?1",
+                [fold(&t.name)],
+                |r| r.get(0),
+            )
+            .optional()?;
+        if taken.is_some() {
+            return Ok(());
+        }
+    }
+    let record = crate::ops::template::Record {
+        project: project.map(|p| p.to_string()),
+        kind,
+        name: t.name.clone(),
+        description: t.description.clone(),
+        content: t.content.clone(),
+        rank: t.rank.clone(),
+        created_at: t.created_at,
+        created_by_kind: t.created_by_kind.clone(),
+        created_by_name: t.created_by_name.clone(),
+        updated_at: t.updated_at,
+    };
+    crate::ops::template::insert_row(tx, plan.id(&t.id), &record)?;
+    Ok(())
+}
+
+/// Rules from an archive as stored: JSON objects only, anything else is no
+/// rules. The custom fields they name take the IDs the fields get here.
+fn rules_text(rules: Option<&serde_json::Value>, plan: &Plan) -> Option<String> {
+    let mut rules = rules
+        .filter(|r| r.as_object().is_some_and(|o| !o.is_empty()))?
+        .clone();
+    crate::ops::rules::map_custom_fields(&mut rules, &|id| plan.ids.get(&id).copied());
+    Some(rules.to_string())
 }

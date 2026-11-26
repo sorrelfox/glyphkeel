@@ -55,7 +55,7 @@ export interface CustomQueryField {
   options: readonly string[];
 }
 
-type FieldType = "custom" | "key" | "project" | "text" | "status" | "category" | "type" | "priority" | "label" | "parent" | "date" | "span" | "duration" | "number" | "is";
+type FieldType = "custom" | "key" | "project" | "text" | "status" | "category" | "type" | "priority" | "label" | "version" | "parent" | "date" | "span" | "duration" | "number" | "is";
 
 interface FieldSpec {
   name: string;
@@ -84,6 +84,7 @@ export const FAKE_FIELDS: readonly FieldSpec[] = [
   { name: "type", aliases: [], type: "type", operators: NAME_OPS, sortable: true, values: "task type names" },
   { name: "priority", aliases: ["prio"], type: "priority", operators: ORDERED_OPS, sortable: true, values: "none < low < normal < high < urgent", choices: PRIORITIES },
   { name: "label", aliases: ["labels"], type: "label", operators: NAME_OPS, sortable: false, values: "label names" },
+  { name: "version", aliases: ["fix-version"], type: "version", operators: NAME_OPS, sortable: true, values: "version names, or none" },
   { name: "parent", aliases: [], type: "parent", operators: NAME_OPS, sortable: true, values: "a task key, or none" },
   { name: "start", aliases: [], type: "date", operators: ORDERED_OPS, sortable: true, values: "a date, today, +7d, or none" },
   { name: "due", aliases: [], type: "date", operators: ORDERED_OPS, sortable: true, values: "a date, today, +7d, or none" },
@@ -667,6 +668,8 @@ function matchesValue(task: ListedTask, field: FieldSpec, op: string, value: str
       return lower === "open" ? !isClosed(task) : lower === "closed" ? isClosed(task) : task.blocked;
     case "label":
       return lower === "none" ? task.labels.length === 0 : task.labels.some((label) => label.name.toLowerCase() === lower);
+    case "version":
+      return lower === "none" ? task.fix_version === undefined : task.fix_version?.name.toLowerCase() === lower;
     case "category":
       return lower === "open" ? !isClosed(task) : lower === "closed" ? isClosed(task) : task.status.category === lower;
     case "text": {
@@ -776,6 +779,9 @@ function namesProject(node: Node | null): boolean {
 function sortValue(task: ListedTask, key: string, statusOrder: (task: ListedTask) => number): number | string | null {
   if (key === "status") {
     return statusOrder(task);
+  }
+  if (key === "version") {
+    return task.fix_version?.name.toLowerCase() ?? null;
   }
   if (key === "key") {
     return `${task.project}-${task.key.slice(task.key.indexOf("-") + 1).padStart(8, "0")}`;

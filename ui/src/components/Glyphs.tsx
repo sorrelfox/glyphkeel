@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
+import { Repeat } from "lucide-react";
+
 import { type Glyph, type Priority } from "../data/catalog";
 import { useT } from "../i18n/I18n";
 
@@ -44,4 +46,10 @@ export function PriorityGlyph({ priority, label }: GlyphProps & { priority: Prio
 export function usePriorityName(): (priority: Priority) => string {
   const t = useT();
   return (priority) => t(`priority-${priority}`);
+}
+
+/** The marker of a recurring task's current occurrence, with its spoken name. */
+export function RecurringMark() {
+  const t = useT();
+  return <Repeat className="ic s muted" role="img" aria-label={t("recurring-mark")} data-recurring="" />;
 }

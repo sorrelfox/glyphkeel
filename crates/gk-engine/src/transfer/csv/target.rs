@@ -14,6 +14,8 @@ pub(crate) enum Target {
     Type,
     Priority,
     Labels,
+    /// The version the task is planned for, by name in the project.
+    FixVersion,
     StartDate,
     DueDate,
     Estimate,
@@ -50,6 +52,7 @@ impl Target {
             "type" => Self::Type,
             "priority" => Self::Priority,
             "labels" => Self::Labels,
+            "fix_version" => Self::FixVersion,
             "start_date" => Self::StartDate,
             "due_date" => Self::DueDate,
             "estimate" => Self::Estimate,
@@ -86,6 +89,7 @@ mod tests {
             Target::parse("blocked_by"),
             Ok(Target::Link(RelationKind::BlockedBy))
         );
+        assert_eq!(Target::parse("fix_version"), Ok(Target::FixVersion));
         assert_eq!(Target::parse("field."), Err(()));
         assert_eq!(Target::parse("assignee"), Err(()));
     }

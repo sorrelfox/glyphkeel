@@ -152,6 +152,10 @@ fn live_names(tx: &Transaction<'_>, kind: NameKind) -> Result<Vec<String>, Failu
             "SELECT DISTINCT x.name FROM labels x JOIN projects p ON p.id = x.project_id
               WHERE p.deleted_at IS NULL ORDER BY x.name_fold"
         }
+        NameKind::Version => {
+            "SELECT DISTINCT x.name FROM versions x JOIN projects p ON p.id = x.project_id
+              WHERE p.deleted_at IS NULL ORDER BY x.name_fold"
+        }
         NameKind::Project => "SELECT key FROM projects WHERE deleted_at IS NULL ORDER BY key",
         NameKind::Task => return Ok(Vec::new()),
     };
@@ -173,6 +177,7 @@ fn check_names(tx: &Transaction<'_>, uses: &[NameUse]) -> Result<Option<QueryErr
             NameKind::Type => (1, "query-unknown-type", "query-unknown-type-none"),
             NameKind::Label => (2, "query-unknown-label", "query-unknown-label-none"),
             NameKind::Project => (3, "query-unknown-project", "query-unknown-project-none"),
+            NameKind::Version => (4, "query-unknown-version", "query-unknown-version-none"),
             NameKind::Task => {
                 if lookup::task(tx, "query", &u.text).is_err() {
                     return Ok(Some(
@@ -665,13 +670,14 @@ fn count(n: i64) -> u32 {
 
 /// One task as lists show it.
 pub(crate) fn listed(tx: &Transaction<'_>, id: Id, now: i64) -> Result<ListedTask, Failure> {
+    use super::recurrence::RECURRING_SQL;
     let sql = format!(
         "SELECT p.key, t.number, t.title, s.id, s.name, s.category, y.id, y.name, y.glyph,
                 t.priority, t.parent_id, t.start_date, t.due_date, t.estimate_min, t.spent_min,
                 t.checklist_done, t.checklist_total, {SUBTASKS_SQL}, {CLOSED_SUBTASKS_SQL},
                 {BLOCKED_SQL}, {COMMENTS_SQL}, {FILES_SQL}, t.claim_session, t.claim_name,
                 t.claim_until, t.rank, t.created_by_kind, t.created_by_name, t.created_at,
-                t.updated_at, t.closed_at, t.version
+                t.updated_at, t.closed_at, t.version, {RECURRING_SQL}
            FROM tasks t JOIN projects p ON p.id = t.project_id
            JOIN statuses s ON s.id = t.status_id JOIN task_types y ON y.id = t.type_id
           WHERE t.id = ?1"
@@ -698,6 +704,7 @@ pub(crate) fn listed(tx: &Transaction<'_>, id: Id, now: i64) -> Result<ListedTas
                 priority: parse_enum(priority_name(r.get(9)?)).unwrap_or(Priority::None),
                 labels: Vec::new(),
                 fields: BTreeMap::new(),
+                fix_version: None,
                 parent: None,
                 start_date: r.get(11)?,
                 due_date: r.get(12)?,
@@ -717,6 +724,7 @@ pub(crate) fn listed(tx: &Transaction<'_>, id: Id, now: i64) -> Result<ListedTas
                 comment_count: count(r.get(20)?),
                 file_count: count(r.get(21)?),
                 claim: live_claim(opt_id_at(r, 22)?, r.get(23)?, r.get(24)?, now),
+                recurring: r.get(32)?,
                 rank: r.get(25)?,
                 created_by: Actor {
                     kind: if r.get::<_, String>(26)? == "agent" {
@@ -747,6 +755,7 @@ pub(crate) fn listed(tx: &Transaction<'_>, id: Id, now: i64) -> Result<ListedTas
     }
     task.labels = task_labels(tx, id)?;
     task.fields = super::custom_field::listed_values(tx, id)?;
+    task.fix_version = super::version::of_task(tx, id)?;
     task.progress_percent = super::rollup::progress(tx, id)?;
     Ok(task)
 }

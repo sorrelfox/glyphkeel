@@ -214,6 +214,16 @@ fn every_field_of_the_registry_filters_data_set_s() {
         json!({ "key": "TM-2", "kind": "duplicates", "other": "TM-3" }),
     )
     .unwrap();
+    // Nor versions.
+    for (op, input) in [
+        ("version.create", json!({ "project": "TM", "name": "1.0" })),
+        (
+            "task.update",
+            json!({ "key": "TM-1", "fix_version": "1.0" }),
+        ),
+    ] {
+        e.call(&Context::user(Via::App), op, input).unwrap();
+    }
     let all = run(&e, "").len();
     let parent = run(&e, "is:parent sort:key")[0].clone();
     let mut walked = 0;
@@ -230,6 +240,7 @@ fn every_field_of_the_registry_filters_data_set_s() {
             FieldType::Type => format!("{name}:Bug"),
             FieldType::Priority => format!("{name}>=high"),
             FieldType::Label => format!("{name}:frontend"),
+            FieldType::Version => format!("{name}:1.0"),
             FieldType::Parent | FieldType::Under => format!("{name}:{parent}"),
             FieldType::Link(_) => format!("{name}:any"),
             FieldType::Date(_) | FieldType::Moment(_) | FieldType::Span => {

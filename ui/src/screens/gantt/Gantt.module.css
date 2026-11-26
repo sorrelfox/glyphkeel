@@ -382,6 +382,33 @@
   stroke-width: 2;
 }
 
+/* A version's due date: a dashed line, with its name in the header. */
+.versionLine {
+  stroke: var(--accent);
+  stroke-dasharray: 4 3;
+  stroke-width: 1.5;
+}
+
+.versionFlag {
+  position: absolute;
+  inset-block: 2px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-inline-size: 12rem;
+  padding-inline: 4px;
+  border-radius: var(--r-s);
+  background: var(--sunken);
+  color: var(--accent-fg);
+  font-size: var(--fs-micro);
+  white-space: nowrap;
+}
+
+.versionDone {
+  opacity: 0.6;
+}
+
 .link {
   fill: none;
   stroke: var(--fg-muted);

@@ -9,12 +9,14 @@
 //! - Jira's "Export CSV (all fields)": `Summary`, `Issue key`, `Issue id`,
 //!   `Parent id` or `Parent`, `Issue Type`, `Status`, `Priority`, one
 //!   `Labels` and one `Comment` column per value, `Due date`, estimates and
-//!   time spent in seconds, and `Inward issue link (…)` and `Outward issue
-//!   link (…)` per kind of link.
+//!   time spent in seconds, `Fix Version/s` (Data Center) or `Fix versions`
+//!   (Cloud), and `Inward issue link (…)` and `Outward issue link (…)` per
+//!   kind of link. Names are matched ignoring case, as the two editions
+//!   differ in it (`Issue key`, `Issue Key`).
 //! - Redmine's issue list as CSV: `#`, `Tracker`, `Parent task` (an issue
 //!   number), `Status`, `Priority`, `Subject`, `Category`, `Start date`,
 //!   `Due date`, `Estimated time` and `Spent time` in hours, `Related
-//!   issues` and `Description`.
+//!   issues`, `Target version` and `Description`.
 
 use gk_api::ops::csv_import::{
     CsvPreset, CsvPresetChange, CsvPresetColumn, CsvPresetDelete, CsvPresetDeleteInput,
@@ -73,6 +75,8 @@ fn jira() -> CsvPreset {
             map("Status", "status"),
             map("Priority", "priority"),
             map("Labels", "labels"),
+            map("Fix Version/s", "fix_version"),
+            map("Fix versions", "fix_version"),
             map("Description", "description"),
             map("Custom field (Start date)", "start_date"),
             map("Due date", "due_date"),
@@ -107,6 +111,7 @@ fn redmine() -> CsvPreset {
             map("Priority", "priority"),
             map("Parent task", "parent"),
             map("Category", "labels"),
+            map("Target version", "fix_version"),
             map("Start date", "start_date"),
             map("Due date", "due_date"),
             timed("Estimated time", "estimate", h),
@@ -127,6 +132,17 @@ const SYNONYMS: &[(&str, &[&str])] = &[
     ("type", &["type", "issue type", "tracker", "kind"]),
     ("priority", &["priority"]),
     ("labels", &["labels", "label", "tags", "tag"]),
+    (
+        "fix_version",
+        &[
+            "fix version",
+            "fix version/s",
+            "fix versions",
+            "target version",
+            "version",
+            "milestone",
+        ],
+    ),
     ("start_date", &["start date", "start", "starts"]),
     ("due_date", &["due date", "due", "deadline"]),
     (

@@ -6,7 +6,7 @@ import { defineConfig, devices } from "@playwright/test";
 // Importing tasks from a CSV file on sample data: a `--mode fake` build of
 // the UI keeps a workspace in memory and knows one sample file. A port of
 // its own, so these run beside the other flows; `GK_CSV_PORT` moves it.
-const PORT = Number(process.env.GK_CSV_PORT ?? 5316);
+const PORT = Number(process.env.GK_CSV_PORT ?? 5315);
 const FAKE_DIST = "node_modules/.cache/csv-fake-dist";
 
 export default defineConfig({

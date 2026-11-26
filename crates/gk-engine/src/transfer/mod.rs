@@ -60,6 +60,9 @@ use crate::messages;
 pub const FORMAT_NAME: &str = "glyphkeel-archive";
 /// The newest archive version this program reads and the one it writes.
 pub const FORMAT_VERSION: u32 = 1;
+/// The archive's project templates, which belong to the workspace rather
+/// than to one project; left out when there are none.
+pub(crate) const TEMPLATES: &str = "templates.jsonl";
 
 /// A function that hears how far an export or import is.
 pub type Progress = Arc<dyn Fn(TransferProgress) + Send + Sync>;

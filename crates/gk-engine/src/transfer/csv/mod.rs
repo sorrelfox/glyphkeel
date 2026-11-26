@@ -48,7 +48,7 @@ use crate::engine::Engine;
 use crate::failure::Failure;
 use crate::messages;
 use crate::ops::lookup::{self, List};
-use crate::ops::{comment, custom_field, project, relation, task, time};
+use crate::ops::{comment, custom_field, project, relation, rules, task, time, version};
 use crate::registry::{CommandFn, Registry};
 use crate::write::WriteCtx;
 
@@ -252,6 +252,7 @@ struct Planned {
     task_type: Option<(String, String)>,
     priority: Option<Priority>,
     labels: Vec<(String, String)>,
+    fix_version: Option<(String, String)>,
     start: Option<Day>,
     due: Option<Day>,
     estimate: Option<i64>,
@@ -371,6 +372,7 @@ fn target_name(t: &Target) -> Option<String> {
             Target::Type => "type",
             Target::Priority => "priority",
             Target::Labels => "labels",
+            Target::FixVersion => "fix_version",
             Target::StartDate => "start_date",
             Target::DueDate => "due_date",
             Target::Estimate => "estimate",
@@ -504,6 +506,7 @@ fn plan_row(record: &parse::Record, columns: &[Mapped], r: &Reading<'_>) -> Plan
                     }
                 }
             }
+            Target::FixVersion => first(&mut p.fix_version),
             Target::StartDate | Target::DueDate => {
                 let slot = if col.target == Target::StartDate {
                     &mut p.start
@@ -914,6 +917,25 @@ fn run(
         {
             continue;
         }
+        // A version the project doesn't have, or that isn't open, is left
+        // out; the task is still made.
+        let fix_version = match &row.fix_version {
+            Some((name, column)) => {
+                match version::resolve_for_task(w.tx(), &p, "fix_version", name) {
+                    Ok(id) => Some(id.to_string()),
+                    Err(f) => {
+                        out.problems.push(row_failure(
+                            f,
+                            CsvSeverity::Warning,
+                            Some(column),
+                            "unknown_version",
+                        )?);
+                        None
+                    }
+                }
+            }
+            None => None,
+        };
         let input = TaskCreateInput {
             project: p.id.to_string(),
             title: row.title.clone(),
@@ -922,13 +944,23 @@ fn run(
             task_type,
             priority: row.priority,
             labels: label_names,
+            fix_version,
             start_date: row.start.map(|d| d.to_string()),
             due_date: row.due.map(|d| d.to_string()),
             estimate: row.estimate.map(|m| format!("{m}m")),
             fields: row.fields.clone(),
             ..TaskCreateInput::default()
         };
-        match w.attempt(|w| task::create(w, input)) {
+        // The rules of the task's status hold for it as for `task.create`:
+        // a required field it lacks makes the row an error.
+        let mut by_rule = false;
+        let made = w.attempt(|w| {
+            let change = task::create(w, input)?;
+            let id = lookup::task(w.tx(), "key", &change.task.key)?.id;
+            rules::enforce_created(w, id).inspect_err(|_| by_rule = true)?;
+            Ok(change)
+        });
+        match made {
             Ok(change) => {
                 for k in &row.keys {
                     by_ref
@@ -936,6 +968,11 @@ fn run(
                         .or_insert_with(|| change.task.key.clone());
                 }
                 out.key = Some(change.task.key);
+            }
+            Err(f) if by_rule && !matches!(f, Failure::Store(_)) => {
+                let e = OpError::from(f);
+                out.problems
+                    .push(refused(CsvSeverity::Error, None, "status_rule", &e));
             }
             Err(f) => out
                 .problems

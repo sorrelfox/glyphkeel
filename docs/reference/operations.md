@@ -39,6 +39,11 @@ The safety class decides who may run an operation:
 | `label.create` | write | app, command line, MCP | `update_project` | `glyphkeel label add` |
 | `label.update` | write | app, command line, MCP | `update_project` | `glyphkeel label edit` |
 | `label.delete` | permanent | app, command line, MCP | `update_project` | `glyphkeel label delete` |
+| `version.list` | read | app, command line, MCP | `list_versions` | `glyphkeel version list <project>` |
+| `version.get` | read | app, command line, MCP | `get_version` | `glyphkeel version show <version>` |
+| `version.create` | write | app, command line, MCP | `create_version` | `glyphkeel version create` |
+| `version.update` | write | app, command line, MCP | `update_version` | `glyphkeel version edit <version>` |
+| `version.delete` | write | app, command line, MCP | `delete_version` | `glyphkeel version delete <version>` |
 | `field.list` | read | app, command line, MCP | `list_custom_fields` | `glyphkeel field list` |
 | `field.create` | write | app, command line, MCP | `create_custom_field` | `glyphkeel field add` |
 | `field.update` | write | app, command line, MCP | `update_custom_field` | `glyphkeel field edit` |
@@ -59,6 +64,17 @@ The safety class decides who may run an operation:
 | `task.release` | write | app, command line, MCP | `release_task` | `glyphkeel task release <key>` |
 | `relation.add` | write | app, command line, MCP | `link_tasks` | `glyphkeel task link <key>` |
 | `relation.remove` | write | app, command line, MCP | `unlink_tasks` | `glyphkeel task unlink <key>` |
+| `recurrence.set` | write | app, command line, MCP | `set_recurrence` | `glyphkeel recurrence set <key>` |
+| `recurrence.clear` | write | app, command line, MCP | `stop_recurrence` | `glyphkeel recurrence clear <key>` |
+| `recurrence.skip` | write | app, command line, MCP | `skip_occurrence` | `glyphkeel recurrence skip <key>` |
+| `recurrence.preview` | read | app, command line, MCP | `preview_recurrence` | `glyphkeel recurrence preview` |
+| `recurrence.run` | write | app, command line | — | `glyphkeel recurrence run` |
+| `template.list` | read | app, command line, MCP | `list_templates` | `glyphkeel template list` |
+| `template.get` | read | app, command line, MCP | `get_template` | `glyphkeel template show <template>` |
+| `template.create` | write | app, command line, MCP | `create_template` | `glyphkeel template create <name>` |
+| `template.update` | write | app, command line, MCP | `update_template` | `glyphkeel template edit <template>` |
+| `template.delete` | write | app, command line, MCP | `delete_template` | `glyphkeel template delete <template>` |
+| `template.apply` | write | app, command line, MCP | `use_template` | `glyphkeel template use <template>` |
 | `description.history` | read | app, command line, MCP | `get_task` | `glyphkeel description history` |
 | `description.revision` | read | app, command line, MCP | `get_description_revision` | `glyphkeel description show <revision>` |
 | `markdown.render` | read | app | — | — |
@@ -74,6 +90,9 @@ The safety class decides who may run an operation:
 | `time.update` | write | app, command line, MCP | `update_time_entry` | `glyphkeel time edit <entry>` |
 | `time.delete` | trash | app, command line, MCP | `delete_time_entry` | `glyphkeel time delete <entry>` |
 | `time.report` | read | app, command line, MCP | `get_time_report` | `glyphkeel time report` |
+| `report.created_closed` | read | app, command line, MCP | `get_created_closed_report` | `glyphkeel report created-closed` |
+| `report.cumulative_flow` | read | app, command line, MCP | `get_cumulative_flow` | `glyphkeel report flow` |
+| `report.cycle_time` | read | app, command line, MCP | `get_cycle_time` | `glyphkeel report cycle-time` |
 | `timer.get` | read | app, command line, MCP | `get_workspace` | `glyphkeel timer status` |
 | `timer.start` | write | app, command line, MCP | `start_timer` | `glyphkeel timer start <key>` |
 | `timer.pause` | write | app, command line, MCP | `pause_timer` | `glyphkeel timer pause` |
@@ -119,6 +138,7 @@ The safety class decides who may run an operation:
 | `agent.sessions` | read | app, command line, MCP | `get_activity` | `glyphkeel agents sessions` |
 | `agent.policy.update` | app | app, command line | — | `glyphkeel agents policy` |
 | `agent.limits.update` | app | app | — | — |
+| `rules.update` | app | app, command line | — | `glyphkeel project rules <project>` |
 | `history.feed` | read | app, command line, MCP | `get_activity` | `glyphkeel activity` |
 | `history.revert` | write | app, command line, MCP | `revert_changes` | `glyphkeel revert` |
 | `history.undo` | app | app | — | — |
@@ -283,6 +303,36 @@ Delete a label and take it off every task. Can't be undone.
 
 Input: `LabelDeleteInput`. Output: `ProjectChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
+## `version.list`
+
+The versions of a project and those its ancestors share with it, with status, dates and progress; with their tasks for the roadmap.
+
+Input: `VersionListInput`. Output: `VersionList`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `version.get`
+
+One version with its progress and its tasks.
+
+Input: `VersionGetInput`. Output: `Version`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `version.create`
+
+Create a version of a project: name, description, status, start and due dates, and whether its sub-projects can use it.
+
+Input: `VersionCreateInput`. Output: `VersionChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `version.update`
+
+Rename a version, change its description, dates, sharing or status, or close it and move its open tasks to another version.
+
+Input: `VersionUpdateInput`. Output: `VersionChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `version.delete`
+
+Delete a version; its tasks are planned for no version. Revert brings both back.
+
+Input: `VersionDeleteInput`. Output: `VersionChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
 ## `field.list`
 
 The custom fields of a project (its own and those of every project) or of the whole workspace: name, query name, kind, options, default, task types, required, and how many tasks have a value.
@@ -403,6 +453,74 @@ Remove a link between two tasks, or a subtask from its parent.
 
 Input: `RelationInput`. Output: `TaskChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
+## `recurrence.set`
+
+Make a task recurring, change its rule, or (`update_details`) make its current details those of the occurrences to come.
+
+Input: `RecurrenceSetInput`. Output: `RecurrenceChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `recurrence.clear`
+
+Stop a task repeating: it stays, and no more occurrences are made.
+
+Input: `RecurrenceTaskInput`. Output: `RecurrenceChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `recurrence.skip`
+
+Pass over a recurring task's current occurrence: its dates move to the next date of the rule.
+
+Input: `RecurrenceTaskInput`. Output: `RecurrenceChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `recurrence.preview`
+
+Read a recurrence rule, in words or by fields, and list its next dates.
+
+Input: `RulePreviewInput`. Output: `RecurrencePreview`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `recurrence.run`
+
+Make the occurrences of series that are made ahead whose day has come; the app does this by itself.
+
+Input: `RecurrenceRunInput`. Output: `RecurrenceRun`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+Not available to agents: Housekeeping that the app and the command line run on a schedule; agents' changes already make occurrences as tasks close.
+
+## `template.list`
+
+The project templates and the task templates of a project or of every project.
+
+Input: `TemplateListInput`. Output: `TemplateList`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `template.get`
+
+One template with its content.
+
+Input: `TemplateRef`. Output: `Template`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `template.create`
+
+Make a task template (from a task, or given) or a project template (from a project, or given).
+
+Input: `TemplateCreateInput`. Output: `TemplateChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `template.update`
+
+Change a template's name, description or content.
+
+Input: `TemplateUpdateInput`. Output: `TemplateChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `template.delete`
+
+Delete a template; it can be brought back with revert. What was made from it stays.
+
+Input: `TemplateRef`. Output: `TemplateChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `template.apply`
+
+Use a template: a task template makes a task with its subtasks; a project template makes a project with its set-up, pages and tasks.
+
+Input: `TemplateApplyInput`. Output: `TemplateApplied`. Schemas: [catalog.schema.json](catalog.schema.json).
+
 ## `description.history`
 
 List the revisions of a task's or project's description, newest first, conflict copies included.
@@ -502,6 +620,24 @@ Input: `TimeEntryRef`. Output: `TimeEntryChange`. Schemas: [catalog.schema.json]
 Logged time over a range of days, grouped by day, week, month, task, project or person, with totals in the workspace's units and optional CSV.
 
 Input: `TimeReportInput`. Output: `TimeReport`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `report.created_closed`
+
+Tasks created against tasks closed and reopened per day, week or month, with the open tasks at the end of each period; from the history, with optional CSV.
+
+Input: `FlowReportInput`. Output: `CreatedClosedReport`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `report.cumulative_flow`
+
+How many tasks were in each status (or category) at the end of each day, week or month; from the history, with optional CSV.
+
+Input: `FlowReportInput`. Output: `CumulativeFlowReport`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `report.cycle_time`
+
+Cycle time (first move into progress to the last close) and lead time (creation to the last close) of the tasks closed over a range of days, with percentiles per period; optional task list and CSV.
+
+Input: `FlowReportInput`. Output: `CycleTimeReport`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `timer.get`
 
@@ -791,6 +927,14 @@ Input: `AgentLimitsPatch`. Output: `SettingsChange`. Schemas: [catalog.schema.js
 
 Not available to agents: It sets how much agents may do; an agent that could call it would raise its own limits beyond what the person allowed.
 
+## `rules.update`
+
+Change a project's status rules (fields set, cleared or required when a task enters a status, fields read-only in it, the timer and claims) and its rules for agents (statuses they may not move tasks into, fields they may not change).
+
+Input: `RulesUpdateInput`. Output: `ProjectChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+Not available to agents: It sets what agents may do; an agent that could call it would lift the rules the person set for agents.
+
 ## `history.feed`
 
 The activity log, newest first: who changed what, when and through which program; optionally the agent sessions.
@@ -893,7 +1037,7 @@ Input: `ImportInput`. Output: `ImportResult`. Schemas: [catalog.schema.json](cat
 
 ## `transfer.import_csv`
 
-Import tasks from a CSV file into a project, with a column mapping or a preset (Jira and Redmine exports are built in); a dry run reports every row's outcome, and the import is one change that Undo takes back.
+Import tasks from a CSV file into a project, with a column mapping or a preset (Jira and Redmine exports are built in); a dry run reports every row's outcome, and the import is one change that Undo takes back. Status rules hold for each task as for task.create; repeating tasks are not imported.
 
 Input: `CsvImportInput`. Output: `CsvImportResult`. Schemas: [catalog.schema.json](catalog.schema.json).
 

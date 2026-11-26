@@ -9,9 +9,10 @@ use serde::de::DeserializeOwned;
 
 use crate::ops::{
     agent, backup, board, bulk, comment, csv_import, description, draft, field, file, history,
-    link, project, query, schedule, search, settings, task, time, today, transfer, trash, view,
-    wiki, workspace,
+    link, project, query, report, rules, schedule, search, settings, task, time, today, transfer,
+    trash, version, view, wiki, workspace,
 };
+use crate::ops::{recurrence, template};
 use crate::schema;
 
 /// One operation of the catalog, as a type: its name and its input and
@@ -178,6 +179,11 @@ pub static CATALOG: &[OpDescriptor] = &[
     project::LABEL_CREATE,
     project::LABEL_UPDATE,
     project::LABEL_DELETE,
+    version::VERSION_LIST,
+    version::VERSION_GET,
+    version::VERSION_CREATE,
+    version::VERSION_UPDATE,
+    version::VERSION_DELETE,
     field::FIELD_LIST,
     field::FIELD_CREATE,
     field::FIELD_UPDATE,
@@ -198,6 +204,17 @@ pub static CATALOG: &[OpDescriptor] = &[
     task::TASK_RELEASE,
     task::RELATION_ADD,
     task::RELATION_REMOVE,
+    recurrence::RECURRENCE_SET,
+    recurrence::RECURRENCE_CLEAR,
+    recurrence::RECURRENCE_SKIP,
+    recurrence::RECURRENCE_PREVIEW,
+    recurrence::RECURRENCE_RUN,
+    template::TEMPLATE_LIST,
+    template::TEMPLATE_GET,
+    template::TEMPLATE_CREATE,
+    template::TEMPLATE_UPDATE,
+    template::TEMPLATE_DELETE,
+    template::TEMPLATE_APPLY,
     description::DESCRIPTION_HISTORY,
     description::DESCRIPTION_REVISION,
     description::MARKDOWN_RENDER,
@@ -213,6 +230,9 @@ pub static CATALOG: &[OpDescriptor] = &[
     time::TIME_UPDATE,
     time::TIME_DELETE,
     time::TIME_REPORT,
+    report::REPORT_CREATED_CLOSED,
+    report::REPORT_CUMULATIVE_FLOW,
+    report::REPORT_CYCLE_TIME,
     time::TIMER_GET,
     time::TIMER_START,
     time::TIMER_PAUSE,
@@ -258,6 +278,7 @@ pub static CATALOG: &[OpDescriptor] = &[
     agent::AGENT_SESSIONS,
     agent::AGENT_POLICY_UPDATE,
     agent::AGENT_LIMITS_UPDATE,
+    rules::RULES_UPDATE,
     history::HISTORY_FEED,
     history::HISTORY_REVERT,
     history::HISTORY_UNDO,

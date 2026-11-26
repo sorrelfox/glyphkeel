@@ -13,6 +13,7 @@ const CHECK: MoveCheck = {
   types: [{ name: "Task", tasks: 3, target: "Task" }],
   labels: [{ name: "ui", tasks: 1 }, { name: "old", tasks: 1 }],
   fields: [{ name: "Area", tasks: 1 }],
+  versions: [{ name: "1.0", tasks: 1 }],
   fallback_status: "Backlog",
   fallback_type: "Task",
 };

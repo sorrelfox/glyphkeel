@@ -141,6 +141,12 @@ pub struct Status {
     /// Most tasks the column should hold; left out when there is no limit.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wip_limit: Option<u32>,
+    /// Its rules for tasks entering it; left out when it has none.
+    #[serde(
+        default,
+        skip_serializing_if = "crate::ops::rules::StatusRules::is_empty"
+    )]
+    pub rules: crate::ops::rules::StatusRules,
     /// Tasks in this status.
     pub tasks: u64,
 }
@@ -159,6 +165,10 @@ pub struct TaskType {
     pub hue: Hue,
     /// Whether new tasks get it unless told otherwise.
     pub is_default: bool,
+    /// New tasks of this type are due this many days after the day they
+    /// are made, unless given a due date; left out when they get none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub due_offset_days: Option<u32>,
     /// Tasks of this type.
     pub tasks: u64,
 }
@@ -215,6 +225,12 @@ pub struct Project {
     pub types: Vec<TaskType>,
     /// The labels, in order.
     pub labels: Vec<Label>,
+    /// The rules for agents; left out when there are none.
+    #[serde(
+        default,
+        skip_serializing_if = "crate::ops::rules::AgentRules::is_empty"
+    )]
+    pub agent_rules: crate::ops::rules::AgentRules,
     /// The colour a new label gets when none is given: the first palette
     /// colour no label uses yet, else the least-used one.
     pub next_label_hue: Hue,
@@ -362,6 +378,13 @@ pub struct TypeChange {
     /// Make it the type new tasks get.
     #[serde(default)]
     pub make_default: bool,
+    /// New tasks of this type are due this many days (0 to 3650) after
+    /// the day they are made, unless given a due date.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub due_offset_days: Option<u32>,
+    /// New tasks of this type get no due date of their own.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub clear_due_offset: bool,
     /// Place it before this type.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub before: Option<String>,
@@ -594,6 +617,10 @@ pub struct TypeCreateInput {
     /// Make it the type new tasks get.
     #[serde(default)]
     pub make_default: bool,
+    /// New tasks of this type are due this many days (0 to 3650) after
+    /// the day they are made, unless given a due date.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub due_offset_days: Option<u32>,
 }
 
 /// Changes to a task type; fields left out keep their value.
@@ -617,6 +644,13 @@ pub struct TypeUpdateInput {
     /// Make it the type new tasks get.
     #[serde(default)]
     pub make_default: bool,
+    /// New tasks of this type are due this many days (0 to 3650) after
+    /// the day they are made, unless given a due date.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub due_offset_days: Option<u32>,
+    /// New tasks of this type get no due date of their own.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub clear_due_offset: bool,
     /// Place it before this type.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub before: Option<String>,

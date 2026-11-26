@@ -170,6 +170,11 @@ fn a_jira_export_is_checked_then_imported_as_one_change() {
 fn a_redmine_export_in_windows_1252_keeps_its_accents_and_links() {
     let dir = TempDir::new().unwrap();
     let e = open(&dir);
+    // The fixture keeps what Redmine writes: CRLF and Windows-1252.
+    let bytes = std::fs::read(fixture("redmine-1252.csv")).unwrap();
+    assert!(bytes.windows(2).any(|w| w == b"\r\n"), "CRLF line endings");
+    assert!(bytes.contains(&0xE9), "\"Café\" in Windows-1252");
+    assert!(std::str::from_utf8(&bytes).is_err(), "not UTF-8");
     let path = fixture("redmine-1252.csv").to_string_lossy().into_owned();
     let done = call(
         &e,
@@ -466,4 +471,89 @@ fn a_row_the_task_rules_refuse_stops_the_import_and_leaves_nothing() {
     assert!(done["setup_group"].is_string());
     call(&e, "history.revert", json!({ "groups": [done["group"]] }));
     assert_eq!(task_count(&e), 0, "Undo moves the tasks to the trash");
+}
+
+#[test]
+fn versions_by_name_and_the_rules_of_each_status_hold_for_every_row() {
+    let dir = TempDir::new().unwrap();
+    let e = open(&dir);
+    call(
+        &e,
+        "version.create",
+        json!({ "project": "SHOP", "name": "1.0" }),
+    );
+    call(
+        &e,
+        "rules.update",
+        json!({ "project": "SHOP", "statuses": [{ "status": "In progress", "rules": {
+            "required": ["estimate"],
+            "set": [{ "field": "start_date", "value": "today", "only_if_empty": true }],
+        } }] }),
+    );
+    let path = write(
+        &dir,
+        "rules.csv",
+        b"Title,Status,Fix Version/s,Estimate,Recurrence\n\
+          Started,In progress,1.0,2h,every week\n\
+          No estimate,In progress,1.0,,\n\
+          Later,To do,2.0,,\n",
+    );
+    let check = call(
+        &e,
+        "transfer.import_csv",
+        json!({ "project": "SHOP", "path": path, "dry_run": true }),
+    );
+    let to: Vec<Value> = check["columns"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["to"].clone())
+        .collect();
+    assert_eq!(
+        to,
+        [
+            json!("title"),
+            json!("status"),
+            json!("fix_version"),
+            json!("estimate"),
+            Value::Null
+        ],
+        "a repeat rule is not imported"
+    );
+    let rows = check["rows"].as_array().unwrap();
+    assert_eq!(rows[0]["outcome"], "created");
+    assert_eq!(
+        codes(&rows[1]),
+        ["status_rule"],
+        "the status needs an estimate"
+    );
+    assert_eq!(rows[1]["outcome"], "skipped");
+    assert!(
+        rows[1]["problems"][0]["message"]
+            .as_str()
+            .unwrap()
+            .contains("estimate"),
+        "{}",
+        rows[1]
+    );
+    assert_eq!(codes(&rows[2]), ["unknown_version"], "no such version");
+    assert_eq!(rows[2]["outcome"], "created");
+    assert_eq!(task_count(&e), 0, "a dry run writes nothing");
+
+    let done = call(
+        &e,
+        "transfer.import_csv",
+        json!({ "project": "SHOP", "path": path, "skip_invalid": true }),
+    );
+    assert_eq!(done["counts"]["created"], 2);
+    let started = get(&e, "SHOP-1");
+    assert_eq!(started["fix_version"]["name"], "1.0");
+    assert!(
+        started["start_date"].is_string(),
+        "the status's actions apply: {started}"
+    );
+    assert!(started.get("recurrence").is_none());
+    let later = get(&e, "SHOP-2");
+    assert_eq!(later["title"], "Later");
+    assert!(later.get("fix_version").is_none());
 }

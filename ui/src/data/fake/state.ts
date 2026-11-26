@@ -5,6 +5,7 @@
 
 import {
   type ActivityEntry,
+  type AgentRules,
   type Actor,
   type ProjectIcon,
   type BoardLayout,
@@ -18,13 +19,19 @@ import {
   type Hue,
   type Modules,
   type Priority,
+  type ProjectBlueprint,
+  type RecurrenceRule,
   type RevisionKind,
+  type TaskBlueprint,
+  type TemplateKind,
+  type StatusRules,
   type Backup,
   type SavedView,
   type Settings,
   type TrashEntry,
   type Via,
 } from "../../generated/ops";
+import { type FakeVersion } from "./versions";
 import { type FakeField, type FieldValue } from "./fields";
 
 export interface FakeStatus {
@@ -33,6 +40,8 @@ export interface FakeStatus {
   category: Category;
   hue: Hue;
   wip_limit: number | null;
+  /** Its rules for tasks entering it; none when left out. */
+  rules?: StatusRules | undefined;
 }
 
 export interface FakeType {
@@ -41,6 +50,8 @@ export interface FakeType {
   glyph: Glyph;
   hue: Hue;
   is_default: boolean;
+  /** New tasks of this type are due this many days after they are made. */
+  due_offset_days?: number;
 }
 
 export interface FakeLabel {
@@ -70,6 +81,8 @@ export interface FakeProject {
   nextNumber: number;
   /** Keys it had before a new key; they still find it and its tasks. */
   oldKeys?: string[];
+  /** The rules for agents; none when left out. */
+  agentRules?: AgentRules | undefined;
 }
 
 export interface FakeTask {
@@ -104,8 +117,42 @@ export interface FakeTask {
   updatedBy: { kind: "user" | "agent"; name: string };
   closedAt: string | null;
   version: number;
+  /** The version (release) it is planned for. */
+  fixVersionId?: string | null;
   /** Custom field values by field ID; none until one is set. */
   fields?: Record<string, FieldValue>;
+  /** The recurring series it is an occurrence of. */
+  seriesId?: string;
+}
+
+/** A recurring task's series: its rule and the details each new occurrence starts from. */
+export interface FakeSeries {
+  id: string;
+  projectId: string;
+  rule: RecurrenceRule;
+  pattern: TaskBlueprint;
+  /** The current occurrence's ID. */
+  current: string | null;
+  /** Made ahead: the date of the next occurrence to make. */
+  nextDate: string | null;
+  /** Occurrences made or passed over, the first included. */
+  made: number;
+  endedAt: string | null;
+  createdAt: string;
+}
+
+/** A task template (of a project) or a project template (of the workspace). */
+export interface FakeTemplate {
+  id: string;
+  kind: TemplateKind;
+  projectId: string | null;
+  name: string;
+  description: string;
+  task?: TaskBlueprint;
+  setup?: ProjectBlueprint;
+  rank: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /** A link between two tasks, stored the way it reads from `from`. */
@@ -266,8 +313,14 @@ export interface FakeState {
   wiki?: FakeWikiPage[];
   /** Deleted tasks, newest deletion last; none until one is deleted. */
   trash?: FakeTrashed[];
+  /** Recurring series; none until a task repeats. */
+  series?: FakeSeries[];
+  /** Templates; none until one is made. */
+  templates?: FakeTemplate[];
   /** Backups, newest first; none until one is made. */
   backups?: Backup[];
+  /** Versions (releases) of the projects; none until one is made. */
+  versions?: FakeVersion[];
   /** Custom fields, in order; none until one is made. */
   customFields?: FakeField[];
   /** The workspace's own CSV import presets; none until one is saved. */

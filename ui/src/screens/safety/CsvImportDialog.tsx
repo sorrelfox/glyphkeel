@@ -36,6 +36,7 @@ const TARGETS = [
   "type",
   "priority",
   "labels",
+  "fix_version",
   "start_date",
   "due_date",
   "estimate",
@@ -446,6 +447,7 @@ export function CsvImportDialog({ project: initialProject, onClose }: { project?
                 {(result.new_types ?? []).length > 0 && <li>{t("csv-new-types", { names: list(result.new_types ?? []) })}</li>}
                 {(result.new_labels ?? []).length > 0 && <li>{t("csv-new-labels", { names: list(result.new_labels ?? []) })}</li>}
               </ul>
+              <p className={styles.note}>{t("csv-no-recurrence")}</p>
               {result.blocked && <p className={styles.bad}>{t("csv-blocked")}</p>}
             </section>
             <section aria-label={t("csv-problems")} className={styles.scroll} data-testid="csv-problems">

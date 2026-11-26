@@ -542,3 +542,50 @@ async fn the_person_sets_the_limit_on_changes_a_minute_while_the_agent_works() {
     }
     c.close().await;
 }
+
+#[tokio::test]
+async fn an_agent_reads_the_flow_reports_and_its_own_closes() {
+    let (_dir, options) = workspace();
+    let (_, mode, version, _) = lifecycles().remove(0);
+    let c = connect(&options, mode, version, "Flow Agent").await;
+    output(
+        &c.call("create_project", json!({ "name": "Agents", "key": "AG" }))
+            .await,
+    );
+    for title in ["One", "Two"] {
+        output(
+            &c.call("create_task", json!({ "project": "AG", "title": title }))
+                .await,
+        );
+    }
+    output(
+        &c.call("move_task", json!({ "key": "AG-1", "status": "Done" }))
+            .await,
+    );
+    let input = json!({ "project": "AG", "bucket": "day", "from": "today" });
+    let created = output(&c.call("get_created_closed_report", input.clone()).await);
+    assert_eq!(created["created"], 2);
+    assert_eq!(created["closed"], 1);
+    let mine = output(
+        &c.call(
+            "get_created_closed_report",
+            json!({ "bucket": "day", "from": "today", "actor": "agent" }),
+        )
+        .await,
+    );
+    assert_eq!(mine["closed"], 1, "the agent closed it");
+    let people = output(
+        &c.call(
+            "get_created_closed_report",
+            json!({ "bucket": "day", "from": "today", "actor": "me" }),
+        )
+        .await,
+    );
+    assert_eq!(people["closed"], 0);
+    let flow = output(&c.call("get_cumulative_flow", input.clone()).await);
+    assert_eq!(flow["items"].as_array().unwrap().len(), 1);
+    let cycle = output(&c.call("get_cycle_time", input).await);
+    assert_eq!(cycle["lead"]["count"], 1);
+    assert_eq!(cycle["cycle"]["count"], 0, "never in progress");
+    c.close().await;
+}

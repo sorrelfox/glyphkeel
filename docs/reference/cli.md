@@ -39,7 +39,7 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel file delete <attachment>` | `file.delete` | Move an attached file to the trash. |
 | `glyphkeel file show <attachment>` | `file.get` | An attached file's name, type, size and owner. |
 | `glyphkeel import <path>` | `transfer.import` | Import an archive as new projects; checks it completely first and never changes existing data. |
-| `glyphkeel import csv <path>` | `transfer.import_csv` | Import tasks from a CSV file into a project, with a column mapping or a preset (Jira and Redmine exports are built in); a dry run reports every row's outcome, and the import is one change that Undo takes back. |
+| `glyphkeel import csv <path>` | `transfer.import_csv` | Import tasks from a CSV file into a project, with a column mapping or a preset (Jira and Redmine exports are built in); a dry run reports every row's outcome, and the import is one change that Undo takes back. Status rules hold for each task as for task.create; repeating tasks are not imported. |
 | `glyphkeel label add` | `label.create` | Add a label to a project; without a colour it gets the first palette colour the project's labels don't use yet. |
 | `glyphkeel label delete` | `label.delete` | Delete a label and take it off every task. Can't be undone. |
 | `glyphkeel label edit` | `label.update` | Rename or recolour a label. |
@@ -51,12 +51,21 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel project list` | `project.list` | The project tree in sidebar order, with keys, names and open-task counts; archived projects on request. |
 | `glyphkeel project move <project>` | `project.move` | Move a project under another one (at most 3 levels), to the top level, or among its siblings. |
 | `glyphkeel project rekey <project>` | `project.change_key` | Give a project a new key; the old key and the old task keys keep working. |
+| `glyphkeel project rules <project>` | `rules.update` | Change a project's status rules (fields set, cleared or required when a task enters a status, fields read-only in it, the timer and claims) and its rules for agents (statuses they may not move tasks into, fields they may not change). |
 | `glyphkeel project show <project>` | `project.get` | One project with its statuses (board order, category, WIP limit), task types, labels, modules, sub-projects and counts. |
 | `glyphkeel project unarchive <project>` | `project.unarchive` | Unarchive a project and its sub-projects. |
+| `glyphkeel recurrence clear <key>` | `recurrence.clear` | Stop a task repeating: it stays, and no more occurrences are made. |
+| `glyphkeel recurrence preview` | `recurrence.preview` | Read a recurrence rule, in words or by fields, and list its next dates. |
+| `glyphkeel recurrence run` | `recurrence.run` | Make the occurrences of series that are made ahead whose day has come; the app does this by itself. |
+| `glyphkeel recurrence set <key>` | `recurrence.set` | Make a task recurring, change its rule, or (`update_details`) make its current details those of the occurrences to come. |
+| `glyphkeel recurrence skip <key>` | `recurrence.skip` | Pass over a recurring task's current occurrence: its dates move to the next date of the rule. |
 | `glyphkeel reminder ack <ids>` | `reminder.acknowledge` | Acknowledge reminders that were shown, so they don't come due again. |
 | `glyphkeel reminder clear <key>` | `reminder.clear` | Remove a task's personal reminder. |
 | `glyphkeel reminder due` | `reminder.due` | The reminders, deadline alerts and timer reminders that are due and not acknowledged, with those missed marked, and when the next one comes. |
 | `glyphkeel reminder set <key>` | `reminder.set` | Set a task's personal reminder: a moment, or a number of days before its due date. |
+| `glyphkeel report created-closed` | `report.created_closed` | Tasks created against tasks closed and reopened per day, week or month, with the open tasks at the end of each period; from the history, with optional CSV. |
+| `glyphkeel report cycle-time` | `report.cycle_time` | Cycle time (first move into progress to the last close) and lead time (creation to the last close) of the tasks closed over a range of days, with percentiles per period; optional task list and CSV. |
+| `glyphkeel report flow` | `report.cumulative_flow` | How many tasks were in each status (or category) at the end of each day, week or month; from the history, with optional CSV. |
 | `glyphkeel revert` | `history.revert` | Revert history groups or everything an agent session changed. Groups that something changed since are skipped and listed. |
 | `glyphkeel schedule` | `schedule.get` | The schedule of a project or a query for the Gantt chart: dated tasks as a tree with summary ranges for parents, milestones, the tasks without dates, blocks links as finish-to-start dependencies, and problems such as a task starting before its blocker ends. |
 | `glyphkeel search <text>` | `search.query` | Search task titles and descriptions, comments, wiki pages and file names for words and fragments, ranked, with the matches marked; a task key finds that task. |
@@ -84,6 +93,12 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel task resolve <key>` | `task.resolve_conflict` | Resolve a conflict copy of a task's description: keep the description, use the copy, or save a combined text. |
 | `glyphkeel task show <keys>` | `task.get` | One to 20 tasks by key, with their fields, description, labels and version; subtasks, links, comments and files on request. |
 | `glyphkeel task unlink <key>` | `relation.remove` | Remove a link between two tasks, or a subtask from its parent. |
+| `glyphkeel template create <name>` | `template.create` | Make a task template (from a task, or given) or a project template (from a project, or given). |
+| `glyphkeel template delete <template>` | `template.delete` | Delete a template; it can be brought back with revert. What was made from it stays. |
+| `glyphkeel template edit <template>` | `template.update` | Change a template's name, description or content. |
+| `glyphkeel template list` | `template.list` | The project templates and the task templates of a project or of every project. |
+| `glyphkeel template show <template>` | `template.get` | One template with its content. |
+| `glyphkeel template use <template>` | `template.apply` | Use a template: a task template makes a task with its subtasks; a project template makes a project with its set-up, pages and tasks. |
 | `glyphkeel time delete <entry>` | `time.delete` | Move a time entry to the trash. |
 | `glyphkeel time edit <entry>` | `time.update` | Change a time entry's duration, day or note. |
 | `glyphkeel time log <key>` | `time.log` | Log time on a task: a duration, the day of the work (default today) and a note. |
@@ -99,6 +114,11 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel type add` | `type.create` | Add a task type to a project. |
 | `glyphkeel type delete` | `type.delete` | Delete a task type; its tasks get another type. Can't be undone. |
 | `glyphkeel type edit` | `type.update` | Rename, reshape, recolour or reorder a task type, or make it the default. |
+| `glyphkeel version create` | `version.create` | Create a version of a project: name, description, status, start and due dates, and whether its sub-projects can use it. |
+| `glyphkeel version delete <version>` | `version.delete` | Delete a version; its tasks are planned for no version. Revert brings both back. |
+| `glyphkeel version edit <version>` | `version.update` | Rename a version, change its description, dates, sharing or status, or close it and move its open tasks to another version. |
+| `glyphkeel version list <project>` | `version.list` | The versions of a project and those its ancestors share with it, with status, dates and progress; with their tasks for the roadmap. |
+| `glyphkeel version show <version>` | `version.get` | One version with its progress and its tasks. |
 | `glyphkeel view create` | `view.create` | Save a query as a named view of a project or of the whole workspace, with its columns, order, grouping and totals. |
 | `glyphkeel view delete <view>` | `view.delete` | Delete a saved view; it can be brought back with revert. |
 | `glyphkeel view edit <view>` | `view.update` | Rename a saved view, change its query, columns, order, grouping or totals, or make it the default. |

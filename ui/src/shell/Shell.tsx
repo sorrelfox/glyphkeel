@@ -55,6 +55,9 @@ export function viewOf(pathname: string): View {
   if (pathname.startsWith("/time")) {
     return "time";
   }
+  if (pathname.startsWith("/reports")) {
+    return "reports";
+  }
   if (pathname.startsWith("/search")) {
     return "search";
   }
@@ -72,6 +75,7 @@ const VIEW_TITLES: Record<Exclude<View, "project">, string> = {
   today: "view-today",
   "all-tasks": "view-all-tasks",
   time: "view-time-report",
+  reports: "view-reports",
   search: "view-search",
   trash: "view-trash",
   activity: "view-activity",
@@ -143,7 +147,7 @@ export function Shell({ titleBar, openGallery, firstRun = false }: ShellProps) {
         }
       : null,
     setView: (next) => {
-      void navigate({ to: next === "all-tasks" ? "/all" : next === "time" ? "/time" : next === "trash" ? "/trash" : next === "activity" ? "/activity" : "/" });
+      void navigate({ to: next === "all-tasks" ? "/all" : next === "time" ? "/time" : next === "reports" ? "/reports" : next === "trash" ? "/trash" : next === "activity" ? "/activity" : "/" });
     },
     projectView:
       view === "project" && projectKey !== undefined

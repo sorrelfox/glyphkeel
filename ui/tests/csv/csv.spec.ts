@@ -22,6 +22,7 @@ test("a CSV file is checked, mapped and imported from the project menu, then und
   const summary = dialog.getByTestId("csv-summary");
   await expect.poll(async () => plain(await summary.innerText())).toContain("2 new tasks");
   await expect.poll(async () => plain(await summary.innerText())).toContain("One row is left out");
+  await expect(summary.getByText(/Repeating tasks are not read from the file/)).toBeVisible();
   const problems = dialog.getByTestId("csv-problems");
   await expect(problems.getByText("The row has no title.")).toBeVisible();
   await expect(problems.getByText(/"soon" is not a date/)).toBeVisible();

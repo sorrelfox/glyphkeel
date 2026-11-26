@@ -8,6 +8,7 @@ import { Button, Dialog, Popover, useLocale } from "react-aria-components";
 
 import { keysOf } from "../../actions/actions";
 import { classes } from "../../classes";
+import { RecurringMark } from "../../components/Glyphs";
 import { Kbd } from "../../components/Kbd";
 import { QueryField, type QueryFieldHandle, type Reading } from "../../components/QueryField/QueryField";
 import { Segmented } from "../../components/Segmented";
@@ -446,9 +447,11 @@ export function CalendarView({ project, openTask, onOpen }: CalendarViewProps) {
     if (!span) {
       return task.key;
     }
-    return span.from === span.to
-      ? t("calendar-task-day", { key: task.key, title: task.title, date: fullDate.format(asDate(span.from)) })
-      : t("calendar-task-days", { key: task.key, title: task.title, from: fullDate.format(asDate(span.from)), to: fullDate.format(asDate(span.to)) });
+    const label =
+      span.from === span.to
+        ? t("calendar-task-day", { key: task.key, title: task.title, date: fullDate.format(asDate(span.from)) })
+        : t("calendar-task-days", { key: task.key, title: task.title, from: fullDate.format(asDate(span.from)), to: fullDate.format(asDate(span.to)) });
+    return task.recurring === true ? t("recurring-label", { label }) : label;
   };
 
   const renderBar = (bar: Bar<ListedTask>, week: readonly Day[]) => {
@@ -490,6 +493,7 @@ export function CalendarView({ project, openTask, onOpen }: CalendarViewProps) {
         <span className={`dot hue-${hue}`} aria-hidden="true" />
         <span className={styles.barKey}>{task.key}</span>
         <span className={styles.barTitle}>{task.title}</span>
+        {task.recurring === true && <RecurringMark />}
       </button>
     );
   };

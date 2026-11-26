@@ -661,6 +661,22 @@ fn cond(c: &Cond, today: Day, now: i64) -> Sql {
             sql.append(names_in("l.name_fold", names));
             sql.push(")");
         }
+        Cond::Versions { names, none } => {
+            let mut parts = Vec::new();
+            if !names.is_empty() {
+                let mut p = Sql::default();
+                p.push("t.fix_version_id IN (SELECT v.id FROM versions v WHERE ");
+                p.append(names_in("v.name_fold", names));
+                p.push(")");
+                parts.push(p);
+            }
+            if *none {
+                let mut p = Sql::default();
+                p.push("t.fix_version_id IS NULL");
+                parts.push(p);
+            }
+            sql.append(any(parts));
+        }
         Cond::Categories(cats) => {
             sql.push("s.category IN (");
             for (i, c) in cats.iter().enumerate() {
@@ -850,6 +866,7 @@ fn cond(c: &Cond, today: Day, now: i64) -> Sql {
                         "estimate" => "t.estimate_min IS NOT NULL",
                         "description" => "t.description <> ''",
                         "labels" => "EXISTS (SELECT 1 FROM task_labels tl WHERE tl.task_id = t.id)",
+                        "version" => "t.fix_version_id IS NOT NULL",
                         "files" => "0 < (SELECT count(*) FROM attachments a WHERE a.deleted_at IS NULL \
                              AND ((a.owner_kind = 'task' AND a.owner_id = t.id) OR (a.owner_kind = 'comment' \
                              AND a.owner_id IN (SELECT c.id FROM comments c WHERE c.task_id = t.id \
@@ -1020,6 +1037,11 @@ fn sort_exprs(by: &SortBy, relevance: bool) -> Vec<Sql> {
                 "CASE s.category WHEN 'todo' THEN 0 WHEN 'in_progress' THEN 1 WHEN 'done' THEN 2 ELSE 3 END",
             ],
             FieldType::Type => vec!["y.name_fold"],
+            FieldType::Version => vec![
+                "(SELECT v.due_date IS NULL FROM versions v WHERE v.id = t.fix_version_id)",
+                "(SELECT v.due_date FROM versions v WHERE v.id = t.fix_version_id)",
+                "(SELECT v.name_fold FROM versions v WHERE v.id = t.fix_version_id)",
+            ],
             FieldType::Priority => vec!["t.priority"],
             FieldType::Parent => vec!["(SELECT k.number FROM tasks k WHERE k.id = t.parent_id)"],
             FieldType::Date(c) => vec![date_column(c)],

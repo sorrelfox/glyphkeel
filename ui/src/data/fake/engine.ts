@@ -72,8 +72,10 @@ import {
   type WikiPageSummary,
   type Backlink,
   type Reference,
+  type FlowReportInput,
 } from "../../generated/ops";
 import { PROJECT_ICONS, suggestHue } from "../catalog";
+import { customRuleField, isEmpty as isEmptyRules } from "../rules";
 import { formatDuration, parseDuration } from "../duration";
 import { BUILT_IN_PRESETS, planCsv } from "./csv";
 import { decodeBase64, materialize, recordedFields, sniff } from "./details";
@@ -81,13 +83,19 @@ import { applyValues, createField, deleteField, fieldOut, fieldsFor, fieldsOf, f
 import { checklistOf, escapeHtml, merge3, publicChecklist, renderFake, setChecked, unifiedDiff } from "./markdown";
 import { newProject, nextFileId, nextId, nextUuid, SAMPLE_AGENT } from "./seed";
 import { type FakeComment, type FakeFile, type FakeProject, type FakeRelation, type FakeReminder, type FakeRevision, type FakeState, type FakeTask, type FakeTimeEntry, type FakeWikiPage } from "./state";
+import { checkReadOnly, enter as enterRules } from "./rules";
 import { naturalDay, nextDay, searchAll, searchWiki, slugOf, headingsOf } from "./overview";
 import { moveDependents, scheduleOf } from "./schedule";
+import { type FakeHost, type NewTask } from "./host";
+import { afterClosing, recurrenceHandlers, taskRecurrence } from "./recurrence";
+import { templateHandlers } from "./templates";
 
 /** The Gantt chart's layout until the person changes it. */
 const DEFAULT_GANTT_LAYOUT: GanttLayout = { zoom: "day", widths: {}, group_by: "parent", move_dependents: false };
 import { linksIn, placePage, subtree, type TextLink } from "./wiki";
+import { createVersion, deleteVersion, getVersion, listVersions, updateVersion, versionForTask, versionRef, visibleVersions, type VersionHost } from "./versions";
 import { createView, deleteView, listViews, matchingKeys, parseQuery, queryError, searchTasks, updateView, type GroupInfo, type QueryNames } from "./query";
+import { createdClosed, cumulativeFlow, cycleTime, defaultFrom, flowPeriods, type FlowEvent, type FlowInput, type FlowStatus, type FlowTask } from "./reports";
 import { addDays, csvOf, localDay, MAX_ENTRY_MINUTES, momentOf, reminderAt, reminderOut, sortDue, timeEntryOut, timerElapsedMs, timerOut, unitsOf, weekStart, workDay } from "./time";
 
 /** An operation failed: the engine's error, as the transports deliver it. */
@@ -253,6 +261,11 @@ export class FakeWorkspace {
     const answer = handler(input ?? {});
     if (!isResult(answer)) {
       return { output: answer };
+    }
+    // Closing the current occurrence of a recurring task makes the next one, in the same step.
+    if (!op.startsWith("history.") && op !== "backup.restore") {
+      const wasOpen = new Set(before.tasks.filter((task) => task.closedAt === null).map((task) => task.id));
+      answer.changes.push(...afterClosing(this.host, this.state.tasks.filter((task) => task.closedAt !== null && wasOpen.has(task.id))));
     }
     if (answer.changes.length === 0) {
       return { output: answer.output };
@@ -526,8 +539,10 @@ export class FakeWorkspace {
         category: status.category,
         hue: status.hue,
         ...some("wip_limit", status.wip_limit),
+        ...(status.rules === undefined || isEmptyRules(status.rules) ? {} : { rules: structuredClone(status.rules) }),
         tasks: tasks.filter((task) => task.statusId === status.id).length,
       })),
+      ...(project.agentRules !== undefined && (project.agentRules.read_only ?? []).length > 0 ? { agent_rules: structuredClone(project.agentRules) } : {}),
       types: project.types.map((type) => ({ ...type, tasks: tasks.filter((task) => task.typeId === type.id).length })),
       labels: project.labels.map((label) => ({ ...label, tasks: tasks.filter((task) => task.labelIds.includes(label.id)).length })),
       next_label_hue: suggestHue(project.labels.map((label) => label.hue)),
@@ -617,6 +632,7 @@ export class FakeWorkspace {
       labels: this.labelRefs(task),
       ...(taskValues(this.state, task).length > 0 ? { fields: taskValues(this.state, task) } : {}),
       ...some("parent", parent && this.keyOf(parent)),
+      ...some("fix_version", versionRef(this.versionHost, task)),
       ...some("start_date", task.startDate),
       ...some("due_date", task.dueDate),
       ...some("estimate_minutes", task.estimateMin),
@@ -635,6 +651,7 @@ export class FakeWorkspace {
       updated_at: task.updatedAt,
       ...some("closed_at", task.closedAt),
       ...(task.oldKeys && task.oldKeys.length > 0 ? { old_keys: [...task.oldKeys] } : {}),
+      ...some("recurrence", taskRecurrence(this.host, task)),
       version: task.version,
     };
   }
@@ -1036,6 +1053,11 @@ export class FakeWorkspace {
       for (const field of moveValues(this.state, one, to.id)) {
         warn(`The custom field "${field}" doesn't exist in ${to.key}; its value was left off.`);
       }
+      const planned = versionRef(this.versionHost, one);
+      if (planned !== undefined && !visibleVersions(this.versionHost, to).some((each) => each.version.id === one.fixVersionId)) {
+        one.fixVersionId = null;
+        warn(`Version "${planned.name}" isn't available in ${to.key} and was taken off.`);
+      }
       one.projectId = to.id;
       one.number = to.nextNumber;
       to.nextNumber += 1;
@@ -1382,6 +1404,7 @@ export class FakeWorkspace {
       key: card.key,
       labels: card.labels,
       ...some("fields", listedValues(this.state, task)),
+      ...some("fix_version", versionRef(this.versionHost, task)),
       ...some("parent", card.parent),
       priority: card.priority,
       progress_percent: card.progress_percent,
@@ -1775,6 +1798,7 @@ export class FakeWorkspace {
       return subtasks.length > 0 ? Math.round(subtasks.reduce((sum, sub) => sum + progress(sub), 0) / subtasks.length) : 0;
     };
     const byId = new Map(this.state.tasks.map((task) => [task.id, task]));
+    const recurring = new Set((this.state.series ?? []).filter((series) => series.endedAt === null && series.current !== null).map((series) => series.current));
     const items = this.state.tasks.map((task): ListedTask => {
       const project = this.projectOf(task);
       const status = this.statusIn(project, task.statusId);
@@ -1808,6 +1832,7 @@ export class FakeWorkspace {
         title: task.title,
         type: this.typeRef(task),
         updated_at: task.updatedAt,
+        ...(recurring.has(task.id) ? { recurring: true } : {}),
         version: task.version,
       };
     });
@@ -1833,6 +1858,95 @@ export class FakeWorkspace {
   }
 
   /** Runs a query; a query that doesn't read fails as the engine's `invalid`. */
+  /** The tasks, statuses and days a flow report covers, from its input. */
+  private flowScope(input: FlowReportInput): { tasks: FlowTask[]; statuses: Map<string, FlowStatus>; scoped: Set<string>; range: FlowInput } {
+    const now = this.today();
+    const bucket = input.bucket ?? "week";
+    const first = this.state.settings.week_start;
+    const to = input.to === null || input.to === undefined ? localDay(now) : (workDay(input.to, now) ?? fail("invalid", `"${input.to}" isn't a day.`, { details: { path: "to" } }));
+    const from = input.from === null || input.from === undefined ? defaultFrom(to, bucket, first) : (workDay(input.from, now) ?? fail("invalid", `"${input.from}" isn't a day.`, { details: { path: "from" } }));
+    if (to < from) {
+      fail("invalid", "The last day comes before the first.", { details: { path: "to", message_id: "activity-to-before-from" } });
+    }
+    if (flowPeriods(from, to, bucket, first).length > 1000) {
+      fail("invalid", "A report has at most 1000 periods; choose a shorter range or longer periods.", { details: { path: "from", message_id: "flow-report-too-many-periods", args: { max: 1000 } } });
+    }
+    if (input.actor?.trim() === "") {
+      fail("invalid", "Name who did it: me, agent, or a name.", { details: { path: "actor", message_id: "flow-report-no-actor" } });
+    }
+    const scope = input.project === null || input.project === undefined ? null : this.project(input.project);
+    const projects = scope === null ? this.state.projects : [scope, ...(input.include_subprojects === false ? [] : this.descendants(scope))];
+    const inScope = new Set(projects.map((each) => each.id));
+    const named = (kind: "type" | "label") => {
+      const text = (kind === "type" ? input.type : input.label)?.trim().toLowerCase();
+      if (text === undefined) {
+        return null;
+      }
+      const ids = new Set(this.state.projects.flatMap((project) => (kind === "type" ? project.types : project.labels).filter((each) => each.name.toLowerCase() === text).map((each) => each.id)));
+      if (ids.size === 0) {
+        fail("invalid", `No project has a ${kind === "type" ? "task type" : "label"} named "${text}".`, { details: { path: kind, message_id: kind === "type" ? "flow-report-unknown-type" : "flow-report-unknown-label", args: { name: text } } });
+      }
+      return ids;
+    };
+    const types = named("type");
+    const labels = named("label");
+    const versionText = input.fix_version?.trim();
+    let versions: Set<string> | null = null;
+    if (versionText !== undefined) {
+      const all = this.versionHost.versions();
+      const byId = all.filter((each) => each.id === versionText);
+      versions = new Set((byId.length > 0 ? byId : all.filter((each) => each.name.toLowerCase() === versionText.toLowerCase())).map((each) => each.id));
+      if (versions.size === 0) {
+        fail("invalid", `No project has a version named "${versionText}".`, { details: { path: "fix_version", message_id: "flow-report-unknown-version", args: { name: versionText } } });
+      }
+    }
+    const query = input.query?.trim();
+    const matching = query === undefined || query === "" ? null : new Set(this.runQuery(() => matchingKeys(this.listedTasks(), query, this.queryNames(), this.archivedKeys())));
+    const statuses = new Map<string, FlowStatus>();
+    for (const project of this.state.projects) {
+      project.statuses.forEach((status, rank) => {
+        statuses.set(status.id, { id: status.id, name: status.name, category: status.category, hue: status.hue, rank });
+      });
+    }
+    const scoped = new Set(projects.flatMap((project) => project.statuses.map((status) => status.id)));
+    const events = new Map<string, FlowEvent[]>();
+    for (const entry of this.state.activity) {
+      if (entry.entity !== "task") {
+        continue;
+      }
+      const status = entry.fields.status?.after;
+      const trashed = entry.fields.trashed;
+      if (typeof status !== "string" && trashed === undefined) {
+        continue;
+      }
+      const list = events.get(entry.id) ?? [];
+      list.push({ at: new Date(entry.at).getTime(), ...(typeof status === "string" ? { status } : {}), ...(trashed === undefined ? {} : { trashed: trashed.after === true }), actor: entry.actor });
+      events.set(entry.id, list);
+    }
+    const tasks = this.state.tasks
+      .filter((task) => inScope.has(task.projectId) && (types === null || types.has(task.typeId)) && (labels === null || task.labelIds.some((id) => labels.has(id))) && (versions === null || (task.fixVersionId !== null && task.fixVersionId !== undefined && versions.has(task.fixVersionId))) && (matching === null || matching.has(this.keyOf(task))))
+      .map((task): FlowTask => {
+        const project = this.projectOf(task);
+        return {
+          key: this.keyOf(task),
+          title: task.title,
+          created: new Date(task.createdAt).getTime(),
+          createdBy: { kind: "user", name: "You" },
+          status: task.statusId,
+          entered: new Date(task.statusEnteredAt).getTime(),
+          firstOpen: project.statuses.find((status) => status.category === "todo")?.id,
+          events: events.get(task.id) ?? [],
+        };
+      });
+    for (const task of tasks) {
+      const made = this.state.activity.find((entry) => entry.entity === "task" && entry.fields.created?.after === true && entry.fields.key?.after === task.key);
+      if (made) {
+        task.createdBy = made.actor;
+      }
+    }
+    return { tasks, statuses, scoped, range: { from, to, bucket, actor: input.actor ?? undefined } };
+  }
+
   private runQuery<T>(run: () => T): T {
     try {
       return run();
@@ -1920,9 +2034,114 @@ export class FakeWorkspace {
   }
 
   /** The change event of a saved view. */
+  /** What the versions need of this workspace. */
+  private readonly versionHost: VersionHost = {
+    versions: () => (this.state.versions ??= []),
+    tasks: () => this.state.tasks,
+    projects: () => this.state.projects,
+    project: (ref) => this.project(ref),
+    writable: (ref) => this.writable(ref),
+    keyOf: (task) => this.keyOf(task),
+    statusOf: (task) => {
+      const status = this.statusIn(this.projectOf(task), task.statusId);
+      return { id: status.id, name: status.name, category: status.category };
+    },
+    typeName: (task) => this.typeRef(task).name,
+    progress: (task) => this.progress(task),
+    touch: (task) => {
+      this.touch(task);
+    },
+    now: () => this.today().toISOString(),
+    newId: () => nextUuid(),
+    fail: (code, message, path) => fail(code, message, path === undefined ? {} : { details: { path } }),
+  };
+
   private viewChange(view: SavedView, fields: string[]): EntityChange[] {
     return [{ entity: "view", id: view.id, fields, ...some("project", view.project) }];
   }
+
+  /**
+   * Writes a new task at its place in its status (default: the project's first to-do status);
+   * `fill` sets what else it starts with before it is stored, and may refuse.
+   */
+  private insertTask(project: FakeProject, fields: NewTask, place: Place = {}, fill?: (task: FakeTask) => void): FakeTask {
+    const target = fields.statusId !== null ? this.statusIn(project, fields.statusId) : (project.statuses.find((candidate) => candidate.category === "todo") ?? project.statuses[0]);
+    if (!target) {
+      fail("invalid", `Project ${project.key} has no statuses or task types.`);
+    }
+    const now = this.today().toISOString();
+    const task: FakeTask = {
+      id: nextId("t"),
+      projectId: project.id,
+      number: project.nextNumber,
+      title: this.checkTitle(fields.title),
+      description: fields.description,
+      statusId: target.id,
+      typeId: fields.typeId,
+      priority: fields.priority,
+      labelIds: [...fields.labelIds],
+      parentId: fields.parentId,
+      ...(fields.parentId !== null ? { subtaskRank: this.lastSubtaskRank(fields.parentId) } : {}),
+      rank: this.rankAt(target.id, place, null),
+      startDate: fields.startDate,
+      dueDate: fields.dueDate,
+      estimateMin: fields.estimateMin,
+      spentMin: 0,
+      files: 0,
+      comments: 0,
+      createdAt: now,
+      editedAt: now,
+      statusEnteredAt: now,
+      updatedAt: now,
+      updatedBy: { kind: "user", name: "You" },
+      closedAt: isClosed(target.category) ? now : null,
+      version: 1,
+    };
+    fill?.(task);
+    project.nextNumber += 1;
+    this.state.tasks.push(task);
+    if (task.description !== "") {
+      this.addRevision(task, task.description, "normal", null);
+    }
+    return task;
+  }
+
+  /** A type's default due date in days, checked; null when not given. */
+  private dueOffset(days: number | null | undefined): number | null {
+    if (days === null || days === undefined) {
+      return null;
+    }
+    if (!Number.isInteger(days) || days < 0 || days > 3650) {
+      fail("invalid", "A default due date is 0 to 3650 days after a task is made.", { details: { path: "due_offset_days" } });
+    }
+    return days;
+  }
+
+  /** What the modules for recurring tasks and templates use of this engine. */
+  private readonly host: FakeHost = {
+    state: () => this.state,
+    today: () => localDay(this.today()),
+    now: () => this.today().toISOString(),
+    fail,
+    project: (ref) => this.project(ref),
+    writable: (ref) => this.writable(ref),
+    task: (key) => this.task(key),
+    keyOf: (task) => this.keyOf(task),
+    projectOf: (task) => this.projectOf(task),
+    dayInput: (text, path) => this.dayInput(text, path),
+    subtasksOf: (task) => this.subtasksOf(task),
+    insertTask: (project, fields) => this.insertTask(project, fields),
+    fullTask: (task) => this.fullTask(task),
+    fullProject: (project) => this.fullProject(project),
+    createProject: ({ name, key, parent, hue, description }) => {
+      this.handlers["project.create"]?.({ name, key, ...some("parent", parent), ...some("hue", hue), description });
+      return this.project(key);
+    },
+    createPage: (project, title, body, parentTitle) => {
+      const parent = parentTitle === null ? undefined : (this.state.wiki ?? []).find((page) => page.projectId === project.id && page.title === parentTitle);
+      this.handlers["wiki.create"]?.({ project: project.key, title, ...(body === "" ? {} : { body }), ...some("parent", parent?.id) });
+    },
+  };
 
   // ---------- the operations ----------
 
@@ -2033,7 +2252,8 @@ export class FakeWorkspace {
       project.icon = icon ?? undefined;
       if (parentProject) {
         // A sub-project starts with copies of its parent's statuses, types and labels.
-        project.statuses = parentProject.statuses.map((status) => ({ ...status, id: nextId("s") }));
+        project.statuses = parentProject.statuses.map((status) => ({ ...structuredClone(status), id: nextId("s") }));
+        project.agentRules = structuredClone(parentProject.agentRules);
         project.types = parentProject.types.map((type) => ({ ...type, id: nextId("ty") }));
         project.labels = parentProject.labels.map((label) => ({ ...label, id: nextId("l") }));
         project.modules = { ...parentProject.modules };
@@ -2204,6 +2424,17 @@ export class FakeWorkspace {
       }
       return this.projectChange(project, "status", fields);
     },
+    "rules.update": ({ project: ref, statuses, agents }) => {
+      const project = this.writable(ref);
+      for (const change of statuses ?? []) {
+        const status = this.statusIn(project, change.status);
+        status.rules = isEmptyRules(change.rules) ? undefined : structuredClone(change.rules);
+      }
+      if (agents !== null && agents !== undefined) {
+        project.agentRules = (agents.read_only ?? []).length > 0 ? structuredClone(agents) : undefined;
+      }
+      return this.projectChange(project, "status", ["rules"]);
+    },
     "status.reorder": ({ project: ref, status: statusRef, before, after, at }) => {
       const project = this.writable(ref);
       const status = this.statusIn(project, statusRef);
@@ -2230,20 +2461,28 @@ export class FakeWorkspace {
       project.statuses = project.statuses.filter((candidate) => candidate !== status);
       return this.projectChange(project, "status", ["*"]);
     },
-    "type.create": ({ project: ref, name, glyph, hue, make_default }) => {
+    "type.create": ({ project: ref, name, glyph, hue, make_default, due_offset_days }) => {
       const project = this.writable(ref);
       this.validHue(hue);
-      const type = { id: nextId("ty"), name: this.uniqueName(project.types, name, "task type"), glyph: glyph ?? "task", hue: hue ?? "grey", is_default: false };
+      const type = { id: nextId("ty"), name: this.uniqueName(project.types, name, "task type"), glyph: glyph ?? "task", hue: hue ?? "grey", is_default: false, ...some("due_offset_days", this.dueOffset(due_offset_days)) };
       project.types.push(type);
       if (make_default === true) {
         project.types.forEach((candidate) => (candidate.is_default = candidate === type));
       }
       return this.projectChange(project, "task_type", ["*"]);
     },
-    "type.update": ({ project: ref, type: typeRef, name, glyph, hue, make_default, before, after, at }) => {
+    "type.update": ({ project: ref, type: typeRef, name, glyph, hue, make_default, before, after, at, due_offset_days, clear_due_offset }) => {
       const project = this.writable(ref);
       const type = this.typeIn(project, typeRef);
       const fields: string[] = [];
+      const offset = this.dueOffset(due_offset_days);
+      if (offset !== null) {
+        type.due_offset_days = offset;
+        fields.push("due_offset_days");
+      } else if (clear_due_offset === true && type.due_offset_days !== undefined) {
+        delete type.due_offset_days;
+        fields.push("due_offset_days");
+      }
       if (name !== null && name !== undefined) {
         type.name = this.uniqueName(project.types, name, "task type", type.id);
         fields.push("name");
@@ -3371,6 +3610,11 @@ export class FakeWorkspace {
       const items = listViews(this.state.views ?? [], { ...input, ...some("project", input.project && this.project(input.project).key) });
       return { items: structuredClone(items), total: items.length };
     },
+    "version.list": (input) => listVersions(this.versionHost, input),
+    "version.get": (input) => getVersion(this.versionHost, input),
+    "version.create": (input) => createVersion(this.versionHost, input),
+    "version.update": (input) => updateVersion(this.versionHost, input),
+    "version.delete": (input) => deleteVersion(this.versionHost, input),
     "view.create": (input) => {
       if (input.query.trim() !== "") {
         this.runQuery(() => searchTasks([], { query: input.query }, this.queryNames(), { archived: new Set(), scoped: false, statusOrder: () => 0 }));
@@ -3417,10 +3661,11 @@ export class FakeWorkspace {
       }
       return { output: { reverted, skipped }, changes: [{ entity: "workspace", id: "w-1", fields: ["*"] }] };
     },
-    "task.create": ({ project: ref, title, status, description, priority, before, after, at, parent: parentKey, start_date, due_date, fields }) => {
+    "task.create": ({ project: ref, title, status, description, priority, before, after, at, parent: parentKey, start_date, due_date, type: typeName, labels, estimate, fix_version, fields }) => {
       const project = this.writable(ref);
+      const fixVersion = fix_version === null || fix_version === undefined ? null : versionForTask(this.versionHost, project, fix_version).id;
       const startDate = start_date === null || start_date === undefined ? null : this.dayInput(start_date, "start_date");
-      const dueDate = due_date === null || due_date === undefined ? null : this.dayInput(due_date, "due_date");
+      let dueDate = due_date === null || due_date === undefined ? null : this.dayInput(due_date, "due_date");
       if (startDate !== null && dueDate !== null && startDate > dueDate) {
         fail("invalid", "The start date is after the due date.", { details: { path: "start_date" } });
       }
@@ -3429,47 +3674,34 @@ export class FakeWorkspace {
         fail("invalid", "A subtask belongs to its parent's project.", { details: { path: "parent" } });
       }
       const trimmed = this.checkTitle(title);
-      const target = status
-        ? this.statusIn(project, status)
-        : (project.statuses.find((candidate) => candidate.category === "todo") ?? project.statuses[0]);
-      const type = project.types.find((candidate) => candidate.is_default) ?? project.types[0];
-      if (!target || !type) {
+      const target = status ? this.statusIn(project, status) : undefined;
+      const type = typeName === null || typeName === undefined ? (project.types.find((candidate) => candidate.is_default) ?? project.types[0]) : this.typeIn(project, typeName);
+      if (!type) {
         fail("invalid", `Project ${project.key} has no statuses or task types.`);
       }
-      const now = this.today().toISOString();
-      const task: FakeTask = {
-        id: nextId("t"),
-        projectId: project.id,
-        number: project.nextNumber,
+      // A type can give new tasks a due date some days from today.
+      if (dueDate === null && type.due_offset_days !== undefined) {
+        const byType = addDays(localDay(this.today()), type.due_offset_days);
+        dueDate = startDate !== null && startDate > byType ? null : byType;
+      }
+      const estimateMin = estimate === null || estimate === undefined ? null : (minutesOf(estimate) ?? fail("invalid", `"${estimate}" is not a duration.`, { details: { path: "estimate" } }));
+      const task = this.insertTask(project, {
         title: trimmed,
         description: description ?? "",
-        statusId: target.id,
+        statusId: target?.id ?? null,
         typeId: type.id,
         priority: priority ?? "none",
-        labelIds: [],
+        labelIds: (labels ?? []).map((label) => this.labelIn(project, label, "labels").id),
         parentId: parent?.id ?? null,
-        ...(parent ? { subtaskRank: this.lastSubtaskRank(parent.id) } : {}),
-        rank: this.rankAt(target.id, { before, after, at }, null),
         startDate,
         dueDate,
-        estimateMin: null,
-        spentMin: 0,
-        files: 0,
-        comments: 0,
-        createdAt: now,
-        editedAt: now,
-        statusEnteredAt: now,
-        updatedAt: now,
-        updatedBy: { kind: "user", name: "You" },
-        closedAt: isClosed(target.category) ? now : null,
-        version: 1,
-      };
-      applyValues(this.state, task, type.name, fields, true, fail);
-      project.nextNumber += 1;
-      this.state.tasks.push(task);
-      if (task.description !== "") {
-        this.addRevision(task, task.description, "normal", null);
-      }
+        estimateMin,
+      }, { before, after, at }, (made) => {
+        if (fixVersion !== null) {
+          made.fixVersionId = fixVersion;
+        }
+        applyValues(this.state, made, type.name, fields, true, fail);
+      });
       return this.taskChange(task, ["*"]);
     },
     "task.update": (input) => {
@@ -3482,6 +3714,15 @@ export class FakeWorkspace {
         });
       }
       const clear = input.clear ?? [];
+      const touched = [
+        ...clear,
+        ...(["title", "description", "type", "priority", "start_date", "due_date", "estimate", "progress", "labels", "parent"] as const).filter((field) => input[field] !== null && input[field] !== undefined),
+        ...((input.add_labels ?? []).length > 0 || (input.remove_labels ?? []).length > 0 ? ["labels"] : []),
+        ...((input.description_edits ?? []).length > 0 ? ["description"] : []),
+        ...(input.fix_version !== null && input.fix_version !== undefined ? ["fix_version"] : []),
+        ...Object.keys(input.fields ?? {}).map((ref) => customRuleField(findField(fieldsFor(this.state, project.id), ref, fail, `fields.${ref}`).id)),
+      ];
+      checkReadOnly(project, task, this.keyOf(task), touched, fail);
       const fields: string[] = [];
       if (input.title !== null && input.title !== undefined) {
         task.title = this.checkTitle(input.title);
@@ -3517,6 +3758,17 @@ export class FakeWorkspace {
         const removed = resolve(input.remove_labels ?? [], "remove_labels");
         task.labelIds = labels.filter((id) => !removed.includes(id));
         fields.push("labels");
+      }
+      if (input.fix_version !== null && input.fix_version !== undefined) {
+        const version = versionForTask(this.versionHost, project, input.fix_version).id;
+        if (version !== task.fixVersionId) {
+          task.fixVersionId = version;
+          fields.push("fix_version");
+        }
+      }
+      if (clear.includes("fix_version") && (task.fixVersionId ?? null) !== null) {
+        task.fixVersionId = null;
+        fields.push("fix_version");
       }
       const typed = (text: string | null | undefined, path: string) => (text === null || text === undefined ? null : this.dayInput(text, path));
       const start = clear.includes("start_date") ? null : (typed(input.start_date, "start_date") ?? task.startDate);
@@ -3805,6 +4057,7 @@ export class FakeWorkspace {
       const project = to;
       const target = status === null || status === undefined ? this.statusIn(project, task.statusId) : this.statusIn(project, status);
       if (target.id !== task.statusId) {
+        fields.push(...enterRules(project, task, this.keyOf(task), target.id, localDay(this.today()), fail, fieldsFor(this.state, project.id), this.typeRef(task).name));
         this.enterStatus(task, target.id);
         fields.push("status");
       }
@@ -3832,6 +4085,7 @@ export class FakeWorkspace {
         types: [],
         labels: [],
         fields: [],
+        versions: [],
         fallback_status: this.fallbackStatus(to).name,
         fallback_type: this.fallbackType(to).name,
       };
@@ -3863,6 +4117,16 @@ export class FakeWorkspace {
           count(check.types, to.types, this.typeRef(one).name);
           for (const label of this.labelRefs(one)) {
             count(check.labels, to.labels, label.name);
+          }
+          const planned = versionRef(this.versionHost, one);
+          if (planned !== undefined) {
+            const kept = visibleVersions(this.versionHost, to).some((each) => each.version.id === one.fixVersionId);
+            const found = check.versions.find((each) => each.name === planned.name);
+            if (found === undefined) {
+              check.versions.push({ name: planned.name, tasks: 1, ...some("target", kept ? planned.name : undefined) });
+            } else {
+              found.tasks += 1;
+            }
           }
           for (const match of moveMatches(this.state, one, to.id)) {
             const found = check.fields.find((each) => fold(each.name) === fold(match.name));
@@ -4024,6 +4288,19 @@ export class FakeWorkspace {
       };
     },
 
+    "report.created_closed": (input) => {
+      const { tasks, statuses, range } = this.flowScope(input);
+      return createdClosed(tasks, statuses, range, this.state.settings.week_start, input.csv === true);
+    },
+    "report.cumulative_flow": (input) => {
+      const { tasks, statuses, scoped, range } = this.flowScope(input);
+      return cumulativeFlow(tasks, statuses, scoped, range, input.group_by ?? "status", this.state.settings.week_start, input.csv === true);
+    },
+    "report.cycle_time": (input) => {
+      const { tasks, statuses, range } = this.flowScope(input);
+      return cycleTime(tasks, statuses, range, this.state.settings.week_start, input.tasks === true, input.csv === true);
+    },
+
     // ---------- timer ----------
 
     "timer.get": () => this.timerStatus(),
@@ -4152,6 +4429,8 @@ export class FakeWorkspace {
       sortDue(items);
       return { items: items.slice(0, limit ?? 100), total: items.length, until: end, ...some("next_at", next) };
     },
+    ...recurrenceHandlers(this.host),
+    ...templateHandlers(this.host),
     "reminder.acknowledge": ({ ids }) => {
       const acknowledged: string[] = [];
       const unknown: string[] = [];

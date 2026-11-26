@@ -29,7 +29,7 @@ pub enum Toolset {
     Tasks,
     /// Comments.
     Comments,
-    /// Time entries, report, timer, reminders.
+    /// Time entries, the time and flow reports, timer, reminders.
     Time,
     /// Today, the board, saved views, personal layout.
     Views,
@@ -388,6 +388,144 @@ Example: delete_project {\"project\": \"OLD\", \"expected_task_count\": 12}",
         idempotent: false,
     },
     McpTool {
+        name: "list_templates",
+        toolset: Toolset::Projects,
+        title: "List templates",
+        description: "Lists the project templates and the task templates of a project (or of every \
+project), with their names and what they hold. Use it before use_template to find the right \
+one. \
+Example: list_templates {\"project\": \"TM\"}",
+        main: "template.list",
+        covers: &["template.list"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "get_template",
+        toolset: Toolset::Projects,
+        title: "Get a template",
+        description: "Returns one template with its content: a task template's task (title, \
+description, type, priority, labels, estimate, custom field values, version, subtasks, dates as \
+days after the day it is used) or a project template's set-up (statuses with their rules, types, \
+labels, custom fields, rules for agents, modules, wiki pages, tasks; no versions). \
+Example: get_template {\"template\": \"Bug report\", \"project\": \"TM\"}",
+        main: "template.get",
+        covers: &["template.get"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "create_template",
+        toolset: Toolset::Projects,
+        title: "Create a template",
+        description: "Makes a template: a task template from a task (`from_task`, with its \
+subtasks) or from a given `task`, or a project template from a project (`from_project`, \
+optionally `include_tasks`) or a given `setup`. Statuses, types and labels are kept by name. \
+Example: create_template {\"name\": \"Bug report\", \"from_task\": \"TM-41\"}",
+        main: "template.create",
+        covers: &["template.create"],
+        idempotent: false,
+    },
+    McpTool {
+        name: "update_template",
+        toolset: Toolset::Projects,
+        title: "Update a template",
+        description: "Changes a template's name, description, or its whole content (`task` or \
+`setup`, replacing what it held). Fields left out keep their value. \
+Example: update_template {\"template\": \"Bug report\", \"project\": \"TM\", \
+\"description\": \"For crashes and wrong results\"}",
+        main: "template.update",
+        covers: &["template.update"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "delete_template",
+        toolset: Toolset::Projects,
+        title: "Delete a template",
+        description: "Deletes a template; tasks and projects made from it stay. Revert brings it \
+back. Only delete templates the person asked you to. \
+Example: delete_template {\"template\": \"Old checklist\", \"project\": \"TM\"}",
+        main: "template.delete",
+        covers: &["template.delete"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "use_template",
+        toolset: Toolset::Projects,
+        title: "Use a template",
+        description: "Makes a task (with its subtasks) from a task template, or a project (with \
+its statuses, types, labels, wiki pages and tasks) from a project template. Dates count from \
+`date` (default today). For a project template give `name` and `key`. Pass a \
+`client_request_id` so a retry doesn't make it twice. \
+Example: use_template {\"template\": \"Bug report\", \"project\": \"TM\", \"title\": \
+\"Crash on save\"}",
+        main: "template.apply",
+        covers: &["template.apply"],
+        idempotent: false,
+    },
+    McpTool {
+        name: "list_versions",
+        toolset: Toolset::Projects,
+        title: "List versions",
+        description: "Lists the versions (releases) of a `project` and those its ancestors share \
+with it (`inherited`), by due date: name, status (open, locked, closed), dates, sharing and \
+progress (tasks closed of total, percent weighted by estimates). `include_tasks: true` adds each \
+version's tasks, like the roadmap; `status` filters. Only open versions take new tasks. \
+Example: list_versions {\"project\": \"TM\", \"status\": [\"open\"]}",
+        main: "version.list",
+        covers: &["version.list"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "get_version",
+        toolset: Toolset::Projects,
+        title: "Get a version",
+        description: "Returns one version with its progress and its tasks (key, title, status, \
+type, progress), named by ID or by name with its `project`. \
+Example: get_version {\"version\": \"1.2\", \"project\": \"TM\"}",
+        main: "version.get",
+        covers: &["version.get"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "create_version",
+        toolset: Toolset::Projects,
+        title: "Create a version",
+        description: "Creates a version (release) of a project: `name` (unique in the project), \
+optional `description` (plain text), `status` (default open), `start_date`, `due_date` and \
+`sharing` (`descendants` lets its sub-projects plan tasks for it). Plan tasks for it with \
+update_task `fix_version`. Only create versions the person asked for. \
+Example: create_version {\"project\": \"TM\", \"name\": \"1.2\", \"due_date\": \"2026-12-15\"}",
+        main: "version.create",
+        covers: &["version.create"],
+        idempotent: false,
+    },
+    McpTool {
+        name: "update_version",
+        toolset: Toolset::Projects,
+        title: "Change a version",
+        description: "Renames a version (saved views follow) or changes its description, dates, \
+`sharing` or `status`. Name it by ID, or by name with its `project`. Closing it with \
+`move_open_tasks_to` (another open version, or `none`) moves its open tasks on in the same \
+change; `tasks_changed` lists them. Tasks of projects that no longer see it after a sharing \
+change lose it. `clear` empties fields. \
+Example: update_version {\"version\": \"1.1\", \"project\": \"TM\", \"status\": \"closed\", \
+\"move_open_tasks_to\": \"1.2\"}",
+        main: "version.update",
+        covers: &["version.update"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "delete_version",
+        toolset: Toolset::Projects,
+        title: "Delete a version",
+        description: "Deletes a version; its tasks are planned for no version, and saved views \
+stop naming it. revert_changes brings both back. Prefer closing a finished version, which keeps \
+its history on the roadmap. \
+Example: delete_version {\"version\": \"1.1\", \"project\": \"TM\"}",
+        main: "version.delete",
+        covers: &["version.delete"],
+        idempotent: true,
+    },
+    McpTool {
         name: "search_tasks",
         toolset: Toolset::Tasks,
         title: "Search tasks",
@@ -435,8 +573,8 @@ Example: get_task {\"keys\": [\"TM-41\"], \"include\": [\"checklist\", \"comment
         toolset: Toolset::Tasks,
         title: "Create a task",
         description: "Creates a task in a project from a title alone, or with `description`, \
-`status`, `type`, `priority` (none, low, normal, high, urgent), `labels`, `parent`, `start_date`, \
-`due_date` (YYYY-MM-DD), `estimate` (`1d 4h`, `90m`) and custom `fields` by name (see \
+`status`, `type`, `priority` (none, low, normal, high, urgent), `labels`, `fix_version`, `parent`, \
+`start_date`, `due_date` (YYYY-MM-DD), `estimate` (`1d 4h`, `90m`) and custom `fields` by name (see \
 list_custom_fields; a required field needs a value). It lands in the first to-do status at \
 the bottom unless told otherwise, and gets the project's next key. Pass `client_request_id` so \
 a retry doesn't create a second task. \
@@ -451,9 +589,10 @@ Example: create_task {\"project\": \"TM\", \"title\": \"Write the release notes\
         toolset: Toolset::Tasks,
         title: "Update a task",
         description: "Changes the given fields of a task only: `title`, `type`, `priority`, \
-`labels` (replace) or `add_labels`/`remove_labels`, `parent`, `start_date`, `due_date`, \
-`estimate`, `progress`, custom `fields` ({\"Story points\": 3}; null clears one), and the \
-description. With new dates, `move_dependents: true` also \
+`labels` (replace) or `add_labels`/`remove_labels`, `fix_version` (an open version, see \
+list_versions), `parent`, `start_date`, `due_date`, `estimate`, `progress`, custom `fields` \
+({\"Story points\": 3}; null clears one), and the description. With new dates, \
+`move_dependents: true` also \
 moves the tasks that depend on this one (blocks links, and theirs in turn) later, as far as each \
 must to begin after its blocker ends, in the same change; `moved` lists them. Prefer `description_edits` ([{old_text, new_text}], \
 each old_text found exactly once) for changes to part of the description; a whole new \
@@ -636,6 +775,56 @@ see the new tests.\"}",
         idempotent: false,
     },
     McpTool {
+        name: "set_recurrence",
+        toolset: Toolset::Tasks,
+        title: "Make a task recurring",
+        description: "Makes a task recurring, or changes its rule. Write the rule in `text` \
+(`every monday`, `every 2 weeks on mon and thu`, `the 1st of each month`, `monthly on the last \
+fri`, `3 days after done`, `until 2027-06-30`, `10 times`) or by fields (`every`, `interval`, \
+`weekdays`, `month_day`, `week_of_month` with `weekday`, `month`, `until`, `count`). The next \
+occurrence is made when this one is closed, or on its date with `create: ahead`. \
+`update_details: true` makes the task's current details those of the occurrences to come; \
+edits without it change this occurrence only. \
+Example: set_recurrence {\"key\": \"TM-41\", \"text\": \"every 2 weeks on mon\"}",
+        main: "recurrence.set",
+        covers: &["recurrence.set"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "stop_recurrence",
+        toolset: Toolset::Tasks,
+        title: "Stop a task repeating",
+        description: "Stops a recurring task's series: the task stays as it is and no more \
+occurrences are made. Only do this when the person asked for it. \
+Example: stop_recurrence {\"key\": \"TM-41\"}",
+        main: "recurrence.clear",
+        covers: &["recurrence.clear"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "skip_occurrence",
+        toolset: Toolset::Tasks,
+        title: "Skip an occurrence",
+        description: "Passes over a recurring task's current occurrence: its dates move to the \
+rule's next date, and the skipped one counts against the rule's number of occurrences. \
+Example: skip_occurrence {\"key\": \"TM-41\"}",
+        main: "recurrence.skip",
+        covers: &["recurrence.skip"],
+        idempotent: false,
+    },
+    McpTool {
+        name: "preview_recurrence",
+        toolset: Toolset::Tasks,
+        title: "Preview a recurrence rule",
+        description: "Reads a recurrence rule, in words (`text`) or by fields, and returns it with \
+its next dates and a summary, without changing anything. Use it to check a rule before \
+set_recurrence. \
+Example: preview_recurrence {\"text\": \"monthly on the last fri\", \"limit\": 3}",
+        main: "recurrence.preview",
+        covers: &["recurrence.preview"],
+        idempotent: true,
+    },
+    McpTool {
         name: "add_comment",
         toolset: Toolset::Comments,
         title: "Add a comment",
@@ -721,6 +910,49 @@ for CSV text. \
 Example: get_time_report {\"from\": \"2026-11-01\", \"to\": \"2026-11-30\", \"group_by\": \"project\"}",
         main: "time.report",
         covers: &["time.report"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "get_created_closed_report",
+        toolset: Toolset::Time,
+        title: "Created against closed",
+        description: "Counts, per `day`, `week` (default) or `month` in the person's time zone, the \
+tasks created, the times tasks were closed and reopened, and the open tasks at the end of each \
+period, from the history. Use it to see whether work comes in faster than it is finished. Default \
+range: the last 12 periods up to today. Narrow it to a `project` (with its sub-projects unless \
+`include_subprojects: false`), a `type`, a `label`, a `fix_version` (name or ID) or a `query` \
+(custom fields as `cf.<name>`), as the tasks are now; `actor` (`me`, `agent` or a name) counts \
+only what that actor did. `csv: true` adds CSV text. \
+Example: get_created_closed_report {\"project\": \"TM\", \"from\": \"2026-09-01\", \"bucket\": \"week\"}",
+        main: "report.created_closed",
+        covers: &["report.created_closed"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "get_cumulative_flow",
+        toolset: Toolset::Time,
+        title: "Cumulative flow",
+        description: "How many tasks were in each status at the end of each `day`, `week` \
+(default) or `month`, from the history: a widening band shows where work piles up. Statuses of \
+the same name in several projects share a band; `group_by: \"category\"` gives one band per \
+category instead. The same filters as get_created_closed_report, without `actor`. \
+Example: get_cumulative_flow {\"project\": \"TM\", \"bucket\": \"day\", \"from\": \"2026-11-01\"}",
+        main: "report.cumulative_flow",
+        covers: &["report.cumulative_flow"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "get_cycle_time",
+        toolset: Toolset::Time,
+        title: "Cycle and lead time",
+        description: "Cycle time (from the first move into an in-progress status to the last \
+close) and lead time (from creation to the last close) of the tasks closed in the range, in days: \
+count, mean, median, 85th and 95th percentile, shortest and longest, overall and per period. \
+`tasks: true` lists each task with its times; `actor` counts only tasks that actor closed. The \
+same filters as get_created_closed_report. \
+Example: get_cycle_time {\"project\": \"TM\", \"bucket\": \"month\", \"tasks\": true}",
+        main: "report.cycle_time",
+        covers: &["report.cycle_time"],
         idempotent: true,
     },
     McpTool {
@@ -1376,11 +1608,19 @@ mod tests {
                 "get_project",
                 "list_custom_fields",
                 "get_agent_brief",
+                "list_templates",
+                "get_template",
+                "list_versions",
+                "get_version",
                 "search_tasks",
                 "get_task",
                 "check_move",
                 "get_description_revision",
+                "preview_recurrence",
                 "get_time_report",
+                "get_created_closed_report",
+                "get_cumulative_flow",
+                "get_cycle_time",
                 "get_reminders",
                 "get_today",
                 "get_board",

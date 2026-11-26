@@ -169,9 +169,7 @@ preferences-unit-days =
         [one] day
        *[other] days
     }
-weekday-monday = Monday
-weekday-saturday = Saturday
-weekday-sunday = Sunday
+# The weekdays' names (weekday-monday…) come with the engine's messages.
 
 ## Toasts
 
@@ -639,6 +637,13 @@ move-to-leave-off = Leave it off
 move-to-fields-left-off = { $project } has no field of the same name and kind for these, so their values are left off:
 # $name is a custom field of the tasks; $count how many of them have a value of it.
 move-to-fields-row =
+    { $count ->
+        [one] { $name } (1 task)
+       *[other] { $name } ({ $count } tasks)
+    }
+move-to-versions-left-off = { $project } can't plan tasks for these versions, so they are taken off:
+# $name is a version the tasks are planned for; $count how many of them.
+move-to-versions-row =
     { $count ->
         [one] { $name } (1 task)
        *[other] { $name } ({ $count } tasks)

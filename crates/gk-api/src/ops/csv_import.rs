@@ -15,6 +15,11 @@
 //! tasks are one change, so one Undo moves all of them to the trash. Rows may
 //! name their parent and linked tasks by the key or ID they had in the
 //! other tool, also when those rows come later in the file.
+//!
+//! Each task is held to the rules of its status as `task.create` holds it:
+//! a row whose task would lack a field its status requires is an error.
+//! Repeating tasks are not read from the file; each row becomes one task
+//! that doesn't repeat.
 
 use std::collections::BTreeMap;
 
@@ -102,7 +107,8 @@ pub struct CsvColumnMapping {
     /// writes one `Labels` column per label).
     pub column: String,
     /// The target: `title`, `description`, `status`, `type`, `priority`,
-    /// `labels`, `start_date`, `due_date`, `estimate`, `spent` (time
+    /// `labels`, `fix_version` (an open version of the project, by name),
+    /// `start_date`, `due_date`, `estimate`, `spent` (time
     /// logged on the import day), `comment`, `key` (the row's key or ID in
     /// the other tool, for references), `parent` (a key or ID, of a row of
     /// the file or a task here), `blocks`, `blocked_by`, `relates`,
@@ -543,7 +549,7 @@ op!(
 );
 
 pub(crate) const TRANSFER_IMPORT_CSV: OpDescriptor = OpDescriptor::of::<TransferImportCsv>(Meta {
-    summary: "Import tasks from a CSV file into a project, with a column mapping or a preset (Jira and Redmine exports are built in); a dry run reports every row's outcome, and the import is one change that Undo takes back.",
+    summary: "Import tasks from a CSV file into a project, with a column mapping or a preset (Jira and Redmine exports are built in); a dry run reports every row's outcome, and the import is one change that Undo takes back. Status rules hold for each task as for task.create; repeating tasks are not imported.",
     kind: OpKind::Command,
     safety: Safety::Write,
     exposure: Exposure::Data,

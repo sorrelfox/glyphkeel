@@ -6,6 +6,7 @@ import { type ReactNode } from "react";
 
 import { useAction } from "../../actions/ActionsProvider";
 import { classes } from "../../classes";
+import { RecurringMark } from "../../components/Glyphs";
 import { ProjectMark } from "../../components/ProjectMark";
 import { useProjects } from "../../data/board";
 import { useTodayOverview } from "../../data/today";
@@ -27,6 +28,8 @@ interface Row {
   title: string;
   due?: string | undefined;
   closed: boolean;
+  /** Whether it is the current occurrence of a recurring task. */
+  recurring?: boolean;
   /** The section's own detail: a status, a reminder's time, who changed it. */
   detail?: ReactNode;
 }
@@ -40,7 +43,7 @@ interface Section {
   count: number;
 }
 
-const taskRow = (task: ListedTask, detail?: ReactNode): Row => ({ key: task.key, title: task.title, due: task.due_date, closed: task.closed_at !== undefined, detail });
+const taskRow = (task: ListedTask, detail?: ReactNode): Row => ({ key: task.key, title: task.title, due: task.due_date, closed: task.closed_at !== undefined, recurring: task.recurring === true, detail });
 
 /** The project key of a task key. */
 const projectOf = (key: string) => key.slice(0, key.lastIndexOf("-"));
@@ -171,13 +174,14 @@ function TodaySection({ section, openTask, onOpen }: { section: Section; openTas
                 className={styles.row}
                 data-today-row={row.key}
                 data-open={row.key === openTask ? "" : undefined}
-                aria-label={t("today-open-task", { key: row.key, title: row.title })}
+                aria-label={row.recurring === true ? t("recurring-label", { label: t("today-open-task", { key: row.key, title: row.title }) }) : t("today-open-task", { key: row.key, title: row.title })}
                 onClick={() => {
                   onOpen(row.key);
                 }}
               >
                 <span className="key">{row.key}</span>
                 <span className={styles.title}>{row.title}</span>
+                {row.recurring === true && <RecurringMark />}
                 {row.detail}
                 {project && (
                   <span className={classes("meta", styles.project)} title={project.path}>

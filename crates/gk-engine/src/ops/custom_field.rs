@@ -533,6 +533,297 @@ pub(crate) fn apply_input(
     Ok(())
 }
 
+// ---------------------------------------------------------------------
+// Templates and recurring tasks
+
+/// The task's values by field name, as a template or a recurring task's
+/// series keeps them.
+pub(crate) fn blueprint_values(
+    tx: &Transaction<'_>,
+    task: Id,
+) -> Result<BTreeMap<String, Value>, Failure> {
+    Ok(task_values(tx, task)?
+        .into_iter()
+        .map(|v| (v.name, v.value))
+        .collect())
+}
+
+/// Gives a task made from a template or a series (`task`, in `project`)
+/// the values `values` names by field name. A field the project lacks, one
+/// not shown for the task's type, or a value the field can't hold is left
+/// out, and its name goes to `left_out`. Fields not given get their
+/// default. With `strict`, a required field left without a value is
+/// refused, as when a task is created; otherwise the task is made anyway.
+pub(crate) fn apply_carried(
+    w: &mut WriteCtx<'_>,
+    task: Id,
+    project: &ProjectRow,
+    values: &BTreeMap<String, Value>,
+    strict: bool,
+    left_out: &mut Vec<String>,
+) -> Result<(), Failure> {
+    let all = rows(w.tx(), Some(project.id))?;
+    if all.is_empty() {
+        for name in values.keys() {
+            if !left_out.contains(name) {
+                left_out.push(name.clone());
+            }
+        }
+        return Ok(());
+    }
+    let task_type = type_name(w.tx(), task)?;
+    let mut given: Vec<Id> = Vec::new();
+    for (name, value) in values {
+        let field = named(&all, name).filter(|f| !given.contains(&f.id));
+        let parsed = field
+            .filter(|f| f.shown_for(&task_type))
+            .and_then(|f| parse_input(f, value, "fields").ok().map(|v| (f, v)));
+        match parsed {
+            Some((field, stored)) => {
+                given.push(field.id);
+                if !stored.is_empty() {
+                    set_values(w, task, project.id, field, &stored)?;
+                }
+            }
+            None => {
+                if !left_out.contains(name) {
+                    left_out.push(name.clone());
+                }
+            }
+        }
+    }
+    for field in all.iter().filter(|f| !given.contains(&f.id)) {
+        if !field.shown_for(&task_type) {
+            continue;
+        }
+        match &field.default {
+            Some(d) => {
+                let stored = parse_input(field, d, "fields")?;
+                set_values(w, task, project.id, field, &stored)?;
+            }
+            None if field.required && strict => {
+                return Err(messages::invalid(
+                    &format!("fields.{}", field.name),
+                    "field-required",
+                    &[("field", field.name.clone())],
+                ));
+            }
+            None => {}
+        }
+    }
+    Ok(())
+}
+
+/// The own custom fields of `project`, in order, as a project template
+/// keeps them.
+pub(crate) fn own_blueprints(
+    tx: &Transaction<'_>,
+    project: Id,
+) -> Result<Vec<gk_api::ops::template::FieldBlueprint>, Failure> {
+    Ok(rows(tx, Some(project))?
+        .into_iter()
+        .filter(|f| f.project == Some(project))
+        .map(|f| gk_api::ops::template::FieldBlueprint {
+            id: f.id.to_string(),
+            name: f.name,
+            kind: api_kind(f.kind),
+            options: f.options,
+            default: f.default,
+            types: f.types,
+            required: f.required,
+        })
+        .collect())
+}
+
+/// Checks a project template's custom fields as `field.create` would:
+/// names (each once), options and defaults. `path` is where the list sits
+/// in the input.
+pub(crate) fn check_blueprints(
+    fields: &[gk_api::ops::template::FieldBlueprint],
+    path: &str,
+) -> Result<(), Failure> {
+    let mut seen: Vec<(String, String)> = Vec::new();
+    for (i, f) in fields.iter().enumerate() {
+        let at = |e: Failure| at_index(e, path, i);
+        let (name, query_name) = clean_name(&f.name).map_err(at)?;
+        if seen
+            .iter()
+            .any(|(n, q)| fold(n) == fold(&name) || *q == query_name)
+        {
+            return Err(messages::invalid(
+                &format!("{path}[{i}].name"),
+                "template-name-twice",
+                &[("name", name)],
+            ));
+        }
+        let kind = core_kind(f.kind);
+        let options = clean_options(kind, &f.options).map_err(at)?;
+        let row = FieldRow {
+            id: Id::from_bytes([0; 16]),
+            project: None,
+            name: name.clone(),
+            query_name: query_name.clone(),
+            kind,
+            options,
+            default: None,
+            types: f.types.clone(),
+            required: f.required,
+            rank: String::new(),
+        };
+        if let Some(d) = &f.default {
+            clean_default(&row, d).map_err(at)?;
+        }
+        seen.push((name, query_name));
+    }
+    Ok(())
+}
+
+/// Puts `path[i]` in front of an error's field path.
+fn at_index(e: Failure, path: &str, i: usize) -> Failure {
+    match e {
+        Failure::Op(mut op) => {
+            let inner = op
+                .details
+                .get("path")
+                .or_else(|| op.details.get("field"))
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+                .unwrap_or_default();
+            let full = if inner.is_empty() {
+                format!("{path}[{i}]")
+            } else {
+                format!("{path}[{i}].{inner}")
+            };
+            op.details.insert("path".to_owned(), Value::String(full));
+            Failure::Op(op)
+        }
+        other => other,
+    }
+}
+
+/// Gives the new project `project` the custom fields of a project
+/// template, checked, unrecorded beyond the project's creation (as a
+/// sub-project's copies are). A field the project has already by the same
+/// name and kind (a field of every project, or a copy of its parent's) is
+/// used instead of a new one. Types the project lacks are dropped from a
+/// field's list. Returns the project's field for each field by its ID in
+/// the template.
+pub(crate) fn insert_blueprints(
+    w: &WriteCtx<'_>,
+    project: &ProjectRow,
+    fields: &[gk_api::ops::template::FieldBlueprint],
+) -> Result<BTreeMap<String, Id>, Failure> {
+    check_blueprints(fields, "setup.fields")?;
+    let known = lookup::all(w.tx(), List::Types, project.id)?;
+    let existing = rows(w.tx(), Some(project.id))?;
+    let ranks = Rank::spread(fields.len());
+    let mut copies = BTreeMap::new();
+    for (f, rank) in fields.iter().zip(&ranks) {
+        let (name, query_name) = clean_name(&f.name)?;
+        let kind = core_kind(f.kind);
+        if let Some(same) = existing
+            .iter()
+            .find(|e| fold(&e.name) == fold(&name) && e.kind == kind)
+        {
+            copies.insert(f.id.clone(), same.id);
+            continue;
+        }
+        check_unique(w.tx(), Some(project.id), &name, &query_name, kind, None)?;
+        let types = f
+            .types
+            .iter()
+            .filter_map(|t| known.iter().find(|k| fold(&k.name) == fold(t)))
+            .map(|k| k.name.clone())
+            .collect();
+        let id = Id::generate_at(u64::try_from(w.now()).unwrap_or(0));
+        let mut row = FieldRow {
+            id,
+            project: Some(project.id),
+            name,
+            query_name,
+            kind,
+            options: clean_options(kind, &f.options)?,
+            default: None,
+            types,
+            required: f.required,
+            rank: rank.as_str().to_owned(),
+        };
+        if let Some(d) = &f.default {
+            row.default = clean_default(&row, d)?;
+        }
+        insert(w, &row, Some(project.id), id)?;
+        copies.insert(f.id.clone(), id);
+    }
+    Ok(copies)
+}
+
+// ---------------------------------------------------------------------
+// Status rules
+
+/// Custom field `id` (as a rule writes it, after `cf:`) when tasks of
+/// `project` have it: one of the project's own fields or of every project.
+pub(crate) fn of_project(
+    tx: &Transaction<'_>,
+    project: Id,
+    id: &str,
+) -> Result<Option<FieldRow>, Failure> {
+    let Ok(id) = id.parse::<Id>() else {
+        return Ok(None);
+    };
+    Ok(rows(tx, Some(project))?.into_iter().find(|f| f.id == id))
+}
+
+/// Checks a value a status rule sets in `field`: what people could type in
+/// the field, or `today` for a date. `path` names the value in errors.
+pub(crate) fn check_rule_value(field: &FieldRow, value: &str, path: &str) -> Result<(), Failure> {
+    if field.kind == FieldKind::Date && value == "today" {
+        return Ok(());
+    }
+    core::parse_value(field.kind, value, &field.options, &field.name)
+        .map(|_| ())
+        .map_err(|e| invalid(path, e))
+}
+
+/// What a status rule does to `field` of a task entering the status:
+/// `Some(value)` sets it (`today` is the day `today` for a date), `None`
+/// clears it. Nothing happens to a task of a type the field isn't shown
+/// for, to a required field being cleared, to a value that no longer fits
+/// the field (its options changed), or, with `only_if_empty`, to a field
+/// that has a value.
+pub(crate) fn apply_rule(
+    w: &mut WriteCtx<'_>,
+    task: Id,
+    project: Id,
+    field: &FieldRow,
+    value: Option<&str>,
+    only_if_empty: bool,
+    today: &str,
+) -> Result<(), Failure> {
+    if !field.shown_for(&type_name(w.tx(), task)?) {
+        return Ok(());
+    }
+    let values = match value {
+        None if field.required => return Ok(()),
+        None => Vec::new(),
+        Some(v) => {
+            if only_if_empty && value_of(w.tx(), task, field)?.is_some() {
+                return Ok(());
+            }
+            let text = if field.kind == FieldKind::Date && v == "today" {
+                today
+            } else {
+                v
+            };
+            match core::parse_value(field.kind, text, &field.options, &field.name) {
+                Ok(stored) => vec![stored],
+                Err(_) => return Ok(()),
+            }
+        }
+    };
+    set_values(w, task, project, field, &values)?;
+    Ok(())
+}
+
 /// The task's values, in the fields' order.
 pub(crate) fn task_values(
     tx: &Transaction<'_>,
@@ -692,21 +983,24 @@ pub(crate) fn move_matches(
         .collect())
 }
 
-/// Gives the new sub-project `child` copies of `parent`'s own fields.
-pub(crate) fn copy_to_subproject(w: &WriteCtx<'_>, parent: Id, child: Id) -> Result<(), Failure> {
+/// Gives the new sub-project `child` copies of `parent`'s own fields, and
+/// returns the ID of each copy by the ID of its original.
+pub(crate) fn copy_to_subproject(
+    w: &WriteCtx<'_>,
+    parent: Id,
+    child: Id,
+) -> Result<BTreeMap<Id, Id>, Failure> {
     let own: Vec<FieldRow> = rows(w.tx(), Some(parent))?
         .into_iter()
         .filter(|f| f.project == Some(parent))
         .collect();
+    let mut copies = BTreeMap::new();
     for f in own {
-        insert(
-            w,
-            &f,
-            Some(child),
-            Id::generate_at(u64::try_from(w.now()).unwrap_or(0)),
-        )?;
+        let id = Id::generate_at(u64::try_from(w.now()).unwrap_or(0));
+        insert(w, &f, Some(child), id)?;
+        copies.insert(f.id, id);
     }
-    Ok(())
+    Ok(copies)
 }
 
 fn insert(w: &WriteCtx<'_>, f: &FieldRow, project: Option<Id>, id: Id) -> Result<(), Failure> {

@@ -109,4 +109,14 @@ fn messages_of_values_match_their_english_errors() {
     same_as_display(&gk_core::check_title(&"a".repeat(1000)).unwrap_err());
     same_as_display(&gk_core::check_comment(&"a".repeat(300 * 1024)).unwrap_err());
     same_as_display(&gk_core::check_page_title("a|b").unwrap_err());
+    let start: Day = "2026-11-26".parse().unwrap();
+    same_as_display(&gk_core::recurrence::parse("sometimes", start).unwrap_err());
+    let mut rule = gk_core::recurrence::Rule::every(gk_core::recurrence::Frequency::Day, 0, start);
+    same_as_display(&rule.check().unwrap_err());
+    rule.interval = 1;
+    rule.until = Some("2026-01-01".parse().unwrap());
+    same_as_display(&rule.check().unwrap_err());
+    rule.until = None;
+    rule.count = Some(0);
+    same_as_display(&rule.check().unwrap_err());
 }
