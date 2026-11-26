@@ -39,8 +39,7 @@ export function useDayFormat(): (day: string) => string {
 
 /**
  * A task on the board. Rows, each left out when empty: type, key, the
- * recurring mark, Blocked,
- * an agent's claim and priority; the title; labels; start and due dates,
+ * recurring mark, Blocked, an agent's claim and priority; the title; labels; start and due dates,
  * checklist, subtasks, estimate and days in the column, as the personal
  * card fields choose, and the custom fields they name, each as its name and
  * value; then comments, files and time spent, when there are any.

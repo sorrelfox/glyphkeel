@@ -81,7 +81,7 @@ import { customRuleField, isEmpty as isEmptyRules } from "../rules";
 import { formatDuration, parseDuration } from "../duration";
 import { BUILT_IN_PRESETS, planCsv } from "./csv";
 import { decodeBase64, materialize, recordedFields, sniff } from "./details";
-import { applyValues, createField, deleteField, fieldOut, fieldsFor, fieldsOf, fillRequired, findField, lackingRequired, listedValues, moveMatches, moveValues, placeField, queryFields, shownFor as shownFieldFor, taskValues, updateField } from "./fields";
+import { applyValues, createField, deleteField, fieldOut, fieldsFor, fieldsOf, fillRequired, findField, followField, lackingRequired, listedValues, moveMatches, moveValues, placeField, queryFields, queryName, shownFor as shownFieldFor, taskValues, updateField } from "./fields";
 import { checklistOf, escapeHtml, merge3, publicChecklist, renderFake, setChecked, unifiedDiff } from "./markdown";
 import { newProject, nextFileId, nextId, nextUuid, SAMPLE_AGENT } from "./seed";
 import { type FakeComment, type FakeFile, type FakeProject, type FakeRelation, type FakeReminder, type FakeRevision, type FakeState, type FakeStatus, type FakeTask, type FakeTimeEntry, type FakeWikiPage, type FakeWorkKind } from "./state";
@@ -2727,7 +2727,9 @@ export class FakeWorkspace {
     "field.update": (input) => {
       const project = input.project === null || input.project === undefined ? null : this.project(input.project);
       const field = findField(fieldsFor(this.state, project?.id ?? null), input.field, fail);
+      const before = queryName(field.name);
       const removed = updateField(this.state, field, input, fail);
+      followField(this.state, field, before, queryName(field.name));
       placeField(this.state, field, input, fail);
       return this.fieldChange(field, ["*"], removed);
     },
@@ -2738,6 +2740,7 @@ export class FakeWorkspace {
       if (input.expected_task_count !== null && input.expected_task_count !== undefined && input.expected_task_count !== count) {
         fail("conflict", `"${field.name}" has a value on ${String(count)} tasks, not ${String(input.expected_task_count)}.`, { details: { message_id: "field-count-differs" } });
       }
+      followField(this.state, field, queryName(field.name), null);
       const removed = deleteField(this.state, field);
       return this.fieldChange(field, ["deleted"], removed);
     },
@@ -3258,7 +3261,12 @@ export class FakeWorkspace {
         {
           tasks: this.state.tasks.flatMap((task) => {
             const item = listed.get(task.id);
-            return item ? [{ task: item, description: task.description, projectActive: !archived.has(item.project) || keys !== null }] : [];
+            // As in the engine, text, Markdown and URL values are found with the description.
+            const text = Object.entries(task.fields ?? {}).flatMap(([id, value]) => {
+              const kind = fieldsOf(this.state).find((field) => field.id === id)?.kind;
+              return typeof value === "string" && (kind === "text" || kind === "markdown" || kind === "url") ? [value] : [];
+            });
+            return item ? [{ task: item, description: [task.description, ...text].filter((part) => part !== "").join("\n\n"), projectActive: !archived.has(item.project) || keys !== null }] : [];
           }),
           comments: this.state.comments.flatMap((comment) => {
             const task = listed.get(comment.taskId);

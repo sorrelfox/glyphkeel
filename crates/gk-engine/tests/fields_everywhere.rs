@@ -610,3 +610,82 @@ fn lists_are_grouped_by_select_and_yes_no_fields() {
         json!({ "project": "TM", "collapsed": { "cf.area": ["Back end"] } }),
     );
 }
+
+#[test]
+fn templates_carry_custom_fields_and_their_tasks_meet_the_required_ones() {
+    let dir = TempDir::new().unwrap();
+    let e = open(&dir);
+    // The built-in Software project brings a required severity for bugs,
+    // with a default, and story points for stories and tasks.
+    call(
+        &e,
+        "template.apply",
+        json!({ "template": "Software project", "name": "App", "key": "ABC" }),
+    );
+    let fields = call(&e, "field.list", json!({ "project": "ABC" }))["fields"].clone();
+    let names: Vec<&str> = fields
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|f| f["project"] == "ABC")
+        .map(|f| f["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["Severity", "Story points"], "{fields}");
+    let bug = call(
+        &e,
+        "template.apply",
+        json!({ "template": "Bug report", "project": "ABC" }),
+    );
+    let key = bug["task"]["key"].as_str().unwrap().to_owned();
+    assert_eq!(value(&e, &key, "Severity"), "Major");
+    // A story that becomes a bug takes the default, so the change goes
+    // through.
+    task(&e, "ABC", "Login");
+    call(&e, "task.update", json!({ "key": "ABC-2", "type": "Bug" }));
+    assert_eq!(value(&e, "ABC-2", "Severity"), "Major");
+
+    // A project template whose task lacks a required value without a
+    // default couldn't be used: it is refused when it is saved.
+    let setup = json!({
+        "types": [{ "name": "Task", "glyph": "task", "hue": "blue", "is_default": true }],
+        "fields": [{ "id": "f1", "name": "Customer", "kind": "text", "required": true }],
+        "tasks": [{ "title": "Kick-off" }],
+    });
+    let err = fails(
+        &e,
+        "template.create",
+        json!({ "name": "Client work", "kind": "project", "setup": setup }),
+    );
+    assert_eq!(message_id(&err), "field-required");
+    assert_eq!(
+        err.details["path"], "setup.tasks[0].fields.Customer",
+        "{err:?}"
+    );
+    let mut setup = setup;
+    setup["tasks"][0]["fields"] = json!({ "customer": "ACME" });
+    setup["task_templates"] = json!([{ "name": "Visit", "task": {
+        "title": "Visit", "subtasks": [{ "title": "Book", "fields": { "Customer": "ACME" } }]
+    } }]);
+    let err = fails(
+        &e,
+        "template.create",
+        json!({ "name": "Client work", "kind": "project", "setup": setup }),
+    );
+    assert_eq!(
+        err.details["path"], "setup.task_templates[0].task.fields.Customer",
+        "{err:?}"
+    );
+    setup["task_templates"][0]["task"]["fields"] = json!({ "Customer": "ACME" });
+    call(
+        &e,
+        "template.create",
+        json!({ "name": "Client work", "kind": "project", "setup": setup }),
+    );
+    let made = call(
+        &e,
+        "template.apply",
+        json!({ "template": "Client work", "name": "Client", "key": "OPR" }),
+    );
+    assert_eq!(made["tasks"], 1, "{made}");
+    assert_eq!(value(&e, "OPR-1", "Customer"), "ACME");
+}

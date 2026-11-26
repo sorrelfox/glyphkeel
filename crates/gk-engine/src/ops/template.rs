@@ -824,6 +824,54 @@ fn check_setup(s: &ProjectBlueprint) -> Result<(), Failure> {
         check_name(&t.name)?;
         check_blueprint(&t.task, &format!("setup.task_templates[{i}].task"))?;
     }
+    for (i, t) in s.tasks.iter().enumerate() {
+        check_required(s, t, &format!("setup.tasks[{i}]"))?;
+    }
+    for (i, t) in s.task_templates.iter().enumerate() {
+        check_required(s, &t.task, &format!("setup.task_templates[{i}].task"))?;
+    }
+    Ok(())
+}
+
+/// Refuses a task of a project template, or one of its subtasks, that
+/// lacks a value for one of the template's required fields without a
+/// default: the template couldn't be used, since its tasks are held to the
+/// same checks as tasks made by hand.
+fn check_required(s: &ProjectBlueprint, bp: &TaskBlueprint, path: &str) -> Result<(), Failure> {
+    if !s.fields.iter().any(|f| f.required && f.default.is_none()) {
+        return Ok(());
+    }
+    // The type a task gets: its own by name, else the template's default.
+    let type_of = |name: Option<&String>| -> Option<String> {
+        if s.types.is_empty() {
+            return None;
+        }
+        name.and_then(|n| s.types.iter().find(|y| fold(&y.name) == fold(n)))
+            .or_else(|| s.types.iter().find(|y| y.is_default))
+            .or_else(|| s.types.first())
+            .map(|y| y.name.clone())
+    };
+    let refuse = |at: String, field: &str| {
+        messages::invalid(
+            &format!("{at}.fields.{field}"),
+            "field-required",
+            &[("field", field.to_owned())],
+        )
+    };
+    let own = type_of(bp.task_type.as_ref());
+    if let Some(field) =
+        super::custom_field::missing_required(&s.fields, own.as_deref(), &bp.fields)
+    {
+        return Err(refuse(path.to_owned(), field));
+    }
+    for (i, sub) in bp.subtasks.iter().enumerate() {
+        let own = type_of(sub.task_type.as_ref());
+        if let Some(field) =
+            super::custom_field::missing_required(&s.fields, own.as_deref(), &sub.fields)
+        {
+            return Err(refuse(format!("{path}.subtasks[{i}]"), field));
+        }
+    }
     Ok(())
 }
 

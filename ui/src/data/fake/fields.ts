@@ -411,6 +411,42 @@ export function updateField(
   return removed;
 }
 
+/**
+ * Follows a renamed (`after`) or deleted (`after` null) field in what names it as `cf.<query name>`, as the engine
+ * does: the card fields of board layouts, the grouping of saved views and the folded groups of list layouts. A
+ * field of one project changes only that project's.
+ */
+export function followField(state: FakeState, field: FakeField, before: string, after: string | null): void {
+  const from = `cf.${before}`;
+  const to = after === null ? null : `cf.${after}`;
+  if (from === to) {
+    return;
+  }
+  const mine = (projectId: string) => field.projectId === null || field.projectId === projectId;
+  for (const [projectId, layout] of Object.entries(state.layouts)) {
+    if (mine(projectId) && layout.card_fields.includes(from)) {
+      layout.card_fields = [...new Set(layout.card_fields.flatMap((each) => (each === from ? (to === null ? [] : [to]) : [each])))];
+    }
+  }
+  const key = field.projectId === null ? null : state.projects.find((project) => project.id === field.projectId)?.key;
+  for (const view of state.views ?? []) {
+    if (view.group_by === from && (key === null || view.project === key)) {
+      if (to === null) {
+        delete view.group_by;
+      } else {
+        view.group_by = to;
+      }
+    }
+  }
+  for (const [projectId, layout] of Object.entries(state.listLayouts ?? {})) {
+    const folded = layout.collapsed?.[from];
+    if (layout.collapsed && folded !== undefined && (field.projectId === null || projectId === field.projectId)) {
+      const rest = Object.fromEntries(Object.entries(layout.collapsed).filter(([grouping]) => grouping !== from));
+      layout.collapsed = to === null ? rest : { ...rest, [to]: folded };
+    }
+  }
+}
+
 /** Deletes a field and its values; returns how many tasks had one. */
 export function deleteField(state: FakeState, field: FakeField): number {
   let count = 0;

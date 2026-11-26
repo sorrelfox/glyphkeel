@@ -785,6 +785,34 @@ pub(crate) fn check_blueprints(
     Ok(())
 }
 
+/// The first of a project template's own required fields without a
+/// default that a task of `type_name` would show and `values` leaves
+/// without a value: using the template would refuse it, as making the task
+/// by hand would. With no type known (the template keeps the default
+/// types), only fields shown for every type are checked.
+pub(crate) fn missing_required<'a>(
+    fields: &'a [gk_api::ops::template::FieldBlueprint],
+    type_name: Option<&str>,
+    values: &BTreeMap<String, Value>,
+) -> Option<&'a str> {
+    fields
+        .iter()
+        .filter(|f| f.required && f.default.is_none())
+        .filter(|f| {
+            f.types.is_empty()
+                || type_name.is_some_and(|t| f.types.iter().any(|y| fold(y) == fold(t)))
+        })
+        .find(|f| {
+            let query_name = clean_name(&f.name).map(|(_, q)| q).unwrap_or_default();
+            !values.keys().any(|k| {
+                let k = k.trim();
+                let bare = gk_query::fields::strip_custom_prefix(k).unwrap_or(k);
+                k == f.id || fold(bare) == fold(&f.name) || fold(bare) == query_name
+            })
+        })
+        .map(|f| f.name.as_str())
+}
+
 /// Puts `path[i]` in front of an error's field path.
 fn at_index(e: Failure, path: &str, i: usize) -> Failure {
     match e {

@@ -11,10 +11,11 @@
 //! their name and description in the person's language by their `key`.
 
 use gk_api::ops::common::{Category, Glyph, Hue, Priority};
+use gk_api::ops::field::CustomFieldKind;
 use gk_api::ops::rules::StatusRules;
 use gk_api::ops::template::{
-    LabelBlueprint, NamedBlueprint, PageBlueprint, ProjectBlueprint, StatusBlueprint,
-    TaskBlueprint, TemplateKind, TypeBlueprint,
+    FieldBlueprint, LabelBlueprint, NamedBlueprint, PageBlueprint, ProjectBlueprint,
+    StatusBlueprint, TaskBlueprint, TemplateKind, TypeBlueprint,
 };
 use gk_core::Id;
 
@@ -69,6 +70,10 @@ fn kind(name: &str, glyph: Glyph, hue: Hue, is_default: bool) -> TypeBlueprint {
         due_offset_days: None,
     }
 }
+
+/// The template's IDs of its custom fields (the new project's get new ones).
+const SEVERITY_ID: &str = "019ab000-0000-7000-8000-000000000101";
+const POINTS_ID: &str = "019ab000-0000-7000-8000-000000000102";
 
 fn label(name: &str, hue: Hue) -> LabelBlueprint {
     LabelBlueprint {
@@ -148,6 +153,30 @@ fn software() -> BuiltIn {
             kind("Bug", Glyph::Bug, Hue::Red, false),
             kind("Epic", Glyph::Epic, Hue::Purple, false),
         ],
+        // A bug needs a severity: it starts at "Major", also for a task
+        // whose type becomes Bug, so no change is refused for want of one.
+        fields: vec![
+            FieldBlueprint {
+                id: SEVERITY_ID.to_owned(),
+                name: "Severity".to_owned(),
+                kind: CustomFieldKind::Select,
+                options: ["Critical", "Major", "Minor", "Trivial"]
+                    .map(str::to_owned)
+                    .to_vec(),
+                default: Some(serde_json::Value::from("Major")),
+                types: vec!["Bug".to_owned()],
+                required: true,
+            },
+            FieldBlueprint {
+                id: POINTS_ID.to_owned(),
+                name: "Story points".to_owned(),
+                kind: CustomFieldKind::Integer,
+                options: Vec::new(),
+                default: None,
+                types: vec!["Story".to_owned(), "Task".to_owned()],
+                required: false,
+            },
+        ],
         labels: vec![
             label("Frontend", Hue::Teal),
             label("Backend", Hue::Blue),
@@ -184,6 +213,7 @@ fn software() -> BuiltIn {
                     description: BUG.to_owned(),
                     task_type: Some("Bug".to_owned()),
                     priority: Priority::High,
+                    fields: [("Severity".to_owned(), serde_json::Value::from("Major"))].into(),
                     ..TaskBlueprint::default()
                 },
             },

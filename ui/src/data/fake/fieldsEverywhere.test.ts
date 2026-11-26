@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { type Board, type BulkResult, type MoveCheck, type Schedule, type TaskChange, type TaskList, type TaskSearchResult } from "../../generated/ops";
+import { type Board, type BulkResult, type CustomFieldList, type MoveCheck, type Schedule, type SearchResult, type TaskChange, type TaskList, type TaskSearchResult, type TemplateApplied, type ViewChange } from "../../generated/ops";
 import { groupTaskInput, isFieldGrouping, isGrouping } from "../../screens/list/model";
 import { searchInput } from "../list";
 import { FakeError, FakeWorkspace } from "./engine";
@@ -122,5 +122,55 @@ describe("custom fields across the views of the sample workspace", () => {
     const key = call<TaskChange>(ws, "task.create", { project: "PER", title: "Dated", due_date: "2026-11-30", fields: { Customer: "ACME" } }).task.key;
     const schedule = call<Schedule>(ws, "schedule.get", { project: "PER" });
     expect(schedule.tasks.find((task) => task.key === key)?.fields).toEqual({ customer: "ACME" });
+  });
+});
+
+describe("custom fields followed by names and found by their text", () => {
+  it("rewrites board card fields and saved groupings when a field is renamed or deleted", () => {
+    const ws = workspace();
+    call(ws, "field.create", { project: "PER", name: "Area", kind: "select", options: ["UI", "API"] });
+    call(ws, "layout.update", { project: "PER", card_fields: ["due", "cf.area"] });
+    const { view } = call<ViewChange>(ws, "view.create", { project: "PER", name: "By area", query: "", group_by: "cf.area" });
+    call(ws, "field.update", { project: "PER", field: "Area", name: "Part" });
+    expect(call<{ layout: { card_fields: string[] } }>(ws, "layout.get", { project: "PER" }).layout.card_fields).toEqual(["due", "cf.part"]);
+    const saved = () => call<{ items: { id: string; group_by?: string }[] }>(ws, "view.list", { project: "PER" }).items.find((each) => each.id === view.id);
+    expect(saved()?.group_by).toBe("cf.part");
+    call(ws, "field.delete", { project: "PER", field: "Part" });
+    expect(call<{ layout: { card_fields: string[] } }>(ws, "layout.get", { project: "PER" }).layout.card_fields).toEqual(["due"]);
+    expect(saved()?.group_by).toBeUndefined();
+  });
+
+  it("finds a task by the text of its custom fields in global search", () => {
+    const ws = workspace();
+    call(ws, "field.create", { project: "PER", name: "Customer", kind: "text" });
+    const key = newTask(ws, "PER", "Invoice", { Customer: "Zanzibar Trading" });
+    const found = call<SearchResult>(ws, "search.query", { text: "zanzibar" });
+    expect(found.items.map((hit) => hit.task)).toContain(key);
+  });
+});
+
+describe("templates and required custom fields", () => {
+  it("the Software project brings a severity for bugs that a bug report and a type change fill", () => {
+    const ws = workspace();
+    call<TemplateApplied>(ws, "template.apply", { template: "Software project", name: "App", key: "ABC" });
+    const own = call<CustomFieldList>(ws, "field.list", { project: "ABC" }).fields.filter((each) => each.project === "ABC");
+    expect(own.map((each) => each.name)).toEqual(["Severity", "Story points"]);
+    const bug = call<TemplateApplied>(ws, "template.apply", { template: "Bug report", project: "ABC" }).task?.key ?? "";
+    expect(valueOf(ws, bug, "Severity")).toBe("Major");
+    const story = newTask(ws, "ABC", "Login");
+    call(ws, "task.update", { key: story, type: "Bug" });
+    expect(valueOf(ws, story, "Severity")).toBe("Major");
+  });
+
+  it("refuses a project template whose task lacks a required value without a default", () => {
+    const ws = workspace();
+    const setup = {
+      types: [{ name: "Task", glyph: "task", hue: "blue", is_default: true }],
+      fields: [{ id: "f1", name: "Customer", kind: "text", required: true }],
+      tasks: [{ title: "Kick-off" }],
+    };
+    const error = failure(() => ws.call("template.create", { name: "Client work", kind: "project", setup }));
+    expect(error.details).toMatchObject({ message_id: "field-required", path: "setup.tasks[0].fields.Customer" });
+    ws.call("template.create", { name: "Client work", kind: "project", setup: { ...setup, tasks: [{ title: "Kick-off", fields: { customer: "ACME" } }] } });
   });
 });

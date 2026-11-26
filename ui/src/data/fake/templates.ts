@@ -216,13 +216,18 @@ const BUILT_IN: readonly (FakeTemplate & { key: string })[] = [
         { name: "Backend", hue: "blue" },
         { name: "Documentation", hue: "yellow" },
       ],
+      // A bug needs a severity: it starts at "Major", also for a task whose type becomes Bug.
+      fields: [
+        { id: "019ab000-0000-7000-8000-000000000101", name: "Severity", kind: "select", options: ["Critical", "Major", "Minor", "Trivial"], default: "Major", types: ["Bug"], required: true },
+        { id: "019ab000-0000-7000-8000-000000000102", name: "Story points", kind: "integer", types: ["Story", "Task"] },
+      ],
       wiki: [
         { title: "Overview", body: "## Goal\n\nWhat the software is for, and for whom.\n" },
         { title: "Releases", body: "## Next release\n\n## Earlier releases\n" },
       ],
       task_templates: [
         { name: "Story", description: "A user story with its acceptance criteria.", task: { title: "Story", type: "Story", description: "As a …, I want … so that ….\n\n## Acceptance criteria\n\n- [ ] \n" } },
-        { name: "Bug report", description: "A bug with the steps that show it.", task: { title: "Bug", type: "Bug", priority: "high", description: "## Steps to reproduce\n\n1. \n\n## Expected\n\n## Actual\n" } },
+        { name: "Bug report", description: "A bug with the steps that show it.", task: { title: "Bug", type: "Bug", priority: "high", fields: { Severity: "Major" }, description: "## Steps to reproduce\n\n1. \n\n## Expected\n\n## Actual\n" } },
       ],
     },
     rank: 0,
@@ -440,6 +445,48 @@ function mapRules<T extends StatusRules | AgentRules>(rules: T, copies: Readonly
   return out as T;
 }
 
+/**
+ * Refuses a set-up whose task, task template or one of their subtasks lacks a value for one of its required fields
+ * without a default: the template couldn't be used. With the default types, only fields of every type are checked.
+ */
+function checkRequired(host: FakeHost, setup: ProjectBlueprint): ProjectBlueprint {
+  const required = (setup.fields ?? []).filter((field) => field.required === true && (field.default === null || field.default === undefined));
+  if (required.length === 0) {
+    return setup;
+  }
+  const types = setup.types ?? [];
+  const typeOf = (name: string | null | undefined): string | null => {
+    if (types.length === 0) {
+      return null;
+    }
+    const named = name === null || name === undefined ? undefined : types.find((type) => fold(type.name) === fold(name));
+    return (named ?? types.find((type) => type.is_default === true) ?? types[0])?.name ?? null;
+  };
+  const check = (task: { type?: string | null; fields?: Record<string, unknown> | null }, path: string) => {
+    const type = typeOf(task.type);
+    const given = Object.keys(task.fields ?? {}).map((key) => fold(key.trim().replace(/^cf\./i, "")));
+    for (const field of required) {
+      const shown = (field.types ?? []).length === 0 || (type !== null && (field.types ?? []).some((each) => fold(each) === fold(type)));
+      if (shown && !Object.keys(task.fields ?? {}).includes(field.id) && !given.includes(fold(field.name))) {
+        host.fail("invalid", `${field.name} is required; give it a value.`, { details: { path: `${path}.fields.${field.name}`, message_id: "field-required", args: { field: field.name } } });
+      }
+    }
+  };
+  const walk = (task: TaskBlueprint, path: string) => {
+    check(task, path);
+    (task.subtasks ?? []).forEach((sub, index) => {
+      check(sub, `${path}.subtasks[${String(index)}]`);
+    });
+  };
+  (setup.tasks ?? []).forEach((task, index) => {
+    walk(task, `setup.tasks[${String(index)}]`);
+  });
+  (setup.task_templates ?? []).forEach((named, index) => {
+    walk(named.task, `setup.task_templates[${String(index)}].task`);
+  });
+  return setup;
+}
+
 /** Gives a new project the set-up's statuses, types, labels, modules, custom fields and rules. */
 function setUp(host: FakeHost, project: FakeProject, setup: ProjectBlueprint): void {
   if (setup.statuses && setup.statuses.length > 0) {
@@ -537,7 +584,7 @@ export function templateHandlers(host: FakeHost): Handlers {
         if ((input.from_task ?? input.task) !== undefined && (input.from_task ?? input.task) !== null) {
           host.fail("invalid", "A task template holds a task, and a project template a project's set-up.", { details: { path: "kind", message_id: "template-kind-mismatch" } });
         }
-        const setup = input.from_project !== null && input.from_project !== undefined ? setupOf(host, host.project(input.from_project), input.include_tasks === true) : structuredClone(input.setup ?? {});
+        const setup = input.from_project !== null && input.from_project !== undefined ? setupOf(host, host.project(input.from_project), input.include_tasks === true) : checkRequired(host, structuredClone(input.setup ?? {}));
         template = add(host, { kind, projectId: null, name, description, setup });
       }
       return { output: { template: output(host, template) }, changes: [change(host, template)] };
@@ -556,7 +603,7 @@ export function templateHandlers(host: FakeHost): Handlers {
         host.fail("invalid", "A task template holds a task, and a project template a project's set-up.", { details: { path: "task", message_id: "template-kind-mismatch" } });
       }
       if (input.task) next.task = structuredClone(input.task);
-      if (input.setup) next.setup = structuredClone(input.setup);
+      if (input.setup) next.setup = checkRequired(host, structuredClone(input.setup));
       if (JSON.stringify(next) === JSON.stringify(template)) {
         return { template: output(host, template) };
       }
