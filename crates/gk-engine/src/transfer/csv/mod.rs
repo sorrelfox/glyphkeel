@@ -955,19 +955,16 @@ fn run(
         // a required field it lacks makes the row an error.
         let mut by_rule = false;
         let made = w.attempt(|w| {
-            let change = task::create(w, input)?;
-            let id = lookup::task(w.tx(), "key", &change.task.key)?.id;
+            let (id, key) = task::create_new(w, input)?;
             rules::enforce_created(w, id).inspect_err(|_| by_rule = true)?;
-            Ok(change)
+            Ok(key)
         });
         match made {
-            Ok(change) => {
+            Ok(made_key) => {
                 for k in &row.keys {
-                    by_ref
-                        .entry(k.clone())
-                        .or_insert_with(|| change.task.key.clone());
+                    by_ref.entry(k.clone()).or_insert_with(|| made_key.clone());
                 }
-                out.key = Some(change.task.key);
+                out.key = Some(made_key);
             }
             Err(f) if by_rule && !matches!(f, Failure::Store(_)) => {
                 let e = OpError::from(f);

@@ -721,6 +721,67 @@ fn the_board_follows_the_personal_layout() {
 }
 
 #[test]
+fn the_board_leaves_out_cards_closed_long_ago_but_counts_them() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicI64, Ordering};
+    const DAY: i64 = 86_400_000;
+    let now = Arc::new(AtomicI64::new(1_780_000_000_000));
+    let dir = tempfile::tempdir().unwrap();
+    let mut config = EngineConfig::new(Role::App);
+    let clock = Arc::clone(&now);
+    config.clock = Arc::new(move || clock.load(Ordering::SeqCst));
+    let e = Engine::open(&WorkspaceLayout::new(dir.path().join("Personal")), config).unwrap();
+    project(&e, "TM", None);
+    for title in ["Old one", "Old two"] {
+        call(
+            &e,
+            "task.create",
+            json!({ "project": "TM", "title": title, "status": "Done" }),
+        );
+    }
+    now.fetch_add(20 * DAY, Ordering::SeqCst);
+    call(
+        &e,
+        "task.create",
+        json!({ "project": "TM", "title": "Recent", "status": "Done" }),
+    );
+    task(&e, "TM", "Open");
+    let done = |board: &Value| {
+        board["columns"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|c| c["name"] == "Done")
+            .unwrap()
+            .clone()
+    };
+    // Closed cards are shown for 14 days by default.
+    let board = call(&e, "board.get", json!({ "project": "TM" }));
+    let column = done(&board);
+    assert_eq!(keys(&column), ["TM-3"]);
+    assert_eq!(column["count"], 3);
+    assert_eq!(column["older"], 2);
+    let board = call(
+        &e,
+        "board.get",
+        json!({ "project": "TM", "show_older": true }),
+    );
+    let column = done(&board);
+    assert_eq!(keys(&column), ["TM-1", "TM-2", "TM-3"]);
+    assert_eq!(column["count"], 3);
+    assert_eq!(column["older"], 0);
+    // A hidden column counts all its tasks.
+    call(
+        &e,
+        "layout.update",
+        json!({ "project": "TM", "hide": ["Done"] }),
+    );
+    let board = call(&e, "board.get", json!({ "project": "TM" }));
+    assert_eq!(board["hidden_tasks"], 3);
+    assert_eq!(done(&board)["cards"], json!([]));
+}
+
+#[test]
 fn undo_takes_back_task_changes_and_moves() {
     let dir = tempfile::tempdir().unwrap();
     let e = open(&dir);

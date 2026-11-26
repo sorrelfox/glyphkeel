@@ -438,20 +438,23 @@ fn resolve_task(tx: &Transaction<'_>, key: &str) -> Option<TaskRow> {
     lookup::task(tx, "task", key).ok()
 }
 
-/// The stored links whose `column` is one of `values`, of `target_kind`.
+/// The stored links whose `column` is one of `values`, of `target_kind`
+/// (`wiki` or `task`). The kind is written into the SQL, not bound, so the
+/// partial indexes for that kind serve the query.
 fn candidates(
     tx: &Transaction<'_>,
-    target_kind: &str,
+    target_kind: &'static str,
     condition: &str,
     values: &serde_json::Value,
 ) -> Result<Vec<LinkRow>, Failure> {
+    debug_assert!(target_kind.bytes().all(|c| c.is_ascii_lowercase()));
     let mut stmt = tx.prepare_cached(&format!(
         "SELECT source_kind, source_id, target_kind, target, heading FROM text_links
-          WHERE target_kind = ?1 AND ({condition})
+          WHERE target_kind = '{target_kind}' AND ({condition})
           ORDER BY source_kind, source_id, position"
     ))?;
     let rows = stmt
-        .query_map(params![target_kind, values.to_string()], |r| {
+        .query_map(params![values.to_string()], |r| {
             Ok((
                 r.get::<_, String>(0)?,
                 id_at(r, 1)?,
@@ -515,10 +518,10 @@ fn collect_backlinks(
         .collect())
 }
 
-const NAME_MATCH: &str = "name_fold IN (SELECT value FROM json_each(?2))
-    OR name_slug IN (SELECT value FROM json_each(?2))
-    OR tail_fold IN (SELECT value FROM json_each(?2))
-    OR tail_slug IN (SELECT value FROM json_each(?2))";
+const NAME_MATCH: &str = "name_fold IN (SELECT value FROM json_each(?1))
+    OR name_slug IN (SELECT value FROM json_each(?1))
+    OR tail_fold IN (SELECT value FROM json_each(?1))
+    OR tail_slug IN (SELECT value FROM json_each(?1))";
 
 /// The pages, task descriptions and comments that link to `page`.
 pub(crate) fn page_backlinks(
@@ -571,7 +574,7 @@ pub(crate) fn task_backlinks(tx: &Transaction<'_>, task: Id) -> Result<Vec<Backl
     let rows = candidates(
         tx,
         "task",
-        "task_number IN (SELECT value FROM json_each(?2))",
+        "task_number IN (SELECT value FROM json_each(?1))",
         &serde_json::json!(numbers),
     )?;
     collect_backlinks(

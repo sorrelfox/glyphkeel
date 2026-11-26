@@ -392,22 +392,21 @@ fn output(
 /// The version task `task` is planned for, as tasks show it.
 pub(crate) fn of_task(tx: &Transaction<'_>, task: Id) -> Result<Option<VersionRef>, Failure> {
     let row = tx
-        .query_row(
+        .prepare_cached(
             "SELECT v.id, v.name, p.key, v.status, v.due_date
                FROM tasks t JOIN versions v ON v.id = t.fix_version_id
                JOIN projects p ON p.id = v.project_id
               WHERE t.id = ?1",
-            [b(task)],
-            |r| {
-                Ok(VersionRef {
-                    id: id_at(r, 0)?.to_string(),
-                    name: r.get(1)?,
-                    project: r.get(2)?,
-                    status: status_of(&r.get::<_, String>(3)?),
-                    due_date: r.get(4)?,
-                })
-            },
-        )
+        )?
+        .query_row([b(task)], |r| {
+            Ok(VersionRef {
+                id: id_at(r, 0)?.to_string(),
+                name: r.get(1)?,
+                project: r.get(2)?,
+                status: status_of(&r.get::<_, String>(3)?),
+                due_date: r.get(4)?,
+            })
+        })
         .optional()?;
     Ok(row)
 }

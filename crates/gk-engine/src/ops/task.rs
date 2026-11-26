@@ -115,12 +115,14 @@ pub(crate) fn labels_value(ids: &[Id]) -> Option<Value> {
 /// Writes the task's labels without recording them.
 pub(crate) fn write_labels(w: &WriteCtx<'_>, task: Id, ids: &[Id]) -> Result<(), Failure> {
     w.tx()
-        .execute("DELETE FROM task_labels WHERE task_id = ?1", [b(task)])?;
+        .prepare_cached("DELETE FROM task_labels WHERE task_id = ?1")?
+        .execute([b(task)])?;
     for id in ids {
-        w.tx().execute(
-            "INSERT OR IGNORE INTO task_labels (task_id, label_id) VALUES (?1, ?2)",
-            params![b(task), b(*id)],
-        )?;
+        w.tx()
+            .prepare_cached(
+                "INSERT OR IGNORE INTO task_labels (task_id, label_id) VALUES (?1, ?2)",
+            )?
+            .execute(params![b(task), b(*id)])?;
     }
     fields::touch(w, TASK, task, "labels")
 }
@@ -145,11 +147,10 @@ pub(crate) fn set_labels(
 /// Keeps the task's search entry and checklist counts in step with its
 /// title and description.
 pub(crate) fn refresh_text(w: &WriteCtx<'_>, task: Id) -> Result<(), Failure> {
-    let (project, title, description): (Vec<u8>, String, String) = w.tx().query_row(
-        "SELECT project_id, title, description FROM tasks WHERE id = ?1",
-        [b(task)],
-        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-    )?;
+    let (project, title, description): (Vec<u8>, String, String) = w
+        .tx()
+        .prepare_cached("SELECT project_id, title, description FROM tasks WHERE id = ?1")?
+        .query_row([b(task)], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
     let analysis = gk_markdown::analyze(&description);
     super::links::index_refs(
         w.tx(),
@@ -158,22 +159,22 @@ pub(crate) fn refresh_text(w: &WriteCtx<'_>, task: Id) -> Result<(), Failure> {
     )?;
     let total = analysis.checklist.len();
     let done = analysis.checklist.iter().filter(|i| i.checked).count();
-    w.tx().execute(
-        "UPDATE tasks SET checklist_done = ?2, checklist_total = ?3 WHERE id = ?1",
-        params![
+    w.tx()
+        .prepare_cached("UPDATE tasks SET checklist_done = ?2, checklist_total = ?3 WHERE id = ?1")?
+        .execute(params![
             b(task),
             i64::try_from(done).unwrap_or(i64::MAX),
             i64::try_from(total).unwrap_or(i64::MAX)
-        ],
-    )?;
+        ])?;
     let body = super::custom_field::indexed_body(w.tx(), task, &analysis.plain_text)?;
-    w.tx().execute(
-        "INSERT INTO search_docs (kind, entity_id, task_id, project_id, title, body, updated_at)
-         VALUES ('task', ?1, ?1, ?2, ?3, ?4, ?5)
-         ON CONFLICT (kind, entity_id) DO UPDATE SET project_id = excluded.project_id,
-           title = excluded.title, body = excluded.body, updated_at = excluded.updated_at",
-        params![b(task), project, title, body, w.now()],
-    )?;
+    w.tx()
+        .prepare_cached(
+            "INSERT INTO search_docs (kind, entity_id, task_id, project_id, title, body, updated_at)
+             VALUES ('task', ?1, ?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT (kind, entity_id) DO UPDATE SET project_id = excluded.project_id,
+               title = excluded.title, body = excluded.body, updated_at = excluded.updated_at",
+        )?
+        .execute(params![b(task), project, title, body, w.now()])?;
     Ok(())
 }
 
@@ -242,7 +243,7 @@ pub(crate) fn load(
            JOIN statuses s ON s.id = t.status_id JOIN task_types y ON y.id = t.type_id
           WHERE t.id = ?1"
     );
-    let row = tx.query_row(&sql, [b(id)], |r| {
+    let row = tx.prepare_cached(&sql)?.query_row([b(id)], |r| {
         let estimate: Option<i64> = r.get(14)?;
         Ok((
             Task {
@@ -323,11 +324,9 @@ pub(crate) fn load(
     })?;
     let (mut task, parent) = row;
     if let Some(parent) = parent {
-        let (project, number): (Vec<u8>, i64) = tx.query_row(
-            "SELECT project_id, number FROM tasks WHERE id = ?1",
-            [b(parent)],
-            |r| Ok((r.get(0)?, r.get(1)?)),
-        )?;
+        let (project, number): (Vec<u8>, i64) = tx
+            .prepare_cached("SELECT project_id, number FROM tasks WHERE id = ?1")?
+            .query_row([b(parent)], |r| Ok((r.get(0)?, r.get(1)?)))?;
         let project = Id::from_slice(&project)
             .map_err(|e| Failure::Store(gk_store::StoreError::Corrupt(e.to_string())))?;
         task.parent = Some(lookup::task_key(tx, project, number)?);
@@ -511,11 +510,9 @@ fn priority_value(p: Priority) -> Option<Value> {
 }
 
 pub(crate) fn category_of(tx: &Transaction<'_>, status: Id) -> Result<StatusCategory, Failure> {
-    let text: String = tx.query_row(
-        "SELECT category FROM statuses WHERE id = ?1",
-        [b(status)],
-        |r| r.get(0),
-    )?;
+    let text: String = tx
+        .prepare_cached("SELECT category FROM statuses WHERE id = ?1")?
+        .query_row([b(status)], |r| r.get(0))?;
     Ok(text.parse().unwrap_or(StatusCategory::Todo))
 }
 
@@ -538,12 +535,11 @@ pub(crate) fn first_status(tx: &Transaction<'_>, project: &ProjectRow) -> Result
 
 pub(crate) fn default_type(tx: &Transaction<'_>, project: &ProjectRow) -> Result<Id, Failure> {
     let found: Option<Id> = tx
-        .query_row(
+        .prepare_cached(
             "SELECT id FROM task_types WHERE project_id = ?1
               ORDER BY is_default DESC, rank, id LIMIT 1",
-            [b(project.id)],
-            |r| id_at(r, 0),
-        )
+        )?
+        .query_row([b(project.id)], |r| id_at(r, 0))
         .optional()?;
     found.ok_or_else(|| {
         Failure::Op(messages::error(
@@ -715,6 +711,12 @@ pub(crate) fn rank_in_column(
     task: Id,
     target: Target,
 ) -> Result<Rank, Failure> {
+    // At either end only the neighbour there matters: one row through the
+    // board index instead of the whole column. When it leaves no room, the
+    // whole column is spread out below, as for any other place.
+    if let Some(rank) = rank_at_end(w.tx(), project, status, task, target)? {
+        return Ok(rank);
+    }
     let siblings = lookup::ranked(
         w.tx(),
         "tasks",
@@ -730,6 +732,48 @@ pub(crate) fn rank_in_column(
         }
     }
     Ok(mine)
+}
+
+/// The rank that puts `task` at the top or the bottom of its column, when
+/// the neighbour there leaves room for one without spreading the column;
+/// `None` otherwise, and for any other target.
+fn rank_at_end(
+    tx: &Transaction<'_>,
+    project: Id,
+    status: Id,
+    task: Id,
+    target: Target,
+) -> Result<Option<Rank>, Failure> {
+    let sql = match target {
+        Target::Bottom => {
+            "SELECT rank FROM tasks
+              WHERE project_id = ?1 AND status_id = ?2 AND deleted_at IS NULL AND id <> ?3
+              ORDER BY rank DESC, id DESC LIMIT 1"
+        }
+        Target::Top => {
+            "SELECT rank FROM tasks
+              WHERE project_id = ?1 AND status_id = ?2 AND deleted_at IS NULL AND id <> ?3
+              ORDER BY rank, id LIMIT 1"
+        }
+        Target::Before(_) | Target::After(_) => return Ok(None),
+    };
+    let neighbour: Option<String> = tx
+        .prepare_cached(sql)?
+        .query_row(params![b(project), b(status), b(task)], |r| r.get(0))
+        .optional()?;
+    let Some(neighbour) = neighbour else {
+        // An empty column (in this project): the full path checks it
+        // without the project, as before.
+        return Ok(None);
+    };
+    let Ok(neighbour) = Rank::parse(&neighbour) else {
+        return Ok(None);
+    };
+    let rank = match target {
+        Target::Bottom => Rank::between(Some(&neighbour), None),
+        _ => Rank::between(None, Some(&neighbour)),
+    };
+    Ok(rank.ok().filter(|r| !r.needs_respread()))
 }
 
 /// The live subtasks of `parent` as `(id, subtask rank)`, in their order;
@@ -902,6 +946,16 @@ fn open_subtasks(tx: &Transaction<'_>, task: Id) -> Result<i64, Failure> {
 // Commands
 
 pub(crate) fn create(w: &mut WriteCtx<'_>, input: TaskCreateInput) -> Result<TaskChange, Failure> {
+    let (id, _) = create_new(w, input)?;
+    changed(w, id, Vec::new())
+}
+
+/// [`create`] without reading the new task back: its ID and key. For
+/// commands that make many tasks and need only their keys.
+pub(crate) fn create_new(
+    w: &mut WriteCtx<'_>,
+    input: TaskCreateInput,
+) -> Result<(Id, String), Failure> {
     let project = lookup::project(w.tx(), "project", &input.project)?;
     lookup::ensure_active(&project)?;
     let title = gk_core::check_title(&input.title).map_err(|e| invalid("title", e))?;
@@ -958,7 +1012,7 @@ pub(crate) fn create(w: &mut WriteCtx<'_>, input: TaskCreateInput) -> Result<Tas
         input.at,
     )?
     .unwrap_or(Target::Bottom);
-    let id = insert(
+    let (id, key) = insert_keyed(
         w,
         NewTask {
             project: project.id,
@@ -981,7 +1035,7 @@ pub(crate) fn create(w: &mut WriteCtx<'_>, input: TaskCreateInput) -> Result<Tas
         super::version::set_task(w, id, project.id, fix_version)?;
     }
     super::custom_field::apply_input(w, id, &project, &input.fields, true)?;
-    changed(w, id, Vec::new())
+    Ok((id, key))
 }
 
 /// The due date a new task of type `task_type` gets when none is given:
@@ -994,11 +1048,8 @@ pub(crate) fn type_due_date(
 ) -> Result<Option<String>, Failure> {
     let days: Option<i64> = w
         .tx()
-        .query_row(
-            "SELECT due_offset_days FROM task_types WHERE id = ?1",
-            [b(task_type)],
-            |r| r.get(0),
-        )
+        .prepare_cached("SELECT due_offset_days FROM task_types WHERE id = ?1")?
+        .query_row([b(task_type)], |r| r.get(0))
         .optional()?
         .flatten();
     let Some(days) = days else {
@@ -1082,6 +1133,11 @@ fn check_new_task_cap(w: &WriteCtx<'_>) -> Result<(), Failure> {
 /// Writes a new task with the project's next number, its labels and its
 /// search entry, and records its creation. The fields are checked already.
 pub(crate) fn insert(w: &mut WriteCtx<'_>, t: NewTask) -> Result<Id, Failure> {
+    insert_keyed(w, t).map(|(id, _)| id)
+}
+
+/// [`insert`], also giving the new task's key.
+fn insert_keyed(w: &mut WriteCtx<'_>, t: NewTask) -> Result<(Id, String), Failure> {
     check_new_task_cap(w)?;
     let id = Id::generate_at(u64::try_from(w.now()).unwrap_or(0));
     let rank = rank_in_column(w, t.project, t.status, id, t.target)?;
@@ -1089,23 +1145,26 @@ pub(crate) fn insert(w: &mut WriteCtx<'_>, t: NewTask) -> Result<Id, Failure> {
         .parent
         .map(|p| rank_among_subtasks(w, t.project, p, id, Target::Bottom))
         .transpose()?;
-    let number: i64 = w.tx().query_row(
-        "UPDATE projects SET next_number = next_number + 1, updated_at = ?2 WHERE id = ?1
+    let number: i64 = w
+        .tx()
+        .prepare_cached(
+            "UPDATE projects SET next_number = next_number + 1, updated_at = ?2 WHERE id = ?1
          RETURNING next_number - 1",
-        params![b(t.project), w.now()],
-        |r| r.get(0),
-    )?;
+        )?
+        .query_row(params![b(t.project), w.now()], |r| r.get(0))?;
     let category = category_of(w.tx(), t.status)?;
     let closed_at = category.is_closed().then(|| w.now());
     let caller = w.caller().clone();
-    w.tx().execute(
-        "INSERT INTO tasks (id, project_id, number, title, title_fold, description, status_id,
+    w.tx()
+        .prepare_cached(
+            "INSERT INTO tasks (id, project_id, number, title, title_fold, description, status_id,
                             status_entered_at, type_id, priority, parent_id, rank, start_date,
                             due_date, estimate_min, created_at, created_by_kind, created_by_name,
                             edited_at, updated_at, closed_at, progress_override, subtask_rank)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?8, ?16, ?17,
                  ?8, ?8, ?18, ?19, ?20)",
-        params![
+        )?
+        .execute(params![
             b(id),
             b(t.project),
             number,
@@ -1126,20 +1185,20 @@ pub(crate) fn insert(w: &mut WriteCtx<'_>, t: NewTask) -> Result<Id, Failure> {
             closed_at,
             t.progress,
             subtask_rank.as_ref().map(Rank::as_str)
-        ],
-    )?;
+        ])?;
     write_labels(w, id, &t.labels)?;
     description::initial(w, Owner::Task(id), &t.description)?;
     w.tx()
-        .execute("UPDATE tasks SET version = 1 WHERE id = ?1", [b(id)])?;
+        .prepare_cached("UPDATE tasks SET version = 1 WHERE id = ?1")?
+        .execute([b(id)])?;
     refresh_text(w, id)?;
     let key = format!("{}-{number}", t.project_key);
     let pid = Some(t.project);
     w.record_field(TASK, id, pid, "created", None, Some(Value::Bool(true)));
-    w.record_field(TASK, id, pid, "key", None, text(key));
+    w.record_field(TASK, id, pid, "key", None, text(key.clone()));
     w.record_field(TASK, id, pid, "title", None, text(t.title));
     w.record_field(TASK, id, pid, "status", None, id_value(t.status));
-    Ok(id)
+    Ok((id, key))
 }
 
 pub(crate) fn priority_index(p: Priority) -> i64 {

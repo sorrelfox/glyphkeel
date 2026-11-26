@@ -557,3 +557,62 @@ fn versions_by_name_and_the_rules_of_each_status_hold_for_every_row() {
     assert_eq!(later["title"], "Later");
     assert!(later.get("fix_version").is_none());
 }
+
+/// A large file: every row becomes a task in one change, the tasks keep the
+/// file's order in their columns, one Undo takes them back, and it takes
+/// seconds, not minutes. Making each task once cost a read of its whole
+/// column and a search of everything the import had changed so far, so
+/// the time grew with the square of the rows. The bound is generous, for
+/// slow machines and unoptimised builds; the release build takes well
+/// under a second.
+#[test]
+fn a_large_file_is_imported_quickly_in_file_order_and_undone_at_once() {
+    const ROWS: usize = 4_000;
+    let dir = TempDir::new().unwrap();
+    let e = open(&dir);
+    let statuses = ["Backlog", "To do", "In progress", "Done"];
+    let mut text = String::from("Title,Status,Priority,Labels,Estimate\r\n");
+    for n in 0..ROWS {
+        text.push_str(&format!(
+            "Imported task {n},{},{},{},{}h\r\n",
+            statuses[n % 4],
+            ["low", "medium", "high"][n % 3],
+            ["web", "api"][n % 2],
+            n % 8 + 1
+        ));
+    }
+    let path = write(&dir, "large.csv", text.as_bytes());
+    let started = std::time::Instant::now();
+    let done = call(
+        &e,
+        "transfer.import_csv",
+        json!({ "project": "SHOP", "path": path }),
+    );
+    let took = started.elapsed();
+    assert_eq!(done["counts"]["created"], ROWS as u64);
+    assert_eq!(task_count(&e), ROWS as u64);
+    assert!(
+        took < std::time::Duration::from_secs(20),
+        "{ROWS} rows took {took:?}"
+    );
+
+    // Each column holds its rows in the file's order.
+    let board = call(
+        &e,
+        "board.get",
+        json!({ "project": "SHOP", "show_older": true }),
+    );
+    for column in board["columns"].as_array().unwrap() {
+        let numbers: Vec<u64> = column["cards"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| c["key"].as_str().unwrap()["SHOP-".len()..].parse().unwrap())
+            .collect();
+        assert!(numbers.windows(2).all(|w| w[0] < w[1]), "{numbers:?}");
+    }
+    assert_eq!(get(&e, "SHOP-2")["labels"][0]["name"], "api");
+
+    call(&e, "history.revert", json!({ "groups": [done["group"]] }));
+    assert_eq!(task_count(&e), 0);
+}

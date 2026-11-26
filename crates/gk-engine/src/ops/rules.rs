@@ -77,11 +77,8 @@ pub(crate) fn parse(text: Option<&str>) -> StatusRules {
 /// The rules of status `status`.
 pub(crate) fn status_rules(tx: &Transaction<'_>, status: Id) -> Result<StatusRules, Failure> {
     let text: Option<String> = tx
-        .query_row(
-            "SELECT rules FROM statuses WHERE id = ?1",
-            [b(status)],
-            |r| r.get(0),
-        )
+        .prepare_cached("SELECT rules FROM statuses WHERE id = ?1")?
+        .query_row([b(status)], |r| r.get(0))
         .optional()?
         .flatten();
     Ok(parse(text.as_deref()))
@@ -539,24 +536,23 @@ struct TaskFacts {
 
 fn facts(tx: &Transaction<'_>, task: Id) -> Result<Option<TaskFacts>, Failure> {
     Ok(tx
-        .query_row(
+        .prepare_cached(
             "SELECT p.key || '-' || t.number, t.project_id, p.key, t.status_id, s.name,
                     t.deleted_at IS NOT NULL
                FROM tasks t JOIN projects p ON p.id = t.project_id
                JOIN statuses s ON s.id = t.status_id
               WHERE t.id = ?1",
-            [b(task)],
-            |r| {
-                Ok(TaskFacts {
-                    key: r.get(0)?,
-                    project: lookup::id_at(r, 1)?,
-                    project_key: r.get(2)?,
-                    status: lookup::id_at(r, 3)?,
-                    status_name: r.get(4)?,
-                    deleted: r.get(5)?,
-                })
-            },
-        )
+        )?
+        .query_row([b(task)], |r| {
+            Ok(TaskFacts {
+                key: r.get(0)?,
+                project: lookup::id_at(r, 1)?,
+                project_key: r.get(2)?,
+                status: lookup::id_at(r, 3)?,
+                status_name: r.get(4)?,
+                deleted: r.get(5)?,
+            })
+        })
         .optional()?)
 }
 

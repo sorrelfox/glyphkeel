@@ -4,7 +4,8 @@
 #
 # The performance measurements with data set L, on the installed release
 # build, under a headless X server (software rendering). The table lands in
-# /out/perf.md. With PERF_ENFORCE=1 a result over its budget fails the run.
+# /out/perf.md. Report only: with PERF_ENFORCE=1 (the reference machine) a
+# result over its budget, or a budgeted measure not taken, fails the run.
 
 . /ci/lib.sh
 
