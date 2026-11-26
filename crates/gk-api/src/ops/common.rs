@@ -152,6 +152,10 @@ pub enum Glyph {
     Feature,
     /// A milestone.
     Milestone,
+    /// An epic: a large piece of work that holds stories.
+    Epic,
+    /// A story: a piece of work told from the user's side.
+    Story,
 }
 
 /// What a status means for the work in it.

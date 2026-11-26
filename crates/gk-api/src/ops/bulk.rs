@@ -68,6 +68,11 @@ pub struct BulkChanges {
     /// Fields to clear.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub clear: Vec<TaskField>,
+    /// With `status`: when a task closes, close its open duplicates too
+    /// (`true`) or leave them open without a warning (`false`), as
+    /// `task.move` does.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub close_duplicates: Option<bool>,
 }
 
 /// A bulk change.

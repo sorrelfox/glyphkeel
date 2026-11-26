@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { App } from "../../App";
 import { settings, workspaceInfo } from "../../data/fixtures";
 import { fakeEngine, rejectWith } from "../../data/testing";
-import { type ProjectSummary, type TaskChange, type TaskCreateInput } from "../../generated/ops";
+import { type ProjectSummary, type TaskChange, type TaskCreateInput, type TemplateApplied, type TemplateApplyInput } from "../../generated/ops";
 
 afterEach(() => {
   cleanup();
@@ -20,7 +20,18 @@ function project(key: string, name: string): ProjectSummary {
 
 async function renderQuickAdd() {
   const created: TaskCreateInput[] = [];
+  const applied: TemplateApplyInput[] = [];
   const engine = fakeEngine({
+    "template.list": (input) =>
+      Promise.resolve(input.project === "TM" ? { items: [{ id: "tpl-1", name: "Weekly report", kind: "task" as const, project: "TM", title: "Report", items: 1 }], total: 1 } : { items: [], total: 0 }),
+    "template.apply": (input) => {
+      if (input.due_date !== undefined && input.due_date !== null && !["fri", "friday"].includes(input.due_date)) {
+        const text = input.due_date;
+        return rejectWith({ code: "invalid", message: `"${text}" is not a date.`, details: { path: "due_date", message_id: "date-invalid", args: { text } } });
+      }
+      applied.push(input);
+      return Promise.resolve({ task: { key: "TM-2", title: input.title ?? "Report" }, tasks: 1 } as TemplateApplied);
+    },
     "workspace.get": () => workspaceInfo(),
     "settings.get": () => settings(),
     "project.list": () => ({ items: [project("TM", "Task Manager"), project("PER", "Personal")], total: 2 }),
@@ -39,7 +50,7 @@ async function renderQuickAdd() {
   await waitFor(() => {
     expect(projectField().textContent).toContain("Task Manager");
   });
-  return { field, created };
+  return { field, created, applied };
 }
 
 /** The project picker's button. */
@@ -112,6 +123,27 @@ describe("the quick-add window", () => {
       expect(created).toHaveLength(1);
     });
     expect(created[0]).toMatchObject({ title: "Call the shop next", due_date: "friday" });
+  });
+
+  it("keeps the typed due date and priority when a template is chosen", async () => {
+    const { field, created, applied } = await renderQuickAdd();
+    const picker = await screen.findByRole("button", { name: /Template/ });
+    act(() => {
+      fireEvent.click(picker);
+    });
+    act(() => {
+      fireEvent.click(screen.getByRole("option", { name: "Weekly report" }));
+    });
+    type(field, "Report for the board next friday !urgent");
+    expect(screen.getByTestId("quick-add-due").textContent).toContain("next friday");
+    expect(screen.getByTestId("quick-add-priority").textContent).toBe("Urgent");
+    enter(field);
+    await waitFor(() => {
+      expect(applied).toHaveLength(1);
+    });
+    expect(created).toHaveLength(0);
+    // "next friday" isn't read here; the shorter date is, with the rest in the title.
+    expect(applied[0]).toMatchObject({ template: "tpl-1", project: "TM", title: "Report for the board next", due_date: "friday", priority: "urgent" });
   });
 
   it("asks for a title instead of creating an empty task, and empties the field on Escape", async () => {

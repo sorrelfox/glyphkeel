@@ -10,6 +10,7 @@ import { Button, Dialog, DialogTrigger, Group, Input, Label, Menu, MenuTrigger, 
 
 import { classes } from "../../classes";
 import { MenuEntries } from "../../components/ContextMenu";
+import { useAskCloseDuplicates } from "../../components/DuplicatePrompt";
 import { Select } from "../../components/Select";
 import { type Project } from "../../data/catalog";
 import { useCommand } from "../../data/hooks";
@@ -184,6 +185,7 @@ export function SubtasksSection({
   const [adding, setAdding] = useState(false);
   const create = useCommand("task.create");
   const move = useCommand("task.move");
+  const askDuplicates = useAskCloseDuplicates();
   const reorder = useCommand("task.reorder_subtask");
   const given = task.subtasks ?? [];
   // The order just asked for, shown until the engine's answer differs from the order it was made from.
@@ -282,7 +284,9 @@ export function SubtasksSection({
               onToggle={() => {
                 const target = sub.closed ? reopening : closing;
                 if (target) {
-                  move.mutate({ key: sub.key, status: target.id });
+                  void askDuplicates(sub.key, !sub.closed).then((close) => {
+                    move.mutate({ key: sub.key, status: target.id, ...(close === undefined ? {} : { close_duplicates: close }) });
+                  });
                 }
               }}
               onOpenTask={onOpenTask}

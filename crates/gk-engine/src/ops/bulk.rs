@@ -214,6 +214,7 @@ fn apply(
                 status: c.status.clone(),
                 project: c.project.clone(),
                 mapping: c.mapping.clone(),
+                close_duplicates: c.close_duplicates,
                 ..TaskMoveInput::default()
             },
         )?;

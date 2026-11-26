@@ -126,23 +126,32 @@ fn rename_with(
         ));
     }
     {
+        // Every process with the workspace open shares its open lock: the
+        // app, the agent server and each command. Taking it alone keeps
+        // them all out until the folder has moved.
         let lock = |path: &Path| LockFile::try_acquire(path).ok().flatten();
-        let app = lock(&from.app_lock());
-        let jobs = lock(&from.jobs_lock());
-        if app.is_none() || jobs.is_none() {
-            return Err(messages::hint(
-                messages::conflict("workspace-in-use", &[("name", old.to_owned())]),
-                "workspace-in-use-hint",
+        let in_use = |id: &str, hint: &str| {
+            messages::hint(
+                messages::conflict(id, &[("name", old.to_owned())]),
+                hint,
                 &[],
-            ));
-        }
+            )
+        };
+        let Some(app) = lock(&from.app_lock()) else {
+            return Err(in_use("workspace-in-use-app", "workspace-in-use-app-hint"));
+        };
+        let (Some(jobs), Some(open)) = (lock(&from.jobs_lock()), lock(&from.open_lock())) else {
+            return Err(in_use("workspace-in-use", "workspace-in-use-hint"));
+        };
+        let moved = fs::rename(from.root(), to.root());
+        drop((app, jobs, open));
+        moved.map_err(|e| {
+            messages::storage(
+                "workspace-rename-failed",
+                &[("name", old.to_owned()), ("error", e.to_string())],
+            )
+        })?;
     }
-    fs::rename(from.root(), to.root()).map_err(|e| {
-        messages::storage(
-            "workspace-rename-failed",
-            &[("name", old.to_owned()), ("error", e.to_string())],
-        )
-    })?;
     if let Some(file) = settings {
         let mut stored = UserSettings::load(file);
         if stored.workspace.as_deref().map(str::trim) == Some(old) {

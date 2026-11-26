@@ -19,7 +19,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 use crate::error::{Result, StoreError};
 
 /// The schema version this program is built for.
-pub const SCHEMA_VERSION: i64 = 15;
+pub const SCHEMA_VERSION: i64 = 16;
 
 /// One migration: the SQL that takes the schema from `version - 1` to
 /// `version`.
@@ -90,6 +90,10 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 15,
         sql: include_str!("../migrations/0015_lag_wip_minimum_and_kinds_of_work.sql"),
+    },
+    Migration {
+        version: 16,
+        sql: include_str!("../migrations/0016_epic_and_story_glyphs.sql"),
     },
 ];
 
@@ -665,7 +669,7 @@ mod tests {
                      'Doing', 'doing', 'in_progress', 'blue', 'i', 3);",
         )
         .unwrap();
-        migrate(&mut conn, MIGRATIONS, |_| Ok(())).unwrap();
+        migrate(&mut conn, &MIGRATIONS[..15], |_| Ok(())).unwrap();
         assert_eq!(user_version(&conn).unwrap(), 15);
         let (min, max): (Option<i64>, Option<i64>) = conn
             .query_row("SELECT wip_min, wip_limit FROM statuses", [], |r| {
@@ -690,6 +694,86 @@ mod tests {
         kind("Design").unwrap();
         assert!(kind("design").is_err(), "names are unique");
         assert!(kind("").is_err(), "names are not empty");
+    }
+
+    #[test]
+    fn version_16_keeps_types_and_their_tasks_and_allows_epics_and_stories() {
+        let mut conn = memory();
+        migrate(&mut conn, &MIGRATIONS[..15], |_| Ok(())).unwrap();
+        conn.execute_batch(
+            "INSERT INTO projects (id, rank, key, name, name_fold, hue, modules, created_at,
+                                   updated_at)
+             VALUES (x'01010101010101010101010101010101', 'i', 'RT', 'RT', 'rt', 'blue', '{}',
+                     0, 0);
+             INSERT INTO statuses (id, project_id, name, name_fold, category, hue, rank)
+             VALUES (x'02020202020202020202020202020202', x'01010101010101010101010101010101',
+                     'To do', 'to do', 'todo', 'blue', 'i');
+             INSERT INTO task_types (id, project_id, name, name_fold, glyph, hue, rank,
+                                     is_default, due_offset_days)
+             VALUES (x'03030303030303030303030303030303', x'01010101010101010101010101010101',
+                     'Bug', 'bug', 'bug', 'red', 'i', 1, 4);",
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO tasks (id, project_id, number, title, title_fold, status_id, type_id,
+                                rank, status_entered_at, created_at, created_by_kind,
+                                created_by_name, edited_at, updated_at)
+             VALUES (x'04040404040404040404040404040404', x'01010101010101010101010101010101',
+                     1, 'Crash', 'crash', x'02020202020202020202020202020202',
+                     x'03030303030303030303030303030303', 'i', 0, 0, 'user', 'You', 0, 0)",
+            [],
+        )
+        .unwrap();
+        migrate(&mut conn, MIGRATIONS, |_| Ok(())).unwrap();
+        assert_eq!(user_version(&conn).unwrap(), 16);
+        let kept: (String, i64, Option<i64>) = conn
+            .query_row(
+                "SELECT y.glyph, y.is_default, y.due_offset_days
+                   FROM tasks t JOIN task_types y ON y.id = t.type_id",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(kept, ("bug".to_owned(), 1, Some(4)));
+        let add = |glyph: &str, name: &str| {
+            conn.execute(
+                "INSERT INTO task_types (id, project_id, name, name_fold, glyph, hue, rank)
+                 VALUES (randomblob(16), x'01010101010101010101010101010101', ?2, lower(?2),
+                         ?1, 'purple', 'j')",
+                [glyph, name],
+            )
+        };
+        add("epic", "Epic").unwrap();
+        add("story", "Story").unwrap();
+        assert!(
+            add("saga", "Saga").is_err(),
+            "the shapes are still a closed list"
+        );
+        assert!(add("story", "story").is_err(), "names stay unique");
+        assert!(
+            conn.execute(
+                "INSERT INTO task_types (id, project_id, name, name_fold, glyph, hue, rank,
+                                         is_default)
+                 VALUES (randomblob(16), x'01010101010101010101010101010101', 'Two', 'two',
+                         'task', 'grey', 'k', 1)",
+                [],
+            )
+            .is_err(),
+            "one default type per project"
+        );
+        assert!(
+            conn.execute(
+                "INSERT INTO tasks (id, project_id, number, title, title_fold, status_id,
+                                    type_id, rank, status_entered_at, created_at,
+                                    created_by_kind, created_by_name, edited_at, updated_at)
+                 VALUES (randomblob(16), x'01010101010101010101010101010101', 2, 'X', 'x',
+                         x'02020202020202020202020202020202', randomblob(16), 'j', 0, 0,
+                         'user', 'You', 0, 0)",
+                [],
+            )
+            .is_err(),
+            "tasks still need a type that exists"
+        );
     }
 
     #[test]

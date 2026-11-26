@@ -122,6 +122,10 @@ text_enum!(
         Feature = "feature",
         /// A milestone.
         Milestone = "milestone",
+        /// An epic: a large piece of work that holds stories.
+        Epic = "epic",
+        /// A story: a piece of work told from the user's side.
+        Story = "story",
     }
 );
 

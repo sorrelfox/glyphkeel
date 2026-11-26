@@ -9,7 +9,7 @@ import { Select } from "../../components/Select";
 import { useToasts } from "../../components/Toasts";
 import { suggestHue, type Hue } from "../../data/catalog";
 import { useCall, useOp } from "../../data/hooks";
-import { useTemplates } from "../../data/recurrence";
+import { useTemplates, useTemplateText } from "../../data/recurrence";
 import { OpFailure } from "../../data/transport";
 import { useT } from "../../i18n/I18n";
 import { HuePicker } from "./HuePicker";
@@ -56,6 +56,7 @@ export function NewProjectDialog({ request, onClose }: NewProjectDialogProps) {
   const [error, setError] = useState<string | null>(null);
   const shownKey = key ?? suggestKey(name);
   const templates = useTemplates("project");
+  const templateText = useTemplateText();
   const [template, setTemplate] = useState(NO_TEMPLATE);
   const toasts = useToasts();
   const { locale } = useLocale();
@@ -144,7 +145,7 @@ export function NewProjectDialog({ request, onClose }: NewProjectDialogProps) {
             <Select
               label={t("project-template")}
               value={template}
-              options={[{ id: NO_TEMPLATE, label: t("project-template-none") }, ...(templates.data?.items ?? []).map((each) => ({ id: each.id, label: each.name }))]}
+              options={[{ id: NO_TEMPLATE, label: t("project-template-none") }, ...(templates.data?.items ?? []).map((each) => ({ id: each.id, label: templateText.name(each) }))]}
               onChange={setTemplate}
             />
           </div>

@@ -293,12 +293,13 @@ fn cards_of(
     status: Id,
     now: i64,
 ) -> Result<Vec<(Card, Option<i64>)>, Failure> {
+    use super::recurrence::RECURRING_SQL;
     let mut stmt = tx.prepare_cached(&format!(
         "SELECT t.id, p.key, t.number, t.title, y.id, y.name, y.glyph, t.priority, t.parent_id,
                 t.start_date, t.due_date, t.estimate_min, t.checklist_done, t.checklist_total,
                 t.rank, t.status_entered_at, t.updated_at, t.closed_at, t.version,
                 {SUBTASKS_SQL}, {CLOSED_SUBTASKS_SQL}, {BLOCKED_SQL}, {COMMENTS_SQL}, {FILES_SQL},
-                t.spent_min, t.claim_session, t.claim_name, t.claim_until
+                t.spent_min, t.claim_session, t.claim_name, t.claim_until, {RECURRING_SQL}
            FROM tasks t JOIN projects p ON p.id = t.project_id
            JOIN task_types y ON y.id = t.type_id
           WHERE t.status_id = ?1 AND t.deleted_at IS NULL
@@ -337,6 +338,7 @@ fn cards_of(
                     file_count: u32::try_from(r.get::<_, i64>(23)?).unwrap_or(0),
                     spent_minutes: r.get(24)?,
                     claim: live_claim(opt_id_at(r, 25)?, r.get(26)?, r.get(27)?, now),
+                    recurring: r.get(28)?,
                     rank: r.get(14)?,
                     status_entered_at: rfc3339(r.get(15)?),
                     updated_at: rfc3339(r.get(16)?),

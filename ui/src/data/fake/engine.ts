@@ -267,7 +267,9 @@ export class FakeWorkspace {
     // Closing the current occurrence of a recurring task makes the next one, in the same step.
     if (!op.startsWith("history.") && op !== "backup.restore") {
       const wasOpen = new Set(before.tasks.filter((task) => task.closedAt === null).map((task) => task.id));
-      answer.changes.push(...afterClosing(this.host, this.state.tasks.filter((task) => task.closedAt !== null && wasOpen.has(task.id))));
+      const closed = this.state.tasks.filter((task) => task.closedAt !== null && wasOpen.has(task.id));
+      answer.changes.push(...afterClosing(this.host, closed));
+      answer.output = this.afterOccurrence(answer.output, closed);
     }
     if (answer.changes.length === 0) {
       return { output: answer.output };
@@ -278,6 +280,27 @@ export class FakeWorkspace {
     this.undoStack.push({ state: before, op, group });
     this.redoStack = [];
     return { output: withGroup(answer.output, group), changes: { group, seq: this.state.seq, changes: answer.changes } };
+  }
+
+  /**
+   * A command's answer after closing occurrences made the next ones: the
+   * closed task in it carries its series as a later read shows it, and
+   * `next_occurrence` names the task made next.
+   */
+  private afterOccurrence<T>(output: T, closed: readonly FakeTask[]): T {
+    if (typeof output !== "object" || output === null || !("task" in output)) {
+      return output;
+    }
+    const shown = (output as { task?: { id?: unknown } }).task;
+    const task = closed.find((each) => each.id === shown?.id);
+    if (!task || task.seriesId === undefined || typeof shown !== "object") {
+      return output;
+    }
+    const series = (this.state.series ?? []).find((each) => each.id === task.seriesId);
+    const rest = Object.fromEntries(Object.entries(shown).filter(([field]) => field !== "recurrence"));
+    const now = taskRecurrence(this.host, task);
+    const next = series && series.current !== null && series.current !== task.id ? this.state.tasks.find((each) => each.id === series.current) : undefined;
+    return { ...output, task: { ...rest, ...(now ? { recurrence: now } : {}) }, ...(next ? { next_occurrence: this.keyOf(next) } : {}) };
   }
 
   /** The settings as the engine answers them, with the default limits for a state saved without them. */
@@ -581,6 +604,11 @@ export class FakeWorkspace {
     );
   }
 
+  /** Whether it is the open occurrence of a recurring task. */
+  private isRecurring(task: FakeTask): boolean {
+    return (this.state.series ?? []).some((series) => series.endedAt === null && series.current === task.id);
+  }
+
   private subtaskCount(task: FakeTask): { done: number; total: number } {
     const subtasks = this.state.tasks.filter((candidate) => candidate.parentId === task.id);
     return { done: subtasks.filter((sub) => sub.closedAt !== null).length, total: subtasks.length };
@@ -596,6 +624,7 @@ export class FakeWorkspace {
       comment_count: this.liveComments(task).length,
       file_count: this.fileCount(task),
       ...some("claim", this.claimOf(task)),
+      ...(this.isRecurring(task) ? { recurring: true } : {}),
       spent_minutes: task.spentMin,
       title: task.title,
       type: this.typeRef(task),
@@ -2101,7 +2130,7 @@ export class FakeWorkspace {
       for (const key of keys) {
         const before = shown(this.listed(this.task(key)));
         if ((change.status !== null && change.status !== undefined) || (change.project !== null && change.project !== undefined)) {
-          take(this.handlers["task.move"]?.({ key, ...some("status", change.status), ...some("project", change.project), ...some("mapping", change.mapping) }));
+          take(this.handlers["task.move"]?.({ key, ...some("status", change.status), ...some("project", change.project), ...some("mapping", change.mapping), ...some("close_duplicates", change.close_duplicates) }));
         }
         const update: TaskUpdateInput = {
           key,

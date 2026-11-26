@@ -22,8 +22,10 @@ const FIELDS: FieldInfo[] = [
   { name: "was", choices: ["status", "priority", "label"], operators: [":"], ranges: false, sortable: false, values: "a field and a value" },
   { name: "changed", choices: ["status", "due"], operators: [":"], ranges: false, sortable: false, values: "a field" },
   { name: "changed-by", operators: [":", "!="], ranges: false, sortable: false, values: "me, agent" },
+  { name: "version", aliases: ["fix-version"], operators: [":", "!="], ranges: false, sortable: false, values: "version names, or none" },
+  { name: "cf.stage", choices: ["Alpha", "Beta stage"], operators: [":", "!="], ranges: false, sortable: false, values: "one of the options" },
 ];
-const NAMES: QueryNames = { statuses: ["To do", "In progress", "Done"], types: ["Task"], labels: ["bug"], projects: ["TM"] };
+const NAMES: QueryNames = { statuses: ["To do", "In progress", "Done"], types: ["Task"], labels: ["bug"], projects: ["TM"], versions: ["1.0", "Spring release"] };
 
 function complete(text: string, explicit = false): CompletionResult | null {
   const state = EditorState.create({ doc: text });
@@ -62,6 +64,12 @@ describe("completion", () => {
     // A space with nothing typed only completes when asked.
     expect(complete("is:open ")).toBeNull();
     expect(labels(complete("is:open ", true))).toContain("status:");
+  });
+
+  it("offers the versions after version:, and a select field's options", () => {
+    expect(labels(complete("version:"))).toEqual(["1.0", '"Spring release"', "none"]);
+    expect(labels(complete("fix-version!="))).toContain("1.0");
+    expect(labels(complete("cf.stage:"))).toEqual(["Alpha", '"Beta stage"']);
   });
 
   it("quotes values with spaces", () => {

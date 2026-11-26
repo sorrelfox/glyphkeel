@@ -169,11 +169,11 @@ describe("templates", () => {
     expect(elsewhere.left_out).toEqual(["crash"]);
     expect(elsewhere.task?.key).toBe("OT-1");
 
-    expect(call<TemplateList>(ws, "template.list", { project: "RT" }).items[0]?.items).toBe(3);
+    expect(call<TemplateList>(ws, "template.list", { project: "RT", kind: "task" }).items[0]?.items).toBe(3);
     ws.call("template.delete", { template: "Bug", project: "RT" });
-    expect(call<TemplateList>(ws, "template.list", {}).total).toBe(0);
+    expect(call<TemplateList>(ws, "template.list", { kind: "task" }).total).toBe(0);
     ws.call("history.undo", {});
-    expect(call<TemplateList>(ws, "template.list", {}).total).toBe(1);
+    expect(call<TemplateList>(ws, "template.list", { kind: "task" }).total).toBe(1);
   });
 
   it("set up a project from a template, and save a project as one", () => {

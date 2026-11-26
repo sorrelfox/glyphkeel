@@ -349,3 +349,42 @@
   flex-direction: column;
   gap: 6px;
 }
+
+.templateItem {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.builtInName {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.templateContents {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 0;
+  padding-block: 6px;
+  padding-inline: 12px;
+  border-inline-start: 2px solid var(--border);
+  font-size: var(--fs-small);
+}
+
+.templateContents dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.templateValues {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

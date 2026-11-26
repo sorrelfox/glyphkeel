@@ -283,6 +283,14 @@ impl WorkspaceLayout {
         self.locks_dir().join("jobs.lock")
     }
 
+    /// Held, shared, by every process that has the workspace open (the
+    /// app, the agent server, each command); renaming the workspace takes
+    /// it alone, so it never moves under a process that uses it.
+    #[must_use]
+    pub fn open_lock(&self) -> PathBuf {
+        self.locks_dir().join("open.lock")
+    }
+
     /// Held briefly while the schema is created or upgraded.
     #[must_use]
     pub fn migrate_lock(&self) -> PathBuf {
@@ -350,6 +358,20 @@ impl LockFile {
     pub fn try_acquire(path: &Path) -> Result<Option<Self>> {
         let file = open_lock_file(path)?;
         match file.try_lock() {
+            Ok(()) => Ok(Some(Self {
+                file,
+                path: path.to_owned(),
+            })),
+            Err(TryLockError::WouldBlock) => Ok(None),
+            Err(TryLockError::Error(e)) => Err(StoreError::io("locking", path, e)),
+        }
+    }
+
+    /// Takes the lock shared with other shared holders, if nobody holds it
+    /// alone; `None` if somebody does.
+    pub fn try_acquire_shared(path: &Path) -> Result<Option<Self>> {
+        let file = open_lock_file(path)?;
+        match file.try_lock_shared() {
             Ok(()) => Ok(Some(Self {
                 file,
                 path: path.to_owned(),
@@ -544,5 +566,27 @@ mod tests {
         assert!(LockFile::try_acquire(&path).unwrap().is_none());
         drop(first);
         assert!(LockFile::try_acquire(&path).unwrap().is_some());
+    }
+
+    #[test]
+    fn shared_locks_keep_out_only_the_one_who_wants_it_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("locks/open.lock");
+        let app = LockFile::try_acquire_shared(&path).unwrap().unwrap();
+        let agent = LockFile::try_acquire_shared(&path).unwrap().unwrap();
+        assert!(
+            LockFile::try_acquire(&path).unwrap().is_none(),
+            "nobody takes it alone while it is shared"
+        );
+        drop(app);
+        assert!(LockFile::try_acquire(&path).unwrap().is_none());
+        drop(agent);
+        let alone = LockFile::try_acquire(&path).unwrap().unwrap();
+        assert!(
+            LockFile::try_acquire_shared(&path).unwrap().is_none(),
+            "nobody shares it while one holds it alone"
+        );
+        drop(alone);
+        assert!(LockFile::try_acquire_shared(&path).unwrap().is_some());
     }
 }

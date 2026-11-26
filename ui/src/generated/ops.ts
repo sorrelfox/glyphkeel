@@ -416,6 +416,8 @@ export type BulkChanges = {
   add_labels?: string[];
   /** Fields to clear. */
   clear?: TaskField[];
+  /** With `status`: when a task closes, close its open duplicates too (`true`) or leave them open without a warning (`false`), as `task.move` does. */
+  close_duplicates?: boolean | null;
   /** The due date, written as for `start_date`. */
   due_date?: string | null;
   /** The estimate, as a duration (`1d 4h`, `90m`). */
@@ -542,6 +544,8 @@ export type Card = {
   project: string;
   /** Its place in the column. */
   rank: string;
+  /** Whether it is the open occurrence of a recurring task. */
+  recurring?: boolean;
   /** Logged time in minutes. */
   spent_minutes: number;
   /** The start date. */
@@ -1709,7 +1713,7 @@ export type GanttLayoutUpdateInput = {
 export type GanttZoom = "day" | "week" | "month" | "quarter";
 
 /** The shape that shows a task's type. */
-export type Glyph = "task" | "bug" | "feature" | "milestone";
+export type Glyph = "task" | "bug" | "feature" | "milestone" | "epic" | "story";
 
 /** The design's nine colours, for projects, statuses, types and labels, in palette order: a new label or project without a colour gets the first one its neighbours don't use yet. */
 export type Hue = "red" | "orange" | "yellow" | "green" | "teal" | "blue" | "purple" | "pink" | "grey";
@@ -3574,6 +3578,8 @@ export type TaskChange = {
   group?: string;
   /** The tasks "also move dependents" moved, blockers first. */
   moved?: MovedTask[];
+  /** For a recurring task closed by the change: the key of the next occurrence it made. The closed task no longer carries the series. */
+  next_occurrence?: string;
   /** The task after the change. */
   task: Task;
   /** Problems that did not stop the change, such as closing a task whose subtasks are still open. */
@@ -3856,6 +3862,8 @@ export type TaskUpdateInput = {
 
 /** A template. */
 export type Template = {
+  /** For a template that comes with Glyphkeel: its key (`software`). Such a template is in every workspace and can't be changed or deleted. */
+  built_in?: string;
   /** When it was made (RFC 3339, UTC). */
   created_at: string;
   /** Who made it. */
@@ -3900,6 +3908,8 @@ export type TemplateApplyInput = {
   client_request_id?: string | null;
   /** The day the template's dates count from (a date: `2026-12-01`, `next mon`); default today. */
   date?: string | null;
+  /** With a task template: the new task's due date instead of the template's (a date: `2026-12-01`, or `fri`, `next mon`, `+3d`). */
+  due_date?: string | null;
   /** A project template: its colour. */
   hue?: Hue | null;
   /** A project template: the new project's key. */
@@ -3910,6 +3920,8 @@ export type TemplateApplyInput = {
   parent?: string | null;
   /** A project template: the parent project, for a sub-project. */
   parent_project?: string | null;
+  /** With a task template: the new task's priority instead of the template's. */
+  priority?: Priority | null;
   /** A task template: the project the task goes to (default the template's), and where a template named by name is looked up. */
   project?: string | null;
   /** A task template: the status; default the project's first. */
@@ -3981,6 +3993,8 @@ export type TemplateRef = {
 
 /** One template in a list, without its content. */
 export type TemplateSummary = {
+  /** For a template that comes with Glyphkeel: its key (`software`). */
+  built_in?: string;
   /** What it is for. */
   description?: string;
   /** The template's ID. */

@@ -154,6 +154,8 @@ pub struct Engine {
     /// When this process last ran the daily jobs (engine clock, ms).
     pub(crate) last_daily: Mutex<Option<i64>>,
     _app_lock: Option<LockFile>,
+    /// Shared: the workspace is in use; see `WorkspaceLayout::open_lock`.
+    _open_lock: LockFile,
 }
 
 #[derive(Debug, Default)]
@@ -182,6 +184,17 @@ impl Engine {
     /// and takes the locks of `config.role`.
     pub fn open(layout: &WorkspaceLayout, config: EngineConfig) -> Result<Self, OpError> {
         layout.create_dirs().map_err(|e| store_error(&e))?;
+        // Shared with every other process using the workspace; a rename
+        // waits for all of them to let go.
+        let open_lock = LockFile::try_acquire_shared(&layout.open_lock())
+            .map_err(|e| store_error(&e))?
+            .ok_or_else(|| {
+                messages::hint(
+                    messages::error(ErrorCode::Busy, "engine-workspace-renaming", &[]),
+                    "engine-workspace-renaming-hint",
+                    &[],
+                )
+            })?;
         let app_lock = if config.role == Role::App {
             let lock = LockFile::try_acquire(&layout.app_lock()).map_err(|e| store_error(&e))?;
             Some(lock.ok_or_else(|| {
@@ -281,6 +294,7 @@ impl Engine {
             backups_fixed,
             last_daily: Mutex::new(None),
             _app_lock: app_lock,
+            _open_lock: open_lock,
         })
     }
 
@@ -690,8 +704,9 @@ impl Engine {
             }
             let _scope = crate::scope::enter(tx, &in_tx.ctx)?;
             let mut w = WriteCtx::new(tx, &in_tx);
-            let output = f(&mut w, input.clone())?;
-            crate::ops::recurrence::after_command(&mut w)?;
+            let mut output = f(&mut w, input.clone())?;
+            let followed = crate::ops::recurrence::after_command(&mut w)?;
+            crate::ops::recurrence::update_output(w.tx(), &mut output, &followed)?;
             crate::ops::rules::enforce(&mut w)?;
             let finished = w.finish()?;
             if !safety_backup {

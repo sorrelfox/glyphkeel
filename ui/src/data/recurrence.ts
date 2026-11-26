@@ -5,7 +5,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useLocale } from "react-aria-components";
 
 import { useToasts } from "../components/Toasts";
-import { type RecurrenceRule, type TemplateApplyInput, type TemplateKind, type Weekday } from "../generated/ops";
+import { type RecurrenceRule, type TemplateApplyInput, type TemplateKind, type TemplateSummary, type Weekday } from "../generated/ops";
 import { useT, type Translate } from "../i18n/I18n";
 import { errorToast, useCall, useOp } from "./hooks";
 
@@ -83,6 +83,34 @@ export function useRuleSummary(): (rule: RecurrenceRule) => string {
 /** The templates of one kind: a project's task templates, or the workspace's project templates. */
 export function useTemplates(kind: TemplateKind, project?: string, enabled = true) {
   return useOp("template.list", { kind, ...(project === undefined ? {} : { project }) }, { enabled });
+}
+
+/** The messages of the templates that come with the program, by their key. */
+const BUILT_IN_TEMPLATES: Readonly<Record<string, { name: string; description: string }>> = {
+  software: { name: "template-built-in-software", description: "template-built-in-software-description" },
+};
+
+/**
+ * A template's name and description as the person reads them: those of a
+ * template that comes with the program in their language, the others as
+ * they were written.
+ */
+export function useTemplateText(): {
+  name: (template: Pick<TemplateSummary, "name" | "built_in">) => string;
+  description: (template: Pick<TemplateSummary, "description" | "built_in">) => string;
+} {
+  const t = useT();
+  const messages = (template: Pick<TemplateSummary, "built_in">) => (template.built_in === undefined ? undefined : BUILT_IN_TEMPLATES[template.built_in]);
+  return {
+    name: (template) => {
+      const known = messages(template);
+      return known ? t(known.name) : template.name;
+    },
+    description: (template) => {
+      const known = messages(template);
+      return known ? t(known.description) : (template.description ?? "");
+    },
+  };
 }
 
 /**
