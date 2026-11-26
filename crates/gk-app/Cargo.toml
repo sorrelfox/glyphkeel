@@ -20,6 +20,8 @@ tauri-build = { workspace = true }
 
 [dependencies]
 gk-api = { workspace = true }
+# File names that are valid on every system, for saved and opened copies.
+gk-core = { workspace = true }
 gk-engine = { workspace = true }
 # The workspace folder's layout and the change watcher's handle.
 gk-store = { workspace = true }

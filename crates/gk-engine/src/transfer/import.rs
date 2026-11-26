@@ -23,7 +23,9 @@ use super::model::{
     WikiPage,
 };
 use super::source::{Source, safe_path};
-use super::{FORMAT_NAME, FORMAT_VERSION, Limits, Progress, Rejected, project_dir, report};
+use super::{
+    FORMAT_NAME, FORMAT_VERSION, Limits, Progress, Rejected, plain_project_dir, project_dir, report,
+};
 use crate::context::Context;
 use crate::engine::Engine;
 use crate::failure::Failure;
@@ -98,7 +100,8 @@ fn is_hash(s: &str) -> bool {
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
-fn classify(path: &str, keys: &HashSet<String>) -> Option<Class> {
+/// `keys` maps each project folder's name to its project's key.
+fn classify(path: &str, keys: &HashMap<String, String>) -> Option<Class> {
     match path {
         MANIFEST => return Some(Class::Manifest),
         SESSIONS => return Some(Class::Sessions),
@@ -109,10 +112,8 @@ fn classify(path: &str, keys: &HashSet<String>) -> Option<Class> {
         return is_hash(sha).then(|| Class::Blob(sha.to_owned()));
     }
     let rest = path.strip_prefix("projects/")?;
-    let (key, inner) = rest.split_once('/')?;
-    if !keys.contains(key) {
-        return None;
-    }
+    let (folder, inner) = rest.split_once('/')?;
+    let key = keys.get(folder)?.as_str();
     if inner == "project.json" {
         return Some(Class::ProjectJson);
     }
@@ -182,15 +183,21 @@ pub(crate) fn read(
     let manifest: Manifest = serde_json::from_value(raw)
         .map_err(|e| Rejected::Json(MANIFEST.into(), 1, e.to_string()))?;
 
-    let mut keys = HashSet::new();
+    let mut keys = HashMap::new();
+    let mut seen = HashSet::new();
     for p in &manifest.projects {
         let dir = project_dir(&p.key);
-        if ProjectKey::new(&p.key).is_err() || p.path != dir || !safe_path(&dir) {
+        if ProjectKey::new(&p.key).is_err()
+            || (p.path != dir && p.path != plain_project_dir(&p.key))
+            || !safe_path(&p.path)
+        {
             return Err(Rejected::BadPath(p.path.clone()));
         }
-        if !keys.insert(p.key.clone()) {
+        if !seen.insert(p.key.clone()) {
             return Err(Rejected::Duplicate(dir));
         }
+        let folder = p.path.trim_start_matches("projects/").to_owned();
+        keys.insert(folder, p.key.clone());
     }
     let listing: Vec<(String, u64)> = source
         .entries()
@@ -257,7 +264,8 @@ pub(crate) fn read(
     };
     let mut projects = Vec::new();
     for mp in &manifest.projects {
-        let dir = project_dir(&mp.key);
+        // The folder the manifest names: checked to be the key's.
+        let dir = mp.path.clone();
         let file_path = format!("{dir}/project.json");
         let bytes = texts
             .remove(&file_path)

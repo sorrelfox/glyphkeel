@@ -72,6 +72,12 @@ date. Glyphkeel itself never goes online.
 - **Quick add:** the shortcut in Preferences › Quick add works from any
   program while Glyphkeel runs. If another program already holds the keys,
   Preferences says so; choose other keys.
+- **File names in exports:** exports, saved files and opened attachments use
+  names that Windows accepts, the same on every system: characters such as
+  `:` and `?` become `_`, trailing dots and spaces go, and a name Windows
+  keeps for a device gets a `_` in front (a wiki page called *CON* is saved
+  as `_con.md`). Importing such a folder of Markdown files takes the `_` off
+  again.
 - **If the window stays blank or flickers:** start it once with
   `glyphkeel-app.exe --safe-graphics`, or turn on Preferences › Appearance ›
   Safe rendering, which draws without the graphics card.
