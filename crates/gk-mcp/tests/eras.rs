@@ -161,6 +161,10 @@ async fn changes_record_the_agent_and_can_be_reverted() {
                 "verify_backup",
                 "export_data",
                 "import_data",
+                "import_csv",
+                "list_csv_presets",
+                "save_csv_preset",
+                "delete_csv_preset",
                 "update_settings",
             ]
             .map(str::to_owned),
