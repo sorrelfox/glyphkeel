@@ -125,3 +125,14 @@ export function momentOf(text: string): string | null {
 export function sortDue(items: DueReminder[]): DueReminder[] {
   return items.sort((a, b) => a.at.localeCompare(b.at));
 }
+
+/** One CSV cell: a text a spreadsheet would run as a formula gets a leading apostrophe; quoted when needed. */
+function csvCell(cell: string): string {
+  const guarded = !/^\d+$/.test(cell) && /^[=+\-@\t\r]/.test(cell) ? `'${cell}` : cell;
+  return /[",\n\r]/.test(guarded) ? `"${guarded.replace(/"/g, '""')}"` : guarded;
+}
+
+/** CSV text as the engine writes it: a header line, CRLF line ends. */
+export function csvOf(header: readonly string[], rows: readonly (readonly string[])[]): string {
+  return [header, ...rows].map((cells) => `${cells.map(csvCell).join(",")}\r\n`).join("");
+}

@@ -25,9 +25,9 @@ use gk_api::OpError;
 use gk_api::ops::settings::WeekStart;
 use gk_api::ops::time::{
     TimeDelete, TimeEntry, TimeEntryChange, TimeEntryRef, TimeGroupBy, TimeLog, TimeLogInput,
-    TimeReport, TimeReportInput, TimeReportOp, TimeReportRow, TimeUpdate, TimeUpdateInput, Timer,
-    TimerChange, TimerGet, TimerPause, TimerStart, TimerStartInput, TimerState, TimerStatus,
-    TimerStop, TimerStopInput,
+    TimeReport, TimeReportCsv, TimeReportInput, TimeReportOp, TimeReportRow, TimeUpdate,
+    TimeUpdateInput, Timer, TimerChange, TimerGet, TimerPause, TimerStart, TimerStartInput,
+    TimerState, TimerStatus, TimerStop, TimerStopInput,
 };
 use gk_core::worklog::{self, WorklogError};
 use gk_core::{Day, DurationUnits, Id, Weekday, format_duration};
@@ -487,12 +487,13 @@ fn report(
     let settings = super::settings::load(tx)?;
     let units =
         DurationUnits::new(settings.hours_per_day, settings.days_per_week).unwrap_or_default();
+    let week_start = first_weekday(settings.week_start);
     let today = zone.day_of(now);
     let day =
         |field: &str, text: &str| worklog::parse_work_day(text, today).map_err(|e| bad(field, &e));
     let from = match &input.from {
         Some(t) => day("from", t)?,
-        None => worklog::week_start(today, first_weekday(settings.week_start)),
+        None => worklog::week_start(today, week_start),
     };
     let to = match &input.to {
         Some(t) => day("to", t)?,
@@ -512,7 +513,11 @@ fn report(
     let projects: Option<HashSet<Id>> = match &input.project {
         Some(p) => {
             let p = lookup::project(tx, "project", p)?;
-            Some(super::project::subtree(tx, p.id)?.into_iter().collect())
+            Some(if input.include_subprojects.unwrap_or(true) {
+                super::project::subtree(tx, p.id)?.into_iter().collect()
+            } else {
+                HashSet::from([p.id])
+            })
         }
         None => None,
     };
@@ -523,16 +528,14 @@ fn report(
         }
         None => None,
     };
-
-    struct Line {
-        id: Id,
-        task: Id,
-        project: Id,
-        date: String,
-        minutes: i64,
+    let person = input.person.as_deref().map(str::trim);
+    if person.is_some_and(str::is_empty) {
+        return Err(messages::invalid("person", "time-report-no-person", &[]));
     }
+
     let mut stmt = tx.prepare_cached(&format!(
-        "SELECT e.id, e.task_id, t.project_id, e.work_date, e.minutes FROM {FROM}
+        "SELECT e.id, e.task_id, t.project_id, e.work_date, e.minutes, e.actor_kind,
+                e.actor_name, e.note FROM {FROM}
           WHERE e.deleted_at IS NULL AND t.deleted_at IS NULL AND p.deleted_at IS NULL
             AND e.work_date BETWEEN ?1 AND ?2
           ORDER BY e.work_date, e.created_at, e.id"
@@ -545,6 +548,9 @@ fn report(
                 project: id_at(r, 2)?,
                 date: r.get(3)?,
                 minutes: r.get(4)?,
+                actor_kind: r.get(5)?,
+                actor_name: r.get(6)?,
+                note: r.get(7)?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -552,55 +558,79 @@ fn report(
         .into_iter()
         .filter(|l| projects.as_ref().is_none_or(|p| p.contains(&l.project)))
         .filter(|l| tasks.as_ref().is_none_or(|t| t.contains(&l.task)))
+        .filter(|l| person.is_none_or(|p| l.logged_by(p)))
         .collect();
 
     let group_by = input.group_by.unwrap_or_default();
     let mut order: Vec<String> = Vec::new();
-    let mut groups: HashMap<String, (Id, i64, u32)> = HashMap::new();
-    for l in &lines {
-        let (key, owner) = match group_by {
-            TimeGroupBy::Day => (l.date.clone(), l.task),
-            TimeGroupBy::Task => (l.task.to_string(), l.task),
-            TimeGroupBy::Project => (l.project.to_string(), l.project),
+    let mut groups: HashMap<String, (usize, i64, u32)> = HashMap::new();
+    for (i, l) in lines.iter().enumerate() {
+        let key = match group_by {
+            TimeGroupBy::Day => l.date.clone(),
+            TimeGroupBy::Week => l.day().map_or_else(
+                || l.date.clone(),
+                |d| worklog::week_start(d, week_start).to_string(),
+            ),
+            TimeGroupBy::Month => l.date.get(..7).unwrap_or(&l.date).to_owned(),
+            TimeGroupBy::Task => l.task.to_string(),
+            TimeGroupBy::Project => l.project.to_string(),
+            TimeGroupBy::Person => format!("{}:{}", l.actor_kind, l.actor_name),
         };
         let g = groups.entry(key.clone()).or_insert_with(|| {
             order.push(key);
-            (owner, 0, 0)
+            (i, 0, 0)
         });
         g.1 += l.minutes;
         g.2 += 1;
     }
+    let mut names = Names::default();
     let mut items = Vec::with_capacity(order.len());
     for key in order {
-        let (owner, minutes, count) = groups[&key];
+        let (first, minutes, count) = groups[&key];
+        let l = &lines[first];
+        let mut person = None;
         let (key, title) = match group_by {
             TimeGroupBy::Day => {
-                let weekday = key
-                    .parse::<Day>()
+                let weekday = l
+                    .day()
                     .map(|d| format!("{:?}", d.weekday()))
                     .unwrap_or_default();
                 (key, weekday)
             }
-            TimeGroupBy::Task => {
-                let t = task_ref(tx, owner)?;
-                (t.key, t.title)
+            TimeGroupBy::Week => {
+                let last = key
+                    .parse::<Day>()
+                    .ok()
+                    .and_then(|d| d.add_days(6).ok())
+                    .map(|d| d.to_string())
+                    .unwrap_or_default();
+                let title = format!("{key}..{last}");
+                (key, title)
             }
-            TimeGroupBy::Project => tx.query_row(
-                "SELECT key, name FROM projects WHERE id = ?1",
-                [b(owner)],
-                |r| Ok((r.get(0)?, r.get(1)?)),
-            )?,
+            TimeGroupBy::Month => (key.clone(), key),
+            TimeGroupBy::Task => names.task(tx, l.task)?,
+            TimeGroupBy::Project => names.project(tx, l.project)?,
+            TimeGroupBy::Person => {
+                person = Some(actor(&l.actor_kind, l.actor_name.clone()));
+                (key, l.actor_name.clone())
+            }
         };
         items.push(TimeReportRow {
             key,
             title,
+            person,
             minutes,
             duration: format_duration(minutes, units),
             entry_count: count,
         });
     }
-    if group_by != TimeGroupBy::Day {
+    if matches!(
+        group_by,
+        TimeGroupBy::Task | TimeGroupBy::Project | TimeGroupBy::Person
+    ) {
         items.sort_by(|a, b| b.minutes.cmp(&a.minutes).then_with(|| a.key.cmp(&b.key)));
+    } else {
+        items.sort_by(|a, b| a.key.cmp(&b.key));
     }
     let total: i64 = lines.iter().map(|l| l.minutes).sum();
     let entries = if input.entries {
@@ -613,6 +643,11 @@ fn report(
     } else {
         None
     };
+    let csv = match input.csv {
+        None => None,
+        Some(TimeReportCsv::Groups) => Some(groups_csv(group_by, &items)),
+        Some(TimeReportCsv::Entries) => Some(entries_csv(tx, &mut names, &lines, units)?),
+    };
     Ok(TimeReport {
         from: from.to_string(),
         to: to.to_string(),
@@ -623,7 +658,164 @@ fn report(
         hours_per_day: settings.hours_per_day,
         days_per_week: settings.days_per_week,
         entries,
+        csv,
     })
+}
+
+/// One live entry the report counts.
+struct Line {
+    id: Id,
+    task: Id,
+    project: Id,
+    date: String,
+    minutes: i64,
+    actor_kind: String,
+    actor_name: String,
+    note: String,
+}
+
+impl Line {
+    fn day(&self) -> Option<Day> {
+        self.date.parse().ok()
+    }
+
+    /// Whether `who` logged it: `me` is the local user, `agent` any agent,
+    /// anything else a name, compared without regard to case.
+    fn logged_by(&self, who: &str) -> bool {
+        match who.to_lowercase().as_str() {
+            "me" => self.actor_kind == "user",
+            "agent" => self.actor_kind == "agent",
+            name => self.actor_name.to_lowercase() == name,
+        }
+    }
+}
+
+/// Task and project keys and titles, each read once.
+#[derive(Default)]
+struct Names {
+    tasks: HashMap<Id, (String, String)>,
+    projects: HashMap<Id, (String, String)>,
+}
+
+impl Names {
+    fn task(&mut self, tx: &Transaction<'_>, id: Id) -> Result<(String, String), Failure> {
+        if let Some(t) = self.tasks.get(&id) {
+            return Ok(t.clone());
+        }
+        let t = task_ref(tx, id)?;
+        let t = (t.key, t.title);
+        self.tasks.insert(id, t.clone());
+        Ok(t)
+    }
+
+    fn project(&mut self, tx: &Transaction<'_>, id: Id) -> Result<(String, String), Failure> {
+        if let Some(p) = self.projects.get(&id) {
+            return Ok(p.clone());
+        }
+        let p: (String, String) = tx.query_row(
+            "SELECT key, name FROM projects WHERE id = ?1",
+            [b(id)],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )?;
+        self.projects.insert(id, p.clone());
+        Ok(p)
+    }
+}
+
+/// The report's groups as CSV: the grouping's name heads the key column.
+/// The column names are the JSON field names, for scripts and spreadsheets
+/// alike.
+fn groups_csv(group_by: TimeGroupBy, items: &[TimeReportRow]) -> String {
+    let group = serde_json::to_value(group_by)
+        .ok()
+        .and_then(|v| v.as_str().map(str::to_owned))
+        .unwrap_or_default();
+    let mut out = String::new();
+    csv_line(
+        &mut out,
+        &[&group, "title", "minutes", "duration", "entry_count"],
+    );
+    for row in items {
+        csv_line(
+            &mut out,
+            &[
+                &row.key,
+                &row.title,
+                &row.minutes.to_string(),
+                &row.duration,
+                &row.entry_count.to_string(),
+            ],
+        );
+    }
+    out
+}
+
+/// The report's entries as CSV, oldest first.
+fn entries_csv(
+    tx: &Transaction<'_>,
+    names: &mut Names,
+    lines: &[Line],
+    units: DurationUnits,
+) -> Result<String, Failure> {
+    let mut out = String::new();
+    csv_line(
+        &mut out,
+        &[
+            "date",
+            "person_kind",
+            "person",
+            "project",
+            "task",
+            "title",
+            "minutes",
+            "duration",
+            "note",
+        ],
+    );
+    for l in lines {
+        let (project, _) = names.project(tx, l.project)?;
+        let (task, title) = names.task(tx, l.task)?;
+        csv_line(
+            &mut out,
+            &[
+                &l.date,
+                &l.actor_kind,
+                &l.actor_name,
+                &project,
+                &task,
+                &title,
+                &l.minutes.to_string(),
+                &format_duration(l.minutes, units),
+                &l.note,
+            ],
+        );
+    }
+    Ok(out)
+}
+
+/// One CSV line (RFC 4180, CRLF). A text cell that a spreadsheet would
+/// run as a formula (it starts with `=`, `+`, `-`, `@`, a tab or a carriage
+/// return) gets a leading apostrophe; numbers stay as they are.
+fn csv_line(out: &mut String, cells: &[&str]) {
+    for (i, cell) in cells.iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        let numeric = !cell.is_empty() && cell.bytes().all(|c| c.is_ascii_digit());
+        let guarded = if !numeric && cell.starts_with(['=', '+', '-', '@', '\t', '\r']) {
+            format!("'{cell}")
+        } else {
+            (*cell).to_owned()
+        };
+        if guarded.contains([',', '"', '\n', '\r']) {
+            out.push('"');
+            out.push_str(&guarded.replace('"', "\"\""));
+            out.push('"');
+        } else {
+            out.push_str(&guarded);
+        }
+    }
+    out.push_str("\r\n");
 }
 
 // ---------------------------------------------------------------------

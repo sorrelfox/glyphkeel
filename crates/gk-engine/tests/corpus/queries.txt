@@ -59,6 +59,8 @@ is:overdue
 due:this-week
 due<+14d is:open
 start:last-month
+during:this-week
+during:2026-03-01..2026-03-31 is:open
 is:unscheduled
 # Moments, compared by the local day
 created:today

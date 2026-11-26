@@ -45,7 +45,7 @@ export interface QueryNames {
   today: string;
 }
 
-type FieldType = "key" | "project" | "text" | "status" | "category" | "type" | "priority" | "label" | "parent" | "date" | "duration" | "number" | "is";
+type FieldType = "key" | "project" | "text" | "status" | "category" | "type" | "priority" | "label" | "parent" | "date" | "span" | "duration" | "number" | "is";
 
 interface FieldSpec {
   name: string;
@@ -76,6 +76,7 @@ export const FAKE_FIELDS: readonly FieldSpec[] = [
   { name: "parent", aliases: [], type: "parent", operators: NAME_OPS, sortable: true, values: "a task key, or none" },
   { name: "start", aliases: [], type: "date", operators: ORDERED_OPS, sortable: true, values: "a date, today, +7d, or none" },
   { name: "due", aliases: [], type: "date", operators: ORDERED_OPS, sortable: true, values: "a date, today, +7d, or none" },
+  { name: "during", aliases: [], type: "span", operators: [":"], sortable: false, values: "a date, or a range such as 2026-11-01..2026-11-30: start to due overlaps it" },
   { name: "created", aliases: [], type: "date", operators: ORDERED_OPS, sortable: true, values: "a date, today, -7d" },
   { name: "updated", aliases: [], type: "date", operators: ORDERED_OPS, sortable: true, values: "a date, today, -7d" },
   { name: "estimate", aliases: ["est"], type: "duration", operators: ORDERED_OPS, sortable: true, values: "a duration such as 2h, or none" },
@@ -96,7 +97,7 @@ export function fieldRegistry(): QueryField[] {
     ...(field.aliases.length > 0 ? { aliases: field.aliases } : {}),
     ...(field.choices ? { choices: field.choices } : {}),
     operators: field.operators,
-    ranges: false,
+    ranges: field.type === "span",
     sortable: field.sortable,
     values: field.values,
   }));
@@ -621,6 +622,15 @@ function matchesValue(task: ListedTask, field: FieldSpec, op: string, value: str
     case "text": {
       const haystack = task.title.toLowerCase();
       return lower.split(/\s+/).every((word) => haystack.includes(word));
+    }
+    case "span": {
+      // The task's days, from its start to its due date, overlap the range.
+      const [from = lower, to = from] = lower.split("..");
+      const first = dayOf(from, today);
+      const last = dayOf(to, today);
+      const start = task.start_date ?? task.due_date;
+      const end = task.due_date ?? task.start_date;
+      return first !== null && last !== null && start !== undefined && end !== undefined && end >= first && start <= last;
     }
     case "project":
       return lower.endsWith("/*") ? task.project.toLowerCase() === lower.slice(0, -2) || task.project.toLowerCase().startsWith(lower.slice(0, -2)) : task.project.toLowerCase() === lower;

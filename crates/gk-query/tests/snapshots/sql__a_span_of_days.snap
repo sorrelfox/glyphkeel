@@ -1,0 +1,15 @@
+---
+source: crates/gk-query/tests/sql.rs
+expression: "golden(&[\"during:2026-11-01..2026-11-30\",\n\"during:this-week,2026-12-24 sort:start\", \"is:open -during:today\",], None,)"
+---
+-- during:2026-11-01..2026-11-30
+SELECT t.id FROM tasks t JOIN projects p ON p.id = t.project_id JOIN statuses s ON s.id = t.status_id JOIN task_types y ON y.id = t.type_id WHERE t.deleted_at IS NULL AND p.deleted_at IS NULL AND p.state = 'active' AND coalesce(((coalesce(t.due_date, t.start_date) >= ? AND coalesce(t.start_date, t.due_date) <= ?)), 0) ORDER BY s.rank ASC NULLS LAST, t.rank ASC NULLS LAST, p.key ASC, t.number ASC LIMIT ? OFFSET ?
+-- params: "2026-11-01", "2026-11-30", 50, 0
+
+-- during:this-week,2026-12-24 sort:start
+SELECT t.id FROM tasks t JOIN projects p ON p.id = t.project_id JOIN statuses s ON s.id = t.status_id JOIN task_types y ON y.id = t.type_id WHERE t.deleted_at IS NULL AND p.deleted_at IS NULL AND p.state = 'active' AND coalesce(((coalesce(t.due_date, t.start_date) >= ? AND coalesce(t.start_date, t.due_date) <= ?) OR (coalesce(t.due_date, t.start_date) >= ? AND coalesce(t.start_date, t.due_date) <= ?)), 0) ORDER BY t.start_date ASC NULLS LAST, p.key ASC, t.number ASC LIMIT ? OFFSET ?
+-- params: "2026-11-23", "2026-11-29", "2026-12-24", "2026-12-24", 50, 0
+
+-- is:open -during:today
+SELECT t.id FROM tasks t JOIN projects p ON p.id = t.project_id JOIN statuses s ON s.id = t.status_id JOIN task_types y ON y.id = t.type_id WHERE t.deleted_at IS NULL AND p.deleted_at IS NULL AND p.state = 'active' AND (coalesce(((s.category IN ('todo', 'in_progress'))), 0) AND NOT coalesce(((coalesce(t.due_date, t.start_date) >= ? AND coalesce(t.start_date, t.due_date) <= ?)), 0)) ORDER BY s.rank ASC NULLS LAST, t.rank ASC NULLS LAST, p.key ASC, t.number ASC LIMIT ? OFFSET ?
+-- params: "2026-11-23", "2026-11-23", 50, 0

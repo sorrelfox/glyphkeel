@@ -37,6 +37,9 @@ pub enum FieldType {
     Link(LinkField),
     /// A day without a time.
     Date(DateColumn),
+    /// The days from the start date to the due date, which must overlap
+    /// the given days.
+    Span,
     /// A moment, compared by local days.
     Moment(MomentColumn),
     /// A duration in minutes.
@@ -391,6 +394,15 @@ pub static FIELDS: &[Field] = &[
         true,
         true,
         "a date, today, +7d, this-week, or none",
+    ),
+    field(
+        "during",
+        &[],
+        FieldType::Span,
+        ONE_OP,
+        true,
+        false,
+        "a date, this-week, or a range such as 2026-11-01..2026-11-30: start to due overlaps it",
     ),
     field(
         "created",

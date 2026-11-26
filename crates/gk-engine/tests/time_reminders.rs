@@ -10,8 +10,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Duration;
 
-use gk_api::ErrorCode;
 use gk_api::ops::common::Via;
+use gk_api::{ErrorCode, Profile};
+use gk_engine::SessionStart;
 use gk_engine::{Context, Engine, EngineConfig, Role, rfc3339};
 use gk_store::WorkspaceLayout;
 use serde_json::{Value, json};
@@ -387,6 +388,137 @@ fn the_report_groups_by_day_task_and_project_in_the_workspace_units() {
         json!({ "from": "2026-11-30", "to": "2026-11-01" }),
     );
     assert_eq!(err.code, ErrorCode::Invalid);
+}
+
+#[test]
+fn the_report_groups_by_week_month_and_person_and_writes_csv() {
+    let dir = TempDir::new().unwrap();
+    let ws = open(&dir);
+    ws.call("project.create", json!({ "name": "Web", "key": "WEB" }));
+    ws.call(
+        "project.create",
+        json!({ "name": "Docs", "key": "DOC", "parent": "WEB" }),
+    );
+    let w = ws.new_task(json!({ "project": "WEB", "title": "Fix, \"quickly\"" }));
+    let d = ws.new_task(json!({ "project": "DOC", "title": "=Write" }));
+    let session = ws
+        .engine
+        .start_session(&SessionStart {
+            name: "Helper".into(),
+            client_id: None,
+            client_version: None,
+            profile: Profile::Standard,
+        })
+        .unwrap();
+    let agent = Context::agent("Helper", session, Profile::Standard);
+    let log = |ctx: &Context, key: &str, duration: &str, date: &str| {
+        ws.engine
+            .call(
+                ctx,
+                "time.log",
+                json!({ "key": key, "duration": duration, "date": date, "note": "n" }),
+            )
+            .unwrap();
+    };
+    log(&app(), &w, "1h", "2026-10-30");
+    log(&app(), &w, "2h", "2026-11-02");
+    log(&agent, &d, "30m", "2026-11-03");
+    log(&app(), &d, "1h", "2026-11-10");
+    let range = json!({ "from": "2026-10-01", "to": "2026-11-30" });
+    let report = |extra: Value| {
+        let mut input = range.clone();
+        input
+            .as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        ws.call("time.report", input)
+    };
+    let rows = |r: &Value| -> Vec<(String, String, i64)> {
+        r["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| {
+                (
+                    r["key"].as_str().unwrap().to_owned(),
+                    r["title"].as_str().unwrap().to_owned(),
+                    r["minutes"].as_i64().unwrap(),
+                )
+            })
+            .collect()
+    };
+
+    // Weeks start on Monday by default.
+    let weeks = report(json!({ "group_by": "week" }));
+    assert_eq!(
+        rows(&weeks),
+        [
+            ("2026-10-26".into(), "2026-10-26..2026-11-01".into(), 60),
+            ("2026-11-02".into(), "2026-11-02..2026-11-08".into(), 150),
+            ("2026-11-09".into(), "2026-11-09..2026-11-15".into(), 60),
+        ]
+    );
+    let months = report(json!({ "group_by": "month" }));
+    assert_eq!(
+        rows(&months),
+        [
+            ("2026-10".into(), "2026-10".into(), 60),
+            ("2026-11".into(), "2026-11".into(), 210),
+        ]
+    );
+    let people = report(json!({ "group_by": "person" }));
+    assert_eq!(people["items"][1]["key"], "agent:Helper");
+    assert_eq!(people["items"][1]["person"]["kind"], "agent");
+    assert_eq!(people["items"][1]["minutes"], 30);
+    assert_eq!(people["items"][0]["minutes"], 240);
+
+    // Filters: one person; a project without its sub-projects.
+    assert_eq!(report(json!({ "person": "agent" }))["total_minutes"], 30);
+    assert_eq!(report(json!({ "person": "helper" }))["total_minutes"], 30);
+    assert_eq!(report(json!({ "person": "me" }))["total_minutes"], 240);
+    assert_eq!(
+        report(json!({ "project": "WEB" }))["total_minutes"],
+        270,
+        "sub-projects by default"
+    );
+    assert_eq!(
+        report(json!({ "project": "WEB", "include_subprojects": false }))["total_minutes"],
+        180
+    );
+    let err = ws.fails("time.report", json!({ "person": " " }));
+    assert_eq!(err.code, ErrorCode::Invalid);
+
+    // CSV: quoted cells, guarded formulas, CRLF line ends.
+    let csv = report(json!({ "group_by": "task", "csv": "groups" }));
+    let csv = csv["csv"].as_str().unwrap();
+    assert_eq!(
+        csv,
+        format!(
+            "task,title,minutes,duration,entry_count\r\n\
+             {w},\"Fix, \"\"quickly\"\"\",180,3h,2\r\n\
+             {d},'=Write,90,1h 30m,2\r\n"
+        )
+    );
+    let entries = report(json!({ "csv": "entries" }));
+    let lines: Vec<&str> = entries["csv"].as_str().unwrap().split("\r\n").collect();
+    assert_eq!(
+        lines[0],
+        "date,person_kind,person,project,task,title,minutes,duration,note"
+    );
+    assert_eq!(
+        lines[2],
+        format!("2026-11-02,user,You,WEB,{w},\"Fix, \"\"quickly\"\"\",120,2h,n")
+    );
+    assert_eq!(
+        lines[3],
+        format!("2026-11-03,agent,Helper,DOC,{d},'=Write,30,30m,n")
+    );
+    assert_eq!(
+        lines.len(),
+        6,
+        "a header, four entries and the last line end"
+    );
+    assert!(report(json!({}))["csv"].is_null());
 }
 
 #[test]

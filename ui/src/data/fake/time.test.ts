@@ -75,6 +75,23 @@ describe("the stand-in's time tracking", () => {
     expect(byTask.items).toEqual([{ key, title: "Write the report", minutes: 120, duration: "2h", entry_count: 1 }]);
   });
 
+  it("groups the report by week, month and person, and writes CSV", () => {
+    const { call, key } = workspace();
+    call("task.update", { key, title: "=Sum, \"all\"" });
+    call("time.log", { key, duration: "1h", date: "2026-10-30" });
+    call("time.log", { key, duration: "2h", date: "2026-11-02" });
+    const range = { from: "2026-10-26", to: "2026-11-08", task: key };
+    const weeks = call<TimeReport>("time.report", { ...range, group_by: "week" });
+    expect(weeks.items.map((row) => [row.key, row.title, row.minutes])).toEqual([["2026-10-26", "2026-10-26..2026-11-01", 60], ["2026-11-02", "2026-11-02..2026-11-08", 120]]);
+    const months = call<TimeReport>("time.report", { ...range, group_by: "month" });
+    expect(months.items.map((row) => [row.key, row.minutes])).toEqual([["2026-10", 60], ["2026-11", 120]]);
+    const people = call<TimeReport>("time.report", { ...range, group_by: "person" });
+    expect(people.items).toEqual([{ key: "user:You", title: "You", person: { kind: "user", name: "You" }, minutes: 180, duration: "3h", entry_count: 2 }]);
+    expect(call<TimeReport>("time.report", { ...range, person: "agent" }).total_minutes).toBe(0);
+    const csv = call<TimeReport>("time.report", { ...range, csv: "groups" }).csv;
+    expect(csv).toBe(`task,title,minutes,duration,entry_count\r\n${key},"'=Sum, ""all""",180,3h,2\r\n`);
+  });
+
   it("sets a reminder, lists it when due, and forgets it once acknowledged", () => {
     const { ws, call, advance, key } = workspace();
     call("task.update", { key, due_date: "2026-11-25" });

@@ -78,7 +78,7 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel time delete <entry>` | `time.delete` | Move a time entry to the trash. |
 | `glyphkeel time edit <entry>` | `time.update` | Change a time entry's duration, day or note. |
 | `glyphkeel time log <key>` | `time.log` | Log time on a task: a duration, the day of the work (default today) and a note. |
-| `glyphkeel time report` | `time.report` | Logged time over a range of days, grouped by day, task or project, with totals in the workspace's units. |
+| `glyphkeel time report` | `time.report` | Logged time over a range of days, grouped by day, week, month, task, project or person, with totals in the workspace's units and optional CSV. |
 | `glyphkeel timer pause` | `timer.pause` | Pause the running timer; it keeps its time. |
 | `glyphkeel timer start <key>` | `timer.start` | Start the timer on a task, or start the paused timer again; a timer on another task is stopped and its time logged. |
 | `glyphkeel timer status` | `timer.get` | The workspace's timer: its task, whether it runs and the time so far. |

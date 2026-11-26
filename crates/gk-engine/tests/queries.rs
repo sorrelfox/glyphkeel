@@ -230,6 +230,10 @@ fn the_planned_examples_find_the_right_tasks() {
             &["TM-1", "TM-2", "TM-3", "TM-4", "TM-5", "SITE-1"],
         ),
         ("start>=2026-12-01", &["TM-4"]),
+        ("during:2026-11-20..2026-11-26", &["TM-1", "TM-2"]),
+        ("during:2026-12-02", &["TM-4"]),
+        ("during:2026-11-27..2026-11-30", &[]),
+        ("during:2026-12-03..2027-01-31 is:open", &["TM-4"]),
         (
             "created:today author:me",
             &["TM-1", "TM-2", "TM-3", "TM-4", "TM-5", "SITE-1"],

@@ -77,6 +77,10 @@ action-all-tasks = All tasks
 action-time-report = Time report
 action-view-board = Show the project as a board
 action-view-list = Show the project as a list
+action-view-calendar = Show the project as a calendar
+action-previous-period = Previous period
+action-next-period = Next period
+action-go-to-today = Go to today
 action-view-gantt = Show the project as a Gantt chart
 action-view-wiki = Show the project's wiki
 action-timer-toggle = Start or stop the timer
@@ -188,6 +192,10 @@ key-left = ←
 key-right = →
 key-up = ↑
 key-down = ↓
+key-page-up = Page Up
+key-page-down = Page Down
+key-home = Home
+key-end = End
 
 ## Appearance
 
@@ -785,9 +793,22 @@ report-last-month = Last month
 report-project = Project
 report-all-projects = All projects
 report-group-by = Group by
+report-this-year = This year
+report-subprojects = Include sub-projects
 report-by-day = Day
+report-by-week = Week
+report-by-month = Month
 report-by-task = Task
 report-by-project = Project
+report-by-person = Person
+report-agent = Agent
+report-export = Export
+report-export-groups = Export the rows as CSV
+report-export-entries = Export the entries as CSV
+report-exported = Time report exported
+# The name of a saved file, without its extension; { $from } and { $to } are days such as 2026-11-01.
+report-file-groups = time-report-{ $from }-{ $to }
+report-file-entries = time-entries-{ $from }-{ $to }
 report-entries = Entries
 report-time = Time
 report-share = Share of the time

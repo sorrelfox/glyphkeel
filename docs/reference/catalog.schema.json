@@ -31985,6 +31985,16 @@
                 "type": "string"
               },
               {
+                "const": "week",
+                "description": "By the week of the work; weeks start on the workspace's first day\nof the week.",
+                "type": "string"
+              },
+              {
+                "const": "month",
+                "description": "By the calendar month of the work.",
+                "type": "string"
+              },
+              {
                 "const": "task",
                 "description": "By task.",
                 "type": "string"
@@ -31992,6 +32002,26 @@
               {
                 "const": "project",
                 "description": "By project.",
+                "type": "string"
+              },
+              {
+                "const": "person",
+                "description": "By the person or agent who logged the time.",
+                "type": "string"
+              }
+            ]
+          },
+          "TimeReportCsv": {
+            "description": "What the time report also returns as CSV text.",
+            "oneOf": [
+              {
+                "const": "groups",
+                "description": "One line per group, as `items`.",
+                "type": "string"
+              },
+              {
+                "const": "entries",
+                "description": "One line per entry, oldest first.",
                 "type": "string"
               }
             ]
@@ -32001,6 +32031,17 @@
         "additionalProperties": false,
         "description": "Which time to report.",
         "properties": {
+          "csv": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TimeReportCsv"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Also return the report as CSV text: `groups` or `entries`."
+          },
           "entries": {
             "default": false,
             "description": "Also list the entries, oldest first.",
@@ -32022,10 +32063,24 @@
                 "type": "null"
               }
             ],
-            "description": "How to group: `day`, `task` (default) or `project`."
+            "description": "How to group: `day`, `week`, `month`, `task` (default), `project`\nor `person`."
+          },
+          "include_subprojects": {
+            "description": "With `project`: its sub-projects' time too; default true.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "person": {
+            "description": "Only the time logged by `me` (the local user), `agent` (any agent)\nor the person or agent of that name.",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "project": {
-            "description": "Only this project and its sub-projects: a key or ID.",
+            "description": "Only this project: a key or ID.",
             "type": [
               "string",
               "null"
@@ -32156,6 +32211,16 @@
                 "type": "string"
               },
               {
+                "const": "week",
+                "description": "By the week of the work; weeks start on the workspace's first day\nof the week.",
+                "type": "string"
+              },
+              {
+                "const": "month",
+                "description": "By the calendar month of the work.",
+                "type": "string"
+              },
+              {
                 "const": "task",
                 "description": "By task.",
                 "type": "string"
@@ -32163,6 +32228,11 @@
               {
                 "const": "project",
                 "description": "By project.",
+                "type": "string"
+              },
+              {
+                "const": "person",
+                "description": "By the person or agent who logged the time.",
                 "type": "string"
               }
             ]
@@ -32182,7 +32252,7 @@
                 "type": "integer"
               },
               "key": {
-                "description": "The day, the task's key or the project's key.",
+                "description": "The day; the week's first day; the month (`YYYY-MM`); the task's\nor the project's key; or the person (`user:Name`, `agent:Name`).",
                 "type": "string"
               },
               "minutes": {
@@ -32190,8 +32260,12 @@
                 "format": "int64",
                 "type": "integer"
               },
+              "person": {
+                "$ref": "#/$defs/Actor",
+                "description": "The person or agent, when grouped by person."
+              },
               "title": {
-                "description": "The weekday, the task's title or the project's name.",
+                "description": "The weekday; the week's days (`2026-11-23..2026-11-29`); the month;\nthe task's title; the project's name; or the person's name.",
                 "type": "string"
               }
             },
@@ -32209,6 +32283,10 @@
         "additionalProperties": false,
         "description": "Logged time over a range of days, grouped, with the total.",
         "properties": {
+          "csv": {
+            "description": "The report as CSV text (comma-separated, a header line, CRLF line\nends), when asked for.",
+            "type": "string"
+          },
           "days_per_week": {
             "description": "The working week the units use, in days.",
             "format": "uint32",
@@ -32237,7 +32315,7 @@
             "type": "integer"
           },
           "items": {
-            "description": "The groups: days in order; tasks and projects by most time first.",
+            "description": "The groups: days, weeks and months in order; tasks, projects and\npeople by most time first.",
             "items": {
               "$ref": "#/$defs/TimeReportRow"
             },
@@ -32272,7 +32350,7 @@
       },
       "output_name": "TimeReport",
       "safety": "read",
-      "summary": "Logged time over a range of days, grouped by day, task or project, with totals in the workspace's units."
+      "summary": "Logged time over a range of days, grouped by day, week, month, task, project or person, with totals in the workspace's units and optional CSV."
     },
     {
       "cli": "timer status",

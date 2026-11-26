@@ -53,6 +53,18 @@ fn golden(queries: &[&str], scope: Option<Scope>) -> String {
 }
 
 #[test]
+fn a_span_of_days() {
+    insta::assert_snapshot!(golden(
+        &[
+            "during:2026-11-01..2026-11-30",
+            "during:this-week,2026-12-24 sort:start",
+            "is:open -during:today",
+        ],
+        None,
+    ));
+}
+
+#[test]
 fn filters() {
     insta::assert_snapshot!(golden(
         &[

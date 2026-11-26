@@ -2774,7 +2774,7 @@ export type TimeEntryRef = {
 };
 
 /** How the time report groups the entries. */
-export type TimeGroupBy = "day" | "task" | "project";
+export type TimeGroupBy = "day" | "week" | "month" | "task" | "project" | "person";
 
 /** Time to log on a task. */
 export type TimeLogInput = {
@@ -2792,6 +2792,8 @@ export type TimeLogInput = {
 
 /** Logged time over a range of days, grouped, with the total. */
 export type TimeReport = {
+  /** The report as CSV text (comma-separated, a header line, CRLF line ends), when asked for. */
+  csv?: string;
   /** The working week the units use, in days. */
   days_per_week: number;
   /** The entries, oldest first, when asked for. */
@@ -2802,7 +2804,7 @@ export type TimeReport = {
   group_by: TimeGroupBy;
   /** The working day the units use, in hours. */
   hours_per_day: number;
-  /** The groups: days in order; tasks and projects by most time first. */
+  /** The groups: days, weeks and months in order; tasks, projects and people by most time first. */
   items: TimeReportRow[];
   /** The last day, included. */
   to: string;
@@ -2812,15 +2814,24 @@ export type TimeReport = {
   total_minutes: number;
 };
 
+/** What the time report also returns as CSV text. */
+export type TimeReportCsv = "groups" | "entries";
+
 /** Which time to report. */
 export type TimeReportInput = {
+  /** Also return the report as CSV text: `groups` or `entries`. */
+  csv?: TimeReportCsv | null;
   /** Also list the entries, oldest first. */
   entries?: boolean;
   /** The first day: `YYYY-MM-DD`, `today` or `yesterday`; default the first day of the current week. */
   from?: string | null;
-  /** How to group: `day`, `task` (default) or `project`. */
+  /** How to group: `day`, `week`, `month`, `task` (default), `project` or `person`. */
   group_by?: TimeGroupBy | null;
-  /** Only this project and its sub-projects: a key or ID. */
+  /** With `project`: its sub-projects' time too; default true. */
+  include_subprojects?: boolean | null;
+  /** Only the time logged by `me` (the local user), `agent` (any agent) or the person or agent of that name. */
+  person?: string | null;
+  /** Only this project: a key or ID. */
   project?: string | null;
   /** Only this task and its subtasks: a key or ID. */
   task?: string | null;
@@ -2834,11 +2845,13 @@ export type TimeReportRow = {
   duration: string;
   /** How many entries. */
   entry_count: number;
-  /** The day, the task's key or the project's key. */
+  /** The day; the week's first day; the month (`YYYY-MM`); the task's or the project's key; or the person (`user:Name`, `agent:Name`). */
   key: string;
   /** The time in minutes. */
   minutes: number;
-  /** The weekday, the task's title or the project's name. */
+  /** The person or agent, when grouped by person. */
+  person?: Actor;
+  /** The weekday; the week's days (`2026-11-23..2026-11-29`); the month; the task's title; the project's name; or the person's name. */
   title: string;
 };
 
@@ -4006,7 +4019,7 @@ export function makeOps(call: Call) {
       update: (input: OpMap["time.update"]["input"]) => call("time.update", input),
       /** Move a time entry to the trash. (trash) */
       delete: (input: OpMap["time.delete"]["input"]) => call("time.delete", input),
-      /** Logged time over a range of days, grouped by day, task or project, with totals in the workspace's units. (read) */
+      /** Logged time over a range of days, grouped by day, week, month, task, project or person, with totals in the workspace's units and optional CSV. (read) */
       report: (input: OpMap["time.report"]["input"] = {}) => call("time.report", input),
     },
     timer: {

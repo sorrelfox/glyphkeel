@@ -5,6 +5,7 @@ import { Outlet, useNavigate, useParams, useRouterState } from "@tanstack/react-
 import { useEffect, useMemo, useState } from "react";
 import { useLocale } from "react-aria-components";
 
+import { type Action } from "../actions/actions";
 import { ActionsProvider } from "../actions/ActionsProvider";
 import { useAppearance } from "../appearance/AppearanceProvider";
 import { useProject } from "../data/board";
@@ -112,6 +113,7 @@ export function Shell({ titleBar, openGallery, firstRun = false }: ShellProps) {
   const [status, setStatus] = useState<StatusInfo | null>(null);
   const [newTask, setNewTask] = useState<(() => void) | null>(null);
   const [timerTask, setTimerTask] = useState<string | null>(null);
+  const [screenActions, setScreenActions] = useState<readonly Action[]>([]);
   const { undo, redo } = useUndo();
   const timer = useTimerCommands();
 
@@ -122,11 +124,12 @@ export function Shell({ titleBar, openGallery, firstRun = false }: ShellProps) {
         setNewTask(() => run);
       },
       setTimerTask,
+      setScreenActions,
     }),
     [],
   );
 
-  const actions = shellActions({
+  const windowActions = shellActions({
     openPalette: () => {
       setPaletteOpen(true);
     },
@@ -141,7 +144,7 @@ export function Shell({ titleBar, openGallery, firstRun = false }: ShellProps) {
     projectView:
       view === "project" && projectKey !== undefined
         ? (next) => {
-            void navigate(next === "list" ? { to: "/projects/$key/list", params: { key: projectKey } } : { to: "/projects/$key", params: { key: projectKey } });
+            void navigate(next === "list" ? { to: "/projects/$key/list", params: { key: projectKey } } : next === "calendar" ? { to: "/projects/$key/calendar", params: { key: projectKey } } : { to: "/projects/$key", params: { key: projectKey } });
           }
         : null,
     toggleSidebar: () => {
@@ -172,6 +175,7 @@ export function Shell({ titleBar, openGallery, firstRun = false }: ShellProps) {
     },
     openGallery,
   });
+  const actions = screenActions.length === 0 ? windowActions : [...windowActions, ...screenActions];
 
   const title =
     view === "project"

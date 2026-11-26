@@ -266,6 +266,23 @@ fn time_is_logged_edited_and_reported() {
         "--to",
         "2026-11-29"
     ]));
+    // CSV is printed as it is, for a file or a pipe.
+    let csv = ws.ok(&[
+        "time",
+        "report",
+        "--from",
+        "2026-11-23",
+        "--to",
+        "2026-11-29",
+        "--group-by",
+        "week",
+        "--csv",
+        "groups",
+    ]);
+    assert_eq!(
+        csv,
+        "week,title,minutes,duration,entry_count\r\n2026-11-23,2026-11-23..2026-11-29,75,1h 15m,1\r\n"
+    );
     let gone = ws.json(&["time", "delete", &id]);
     assert_eq!(gone["spent_minutes"], 0);
     let out = ws.run(&["time", "log", "GK-1", "--duration", "25h"]);

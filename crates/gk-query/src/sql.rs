@@ -401,6 +401,50 @@ fn bounds_on(column: &str, b: &[Bounds], as_day: bool) -> Vec<Sql> {
         .collect()
 }
 
+/// A task whose days, from its start to its due date, share a day with
+/// `b`. A task with one of the dates is that one day; without either it
+/// never matches (the comparisons are NULL).
+fn span_overlaps(b: &Bounds) -> Sql {
+    const FIRST: &str = "coalesce(t.start_date, t.due_date)";
+    const LAST: &str = "coalesce(t.due_date, t.start_date)";
+    let mut parts = Vec::new();
+    // The task ends on or after the first day…
+    if let Some(lo) = b.lo {
+        parts.extend(bounds_on(
+            LAST,
+            &[Bounds {
+                lo: Some(lo),
+                hi: None,
+            }],
+            true,
+        ));
+    }
+    // …and starts on or before the last one.
+    if let Some(hi) = b.hi {
+        parts.extend(bounds_on(
+            FIRST,
+            &[Bounds {
+                lo: None,
+                hi: Some(hi),
+            }],
+            true,
+        ));
+    }
+    if parts.is_empty() {
+        parts.extend(bounds_on(FIRST, &[Bounds { lo: None, hi: None }], true));
+    }
+    let mut sql = Sql::default();
+    sql.push("(");
+    for (i, p) in parts.into_iter().enumerate() {
+        if i > 0 {
+            sql.push(" AND ");
+        }
+        sql.append(p);
+    }
+    sql.push(")");
+    sql
+}
+
 fn with_none(column: &str, mut parts: Vec<Sql>, none: bool) -> Sql {
     if none {
         let mut sql = Sql::default();
@@ -686,6 +730,7 @@ fn cond(c: &Cond, today: Day, now: i64) -> Sql {
             let col = date_column(*column);
             sql.append(with_none(col, bounds_on(col, bounds, true), *none));
         }
+        Cond::Span(bounds) => sql.append(any(bounds.iter().map(span_overlaps).collect())),
         Cond::Moment {
             column,
             bounds,
@@ -852,6 +897,7 @@ fn sort_exprs(by: SortBy, relevance: bool) -> Vec<&'static str> {
             FieldType::Author => vec!["t.created_by_name"],
             FieldType::Count(c) => vec![count_expr(c)],
             FieldType::FullText(_)
+            | FieldType::Span
             | FieldType::Label
             | FieldType::Under
             | FieldType::Link(_)

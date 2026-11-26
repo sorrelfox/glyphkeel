@@ -18,6 +18,10 @@ const KEY_MESSAGES: Readonly<Record<string, string>> = {
   ArrowRight: "key-right",
   ArrowUp: "key-up",
   ArrowDown: "key-down",
+  PageUp: "key-page-up",
+  PageDown: "key-page-down",
+  Home: "key-home",
+  End: "key-end",
 };
 
 /** A chord as the hint shows it: "Ctrl K", "Ctrl Shift Z", "F9", "?". */
