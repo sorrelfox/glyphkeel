@@ -77,6 +77,8 @@ struct Entry {
     version: i64,
     /// The claim's session, agent name and end, as stored; it may have run out.
     claim: (Option<Id>, Option<String>, Option<i64>),
+    /// The open occurrence of a recurring task.
+    recurring: bool,
 }
 
 impl Entry {
@@ -100,7 +102,9 @@ const ROW_SQL: &str = "SELECT t.id, t.project_id, p.key, p.state = 'active', t.n
         s.id, s.name, s.category, y.glyph = 'milestone', t.parent_id,
         coalesce(t.subtask_rank, ''), t.rank, t.start_date, t.due_date, t.estimate_min,
         t.progress_override, t.closed_at IS NOT NULL, t.checklist_done, t.checklist_total,
-        t.version, t.claim_session, t.claim_name, t.claim_until
+        t.version, t.claim_session, t.claim_name, t.claim_until,
+        EXISTS (SELECT 1 FROM task_series rs WHERE rs.id = t.series_id
+                   AND rs.current_task = t.id AND rs.ended_at IS NULL)
    FROM tasks t JOIN projects p ON p.id = t.project_id
    JOIN statuses s ON s.id = t.status_id JOIN task_types y ON y.id = t.type_id
   WHERE t.deleted_at IS NULL AND p.deleted_at IS NULL";
@@ -133,6 +137,7 @@ fn row(r: &Row<'_>) -> gk_store::rusqlite::Result<Entry> {
         checklist: (count(r.get(18)?), count(r.get(19)?)),
         version: r.get(20)?,
         claim: (opt_id_at(r, 21)?, r.get(22)?, r.get(23)?),
+        recurring: r.get(24)?,
     })
 }
 
@@ -546,6 +551,7 @@ fn get(q: &QueryCtx<'_>, input: ScheduleInput) -> Result<Schedule, Failure> {
             labels: labels.remove(id).unwrap_or_default(),
             read_only: r.read_only(),
             claim: r.claim(q.now),
+            recurring: r.recurring,
             shape,
             start_date: r.dates.start.map(|d| d.to_string()),
             due_date: r.dates.due.map(|d| d.to_string()),

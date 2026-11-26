@@ -22,6 +22,7 @@ pub mod palette;
 pub mod portable;
 pub mod progress;
 pub mod rank;
+pub mod recurrence;
 pub mod schedule;
 pub mod status;
 pub mod text;

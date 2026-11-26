@@ -55,6 +55,17 @@ The safety class decides who may run an operation:
 | `task.release` | write | app, command line, MCP | `release_task` | `glyphkeel task release <key>` |
 | `relation.add` | write | app, command line, MCP | `link_tasks` | `glyphkeel task link <key>` |
 | `relation.remove` | write | app, command line, MCP | `unlink_tasks` | `glyphkeel task unlink <key>` |
+| `recurrence.set` | write | app, command line, MCP | `set_recurrence` | `glyphkeel recurrence set <key>` |
+| `recurrence.clear` | write | app, command line, MCP | `stop_recurrence` | `glyphkeel recurrence clear <key>` |
+| `recurrence.skip` | write | app, command line, MCP | `skip_occurrence` | `glyphkeel recurrence skip <key>` |
+| `recurrence.preview` | read | app, command line, MCP | `preview_recurrence` | `glyphkeel recurrence preview` |
+| `recurrence.run` | write | app, command line | — | `glyphkeel recurrence run` |
+| `template.list` | read | app, command line, MCP | `list_templates` | `glyphkeel template list` |
+| `template.get` | read | app, command line, MCP | `get_template` | `glyphkeel template show <template>` |
+| `template.create` | write | app, command line, MCP | `create_template` | `glyphkeel template create <name>` |
+| `template.update` | write | app, command line, MCP | `update_template` | `glyphkeel template edit <template>` |
+| `template.delete` | write | app, command line, MCP | `delete_template` | `glyphkeel template delete <template>` |
+| `template.apply` | write | app, command line, MCP | `use_template` | `glyphkeel template use <template>` |
 | `description.history` | read | app, command line, MCP | `get_task` | `glyphkeel description history` |
 | `description.revision` | read | app, command line, MCP | `get_description_revision` | `glyphkeel description show <revision>` |
 | `markdown.render` | read | app | — | — |
@@ -370,6 +381,74 @@ Input: `RelationInput`. Output: `TaskChange`. Schemas: [catalog.schema.json](cat
 Remove a link between two tasks, or a subtask from its parent.
 
 Input: `RelationInput`. Output: `TaskChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `recurrence.set`
+
+Make a task recurring, change its rule, or (`update_details`) make its current details those of the occurrences to come.
+
+Input: `RecurrenceSetInput`. Output: `RecurrenceChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `recurrence.clear`
+
+Stop a task repeating: it stays, and no more occurrences are made.
+
+Input: `RecurrenceTaskInput`. Output: `RecurrenceChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `recurrence.skip`
+
+Pass over a recurring task's current occurrence: its dates move to the next date of the rule.
+
+Input: `RecurrenceTaskInput`. Output: `RecurrenceChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `recurrence.preview`
+
+Read a recurrence rule, in words or by fields, and list its next dates.
+
+Input: `RulePreviewInput`. Output: `RecurrencePreview`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `recurrence.run`
+
+Make the occurrences of series that are made ahead whose day has come; the app does this by itself.
+
+Input: `RecurrenceRunInput`. Output: `RecurrenceRun`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+Not available to agents: Housekeeping that the app and the command line run on a schedule; agents' changes already make occurrences as tasks close.
+
+## `template.list`
+
+The project templates and the task templates of a project or of every project.
+
+Input: `TemplateListInput`. Output: `TemplateList`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `template.get`
+
+One template with its content.
+
+Input: `TemplateRef`. Output: `Template`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `template.create`
+
+Make a task template (from a task, or given) or a project template (from a project, or given).
+
+Input: `TemplateCreateInput`. Output: `TemplateChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `template.update`
+
+Change a template's name, description or content.
+
+Input: `TemplateUpdateInput`. Output: `TemplateChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `template.delete`
+
+Delete a template; it can be brought back with revert. What was made from it stays.
+
+Input: `TemplateRef`. Output: `TemplateChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `template.apply`
+
+Use a template: a task template makes a task with its subtasks; a project template makes a project with its set-up, pages and tasks.
+
+Input: `TemplateApplyInput`. Output: `TemplateApplied`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `description.history`
 

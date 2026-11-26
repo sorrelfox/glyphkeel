@@ -18,7 +18,7 @@ use serde_json::Value;
 use super::model::{
     Activity, AgentSession, Attachment, Claim, Comment, CommentRevision, Counts, Label, Layout,
     Manifest, ManifestProject, Modules, Project, ProjectFile, Relation, Revision, SavedView,
-    Status, Task, TaskType, TimeEntry, WikiPage,
+    SeriesLine, Status, Task, TaskType, TemplateLine, TimeEntry, WikiPage,
 };
 use super::sink::Sink;
 use super::{FORMAT_NAME, FORMAT_VERSION, Progress, project_dir, report};
@@ -155,8 +155,8 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
     )?;
     let types = all(
         tx,
-        "SELECT id, name, glyph, hue, rank, is_default FROM task_types WHERE project_id = ?1
-          ORDER BY rank, id",
+        "SELECT id, name, glyph, hue, rank, is_default, due_offset_days FROM task_types
+          WHERE project_id = ?1 ORDER BY rank, id",
         &pid,
         |r| {
             Ok(TaskType {
@@ -166,6 +166,7 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
                 hue: r.get(3)?,
                 rank: r.get(4)?,
                 is_default: r.get(5)?,
+                due_offset_days: r.get(6)?,
             })
         },
     )?;
@@ -229,6 +230,27 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
         |r| r.get(0),
     )?;
     let key = project.key.clone();
+    let templates = crate::ops::template::all(tx)?
+        .into_iter()
+        .filter(|(_, t)| t.project.as_deref() == Some(id.to_string().as_str()))
+        .map(|(tid, t)| template_line(tid, t))
+        .collect();
+    let series = crate::ops::recurrence::of_project(tx, id)?
+        .into_iter()
+        .map(|(sid, s)| SeriesLine {
+            id: sid.to_string(),
+            rule: serde_json::to_value(&s.rule).unwrap_or(Value::Null),
+            pattern: serde_json::to_value(&s.pattern).unwrap_or(Value::Null),
+            current_task: s.current,
+            next_date: s.next_date,
+            made: s.made,
+            ended_at: s.ended_at,
+            created_at: s.created_at,
+            created_by_kind: s.created_by_kind,
+            created_by_name: s.created_by_name,
+            updated_at: s.updated_at,
+        })
+        .collect();
 
     let mut descriptions = Vec::new();
     let mut tasks = all(
@@ -238,7 +260,8 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
                 t.due_date, t.estimate_min, t.progress_override, t.checklist_done,
                 t.checklist_total, t.spent_min, t.claim_session, t.claim_name, t.claim_until,
                 t.created_at, t.created_by_kind, t.created_by_name, t.edited_at, t.updated_at,
-                t.closed_at, t.deleted_at, t.deleted_group, t.version, t.subtask_rank
+                t.closed_at, t.deleted_at, t.deleted_group, t.version, t.subtask_rank,
+                t.series_id
            FROM tasks t WHERE t.project_id = ?1 ORDER BY t.number",
         &pid,
         |r| {
@@ -287,6 +310,7 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
                     version: r.get(29)?,
                     subtask_rank: r.get(30)?,
                     key_aliases: Vec::new(),
+                    series_id: opt_id(r, 31)?,
                 },
                 description,
             ))
@@ -598,6 +622,8 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
             views,
             layouts,
             key_aliases,
+            templates,
+            series,
         },
         tasks,
         descriptions,
@@ -608,6 +634,24 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
         files,
         activity,
     })
+}
+
+fn template_line(id: Id, t: crate::ops::template::Record) -> TemplateLine {
+    TemplateLine {
+        id: id.to_string(),
+        kind: match t.kind {
+            gk_api::ops::template::TemplateKind::Task => "task".to_owned(),
+            gk_api::ops::template::TemplateKind::Project => "project".to_owned(),
+        },
+        name: t.name,
+        description: t.description,
+        content: t.content,
+        rank: t.rank,
+        created_at: t.created_at,
+        created_by_kind: t.created_by_kind,
+        created_by_name: t.created_by_name,
+        updated_at: t.updated_at,
+    }
 }
 
 fn modules_of(text: &str) -> Modules {
@@ -692,7 +736,7 @@ pub(crate) fn export(
 ) -> Result<ExportResult, OpError> {
     report(progress, TransferPhase::Reading, 0, 1);
     let whole = input.projects.is_empty();
-    let (projects, sessions) = engine
+    let (projects, sessions, templates) = engine
         .store()
         .read(|tx| {
             let ids = chosen(tx, input)?;
@@ -728,7 +772,18 @@ pub(crate) fn export(
                 w
             });
             let sessions = sessions(tx, wanted.as_ref())?;
-            Ok::<_, Failure>((out, sessions))
+            // Project templates belong to the workspace: only a whole
+            // export takes them.
+            let templates: Vec<TemplateLine> = if whole {
+                crate::ops::template::all(tx)?
+                    .into_iter()
+                    .filter(|(_, t)| t.project.is_none())
+                    .map(|(tid, t)| template_line(tid, t))
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            Ok::<_, Failure>((out, sessions, templates))
         })
         .map_err(OpError::from)?;
 
@@ -743,7 +798,9 @@ pub(crate) fn export(
         )
     };
     let mut sink = Sink::create(target, format).map_err(cant_write)?;
-    let written = write_all(engine, &mut sink, &projects, &sessions, progress);
+    let written = write_all(
+        engine, &mut sink, &projects, &sessions, &templates, progress,
+    );
     let counts = match written {
         Ok(counts) => counts,
         Err(e) => {
@@ -770,6 +827,7 @@ fn write_all(
     sink: &mut Sink,
     projects: &[Out],
     sessions: &[AgentSession],
+    templates: &[TemplateLine],
     progress: &Progress,
 ) -> Result<ArchiveCounts, OpError> {
     let io = |e: std::io::Error| {
@@ -785,6 +843,9 @@ fn write_all(
     sink.put("agent_sessions.jsonl", &jsonl(sessions)?)
         .map_err(io)?;
     counts.agent_sessions = sessions.len() as u64;
+    if !templates.is_empty() {
+        sink.put(super::TEMPLATES, &jsonl(templates)?).map_err(io)?;
+    }
     for (i, p) in projects.iter().enumerate() {
         report(
             progress,

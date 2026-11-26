@@ -138,6 +138,10 @@ pub struct Task {
     /// The agent that claimed it, while the claim lasts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub claim: Option<Claim>,
+    /// Its series, for a recurring task: the rule, the next date and the
+    /// details new occurrences get.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recurrence: Option<crate::ops::recurrence::Recurrence>,
     /// Its subtasks in order, when asked for with `include`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subtasks: Option<Vec<TaskRef>>,

@@ -64,7 +64,7 @@ const fn is_leap(year: u16) -> bool {
     (year.is_multiple_of(4) && !year.is_multiple_of(100)) || year.is_multiple_of(400)
 }
 
-const fn days_in_month(year: u16, month: u8) -> u8 {
+pub(crate) const fn days_in_month(year: u16, month: u8) -> u8 {
     match month {
         2 if is_leap(year) => 29,
         2 => 28,

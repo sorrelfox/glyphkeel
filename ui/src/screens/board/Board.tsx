@@ -24,6 +24,7 @@ import { ActionsProvider } from "../../actions/ActionsProvider";
 import { isMenuKey, useContextMenu, type MenuEntry } from "../../components/ContextMenu";
 import { useTrashTasks } from "../../data/safety";
 import { useToasts } from "../../components/Toasts";
+import { useApplyTemplate, useTemplates } from "../../data/recurrence";
 import { cardsOf, columnsOf, useBoard, useCreateTask, useLayout, useMoveTask, useProject, useUpdateLayout, useUpdateTask, type Move } from "../../data/board";
 import { PRIORITIES, SORT_MODES, type Board as BoardData, type BoardLayout, type Card, type CardSize, type Place, type Project } from "../../data/catalog";
 import { loadCardSize, saveCardSize } from "../../prefs/store";
@@ -103,6 +104,8 @@ function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowO
   const updateLayout = useUpdateLayout(project.key);
   const move = useMoveTask(board, showOlder.size > 0);
   const create = useCreateTask();
+  const apply = useApplyTemplate();
+  const templates = useTemplates("task", project.key);
   const update = useUpdateTask();
   const menu = useContextMenu(t("card-menu"));
   const trash = useTrashTasks();
@@ -434,7 +437,7 @@ function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowO
     }
   });
 
-  const createIn = (laneId: string, title: string) => {
+  const createIn = (laneId: string, title: string, template: string | null) => {
     const column = view.lanes.find((lane) => lane.column.id === laneId)?.column;
     if (!column) {
       return;
@@ -444,12 +447,28 @@ function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowO
     if (target === undefined || status === undefined) {
       return;
     }
+    const created = (key: string) => {
+      setSelected(key);
+      announce(t("task-created", { key, column: column.name }));
+    };
+    if (template !== null) {
+      apply.mutate(
+        { template, project: target, status, ...(title.trim() === "" ? {} : { title }) },
+        {
+          onSuccess: (applied) => {
+            if (applied.task) {
+              created(applied.task.key);
+            }
+          },
+        },
+      );
+      return;
+    }
     create.mutate(
       { project: target, title, status },
       {
         onSuccess: (change) => {
-          setSelected(change.task.key);
-          announce(t("task-created", { key: change.task.key, column: column.name }));
+          created(change.task.key);
         },
       },
     );
@@ -554,8 +573,9 @@ function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowO
                       setAdding(lane.column.id);
                     }
                   }}
-                  onCreate={(title) => {
-                    createIn(lane.column.id, title);
+                  templates={templates.data?.items ?? []}
+                  onCreate={(title, template) => {
+                    createIn(lane.column.id, title, template);
                   }}
                   onStopAdding={() => {
                     setAdding(null);

@@ -17,7 +17,11 @@ import {
   type Hue,
   type Modules,
   type Priority,
+  type ProjectBlueprint,
+  type RecurrenceRule,
   type RevisionKind,
+  type TaskBlueprint,
+  type TemplateKind,
   type Backup,
   type SavedView,
   type Settings,
@@ -39,6 +43,8 @@ export interface FakeType {
   glyph: Glyph;
   hue: Hue;
   is_default: boolean;
+  /** New tasks of this type are due this many days after they are made. */
+  due_offset_days?: number;
 }
 
 export interface FakeLabel {
@@ -102,6 +108,38 @@ export interface FakeTask {
   updatedBy: { kind: "user" | "agent"; name: string };
   closedAt: string | null;
   version: number;
+  /** The recurring series it is an occurrence of. */
+  seriesId?: string;
+}
+
+/** A recurring task's series: its rule and the details each new occurrence starts from. */
+export interface FakeSeries {
+  id: string;
+  projectId: string;
+  rule: RecurrenceRule;
+  pattern: TaskBlueprint;
+  /** The current occurrence's ID. */
+  current: string | null;
+  /** Made ahead: the date of the next occurrence to make. */
+  nextDate: string | null;
+  /** Occurrences made or passed over, the first included. */
+  made: number;
+  endedAt: string | null;
+  createdAt: string;
+}
+
+/** A task template (of a project) or a project template (of the workspace). */
+export interface FakeTemplate {
+  id: string;
+  kind: TemplateKind;
+  projectId: string | null;
+  name: string;
+  description: string;
+  task?: TaskBlueprint;
+  setup?: ProjectBlueprint;
+  rank: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /** A link between two tasks, stored the way it reads from `from`. */
@@ -262,6 +300,10 @@ export interface FakeState {
   wiki?: FakeWikiPage[];
   /** Deleted tasks, newest deletion last; none until one is deleted. */
   trash?: FakeTrashed[];
+  /** Recurring series; none until a task repeats. */
+  series?: FakeSeries[];
+  /** Templates; none until one is made. */
+  templates?: FakeTemplate[];
   /** Backups, newest first; none until one is made. */
   backups?: Backup[];
   workspaceName: string;

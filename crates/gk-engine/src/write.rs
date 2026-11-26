@@ -71,6 +71,22 @@ impl<'a> WriteCtx<'a> {
             .collect()
     }
 
+    /// The tasks this command closed so far (their `closed_at` went from
+    /// none to a moment), in order.
+    pub(crate) fn newly_closed(&self) -> Vec<Id> {
+        self.changes
+            .iter()
+            .filter(|c| c.entity == crate::ops::fields::TASK)
+            .filter(|c| {
+                c.fields.get("closed_at").is_some_and(|f| {
+                    f.before.as_ref().is_none_or(Value::is_null)
+                        && f.after.as_ref().is_some_and(|v| !v.is_null())
+                })
+            })
+            .map(|c| c.id)
+            .collect()
+    }
+
     /// How many items of `entity` this command has created so far.
     pub(crate) fn created_so_far(&self, entity: &str) -> usize {
         self.changes

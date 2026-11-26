@@ -169,9 +169,7 @@ preferences-unit-days =
         [one] day
        *[other] days
     }
-weekday-monday = Monday
-weekday-saturday = Saturday
-weekday-sunday = Sunday
+# The weekdays' names (weekday-monday…) come with the engine's messages.
 
 ## Toasts
 

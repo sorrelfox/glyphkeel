@@ -14,6 +14,7 @@ use crate::key::{KeyError, PROJECT_KEY_MAX, PROJECT_KEY_MIN};
 use crate::kinds::KindError;
 use crate::merge::EditError;
 use crate::rank::{MAX_LEN, RankError};
+use crate::recurrence::RuleError;
 use crate::text::TextError;
 use crate::wiki::PageTitleError;
 use crate::worklog::{REMINDER_MAX_DAYS_BEFORE, WorklogError};
@@ -49,6 +50,39 @@ impl Message for DayError {
             Self::Format(text) | Self::NoSuchDay(text) => vec![arg("text", text)],
             Self::OutOfRange => vec![],
             Self::StartAfterDue { start, due } => vec![arg("start", start), arg("due", due)],
+        }
+    }
+}
+
+impl Message for RuleError {
+    fn message_id(&self) -> &'static str {
+        match self {
+            Self::Interval { .. } => "value-recurrence-interval",
+            Self::MonthDay => "value-recurrence-month-day",
+            Self::WeekOfMonth => "value-recurrence-week-of-month",
+            Self::Month => "value-recurrence-month",
+            Self::DayAndWeekday => "value-recurrence-day-and-weekday",
+            Self::Parts { .. } => "value-recurrence-parts",
+            Self::CompletionPattern => "value-recurrence-completion-pattern",
+            Self::UntilBeforeStart { .. } => "value-recurrence-until-before-start",
+            Self::Count { .. } => "value-recurrence-count",
+            Self::Text(_) => "value-recurrence-text",
+        }
+    }
+    fn message_args(&self) -> Vec<(&'static str, String)> {
+        match self {
+            Self::Interval { max } => vec![arg("max", max)],
+            Self::Count { max } => vec![arg("max", max)],
+            Self::Parts { unit } => vec![arg("unit", unit)],
+            Self::UntilBeforeStart { start, until } => {
+                vec![arg("start", start), arg("until", until)]
+            }
+            Self::Text(text) => vec![arg("text", text)],
+            Self::MonthDay
+            | Self::WeekOfMonth
+            | Self::Month
+            | Self::DayAndWeekday
+            | Self::CompletionPattern => vec![],
         }
     }
 }

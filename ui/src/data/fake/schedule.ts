@@ -149,6 +149,7 @@ export function scheduleOf(tasks: readonly ListedTask[], links: readonly BlocksL
       ...(task.start_date === undefined ? {} : { start_date: task.start_date }),
       status: task.status,
       ...(summary === undefined ? {} : { summary }),
+      ...(task.recurring === true ? { recurring: true } : {}),
       title: task.title,
       version: task.version,
     });

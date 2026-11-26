@@ -39,7 +39,7 @@ use crate::time::rfc3339;
 use crate::write::WriteCtx;
 
 /// Most levels of subtasks: a task and four levels below it.
-const MAX_LEVELS: usize = 5;
+pub(crate) const MAX_LEVELS: usize = 5;
 /// Most tasks one read returns.
 const MAX_KEYS: usize = 20;
 /// Most tasks one move check looks at, as many as one bulk change takes.
@@ -296,6 +296,7 @@ pub(crate) fn load(
                 backlinks: None,
                 references: None,
                 reminder: None,
+                recurrence: None,
                 rank: r.get(19)?,
                 old_keys: Vec::new(),
                 created_by: Actor {
@@ -329,6 +330,7 @@ pub(crate) fn load(
         task.parent = Some(lookup::task_key(tx, project, number)?);
     }
     task.labels = task_labels(tx, id)?;
+    task.recurrence = super::recurrence::of_task(tx, id)?;
     task.progress_percent = super::rollup::progress(tx, id)?;
     if task.subtask_count.total > 0 {
         task.totals = super::rollup::totals(tx, id)?;
@@ -562,7 +564,7 @@ pub(crate) fn resolve_labels(
 
 /// The levels from the top task down to `id` (1 for a task without a
 /// parent).
-fn level_of(tx: &Transaction<'_>, id: Id) -> Result<usize, Failure> {
+pub(crate) fn level_of(tx: &Transaction<'_>, id: Id) -> Result<usize, Failure> {
     let mut level = 1;
     let mut next = Some(id);
     while let Some(current) = next {
@@ -926,6 +928,10 @@ fn create(w: &mut WriteCtx<'_>, input: TaskCreateInput) -> Result<TaskChange, Fa
         .map(|d| date_input(w, "due_date", d))
         .transpose()?;
     gk_core::check_date_range(start, due).map_err(|e| invalid("start_date", e))?;
+    let due = match due {
+        Some(d) => Some(d.to_string()),
+        None => type_due_date(w, task_type, start.map(|d| d.to_string()).as_deref())?,
+    };
     let units = units(w.tx())?;
     let estimate = input
         .estimate
@@ -952,7 +958,7 @@ fn create(w: &mut WriteCtx<'_>, input: TaskCreateInput) -> Result<TaskChange, Fa
             priority: priority_index(input.priority.unwrap_or_default()),
             parent,
             start_date: start.map(|d| d.to_string()),
-            due_date: due.map(|d| d.to_string()),
+            due_date: due,
             estimate,
             progress: None,
             labels,
@@ -960,6 +966,38 @@ fn create(w: &mut WriteCtx<'_>, input: TaskCreateInput) -> Result<TaskChange, Fa
         },
     )?;
     changed(w, id, Vec::new())
+}
+
+/// The due date a new task of type `task_type` gets when none is given:
+/// the type's number of days after today, in the person's time zone; none
+/// when the type sets none or the start date comes after it.
+pub(crate) fn type_due_date(
+    w: &WriteCtx<'_>,
+    task_type: Id,
+    start: Option<&str>,
+) -> Result<Option<String>, Failure> {
+    let days: Option<i64> = w
+        .tx()
+        .query_row(
+            "SELECT due_offset_days FROM task_types WHERE id = ?1",
+            [b(task_type)],
+            |r| r.get(0),
+        )
+        .optional()?
+        .flatten();
+    let Some(days) = days else {
+        return Ok(None);
+    };
+    let due = w
+        .zone()
+        .day_of(w.now())
+        .add_days(days)
+        .map_err(|e| invalid("due_date", e))?
+        .to_string();
+    Ok(match start {
+        Some(s) if s > due.as_str() => None,
+        _ => Some(due),
+    })
 }
 
 /// The fields of a task about to be written.

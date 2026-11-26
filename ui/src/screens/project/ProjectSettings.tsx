@@ -13,7 +13,10 @@ import { TypeGlyph } from "../../components/Glyphs";
 import { Switch } from "../../components/Switch";
 import { useProject } from "../../data/board";
 import { GLYPHS, HUES, MODULES, STATUS_CATEGORIES, type Hue, type Project, type Status } from "../../data/catalog";
-import { useCommand } from "../../data/hooks";
+import { useToasts } from "../../components/Toasts";
+import { useCommand, useUndo } from "../../data/hooks";
+import { useTemplates } from "../../data/recurrence";
+import { type TemplateSummary } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { HuePicker } from "./HuePicker";
 import { DeleteQuestion } from "./DeleteProject";
@@ -58,6 +61,9 @@ export function ProjectSettings({ projectKey, onClose }: ProjectSettingsProps) {
               <Tab id="labels" className={({ isSelected }) => (isSelected ? "tab on" : "tab")}>
                 {t("project-settings-labels")}
               </Tab>
+              <Tab id="templates" className={({ isSelected }) => (isSelected ? "tab on" : "tab")}>
+                {t("project-settings-templates")}
+              </Tab>
             </TabList>
             <TabPanel id="general" className={classes(styles.panel)}>
               <General project={project.data} onDeleted={onClose} />
@@ -70,6 +76,9 @@ export function ProjectSettings({ projectKey, onClose }: ProjectSettingsProps) {
             </TabPanel>
             <TabPanel id="labels" className={classes(styles.panel)}>
               <Labels project={project.data} />
+            </TabPanel>
+            <TabPanel id="templates" className={classes(styles.panel)}>
+              <Templates project={project.data} />
             </TabPanel>
           </Tabs>
         )}
@@ -452,6 +461,10 @@ function Types({ project }: { project: Project }) {
   const ref = { project: project.key };
   return (
     <div className={styles.list}>
+      <div className={classes(styles.simpleRow, styles.listHead)}>
+        <span className={styles.typeHeadName}>{t("type-name")}</span>
+        <span>{t("type-due-offset-head")}</span>
+      </div>
       {project.types.map((type) => (
         <div key={type.id} className={styles.simpleRow}>
           <TypeGlyph glyph={type.glyph} />
@@ -465,6 +478,17 @@ function Types({ project }: { project: Project }) {
             }}
             options={GLYPHS.map((glyph) => ({ id: glyph, label: t(`glyph-${glyph}`), icon: <TypeGlyph glyph={glyph} /> }))}
           />
+          <span className={styles.offset}>
+            <SaveField
+              className={classes(styles.narrow)}
+              label={t("type-due-offset", { name: type.name })}
+              value={type.due_offset_days === undefined ? "" : String(type.due_offset_days)}
+              onSave={(value) => {
+                update.mutate(value.trim() === "" ? { ...ref, type: type.id, clear_due_offset: true } : { ...ref, type: type.id, due_offset_days: Math.max(0, Math.trunc(Number(value))) });
+              }}
+            />
+            <span className="muted">{t("type-due-offset-suffix", { count: type.due_offset_days ?? 0 })}</span>
+          </span>
           {type.is_default && <span className="chip outline">{t("type-default")}</span>}
           <Button
             className="btn flat icon sm"
@@ -563,5 +587,89 @@ function Labels({ project }: { project: Project }) {
         </button>
       </form>
     </div>
+  );
+}
+
+/**
+ * The project's task templates and the workspace's project templates: their
+ * names and descriptions change in place, and they can be deleted (Undo
+ * brings one back). The project itself can be saved as a project template.
+ */
+function Templates({ project }: { project: Project }) {
+  const t = useT();
+  const own = useTemplates("task", project.key);
+  const workspace = useTemplates("project");
+  const create = useCommand("template.create");
+  const [name, setName] = useState("");
+  const [withTasks, setWithTasks] = useState(false);
+  return (
+    <div className={styles.form}>
+      <TemplateList title={t("templates-task")} empty={t("templates-none-task")} items={own.data?.items ?? []} />
+      <TemplateList title={t("templates-project")} empty={t("templates-none-project")} items={workspace.data?.items ?? []} />
+      <form
+        className={styles.templateSave}
+        aria-label={t("template-save-project")}
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (name.trim() !== "") {
+            create.mutate(
+              { name: name.trim(), from_project: project.key, include_tasks: withTasks },
+              {
+                onSuccess: () => {
+                  setName("");
+                },
+              },
+            );
+          }
+        }}
+      >
+        <h3 className={styles.templateHead}>{t("template-save-project")}</h3>
+        <div className={styles.addRow}>
+          <span className="field grow">
+            <input aria-label={t("template-name")} placeholder={t("template-name")} maxLength={100} value={name} onChange={(event) => { setName(event.target.value); }} />
+          </span>
+          <button type="submit" className="btn" disabled={name.trim() === "" || create.isPending}>
+            {t("template-save-project-button")}
+          </button>
+        </div>
+        <Switch isSelected={withTasks} onChange={setWithTasks}>
+          {t("template-include-tasks")}
+        </Switch>
+      </form>
+    </div>
+  );
+}
+
+function TemplateList({ title, empty, items }: { title: string; empty: string; items: readonly TemplateSummary[] }) {
+  const t = useT();
+  const update = useCommand("template.update", { undoable: t("toast-template-changed") });
+  const remove = useCommand("template.delete");
+  const toasts = useToasts();
+  const { undo } = useUndo();
+  return (
+    <section className={styles.list} aria-label={title}>
+      <h3 className={styles.templateHead}>{title}</h3>
+      {items.length === 0 && <p className="muted">{empty}</p>}
+      {items.map((template) => (
+        <div key={template.id} className={styles.templateRow} data-template={template.name}>
+          <SaveField className={classes(styles.growField)} label={t("template-rename", { name: template.name })} value={template.name} onSave={(value) => { if (value.trim() !== "") { update.mutate({ template: template.id, name: value }); } }} />
+          <SaveField className={classes(styles.growField)} label={t("template-describe", { name: template.name })} value={template.description ?? ""} onSave={(value) => { update.mutate({ template: template.id, description: value }); }} />
+          <span className="meta">{t(template.kind === "task" ? "template-items-task" : "template-items-project", { count: template.items })}</span>
+          <Button className="btn flat icon sm" aria-label={t("template-delete", { name: template.name })} onPress={() => {
+              remove.mutate(
+                { template: template.id },
+                {
+                  onSuccess: () => {
+                    toasts.show({ tone: "info", text: t("toast-template-deleted", { name: template.name }), action: { label: t("toast-undo"), run: undo } });
+                  },
+                },
+              );
+            }}
+          >
+            <Trash2 className="ic s" />
+          </Button>
+        </div>
+      ))}
+    </section>
   );
 }

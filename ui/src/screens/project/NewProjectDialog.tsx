@@ -2,11 +2,14 @@
 // Copyright (C) 2026 Glyphkeel contributors
 
 import { useState } from "react";
-import { Button } from "react-aria-components";
+import { Button, useLocale } from "react-aria-components";
 
 import { Dialog } from "../../components/Dialog";
+import { Select } from "../../components/Select";
+import { useToasts } from "../../components/Toasts";
 import { suggestHue, type Hue } from "../../data/catalog";
 import { useCall, useOp } from "../../data/hooks";
+import { useTemplates } from "../../data/recurrence";
 import { OpFailure } from "../../data/transport";
 import { useT } from "../../i18n/I18n";
 import { HuePicker } from "./HuePicker";
@@ -30,6 +33,9 @@ export function suggestKey(name: string): string {
   return key.slice(0, 10);
 }
 
+/** No template: an empty project. */
+const NO_TEMPLATE = "none";
+
 interface NewProjectDialogProps {
   request: NewProjectRequest;
   /** Called with the new project's key, or nothing when cancelled. */
@@ -49,16 +55,29 @@ export function NewProjectDialog({ request, onClose }: NewProjectDialogProps) {
   const hue = picked ?? suggestHue(siblings.map((project) => project.hue));
   const [error, setError] = useState<string | null>(null);
   const shownKey = key ?? suggestKey(name);
+  const templates = useTemplates("project");
+  const [template, setTemplate] = useState(NO_TEMPLATE);
+  const toasts = useToasts();
+  const { locale } = useLocale();
 
+  const failed = (failure: unknown) => {
+    setError(failure instanceof OpFailure ? [failure.error.message, "hint" in failure.error ? failure.error.hint : undefined].filter(Boolean).join(" ") : String(failure));
+  };
   const create = () => {
-    call("project.create", { name, key: shownKey, parent: request.parent, ...(picked === null ? {} : { hue: picked }) }).then(
-      (change) => {
-        onClose(change.project.key);
-      },
-      (failure: unknown) => {
-        setError(failure instanceof OpFailure ? [failure.error.message, "hint" in failure.error ? failure.error.hint : undefined].filter(Boolean).join(" ") : String(failure));
-      },
-    );
+    if (template !== NO_TEMPLATE) {
+      // A project template sets up the statuses, types, labels, pages, tasks and task templates.
+      call("template.apply", { template, name, key: shownKey, parent_project: request.parent, ...(picked === null ? {} : { hue: picked }) }).then((applied) => {
+        const leftOut = applied.left_out ?? [];
+        if (leftOut.length > 0) {
+          toasts.show({ tone: "info", text: t("template-left-out", { count: leftOut.length, names: new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(leftOut) }) });
+        }
+        onClose(applied.project?.key ?? shownKey);
+      }, failed);
+      return;
+    }
+    call("project.create", { name, key: shownKey, parent: request.parent, ...(picked === null ? {} : { hue: picked }) }).then((change) => {
+      onClose(change.project.key);
+    }, failed);
   };
 
   return (
@@ -119,6 +138,17 @@ export function NewProjectDialog({ request, onClose }: NewProjectDialogProps) {
           <span className={styles.formLabel}>{t("project-colour")}</span>
           <HuePicker label={t("project-colour")} value={hue} onChange={setPicked} />
         </div>
+        {(templates.data?.items.length ?? 0) > 0 && (
+          <div className={styles.formRow}>
+            <span className={styles.formLabel}>{t("project-template")}</span>
+            <Select
+              label={t("project-template")}
+              value={template}
+              options={[{ id: NO_TEMPLATE, label: t("project-template-none") }, ...(templates.data?.items ?? []).map((each) => ({ id: each.id, label: each.name }))]}
+              onChange={setTemplate}
+            />
+          </div>
+        )}
         {error && (
           <p className={styles.error} role="alert">
             {error}

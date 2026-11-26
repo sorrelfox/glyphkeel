@@ -80,6 +80,9 @@ import { newProject, nextFileId, nextId, nextUuid, SAMPLE_AGENT } from "./seed";
 import { type FakeComment, type FakeFile, type FakeProject, type FakeRelation, type FakeReminder, type FakeRevision, type FakeState, type FakeTask, type FakeTimeEntry, type FakeWikiPage } from "./state";
 import { naturalDay, nextDay, searchAll, searchWiki, slugOf, headingsOf } from "./overview";
 import { moveDependents, scheduleOf } from "./schedule";
+import { type FakeHost, type NewTask } from "./host";
+import { afterClosing, recurrenceHandlers, taskRecurrence } from "./recurrence";
+import { templateHandlers } from "./templates";
 
 /** The Gantt chart's layout until the person changes it. */
 const DEFAULT_GANTT_LAYOUT: GanttLayout = { zoom: "day", widths: {}, group_by: "parent", move_dependents: false };
@@ -250,6 +253,11 @@ export class FakeWorkspace {
     const answer = handler(input ?? {});
     if (!isResult(answer)) {
       return { output: answer };
+    }
+    // Closing the current occurrence of a recurring task makes the next one, in the same step.
+    if (!op.startsWith("history.") && op !== "backup.restore") {
+      const wasOpen = new Set(before.tasks.filter((task) => task.closedAt === null).map((task) => task.id));
+      answer.changes.push(...afterClosing(this.host, this.state.tasks.filter((task) => task.closedAt !== null && wasOpen.has(task.id))));
     }
     if (answer.changes.length === 0) {
       return { output: answer.output };
@@ -631,6 +639,7 @@ export class FakeWorkspace {
       updated_at: task.updatedAt,
       ...some("closed_at", task.closedAt),
       ...(task.oldKeys && task.oldKeys.length > 0 ? { old_keys: [...task.oldKeys] } : {}),
+      ...some("recurrence", taskRecurrence(this.host, task)),
       version: task.version,
     };
   }
@@ -1758,6 +1767,7 @@ export class FakeWorkspace {
       return subtasks.length > 0 ? Math.round(subtasks.reduce((sum, sub) => sum + progress(sub), 0) / subtasks.length) : 0;
     };
     const byId = new Map(this.state.tasks.map((task) => [task.id, task]));
+    const recurring = new Set((this.state.series ?? []).filter((series) => series.endedAt === null && series.current !== null).map((series) => series.current));
     const items = this.state.tasks.map((task): ListedTask => {
       const project = this.projectOf(task);
       const status = this.statusIn(project, task.statusId);
@@ -1790,6 +1800,7 @@ export class FakeWorkspace {
         title: task.title,
         type: this.typeRef(task),
         updated_at: task.updatedAt,
+        ...(recurring.has(task.id) ? { recurring: true } : {}),
         version: task.version,
       };
     });
@@ -1904,6 +1915,85 @@ export class FakeWorkspace {
   private viewChange(view: SavedView, fields: string[]): EntityChange[] {
     return [{ entity: "view", id: view.id, fields, ...some("project", view.project) }];
   }
+
+  /** Writes a new task at its place in its status (default: the project's first to-do status). */
+  private insertTask(project: FakeProject, fields: NewTask, place: Place = {}): FakeTask {
+    const target = fields.statusId !== null ? this.statusIn(project, fields.statusId) : (project.statuses.find((candidate) => candidate.category === "todo") ?? project.statuses[0]);
+    if (!target) {
+      fail("invalid", `Project ${project.key} has no statuses or task types.`);
+    }
+    const now = this.today().toISOString();
+    const task: FakeTask = {
+      id: nextId("t"),
+      projectId: project.id,
+      number: project.nextNumber,
+      title: this.checkTitle(fields.title),
+      description: fields.description,
+      statusId: target.id,
+      typeId: fields.typeId,
+      priority: fields.priority,
+      labelIds: [...fields.labelIds],
+      parentId: fields.parentId,
+      ...(fields.parentId !== null ? { subtaskRank: this.lastSubtaskRank(fields.parentId) } : {}),
+      rank: this.rankAt(target.id, place, null),
+      startDate: fields.startDate,
+      dueDate: fields.dueDate,
+      estimateMin: fields.estimateMin,
+      spentMin: 0,
+      files: 0,
+      comments: 0,
+      createdAt: now,
+      editedAt: now,
+      statusEnteredAt: now,
+      updatedAt: now,
+      updatedBy: { kind: "user", name: "You" },
+      closedAt: isClosed(target.category) ? now : null,
+      version: 1,
+    };
+    project.nextNumber += 1;
+    this.state.tasks.push(task);
+    if (task.description !== "") {
+      this.addRevision(task, task.description, "normal", null);
+    }
+    return task;
+  }
+
+  /** A type's default due date in days, checked; null when not given. */
+  private dueOffset(days: number | null | undefined): number | null {
+    if (days === null || days === undefined) {
+      return null;
+    }
+    if (!Number.isInteger(days) || days < 0 || days > 3650) {
+      fail("invalid", "A default due date is 0 to 3650 days after a task is made.", { details: { path: "due_offset_days" } });
+    }
+    return days;
+  }
+
+  /** What the modules for recurring tasks and templates use of this engine. */
+  private readonly host: FakeHost = {
+    state: () => this.state,
+    today: () => localDay(this.today()),
+    now: () => this.today().toISOString(),
+    fail,
+    project: (ref) => this.project(ref),
+    writable: (ref) => this.writable(ref),
+    task: (key) => this.task(key),
+    keyOf: (task) => this.keyOf(task),
+    projectOf: (task) => this.projectOf(task),
+    dayInput: (text, path) => this.dayInput(text, path),
+    subtasksOf: (task) => this.subtasksOf(task),
+    insertTask: (project, fields) => this.insertTask(project, fields),
+    fullTask: (task) => this.fullTask(task),
+    fullProject: (project) => this.fullProject(project),
+    createProject: ({ name, key, parent, hue, description }) => {
+      this.handlers["project.create"]?.({ name, key, ...some("parent", parent), ...some("hue", hue), description });
+      return this.project(key);
+    },
+    createPage: (project, title, body, parentTitle) => {
+      const parent = parentTitle === null ? undefined : (this.state.wiki ?? []).find((page) => page.projectId === project.id && page.title === parentTitle);
+      this.handlers["wiki.create"]?.({ project: project.key, title, ...(body === "" ? {} : { body }), ...some("parent", parent?.id) });
+    },
+  };
 
   // ---------- the operations ----------
 
@@ -2211,20 +2301,28 @@ export class FakeWorkspace {
       project.statuses = project.statuses.filter((candidate) => candidate !== status);
       return this.projectChange(project, "status", ["*"]);
     },
-    "type.create": ({ project: ref, name, glyph, hue, make_default }) => {
+    "type.create": ({ project: ref, name, glyph, hue, make_default, due_offset_days }) => {
       const project = this.writable(ref);
       this.validHue(hue);
-      const type = { id: nextId("ty"), name: this.uniqueName(project.types, name, "task type"), glyph: glyph ?? "task", hue: hue ?? "grey", is_default: false };
+      const type = { id: nextId("ty"), name: this.uniqueName(project.types, name, "task type"), glyph: glyph ?? "task", hue: hue ?? "grey", is_default: false, ...some("due_offset_days", this.dueOffset(due_offset_days)) };
       project.types.push(type);
       if (make_default === true) {
         project.types.forEach((candidate) => (candidate.is_default = candidate === type));
       }
       return this.projectChange(project, "task_type", ["*"]);
     },
-    "type.update": ({ project: ref, type: typeRef, name, glyph, hue, make_default, before, after, at }) => {
+    "type.update": ({ project: ref, type: typeRef, name, glyph, hue, make_default, before, after, at, due_offset_days, clear_due_offset }) => {
       const project = this.writable(ref);
       const type = this.typeIn(project, typeRef);
       const fields: string[] = [];
+      const offset = this.dueOffset(due_offset_days);
+      if (offset !== null) {
+        type.due_offset_days = offset;
+        fields.push("due_offset_days");
+      } else if (clear_due_offset === true && type.due_offset_days !== undefined) {
+        delete type.due_offset_days;
+        fields.push("due_offset_days");
+      }
       if (name !== null && name !== undefined) {
         type.name = this.uniqueName(project.types, name, "task type", type.id);
         fields.push("name");
@@ -3303,10 +3401,10 @@ export class FakeWorkspace {
       }
       return { output: { reverted, skipped }, changes: [{ entity: "workspace", id: "w-1", fields: ["*"] }] };
     },
-    "task.create": ({ project: ref, title, status, description, priority, before, after, at, parent: parentKey, start_date, due_date }) => {
+    "task.create": ({ project: ref, title, status, description, priority, before, after, at, parent: parentKey, start_date, due_date, type: typeName, labels, estimate }) => {
       const project = this.writable(ref);
       const startDate = start_date === null || start_date === undefined ? null : this.dayInput(start_date, "start_date");
-      const dueDate = due_date === null || due_date === undefined ? null : this.dayInput(due_date, "due_date");
+      let dueDate = due_date === null || due_date === undefined ? null : this.dayInput(due_date, "due_date");
       if (startDate !== null && dueDate !== null && startDate > dueDate) {
         fail("invalid", "The start date is after the due date.", { details: { path: "start_date" } });
       }
@@ -3315,46 +3413,29 @@ export class FakeWorkspace {
         fail("invalid", "A subtask belongs to its parent's project.", { details: { path: "parent" } });
       }
       const trimmed = this.checkTitle(title);
-      const target = status
-        ? this.statusIn(project, status)
-        : (project.statuses.find((candidate) => candidate.category === "todo") ?? project.statuses[0]);
-      const type = project.types.find((candidate) => candidate.is_default) ?? project.types[0];
-      if (!target || !type) {
+      const target = status ? this.statusIn(project, status) : undefined;
+      const type = typeName === null || typeName === undefined ? (project.types.find((candidate) => candidate.is_default) ?? project.types[0]) : this.typeIn(project, typeName);
+      if (!type) {
         fail("invalid", `Project ${project.key} has no statuses or task types.`);
       }
-      const now = this.today().toISOString();
-      const task: FakeTask = {
-        id: nextId("t"),
-        projectId: project.id,
-        number: project.nextNumber,
+      // A type can give new tasks a due date some days from today.
+      if (dueDate === null && type.due_offset_days !== undefined) {
+        const byType = addDays(localDay(this.today()), type.due_offset_days);
+        dueDate = startDate !== null && startDate > byType ? null : byType;
+      }
+      const estimateMin = estimate === null || estimate === undefined ? null : (minutesOf(estimate) ?? fail("invalid", `"${estimate}" is not a duration.`, { details: { path: "estimate" } }));
+      const task = this.insertTask(project, {
         title: trimmed,
         description: description ?? "",
-        statusId: target.id,
+        statusId: target?.id ?? null,
         typeId: type.id,
         priority: priority ?? "none",
-        labelIds: [],
+        labelIds: (labels ?? []).map((label) => this.labelIn(project, label, "labels").id),
         parentId: parent?.id ?? null,
-        ...(parent ? { subtaskRank: this.lastSubtaskRank(parent.id) } : {}),
-        rank: this.rankAt(target.id, { before, after, at }, null),
         startDate,
         dueDate,
-        estimateMin: null,
-        spentMin: 0,
-        files: 0,
-        comments: 0,
-        createdAt: now,
-        editedAt: now,
-        statusEnteredAt: now,
-        updatedAt: now,
-        updatedBy: { kind: "user", name: "You" },
-        closedAt: isClosed(target.category) ? now : null,
-        version: 1,
-      };
-      project.nextNumber += 1;
-      this.state.tasks.push(task);
-      if (task.description !== "") {
-        this.addRevision(task, task.description, "normal", null);
-      }
+        estimateMin,
+      }, { before, after, at });
       return this.taskChange(task, ["*"]);
     },
     "task.update": (input) => {
@@ -4022,6 +4103,8 @@ export class FakeWorkspace {
       sortDue(items);
       return { items: items.slice(0, limit ?? 100), total: items.length, until: end, ...some("next_at", next) };
     },
+    ...recurrenceHandlers(this.host),
+    ...templateHandlers(this.host),
     "reminder.acknowledge": ({ ids }) => {
       const acknowledged: string[] = [];
       const unknown: string[] = [];
