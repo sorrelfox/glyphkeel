@@ -161,6 +161,21 @@ cargo xtask ci --suite flatpak         # flatpak-builder on this machine (needs 
 cargo xtask check-bundle               # the built UI names no remote address
 ```
 
+The other channels are checked in containers too (`docs/releasing.md` has the
+details):
+
+```sh
+cargo xtask ci --distro arch           # the Arch Linux package: makepkg, namcap, installed in a clean container
+cargo xtask ci --suite repos           # the signed APT and DNF repositories, added and installed from
+cargo xtask ci --suite repos --packages-from DIR   # the same with a deb and an rpm from DIR
+cargo xtask ci --suite flathub         # the Flathub manifest: source lists, linter, flatpak-builder
+```
+
+The containers of `repos` have the network, for the dependencies from the
+distributions' own repositories; the Arch package's checks run without it, as
+the others do. `flathub` runs its container with `--privileged`, because flatpak-builder
+sandboxes every build step.
+
 Their results land in `target/ci-cache/results/<distro>/<suite>/` (the
 performance table is `perf.md`). `perf` only reports by default, even when a
 measure couldn't be taken; `--perf-enforce` fails it on a result over budget

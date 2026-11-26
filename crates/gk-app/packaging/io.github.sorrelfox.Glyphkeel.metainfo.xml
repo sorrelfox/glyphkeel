@@ -40,6 +40,7 @@
   <url type="homepage">https://sorrelfox.github.io/glyphkeel/</url>
   <url type="bugtracker">https://github.com/sorrelfox/glyphkeel/issues</url>
   <url type="vcs-browser">https://github.com/sorrelfox/glyphkeel</url>
+  <url type="help">https://github.com/sorrelfox/glyphkeel/tree/main/docs</url>
   <categories>
     <category>Office</category>
     <category>ProjectManagement</category>
@@ -56,6 +57,22 @@
     <screenshot type="default">
       <caption>A project board with its columns of task cards</caption>
       <image>https://raw.githubusercontent.com/sorrelfox/glyphkeel/main/docs/screenshots/board.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>A task open beside the board, with its checklist, subtasks and links</caption>
+      <image>https://raw.githubusercontent.com/sorrelfox/glyphkeel/main/docs/screenshots/task.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>The tasks of a project as a list</caption>
+      <image>https://raw.githubusercontent.com/sorrelfox/glyphkeel/main/docs/screenshots/list.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Today, the tasks for the day</caption>
+      <image>https://raw.githubusercontent.com/sorrelfox/glyphkeel/main/docs/screenshots/today.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>A wiki page of a project</caption>
+      <image>https://raw.githubusercontent.com/sorrelfox/glyphkeel/main/docs/screenshots/wiki.png</image>
     </screenshot>
   </screenshots>
   <branding>

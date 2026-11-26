@@ -124,6 +124,7 @@ const NAMES: &[&str] = &[
     ".gitattributes",
     "Containerfile",
     "Dockerfile",
+    "PKGBUILD",
 ];
 
 fn checked(path: &Path) -> bool {

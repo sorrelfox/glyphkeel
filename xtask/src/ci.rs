@@ -12,10 +12,12 @@
 //! cargo registry, each distribution's `target/` and the pnpm store) live in
 //! named volumes, so runs after the first are incremental.
 //!
-//! The suites `packages`, `offline`, `perf` and `flatpak` check what ships,
-//! from the host (see `installed.rs`): the deb and rpm are built once in the
+//! The suites `packages`, `offline`, `perf`, `flatpak`, `repos` and
+//! `flathub` check what ships, from the host (see `installed.rs`,
+//! `repos.rs` and `flathub.rs`): the deb and rpm are built once in the
 //! Ubuntu 22.04 image, then installed in clean containers of each
-//! distribution and checked there.
+//! distribution and checked there. `--distro arch` builds and checks the
+//! Arch Linux package (`arch.rs`).
 
 use std::fmt;
 use std::fs;
@@ -31,9 +33,11 @@ use crate::windows::WinSuite;
 const HELP: &str = "\
 Usage: cargo xtask ci [--suite S[,S…]] [--distro D[,D…]] [--engine E] [--rebuild]
                       [--cache-dir DIR] [--package-release N] [--ui-flows F[,F…]]
-                      [--pseudo-locale L] [--perf-enforce]
+                      [--pseudo-locale L] [--perf-enforce] [--packages-from DIR]
        cargo xtask ci --distro windows-cross [--suite S[,S…]] [--engine E] [--rebuild]
                       [--cache-dir DIR] [--release-dir DIR]
+       cargo xtask ci --distro arch [--suite package] [--engine E] [--rebuild]
+                      [--cache-dir DIR] [--package-release N]
        cargo xtask ci --here [--suite S[,S…]] [--package-release N] [--ui-flows F[,F…]]
                       [--pseudo-locale L]
        cargo xtask ci --list
@@ -51,6 +55,11 @@ Options:
                 Linux and run under Wine. It is never part of the default,
                 runs on its own and has suites of its own (see `--list`;
                 default: all of them).
+                `arch` is the Arch Linux package: built with makepkg from
+                the source tarball, checked with namcap and installed in a
+                clean Arch Linux container (see `--list`). It runs on its
+                own, never by default; its packages land in
+                <cache>/arch/out/.
   --engine E    `podman` or `docker`. Default: podman when it is installed,
                 docker otherwise.
   --rebuild     Rebuild the images from scratch, without the layer cache.
@@ -61,7 +70,8 @@ Options:
                 DIR/target-<distro>/dist/bundle/.
   --package-release N
                 The rpm's release number, for a rebuild of the same version
-                (`package` suite only). Default: 1.
+                (`package` suite only), or the Arch package's `pkgrel`.
+                Default: 1.
   --ui-flows F  Run only these browser flows in the `ui` suite (repeatable or
                 comma-separated; see `--list`). Default: every flow, one
                 after another, each against a fresh workspace.
@@ -73,6 +83,10 @@ Options:
                 machine). Without it the suite only reports: timings and
                 memory depend on the machine, so nothing it measures fails
                 the run.
+  --packages-from DIR
+                Take the deb and rpm the `repos` suite puts in the
+                repositories from DIR (one of each) instead of building
+                them. Only with `--suite repos` alone.
   --release-dir DIR
                 Copy the Windows installer to DIR/<version>/windows/
                 (windows-cross `nsis` suite only). Without it the installer
@@ -140,10 +154,15 @@ pub(crate) enum Suite {
     Perf,
     /// The Flatpak, built with flatpak-builder on the host.
     Flatpak,
+    /// The signed APT and DNF repositories, made with a throwaway key and
+    /// added in clean containers as users add them.
+    Repos,
+    /// The Flathub submission's manifest, built and linted in a container.
+    Flathub,
 }
 
 impl Suite {
-    const ALL: [Self; 13] = [
+    const ALL: [Self; 15] = [
         Self::Static,
         Self::Rust,
         Self::Ui,
@@ -157,6 +176,8 @@ impl Suite {
         Self::Offline,
         Self::Perf,
         Self::Flatpak,
+        Self::Repos,
+        Self::Flathub,
     ];
     const DEFAULT: [Self; 4] = [Self::Static, Self::Rust, Self::Ui, Self::App];
 
@@ -175,6 +196,8 @@ impl Suite {
             Self::Offline => "offline",
             Self::Perf => "perf",
             Self::Flatpak => "flatpak",
+            Self::Repos => "repos",
+            Self::Flathub => "flathub",
         }
     }
 
@@ -217,6 +240,16 @@ impl Suite {
                 "the Flatpak, built with flatpak-builder on the host (skipped without the \
                  generated source lists)"
             }
+            Self::Repos => {
+                "the signed APT and DNF repositories (`cargo xtask repos`) with a throwaway \
+                 key, added and installed from in clean containers of each distribution, \
+                 and refused when changed (from the host)"
+            }
+            Self::Flathub => {
+                "the Flathub manifest: source lists generated, linted with Flathub's linter, \
+                 built with flatpak-builder in a container, AppStream and desktop files \
+                 validated in the build (from the host)"
+            }
         }
     }
 
@@ -225,7 +258,12 @@ impl Suite {
     pub(crate) fn on_host(self) -> bool {
         matches!(
             self,
-            Self::Packages | Self::Offline | Self::Perf | Self::Flatpak
+            Self::Packages
+                | Self::Offline
+                | Self::Perf
+                | Self::Flatpak
+                | Self::Repos
+                | Self::Flathub
         )
     }
 
@@ -332,7 +370,12 @@ impl Suite {
             ],
             Self::TestData => DATA_SETS.iter().map(|set| Step::Seed(set)).collect(),
             Self::Pseudo => vec![Step::Pseudo(locale.to_owned())],
-            Self::Packages | Self::Offline | Self::Perf | Self::Flatpak => Vec::new(),
+            Self::Packages
+            | Self::Offline
+            | Self::Perf
+            | Self::Flatpak
+            | Self::Repos
+            | Self::Flathub => Vec::new(),
         }
     }
 }
@@ -816,8 +859,12 @@ struct Options {
     pseudo_locale: String,
     /// Whether the `perf` suite fails on a result over budget.
     perf_enforce: bool,
+    /// The deb and rpm the `repos` suite uses instead of building them.
+    packages_from: Option<PathBuf>,
     /// Whether the Windows cross build runs instead of the distributions.
     windows: bool,
+    /// Whether the Arch Linux package is built instead.
+    arch: bool,
     /// The suites of the Windows cross build.
     win_suites: Vec<WinSuite>,
     /// Where the Windows installer is copied, under `<version>/windows/`.
@@ -839,7 +886,9 @@ impl Options {
             ui_flows: Vec::new(),
             pseudo_locale: PSEUDO_LOCALE.to_owned(),
             perf_enforce: false,
+            packages_from: None,
             windows: false,
+            arch: false,
             win_suites: Vec::new(),
             release_dir: None,
             here: false,
@@ -875,6 +924,8 @@ impl Options {
                         let name = name.trim();
                         if name == crate::windows::NAME {
                             options.windows = true;
+                        } else if name == crate::arch::NAME {
+                            options.arch = true;
                         } else {
                             push_unique(&mut options.distros, Distro::parse(name)?);
                         }
@@ -916,13 +967,29 @@ impl Options {
                     options.pseudo_locale = locale;
                 }
                 "--perf-enforce" => options.perf_enforce = true,
+                "--packages-from" => options.packages_from = Some(PathBuf::from(value()?)),
                 "--here" => options.here = true,
                 "--list" => options.list = true,
                 "-h" | "--help" => options.help = true,
                 other => bail!("unknown option `{other}`\n\n{HELP}"),
             }
         }
-        if options.windows {
+        if options.arch {
+            if options.windows || !options.distros.is_empty() {
+                bail!(
+                    "`{}` runs on its own; run the other distributions separately",
+                    crate::arch::NAME
+                );
+            }
+            if let Some(name) = suite_names.iter().find(|name| *name != crate::arch::SUITE) {
+                bail!(
+                    "unknown suite `{name}` for `{}`: its only suite is `{}`",
+                    crate::arch::NAME,
+                    crate::arch::SUITE
+                );
+            }
+            options.suites = vec![Suite::Package];
+        } else if options.windows {
             if !options.distros.is_empty() {
                 bail!(
                     "`{}` runs on its own, with suites of its own; run the other \
@@ -965,8 +1032,19 @@ impl Options {
         if options.pseudo_locale != PSEUDO_LOCALE && !options.suites.contains(&Suite::Pseudo) {
             bail!("`--pseudo-locale` applies to the `pseudo` suite only");
         }
+        if options.packages_from.is_some()
+            && (options.suites.as_slice() != [Suite::Repos] || options.arch)
+        {
+            bail!("`--packages-from` applies to the `repos` suite only, run on its own");
+        }
         if options.perf_enforce && !options.suites.contains(&Suite::Perf) {
             bail!("`--perf-enforce` applies to the `perf` suite only");
+        }
+        if options.here && options.arch {
+            bail!(
+                "`{}` runs from the host and needs containers; drop `--here`",
+                crate::arch::NAME
+            );
         }
         if options.here
             && let Some(suite) = options.suites.iter().find(|suite| suite.on_host())
@@ -1021,6 +1099,20 @@ pub(crate) fn run(root: &Path, args: &[String]) -> Result<bool> {
         None => Engine::detect()?,
     };
     let pins = Pins::read(root)?;
+    if options.arch {
+        return crate::arch::ArchRun {
+            root,
+            engine,
+            pins: &pins,
+            rebuild: options.rebuild,
+            package_release: options.package_release,
+            cache_dir: options
+                .cache_dir
+                .clone()
+                .unwrap_or_else(|| root.join(crate::installed::DEFAULT_CACHE)),
+        }
+        .run();
+    }
     if options.windows {
         return crate::windows::run_in_container(
             root,
@@ -1075,6 +1167,7 @@ pub(crate) fn run(root: &Path, args: &[String]) -> Result<bool> {
             rebuild: options.rebuild,
             package_release: options.package_release,
             perf_enforce: options.perf_enforce,
+            packages_from: options.packages_from.as_deref(),
             cache_dir: options
                 .cache_dir
                 .clone()
@@ -1107,6 +1200,16 @@ fn list() {
     for suite in WinSuite::ALL {
         eprintln!("    {:<8} {}", suite.name(), suite.about());
     }
+    eprintln!(
+        "  {} (on its own, never by default; its one suite):",
+        crate::arch::NAME
+    );
+    eprintln!(
+        "    {:<8} makepkg from the source tarball, namcap, the AUR files, and the \
+         package installed in a clean Arch Linux container: files, programs, a \
+         command-line and an MCP session",
+        crate::arch::SUITE
+    );
     eprintln!("UI flows of the ui suite (default: all, in this order):");
     for flow in Flow::ALL {
         eprintln!("  {:<8} {} ({})", flow.name, flow.about, flow.config);
@@ -1617,9 +1720,31 @@ mod tests {
     }
 
     #[test]
+    fn the_arch_package_runs_on_its_own_with_one_suite() {
+        let options = parse(&["--distro", "arch"]).unwrap();
+        assert!(options.arch);
+        assert!(options.distros.is_empty(), "no other distribution runs");
+        assert_eq!(options.suites, [Suite::Package]);
+        let options = parse(&[
+            "--distro=arch",
+            "--suite",
+            "package",
+            "--package-release",
+            "2",
+        ])
+        .unwrap();
+        assert_eq!(options.package_release, Some(2));
+        assert!(!parse(&[]).unwrap().arch, "never part of the default run");
+        assert!(parse(&["--distro", "arch,fedora"]).is_err());
+        assert!(parse(&["--distro", "arch,windows-cross"]).is_err());
+        assert!(parse(&["--distro", "arch", "--suite", "rust"]).is_err());
+        assert!(parse(&["--distro", "arch", "--here"]).is_err());
+    }
+
+    #[test]
     fn unknown_names_and_conflicts_are_errors() {
         assert!(parse(&["--suite", "nope"]).is_err());
-        assert!(parse(&["--distro", "arch"]).is_err());
+        assert!(parse(&["--distro", "gentoo"]).is_err());
         assert!(parse(&["--engine", "lxc"]).is_err());
         assert!(parse(&["--suite"]).is_err());
         assert!(parse(&["--here", "--rebuild"]).is_err());
