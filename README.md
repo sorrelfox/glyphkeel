@@ -148,6 +148,14 @@ feature to the engine, the MCP server, the command line and the app together.
 
 Releases will appear on the [releases page](https://github.com/sorrelfox/glyphkeel/releases).
 
+## Documentation
+
+The [documentation](docs/README.md) has a user guide for the app, and guides to
+[backup and restore](docs/backup-and-restore.md),
+[the query language](docs/query-language.md),
+[the command line](docs/cli.md) and
+[working with AI agents](docs/mcp.md).
+
 ## Building from source
 
 You need:

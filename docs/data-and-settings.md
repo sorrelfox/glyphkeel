@@ -66,7 +66,8 @@ folders, give the client the same variables in its server settings.
 
 Keep a workspace on a local disk. Several Glyphkeel programs may use it at
 once, which network and cloud-synced folders don't handle reliably; use
-backups or exports to move data between computers.
+[backups](backup-and-restore.md#moving-to-another-computer) or
+[exports](guide/export-import.md) to move data between computers.
 
 ## Uninstalling keeps your data
 

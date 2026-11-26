@@ -9,7 +9,8 @@ closed.
 
 The quickest way is Preferences › Agents & CLI in the app: pick a client and
 copy its set-up, with the full path of the command already filled in. The
-examples below do the same by hand.
+examples below do the same by hand. What agents can do, and how to keep them
+within limits, is in [Working with AI agents](mcp.md).
 
 ## The command
 
@@ -125,6 +126,7 @@ prompt's project is that project when you leave it out.
 arguments and full text.
 
 Every change an agent makes is recorded with its session, and Preferences ›
-Agents & CLI lists the sessions, each of which can be reverted. Client
+Agents & CLI lists the sessions, each of which can be reverted
+([Undo and review](mcp.md#undo-and-review)). Client
 formats change from time to time; if one of these no longer works, the
 client's own documentation has the current form.
