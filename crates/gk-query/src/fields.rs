@@ -29,6 +29,8 @@ pub enum FieldType {
     Priority,
     /// Label names; `:` any of them.
     Label,
+    /// The names of versions (releases), or `none`.
+    Version,
     /// The parent task, or `none`.
     Parent,
     /// Any ancestor task.
@@ -181,6 +183,7 @@ pub const HAS_PARTS: &[&str] = &[
     "estimate",
     "description",
     "labels",
+    "version",
     "files",
     "comments",
     "subtasks",
@@ -322,6 +325,15 @@ pub static FIELDS: &[Field] = &[
         false,
         false,
         "label names",
+    ),
+    field(
+        "version",
+        &["fix-version"],
+        FieldType::Version,
+        NAME_OPS,
+        false,
+        true,
+        "version names, or none",
     ),
     field(
         "parent",

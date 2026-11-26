@@ -24,6 +24,7 @@ import {
   type TrashEntry,
   type Via,
 } from "../../generated/ops";
+import { type FakeVersion } from "./versions";
 
 export interface FakeStatus {
   id: string;
@@ -98,6 +99,8 @@ export interface FakeTask {
   updatedBy: { kind: "user" | "agent"; name: string };
   closedAt: string | null;
   version: number;
+  /** The version (release) it is planned for. */
+  fixVersionId?: string | null;
 }
 
 /** A link between two tasks, stored the way it reads from `from`. */
@@ -260,6 +263,8 @@ export interface FakeState {
   trash?: FakeTrashed[];
   /** Backups, newest first; none until one is made. */
   backups?: Backup[];
+  /** Versions (releases) of the projects; none until one is made. */
+  versions?: FakeVersion[];
   workspaceName: string;
   seq: number;
 }

@@ -41,6 +41,7 @@ import { DescriptionSection, type DescriptionView } from "./Description";
 import { FilesSection, useFileDrop } from "./Files";
 import { LinksSection, SubtasksSection } from "./Sections";
 import { QuickLog, ReminderValue, TimerButton } from "./Time";
+import { VersionPicker } from "./VersionPicker";
 import styles from "./TaskPanel.module.css";
 
 interface TaskPanelProps {
@@ -338,6 +339,9 @@ function Loaded({
                 </span>
               )}
             </span>
+          </Prop>
+          <Prop label={t("prop-version")}>
+            <VersionPicker task={task} readOnly={readOnly} onChange={(version) => { setOrClear("fix_version", version); }} />
           </Prop>
           <Prop label={t("prop-labels")} wide>
             <Labels task={task} project={project} readOnly={readOnly} onChange={(labels) => { setOrClear("labels", labels.length === 0 ? null : labels); }} />

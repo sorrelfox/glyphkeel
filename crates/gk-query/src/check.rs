@@ -124,6 +124,13 @@ pub enum Cond {
     Types(Vec<NameRef>),
     /// Has any of these labels.
     Labels(Vec<NameRef>),
+    /// Planned for a version of one of these names, or (`none`) for none.
+    Versions {
+        /// The versions.
+        names: Vec<NameRef>,
+        /// Tasks without a version match.
+        none: bool,
+    },
     /// Priority within any of these bounds (0 none to 4 urgent).
     Priority(Vec<Bounds>),
     /// A subtask of one of these tasks, or (`none`) of no task.
@@ -216,6 +223,8 @@ pub enum NameKind {
     Type,
     /// A label.
     Label,
+    /// A version.
+    Version,
     /// A project key.
     Project,
     /// A task key.
@@ -351,6 +360,7 @@ fn collect_names(f: &Filter, out: &mut Vec<NameUse>) {
             Cond::Statuses(n) => names(NameKind::Status, n, out),
             Cond::Types(n) => names(NameKind::Type, n, out),
             Cond::Labels(n) => names(NameKind::Label, n, out),
+            Cond::Versions { names: n, .. } => names(NameKind::Version, n, out),
             Cond::Projects(p) => out.extend(p.iter().map(|p| NameUse {
                 kind: NameKind::Project,
                 text: p.key.clone(),
@@ -766,6 +776,14 @@ fn condition(
                 .map(|v| name_ref(v, field))
                 .collect::<Result<_, _>>()?,
         ),
+        FieldType::Version => Cond::Versions {
+            names: values
+                .iter()
+                .filter(|v| !is_none(v))
+                .map(|v| name_ref(v, field))
+                .collect::<Result<_, _>>()?,
+            none: values.iter().any(is_none),
+        },
         FieldType::Category => {
             let mut cats = Vec::new();
             for v in values {

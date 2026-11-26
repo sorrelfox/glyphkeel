@@ -255,6 +255,7 @@ pub(crate) fn load(
                 priority: parse_enum(priority_name(r.get(10)?)).unwrap_or(Priority::None),
                 labels: Vec::new(),
                 parent: None,
+                fix_version: None,
                 description: r.get(3)?,
                 description_revision: opt_id_at(r, 36)?.map(|id| id.to_string()),
                 conflict_copies: count(r.get(37)?),
@@ -323,6 +324,7 @@ pub(crate) fn load(
         task.parent = Some(lookup::task_key(tx, project, number)?);
     }
     task.labels = task_labels(tx, id)?;
+    task.fix_version = super::version::of_task(tx, id)?;
     task.progress_percent = super::rollup::progress(tx, id)?;
     if task.subtask_count.total > 0 {
         task.totals = super::rollup::totals(tx, id)?;
@@ -901,6 +903,11 @@ fn create(w: &mut WriteCtx<'_>, input: TaskCreateInput) -> Result<TaskChange, Fa
         None => default_type(w.tx(), &project)?,
     };
     let labels = resolve_labels(w.tx(), &project, "labels", &input.labels)?;
+    let fix_version = input
+        .fix_version
+        .as_deref()
+        .map(|v| super::version::resolve_for_task(w.tx(), &project, "fix_version", v))
+        .transpose()?;
     let parent = match &input.parent {
         Some(p) => {
             let parent = lookup::task(w.tx(), "parent", p)?;
@@ -953,6 +960,9 @@ fn create(w: &mut WriteCtx<'_>, input: TaskCreateInput) -> Result<TaskChange, Fa
             target,
         },
     )?;
+    if fix_version.is_some() {
+        super::version::set_task(w, id, project.id, fix_version)?;
+    }
     changed(w, id, Vec::new())
 }
 
@@ -1124,6 +1134,11 @@ pub(crate) fn update(w: &mut WriteCtx<'_>, input: TaskUpdateInput) -> Result<Tas
             TaskField::Labels,
             "labels",
         ),
+        (
+            input.fix_version.is_some(),
+            TaskField::FixVersion,
+            "fix_version",
+        ),
     ] {
         if given && clears(field) {
             return Err(messages::invalid(
@@ -1230,6 +1245,16 @@ pub(crate) fn update(w: &mut WriteCtx<'_>, input: TaskUpdateInput) -> Result<Tas
         let remove = resolve_labels(w.tx(), &project, "remove_labels", &input.remove_labels)?;
         ids.retain(|l| !remove.contains(l));
         set_labels(w, id, project.id, &ids)?;
+    }
+    if let Some(v) = &input.fix_version {
+        let current = fields::read(w.tx(), TASK, id, super::version::TASK_FIELD)?;
+        let version = super::version::resolve_for_task(w.tx(), &project, "fix_version", v)?;
+        if current != id_value(version) {
+            super::version::set_task(w, id, project.id, Some(version))?;
+        }
+    }
+    if clears(TaskField::FixVersion) {
+        super::version::set_task(w, id, project.id, None)?;
     }
     if let Some(p) = &input.parent {
         let parent = lookup::task(w.tx(), "parent", p)?;
@@ -1512,6 +1537,12 @@ fn move_to_project(
             }
         }
         set_labels(w, id, to.id, &kept)?;
+        if let Some(key) = super::version::drop_unreachable_task(w, id, to.id)? {
+            warnings.push(messages::text(
+                "task-version-left-off",
+                &[("version", key), ("project", to.key.clone())],
+            ));
+        }
         if id == task.id && task.parent.is_some() {
             set_parent(w, id, to.id, None)?;
         }

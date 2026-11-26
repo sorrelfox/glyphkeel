@@ -121,6 +121,7 @@ fn duplicate(w: &mut WriteCtx<'_>, input: TaskDuplicateInput) -> Result<TaskChan
                 target: Target::Bottom,
             },
         )?;
+        super::version::copy_to(w, old, new, project.id)?;
         super::file::copy_to(w, old, new, project.id)?;
         copies.insert(old, new);
     }

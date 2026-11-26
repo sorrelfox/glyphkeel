@@ -30,7 +30,7 @@ use serde_json::{Map, Value};
 use super::description::{self, Owner};
 use super::{
     agent, board, claim, comment, desc, fields, file, gantt_layout, list_layout, lookup, project,
-    relation, reminder, settings, task, time, trash, view, wiki,
+    relation, reminder, settings, task, time, trash, version, view, wiki,
 };
 use crate::failure::Failure;
 use crate::messages;
@@ -402,6 +402,7 @@ fn current(
         (list_layout::ENTITY, list_layout::FIELD) => list_layout::raw(tx, id)?,
         (gantt_layout::ENTITY, gantt_layout::FIELD) => gantt_layout::raw(tx, id)?,
         (view::ENTITY, view::RECORD) => view::raw(tx, id)?,
+        (version::ENTITY, version::RECORD) => version::raw(tx, id)?,
         (_, "deleted" | trash::PURGED) => return Ok(None),
         (fields::PROJECT | fields::TASK | fields::WIKI, trash::TRASHED) => {
             trash::raw_trashed(tx, entity, id)?
@@ -498,6 +499,12 @@ fn apply(
         (view::ENTITY, view::RECORD) => {
             let before = view::raw(w.tx(), id)?;
             view::write_raw(w, id, value.as_ref())?;
+            w.record_field(entity, id, project, field, before, value);
+            Ok(())
+        }
+        (version::ENTITY, version::RECORD) => {
+            let before = version::raw(w.tx(), id)?;
+            version::write_raw(w, id, value.as_ref())?;
             w.record_field(entity, id, project, field, before, value);
             Ok(())
         }

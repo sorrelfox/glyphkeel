@@ -42,6 +42,7 @@ pub mod time;
 pub mod today;
 pub mod transfer;
 pub mod trash;
+pub mod version;
 pub mod view;
 pub mod wiki;
 pub mod workspace;

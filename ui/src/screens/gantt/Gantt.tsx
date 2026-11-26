@@ -8,7 +8,7 @@
 // Only the rows and the stretch of timeline on screen are drawn.
 
 import { useLocalization } from "@fluent/react";
-import { ChevronDown, ChevronRight, TriangleAlert } from "lucide-react";
+import { ChevronDown, ChevronRight, Milestone, TriangleAlert } from "lucide-react";
 import {
   memo,
   useCallback,
@@ -29,6 +29,7 @@ import { useLocale } from "react-aria-components";
 
 import { classes } from "../../classes";
 import { useMovePreview } from "../../data/schedule";
+import { type VersionMarker } from "../../data/versions";
 import { type GanttGrouping, type ReadOnlyReason, type Schedule, type ScheduleDependency, type SchedulePreviewInput, type ScheduleProblem, type ScheduledTask, type UnscheduledTask } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { addDays, asDate, daysBetween, firstDayOfWeek, weekday, type Day } from "../calendar/model";
@@ -110,6 +111,8 @@ export interface GanttProps {
   onRange: (range: { from: Day; to: Day }) => void;
   /** A change of a task that can't be changed was asked for. */
   onRefused: (key: string, reason: ReadOnlyReason) => void;
+  /** The project's versions with a due date, drawn as markers at the end of that day. */
+  versions?: readonly VersionMarker[];
   ref?: Ref<GanttHandle>;
 }
 
@@ -187,6 +190,8 @@ function useProblemText(): (problem: ScheduleProblem) => string {
   return (problem) => (l10n.getBundle(problem.message_id) ? l10n.getString(problem.message_id, problem.args ?? null) : problem.message);
 }
 
+const NO_VERSIONS: readonly VersionMarker[] = [];
+
 export const Gantt = memo(function Gantt({
   schedule,
   origin,
@@ -208,6 +213,7 @@ export const Gantt = memo(function Gantt({
   onWidth,
   onRange,
   onRefused,
+  versions = NO_VERSIONS,
   ref,
 }: GanttProps) {
   const t = useT();
@@ -876,6 +882,9 @@ export const Gantt = memo(function Gantt({
   const topCells = headerCells(origin, ppd, topUnit, x0, x1, width, weekStart);
   const lowCells = headerCells(origin, ppd, lowUnit, x0, x1, width, weekStart);
   const todayX = dayX(origin, today, ppd);
+  const versionDate = new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeZone: "UTC" });
+  // A version is due at the end of its day.
+  const markers = versions.map((version) => ({ ...version, x: dayX(origin, version.day, ppd) + ppd })).filter((marker) => marker.x >= 0 && marker.x <= width);
   const height = rows.length * ROW;
   const shown = rows.slice(r0, r1);
   const dependencies = useMemo(() => visibleDependencies(schedule.dependencies, index, r0, r1), [schedule.dependencies, index, r0, r1]);
@@ -1031,6 +1040,12 @@ export const Gantt = memo(function Gantt({
                   <span>{cellLabel(cell, true)}</span>
                 </div>
               ))}
+              {markers.map((marker) => (
+                <div key={marker.id} className={classes(styles.versionFlag, marker.status === "closed" && styles.versionDone)} style={{ insetInlineStart: marker.x }} title={t("gantt-version-marker", { name: marker.name, date: versionDate.format(asDate(marker.day)) })} data-version={marker.name}>
+                  <Milestone className="ic s" aria-hidden="true" />
+                  <span className="truncate">{marker.name}</span>
+                </div>
+              ))}
             </div>
             <div className={styles.headRow}>
               {lowCells.map((cell) => (
@@ -1101,6 +1116,9 @@ export const Gantt = memo(function Gantt({
               )}
               {shown.map((row, k) => (row.kind === "group" ? <rect key={row.id} className={styles.groupBand} x={x0} width={Math.max(0, Math.min(x1, width) - x0)} y={(r0 + k) * ROW} height={ROW} /> : null))}
               <line className={styles.today} x1={todayX + ppd / 2} x2={todayX + ppd / 2} y1={0} y2={height} />
+              {markers.map((marker) => (
+                <line key={marker.id} className={classes(styles.versionLine, marker.status === "closed" && styles.versionDone)} x1={marker.x} x2={marker.x} y1={0} y2={height} />
+              ))}
               <g className={styles.links}>
                 {dependencies.map((dependency) => {
                   const a = byKey.get(dependency.from);

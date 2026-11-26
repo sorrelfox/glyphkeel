@@ -39,6 +39,11 @@ The safety class decides who may run an operation:
 | `label.create` | write | app, command line, MCP | `update_project` | `glyphkeel label add` |
 | `label.update` | write | app, command line, MCP | `update_project` | `glyphkeel label edit` |
 | `label.delete` | permanent | app, command line, MCP | `update_project` | `glyphkeel label delete` |
+| `version.list` | read | app, command line, MCP | `list_versions` | `glyphkeel version list <project>` |
+| `version.get` | read | app, command line, MCP | `get_version` | `glyphkeel version show <version>` |
+| `version.create` | write | app, command line, MCP | `create_version` | `glyphkeel version create` |
+| `version.update` | write | app, command line, MCP | `update_version` | `glyphkeel version edit <version>` |
+| `version.delete` | write | app, command line, MCP | `delete_version` | `glyphkeel version delete <version>` |
 | `task.search` | read | app, command line, MCP | `search_tasks` | `glyphkeel task list` |
 | `task.get` | read | app, command line, MCP | `get_task` | `glyphkeel task show <keys>` |
 | `task.create` | write | app, command line, MCP | `create_task` | `glyphkeel task create` |
@@ -273,6 +278,36 @@ Input: `LabelUpdateInput`. Output: `ProjectChange`. Schemas: [catalog.schema.jso
 Delete a label and take it off every task. Can't be undone.
 
 Input: `LabelDeleteInput`. Output: `ProjectChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `version.list`
+
+The versions of a project and those its ancestors share with it, with status, dates and progress; with their tasks for the roadmap.
+
+Input: `VersionListInput`. Output: `VersionList`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `version.get`
+
+One version with its progress and its tasks.
+
+Input: `VersionGetInput`. Output: `Version`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `version.create`
+
+Create a version of a project: name, description, status, start and due dates, and whether its sub-projects can use it.
+
+Input: `VersionCreateInput`. Output: `VersionChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `version.update`
+
+Rename a version, change its description, dates, sharing or status, or close it and move its open tasks to another version.
+
+Input: `VersionUpdateInput`. Output: `VersionChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `version.delete`
+
+Delete a version; its tasks are planned for no version. Revert brings both back.
+
+Input: `VersionDeleteInput`. Output: `VersionChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `task.search`
 

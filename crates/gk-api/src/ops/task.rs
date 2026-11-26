@@ -89,6 +89,9 @@ pub struct Task {
     /// The parent task's key, for a subtask.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,
+    /// The version (release) it is planned for.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fix_version: Option<crate::ops::version::VersionRef>,
     /// Its description (Markdown).
     pub description: String,
     /// The description's revision; pass it as `base_revision` when you save
@@ -362,6 +365,10 @@ pub struct TaskCreateInput {
     /// Labels, by name or ID.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub labels: Vec<String>,
+    /// The version it is planned for (name or ID): an open version of the
+    /// project or one shared with it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fix_version: Option<String>,
     /// The parent task, for a subtask (same project, at most 5 levels).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,
@@ -409,6 +416,8 @@ pub enum TaskField {
     Progress,
     /// Every label.
     Labels,
+    /// The version it is planned for.
+    FixVersion,
 }
 
 /// Changes to a task; fields left out keep their value. Status and
@@ -455,6 +464,10 @@ pub struct TaskUpdateInput {
     /// Labels to take off.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub remove_labels: Vec<String>,
+    /// Plan it for this version (name or ID): an open version of the
+    /// project or one shared with it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fix_version: Option<String>,
     /// A new parent task (same project, at most 5 levels, no loops).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,

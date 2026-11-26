@@ -175,6 +175,7 @@ transfer-invalid-task-project = { $path }, line { $line }: the task belongs to a
 transfer-invalid-task-number = { $path }, line { $line }: task number { $number } is not unique.
 transfer-invalid-task-status = { $path }, line { $line }: the status or type is not one of the project's.
 transfer-invalid-task-label = { $path }, line { $line }: the label { $label } is not one of the project's.
+transfer-invalid-version = { $path }, line { $line }: the version "{ $version }" is not valid (name, status, sharing or dates), or its name is used twice.
 transfer-invalid-title = { $path }, line { $line }: the title is empty or too long.
 transfer-invalid-description-size = { $path }, line { $line }: the description is larger than 1 MB.
 transfer-invalid-link-target = { $path }, line { $line }: a link points to no other task in the archive.
@@ -420,6 +421,27 @@ view-not-found = There is no view "{ $view }".
 view-not-found-hint = Name a view of the project given with `project`, or use its ID.
 view-name-ambiguous = Several views are named "{ $view }", for different screens.
 view-name-ambiguous-hint = Use the view's ID from view.list.
+
+## Versions
+
+version-not-found = There is no version "{ $version }".
+version-not-found-hint = Name a version of the project given with `project`, or use its ID; version.list lists them.
+version-not-for-project = Tasks of { $project } can't be planned for a version "{ $version }": it is not one of the project's versions or one shared with it.
+version-name-ambiguous = Several projects have a version named "{ $version }".
+version-name-ambiguous-hint = Give the project with `project`, or use the version's ID.
+version-name-taken = The project already has a version named "{ $version }".
+version-name-taken-hint = Choose another name, or change that version.
+version-not-open = { $status ->
+        [locked] Version "{ $version }" is locked, so no tasks can be added to it.
+       *[closed] Version "{ $version }" is closed, so no tasks can be added to it.
+    }
+version-not-open-hint = Choose an open version, or open this one again first.
+version-description-long = A version's description is at most { $max } characters.
+version-dates-order = A version's start date can't be after its due date.
+version-move-needs-close = Open tasks can only be moved on when the version is closed: give status closed too.
+version-move-to-itself = Choose another version to move the open tasks to.
+version-move-not-shared = { $task } can't be planned for the chosen version, because that version isn't shared with its project.
+task-version-left-off = Version "{ $version }" isn't available in { $project } and was taken off.
 
 ## Stored data that can't be read
 

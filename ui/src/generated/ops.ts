@@ -414,6 +414,8 @@ export type BulkChanges = {
   due_date?: string | null;
   /** The estimate, as a duration (`1d 4h`, `90m`). */
   estimate?: string | null;
+  /** Plan them for the version of this name (in each task's project, or shared with it). */
+  fix_version?: string | null;
   /** Replace the labels with these. */
   labels?: string[] | null;
   /** Make them subtasks of this task. */
@@ -2478,6 +2480,8 @@ export type Task = {
   file_count: number;
   /** The files attached to it, when asked for with `include`. */
   files?: Attachment[];
+  /** The version (release) it is planned for. */
+  fix_version?: VersionRef;
   /** The task's ID. */
   id: string;
   /** The task's key (`TM-41`). */
@@ -2576,6 +2580,8 @@ export type TaskCreateInput = {
   due_date?: string | null;
   /** The estimate, as a duration (`1d 4h`, `90m`, `1.5h`). */
   estimate?: string | null;
+  /** The version it is planned for (name or ID): an open version of the project or one shared with it. */
+  fix_version?: string | null;
   /** Labels, by name or ID. */
   labels?: string[];
   /** The parent task, for a subtask (same project, at most 5 levels). */
@@ -2615,7 +2621,7 @@ export type TaskDuplicateInput = {
 };
 
 /** A task field that can be cleared. */
-export type TaskField = "description" | "parent" | "start_date" | "due_date" | "estimate" | "progress" | "labels";
+export type TaskField = "description" | "parent" | "start_date" | "due_date" | "estimate" | "progress" | "labels" | "fix_version";
 
 /** Which tasks to read. */
 export type TaskGetInput = {
@@ -2772,6 +2778,8 @@ export type TaskUpdateInput = {
   estimate?: string | null;
   /** Refuse the change unless the task still has this version. */
   expected_version?: number | null;
+  /** Plan it for this version (name or ID): an open version of the project or one shared with it. */
+  fix_version?: string | null;
   /** The task: its key or ID. */
   key: string;
   /** Replace the labels with these. */
@@ -3295,6 +3303,189 @@ export type UnscheduledTask = {
   version: number;
 };
 
+/** A version. */
+export type Version = {
+  /** When it was created (RFC 3339, UTC). */
+  created_at: string;
+  /** What it is for: plain text. */
+  description?: string;
+  /** When it is due (`YYYY-MM-DD`). */
+  due_date?: string;
+  /** Its ID. */
+  id: string;
+  /** Whether it belongs to an ancestor project and is shared with this one, when listed for a project. */
+  inherited?: boolean;
+  /** Its name, unique in its project (ignoring case). */
+  name: string;
+  /** Its progress. */
+  progress: VersionProgress;
+  /** The key of the project it belongs to. */
+  project: string;
+  /** Its place among the project's versions. */
+  rank: string;
+  /** Which projects can plan tasks for it. */
+  sharing: VersionSharing;
+  /** When work on it starts (`YYYY-MM-DD`). */
+  start_date?: string;
+  /** Where it stands. */
+  status: VersionStatus;
+  /** Its tasks, when asked for: top-level first by board order. */
+  tasks?: VersionTask[];
+  /** When it last changed. */
+  updated_at: string;
+};
+
+/** A version after a change. */
+export type VersionChange = {
+  /** Whether it was deleted. */
+  deleted?: boolean;
+  /** The history group, for revert and Undo; left out when nothing changed. */
+  group?: string;
+  /** The keys of the tasks whose version changed with it: moved on when it closed, or cleared by a deletion or new sharing. */
+  tasks_changed?: string[];
+  /** The version after the change (before it, for a deletion). */
+  version: Version;
+  /** The saved views whose query was rewritten because they named the version (renamed or deleted), by name. */
+  views_rewritten?: string[];
+};
+
+/** A new version. */
+export type VersionCreateInput = {
+  /** What it is for: plain text, up to 4,000 characters. */
+  description?: string | null;
+  /** When it is due: `YYYY-MM-DD`, or `today`, `fri`, `+2w`, `dec 1`. */
+  due_date?: string | null;
+  /** Its name, up to 100 characters, unique in the project. */
+  name: string;
+  /** The project (key or ID). */
+  project: string;
+  /** Which projects can plan tasks for it; default: only its own. */
+  sharing?: VersionSharing | null;
+  /** When work starts: `YYYY-MM-DD`, or `today`, `fri`, `+2w`, `dec 1`. */
+  start_date?: string | null;
+  /** Where it stands; default: open. */
+  status?: VersionStatus | null;
+};
+
+/** Which version to delete. */
+export type VersionDeleteInput = {
+  /** With a name: the version's project (key or ID). */
+  project?: string | null;
+  /** The version: its ID, or its name. */
+  version: string;
+};
+
+/** A version field that can be cleared. */
+export type VersionField = "description" | "start_date" | "due_date";
+
+/** One version to read. */
+export type VersionGetInput = {
+  /** With a name: the project (key or ID); its own versions come first, then those shared with it. */
+  project?: string | null;
+  /** The version: its ID, or its name. */
+  version: string;
+};
+
+/** Versions: by due date (those without one last), then by their order. */
+export type VersionList = {
+  /** The versions. */
+  items: Version[];
+  /** How many. */
+  total: number;
+  /** With `include_tasks`: the project's open tasks planned for no version. */
+  unplanned?: number;
+};
+
+/** Which versions to list. */
+export type VersionListInput = {
+  /** Include each version's tasks, for the roadmap. */
+  include_tasks?: boolean;
+  /** Leave out the versions ancestors share with the project. */
+  own_only?: boolean;
+  /** The project (key or ID): its own versions and those its ancestors share with it. */
+  project: string;
+  /** Only versions with these statuses; default: all. */
+  status?: VersionStatus[];
+};
+
+/** How far a version has come. */
+export type VersionProgress = {
+  /** How many of them are closed. */
+  closed: number;
+  /** The tasks' estimates added up, in minutes. */
+  estimate_minutes: number;
+  /** Done, in percent: each task's progress weighted by its estimate; closed tasks count as 100 %, unestimated ones get the average weight. */
+  percent: number;
+  /** The time logged on them, in minutes. */
+  spent_minutes: number;
+  /** The tasks planned for it (not in the trash). */
+  total: number;
+};
+
+/** A version as a task shows it. */
+export type VersionRef = {
+  /** Its due date (`YYYY-MM-DD`). */
+  due_date?: string;
+  /** Its ID. */
+  id: string;
+  /** Its name. */
+  name: string;
+  /** The key of the project it belongs to. */
+  project: string;
+  /** Where it stands. */
+  status: VersionStatus;
+};
+
+/** Which projects can plan tasks for a version. */
+export type VersionSharing = "none" | "descendants";
+
+/** Where a version stands. */
+export type VersionStatus = "open" | "locked" | "closed";
+
+/** A task of a version, as the roadmap lists it. */
+export type VersionTask = {
+  /** Whether it is closed (done or cancelled). */
+  closed: boolean;
+  /** Its ID. */
+  id: string;
+  /** Its key. */
+  key: string;
+  /** Its progress in percent. */
+  progress_percent: number;
+  /** Its project's key. */
+  project: string;
+  /** Its status. */
+  status: StatusRef;
+  /** Its title. */
+  title: string;
+  /** Its type's name. */
+  type: string;
+};
+
+/** Changes to a version; fields left out keep their value. */
+export type VersionUpdateInput = {
+  /** Fields to clear. */
+  clear?: VersionField[];
+  /** A new description. */
+  description?: string | null;
+  /** A new due date. */
+  due_date?: string | null;
+  /** When closing it: plan its open tasks for this other open version (its name or ID) instead, or `none` to plan them for no version. Left out, open tasks stay in the closed version. */
+  move_open_tasks_to?: string | null;
+  /** A new name; saved views that name the old one are rewritten. */
+  name?: string | null;
+  /** With a name: the version's project (key or ID). */
+  project?: string | null;
+  /** New sharing. Tasks of projects that no longer see the version lose it. */
+  sharing?: VersionSharing | null;
+  /** A new start date. */
+  start_date?: string | null;
+  /** A new status. */
+  status?: VersionStatus | null;
+  /** The version: its ID, or its name. */
+  version: string;
+};
+
 /** The program a change came through. */
 export type Via = "app" | "cli" | "mcp";
 
@@ -3799,6 +3990,11 @@ export interface OpMap {
   "label.create": { input: LabelCreateInput; output: ProjectChange; safety: "write"; kind: "command" };
   "label.update": { input: LabelUpdateInput; output: ProjectChange; safety: "write"; kind: "command" };
   "label.delete": { input: LabelDeleteInput; output: ProjectChange; safety: "permanent"; kind: "command" };
+  "version.list": { input: VersionListInput; output: VersionList; safety: "read"; kind: "query" };
+  "version.get": { input: VersionGetInput; output: Version; safety: "read"; kind: "query" };
+  "version.create": { input: VersionCreateInput; output: VersionChange; safety: "write"; kind: "command" };
+  "version.update": { input: VersionUpdateInput; output: VersionChange; safety: "write"; kind: "command" };
+  "version.delete": { input: VersionDeleteInput; output: VersionChange; safety: "write"; kind: "command" };
   "task.search": { input: TaskSearchInput; output: TaskSearchResult; safety: "read"; kind: "query" };
   "task.get": { input: TaskGetInput; output: TaskList; safety: "read"; kind: "query" };
   "task.create": { input: TaskCreateInput; output: TaskChange; safety: "write"; kind: "command" };
@@ -3920,6 +4116,11 @@ export const OP_SAFETY = {
   "label.create": "write",
   "label.update": "write",
   "label.delete": "permanent",
+  "version.list": "read",
+  "version.get": "read",
+  "version.create": "write",
+  "version.update": "write",
+  "version.delete": "write",
   "task.search": "read",
   "task.get": "read",
   "task.create": "write",
@@ -4269,6 +4470,18 @@ export function makeOps(call: Call) {
       update: (input: OpMap["type.update"]["input"]) => call("type.update", input),
       /** Delete a task type; its tasks get another type. Can't be undone. (permanent) */
       delete: (input: OpMap["type.delete"]["input"]) => call("type.delete", input),
+    },
+    version: {
+      /** The versions of a project and those its ancestors share with it, with status, dates and progress; with their tasks for the roadmap. (read) */
+      list: (input: OpMap["version.list"]["input"]) => call("version.list", input),
+      /** One version with its progress and its tasks. (read) */
+      get: (input: OpMap["version.get"]["input"]) => call("version.get", input),
+      /** Create a version of a project: name, description, status, start and due dates, and whether its sub-projects can use it. (write) */
+      create: (input: OpMap["version.create"]["input"]) => call("version.create", input),
+      /** Rename a version, change its description, dates, sharing or status, or close it and move its open tasks to another version. (write) */
+      update: (input: OpMap["version.update"]["input"]) => call("version.update", input),
+      /** Delete a version; its tasks are planned for no version. Revert brings both back. (write) */
+      delete: (input: OpMap["version.delete"]["input"]) => call("version.delete", input),
     },
     view: {
       /** The saved views of a project or of the whole workspace: name, query, columns, order, grouping, totals and which is the default. (read) */

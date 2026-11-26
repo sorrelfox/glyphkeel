@@ -434,6 +434,32 @@ fn check(parsed: &mut Parsed) -> Result<(), Rejected> {
             gk_core::Hue::from_str(&l.hue).map_err(|_| color(&pj, 1, &l.hue))?;
             labels.insert(l.id.clone());
         }
+        let mut version_names = HashSet::new();
+        for v in &proj.file.versions {
+            unique(&pj, 1, &v.id)?;
+            rank_ok(&pj, 1, &v.rank)?;
+            let dates_ok = [&v.start_date, &v.due_date].iter().all(|d| {
+                d.as_deref()
+                    .is_none_or(|d| d.parse::<gk_core::Day>().is_ok())
+            }) && (v.start_date.is_none()
+                || v.due_date.is_none()
+                || v.start_date <= v.due_date);
+            if v.name.trim().is_empty()
+                || v.name.chars().count() > 100
+                || v.description.chars().count() > 4000
+                || !matches!(v.status.as_str(), "open" | "locked" | "closed")
+                || !matches!(v.sharing.as_str(), "none" | "descendants")
+                || !dates_ok
+                || !version_names.insert(fold(&v.name))
+            {
+                return Err(bad_with(
+                    pj.clone(),
+                    1,
+                    "transfer-invalid-version",
+                    &[("version", &v.name)],
+                ));
+            }
+        }
         for v in &proj.file.views {
             unique(&pj, 1, &v.id)?;
             rank_ok(&pj, 1, &v.rank)?;
@@ -834,6 +860,9 @@ pub(crate) fn plan(
         }
         for l in &p.file.labels {
             replace("labels", &l.id)?;
+        }
+        for v in &p.file.versions {
+            replace("versions", &v.id)?;
         }
         for v in &p.file.views {
             replace("saved_views", &v.id)?;
@@ -1271,6 +1300,27 @@ fn write(
                 fold(&l.name),
                 l.hue,
                 l.rank
+            ])?;
+        }
+        for v in &proj.file.versions {
+            tx.prepare_cached(
+                "INSERT INTO versions (id, project_id, name, name_fold, description, status,
+                   start_date, due_date, sharing, rank, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            )?
+            .execute(params![
+                b(plan.id(&v.id)),
+                b(id),
+                v.name,
+                fold(&v.name),
+                v.description,
+                v.status,
+                v.start_date,
+                v.due_date,
+                v.sharing,
+                v.rank,
+                v.created_at,
+                v.updated_at
             ])?;
         }
         for v in &proj.file.views {
@@ -1721,6 +1771,26 @@ fn write(
             }
         }
         imported.push(id);
+    }
+
+    // Tasks' versions, once every project's versions are in: a version
+    // that isn't in the archive is left off.
+    let archive_versions: HashSet<&String> = parsed
+        .projects
+        .iter()
+        .flat_map(|p| p.file.versions.iter().map(|v| &v.id))
+        .collect();
+    for proj in &parsed.projects {
+        for t in &proj.tasks {
+            if let Some(v) = t
+                .fix_version_id
+                .as_ref()
+                .filter(|v| archive_versions.contains(v))
+            {
+                tx.prepare_cached("UPDATE tasks SET fix_version_id = ?2 WHERE id = ?1")?
+                    .execute(params![b(plan.id(&t.id)), b(plan.id(v))])?;
+            }
+        }
     }
 
     // History, in its original order across the archive.

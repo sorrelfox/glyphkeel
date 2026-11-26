@@ -35,6 +35,10 @@ pub struct BulkChanges {
     /// Labels to take off.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub remove_labels: Vec<String>,
+    /// Plan them for the version of this name (in each task's project,
+    /// or shared with it).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fix_version: Option<String>,
     /// Make them subtasks of this task.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,

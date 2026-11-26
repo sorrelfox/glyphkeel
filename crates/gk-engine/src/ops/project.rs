@@ -1206,6 +1206,7 @@ fn move_project(
             "parent",
             new_parent.and_then(id_value),
         )?;
+        super::version::project_moved(w, p.id)?;
     }
     let target = match (target, parent_changes) {
         (Some(t), _) => t,
