@@ -111,6 +111,9 @@ pub struct SearchHit {
     /// The wiki page's slug.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub slug: Option<String>,
+    /// The wiki page's ID, for a file attached to a page.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub page: Option<String>,
     /// When it last changed (RFC 3339, UTC).
     pub updated_at: String,
     /// The ID of what was found: the task, comment, page, file or project.

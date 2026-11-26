@@ -551,12 +551,19 @@ fn check(parsed: &mut Parsed) -> Result<(), Rejected> {
             .map(|w| (&w.id, w.parent_id.as_ref()))
             .collect();
         let mut briefs = 0;
+        let mut homes = 0;
         for (i, w) in proj.wiki.iter().enumerate() {
             unique(&wp, i + 1, &w.id)?;
             if w.is_agent_brief {
                 briefs += 1;
                 if briefs > 1 {
                     return Err(bad(wp, i + 1, "transfer-invalid-two-briefs"));
+                }
+            }
+            if w.is_home && w.deleted_at.is_none() {
+                homes += 1;
+                if homes > 1 {
+                    return Err(bad(wp, i + 1, "transfer-invalid-two-homes"));
                 }
             }
             if w.project_id != project_id {
@@ -1556,8 +1563,9 @@ fn write(
         for page in &proj.wiki {
             tx.prepare_cached(
                 "INSERT INTO wiki_pages (id, project_id, rank, title, title_fold, slug,
-                   current_rev, is_agent_brief, created_at, updated_at, deleted_at, deleted_group)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                   current_rev, is_agent_brief, created_at, updated_at, deleted_at, deleted_group,
+                   is_home)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             )?
             .execute(params![
                 b(plan.id(&page.id)),
@@ -1572,6 +1580,7 @@ fn write(
                 page.updated_at,
                 page.deleted_at,
                 plan.group(page.deleted_group.as_ref()),
+                page.is_home && page.deleted_at.is_none(),
             ])?;
             for slug in &page.redirects {
                 tx.prepare_cached(

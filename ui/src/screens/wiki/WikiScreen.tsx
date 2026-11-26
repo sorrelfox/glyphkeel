@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Glyphkeel contributors
 
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
-import { BookOpen, Plus } from "lucide-react";
+import { BookOpen, FolderInput, Plus } from "lucide-react";
 import { useState } from "react";
 import { Button } from "react-aria-components";
 
@@ -19,7 +19,7 @@ import { TaskPanel } from "../task/TaskPanel";
 import { NewPageDialog, RenamePageDialog, type NewPageRequest } from "./PageDialogs";
 import { PageTree } from "./PageTree";
 import { PageView } from "./PageView";
-import { useExportPage } from "./exportPage";
+import { ExportPageDialog, ImportFolderDialog, type ExportFrom } from "./TransferDialogs";
 import styles from "./Wiki.module.css";
 
 /** The wiki's place in the window: the page shown, the heading a link named, and a task open beside it. */
@@ -57,7 +57,8 @@ export function WikiScreen() {
   const project = useProject(key);
   const tree = useWikiTree(key);
   const pages = tree.data?.items ?? [];
-  const current = page ?? pages[0]?.id;
+  // The wiki opens on its home page, or else on its first page.
+  const current = page ?? pages.find((candidate) => candidate.home === true)?.id ?? pages[0]?.id;
   const writable = project.data !== undefined && project.data.state === "active" && project.data.modules.wiki;
   const [newPage, setNewPage] = useState<NewPageRequest | null>(null);
   const [renaming, setRenaming] = useState<Pick<WikiPage, "id" | "title"> | null>(null);
@@ -65,7 +66,9 @@ export function WikiScreen() {
   const [fresh, setFresh] = useState<string | null>(null);
   const move = useCommand("wiki.move");
   const remove = useCommand("wiki.delete", { undoable: t("wiki-deleted") });
-  const exportPage = useExportPage();
+  const [exporting, setExporting] = useState<ExportFrom | null>(null);
+  // A folder import: inside a page, or at the top (null); undefined while none is asked for.
+  const [importing, setImporting] = useState<{ id: string; title: string } | null | undefined>(undefined);
 
   useStatus({ summary: tree.data ? t("wiki-page-count", { count: tree.data.total }) : "" });
 
@@ -113,8 +116,11 @@ export function WikiScreen() {
         onRename={setRenaming}
         onDelete={trash}
         onOpenWindow={openWindow}
-        onExport={(target, subpages) => {
-          exportPage({ page: target, subpages });
+        onExport={(target) => {
+          setExporting({ id: target.id, slug: target.slug, title: target.title, project: key, hasChildren: target.children > 0 });
+        }}
+        onImport={(parent) => {
+          setImporting(parent === null ? null : { id: parent.id, title: parent.title });
         }}
       />
       {current !== undefined ? (
@@ -153,6 +159,12 @@ export function WikiScreen() {
                 {t("wiki-new-page")}
               </Button>
             )}
+            {writable && (
+              <Button className="btn" onPress={() => { setImporting(null); }}>
+                <FolderInput className="ic" />
+                {t("wiki-import")}
+              </Button>
+            )}
           </div>
         )
       )}
@@ -177,6 +189,28 @@ export function WikiScreen() {
             if (created !== undefined) {
               setFresh(created);
               openPage(created);
+            }
+          }}
+        />
+      )}
+      {exporting && (
+        <ExportPageDialog
+          page={exporting}
+          onClose={() => {
+            setExporting(null);
+          }}
+        />
+      )}
+      {importing !== undefined && (
+        <ImportFolderDialog
+          project={key}
+          parent={importing ?? undefined}
+          onClose={() => {
+            setImporting(undefined);
+          }}
+          onImported={(first) => {
+            if (first !== undefined) {
+              openPage(first);
             }
           }}
         />

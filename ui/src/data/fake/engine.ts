@@ -779,7 +779,9 @@ export class FakeWorkspace {
 
   private attachment(file: FakeFile): Attachment {
     const task = this.state.tasks.find((candidate) => candidate.id === file.taskId);
+    const page = file.pageId === undefined ? undefined : (this.state.wiki ?? []).find((candidate) => candidate.id === file.pageId);
     return {
+      ...(page ? { page: page.id, project: this.projectKeyOf(page) } : {}),
       id: file.id,
       name: file.name,
       kind: file.kind,
@@ -889,7 +891,8 @@ export class FakeWorkspace {
   }
 
   private liveFile(id: string): FakeFile {
-    const file = this.state.files.find((candidate) => candidate.id === id && candidate.deletedAt === null);
+    const pages = new Set((this.state.wiki ?? []).map((page) => page.id));
+    const file = this.state.files.find((candidate) => candidate.id === id && candidate.deletedAt === null && (candidate.pageId === undefined || pages.has(candidate.pageId)));
     if (!file) {
       fail("not_found", `There is no attached file ${id}.`);
     }
@@ -906,9 +909,11 @@ export class FakeWorkspace {
 
   private fileChange(file: FakeFile, fields: string[]): Result<FileChange> {
     const task = this.state.tasks.find((candidate) => candidate.id === file.taskId);
+    const page = file.pageId === undefined ? undefined : (this.state.wiki ?? []).find((candidate) => candidate.id === file.pageId);
+    const project = task ? this.projectOf(task).key : page ? this.projectKeyOf(page) : undefined;
     return {
       output: { file: this.attachment(file), deleted: file.deletedAt !== null },
-      changes: [{ entity: "attachment", id: file.id, fields, ...some("project", task && this.projectOf(task).key) }],
+      changes: [{ entity: "attachment", id: file.id, fields, ...some("project", project) }],
     };
   }
 
@@ -1319,6 +1324,7 @@ export class FakeWorkspace {
       children: pages.filter((other) => other.parentId === page.id).length,
       ...some("parent", page.parentId),
       ...(page.agentBrief === true ? { agent_brief: true } : {}),
+      ...(page.home === true ? { home: true } : {}),
       updated_at: page.updatedAt,
     };
   }
@@ -1515,7 +1521,9 @@ export class FakeWorkspace {
       ...(include.includes("backlinks") ? { backlinks: this.pageBacklinks(page) } : {}),
       ...(include.includes("references") ? { references: this.pageReferences(page) } : {}),
       ...(include.includes("checklist") ? { checklist_items: publicChecklist(page.body) } : {}),
+      ...(include.includes("files") ? { files: this.state.files.filter((file) => file.pageId === page.id && file.deletedAt === null).map((file) => this.attachment(file)) } : {}),
       ...(page.agentBrief === true ? { agent_brief: true } : {}),
+      ...(page.home === true ? { home: true } : {}),
       created_at: page.createdAt,
       updated_at: page.updatedAt,
     };
@@ -2458,16 +2466,21 @@ export class FakeWorkspace {
         height: Math.max(1, Math.round(file.height * scale)),
       };
     },
-    "file.attach": ({ task: key, comment: commentId, data_base64, name, path }) => {
+    "file.attach": ({ task: key, comment: commentId, page: pageRef, project: projectRef, data_base64, name, path }) => {
       if (path !== null && path !== undefined) {
         fail("invalid", "The sample workspace can't read files from disk.", { details: { path: "path" } });
       }
+      const page = pageRef === null || pageRef === undefined ? null : this.wikiPage(pageRef, projectRef);
       const comment = commentId === null || commentId === undefined ? null : this.liveComment(commentId);
-      const task = comment ? this.state.tasks.find((candidate) => candidate.id === comment.taskId) : key ? this.task(key) : undefined;
-      if (!task) {
-        fail("invalid", "Name the task or the comment to attach the file to.", { details: { path: "task" } });
+      const task = page ? undefined : comment ? this.state.tasks.find((candidate) => candidate.id === comment.taskId) : key ? this.task(key) : undefined;
+      if (!task && !page) {
+        fail("invalid", "Name the task, the comment or the wiki page to attach the file to.", { details: { path: "task" } });
       }
-      this.writable(this.projectOf(task).key);
+      if (page) {
+        this.wikiWritable(this.projectKeyOf(page));
+      } else if (task) {
+        this.writable(this.projectOf(task).key);
+      }
       const bytes = decodeBase64(data_base64 ?? "");
       if (!bytes || name === null || name === undefined || name.trim() === "") {
         fail("invalid", "Give the file's content as Base64 and its name.", { details: { path: "data_base64" } });
@@ -2479,7 +2492,8 @@ export class FakeWorkspace {
       const sniffed = sniff(bytes, name);
       const file: FakeFile = {
         id: nextFileId(),
-        taskId: task.id,
+        taskId: task?.id ?? "",
+        ...(page ? { pageId: page.id } : {}),
         commentId: comment?.id ?? null,
         name: name.trim(),
         size: bytes.length,
@@ -2489,7 +2503,9 @@ export class FakeWorkspace {
         ...sniffed,
       };
       this.state.files.push(file);
-      this.touch(task, false);
+      if (task) {
+        this.touch(task, false);
+      }
       return this.fileChange(file, ["created"]);
     },
     "file.delete": ({ attachment }) => {
@@ -2644,7 +2660,7 @@ export class FakeWorkspace {
       ];
       return { items, total: items.length };
     },
-    "wiki.update": ({ page: ref, project: projectRef, title, body, edits, parent: parentRef, clear, before, after, at, base_revision, agent_brief, message }) => {
+    "wiki.update": ({ page: ref, project: projectRef, title, body, edits, parent: parentRef, clear, before, after, at, base_revision, agent_brief, home, message }) => {
       const page = this.wikiPage(ref, projectRef);
       const project = this.wikiWritable(this.projectKeyOf(page));
       const pages = (this.state.wiki ??= []);
@@ -2684,6 +2700,14 @@ export class FakeWorkspace {
           }
         }
         fields.push("agent_brief");
+      }
+      if (home !== null && home !== undefined && home !== (page.home === true)) {
+        for (const other of pages) {
+          if (other.projectId === project.id) {
+            other.home = other === page ? home : home ? false : other.home === true;
+          }
+        }
+        fields.push("home");
       }
       let text = body ?? undefined;
       if (edits !== undefined && edits.length > 0) {
@@ -2746,6 +2770,55 @@ export class FakeWorkspace {
       const pages = subpages === true ? subtree(this.state.wiki ?? [], page) : [page];
       const name = path ?? `${page.slug}.zip`;
       return { path: `exports/${name}`, format: format ?? "zip", pages: pages.length, attachments: 0, size: pages.reduce((sum, one) => sum + one.body.length, 0) };
+    },
+    "wiki.import": ({ project: ref, path, parent: parentRef, dry_run }) => {
+      // The sample workspace reads no folders: it knows one, "notes", with two
+      // Markdown files and a picture.
+      const project = this.wikiWritable(ref);
+      if (path.replace(/[/\\]+$/, "").split(/[/\\]/).at(-1) !== "notes") {
+        fail("invalid", "The sample workspace can import only its own folder \"notes\".", { details: { path: "path" } });
+      }
+      const pages = (this.state.wiki ??= []);
+      const parent = parentRef === null || parentRef === undefined ? null : this.wikiPage(parentRef, project.key);
+      const free = (title: string) => {
+        let name = title;
+        for (let n = 2; pages.some((page) => page.projectId === project.id && fold(page.title) === fold(name)); n += 1) {
+          name = `${title} (${String(n)})`;
+        }
+        return name;
+      };
+      const first = free("Meeting notes");
+      const second = free("Ideas");
+      const renamed = [
+        ...(first === "Meeting notes" ? [] : [{ path: "Meeting notes.md", title: first }]),
+        ...(second === "Ideas" ? [] : [{ path: "Meeting notes/Ideas.md", title: second }]),
+      ];
+      const summary = { dry_run: dry_run === true, pages: 2, attachments: 1, skipped: ["notes.txt"], ...(renamed.length > 0 ? { renamed } : {}) };
+      if (dry_run === true) {
+        return { ...summary, top: [{ id: "", slug: slugOf(first, []), title: first }] };
+      }
+      const now = this.today().toISOString();
+      const make = (title: string, under: string | null, body: string): FakeWikiPage => {
+        const page: FakeWikiPage = {
+          id: nextId("w"),
+          projectId: project.id,
+          title,
+          slug: slugOf(title, pages.filter((other) => other.projectId === project.id).map((other) => other.slug)),
+          parentId: under,
+          body: "",
+          createdAt: now,
+          updatedAt: now,
+        };
+        this.movePage(page, under, { at: "bottom" });
+        this.addPageRevision(page, body, "normal", null);
+        return page;
+      };
+      const top = make(first, parent?.id ?? null, `# Meeting notes\n\nSee [[${second}]].\n`);
+      const child = make(second, top.id, "Ideas for later.\n");
+      return {
+        output: { ...summary, top: [{ id: top.id, slug: top.slug, title: top.title }] },
+        changes: [top, child].map((page) => ({ entity: "wiki_page", id: page.id, fields: ["created"], project: project.key })),
+      };
     },
     "wiki.delete": ({ page: ref, project: projectRef }) => {
       const page = this.wikiPage(ref, projectRef);

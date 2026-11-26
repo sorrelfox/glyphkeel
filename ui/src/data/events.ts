@@ -38,7 +38,7 @@ export const ENTITY_QUERIES: Readonly<Record<string, readonly OpId[]>> = {
   gantt_layout: ["gantt.layout.get"],
   // Cards count comments and files, and show the Blocked badge.
   comment: ["trash.list", "comment.list", "task.get", "board.get", "markdown.render", "task.search", "today.get", "search.query", ...LINKS],
-  attachment: ["trash.list", "comment.list", "task.get", "board.get", "file.get", "file.read", "task.search", "search.query"],
+  attachment: ["trash.list", "comment.list", "task.get", "board.get", "file.get", "file.read", "task.search", "search.query", "wiki.get"],
   // The Gantt chart draws blocks links as dependencies.
   relation: ["task.get", "board.get", "task.search", "schedule.get", "schedule.preview_move"],
   // Cards and the task show the time spent; the report adds it up.

@@ -68,7 +68,9 @@ mod text;
 pub use checklist::{ChecklistItem, ToggleError, checklist, set_checked, toggle};
 pub use headings::{Heading, headings};
 pub use plain::plain_text;
-pub use references::{References, WikiLink, WikiLinkSpan, references, wiki_link_spans};
+pub use references::{
+    LinkSpan, References, WikiLink, WikiLinkSpan, link_spans, references, wiki_link_spans,
+};
 pub use render::{RenderOptions, render};
 pub use sanitize::allowlist;
 

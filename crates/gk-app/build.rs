@@ -19,6 +19,8 @@ fn main() {
         "export_archive",
         "export_wiki_page",
         "choose_import",
+        "choose_wiki_folder",
+        "import_wiki_folder",
         "import_archive",
         "choose_backup_folder",
         "open_link",

@@ -45,6 +45,9 @@ pub struct WikiPageSummary {
     /// Whether it is the project's instructions for agents.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub agent_brief: bool,
+    /// Whether it is the wiki's home page, the page the wiki opens on.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub home: bool,
     /// When it last changed (RFC 3339, UTC).
     pub updated_at: String,
     /// The page's ID.
@@ -159,6 +162,8 @@ pub enum WikiPart {
     References,
     /// Its checklist items, numbered, for `checklist.update`.
     Checklist,
+    /// The files attached to it.
+    Files,
 }
 
 /// A page to read.
@@ -173,7 +178,7 @@ pub struct WikiGetInput {
     /// An older revision to read instead of the current text.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub revision: Option<String>,
-    /// What to add: `backlinks`, `references`.
+    /// What to add: `backlinks`, `references`, `checklist`, `files`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub include: Vec<WikiPart>,
 }
@@ -227,6 +232,9 @@ pub struct WikiPage {
     /// Whether it is the project's instructions for agents.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub agent_brief: bool,
+    /// Whether it is the wiki's home page, the page the wiki opens on.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub home: bool,
     /// What links to it, when asked for with `include`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub backlinks: Option<Vec<Backlink>>,
@@ -236,6 +244,10 @@ pub struct WikiPage {
     /// Its checklist items, numbered, when asked for with `include`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checklist_items: Option<Vec<crate::ops::description::ChecklistItem>>,
+    /// The files attached to it, oldest first, when asked for with
+    /// `include`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub files: Option<Vec<crate::ops::file::Attachment>>,
     /// When it was created (RFC 3339, UTC).
     pub created_at: String,
     /// When it last changed.
@@ -333,6 +345,11 @@ pub struct WikiUpdateInput {
     /// change this, not agents.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent_brief: Option<bool>,
+    /// Make it the wiki's home page (`true`; the page that was the home
+    /// page before stops being it), or stop it being the home page
+    /// (`false`). Without a home page the wiki opens on its first page.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub home: Option<bool>,
     /// Fields to clear.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub clear: Vec<WikiField>,
@@ -461,7 +478,7 @@ pub(crate) const WIKI_CREATE: OpDescriptor = OpDescriptor::of::<WikiCreate>(writ
     "WikiCreateInput",
 ));
 pub(crate) const WIKI_UPDATE: OpDescriptor = OpDescriptor::of::<WikiUpdate>(write(
-    "Change a wiki page: its text (whole, with a base revision, or by targeted edits), title, parent or place; or resolve a conflict copy.",
+    "Change a wiki page: its text (whole, with a base revision, or by targeted edits), title, parent or place, whether it is the home page; or resolve a conflict copy.",
     "wiki put <page>",
     "WikiUpdateInput",
 ));
@@ -543,7 +560,20 @@ pub(crate) const WIKI_MOVE: OpDescriptor = OpDescriptor::of::<WikiMove>(write(
     "WikiMoveInput",
 ));
 
-/// A page, or a whole wiki, to export as Markdown files.
+/// What a wiki export writes for each page.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WikiTextFormat {
+    /// Markdown files (`.md`), as the pages are written.
+    #[default]
+    Markdown,
+    /// Web pages (`.html`) that open in any browser without the app,
+    /// rendered as the wiki shows them, with an `index.html` listing the
+    /// pages when there are several.
+    Html,
+}
+
+/// A page, or a whole wiki, to export as Markdown files or web pages.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct WikiExportInput {
@@ -566,6 +596,9 @@ pub struct WikiExportInput {
     /// A `.zip` file (the default) or a folder.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub format: Option<crate::ops::transfer::ArchiveFormat>,
+    /// Markdown files (the default) or web pages.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text_format: Option<WikiTextFormat>,
 }
 
 /// A finished page export.
@@ -576,7 +609,7 @@ pub struct WikiExportResult {
     pub path: String,
     /// How it is stored.
     pub format: crate::ops::transfer::ArchiveFormat,
-    /// The Markdown files written: one per page.
+    /// The pages written: one Markdown file or web page each.
     pub pages: u64,
     /// The attached files copied.
     pub attachments: u64,
@@ -593,11 +626,85 @@ op!(
 );
 
 pub(crate) const WIKI_EXPORT: OpDescriptor = OpDescriptor::of::<WikiExport>(Meta {
-    summary: "Export a wiki page, optionally with the pages inside it, or a project's whole wiki, as Markdown files with their attachments, in a .zip file or a folder; links between the exported pages and to the attachments become relative links.",
+    summary: "Export a wiki page, optionally with the pages inside it, or a project's whole wiki, as Markdown files or web pages with their attachments, in a .zip file or a folder; links between the exported pages and to the attachments become relative links.",
     kind: OpKind::Command,
     safety: Safety::Write,
     exposure: Exposure::Data,
     cli: Some("wiki export <page>"),
     input_name: "WikiExportInput",
     output_name: "WikiExportResult",
+});
+
+/// A folder of Markdown files to import as wiki pages.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WikiImportInput {
+    /// The project whose wiki the pages go to (key or ID).
+    pub project: String,
+    /// The folder (or a `.zip` file of one). Agents give a plain name of
+    /// one in the workspace's `exports` folder.
+    pub path: String,
+    /// The page to put the imported pages in (title, slug or ID); left out:
+    /// at the top of the wiki.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent: Option<String>,
+    /// Only check the folder and say what would be imported.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub dry_run: bool,
+}
+
+/// What a folder import made, or would make.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WikiImportResult {
+    /// Whether this was only a check.
+    pub dry_run: bool,
+    /// The pages made: one per Markdown file, and one per folder without
+    /// its own file.
+    pub pages: u64,
+    /// The files attached to the pages: the images and other files the
+    /// texts link to.
+    pub attachments: u64,
+    /// The pages made at the top of the import, in order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub top: Vec<WikiPageRef>,
+    /// Pages whose title was taken, with the title they got instead.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub renamed: Vec<WikiImportRename>,
+    /// Files in the folder that were left out: neither Markdown nor linked
+    /// from a page (paths in the folder).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub skipped: Vec<String>,
+    /// The history group, for revert and Undo (moving every imported page
+    /// to the trash); left out on a dry run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
+}
+
+/// A page that got another title than its file's name.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WikiImportRename {
+    /// The file or folder in the import.
+    pub path: String,
+    /// The page's title.
+    pub title: String,
+}
+
+op!(
+    /// A folder of Markdown files as wiki pages.
+    WikiImport,
+    "wiki.import",
+    WikiImportInput,
+    WikiImportResult
+);
+
+pub(crate) const WIKI_IMPORT: OpDescriptor = OpDescriptor::of::<WikiImport>(Meta {
+    summary: "Import a folder of Markdown files as wiki pages: sub-folders become pages inside pages, relative links between the files and `[[…]]` links become wiki links, and linked images and files are attached to their pages; one change that Undo takes back.",
+    kind: OpKind::Command,
+    safety: Safety::Write,
+    exposure: Exposure::Data,
+    cli: Some("wiki import <path>"),
+    input_name: "WikiImportInput",
+    output_name: "WikiImportResult",
 });

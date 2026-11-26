@@ -460,7 +460,8 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
         tx,
         "SELECT w.id, w.parent_id, w.rank, w.title, w.slug, w.current_rev, w.is_agent_brief,
                 w.created_at, w.updated_at, w.deleted_at, w.deleted_group,
-                coalesce((SELECT body FROM wiki_revisions r WHERE r.id = w.current_rev), '')
+                coalesce((SELECT body FROM wiki_revisions r WHERE r.id = w.current_rev), ''),
+                w.is_home
            FROM wiki_pages w WHERE w.project_id = ?1 ORDER BY w.rank, w.id",
         &pid,
         |r| {
@@ -475,6 +476,7 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
                     path: String::new(),
                     current_rev: opt_id(r, 5)?.unwrap_or_default(),
                     is_agent_brief: r.get(6)?,
+                    is_home: r.get(12)?,
                     created_at: r.get(7)?,
                     updated_at: r.get(8)?,
                     deleted_at: r.get(9)?,

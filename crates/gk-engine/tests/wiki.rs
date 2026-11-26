@@ -1131,3 +1131,424 @@ fn one_page_per_project_is_the_agent_brief_and_only_people_choose_it() {
     );
     assert_eq!(ws.get("Conventions").get("agent_brief"), None);
 }
+
+/// A small real PNG image.
+fn png() -> Vec<u8> {
+    let mut out = std::io::Cursor::new(Vec::new());
+    image::RgbaImage::from_pixel(4, 3, image::Rgba([10, 20, 30, 255]))
+        .write_to(&mut out, image::ImageFormat::Png)
+        .unwrap();
+    out.into_inner()
+}
+
+fn sure() -> Context {
+    Context::user(Via::Cli).with_confirmation(Confirmation::Given)
+}
+
+#[test]
+fn files_attach_to_pages_and_go_to_the_trash_and_back_with_them() {
+    let ws = open();
+    let home = ws.page("Home", "Text.\n");
+    let page_id = home["id"].as_str().unwrap().to_owned();
+    let attached = ws.call(
+        "file.attach",
+        json!({
+            "project": "TM",
+            "page": "home",
+            "name": "chart.png",
+            "data_base64": gk_core::base64_encode(&png()),
+        }),
+    );
+    let file = attached["file"].clone();
+    let id = file["id"].as_str().unwrap().to_owned();
+    assert_eq!(file["page"], page_id.as_str(), "{file}");
+    assert_eq!(file["project"], "TM", "{file}");
+    assert_eq!(file["task"], "", "{file}");
+    assert_eq!(file["kind"], "image");
+    assert_eq!(file["width"], 4);
+
+    let with_files = ws.call(
+        "wiki.get",
+        json!({ "project": "TM", "page": "Home", "include": ["files"] }),
+    );
+    assert_eq!(with_files["files"][0]["id"], id.as_str(), "{with_files}");
+    assert_eq!(ws.get("Home").get("files"), None);
+    let thumb = ws.call("file.thumbnail", json!({ "attachment": id }));
+    assert_eq!(thumb["mime"], "image/png", "{thumb}");
+    let found = ws.call(
+        "search.query",
+        json!({ "text": "chart", "kinds": ["file"] }),
+    );
+    assert_eq!(found["items"][0]["page"], page_id.as_str(), "{found}");
+    assert_eq!(found["items"][0]["slug"], "home", "{found}");
+
+    // One owner only; `project` is for pages.
+    ws.call("task.create", json!({ "project": "TM", "title": "T" }));
+    let err = ws.fails(
+        "file.attach",
+        json!({ "task": "TM-1", "page": page_id, "name": "a.txt", "data_base64": "YQ==" }),
+    );
+    assert_eq!(err.details["message_id"], "file-attach-to-what", "{err:?}");
+    let err = ws.fails(
+        "file.attach",
+        json!({ "task": "TM-1", "project": "TM", "name": "a.txt", "data_base64": "YQ==" }),
+    );
+    assert_eq!(
+        err.details["message_id"], "file-project-for-page",
+        "{err:?}"
+    );
+
+    // The page goes to the trash with its file, and comes back with it.
+    let deleted = ws.call("wiki.delete", json!({ "project": "TM", "page": "Home" }));
+    let err = ws.fails("file.get", json!({ "attachment": id }));
+    assert_eq!(err.code, ErrorCode::NotFound);
+    let trash = ws.call("trash.list", json!({}));
+    assert_eq!(trash["total"], 1, "{trash}");
+    let entry = deleted["items"][0]["id"].clone();
+    ws.call("trash.restore", json!({ "items": [entry] }));
+    assert_eq!(
+        ws.call("file.get", json!({ "attachment": id }))["name"],
+        "chart.png"
+    );
+
+    // The file alone to the trash and back; Undo too.
+    ws.call("file.delete", json!({ "attachment": id }));
+    let listed = ws.call(
+        "wiki.get",
+        json!({ "project": "TM", "page": "Home", "include": ["files"] }),
+    );
+    assert_eq!(listed["files"], json!([]), "{listed}");
+    let trash = ws.call("trash.list", json!({}));
+    assert_eq!(trash["items"][0]["kind"], "file", "{trash}");
+    assert_eq!(trash["items"][0]["project"], "TM", "{trash}");
+    ws.call("history.undo", json!({}));
+    assert_eq!(
+        ws.call("file.get", json!({ "attachment": id }))["name"],
+        "chart.png"
+    );
+
+    // In backups and archives.
+    let backup = ws.call("backup.create", json!({}));
+    assert_eq!(backup["files"], 1, "{backup}");
+    let out = ws._dir.path().join("archive");
+    ws.call(
+        "transfer.export",
+        json!({ "path": out.to_string_lossy(), "format": "folder", "projects": ["TM"] }),
+    );
+    ws.call(
+        "transfer.import",
+        json!({ "path": out.to_string_lossy(), "keys": [{ "from": "TM", "to": "CP" }] }),
+    );
+    let copy = ws.call(
+        "wiki.get",
+        json!({ "project": "CP", "page": "Home", "include": ["files"] }),
+    );
+    assert_eq!(copy["files"][0]["name"], "chart.png", "{copy}");
+    assert_eq!(copy["files"][0]["sha256"], file["sha256"], "{copy}");
+
+    // Purged with the page: the copy keeps the stored content.
+    let deleted = ws.call("wiki.delete", json!({ "project": "TM", "page": "Home" }));
+    let entry = deleted["items"][0]["id"].clone();
+    ws.engine
+        .call(&sure(), "trash.purge", json!({ "items": [entry] }))
+        .unwrap();
+    let err = ws.fails("file.get", json!({ "attachment": id }));
+    assert_eq!(err.code, ErrorCode::NotFound);
+    let sha = file["sha256"].as_str().unwrap();
+    assert!(gk_store::file_path(&ws.layout, sha).is_some());
+
+    // Not while the wiki is off.
+    ws.call(
+        "project.update",
+        json!({ "project": "CP", "modules": { "wiki": false } }),
+    );
+    let err = ws.fails(
+        "file.attach",
+        json!({ "project": "CP", "page": "Home", "name": "a.txt", "data_base64": "YQ==" }),
+    );
+    assert_eq!(err.code, ErrorCode::Forbidden, "{err:?}");
+}
+
+#[test]
+fn one_page_is_the_home_page_and_undo_moves_the_mark_back() {
+    let ws = open();
+    ws.page("Start", "");
+    ws.page("Welcome", "");
+    let set = ws.call(
+        "wiki.update",
+        json!({ "project": "TM", "page": "Welcome", "home": true }),
+    );
+    assert_eq!(set["page"]["home"], true, "{set}");
+    let list = ws.call("wiki.list", json!({ "project": "TM" }));
+    let homes: Vec<&Value> = list["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|p| p["home"] == true)
+        .collect();
+    assert_eq!(homes.len(), 1, "{list}");
+    assert_eq!(homes[0]["title"], "Welcome");
+
+    ws.call(
+        "wiki.update",
+        json!({ "project": "TM", "page": "Start", "home": true }),
+    );
+    assert_eq!(ws.get("Welcome").get("home"), None);
+    assert_eq!(ws.get("Start")["home"], true);
+    ws.call("history.undo", json!({}));
+    assert_eq!(ws.get("Welcome")["home"], true);
+    assert_eq!(ws.get("Start").get("home"), None);
+
+    // A page in the trash is not the home page; back, it is again.
+    let deleted = ws.call("wiki.delete", json!({ "project": "TM", "page": "Welcome" }));
+    let list = ws.call("wiki.list", json!({ "project": "TM" }));
+    assert!(
+        list["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|p| p.get("home").is_none())
+    );
+    let entry = deleted["items"][0]["id"].clone();
+    ws.call("trash.restore", json!({ "items": [entry] }));
+    assert_eq!(ws.get("Welcome")["home"], true);
+
+    // Agents may choose it too: it only says where the wiki opens.
+    let agent = agent_of(&ws.engine, "Helper");
+    ws.engine
+        .call(
+            &agent,
+            "wiki.update",
+            json!({ "project": "TM", "page": "Start", "home": true }),
+        )
+        .unwrap();
+    ws.call(
+        "wiki.update",
+        json!({ "project": "TM", "page": "Start", "home": false }),
+    );
+    let list = ws.call("wiki.list", json!({ "project": "TM" }));
+    assert!(
+        list["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|p| p.get("home").is_none())
+    );
+}
+
+#[test]
+fn a_branch_exports_as_web_pages_with_its_files_and_a_list_of_pages() {
+    let ws = open();
+    let home = ws.page("Home", "");
+    let file = ws.call(
+        "file.attach",
+        json!({ "page": home["id"], "name": "chart.png", "data_base64": gk_core::base64_encode(&png()) }),
+    )["file"]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    ws.call(
+        "wiki.update",
+        json!({
+            "project": "TM",
+            "page": "Home",
+            "body": format!("# Top\n\nSee [[Child#Second part|the part]] and [[Elsewhere]].\n\n![chart](gk-file://{file})\n"),
+        }),
+    );
+    ws.page("Elsewhere", "");
+    ws.call(
+        "wiki.create",
+        json!({ "project": "TM", "title": "Child", "parent": "Home", "body": "## Second part\n\nBack to [[Home]].\n" }),
+    );
+    let out = ws._dir.path().join("web");
+    let done = ws.call(
+        "wiki.export",
+        json!({
+            "project": "TM",
+            "page": "Home",
+            "subpages": true,
+            "text_format": "html",
+            "path": out.to_string_lossy(),
+            "format": "folder",
+        }),
+    );
+    assert_eq!(done["pages"], 2, "{done}");
+    assert_eq!(done["attachments"], 1, "{done}");
+    let read = |p: &str| std::fs::read_to_string(out.join(p)).unwrap();
+    let home = read("home.html");
+    assert!(home.starts_with("<!doctype html>"), "{home}");
+    assert!(
+        home.contains("href=\"home/child.html#second-part\""),
+        "{home}"
+    );
+    assert!(home.contains("src=\"files/chart.png\""), "{home}");
+    assert!(!home.contains("gk-file"), "{home}");
+    assert!(home.contains("href=\"index.html\""), "{home}");
+    let child = read("home/child.html");
+    assert!(child.contains("<h2 id=\"second-part\">"), "{child}");
+    assert!(child.contains("href=\"../home.html\""), "{child}");
+    let index = read("index.html");
+    assert!(index.contains("href=\"home/child.html\""), "{index}");
+    assert!(out.join("files/chart.png").is_file());
+
+    // One page alone needs no list.
+    let alone = ws._dir.path().join("alone");
+    ws.call(
+        "wiki.export",
+        json!({
+            "project": "TM", "page": "Elsewhere", "text_format": "html",
+            "path": alone.to_string_lossy(), "format": "folder",
+        }),
+    );
+    assert!(alone.join("elsewhere.html").is_file());
+    assert!(!alone.join("index.html").exists());
+}
+
+/// Writes the files of a folder to import.
+fn folder(root: &std::path::Path, files: &[(&str, &[u8])]) {
+    for (path, content) in files {
+        let full = root.join(path);
+        std::fs::create_dir_all(full.parent().unwrap()).unwrap();
+        std::fs::write(full, content).unwrap();
+    }
+}
+
+#[test]
+fn a_folder_of_markdown_imports_as_pages_with_links_and_images_in_one_change() {
+    let ws = open();
+    ws.page("guide", "Already here.\n");
+    let dir = ws._dir.path().join("notes");
+    let png = png();
+    folder(
+        &dir,
+        &[
+            (
+                "guide.md",
+                b"# Guide\n\nRead [the setup](guide/setup.md#install-it) and [[setup]].\n\n![shot](img/shot.png)\n\n[web](https://example.com/a.md) [out](../secret.md)\n",
+            ),
+            ("guide/setup.md", b"## Install it\n\nBack to [guide](../guide.md).\n"),
+            ("ideas/index.md", b"Ideas, see [[guide]].\n"),
+            ("ideas/later/one.md", b"One.\n"),
+            ("img/shot.png", &png),
+            ("img/unused.png", &png),
+            (".git/HEAD", b"ref"),
+        ],
+    );
+    let dry = ws.call(
+        "wiki.import",
+        json!({ "project": "TM", "path": dir.to_string_lossy(), "dry_run": true }),
+    );
+    assert_eq!(dry["pages"], 5, "{dry}");
+    assert_eq!(dry["attachments"], 1, "{dry}");
+    assert_eq!(dry["renamed"][0]["title"], "guide (2)", "{dry}");
+    assert_eq!(ws.titles().len(), 1, "a dry run writes nothing");
+
+    let done = ws.call(
+        "wiki.import",
+        json!({ "project": "TM", "path": dir.to_string_lossy() }),
+    );
+    assert_eq!(done["pages"], 5, "{done}");
+    assert!(done["group"].is_string(), "{done}");
+    assert_eq!(
+        done["skipped"],
+        json!([".git/HEAD", "img/unused.png"]),
+        "{done}"
+    );
+    assert_eq!(
+        ws.titles(),
+        [
+            "guide",
+            "guide (2)",
+            "  setup",
+            "ideas",
+            "  later",
+            "    one"
+        ]
+    );
+    let guide = ws.call(
+        "wiki.get",
+        json!({ "project": "TM", "page": "guide (2)", "include": ["files"] }),
+    );
+    let shot = guide["files"][0]["id"].as_str().unwrap().to_owned();
+    assert_eq!(guide["files"][0]["name"], "shot.png");
+    assert_eq!(
+        guide["body"],
+        format!(
+            "# Guide\n\nRead [[setup#Install it|the setup]] and [[setup]].\n\n![shot](gk-file://{shot})\n\n[web](https://example.com/a.md) [out](../secret.md)\n"
+        )
+    );
+    assert_eq!(
+        ws.get("setup")["body"],
+        "## Install it\n\nBack to [[guide (2)|guide]].\n"
+    );
+    assert_eq!(ws.get("ideas")["body"], "Ideas, see [[guide (2)]].\n");
+    assert_eq!(ws.get("later")["body"], "");
+
+    // Undo takes the whole import back.
+    ws.call("history.undo", json!({}));
+    assert_eq!(ws.titles(), ["guide"]);
+    let err = ws.fails("file.get", json!({ "attachment": shot }));
+    assert_eq!(err.code, ErrorCode::NotFound);
+
+    // Into a page, and as an agent only from the exports folder.
+    let inside = ws.call(
+        "wiki.import",
+        json!({ "project": "TM", "path": dir.join("ideas").to_string_lossy(), "parent": "guide" }),
+    );
+    assert_eq!(inside["pages"], 3, "{inside}");
+    assert_eq!(ws.titles(), ["guide", "  index", "  later", "    one"]);
+    let agent = agent_of(&ws.engine, "Helper");
+    let err = ws
+        .engine
+        .call(
+            &agent,
+            "wiki.import",
+            json!({ "project": "TM", "path": dir.to_string_lossy() }),
+        )
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::Invalid, "{err:?}");
+}
+
+#[test]
+fn a_hostile_folder_is_refused_before_anything_is_written() {
+    let ws = open();
+    let empty = ws._dir.path().join("empty");
+    folder(&empty, &[("a.txt", b"x")]);
+    let err = ws.fails(
+        "wiki.import",
+        json!({ "project": "TM", "path": empty.to_string_lossy() }),
+    );
+    assert_eq!(err.details["message_id"], "wiki-import-nothing", "{err:?}");
+
+    let big = ws._dir.path().join("big");
+    folder(&big, &[("a.md", &vec![b'a'; (1 << 20) + 1])]);
+    let err = ws.fails(
+        "wiki.import",
+        json!({ "project": "TM", "path": big.to_string_lossy() }),
+    );
+    assert_eq!(
+        err.details["message_id"], "transfer-entry-too-large",
+        "{err:?}"
+    );
+
+    let binary = ws._dir.path().join("binary");
+    folder(&binary, &[("a.md", b"\xff\xfe\0bad")]);
+    let err = ws.fails(
+        "wiki.import",
+        json!({ "project": "TM", "path": binary.to_string_lossy() }),
+    );
+    assert_eq!(err.details["message_id"], "wiki-import-not-text", "{err:?}");
+
+    #[cfg(unix)]
+    {
+        let linked = ws._dir.path().join("linked");
+        folder(&linked, &[("a.md", b"A")]);
+        std::os::unix::fs::symlink("/etc/passwd", linked.join("b.md")).unwrap();
+        let err = ws.fails(
+            "wiki.import",
+            json!({ "project": "TM", "path": linked.to_string_lossy() }),
+        );
+        assert_eq!(err.details["message_id"], "transfer-link", "{err:?}");
+    }
+    assert!(ws.titles().is_empty());
+}

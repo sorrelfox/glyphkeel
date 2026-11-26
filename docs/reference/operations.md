@@ -101,6 +101,7 @@ The safety class decides who may run an operation:
 | `wiki.delete` | trash | app, command line, MCP | `delete_wiki_page` | `glyphkeel wiki delete <page>` |
 | `wiki.history` | read | app, command line, MCP | `get_wiki_history` | `glyphkeel wiki history <page>` |
 | `wiki.export` | write | app, command line, MCP | `export_wiki_page` | `glyphkeel wiki export <page>` |
+| `wiki.import` | write | app, command line, MCP | `import_wiki_pages` | `glyphkeel wiki import <path>` |
 | `wiki.backlinks` | read | app, command line, MCP | `get_wiki_page` | `glyphkeel wiki backlinks <page>` |
 | `wiki.references` | read | app, command line, MCP | `get_wiki_page` | `glyphkeel wiki references <page>` |
 | `task.backlinks` | read | app, command line, MCP | `get_task` | `glyphkeel task backlinks <key>` |
@@ -639,7 +640,7 @@ Input: `WikiCreateInput`. Output: `WikiChange`. Schemas: [catalog.schema.json](c
 
 ## `wiki.update`
 
-Change a wiki page: its text (whole, with a base revision, or by targeted edits), title, parent or place; or resolve a conflict copy.
+Change a wiki page: its text (whole, with a base revision, or by targeted edits), title, parent or place, whether it is the home page; or resolve a conflict copy.
 
 Input: `WikiUpdateInput`. Output: `WikiChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
@@ -663,9 +664,15 @@ Input: `WikiHistoryInput`. Output: `RevisionList`. Schemas: [catalog.schema.json
 
 ## `wiki.export`
 
-Export a wiki page, optionally with the pages inside it, or a project's whole wiki, as Markdown files with their attachments, in a .zip file or a folder; links between the exported pages and to the attachments become relative links.
+Export a wiki page, optionally with the pages inside it, or a project's whole wiki, as Markdown files or web pages with their attachments, in a .zip file or a folder; links between the exported pages and to the attachments become relative links.
 
 Input: `WikiExportInput`. Output: `WikiExportResult`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `wiki.import`
+
+Import a folder of Markdown files as wiki pages: sub-folders become pages inside pages, relative links between the files and `[[…]]` links become wiki links, and linked images and files are attached to their pages; one change that Undo takes back.
+
+Input: `WikiImportInput`. Output: `WikiImportResult`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `wiki.backlinks`
 
@@ -713,7 +720,7 @@ Not available to agents: It gives a path in the workspace's cache, which the app
 
 ## `file.attach`
 
-Attach a local file, or Base64 data with a name, to a task or a comment.
+Attach a local file, or Base64 data with a name, to a task, a comment or a wiki page.
 
 Input: `FileAttachInput`. Output: `FileChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 

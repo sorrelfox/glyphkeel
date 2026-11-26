@@ -140,6 +140,9 @@ function SearchResults({ params, onChange, onOpenTask }: { params: SearchParams;
   const activate = (hit: SearchHit) => {
     if (hit.kind === "wiki") {
       setWiki(hit.id);
+    } else if (hit.page !== undefined) {
+      // A file on a wiki page opens the page.
+      setWiki(hit.page);
     } else if (hit.kind === "project") {
       void navigate({ to: "/projects/$key", params: { key: hit.project } });
     } else if (hit.task !== undefined) {

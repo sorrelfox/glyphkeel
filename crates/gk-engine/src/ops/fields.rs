@@ -139,6 +139,7 @@ const SPECS: &[Spec] = &[
         "is_agent_brief",
         Enc::Bool,
     ),
+    spec(WIKI, "home", "wiki_pages", "is_home", Enc::Bool),
 ];
 
 const PRIORITIES: [&str; 5] = ["none", "low", "normal", "high", "urgent"];

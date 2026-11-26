@@ -189,6 +189,7 @@ transfer-invalid-page-title = { $path }, line { $line }: the page's title is not
 transfer-invalid-page-slug = { $path }, line { $line }: the page's slug is empty or too long.
 transfer-invalid-page-nesting = { $path }, line { $line }: pages nest too deep or in a circle.
 transfer-invalid-two-briefs = { $path }, line { $line }: a project has one page of instructions for agents, not two.
+transfer-invalid-two-homes = { $path }, line { $line }: a wiki has one home page, not two.
 transfer-invalid-page-parent = { $path }, line { $line }: the parent page is not in the project.
 transfer-invalid-revision-owner = { $path }, line { $line }: the revision's owner is not in the project.
 transfer-invalid-revision-size = { $path }, line { $line }: the revision is larger than 1 MB.
@@ -517,6 +518,14 @@ history-in-use = { $count ->
 description-item-gone = The item is gone.
 description-task-or-project = Name either a task or a project.
 wiki-export-what = Name a page to export, or a project to export its whole wiki.
+# The link to the list of pages at the top of an exported web page.
+wiki-export-contents = Contents
+# The accessible name of the row of links above an exported web page's title.
+wiki-export-trail = Pages above this one
+wiki-import-nothing = The folder holds no Markdown files (`.md`).
+wiki-import-not-text = { $path } is not text in UTF-8.
+wiki-import-too-many = The folder makes { $count } pages; one import makes at most { $max }.
+wiki-import-too-deep = { $path } is nested too deep: pages nest at most { $max } levels.
 wiki-brief-agents = Agents can't choose or change the page that briefs them.
 wiki-brief-agents-hint = Ask the person to mark the page in the app or with `glyphkeel wiki put`.
 checklist-one-owner = Name one of a task (key), a comment or a wiki page.
@@ -590,20 +599,21 @@ settings-out-of-range = { $field } must be from { $min } to { $max }; got { $val
 file-no-thumbnail = { $name } has no thumbnail: { $error }.
 file-no-thumbnail-hint = Thumbnails are made for PNG, JPEG, GIF and WebP images.
 file-not-found = There is no attached file "{ $file }".
-file-not-found-hint = Attachment IDs are listed by get_task with include ["files"].
+file-not-found-hint = Attachment IDs are listed by get_task and get_wiki_page with include ["files"].
 file-task-gone = The file's task is gone.
 file-unreadable = The stored file can't be read: { $error }.
 file-image-too-large = The image is larger than { $max } MB, so its content is not returned.
 file-not-text-or-image = This file is neither text nor an image; only its details are returned.
 file-too-large = The file is { $size } MB; files can be at most { $max } MB.
 file-too-large-hint = The limit is the workspace setting file_max_mb.
-file-attach-to-what = Name either the `task` or the `comment` to attach the file to.
+file-attach-to-what = Name one of the `task`, the `comment` or the wiki `page` to attach the file to.
+file-project-for-page = `project` names the project of a wiki `page`; leave it out for a task or a comment.
 file-path-unreadable = Can't read "{ $path }": { $error }.
 file-path-not-a-file = "{ $path }" is not a file.
 file-path-or-data = Give either `path` or `data_base64` (with `name`).
 file-data-needs-name = A file given as `data_base64` needs a `name`.
 file-not-stored = The file can't be stored: { $error }.
-file-task-or-comment = Name the task or the comment.
+file-task-or-comment = Name the task, the comment or the wiki page.
 file-content-gone = The file's content is no longer stored, so it can't come back.
 
 ## Time entries and the timer

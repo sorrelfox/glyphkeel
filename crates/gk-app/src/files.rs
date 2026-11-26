@@ -9,8 +9,8 @@
 //!   within the size limits, with the type the engine sniffed from the
 //!   content and `nosniff`. Other files are never served to the page.
 //! - **The file chooser** and **files dropped on a window** are handled here
-//!   in Rust: the page names the task, never a path, so it can't make the app
-//!   read a file the person didn't choose.
+//!   in Rust: the page names the task or the wiki page, never a path, so it
+//!   can't make the app read a file the person didn't choose.
 //! - **Opening and saving** go through the system: a file opens in the
 //!   desktop's default app from a copy, and an executable or a script is
 //!   never opened, only saved.
@@ -254,13 +254,26 @@ fn display_name(path: &Path) -> String {
     )
 }
 
-/// Attaches each of `paths` to `task`, one command each.
-fn attach_paths(workspace: &Workspace, task: &str, paths: &[PathBuf]) -> Attached {
+/// What files are attached to: a task (its key) or a wiki page (its ID).
+fn owner(task: Option<String>, page: Option<String>) -> Result<Value, OpError> {
+    match (task, page) {
+        (Some(task), None) => Ok(json!({ "task": task })),
+        (None, Some(page)) => Ok(json!({ "page": page })),
+        _ => Err(OpError::invalid(
+            "Name either the task or the wiki page to attach the files to.",
+        )),
+    }
+}
+
+/// Attaches each of `paths` to `owner`, one command each.
+fn attach_paths(workspace: &Workspace, owner: &Value, paths: &[PathBuf]) -> Attached {
     let mut attached = Attached::default();
     for path in paths {
         let result = match path.to_str() {
             Some(text) => {
-                workspace.call("file.attach", json!({ "task": task, "path": text }), None)
+                let mut input = owner.clone();
+                input["path"] = json!(text);
+                workspace.call("file.attach", input, None)
             }
             None => Err(OpError::invalid(format!(
                 "The path of {} can't be read as text.",
@@ -278,17 +291,19 @@ fn attach_paths(workspace: &Workspace, task: &str, paths: &[PathBuf]) -> Attache
     attached
 }
 
-/// Lets the person choose files and attaches them to `task`. Choosing
-/// nothing attaches nothing.
+/// Lets the person choose files and attaches them to `task` or to wiki
+/// page `page`. Choosing nothing attaches nothing.
 #[tauri::command]
 pub(crate) async fn attach_files(
     window: WebviewWindow,
     workspace: State<'_, Arc<Workspace>>,
-    task: String,
+    task: Option<String>,
+    page: Option<String>,
 ) -> Result<Attached, OpError> {
+    let owner = owner(task, page)?;
     let paths = dialog::choose(&window, dialog::Mode::Open).await?;
     let workspace = Arc::clone(&workspace);
-    blocking(move || Ok(attach_paths(&workspace, &task, &paths))).await
+    blocking(move || Ok(attach_paths(&workspace, &owner, &paths))).await
 }
 
 pub(crate) async fn blocking<T: Send + 'static>(
@@ -403,22 +418,24 @@ pub(crate) fn watch_drops<R: Runtime>(
         .insert(window.label().to_owned(), channel);
 }
 
-/// Attaches the files of drop `drop` to `task`. A drop can be attached once,
-/// only by the window it was made on.
+/// Attaches the files of drop `drop` to `task` or to wiki page `page`. A
+/// drop can be attached once, only by the window it was made on.
 #[tauri::command]
 pub(crate) async fn attach_drop(
     window: WebviewWindow,
     drops: State<'_, Drops>,
     workspace: State<'_, Arc<Workspace>>,
     drop: u64,
-    task: String,
+    task: Option<String>,
+    page: Option<String>,
 ) -> Result<Attached, OpError> {
+    let owner = owner(task, page)?;
     let paths = drops.take(window.label(), drop).ok_or_else(|| {
         OpError::not_found("Those dropped files are no longer known.", &[])
             .with_hint("Drop them again.")
     })?;
     let workspace = Arc::clone(&workspace);
-    blocking(move || Ok(attach_paths(&workspace, &task, &paths))).await
+    blocking(move || Ok(attach_paths(&workspace, &owner, &paths))).await
 }
 
 /// Tauri's drop handler, for every window: tells the page, keeping the
@@ -643,6 +660,8 @@ pub(crate) mod dialog {
         Import { folder: bool },
         /// Choose the folder backups go to.
         BackupFolder,
+        /// Choose a folder of Markdown files to import into the wiki.
+        WikiFolder,
     }
 
     /// Shows GTK's native file chooser (the desktop portal's, where there is
@@ -698,6 +717,11 @@ pub(crate) mod dialog {
                 "chooser-backup-folder",
                 FileChooserAction::SelectFolder,
             ),
+            Mode::WikiFolder => (
+                "chooser-wiki-folder-title",
+                "chooser-import",
+                FileChooserAction::SelectFolder,
+            ),
         };
         let dialog = FileChooserNative::new(
             Some(&text(title, &[])),
@@ -728,7 +752,7 @@ pub(crate) mod dialog {
                 dialog.set_do_overwrite_confirmation(true);
             }
             Mode::Import { folder: false } => dialog.add_filter(zip_filter()),
-            Mode::Import { folder: true } | Mode::BackupFolder => {}
+            Mode::Import { folder: true } | Mode::BackupFolder | Mode::WikiFolder => {}
         }
         // The dialog lives until it answers; then the answer is sent once.
         let keep = RefCell::new(Some((dialog.clone(), answer)));
@@ -759,6 +783,7 @@ pub(crate) mod dialog {
         Export { name: String, folder: bool },
         Import { folder: bool },
         BackupFolder,
+        WikiFolder,
     }
 
     pub(crate) async fn choose(
@@ -1014,10 +1039,26 @@ mod tests {
         let ws = workspace(&dir);
         let file = dir.path().join("notes.txt");
         std::fs::write(&file, "hello\n").unwrap();
-        let attached = attach_paths(&ws, "GS-1", &[file, dir.path().join("missing.txt")]);
+        let task = owner(Some("GS-1".into()), None).unwrap();
+        let attached = attach_paths(&ws, &task, &[file.clone(), dir.path().join("missing.txt")]);
         assert_eq!(attached.files.len(), 1);
         assert_eq!(attached.failed.len(), 1);
         assert_eq!(attached.failed[0].name, "missing.txt");
+        // A wiki page takes files the same way.
+        let page = ws
+            .call(
+                "wiki.create",
+                json!({ "project": "GS", "title": "Notes" }),
+                None,
+            )
+            .unwrap()["page"]["id"]
+            .clone();
+        let page = owner(None, Some(page.as_str().unwrap().to_owned())).unwrap();
+        let attached = attach_paths(&ws, &page, &[file]);
+        assert_eq!(attached.files.len(), 1, "{:?}", attached.failed);
+        assert!(attached.files[0]["file"]["page"].is_string());
+        assert!(owner(None, None).is_err());
+        assert!(owner(Some("GS-1".into()), Some("x".into())).is_err());
         ws.close();
     }
 

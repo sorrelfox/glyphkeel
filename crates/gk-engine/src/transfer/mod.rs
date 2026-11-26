@@ -33,6 +33,8 @@ mod model;
 mod sink;
 mod source;
 mod wiki_export;
+mod wiki_html;
+mod wiki_import;
 
 #[cfg(test)]
 mod tests;

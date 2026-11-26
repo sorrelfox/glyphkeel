@@ -10,7 +10,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import { OpFailure, toCallError } from "../data/transport";
-import { type Call, type ExportResult, type ImportResult, type KeyChange, type WikiExportResult } from "../generated/ops";
+import { type Call, type ExportResult, type ImportResult, type KeyChange, type WikiExportResult, type WikiImportResult } from "../generated/ops";
 import { inApp } from "./files";
 
 /** Runs an app command; its refusals become failures like the engine's. */
@@ -45,18 +45,38 @@ export function exportArchive(call: Call, request: ExportRequest): Promise<Expor
 
 /**
  * What to export from a wiki: a page by its ID (with the pages inside it
- * when `subpages`), or a project's whole wiki; and the name the chooser
- * suggests.
+ * when `subpages`), or a project's whole wiki; the name the chooser
+ * suggests; and whether as web pages instead of Markdown files.
  */
-export type PageExportRequest = ({ page: string; subpages: boolean } | { project: string }) & { name: string };
+export type PageExportRequest = ({ page: string; subpages: boolean } | { project: string }) & { name: string; html?: boolean };
 
-/** Exports a wiki page, or a whole wiki, as Markdown files in a `.zip` file where the person chooses; null when they cancelled the chooser. */
+/** Exports a wiki page, or a whole wiki, as Markdown files or web pages in a `.zip` file where the person chooses; null when they cancelled the chooser. */
 export function exportWikiPage(call: Call, request: PageExportRequest): Promise<WikiExportResult | null> {
   const input = "page" in request ? { page: request.page, subpages: request.subpages } : { project: request.project };
+  const html = request.html === true;
   if (choosesFiles()) {
-    return command<WikiExportResult | null>("export_wiki_page", { page: null, project: null, subpages: false, ...input, name: request.name });
+    return command<WikiExportResult | null>("export_wiki_page", { page: null, project: null, subpages: false, ...input, name: request.name, html });
   }
-  return call("wiki.export", input);
+  return call("wiki.export", { ...input, text_format: html ? "html" : "markdown" });
+}
+
+/** Lets the person choose a folder of Markdown files to import into a wiki; null when they cancelled. Only in the app. */
+export function chooseWikiFolder(): Promise<ImportSource | null> {
+  return command<{ token: string; name: string } | null>("choose_wiki_folder", {});
+}
+
+/** Where a folder import goes: the project's wiki, inside a page (its ID) or at the top. */
+export interface WikiImportTarget {
+  project: string;
+  parent?: string | undefined;
+}
+
+/** Checks (`dryRun`) or imports a chosen folder of Markdown files as wiki pages. */
+export function importWikiFolder(call: Call, source: ImportSource, target: WikiImportTarget, dryRun: boolean): Promise<WikiImportResult> {
+  if ("token" in source) {
+    return command<WikiImportResult>("import_wiki_folder", { token: source.token, project: target.project, parent: target.parent ?? null, dryRun });
+  }
+  return call("wiki.import", { project: target.project, path: source.path, ...(target.parent === undefined ? {} : { parent: target.parent }), dry_run: dryRun });
 }
 
 /** An archive chosen for an import: in the app, its token; in a browser, its name in the exports folder. */

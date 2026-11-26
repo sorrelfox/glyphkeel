@@ -354,6 +354,9 @@ pub(crate) struct WikiPage {
     pub(crate) path: String,
     pub(crate) current_rev: String,
     pub(crate) is_agent_brief: bool,
+    /// Whether it is the wiki's home page; left out when not.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) is_home: bool,
     pub(crate) created_at: i64,
     pub(crate) updated_at: i64,
     pub(crate) deleted_at: Option<i64>,

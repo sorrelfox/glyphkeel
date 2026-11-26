@@ -19,7 +19,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 use crate::error::{Result, StoreError};
 
 /// The schema version this program is built for.
-pub const SCHEMA_VERSION: i64 = 8;
+pub const SCHEMA_VERSION: i64 = 9;
 
 /// One migration: the SQL that takes the schema from `version - 1` to
 /// `version`.
@@ -62,6 +62,10 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 8,
         sql: include_str!("../migrations/0008_text_links.sql"),
+    },
+    Migration {
+        version: 9,
+        sql: include_str!("../migrations/0009_wiki_home.sql"),
     },
 ];
 
@@ -504,5 +508,33 @@ mod tests {
             .map(|i| i.as_str())
             .collect();
         assert_eq!(named, known);
+    }
+    #[test]
+    fn version_9_keeps_pages_and_allows_one_home_page_per_project() {
+        let mut conn = memory();
+        migrate(&mut conn, &MIGRATIONS[..8], |_| Ok(())).unwrap();
+        conn.execute_batch(
+            "INSERT INTO projects (id, rank, key, name, name_fold, hue, modules, created_at,
+                                   updated_at)
+             VALUES (x'01010101010101010101010101010101', 'i', 'WK', 'WK', 'wk', 'blue', '{}',
+                     0, 0);
+             INSERT INTO wiki_pages (id, project_id, rank, title, title_fold, slug, created_at,
+                                     updated_at)
+             VALUES (x'02020202020202020202020202020202', x'01010101010101010101010101010101',
+                     'i', 'Plan', 'plan', 'plan', 0, 0),
+                    (x'03030303030303030303030303030303', x'01010101010101010101010101010101',
+                     'j', 'Home', 'home', 'home', 0, 0);",
+        )
+        .unwrap();
+        migrate(&mut conn, MIGRATIONS, |_| Ok(())).unwrap();
+        assert_eq!(user_version(&conn).unwrap(), 9);
+        let homes: i64 = conn
+            .query_row("SELECT sum(is_home) FROM wiki_pages", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(homes, 0);
+        conn.execute("UPDATE wiki_pages SET is_home = 1 WHERE slug = 'home'", [])
+            .unwrap();
+        let second = conn.execute("UPDATE wiki_pages SET is_home = 1 WHERE slug = 'plan'", []);
+        assert!(second.is_err(), "two home pages in one project");
     }
 }

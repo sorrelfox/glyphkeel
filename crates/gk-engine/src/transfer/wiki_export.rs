@@ -2,14 +2,20 @@
 // Copyright (C) 2026 Glyphkeel contributors
 
 //! Exporting one wiki page, optionally with the pages inside it, or a
-//! project's whole wiki, as plain Markdown files that read well outside the
-//! app.
+//! project's whole wiki, as plain Markdown files or as web pages that read
+//! well outside the app.
 //!
 //! ```text
-//! <slug>.md                   the page's current text
+//! <slug>.md                   the page's current text (`.html`: the page rendered)
 //! <slug>/<child-slug>.md      the pages inside it (with `subpages`), the tree as folders
 //! files/<file name>           the files the pages hold or link to
+//! index.html                  web pages only, when there are several: the tree of pages
 //! ```
+//!
+//! Web pages are rendered by the same Markdown renderer as the wiki's
+//! reader, with a small style sheet of their own, and need nothing else:
+//! no script, no fonts, nothing from the network except images the text
+//! itself takes from the web.
 //!
 //! Links between the exported pages (`[[Page]]`, `[[Page#Heading|label]]`)
 //! become relative Markdown links, a heading as a GitHub-style anchor;
@@ -21,7 +27,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::path::Path;
 
 use gk_api::ops::transfer::ArchiveFormat;
-use gk_api::ops::wiki::{WikiExportInput, WikiExportResult};
+use gk_api::ops::wiki::{WikiExportInput, WikiExportResult, WikiTextFormat};
 use gk_api::{ErrorCode, OpError};
 use gk_core::Id;
 use gk_store::rusqlite::{OptionalExtension, Transaction, params};
@@ -42,10 +48,10 @@ const MAX_LEVELS: usize = 16;
 const FILES_DIR: &str = "files";
 
 /// One page to write.
-struct Page {
+pub(super) struct Page {
     /// Its path in the export, `a/b.md`.
-    path: String,
-    body: String,
+    pub(super) path: String,
+    pub(super) body: String,
 }
 
 /// One attached file to copy.
@@ -134,10 +140,14 @@ fn write(
         return Err(e);
     }
     let size = sink.finish().map_err(cant_write)?;
+    let index = pages
+        .iter()
+        .filter(|p| p.path == super::wiki_html::INDEX)
+        .count();
     Ok(WikiExportResult {
         path: target.to_string_lossy().into_owned(),
         format,
-        pages: pages.len() as u64,
+        pages: (pages.len() - index) as u64,
         attachments: files.len() as u64,
         size,
     })
@@ -149,6 +159,8 @@ fn read(
     tx: &Transaction<'_>,
     input: &WikiExportInput,
 ) -> Result<(Vec<Page>, Vec<File>, String), Failure> {
+    let html = input.text_format == Some(WikiTextFormat::Html);
+    let ext = if html { ".html" } else { ".md" };
     let (roots, project, name) = match &input.page {
         Some(page) => {
             let root = wiki::find_page(tx, input.project.as_deref(), "page", page)?;
@@ -172,22 +184,27 @@ fn read(
     // The pages, the tree as folders: a page's children go in a folder
     // named like its file.
     let mut used = BTreeSet::new();
+    if html {
+        used.insert(super::wiki_html::INDEX.to_owned());
+    }
     let mut rows: Vec<(PageRow, String)> = Vec::new();
+    let mut levels: Vec<usize> = Vec::new();
     let mut queue = Vec::new();
     for root in roots.into_iter().rev() {
-        let path = free_path(&mut used, "", &root.slug, ".md");
+        let path = free_path(&mut used, "", &root.slug, ext);
         queue.push((root, path, 0usize));
     }
     while let Some((page, path, level)) = queue.pop() {
         if subpages && level < MAX_LEVELS {
-            let folder = path.trim_end_matches(".md").to_owned();
+            let folder = path.trim_end_matches(ext).to_owned();
             let kids = wiki::children(tx, page.project, Some(page.id))?;
             for kid in kids.into_iter().rev() {
-                let kid_path = free_path(&mut used, &format!("{folder}/"), &kid.slug, ".md");
+                let kid_path = free_path(&mut used, &format!("{folder}/"), &kid.slug, ext);
                 queue.push((kid, kid_path, level + 1));
             }
         }
         rows.push((page, path));
+        levels.push(level);
     }
     let by_id: HashMap<Id, String> = rows.iter().map(|(p, path)| (p.id, path.clone())).collect();
 
@@ -227,9 +244,88 @@ fn read(
     }
 
     let mut pages = Vec::new();
-    for (id, path, body) in texts {
-        let text = rewrite(tx, &project.key, id, &path, &body, &by_id, &file_paths)?;
-        pages.push(Page { path, body: text });
+    if html {
+        let titles: HashMap<Id, String> =
+            rows.iter().map(|(p, _)| (p.id, p.title.clone())).collect();
+        let several = rows.len() > 1;
+        for (id, path, body) in texts {
+            let resolve_page = |link: &str| -> Option<String> {
+                let (page, heading) = match link.split_once('#') {
+                    Some((p, h)) => (p.trim(), Some(h.trim())),
+                    None => (link.trim(), None),
+                };
+                let target = if page.is_empty() {
+                    Some(id)
+                } else {
+                    wiki::find_page(tx, Some(&project.key), "page", page)
+                        .ok()
+                        .map(|p| p.id)
+                };
+                let target_path = target.and_then(|t| by_id.get(&t))?;
+                let mut url = if target == Some(id) {
+                    String::new()
+                } else {
+                    encode(&relative(&path, target_path))
+                };
+                if let Some(h) = heading {
+                    url.push('#');
+                    url.push_str(&anchor(h));
+                }
+                Some(url)
+            };
+            let resolve_file =
+                |file: Id| file_paths.get(&file).map(|to| encode(&relative(&path, to)));
+            let page_row = rows.iter().find(|(p, _)| p.id == id).map(|(p, _)| p);
+            let trail: Vec<(String, String)> = page_row
+                .map(|p| wiki::ancestor_ids(tx, p.parent))
+                .transpose()?
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|a| {
+                    let to = by_id.get(&a)?;
+                    Some((titles.get(&a)?.clone(), encode(&relative(&path, to))))
+                })
+                .collect();
+            let index = several.then(|| encode(&relative(&path, super::wiki_html::INDEX)));
+            let title = titles.get(&id).cloned().unwrap_or_default();
+            let text = super::wiki_html::page(
+                &title,
+                &id.to_string(),
+                &body,
+                &trail,
+                index.as_deref(),
+                &resolve_page,
+                &resolve_file,
+            );
+            pages.push(Page { path, body: text });
+        }
+        if several {
+            let entries: Vec<(usize, String, String)> = rows
+                .iter()
+                .zip(&levels)
+                .map(|((p, path), level)| (*level, p.title.clone(), encode(path)))
+                .collect();
+            let heading = match &input.page {
+                Some(_) => rows
+                    .first()
+                    .map(|(p, _)| p.title.clone())
+                    .unwrap_or_default(),
+                None => tx.query_row(
+                    "SELECT name FROM projects WHERE id = ?1",
+                    [b(project.id)],
+                    |r| r.get(0),
+                )?,
+            };
+            pages.push(Page {
+                path: super::wiki_html::INDEX.to_owned(),
+                body: super::wiki_html::index(&heading, &entries),
+            });
+        }
+    } else {
+        for (id, path, body) in texts {
+            let text = rewrite(tx, &project.key, id, &path, &body, &by_id, &file_paths)?;
+            pages.push(Page { path, body: text });
+        }
     }
     Ok((pages, files, name))
 }
@@ -401,7 +497,7 @@ fn split_name(name: &str) -> (String, String) {
 }
 
 /// `to` (a path in the export) as seen from the file `from`.
-fn relative(from: &str, to: &str) -> String {
+pub(super) fn relative(from: &str, to: &str) -> String {
     let from_dirs: Vec<&str> = from.split('/').collect();
     let from_dirs = &from_dirs[..from_dirs.len() - 1];
     let to_parts: Vec<&str> = to.split('/').collect();
@@ -418,7 +514,7 @@ fn relative(from: &str, to: &str) -> String {
 
 /// A path as a link destination: bytes other than letters, digits, `/`
 /// and `-._~` percent-encoded.
-fn encode(path: &str) -> String {
+pub(super) fn encode(path: &str) -> String {
     let mut out = String::with_capacity(path.len());
     for byte in path.bytes() {
         if byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'-' | b'.' | b'_' | b'~') {
@@ -432,7 +528,7 @@ fn encode(path: &str) -> String {
 
 /// A heading's anchor as GitHub and most Markdown viewers make it: lower
 /// case, spaces as `-`, punctuation dropped.
-fn anchor(heading: &str) -> String {
+pub(super) fn anchor(heading: &str) -> String {
     let slug: String = heading
         .trim()
         .to_lowercase()

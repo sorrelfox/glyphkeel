@@ -3,7 +3,7 @@
 
 //! Attached files.
 //!
-//! A file is attached to a task or a comment, and named by the
+//! A file is attached to a task, a comment or a wiki page, and named by the
 //! attachment's ID. The same content attached twice is stored once. Its type
 //! is read from its bytes, never taken from its name.
 
@@ -49,11 +49,17 @@ pub struct Attachment {
     /// An image's height in pixels.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub height: Option<u32>,
-    /// The task's key.
+    /// The task's key; empty for a file on a wiki page.
     pub task: String,
     /// The comment's ID, for a file attached to a comment.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub comment: Option<String>,
+    /// The wiki page's ID, for a file attached to a page.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub page: Option<String>,
+    /// The project's key, for a file attached to a wiki page.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
     /// Who attached it.
     pub added_by: Actor,
     /// When it was attached (RFC 3339, UTC).
@@ -70,6 +76,12 @@ pub struct FileAttachInput {
     /// The comment to attach it to: its ID.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub comment: Option<String>,
+    /// The wiki page to attach it to: its title (any case), slug or ID.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub page: Option<String>,
+    /// The page's project (key or ID); needed unless `page` is an ID.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
     /// The path of a local file to read.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
@@ -201,7 +213,7 @@ pub(crate) const FILE_READ: OpDescriptor = OpDescriptor::of::<FileRead>(Meta {
 });
 
 pub(crate) const FILE_ATTACH: OpDescriptor = OpDescriptor::of::<FileAttach>(Meta {
-    summary: "Attach a local file, or Base64 data with a name, to a task or a comment.",
+    summary: "Attach a local file, or Base64 data with a name, to a task, a comment or a wiki page.",
     kind: OpKind::Command,
     safety: Safety::Write,
     exposure: Exposure::Data,

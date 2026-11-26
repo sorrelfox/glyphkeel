@@ -125,7 +125,10 @@ export interface FakeComment {
 
 export interface FakeFile {
   id: string;
+  /** The task's ID; empty for a file on a wiki page. */
   taskId: string;
+  /** The wiki page's ID, for a file on a page. */
+  pageId?: string;
   commentId: string | null;
   name: string;
   mime: string;
@@ -215,6 +218,8 @@ export interface FakeWikiPage {
   updatedAt: string;
   /** Whether it is its project's brief for agents. */
   agentBrief?: boolean;
+  /** Whether it is its wiki's home page. */
+  home?: boolean;
 }
 
 /** Tasks in the trash: one deletion, with the subtasks that went with it; or wiki pages, with the pages inside. */
