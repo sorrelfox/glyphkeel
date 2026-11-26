@@ -71,6 +71,11 @@
   </supports>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.1.4" date="2026-11-26">
+      <description>
+        <p>A wiki with links, backlinks, page moves, files, templates, macros, export and folder import; a Gantt chart with dependencies and moving dependents; a calendar; and a fuller time report.</p>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-11-24">
       <description>
         <p>First public release: tasks on a board and in a list, a query language and saved views, search, wiki, time tracking, trash, backups, export and import, an activity feed, and a command line and agent server.</p>

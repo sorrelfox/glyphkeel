@@ -5,6 +5,38 @@ Conventional Commits, and versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-11-26
+
+### Features
+
+- **Wiki:** a page tree per project with a reader, an editor, history with
+  word-level differences and restore, and an outline with links in and out.
+  Pages can be moved, opened in their own window, given files, marked as a
+  home page or a template, and use macros for a table of contents, child
+  pages, included pages and live task lists. Checkboxes can be ticked in the
+  reader. Pages export as Markdown or web pages, and a folder of Markdown
+  files imports as a page tree.
+- **Links:** links to wiki pages and tasks in pages, descriptions and
+  comments are tracked, and each page and task lists what links to it.
+- **Gantt:** a project's schedule as a Gantt chart: move and resize bars,
+  draw and remove dependencies, edit dates in the table, drag unscheduled
+  tasks onto the timeline, optionally move dependent tasks with an exact
+  preview, group rows, list milestones, save views, mark tasks behind
+  schedule, and export a picture or print. Works right to left and from the
+  keyboard.
+- **Schedule:** the schedule with dependency problems through the command
+  line and the agent server, and moving dependents in one undoable change.
+- **Calendar:** month and week grids with drag or keys to reschedule and
+  quick add on a day.
+- **Time report:** grouping by day, week, month, person, task or project,
+  a person filter and CSV export.
+- **Queries:** a `during:` field for tasks whose dates overlap a period.
+
+### Fixes
+
+- Moving a whole bar past its old due date, and undoing it, no longer fails.
+- Moving a task whose dependents loop back to it is refused.
+
 ## [0.1.0] - 2026-11-24
 
 First public release.
