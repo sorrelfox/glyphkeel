@@ -58,6 +58,17 @@ reason = "SQLite is in the public domain; the blessing is not a licence conditio
 
 [[exception]]
 kind = "component"
+name = "NSIS"
+allow = ["CPL-1.0"]
+reason = """
+The LZMA decompressor in the Windows installer's stub. The installer is a \
+separate program that unpacks Glyphkeel, not linked with it, and the module's \
+authors expressly permit linking to it without the Common Public License \
+applying to the linked code.\
+"""
+
+[[exception]]
+kind = "component"
 name = "Microsoft Edge WebView2 bootstrapper"
 allow = ["LicenseRef-Microsoft-WebView2"]
 reason = """
@@ -113,28 +124,53 @@ notice, here is a blessing:
 
 [[component]]
 name = "KaTeX fonts"
-licence = "MIT"
-source = "https://github.com/KaTeX/KaTeX"
-used = "The math fonts in the app's interface, which come with the katex package and are under its licence (listed with the JavaScript packages)."
+licence = "OFL-1.1"
+source = "https://github.com/KaTeX/katex-fonts"
+used = """
+The math fonts in the app's interface, which come with the katex package \
+(listed with the JavaScript packages). The fonts carry their own licence in \
+their metadata: the SIL Open Font License, with the Reserved Font Names \
+KaTeX_AMS, KaTeX_Caligraphic, KaTeX_Fraktur, KaTeX_Main, KaTeX_Math, \
+KaTeX_SansSerif, KaTeX_Script, KaTeX_Size1 to KaTeX_Size4 and \
+KaTeX_Typewriter.\
+"""
+copyright = "2009-2010 Design Science, Inc. (www.mathjax.org); 2014-2018 Khan Academy (www.khanacademy.org)"
+texts = ["xtask/licences/OFL-1.1.txt"]
 
 [[component]]
 name = "TextMate grammars"
-licence = "MIT"
+licence = "MIT AND Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND BSD-3-Clause AND ISC AND MPL-2.0 AND GPL-3.0-only AND LGPL-3.0-only"
 source = "https://github.com/shikijs/textmate-grammars-themes"
 used = """
 The grammars of code highlighting, which come with the @shikijs/langs package \
-(listed with the JavaScript packages). Each grammar comes from its own \
-project, under that project's licence; the list of grammars, their sources \
-and licences is kept at the source address.\
+(listed with the JavaScript packages), built from the tm-grammars package. \
+Each grammar comes from its own project, under that project's licence. The \
+tm-grammars notice, with every grammar's source, licence and licence text, \
+and the licence of tm-grammars itself are reproduced below.\
 """
+copyright = "2021 Pine Wu, 2023 Anthony Fu (tm-grammars); each grammar's authors, as its notice says"
+texts = ["third_party/tm-grammars/LICENSE", "third_party/tm-grammars/NOTICE"]
 
 [[component]]
 name = "NSIS"
-licence = "Zlib"
+licence = "Zlib AND CPL-1.0"
 source = "https://nsis.sourceforge.io/"
-used = "The Windows installer and uninstaller are made with it and contain its code."
-copyright = "Nullsoft and Contributors"
-texts = ["xtask/licences/Zlib.txt"]
+used = """
+The Windows installer and uninstaller are made with it and contain its code: \
+the installer stub under the zlib licence, and the LZMA decompressor of its \
+LZMA compression module under the Common Public License with the module \
+authors' special exception. Its licence file is reproduced below.\
+"""
+copyright = "1999-2026 NSIS contributors"
+texts = ["third_party/nsis/COPYING"]
+
+[[component]]
+name = "nsis_tauri_utils"
+licence = "MIT OR Apache-2.0"
+source = "https://github.com/tauri-apps/nsis-tauri-utils"
+used = "An NSIS plug-in that the Windows installer and uninstaller carry, from the Tauri bundler."
+copyright = "2019-2022 Tauri Programme within The Commons Conservancy"
+texts = ["xtask/licences/MIT.txt", "xtask/licences/Apache-2.0.txt"]
 
 [[component]]
 name = "Microsoft Edge WebView2 bootstrapper"

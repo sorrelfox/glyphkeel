@@ -11,14 +11,14 @@ a command line and a built-in MCP server.**
 
 <img src="docs/screenshots/board.png" alt="The Glyphkeel board in the light theme: a sidebar with Today, All tasks and three projects, a filter bar, and five columns from Backlog to Done with task cards showing labels, due dates, checklist progress, comments and time spent" width="900">
 
-<sub>The board of version 0.1.0, with a running timer in the sidebar.</sub>
+<sub>The board, with a running timer in the sidebar.</sub>
 
 </div>
 
 > [!IMPORTANT]
-> Glyphkeel is in early development. The first release, 0.1.0, is being
-> prepared, and nothing here is ready for daily use yet. The pictures in this README are screenshots of
-> version 0.1.0, except the two marked as planned.
+> Glyphkeel is in early development. It works, but it changes quickly and has
+> few users so far: keep backups of anything that matters. The pictures in this
+> README are screenshots of the app, except the two marked as design previews.
 
 ## Why
 
@@ -32,39 +32,61 @@ It is also built for working alongside coding agents. The desktop app, the
 engine and one set of operations, so an agent can do the same things you can,
 under rules you set, and every change it makes is recorded and can be undone.
 
-## Planned features
+## Features
 
 **Projects and tasks**
 - Projects with sub-projects, each with its own key, statuses, types and labels.
+  Keys can be changed, and tasks moved between projects.
 - Tasks with Markdown descriptions, checklists, subtasks, links, comments,
   attachments, estimates and due dates.
-- History for every change, undo, revert, and a trash for deleted items.
+- [Custom fields](docs/guide/custom-fields.md) of nine kinds per project, on the
+  task panel, board cards, list columns, in grouping and in queries.
+- [Versions](docs/guide/roadmap.md) with a roadmap page, and
+  [status rules](docs/guide/rules.md): fields a status needs, sets or protects,
+  and limits on what agents may change.
+- [Recurring tasks and templates](docs/guide/recurring-and-templates.md) for
+  tasks and whole projects.
+- [History](docs/guide/history-and-trash.md) for every change, undo, revert, and
+  a trash for deleted items.
 
 **Views**
-- Kanban board with a personal column layout: reorder, hide or collapse columns
-  without changing the project.
-- Task list with filters, grouping, bulk edit, saved views and export.
-- Gantt chart with dependencies and milestones, and a calendar.
-- Today view, global search and a command palette.
-- A wiki per project, with a page tree, revisions and links to tasks.
+- [Kanban board](docs/guide/board.md) with a personal column layout: reorder,
+  hide or collapse columns without changing the project.
+- [Task list](docs/guide/list.md) with filters, grouping, bulk changes, saved
+  views and export.
+- [Gantt chart and calendar](docs/guide/calendar-and-gantt.md) with
+  dependencies, lag and milestones.
+- [Today view, search and a command palette](docs/guide/search.md), with quick
+  add.
+- [A wiki](docs/guide/wiki.md) per project, with a page tree, revisions, macros,
+  page templates and links to tasks.
 
 **Query language**
 - One text form for every filter, such as
   `status:open label:linux due<+7d sort:due,-priority`. It works the same in
-  the filter bar, the search box and the command line.
+  the filter bar, the search box, the command line and the MCP server
+  ([the query language](docs/query-language.md)).
 
-**Time**
-- Time entries, a running timer, remaining estimates and reminders as desktop
-  notifications.
+**Time and reports**
+- [Time entries](docs/guide/time.md), a running timer, remaining estimates and
+  reminders as desktop notifications.
+- A time report, and flow reports: created against closed, cumulative flow and
+  cycle time.
 
 **Data**
 - One SQLite database and a folder of attached files. Daily backups, restore,
-  and export to plain JSON and Markdown.
+  and export to plain JSON and Markdown
+  ([backup and restore](docs/backup-and-restore.md)).
+- [CSV import](docs/guide/export-import.md) with column mapping and presets for
+  Jira and Redmine exports.
 - Never online: no account, no telemetry, no update checks.
 
 **Desktop**
-- Keyboard-first, with five themes (Light, Dark, Slate, Sand and a
-  high-contrast theme), nine accent colours and a compact density.
+- Keyboard-first ([keyboard shortcuts](docs/guide/keyboard-shortcuts.md)), with
+  five themes (Light, Dark, Slate, Sand and a high-contrast theme), nine accent
+  colours and a compact density.
+- Ready for translation: every text comes from translation files, and dates and
+  numbers follow your locale ([languages](docs/guide/languages.md)).
 
 ## Working with AI agents (MCP)
 
@@ -80,6 +102,9 @@ output; nothing listens on the network.
   whole session can be reviewed and reverted.
 - Agents can claim a task for a while, so two agents don't pick up the same
   work.
+- Prompts such as "Plan my day", "Weekly review" and "Write release notes"
+  give agents a ready-made starting point, with completion for their
+  arguments.
 
 The MCP server works while the app is closed. It is part of the command line,
 not a separate service.
@@ -90,7 +115,7 @@ and settings are kept, and how to move them, is in
 
 ## Screenshots
 
-Screenshots of version 0.1.0, taken with a sample workspace.
+Screenshots of the app, taken with a sample workspace.
 
 <table>
   <tr>
@@ -118,15 +143,16 @@ Screenshots of version 0.1.0, taken with a sample workspace.
 
 </details>
 
-### Planned
+### Design previews
 
-These two features are not built yet. The pictures are design previews,
-rendered from the UI design, not screenshots of the app.
+The Gantt chart and the wiki are part of the app. These two pictures, though,
+are design previews rendered from the UI design, not screenshots of the app,
+so the app looks a little different.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/gantt.png" alt="Design preview of a planned feature: Gantt chart with task bars, a dependency, a milestone and unscheduled tasks"><br><sub>Design preview: Gantt chart with dependencies, a milestone and unscheduled tasks</sub></td>
-    <td width="50%"><img src="docs/screenshots/wiki.png" alt="Design preview of a planned feature: a wiki page about the query language, with a page tree and an outline"><br><sub>Design preview: wiki page with a page tree, outline and links to tasks</sub></td>
+    <td width="50%"><img src="docs/screenshots/gantt.png" alt="Design preview: Gantt chart with task bars, a dependency, a milestone and unscheduled tasks"><br><sub>Design preview: Gantt chart with dependencies, a milestone and unscheduled tasks</sub></td>
+    <td width="50%"><img src="docs/screenshots/wiki.png" alt="Design preview: a wiki page about the query language, with a page tree and an outline"><br><sub>Design preview: wiki page with a page tree, outline and links to tasks</sub></td>
   </tr>
 </table>
 
@@ -134,19 +160,17 @@ rendered from the UI design, not screenshots of the app.
 
 Glyphkeel is being built in the open, in vertical slices: each slice adds a
 feature to the engine, the MCP server, the command line and the app together.
+The [changelog](CHANGELOG.md) lists what each version added.
 
-- **Now:** version 0.1.0, the first release, is being prepared. Projects, tasks and the board,
-  task details, time tracking, the list and query language, search, history,
-  the trash and backups work in the app, on the command line and through the
-  MCP server.
-- **Next:** feedback on 0.1.0, then the wiki in the app.
-- **Later:** the Gantt chart and calendar, and deeper project
-  settings such as custom fields, versions and recurring tasks.
+- **Now:** everything in [Features](#features) works in the app, on the
+  command line and through the MCP server.
+- **Next:** polish, accessibility, security review and packaging, based on
+  feedback.
 - **Platforms:** Linux, packaged as deb, rpm and Flatpak, and Windows 10
   and 11, with a per-user installer ([Glyphkeel on Windows](docs/windows.md)).
   macOS is not planned at present.
 
-Releases will appear on the [releases page](https://github.com/sorrelfox/glyphkeel/releases).
+Releases are published on the [releases page](https://github.com/sorrelfox/glyphkeel/releases).
 
 ## Documentation
 

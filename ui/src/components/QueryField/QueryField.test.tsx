@@ -18,7 +18,7 @@ const FIELDS: FieldInfo[] = [
   { name: "status", operators: [":", "!="], ranges: false, sortable: true, values: "status names" },
   { name: "priority", aliases: ["prio"], choices: ["none", "low", "normal", "high", "urgent"], operators: [":", "<", ">"], ranges: false, sortable: true, values: "none < low" },
   { name: "due", operators: [":", "<", ">"], ranges: true, sortable: true, values: "a date" },
-  { name: "label", aliases: ["labels"], operators: [":", "!="], ranges: false, sortable: false, values: "label names" },
+  { name: "label", aliases: ["labels"], operators: [":", "!="], ranges: false, sortable: false, values: "label names, or none" },
   { name: "was", choices: ["status", "priority", "label"], operators: [":"], ranges: false, sortable: false, values: "a field and a value" },
   { name: "changed", choices: ["status", "due"], operators: [":"], ranges: false, sortable: false, values: "a field" },
   { name: "changed-by", operators: [":", "!="], ranges: false, sortable: false, values: "me, agent" },

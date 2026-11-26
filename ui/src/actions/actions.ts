@@ -28,9 +28,9 @@ export interface Action {
 }
 
 /**
- * The default keymap. Every command of the app has its keys here, including
- * the ones whose screens don't exist yet; an action takes its keys from this
- * table by ID.
+ * The default keymap: the keys of every window action, which takes them from
+ * this table by ID. Keys a screen handles inside its own board, grid, tree or
+ * chart (Enter, Delete, F2…) are listed in `shell/screenKeys.ts` instead.
  */
 export const DEFAULT_KEYMAP: Readonly<Record<string, readonly string[]>> = {
   "palette.open": ["Ctrl+K"],
@@ -48,24 +48,13 @@ export const DEFAULT_KEYMAP: Readonly<Record<string, readonly string[]>> = {
   "app.preferences": ["Ctrl+,"],
   "app.undo": ["Ctrl+Z"],
   "app.redo": ["Ctrl+Shift+Z"],
-  "selection.open": ["Enter"],
-  "selection.openWindow": ["Ctrl+Enter"],
-  "selection.clear": ["Escape"],
   "card.moveLeft": ["Alt+ArrowLeft"],
   "card.moveRight": ["Alt+ArrowRight"],
   "card.moveUp": ["Alt+ArrowUp"],
   "card.moveDown": ["Alt+ArrowDown"],
   "column.moveLeft": ["Alt+Shift+ArrowLeft"],
   "column.moveRight": ["Alt+Shift+ArrowRight"],
-  "task.edit": ["E"],
-  "selection.rename": ["F2"],
-  "task.setStatus": ["S"],
-  "task.setPriority": ["P"],
-  "task.setLabels": ["L"],
-  "task.setDue": ["D"],
   "timer.toggle": ["T"],
-  "task.toggleDone": ["Space"],
-  "selection.trash": ["Delete"],
   "help.shortcuts": ["?"],
   "window.close": ["Ctrl+W"],
   "app.quit": ["Ctrl+Q"],

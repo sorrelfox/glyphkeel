@@ -416,6 +416,44 @@ async fn a_session_limited_to_a_project_completes_and_names_only_that_project() 
     conn.close().await;
 }
 
+/// `glyphkeel mcp` with no options but the workspace serves every prompt:
+/// the standard profile with the default toolsets.
+#[tokio::test]
+async fn the_default_command_line_lists_every_prompt() {
+    let (_dir, defaults) = workspace();
+    let workspace = defaults.workspace.clone().unwrap();
+    let options = Options::parse_args(&["--workspace".into(), workspace.into()]).unwrap();
+    assert_eq!(options.profile, Profile::Standard);
+    assert_eq!(options.toolsets(), Toolset::defaults());
+    seeded(&options);
+    let conn = connect(
+        &options,
+        ClientLifecycleMode::Discover {
+            preferred_versions: vec![ProtocolVersion::V_2026_07_28],
+        },
+        ProtocolVersion::V_2026_07_28,
+        "default-check",
+    )
+    .await;
+    let names: Vec<String> = conn
+        .client
+        .list_all_prompts()
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|p| p.name)
+        .collect();
+    let all: Vec<String> = golden_prompts()["prompts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| p["name"].as_str().unwrap().to_owned())
+        .collect();
+    assert_eq!(all.len(), 8);
+    assert_eq!(names, all);
+    conn.close().await;
+}
+
 #[tokio::test]
 async fn the_prompt_list_follows_the_toolsets() {
     let (_dir, mut options) = workspace();

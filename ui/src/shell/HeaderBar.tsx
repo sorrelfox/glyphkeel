@@ -13,6 +13,7 @@ import { type Project } from "../data/catalog";
 import { Tooltip } from "../components/Tooltip";
 import { classes } from "../classes";
 import { ProjectMark } from "../components/ProjectMark";
+import { useMoveProjectEntry } from "../screens/project/moveProject";
 import { useT } from "../i18n/I18n";
 import { appWindow } from "../ipc/window";
 import { dragRegion, type TitleBar } from "../start";
@@ -124,6 +125,8 @@ function ProjectButton({ project, onSettings, onNewSubproject }: ProjectButtonPr
   const t = useT();
   const importCsv = useAction("app.importCsv");
   const projects = useProjects();
+  const moveEntry = useMoveProjectEntry();
+  const summary = projects.data?.items.find((candidate) => candidate.key === project.key);
   const path: string[] = [];
   let parent = project.parent;
   while (parent !== undefined) {
@@ -158,6 +161,7 @@ function ProjectButton({ project, onSettings, onNewSubproject }: ProjectButtonPr
                 disabled: !onNewSubproject || project.state === "archived",
               },
               { id: "import-csv", label: t("project-import-csv"), run: () => { importCsv.run(); }, disabled: project.state === "archived" },
+              ...(project.state === "archived" ? [] : [moveEntry(summary)]),
             ]}
           />
         </Menu>

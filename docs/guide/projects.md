@@ -28,8 +28,11 @@ The board, the list, the calendar, the Gantt chart and the time report each
 have **Include sub-projects**, to show the tasks of the sub-projects too. In a
 query, `project:TM/*` means the project and everything below it.
 
-To move a project under another one, or back to the top level, use the command
-line: `glyphkeel project move <project> --parent <other>`, or
+To move a project under another one, or back to the top level, open its menu
+(right-click it in the sidebar, or click its name above the view) and choose
+**Move to**: **Top level**, or the project to put it under. Its sub-projects
+move with it. Projects that would go deeper than three levels aren't offered.
+On the command line: `glyphkeel project move <project> --parent <other>`, or
 `glyphkeel project move <project> --top-level`.
 
 ## The project key

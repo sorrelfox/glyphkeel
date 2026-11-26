@@ -14,6 +14,7 @@ import { type ProjectSummary } from "../../data/catalog";
 import { useCommand } from "../../data/hooks";
 import { useT } from "../../i18n/I18n";
 import { loadCollapsedProjects, saveCollapsedProjects } from "../../prefs/store";
+import { useMoveProjectEntry } from "./moveProject";
 import { type NewProjectRequest } from "./NewProjectDialog";
 import styles from "./Project.module.css";
 
@@ -54,6 +55,7 @@ export function ProjectTree({ current, onNewProject, onSettings, onExport, onImp
   const archive = useCommand("project.archive", { undoable: t("toast-project-archived") });
   const unarchive = useCommand("project.unarchive");
   const menu = useContextMenu(t("project-menu"));
+  const moveEntry = useMoveProjectEntry();
 
   const all = projects.data?.items ?? [];
   const active = all.filter((project) => project.state === "active");
@@ -74,6 +76,7 @@ export function ProjectTree({ current, onNewProject, onSettings, onExport, onImp
           { id: "open", label: t("project-open"), run: () => { open(project.key); } },
           { id: "subproject", label: t("project-new-subproject"), run: () => { onNewProject({ parent: project.key }); } },
           { id: "settings", label: t("project-settings"), run: () => { onSettings(project.key); } },
+          moveEntry(project),
           "separator",
           { id: "archive", label: t("project-archive"), run: () => { archive.mutate({ project: project.key }); } },
           { id: "export", label: t("project-export"), run: () => { onExport(project.key); } },

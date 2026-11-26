@@ -7,6 +7,7 @@ import { Button, Menu, MenuItem, MenuTrigger, Popover } from "react-aria-compone
 
 import { keysOf, type Action } from "../actions/actions";
 import { ActionsProvider } from "../actions/ActionsProvider";
+import { parseChord } from "../actions/keymap";
 import { ACCENTS, DENSITIES, THEME_ACCENT, THEMES, type Accent, type Theme } from "../appearance/appearance";
 import { useAppearance } from "../appearance/AppearanceProvider";
 import { Dialog } from "../components/Dialog";
@@ -36,7 +37,7 @@ export default function Gallery({ onLeave }: GalleryProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const actions: Action[] = [
-    { id: "dev.leaveGallery", label: "action-leave-gallery", group: "navigation", keys: keysOf("selection.clear"), run: onLeave },
+    { id: "dev.leaveGallery", label: "action-leave-gallery", group: "navigation", keys: [parseChord("Escape")], run: onLeave },
     { id: "window.close", label: "action-close-window", group: "window", keys: keysOf("window.close"), run: () => void appWindow.close() },
     { id: "app.quit", label: "action-quit", group: "app", keys: keysOf("app.quit"), run: () => void appWindow.close() },
   ];
@@ -355,7 +356,7 @@ function ThemeColumn({ theme, accent, density }: ThemeColumnProps) {
 
 /** A menu of sample items in a popover, to show that overlays take the window's theme. */
 function SampleMenu({ label }: { label: string }) {
-  const [open] = keysOf("selection.open");
+  const open = parseChord("Enter");
   return (
     <MenuTrigger>
       <Button className="btn">
@@ -367,7 +368,7 @@ function SampleMenu({ label }: { label: string }) {
           {MENU.map((item, index) => (
             <MenuItem key={item} id={item} className="item" textValue={item}>
               <span className={classes("grow", item === MENU[MENU.length - 1] && "accent")}>{item}</span>
-              {index === 0 && open && <Kbd chord={open} />}
+              {index === 0 && <Kbd chord={open} />}
             </MenuItem>
           ))}
         </Menu>

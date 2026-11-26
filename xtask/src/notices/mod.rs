@@ -422,7 +422,7 @@ impl Policy {
                 let body = fs::read_to_string(root.join(file))
                     .with_context(|| format!("{POLICY}: cannot read {file}"))?;
                 texts.push(Text {
-                    label: format!("standard text: {}", file_stem(file)),
+                    label: component_text_label(file, &c.name),
                     body: normalise(&body),
                 });
             }
@@ -450,6 +450,20 @@ fn join(items: &[&String]) -> String {
         .map(|s| s.as_str())
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+/// How a component's text is named in the notices: a standard licence text
+/// by its licence, a file the component's project wrote by its name.
+fn component_text_label(file: &str, component: &str) -> String {
+    if Path::new(file).starts_with(STANDARD_TEXTS) {
+        format!("standard text: {}", file_stem(file))
+    } else {
+        let name = Path::new(file)
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or(file);
+        format!("{name} of {component}")
+    }
 }
 
 fn file_stem(path: &str) -> &str {
@@ -1010,8 +1024,8 @@ mod tests {
     use serde_json::json;
 
     use super::{
-        Entry, Kind, Policy, Text, indented, is_licence_file, normalise, npm_licence, render,
-        repository, shipped_packages,
+        Entry, Kind, Policy, Text, component_text_label, indented, is_licence_file, normalise,
+        npm_licence, render, repository, shipped_packages,
     };
 
     fn entry(kind: Kind, name: &str, licence: &str) -> Entry {
@@ -1048,6 +1062,18 @@ name = "khroma"
 licence = "MIT"
 reason = "why"
 "#;
+
+    #[test]
+    fn component_texts_are_named_by_licence_or_by_file() {
+        assert_eq!(
+            component_text_label("xtask/licences/OFL-1.1.txt", "KaTeX fonts"),
+            "standard text: OFL-1.1"
+        );
+        assert_eq!(
+            component_text_label("third_party/nsis/COPYING", "NSIS"),
+            "COPYING of NSIS"
+        );
+    }
 
     #[test]
     fn the_repository_policy_parses_and_matches_cargo_deny() {

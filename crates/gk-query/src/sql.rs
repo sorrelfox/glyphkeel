@@ -916,13 +916,24 @@ fn cond(c: &Cond, today: Day, now: i64) -> Sql {
         },
         Cond::Statuses(names) => sql.append(names_in("s.name_fold", names)),
         Cond::Types(names) => sql.append(names_in("y.name_fold", names)),
-        Cond::Labels(names) => {
-            sql.push(
-                "EXISTS (SELECT 1 FROM task_labels tl JOIN labels l ON l.id = tl.label_id \
-                 WHERE tl.task_id = t.id AND ",
-            );
-            sql.append(names_in("l.name_fold", names));
-            sql.push(")");
+        Cond::Labels { names, none } => {
+            let mut parts = Vec::new();
+            if !names.is_empty() {
+                let mut p = Sql::default();
+                p.push(
+                    "EXISTS (SELECT 1 FROM task_labels tl JOIN labels l ON l.id = tl.label_id \
+                     WHERE tl.task_id = t.id AND ",
+                );
+                p.append(names_in("l.name_fold", names));
+                p.push(")");
+                parts.push(p);
+            }
+            if *none {
+                let mut p = Sql::default();
+                p.push("NOT EXISTS (SELECT 1 FROM task_labels tl WHERE tl.task_id = t.id)");
+                parts.push(p);
+            }
+            sql.append(any(parts));
         }
         Cond::Versions { names, none } => {
             let mut parts = Vec::new();

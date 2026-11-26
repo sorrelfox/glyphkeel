@@ -23,6 +23,7 @@ const KEY_MESSAGES: Readonly<Record<string, string>> = {
   PageDown: "key-page-down",
   Home: "key-home",
   End: "key-end",
+  ContextMenu: "key-menu",
 };
 
 /** On Windows the Super key is the Windows key, and is named so. */

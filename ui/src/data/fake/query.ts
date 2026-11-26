@@ -118,7 +118,7 @@ export const FAKE_FIELDS: readonly FieldSpec[] = [
   { name: "category", aliases: ["cat"], type: "category", operators: NAME_OPS, sortable: true, values: "todo, in_progress, done, cancelled; open, closed", choices: CATEGORIES },
   { name: "type", aliases: [], type: "type", operators: NAME_OPS, sortable: true, values: "task type names" },
   { name: "priority", aliases: ["prio"], type: "priority", operators: ORDERED_OPS, sortable: true, values: "none < low < normal < high < urgent", choices: PRIORITIES },
-  { name: "label", aliases: ["labels"], type: "label", operators: NAME_OPS, sortable: false, values: "label names" },
+  { name: "label", aliases: ["labels"], type: "label", operators: NAME_OPS, sortable: false, values: "label names, or none" },
   { name: "version", aliases: ["fix-version"], type: "version", operators: NAME_OPS, sortable: true, values: "version names, or none" },
   { name: "parent", aliases: [], type: "parent", operators: NAME_OPS, sortable: true, values: "a task key, or none" },
   { name: "start", aliases: [], type: "date", operators: ORDERED_OPS, sortable: true, values: "a date, today, +7d, or none" },
