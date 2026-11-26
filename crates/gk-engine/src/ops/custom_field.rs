@@ -602,52 +602,94 @@ pub(crate) fn copy_values(w: &WriteCtx<'_>, old: Id, new: Id) -> Result<(), Fail
     Ok(())
 }
 
+/// A field a moving task has a value of, the value (read only when it
+/// goes to another field) and the target's field that takes it.
+type Carried<'a> = (FieldRow, Option<Value>, Option<&'a FieldRow>);
+
+/// What happens to the values of `task` when it moves to the project whose
+/// fields are `target`: for each field it has a value of, the field's name
+/// and the target's field that would hold the value (the field itself when
+/// the target has it too; else one of the same query name and kind that
+/// takes the value, options by name), or none when it would be left off.
+fn carry_plan<'a>(
+    tx: &Transaction<'_>,
+    task: Id,
+    target: &'a [FieldRow],
+) -> Result<Vec<Carried<'a>>, Failure> {
+    let held: Vec<Id> = {
+        // In the order the task panel shows them: fields of every project
+        // first, then by rank.
+        let mut stmt = tx.prepare(
+            "SELECT f.id FROM custom_fields f
+              WHERE f.id IN (SELECT field_id FROM custom_values WHERE task_id = ?1)
+              ORDER BY f.project_id IS NOT NULL, f.rank, f.id",
+        )?;
+        stmt.query_map([b(task)], |r| id_at(r, 0))?
+            .collect::<Result<_, _>>()?
+    };
+    let mut plan = Vec::new();
+    for id in held {
+        let Some(old) = row_by_id(tx, id)? else {
+            continue;
+        };
+        if let Some(same) = target.iter().find(|f| f.id == id) {
+            plan.push((old, None, Some(same)));
+            continue;
+        }
+        let value = value_of(tx, task, &old)?;
+        let new = value.as_ref().and_then(|v| {
+            target
+                .iter()
+                .filter(|f| f.query_name == old.query_name && f.kind == old.kind)
+                .find(|f| parse_input(f, v, "fields").is_ok())
+        });
+        plan.push((old, value, new));
+    }
+    Ok(plan)
+}
+
 /// After `task` moved to project `to`: its values of fields `to` doesn't
 /// have go to `to`'s field of the same query name and kind where it has
-/// one (options by name), and are dropped otherwise. Returns warnings for
-/// the values left behind.
+/// one that takes them (options by name), and are dropped otherwise.
+/// Returns warnings for the values left behind.
 pub(crate) fn follow_move(
     w: &mut WriteCtx<'_>,
     task: Id,
     to: &ProjectRow,
 ) -> Result<Vec<String>, Failure> {
     let target = rows(w.tx(), Some(to.id))?;
-    let held: Vec<Id> = {
-        let mut stmt = w
-            .tx()
-            .prepare("SELECT DISTINCT field_id FROM custom_values WHERE task_id = ?1")?;
-        stmt.query_map([b(task)], |r| id_at(r, 0))?
-            .collect::<Result<_, _>>()?
-    };
     let mut warnings = Vec::new();
-    for id in held {
-        if target.iter().any(|f| f.id == id) {
+    for (old, value, new) in carry_plan(w.tx(), task, &target)? {
+        if new.is_some_and(|f| f.id == old.id) {
             continue;
         }
-        let Some(old) = row_by_id(w.tx(), id)? else {
-            continue;
-        };
-        let value = value_of(w.tx(), task, &old)?;
         set_values(w, task, to.id, &old, &[])?;
-        let new = target
-            .iter()
-            .find(|f| f.query_name == old.query_name && f.kind == old.kind);
-        let moved = match (new, &value) {
-            (Some(new), Some(v)) => parse_input(new, v, "fields")
-                .ok()
-                .map(|values| set_values(w, task, to.id, new, &values))
-                .transpose()?
-                .is_some(),
-            _ => false,
-        };
-        if !moved {
-            warnings.push(messages::text(
+        match (new, &value) {
+            (Some(new), Some(v)) => {
+                let values = parse_input(new, v, "fields")?;
+                set_values(w, task, to.id, new, &values)?;
+            }
+            _ => warnings.push(messages::text(
                 "field-left-off",
                 &[("field", old.name.clone()), ("project", to.key.clone())],
-            ));
+            )),
         }
     }
     Ok(warnings)
+}
+
+/// For a move check: the custom fields `task` has values of, and the field
+/// of project `to` that would hold each (absent when it would be left off).
+pub(crate) fn move_matches(
+    tx: &Transaction<'_>,
+    task: Id,
+    to: &ProjectRow,
+) -> Result<Vec<(String, Option<String>)>, Failure> {
+    let target = rows(tx, Some(to.id))?;
+    Ok(carry_plan(tx, task, &target)?
+        .into_iter()
+        .map(|(old, _, new)| (old.name, new.map(|f| f.name.clone())))
+        .collect())
 }
 
 /// Gives the new sub-project `child` copies of `parent`'s own fields.

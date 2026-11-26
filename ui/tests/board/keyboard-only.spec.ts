@@ -90,6 +90,7 @@ test("the list without a mouse: filter, walk the rows, select, open, trash and u
   await page.keyboard.press("End");
   await expect.poll(async () => (await focusedRow(page)).index).toBe(shown - 1);
   await page.keyboard.press("Home");
+  await expect.poll(async () => (await focusedRow(page)).index).toBe(0);
 
   // Enter opens the task; F6 goes into it; Escape closes it and gives the
   // focus back to its row.

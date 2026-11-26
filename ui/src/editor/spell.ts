@@ -5,7 +5,9 @@
  * Spelling through the app's spell checker: the visible prose is sent with
  * code, links, math, task keys and wiki links blanked out, and misspelt
  * words come back as ranges, drawn as wavy underlines. Loaded and typed text
- * are checked alike. The web view's own checker stays off.
+ * are checked alike. The web view's own checker stays off, except where
+ * the web view checks spelling itself (WebView2 on Windows): there the app
+ * has no checker, nothing is sent, and the editor asks the web view instead.
  */
 
 import { syntaxTree } from "@codemirror/language";
@@ -13,6 +15,7 @@ import { Facet, RangeSetBuilder } from "@codemirror/state";
 import { Decoration, EditorView, ViewPlugin, type DecorationSet, type ViewUpdate } from "@codemirror/view";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 
+import { webViewChecksSpelling } from "../platform";
 import type { SpellChecker } from "./types";
 
 /** The spell checker of the desktop app, behind its two commands. */
@@ -32,9 +35,12 @@ export const noSpellChecker: SpellChecker = {
   suggest: () => Promise.resolve([]),
 };
 
-/** The spell checker to use when a screen passes none: the app's, or none in a plain browser. */
+/**
+ * The spell checker to use when a screen passes none: the app's, or none in
+ * a plain browser or where the web view checks spelling itself.
+ */
 export function defaultSpellChecker(): SpellChecker | null {
-  return isTauri() ? appSpellChecker : null;
+  return isTauri() && !webViewChecksSpelling() ? appSpellChecker : null;
 }
 
 export const spellCheckerFacet = Facet.define<SpellChecker, SpellChecker>({

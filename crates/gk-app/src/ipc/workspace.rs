@@ -4,7 +4,9 @@
 //! The open workspace: the engine, the change events it forwards to the
 //! windows, the watcher for other programs' commits and the background
 //! jobs. After a restore from a backup the engine that ran it must not go
-//! on, so the workspace closes it and opens the restored data afresh.
+//! on, so the workspace closes it and opens the restored data afresh. When
+//! the person opens another workspace, the same happens with the other
+//! folder ([`Workspace::switch`]).
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
@@ -48,9 +50,9 @@ fn raises(current: Profile, wanted: Profile) -> bool {
 pub(crate) struct Workspace {
     engine: Mutex<Option<Arc<Engine>>>,
     /// The workspace folder, for the stored files the app hands out.
-    layout: Option<WorkspaceLayout>,
+    layout: Mutex<Option<WorkspaceLayout>>,
     /// Why the workspace isn't open; every call answers with it.
-    failure: Option<OpError>,
+    failure: Mutex<Option<OpError>>,
     windows: Arc<Windows>,
     confirm: Confirmation,
     background: Mutex<Option<Background>>,
@@ -99,12 +101,12 @@ impl Workspace {
         let created = !layout.database().exists();
         let (engine, background) = match start(layout, config.clone(), &windows) {
             Ok(started) => started,
-            Err(err) => return Self::failed(err),
+            Err(err) => return Self::failed_with(err, Some(config), confirm),
         };
         Self {
             engine: Mutex::new(Some(engine)),
-            layout: Some(layout.clone()),
-            failure: None,
+            layout: Mutex::new(Some(layout.clone())),
+            failure: Mutex::new(None),
             windows,
             confirm,
             background: Mutex::new(Some(background)),
@@ -117,16 +119,24 @@ impl Workspace {
         }
     }
 
-    /// No workspace: every call answers with `failure`.
-    pub(crate) fn failed(failure: OpError) -> Self {
+    /// No workspace: every call answers with `failure`, until the person
+    /// opens another workspace, which opens with `config` and `confirm`.
+    pub(crate) fn failed_with(
+        failure: OpError,
+        config: Option<EngineConfig>,
+        confirm: Confirmation,
+    ) -> Self {
         Self {
             engine: Mutex::new(None),
-            layout: None,
-            failure: Some(failure),
+            layout: Mutex::new(None),
+            failure: Mutex::new(Some(failure)),
             windows: Arc::new(Windows::default()),
-            confirm: Confirmation::Refuse,
+            confirm,
             background: Mutex::new(None),
-            reopen: Mutex::new(Reopen::default()),
+            reopen: Mutex::new(Reopen {
+                config,
+                notifier: None,
+            }),
             lost: Mutex::new(None),
             created: false,
         }
@@ -137,21 +147,64 @@ impl Workspace {
     /// again too. Every window then hears that everything changed. Calls
     /// still running on the old engine get a moment to end first.
     pub(crate) fn reopen(&self) -> Result<(), OpError> {
-        let Some(layout) = self.layout.clone() else {
+        let Some(layout) = self.layout() else {
             return Ok(());
         };
+        self.open_at(&layout)
+    }
+
+    /// Closes the workspace and opens the one at `layout` in its place,
+    /// creating it when it doesn't exist yet. When that fails, the one that
+    /// was open opens again, and the error says why.
+    pub(crate) fn switch(&self, layout: &WorkspaceLayout) -> Result<(), OpError> {
+        self.closed_for(|_| Ok(layout.clone()))
+    }
+
+    /// Closes the workspace, runs `change` on the folder that was open
+    /// (`None` when none was), and opens the folder it returns. When
+    /// `change` or the opening fails, the folder that was open opens again,
+    /// and the error is `change`'s or the opening's.
+    pub(crate) fn closed_for(
+        &self,
+        change: impl FnOnce(Option<&WorkspaceLayout>) -> Result<WorkspaceLayout, OpError>,
+    ) -> Result<(), OpError> {
+        let before = self.layout();
+        self.close_within(REOPEN_WAIT);
+        let result = change(before.as_ref()).and_then(|layout| {
+            self.open_at(&layout)?;
+            *lock(&self.layout) = Some(layout);
+            *lock(&self.failure) = None;
+            Ok(())
+        });
+        if let Err(err) = result {
+            if let Some(before) = before
+                && lock(&self.engine).is_none()
+            {
+                let _ = self.open_at(&before);
+            }
+            return Err(err);
+        }
+        Ok(())
+    }
+
+    /// Opens the engine at `layout`, the way the workspace was first
+    /// opened, in the time zone the person chose since, and tells every
+    /// window that everything changed.
+    fn open_at(&self, layout: &WorkspaceLayout) -> Result<(), OpError> {
         let (config, notifier) = {
             let reopen = lock(&self.reopen);
             (reopen.config.clone(), reopen.notifier.clone())
         };
         let Some(mut config) = config else {
-            return Ok(());
+            return Err(self
+                .failure()
+                .unwrap_or_else(|| OpError::new(ErrorCode::Storage, "The workspace is closed.")));
         };
         if let Some(zone) = self.time_zone() {
             config.time_zone = Some(zone);
         }
         self.close_within(REOPEN_WAIT);
-        match start(&layout, config, &self.windows) {
+        match start(layout, config, &self.windows) {
             Ok((engine, background)) => {
                 *lock(&self.engine) = Some(engine);
                 *lock(&self.background) = Some(background);
@@ -171,7 +224,9 @@ impl Workspace {
 
     /// Why the workspace isn't open, if it isn't.
     pub(crate) fn failure(&self) -> Option<OpError> {
-        self.failure.clone().or_else(|| lock(&self.lost).clone())
+        lock(&self.failure)
+            .clone()
+            .or_else(|| lock(&self.lost).clone())
     }
 
     /// Whether this start made the workspace, so it is the first run on it.
@@ -180,8 +235,8 @@ impl Workspace {
     }
 
     /// The workspace folder, while it is open.
-    pub(crate) fn layout(&self) -> Option<&WorkspaceLayout> {
-        self.layout.as_ref()
+    pub(crate) fn layout(&self) -> Option<WorkspaceLayout> {
+        lock(&self.layout).clone()
     }
 
     /// Runs `op` for the person through the app. Blocks: call it from a

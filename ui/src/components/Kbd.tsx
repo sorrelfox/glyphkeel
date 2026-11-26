@@ -3,6 +3,7 @@
 
 import { chordParts, type Chord } from "../actions/keymap";
 import { useT, type Translate } from "../i18n/I18n";
+import { platform } from "../platform";
 
 /** Message IDs of the keys that have a name of their own in hints. */
 const KEY_MESSAGES: Readonly<Record<string, string>> = {
@@ -24,11 +25,15 @@ const KEY_MESSAGES: Readonly<Record<string, string>> = {
   End: "key-end",
 };
 
+/** On Windows the Super key is the Windows key, and is named so. */
+const WINDOWS_MESSAGES: Readonly<Record<string, string>> = { super: "key-windows" };
+
 /** A chord as the hint shows it: "Ctrl K", "Ctrl Shift Z", "F9", "?". */
 export function chordLabel(chord: Chord, t: Translate): string {
+  const own = platform() === "windows" ? WINDOWS_MESSAGES : {};
   return chordParts(chord)
     .map((part) => {
-      const message = KEY_MESSAGES[part];
+      const message = own[part] ?? KEY_MESSAGES[part];
       return message ? t(message) : part.toUpperCase();
     })
     .join(" ");

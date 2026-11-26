@@ -55,6 +55,23 @@ status-workspace = Local workspace
 status-workspace-name = { $name }
 status-workspace-unavailable = Workspace unavailable
 
+## The workspace switcher, in the status bar
+
+# The menu button's name for screen readers; $name is the open workspace.
+workspace-menu = Workspace { $name }: switch to another
+workspace-new = New workspace…
+workspace-rename = Rename this workspace…
+workspace-new-title = New workspace
+workspace-rename-title = Rename “{ $name }”
+workspace-name = Name
+workspace-create = Create and open
+workspace-rename-confirm = Rename
+workspace-new-note = A workspace keeps its own projects, tasks and wiki, apart from the others. It opens in place of this one; the command line and agents work in it too.
+workspace-rename-note = Agents and commands working in this workspace must stop first.
+workspace-opened = Opened the workspace “{ $name }”.
+workspace-renamed = The workspace is called “{ $name }” now.
+workspace-no-data-folder = The data folder could not be found.
+
 ## Actions: their names in menus, tooltips and the shortcut sheet
 
 action-palette = Search or run a command
@@ -131,6 +148,9 @@ preferences-run-in-background = Keep running in the background
 preferences-run-in-background-about = Closing the last window keeps Glyphkeel running for reminders and the timer, with an icon in the tray. Quit ends it.
 preferences-autostart = Start when you log in
 preferences-autostart-about = With background mode on, Glyphkeel starts with only its tray icon, for reminders; otherwise its window opens.
+# On Windows.
+preferences-autostart-windows = Start when you sign in
+preferences-autostart-windows-about = With background mode on, Glyphkeel starts with only its icon in the notification area, for reminders; otherwise its window opens. The Startup apps list in Windows Settings can turn it off too.
 preferences-rendering = Rendering
 preferences-safe-rendering = Safe rendering
 preferences-safe-rendering-about = Draws without the graphics card. Turn it on if windows stay blank, white or flicker. Scrolling is less smooth and Glyphkeel uses more memory.
@@ -199,6 +219,8 @@ key-ctrl = Ctrl
 key-alt = Alt
 key-shift = Shift
 key-super = Super
+# The Windows logo key, in shortcut hints on Windows.
+key-windows = Win
 key-escape = Esc
 key-delete = Delete
 key-enter = Enter
@@ -266,6 +288,16 @@ project-new-subproject-title = New sub-project of { $parent }
 project-create = Create project
 project-name = Name
 project-key = Key
+project-key-change = Change…
+project-key-new = New key
+project-key-save = Change key
+# $old is the key now. Task keys with it keep working after the change.
+project-key-note = 2 to 10 capital letters and digits, starting with a letter. Keys such as { $old }-1 keep working in links, addresses, the command line, agents and queries; saved queries change to the new key.
+project-key-old =
+    { $count ->
+        [one] Earlier key: { $keys }
+       *[other] Earlier keys: { $keys }
+    }
 project-colour = Colour
 project-icon = Icon
 project-icon-circle = Circle
@@ -323,6 +355,7 @@ module-gantt = Gantt
 module-wiki = Wiki
 module-time = Time tracking
 toast-project-changed = Project changed
+toast-project-key-changed = Project key changed
 toast-project-archived = Project archived
 dialog-cancel = Cancel
 settings-add = Add
@@ -562,6 +595,61 @@ panel-duplicate = Duplicate
 panel-duplicate-alone = Duplicate without subtasks
 panel-duplicated = Task duplicated
 panel-release = Release the agent's claim
+panel-move = Move to another project…
+
+## Moving tasks to another project
+
+move-to-title =
+    { $count ->
+        [one] Move to another project
+       *[other] Move { $count } tasks to another project
+    }
+move-to-project = Project
+move-to-choose-project = Choose a project
+# A project in the list of targets.
+move-to-project-option = { $key } · { $name }
+move-to-no-project = There is no other active project to move to.
+move-to-checking = Checking what the move takes…
+move-to-nothing = These tasks are in that project already.
+# $subtasks is how many subtasks move with the task, at any depth.
+move-to-keys-one =
+    { $subtasks ->
+        [0] { $from } becomes { $to }.
+        [one] { $from } becomes { $to }, and its subtask moves with it.
+       *[other] { $from } becomes { $to }, and its { $subtasks } subtasks move with it.
+    } Its comments, files, time and links come along, and the old keys still find it.
+move-to-keys-many =
+    { $count ->
+        [one] One task gets a new key in { $project }.
+       *[other] { $count } tasks, subtasks included, get new keys in { $project }.
+    } Their comments, files, time and links come along, and the old keys still find them.
+move-to-all-match = { $project } has a status, type and label of the same name for each of them.
+move-to-map-intro = { $project } has nothing of the same name for these. Choose what they become there:
+move-to-map-statuses = Statuses
+move-to-map-types = Types
+move-to-map-labels = Labels
+# $name is a status, type or label of the tasks; $count how many of them have it.
+move-to-map-row =
+    { $count ->
+        [one] { $name } (1 task)
+       *[other] { $name } ({ $count } tasks)
+    }
+move-to-map-choice = What “{ $name }” becomes
+move-to-leave-off = Leave it off
+move-to-fields-left-off = { $project } has no field of the same name and kind for these, so their values are left off:
+# $name is a custom field of the tasks; $count how many of them have a value of it.
+move-to-fields-row =
+    { $count ->
+        [one] { $name } (1 task)
+       *[other] { $name } ({ $count } tasks)
+    }
+move-to-confirm = Move
+move-to-done = Moved: the task is { $key } now.
+move-to-done-many =
+    { $count ->
+        [one] Moved one task to { $project }.
+       *[other] Moved { $count } tasks to { $project }.
+    }
 panel-blocked-by =
     { $count ->
         [0] Blocked

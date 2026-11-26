@@ -165,9 +165,30 @@ performance table is `perf.md`). `perf` reports by default; `--perf-enforce`
 fails it on a result over budget. Set `GLYPHKEEL_CI_PREFIX` to give the
 images and containers of a second checkout their own names.
 
+The Windows build is checked from Linux too, in a container that cross-compiles
+for `x86_64-pc-windows-msvc` and runs the tests under Wine, without a display:
+
+```sh
+cargo xtask ci --distro windows-cross                      # every Windows suite
+cargo xtask ci --distro windows-cross --suite build,clippy,test
+cargo xtask ci --distro windows-cross --suite smoke,nsis,install
+cargo xtask ci --distro windows-cross --release-dir DIR    # also copy the installer to DIR/<version>/windows/
+```
+
+Its suites are `build`, `clippy` (with `-D warnings` for the Windows
+target), `test` (every crate's tests under Wine), `smoke` (a command-line and
+MCP session), `nsis` (the installer, from the `dist` profile, unsigned) and
+`install` (a silent install and uninstall under Wine, which checks the
+folders, the `PATH` entry, the `glyphkeel://` handler and that uninstalling
+keeps the data). `windows-cross` is never part of the default run and is
+given on its own. The first `nsis` run needs the network once: the Tauri
+bundler downloads its NSIS helpers and the WebView2 bootstrapper. Wine is
+not Windows: NTFS behaviour, WebView2, SmartScreen and the GUI are checked by
+hand on a real Windows 10 and 11.
+
 GitHub Actions run only when a pre-release tag (`v0.1.0-rc.1`) is pushed: the
-same suites in the same containers, a Windows build with the unit tests, the
-packages, an SBOM, checksums and build-provenance attestations, published as a
+same suites in the same containers, a Windows build with the unit tests and
+the NSIS installer, the packages, an SBOM, checksums and build-provenance attestations, published as a
 GitHub pre-release. Pushes and pull requests start no runs, so run the checks
 above yourself. A final release (`v0.1.0`, tagged on the same commit as its
 last pre-release) builds nothing: it republishes that pre-release's files.

@@ -58,13 +58,16 @@ test("a select field's options are renamed in settings and chosen in the panel",
   await page.getByRole("option", { name: "One option" }).click();
   await settings.getByRole("button", { name: "Add a field" }).click();
   const block = settings.getByTestId("field-settings-Area");
-  const first = block.getByRole("textbox", { name: "Option" }).first();
+  // Exact: "Add an option" would match the name too.
+  const options = block.getByRole("textbox", { name: "Option", exact: true });
+  const first = options.first();
   await first.fill("Front end");
   await first.press("Enter");
   const add = block.getByRole("textbox", { name: "Add an option" });
   await add.fill("Back end");
   await add.press("Enter");
-  await expect(block.getByRole("textbox", { name: "Option" })).toHaveCount(2);
+  await expect(options).toHaveCount(2);
+  await expect(options.nth(1)).toHaveValue("Back end");
   await settings.getByRole("button", { name: "Close" }).click();
 
   await page.locator("section[data-lane] [data-card]").first().dblclick();

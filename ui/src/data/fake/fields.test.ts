@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { type CustomFieldChange, type CustomFieldList, type TaskChange, type TaskList, type TaskSearchResult } from "../../generated/ops";
+import { type CustomFieldChange, type CustomFieldList, type MoveCheck, type TaskChange, type TaskList, type TaskSearchResult } from "../../generated/ops";
 import { FakeError, FakeWorkspace } from "./engine";
 import { queryName } from "./fields";
 import { seed } from "./seed";
@@ -78,5 +78,20 @@ describe("custom fields in the sample workspace", () => {
     call(ws, "field.create", { project: "TM", name: "Customer", kind: "text", required: true });
     expect(failure(() => call(ws, "task.create", { project: "TM", title: "Without" })).details?.message_id).toBe("field-required");
     expect(call<TaskChange>(ws, "task.create", { project: "TM", title: "With", fields: { Customer: "ACME" } }).task.fields?.[0]?.value).toBe("ACME");
+  });
+  it("carries values to a target's field of the same name and kind on a move, and says which are left off", () => {
+    const ws = workspace();
+    call(ws, "field.create", { project: "TM", name: "Area", kind: "select", options: ["Front end", "Back end"] });
+    call(ws, "field.create", { project: "TM", name: "Story points", kind: "integer" });
+    call(ws, "field.create", { project: "PER", name: "area", kind: "select", options: ["Back end"] });
+    const task = call<TaskChange>(ws, "task.create", { project: "TM", title: "Sized", fields: { Area: "Back end", "Story points": 3 } }).task;
+    const check = call<MoveCheck>(ws, "task.move_check", { keys: [task.key], project: "PER" });
+    expect(check.fields).toEqual([
+      { name: "Area", tasks: 1, target: "area" },
+      { name: "Story points", tasks: 1 },
+    ]);
+    const moved = ws.call("task.move", { key: task.key, project: "PER" }).output as TaskChange;
+    expect(moved.task.fields?.map((value) => [value.name, value.value])).toEqual([["area", "Back end"]]);
+    expect(moved.warnings?.some((warning) => warning.includes("Story points"))).toBe(true);
   });
 });

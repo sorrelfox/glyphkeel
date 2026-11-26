@@ -48,6 +48,7 @@ The safety class decides who may run an operation:
 | `task.create` | write | app, command line, MCP | `create_task` | `glyphkeel task create` |
 | `task.update` | write | app, command line, MCP | `update_task` | `glyphkeel task edit <key>` |
 | `task.move` | write | app, command line, MCP | `move_task` | `glyphkeel task move <key>` |
+| `task.move_check` | read | app, command line, MCP | `check_move` | `glyphkeel task move-check <keys>` |
 | `task.delete` | trash | app, command line, MCP | `delete_tasks` | `glyphkeel task delete <keys>` |
 | `task.bulk_update` | write | app, command line, MCP | `bulk_update_tasks` | `glyphkeel task bulk` |
 | `task.reorder_subtask` | write | app, command line, MCP | `reorder_subtask` | `glyphkeel task reorder-subtask <key>` |
@@ -331,6 +332,12 @@ Input: `TaskUpdateInput`. Output: `TaskChange`. Schemas: [catalog.schema.json](c
 Move a task to another status or place in its column, or to another project (new key; the old one forwards).
 
 Input: `TaskMoveInput`. Output: `TaskChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `task.move_check`
+
+What moving tasks to another project would do: their new keys, and which of their statuses, types and labels the target project has no match for.
+
+Input: `TaskMoveCheckInput`. Output: `MoveCheck`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `task.delete`
 

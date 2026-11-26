@@ -416,6 +416,8 @@ export type BulkChanges = {
   estimate?: string | null;
   /** Replace the labels with these. */
   labels?: string[] | null;
+  /** With `project`: which status, type or label of that project stands in for one it has no match for. */
+  mapping?: MoveMapping;
   /** Make them subtasks of this task. */
   parent?: string | null;
   /** The priority. */
@@ -1559,6 +1561,54 @@ export type ModulesPatch = {
   time?: boolean | null;
   /** The wiki. */
   wiki?: boolean | null;
+};
+
+/** What moving tasks to another project would do: their new keys, and how their statuses, types and labels would be matched there. */
+export type MoveCheck = {
+  /** The target's status for those it has no match for: its first one. */
+  fallback_status: string;
+  /** The target's type for those it has no match for: its default one. */
+  fallback_type: string;
+  /** The custom fields they have values of. The target is the target's field that would hold the values; absent when they would be left off. */
+  fields: MoveMatch[];
+  /** Every task that would move, subtasks included, with its key now and the key it would get. */
+  keys: MovedKey[];
+  /** Their labels. */
+  labels: MoveMatch[];
+  /** The target project's key. */
+  project: string;
+  /** The statuses the tasks have now. */
+  statuses: MoveMatch[];
+  /** Their types. */
+  types: MoveMatch[];
+};
+
+/** What tasks moving to another project take there in place of the statuses, types and labels of their own project. Each map goes from a name in the task's project to a name in the target project (any case). A name left out keeps the target's item of the same name; without one, a status becomes the target's first status, a type its default type, and a label is left off. Every change says which. */
+export type MoveMapping = {
+  /** Label names, the same way. */
+  labels?: Record<string, string>;
+  /** Status names: from the task's project to the target project. */
+  statuses?: Record<string, string>;
+  /** Type names, the same way. */
+  types?: Record<string, string>;
+};
+
+/** A status, type, label or custom field of the moving tasks, and its match in the target project. */
+export type MoveMatch = {
+  /** Its name. */
+  name: string;
+  /** The target's item of the same name; absent when it has none. */
+  target?: string;
+  /** How many of the moving tasks have it. */
+  tasks: number;
+};
+
+/** A key now and the one a move would give. */
+export type MovedKey = {
+  /** The key now. */
+  from: string;
+  /** The key in the target project. */
+  to: string;
 };
 
 /** A task that "also move dependents" moved. */
@@ -2783,6 +2833,14 @@ export type TaskList = {
   total: number;
 };
 
+/** Tasks that might move to another project, to see first what the move would do. */
+export type TaskMoveCheckInput = {
+  /** The tasks: keys or IDs, 1 to 500. Their subtasks would move with them. */
+  keys: string[];
+  /** The project they would move to. */
+  project: string;
+};
+
 /** Where to move a task: another status, another place in its column, or another project. */
 export type TaskMoveInput = {
   /** Place it after this task of the target status. */
@@ -2795,6 +2853,8 @@ export type TaskMoveInput = {
   expected_version?: number | null;
   /** The task: its key or ID. */
   key: string;
+  /** With `project`: which status, type or label of that project stands in for one it has no match for. */
+  mapping?: MoveMapping;
   /** Move the task although another agent claimed it (full profile only). */
   override_claim?: boolean;
   /** Move it to another project: it gets the next key there, and the old key keeps finding it. Its subtasks move with it. */
@@ -3954,6 +4014,7 @@ export interface OpMap {
   "task.create": { input: TaskCreateInput; output: TaskChange; safety: "write"; kind: "command" };
   "task.update": { input: TaskUpdateInput; output: TaskChange; safety: "write"; kind: "command" };
   "task.move": { input: TaskMoveInput; output: TaskChange; safety: "write"; kind: "command" };
+  "task.move_check": { input: TaskMoveCheckInput; output: MoveCheck; safety: "read"; kind: "query" };
   "task.delete": { input: TaskDeleteInput; output: TrashChange; safety: "trash"; kind: "command" };
   "task.bulk_update": { input: BulkUpdateInput; output: BulkResult; safety: "write"; kind: "command" };
   "task.reorder_subtask": { input: SubtaskReorderInput; output: TaskChange; safety: "write"; kind: "command" };
@@ -4079,6 +4140,7 @@ export const OP_SAFETY = {
   "task.create": "write",
   "task.update": "write",
   "task.move": "write",
+  "task.move_check": "read",
   "task.delete": "trash",
   "task.bulk_update": "write",
   "task.reorder_subtask": "write",
@@ -4369,6 +4431,8 @@ export function makeOps(call: Call) {
       update: (input: OpMap["task.update"]["input"]) => call("task.update", input),
       /** Move a task to another status or place in its column, or to another project (new key; the old one forwards). (write) */
       move: (input: OpMap["task.move"]["input"]) => call("task.move", input),
+      /** What moving tasks to another project would do: their new keys, and which of their statuses, types and labels the target project has no match for. (read) */
+      moveCheck: (input: OpMap["task.move_check"]["input"]) => call("task.move_check", input),
       /** Move tasks to the trash, each with its subtasks; they can be restored from there. (trash) */
       delete: (input: OpMap["task.delete"]["input"]) => call("task.delete", input),
       /** Make the same change to many tasks chosen by key or query (status, type, priority, labels, parent, dates set or shifted, estimate, project), previewed first, as one change for Undo and revert. (write) */

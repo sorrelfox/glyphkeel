@@ -67,12 +67,16 @@ export interface FakeProject {
   types: FakeType[];
   labels: FakeLabel[];
   nextNumber: number;
+  /** Keys it had before a new key; they still find it and its tasks. */
+  oldKeys?: string[];
 }
 
 export interface FakeTask {
   id: string;
   projectId: string;
   number: number;
+  /** Keys it had in other projects before it moved; they still find it. */
+  oldKeys?: string[];
   title: string;
   description: string;
   statusId: string;

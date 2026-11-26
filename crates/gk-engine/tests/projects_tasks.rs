@@ -1151,3 +1151,118 @@ fn a_project_icon_comes_from_the_fixed_set_and_undoes() {
         "the change shows in the history: {feed}"
     );
 }
+
+#[test]
+fn a_move_to_another_project_maps_what_the_target_lacks() {
+    let dir = tempfile::tempdir().unwrap();
+    let e = open(&dir);
+    project(&e, "TM", None);
+    project(&e, "OT", None);
+    call(
+        &e,
+        "status.create",
+        json!({ "project": "TM", "name": "QA", "category": "in_progress" }),
+    );
+    call(
+        &e,
+        "type.create",
+        json!({ "project": "TM", "name": "Chore" }),
+    );
+    for (p, l) in [("TM", "ui"), ("TM", "old"), ("OT", "frontend")] {
+        call(&e, "label.create", json!({ "project": p, "name": l }));
+    }
+    task(&e, "TM", "Parent");
+    task(&e, "TM", "Child");
+    call(
+        &e,
+        "task.update",
+        json!({ "key": "TM-1", "type": "Chore", "labels": ["ui", "old"] }),
+    );
+    call(&e, "task.move", json!({ "key": "TM-1", "status": "QA" }));
+    call(
+        &e,
+        "task.update",
+        json!({ "key": "TM-2", "parent": "TM-1" }),
+    );
+    call(&e, "comment.add", json!({ "key": "TM-1", "body": "Kept" }));
+    task(&e, "OT", "Already there");
+
+    let check = call(
+        &e,
+        "task.move_check",
+        json!({ "keys": ["TM-1", "TM-2"], "project": "OT" }),
+    );
+    assert_eq!(
+        check["keys"],
+        json!([{ "from": "TM-1", "to": "OT-2" }, { "from": "TM-2", "to": "OT-3" }])
+    );
+    let qa = check["statuses"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["name"] == "QA")
+        .unwrap()
+        .clone();
+    assert_eq!(qa["tasks"], 1);
+    assert!(qa.get("target").is_none());
+    assert_eq!(check["fallback_status"], "Backlog");
+    let ui = check["labels"].as_array().unwrap()[0].clone();
+    assert_eq!(ui["name"], "ui");
+    assert!(ui.get("target").is_none());
+    // The check changes nothing.
+    assert_eq!(
+        call(&e, "task.get", json!({ "keys": ["TM-1"] }))["items"][0]["key"],
+        "TM-1"
+    );
+
+    // A mapping that names nothing in the target is refused.
+    let err = fails(
+        &e,
+        "task.move",
+        json!({ "key": "TM-1", "project": "OT", "mapping": { "statuses": { "QA": "Nope" } } }),
+    );
+    assert_eq!(err.code, ErrorCode::NotFound);
+
+    let app = Context::user(Via::App);
+    let moved = e
+        .call(
+            &app,
+            "task.move",
+            json!({
+                "key": "TM-1",
+                "project": "OT",
+                "mapping": { "statuses": { "QA": "Review" }, "labels": { "ui": "frontend" } }
+            }),
+        )
+        .unwrap();
+    let t = moved["task"].clone();
+    assert_eq!(t["key"], "OT-2");
+    assert_eq!(t["status"]["name"], "Review");
+    assert_eq!(t["type"]["name"], "Task");
+    assert_eq!(names(&t["labels"]), ["frontend"]);
+    let warnings: Vec<String> = serde_json::from_value(moved["warnings"].clone()).unwrap();
+    assert!(warnings.iter().any(|w| w.contains("Chore")), "{warnings:?}");
+    assert!(
+        warnings.iter().any(|w| w.contains("\"old\"")),
+        "{warnings:?}"
+    );
+    let got = call(
+        &e,
+        "task.get",
+        json!({ "keys": ["TM-1"], "include": ["comments"] }),
+    )["items"][0]
+        .clone();
+    assert_eq!(got["key"], "OT-2");
+    assert_eq!(got["comments"].as_array().map(Vec::len), Some(1));
+
+    // Undo takes it home, and the key it had meanwhile still finds it.
+    e.call(&app, "history.undo", json!({})).unwrap();
+    let back = call(&e, "task.get", json!({ "keys": ["OT-2"] }))["items"][0].clone();
+    assert_eq!(back["key"], "TM-1");
+    assert_eq!(back["status"]["name"], "QA");
+    assert_eq!(names(&back["labels"]), ["ui", "old"]);
+    assert_eq!(back["old_keys"], json!(["OT-2"]));
+    let child = call(&e, "task.get", json!({ "keys": ["TM-2"] }))["items"][0].clone();
+    assert_eq!(child["key"], "TM-2");
+    assert_eq!(child["parent"], "TM-1");
+}

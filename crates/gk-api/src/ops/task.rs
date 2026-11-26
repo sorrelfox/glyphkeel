@@ -532,9 +532,102 @@ pub struct TaskMoveInput {
     /// key keeps finding it. Its subtasks move with it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub project: Option<String>,
+    /// With `project`: which status, type or label of that project stands
+    /// in for one it has no match for.
+    #[serde(default, skip_serializing_if = "MoveMapping::is_empty")]
+    pub mapping: MoveMapping,
     /// Move the task although another agent claimed it (full profile only).
     #[serde(default)]
     pub override_claim: bool,
+}
+
+/// What tasks moving to another project take there in place of the
+/// statuses, types and labels of their own project. Each map goes from a
+/// name in the task's project to a name in the target project (any case).
+/// A name left out keeps the target's item of the same name; without one, a
+/// status becomes the target's first status, a type its default type, and
+/// a label is left off. Every change says which.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MoveMapping {
+    /// Status names: from the task's project to the target project.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub statuses: BTreeMap<String, String>,
+    /// Type names, the same way.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub types: BTreeMap<String, String>,
+    /// Label names, the same way.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub labels: BTreeMap<String, String>,
+}
+
+impl MoveMapping {
+    /// Whether it maps nothing.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.statuses.is_empty() && self.types.is_empty() && self.labels.is_empty()
+    }
+}
+
+/// Tasks that might move to another project, to see first what the move
+/// would do.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TaskMoveCheckInput {
+    /// The tasks: keys or IDs, 1 to 500. Their subtasks would move with them.
+    pub keys: Vec<String>,
+    /// The project they would move to.
+    pub project: String,
+}
+
+/// What moving tasks to another project would do: their new keys, and how
+/// their statuses, types and labels would be matched there.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MoveCheck {
+    /// The target project's key.
+    pub project: String,
+    /// Every task that would move, subtasks included, with its key now and
+    /// the key it would get.
+    pub keys: Vec<MovedKey>,
+    /// The statuses the tasks have now.
+    pub statuses: Vec<MoveMatch>,
+    /// Their types.
+    pub types: Vec<MoveMatch>,
+    /// Their labels.
+    pub labels: Vec<MoveMatch>,
+    /// The custom fields they have values of. The target is the target's
+    /// field that would hold the values; absent when they would be left off.
+    #[serde(default)]
+    pub fields: Vec<MoveMatch>,
+    /// The target's status for those it has no match for: its first one.
+    pub fallback_status: String,
+    /// The target's type for those it has no match for: its default one.
+    pub fallback_type: String,
+}
+
+/// A key now and the one a move would give.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MovedKey {
+    /// The key now.
+    pub from: String,
+    /// The key in the target project.
+    pub to: String,
+}
+
+/// A status, type, label or custom field of the moving tasks, and its match
+/// in the target project.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MoveMatch {
+    /// Its name.
+    pub name: String,
+    /// How many of the moving tasks have it.
+    pub tasks: u64,
+    /// The target's item of the same name; absent when it has none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
 }
 
 /// Where to put a subtask among its parent's subtasks. Subtasks keep an
@@ -688,6 +781,13 @@ op!(
     TaskChange
 );
 op!(
+    /// What a move to another project would do.
+    TaskMoveCheck,
+    "task.move_check",
+    TaskMoveCheckInput,
+    MoveCheck
+);
+op!(
     /// Moves a subtask to another place among its parent's subtasks.
     TaskReorderSubtask,
     "task.reorder_subtask",
@@ -830,6 +930,16 @@ pub(crate) const TASK_DELETE: OpDescriptor = OpDescriptor::of::<TaskDelete>(Meta
     cli: Some("task delete <keys>"),
     input_name: "TaskDeleteInput",
     output_name: "TrashChange",
+});
+
+pub(crate) const TASK_MOVE_CHECK: OpDescriptor = OpDescriptor::of::<TaskMoveCheck>(Meta {
+    summary: "What moving tasks to another project would do: their new keys, and which of their statuses, types and labels the target project has no match for.",
+    kind: OpKind::Query,
+    safety: Safety::Read,
+    exposure: Exposure::Data,
+    cli: Some("task move-check <keys>"),
+    input_name: "TaskMoveCheckInput",
+    output_name: "MoveCheck",
 });
 
 pub(crate) const TASK_MOVE: OpDescriptor = OpDescriptor::of::<TaskMove>(Meta {

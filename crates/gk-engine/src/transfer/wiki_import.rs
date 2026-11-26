@@ -397,10 +397,19 @@ fn is_folder_text(file: &str) -> bool {
     )
 }
 
-/// A page title made from a file name: the characters links can't hold
-/// become `-`, at most the length titles may have.
+/// A file name without the `_` that exports put before a name Windows
+/// reserves (`_con` for `con`).
+fn unmarked(name: &str) -> &str {
+    match name.strip_prefix('_') {
+        Some(device) if gk_core::is_windows_device(device) => device,
+        _ => name,
+    }
+}
+
+/// A page title made from a file name (see [`unmarked`]): the characters
+/// links can't hold become `-`, at most the length titles may have.
 fn title_of(name: &str) -> String {
-    let cleaned: String = name
+    let cleaned: String = unmarked(name)
         .chars()
         .map(|c| {
             if matches!(c, '[' | ']' | '#' | '|') || c.is_control() {
@@ -485,7 +494,7 @@ fn plan(entries: &BTreeMap<String, u64>, target: &Target) -> Result<Plan, OpErro
             n += 1;
         }
         taken.insert(fold(&title));
-        if title != last(&key) {
+        if title != unmarked(last(&key)) {
             renamed.push(WikiImportRename {
                 path: source.clone().unwrap_or_else(|| key.clone()),
                 title: title.clone(),

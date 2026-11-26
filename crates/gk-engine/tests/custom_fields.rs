@@ -494,6 +494,26 @@ fn sub_projects_copy_fields_and_moves_keep_values_by_name() {
             ("Area".to_owned(), json!("Back end")),
         ]
     );
+    let check = call(
+        &e,
+        "task.move_check",
+        json!({ "keys": [key.clone()], "project": "OT" }),
+    );
+    let kept: Vec<(&str, Option<&str>)> = check["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| (m["name"].as_str().unwrap(), m["target"].as_str()))
+        .collect();
+    assert_eq!(
+        kept,
+        [
+            ("Platforms", Some("Platforms")),
+            ("Story points", None),
+            ("Area", None)
+        ],
+        "the check shows which values would be left off"
+    );
     let moved = call(&e, "task.move", json!({ "key": key, "project": "OT" }));
     let key = moved["task"]["key"].as_str().unwrap().to_owned();
     assert_eq!(

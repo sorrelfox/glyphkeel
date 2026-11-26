@@ -126,6 +126,76 @@ export function parseValue(field: FakeField, value: unknown, path: string, fail:
   }
 }
 
+/** Where a value goes when its task moves: the target's field that takes it and the value there, if any. */
+interface Carried {
+  field: FakeField;
+  target?: { field: FakeField; value: FieldValue } | undefined;
+}
+
+const refuse: Fail = () => {
+  throw new Error("refused");
+};
+
+/** `value` as `field` takes it, or undefined when it doesn't. */
+function taken(field: FakeField, value: FieldValue): FieldValue | undefined {
+  try {
+    return parseValue(field, value, "fields", refuse);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * What moving `task` to project `projectId` does to its values: a field the
+ * target has too keeps it; else it goes to the target's field of the same
+ * query name and kind that takes it (options by name), or is left off.
+ */
+function carryPlan(state: FakeState, task: FakeTask, projectId: string): Carried[] {
+  const target = fieldsFor(state, projectId);
+  return fieldsFor(state, task.projectId).flatMap((field): Carried[] => {
+    const value = task.fields?.[field.id];
+    if (value === undefined) {
+      return [];
+    }
+    const same = target.find((candidate) => candidate.id === field.id);
+    if (same) {
+      return [{ field, target: { field: same, value } }];
+    }
+    for (const candidate of target.filter((each) => queryName(each.name) === queryName(field.name) && each.kind === field.kind)) {
+      const there = taken(candidate, value);
+      if (there !== undefined) {
+        return [{ field, target: { field: candidate, value: there } }];
+      }
+    }
+    return [{ field }];
+  });
+}
+
+/** For a move check: each field `task` has a value of, and the target's field that would hold it. */
+export function moveMatches(state: FakeState, task: FakeTask, projectId: string): { name: string; target?: string }[] {
+  return carryPlan(state, task, projectId).map(({ field, target }) => (target ? { name: field.name, target: target.field.name } : { name: field.name }));
+}
+
+/**
+ * Moves `task`'s values to the fields of project `projectId` (call before
+ * the task changes project). Returns the names of the fields left off.
+ */
+export function moveValues(state: FakeState, task: FakeTask, projectId: string): string[] {
+  const values: Record<string, FieldValue> = {};
+  const lost: string[] = [];
+  for (const { field, target } of carryPlan(state, task, projectId)) {
+    if (target === undefined) {
+      lost.push(field.name);
+    } else {
+      values[target.field.id] = target.value;
+    }
+  }
+  if (task.fields !== undefined) {
+    task.fields = values;
+  }
+  return lost;
+}
+
 /** Whether `field` shows for tasks of the type named `type`. */
 export function shownFor(field: FakeField, type: string): boolean {
   return field.types.length === 0 || field.types.some((name) => fold(name) === fold(type));

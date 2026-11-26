@@ -8,6 +8,8 @@
  * absolute path.
  */
 
+import { type Platform } from "../../platform";
+
 /** What a snippet is written in, for its label. */
 export type SnippetFormat = "shell" | "json" | "toml";
 
@@ -18,6 +20,8 @@ export interface McpClient {
   format: SnippetFormat;
   /** The file it goes in, or `undefined` for a command to run. */
   file?: string;
+  /** The same file as Windows names it, where that differs. */
+  windowsFile?: string;
   /** The text to copy, for the command that starts the tool (program and leading arguments). */
   snippet: (command: readonly string[]) => string;
 }
@@ -65,6 +69,7 @@ export const MCP_CLIENTS: readonly McpClient[] = [
     name: "Codex",
     format: "toml",
     file: "~/.codex/config.toml",
+    windowsFile: "%USERPROFILE%\\.codex\\config.toml",
     snippet: (command) => {
       const { command: program, args } = server(command);
       return [`[mcp_servers.glyphkeel]`, `command = ${tomlString(program)}`, `args = [${args.map(tomlString).join(", ")}]`].join("\n");
@@ -75,6 +80,7 @@ export const MCP_CLIENTS: readonly McpClient[] = [
     name: "Cursor",
     format: "json",
     file: "~/.cursor/mcp.json",
+    windowsFile: "%USERPROFILE%\\.cursor\\mcp.json",
     snippet: (command) => mcpServersJson(command),
   },
   {
@@ -85,6 +91,11 @@ export const MCP_CLIENTS: readonly McpClient[] = [
     snippet: (command) => JSON.stringify({ servers: { glyphkeel: { type: "stdio", ...server(command) } } }, null, 2),
   },
 ];
+
+/** The file a client's set-up goes in, as the platform names it; `undefined` for a command to run. */
+export function clientFile(client: McpClient, on: Platform): string | undefined {
+  return on === "windows" ? (client.windowsFile ?? client.file) : client.file;
+}
 
 /** A repository's `.mcp.json` that limits the agent to one project and its sub-projects. */
 export function projectSnippet(command: readonly string[], project: string): string {

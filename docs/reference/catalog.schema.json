@@ -18216,6 +18216,34 @@
                 "type": "string"
               }
             ]
+          },
+          "MoveMapping": {
+            "additionalProperties": false,
+            "description": "What tasks moving to another project take there in place of the\nstatuses, types and labels of their own project. Each map goes from a\nname in the task's project to a name in the target project (any case).\nA name left out keeps the target's item of the same name; without one, a\nstatus becomes the target's first status, a type its default type, and\na label is left off. Every change says which.",
+            "properties": {
+              "labels": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Label names, the same way.",
+                "type": "object"
+              },
+              "statuses": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Status names: from the task's project to the target project.",
+                "type": "object"
+              },
+              "types": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Type names, the same way.",
+                "type": "object"
+              }
+            },
+            "type": "object"
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -18258,6 +18286,10 @@
           "key": {
             "description": "The task: its key or ID.",
             "type": "string"
+          },
+          "mapping": {
+            "$ref": "#/$defs/MoveMapping",
+            "description": "With `project`: which status, type or label of that project stands\nin for one it has no match for."
           },
           "override_claim": {
             "default": false,
@@ -19744,6 +19776,154 @@
       "summary": "Move a task to another status or place in its column, or to another project (new key; the old one forwards)."
     },
     {
+      "cli": "task move-check <keys>",
+      "exposure": "data",
+      "id": "task.move_check",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Tasks that might move to another project, to see first what the move\nwould do.",
+        "properties": {
+          "keys": {
+            "description": "The tasks: keys or IDs, 1 to 500. Their subtasks would move with them.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "project": {
+            "description": "The project they would move to.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "keys",
+          "project"
+        ],
+        "title": "TaskMoveCheckInput",
+        "type": "object"
+      },
+      "input_name": "TaskMoveCheckInput",
+      "kind": "query",
+      "mcp_tool": "check_move",
+      "output": {
+        "$defs": {
+          "MoveMatch": {
+            "additionalProperties": false,
+            "description": "A status, type, label or custom field of the moving tasks, and its match\nin the target project.",
+            "properties": {
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "target": {
+                "description": "The target's item of the same name; absent when it has none.",
+                "type": "string"
+              },
+              "tasks": {
+                "description": "How many of the moving tasks have it.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "name",
+              "tasks"
+            ],
+            "type": "object"
+          },
+          "MovedKey": {
+            "additionalProperties": false,
+            "description": "A key now and the one a move would give.",
+            "properties": {
+              "from": {
+                "description": "The key now.",
+                "type": "string"
+              },
+              "to": {
+                "description": "The key in the target project.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "from",
+              "to"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "What moving tasks to another project would do: their new keys, and how\ntheir statuses, types and labels would be matched there.",
+        "properties": {
+          "fallback_status": {
+            "description": "The target's status for those it has no match for: its first one.",
+            "type": "string"
+          },
+          "fallback_type": {
+            "description": "The target's type for those it has no match for: its default one.",
+            "type": "string"
+          },
+          "fields": {
+            "default": [],
+            "description": "The custom fields they have values of. The target is the target's\nfield that would hold the values; absent when they would be left off.",
+            "items": {
+              "$ref": "#/$defs/MoveMatch"
+            },
+            "type": "array"
+          },
+          "keys": {
+            "description": "Every task that would move, subtasks included, with its key now and\nthe key it would get.",
+            "items": {
+              "$ref": "#/$defs/MovedKey"
+            },
+            "type": "array"
+          },
+          "labels": {
+            "description": "Their labels.",
+            "items": {
+              "$ref": "#/$defs/MoveMatch"
+            },
+            "type": "array"
+          },
+          "project": {
+            "description": "The target project's key.",
+            "type": "string"
+          },
+          "statuses": {
+            "description": "The statuses the tasks have now.",
+            "items": {
+              "$ref": "#/$defs/MoveMatch"
+            },
+            "type": "array"
+          },
+          "types": {
+            "description": "Their types.",
+            "items": {
+              "$ref": "#/$defs/MoveMatch"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "project",
+          "keys",
+          "statuses",
+          "types",
+          "labels",
+          "fields",
+          "fallback_status",
+          "fallback_type"
+        ],
+        "title": "MoveCheck",
+        "type": "object"
+      },
+      "output_name": "MoveCheck",
+      "safety": "read",
+      "summary": "What moving tasks to another project would do: their new keys, and which of their statuses, types and labels the target project has no match for."
+    },
+    {
       "cli": "task delete <keys>",
       "exposure": "data",
       "id": "task.delete",
@@ -19996,6 +20176,10 @@
                   "null"
                 ]
               },
+              "mapping": {
+                "$ref": "#/$defs/MoveMapping",
+                "description": "With `project`: which status, type or label of that project stands\nin for one it has no match for."
+              },
               "parent": {
                 "description": "Make them subtasks of this task.",
                 "type": [
@@ -20062,6 +20246,34 @@
                   "string",
                   "null"
                 ]
+              }
+            },
+            "type": "object"
+          },
+          "MoveMapping": {
+            "additionalProperties": false,
+            "description": "What tasks moving to another project take there in place of the\nstatuses, types and labels of their own project. Each map goes from a\nname in the task's project to a name in the target project (any case).\nA name left out keeps the target's item of the same name; without one, a\nstatus becomes the target's first status, a type its default type, and\na label is left off. Every change says which.",
+            "properties": {
+              "labels": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Label names, the same way.",
+                "type": "object"
+              },
+              "statuses": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Status names: from the task's project to the target project.",
+                "type": "object"
+              },
+              "types": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Type names, the same way.",
+                "type": "object"
               }
             },
             "type": "object"

@@ -164,7 +164,6 @@ list-bulk-summary-status = Status: { $value }
 list-bulk-summary-priority = Priority: { $value }
 list-bulk-summary-add-label = Add label { $value }
 list-bulk-summary-remove-label = Remove label { $value }
-list-bulk-summary-move = Move to { $value }
 list-bulk-preview = { $change } · { $count ->
     [one] { $count } of { $total } task changes
    *[other] { $count } of { $total } tasks change

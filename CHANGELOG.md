@@ -5,6 +5,27 @@ Conventional Commits, and versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-11-26
+
+### Features
+
+- **Windows:** the app and the command line build and run on Windows. An
+  unsigned installer installs for the current user, puts `glyphkeel.exe`
+  on the user's path, registers `glyphkeel://` links and keeps the data on
+  uninstall. A second start hands over to the running app; reminders show
+  as Windows notifications that open the task; links, attachments, file
+  dialogs and confirmations use the system; the app can start with
+  Windows, remembers its window, renders safely on request and uses the
+  system title bar, Windows fonts and key names.
+- **Folders:** `GLYPHKEEL_DATA_DIR` and `GLYPHKEEL_CONFIG_DIR` move the data
+  and the personal settings on every platform.
+
+### Fixes
+
+- Imports and backup copies no longer fail on Windows with access denied.
+- Exported file and folder names are valid on every system, including
+  names such as `CON` or `a:b`.
+
 ## [0.1.4] - 2026-11-26
 
 ### Features

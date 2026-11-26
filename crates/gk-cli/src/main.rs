@@ -128,6 +128,21 @@ fn run(ops: &[OpCommand], matches: &ArgMatches, out: Out) -> Result<(), OpError>
                 })?;
             print_bytes(&buf)
         }
+        Some((commands::WORKSPACE, m)) if m.subcommand().is_some() => {
+            let Some((word, sub)) = m.subcommand() else {
+                unreachable!("checked above")
+            };
+            let (human, value) = workspace::run(word, sub, workspace)?;
+            if out.quiet {
+                return Ok(());
+            }
+            let text = if out.json {
+                output::json(&value)
+            } else {
+                human
+            };
+            print_bytes(text.as_bytes())
+        }
         Some(_) => {
             let (cmd, m) = commands::find(ops, matches)
                 .unwrap_or_else(|| unreachable!("every other command is an operation"));

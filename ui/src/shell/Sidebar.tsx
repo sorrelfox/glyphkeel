@@ -9,6 +9,7 @@ import { classes } from "../classes";
 import { useCounts } from "../data/board";
 import { useSidebarCounts } from "../data/today";
 import { useT } from "../i18n/I18n";
+import { dragRegion, type TitleBar } from "../start";
 import { type NewProjectRequest } from "../screens/project/NewProjectDialog";
 import { ProjectTree } from "../screens/project/ProjectTree";
 import { type View } from "./shellActions";
@@ -21,6 +22,8 @@ interface SidebarProps {
   /** The open project's key. */
   project: string | undefined;
   width: number;
+  /** With the system title bar the sidebar's top doesn't move the window. */
+  titleBar?: TitleBar;
   onNewProject: (request: NewProjectRequest) => void;
   onProjectSettings: (key: string) => void;
   onExportProject: (key: string) => void;
@@ -34,7 +37,7 @@ interface SidebarProps {
  * tasks with their counts, the time report, the activity, the project tree, the
  * timer chip while a timer runs, then Trash and Preferences.
  */
-export function Sidebar({ view, project, width, onNewProject, onProjectSettings, onExportProject, onDeleteProject }: SidebarProps) {
+export function Sidebar({ view, project, width, titleBar = "app", onNewProject, onProjectSettings, onExportProject, onDeleteProject }: SidebarProps) {
   const t = useT();
   const today = useAction("nav.today");
   const allTasks = useAction("nav.allTasks");
@@ -49,7 +52,7 @@ export function Sidebar({ view, project, width, onNewProject, onProjectSettings,
 
   return (
     <nav className={classes("sidebar", styles.sidebar)} style={{ flexBasis: width }} aria-label={t("sidebar-label")} data-region="sidebar" tabIndex={-1}>
-      <div className={styles.sidebarTop} data-tauri-drag-region>
+      <div className={styles.sidebarTop} {...dragRegion(titleBar)}>
         <SidebarSearch />
       </div>
 

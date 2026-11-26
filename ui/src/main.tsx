@@ -12,11 +12,14 @@ import "./styles/base.css";
 import { App } from "./App";
 import { apply, readDesktop, resolve } from "./appearance/appearance";
 import { suppressBrowserBehaviour } from "./native";
+import { applyPlatform } from "./platform";
 import { loadAppearance } from "./prefs/store";
 import { readStart } from "./start";
 
-// The window is still hidden. The theme goes onto <html> before the first
-// render, so the first frame the user sees is already in it.
+const start = readStart();
+// The window is still hidden. The platform and the theme go onto <html>
+// before the first render, so the first frame the user sees is already in them.
+applyPlatform(start.platform ?? "linux", document.documentElement);
 apply(resolve(loadAppearance(), readDesktop(window)), document.documentElement);
 suppressBrowserBehaviour(window);
 
@@ -27,6 +30,6 @@ if (!root) {
 
 createRoot(root).render(
   <StrictMode>
-    <App start={readStart()} />
+    <App start={start} />
   </StrictMode>,
 );

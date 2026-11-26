@@ -21,6 +21,7 @@ import {
 
 import { classes } from "../../classes";
 import { MenuEntries } from "../../components/ContextMenu";
+import { MoveTasksDialog } from "./MoveTasksDialog";
 import { PriorityGlyph, TypeGlyph } from "../../components/Glyphs";
 import { Select } from "../../components/Select";
 import { useToasts } from "../../components/Toasts";
@@ -130,6 +131,7 @@ function Loaded({
   const trash = useTrashTasks();
   const readOnly = project.state === "archived";
   const [descriptionView, setDescriptionView] = useState<DescriptionView>({ kind: "read" });
+  const [moving, setMoving] = useState(false);
   const blockers = (task.links ?? []).filter((link) => link.kind === "blocked_by" && !link.task.closed).map((link) => link.task.key);
   const copy = (withoutSubtasks: boolean) => {
     duplicate.mutate(
@@ -212,6 +214,7 @@ function Loaded({
                   ...(task.claim
                     ? [{ id: "release", label: t("panel-release"), disabled: readOnly, run: () => { release.mutate({ key: task.key, override_claim: true }); } }]
                     : []),
+                  { id: "move", label: t("panel-move"), disabled: readOnly, run: () => { setMoving(true); } },
                   "separator",
                   { id: "trash", label: t("trash-move", { count: 1 }), disabled: readOnly, run: () => { trash([task.key], onClose); } },
                 ]}
@@ -223,6 +226,18 @@ function Loaded({
           <X className="ic" />
         </Button>
       </div>
+      {moving && (
+        <MoveTasksDialog
+          keys={[task.key]}
+          from={project.key}
+          onClose={(moved) => {
+            setMoving(false);
+            if (moved !== undefined) {
+              onOpenTask(moved);
+            }
+          }}
+        />
+      )}
 
       <div
         className={styles.body}
