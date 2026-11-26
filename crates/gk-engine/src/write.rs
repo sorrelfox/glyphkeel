@@ -36,6 +36,9 @@ pub struct WriteCtx<'a> {
     tx: &'a Transaction<'a>,
     meta: &'a CommandMeta,
     changes: Vec<PendingChange>,
+    /// Tasks the engine made on its own in this command (occurrences of
+    /// recurring tasks), which status rules don't refuse.
+    automatic: Vec<Id>,
 }
 
 #[derive(Debug, Clone)]
@@ -59,7 +62,20 @@ impl<'a> WriteCtx<'a> {
             tx,
             meta,
             changes: Vec::new(),
+            automatic: Vec::new(),
         }
+    }
+
+    /// Notes that the engine made task `task` on its own, not the caller.
+    pub(crate) fn made_automatically(&mut self, task: Id) {
+        if !self.automatic.contains(&task) {
+            self.automatic.push(task);
+        }
+    }
+
+    /// Whether the engine made task `task` on its own in this command.
+    pub(crate) fn is_automatic(&self, task: Id) -> bool {
+        self.automatic.contains(&task)
     }
 
     /// The items of `entity` this command has changed so far, in order.
@@ -67,6 +83,22 @@ impl<'a> WriteCtx<'a> {
         self.changes
             .iter()
             .filter(|c| c.entity == entity)
+            .map(|c| c.id)
+            .collect()
+    }
+
+    /// The tasks this command closed so far (their `closed_at` went from
+    /// none to a moment), in order.
+    pub(crate) fn newly_closed(&self) -> Vec<Id> {
+        self.changes
+            .iter()
+            .filter(|c| c.entity == crate::ops::fields::TASK)
+            .filter(|c| {
+                c.fields.get("closed_at").is_some_and(|f| {
+                    f.before.as_ref().is_none_or(Value::is_null)
+                        && f.after.as_ref().is_some_and(|v| !v.is_null())
+                })
+            })
             .map(|c| c.id)
             .collect()
     }

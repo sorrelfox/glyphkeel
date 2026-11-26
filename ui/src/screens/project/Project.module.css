@@ -314,3 +314,38 @@
 .keyField .field {
   inline-size: 12ch;
 }
+
+/* ---------- a task type's default due date ---------- */
+
+.offset {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.typeHeadName {
+  flex: 1;
+  padding-inline-start: 24px;
+}
+
+/* ---------- templates ---------- */
+
+.templateHead {
+  margin: 0;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  color: var(--fg-muted);
+}
+
+.templateRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.templateSave {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}

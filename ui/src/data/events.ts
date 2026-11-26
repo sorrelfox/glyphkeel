@@ -55,6 +55,10 @@ export const ENTITY_QUERIES: Readonly<Record<string, readonly OpId[]>> = {
   // Versions: the roadmap, the task panel's picker, queries naming them and the Gantt chart's markers.
   version: ["version.list", "version.get", "task.get", "task.search", "query.parse", ...FLOW],
   // Wiki pages: their search, links to them and their text, and their revisions (read like a description's).
+  // A recurring task's series: the task carries it, and lists mark its current occurrence.
+  series: ["task.get", "task.search", "today.get", "schedule.get", "board.get"],
+  // Templates: their lists, and the one shown.
+  template: ["template.list", "template.get"],
   wiki_page: ["trash.list", "wiki.search", "wiki.get", "wiki.list", "wiki.history", "description.revision", "search.query", "markdown.render", ...LINKS],
 };
 

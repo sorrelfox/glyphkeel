@@ -388,6 +388,80 @@ Example: delete_project {\"project\": \"OLD\", \"expected_task_count\": 12}",
         idempotent: false,
     },
     McpTool {
+        name: "list_templates",
+        toolset: Toolset::Projects,
+        title: "List templates",
+        description: "Lists the project templates and the task templates of a project (or of every \
+project), with their names and what they hold. Use it before use_template to find the right \
+one. \
+Example: list_templates {\"project\": \"TM\"}",
+        main: "template.list",
+        covers: &["template.list"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "get_template",
+        toolset: Toolset::Projects,
+        title: "Get a template",
+        description: "Returns one template with its content: a task template's task (title, \
+description, type, priority, labels, estimate, custom field values, version, subtasks, dates as \
+days after the day it is used) or a project template's set-up (statuses with their rules, types, \
+labels, custom fields, rules for agents, modules, wiki pages, tasks; no versions). \
+Example: get_template {\"template\": \"Bug report\", \"project\": \"TM\"}",
+        main: "template.get",
+        covers: &["template.get"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "create_template",
+        toolset: Toolset::Projects,
+        title: "Create a template",
+        description: "Makes a template: a task template from a task (`from_task`, with its \
+subtasks) or from a given `task`, or a project template from a project (`from_project`, \
+optionally `include_tasks`) or a given `setup`. Statuses, types and labels are kept by name. \
+Example: create_template {\"name\": \"Bug report\", \"from_task\": \"TM-41\"}",
+        main: "template.create",
+        covers: &["template.create"],
+        idempotent: false,
+    },
+    McpTool {
+        name: "update_template",
+        toolset: Toolset::Projects,
+        title: "Update a template",
+        description: "Changes a template's name, description, or its whole content (`task` or \
+`setup`, replacing what it held). Fields left out keep their value. \
+Example: update_template {\"template\": \"Bug report\", \"project\": \"TM\", \
+\"description\": \"For crashes and wrong results\"}",
+        main: "template.update",
+        covers: &["template.update"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "delete_template",
+        toolset: Toolset::Projects,
+        title: "Delete a template",
+        description: "Deletes a template; tasks and projects made from it stay. Revert brings it \
+back. Only delete templates the person asked you to. \
+Example: delete_template {\"template\": \"Old checklist\", \"project\": \"TM\"}",
+        main: "template.delete",
+        covers: &["template.delete"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "use_template",
+        toolset: Toolset::Projects,
+        title: "Use a template",
+        description: "Makes a task (with its subtasks) from a task template, or a project (with \
+its statuses, types, labels, wiki pages and tasks) from a project template. Dates count from \
+`date` (default today). For a project template give `name` and `key`. Pass a \
+`client_request_id` so a retry doesn't make it twice. \
+Example: use_template {\"template\": \"Bug report\", \"project\": \"TM\", \"title\": \
+\"Crash on save\"}",
+        main: "template.apply",
+        covers: &["template.apply"],
+        idempotent: false,
+    },
+    McpTool {
         name: "list_versions",
         toolset: Toolset::Projects,
         title: "List versions",
@@ -699,6 +773,56 @@ see the new tests.\"}",
         main: "task.release",
         covers: &["task.release"],
         idempotent: false,
+    },
+    McpTool {
+        name: "set_recurrence",
+        toolset: Toolset::Tasks,
+        title: "Make a task recurring",
+        description: "Makes a task recurring, or changes its rule. Write the rule in `text` \
+(`every monday`, `every 2 weeks on mon and thu`, `the 1st of each month`, `monthly on the last \
+fri`, `3 days after done`, `until 2027-06-30`, `10 times`) or by fields (`every`, `interval`, \
+`weekdays`, `month_day`, `week_of_month` with `weekday`, `month`, `until`, `count`). The next \
+occurrence is made when this one is closed, or on its date with `create: ahead`. \
+`update_details: true` makes the task's current details those of the occurrences to come; \
+edits without it change this occurrence only. \
+Example: set_recurrence {\"key\": \"TM-41\", \"text\": \"every 2 weeks on mon\"}",
+        main: "recurrence.set",
+        covers: &["recurrence.set"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "stop_recurrence",
+        toolset: Toolset::Tasks,
+        title: "Stop a task repeating",
+        description: "Stops a recurring task's series: the task stays as it is and no more \
+occurrences are made. Only do this when the person asked for it. \
+Example: stop_recurrence {\"key\": \"TM-41\"}",
+        main: "recurrence.clear",
+        covers: &["recurrence.clear"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "skip_occurrence",
+        toolset: Toolset::Tasks,
+        title: "Skip an occurrence",
+        description: "Passes over a recurring task's current occurrence: its dates move to the \
+rule's next date, and the skipped one counts against the rule's number of occurrences. \
+Example: skip_occurrence {\"key\": \"TM-41\"}",
+        main: "recurrence.skip",
+        covers: &["recurrence.skip"],
+        idempotent: false,
+    },
+    McpTool {
+        name: "preview_recurrence",
+        toolset: Toolset::Tasks,
+        title: "Preview a recurrence rule",
+        description: "Reads a recurrence rule, in words (`text`) or by fields, and returns it with \
+its next dates and a summary, without changing anything. Use it to check a rule before \
+set_recurrence. \
+Example: preview_recurrence {\"text\": \"monthly on the last fri\", \"limit\": 3}",
+        main: "recurrence.preview",
+        covers: &["recurrence.preview"],
+        idempotent: true,
     },
     McpTool {
         name: "add_comment",
@@ -1428,12 +1552,15 @@ mod tests {
                 "get_project",
                 "list_custom_fields",
                 "get_agent_brief",
+                "list_templates",
+                "get_template",
                 "list_versions",
                 "get_version",
                 "search_tasks",
                 "get_task",
                 "check_move",
                 "get_description_revision",
+                "preview_recurrence",
                 "get_time_report",
                 "get_created_closed_report",
                 "get_cumulative_flow",

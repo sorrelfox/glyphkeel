@@ -11,7 +11,9 @@ import { Button, Menu, MenuTrigger, Popover } from "react-aria-components";
 
 import { classes } from "../../classes";
 import { MenuEntries, type MenuEntry } from "../../components/ContextMenu";
+import { Select } from "../../components/Select";
 import { type Card } from "../../data/catalog";
+import { type TemplateSummary } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { CardView } from "./CardView";
 import { keepMounted, type LaneData } from "./dnd";
@@ -104,7 +106,10 @@ interface LaneProps {
   adding: boolean;
   menu: readonly MenuEntry[];
   onAdd: () => void;
-  onCreate: (title: string) => void;
+  /** Task templates the Add task field offers. */
+  templates?: readonly TemplateSummary[];
+  /** A new task: its title, and the template it starts from (the title may then be empty). */
+  onCreate: (title: string, template: string | null) => void;
   onStopAdding: () => void;
   onShowOlder: () => void;
   /** Hands the board how to bring a place of this lane into view while it is drawn virtually, and null when not. */
@@ -112,7 +117,7 @@ interface LaneProps {
 }
 
 /** One board column: its header with the count and WIP limit, its cards, and the inline Add task field. */
-export function Lane({ lane, keys, cards, handlers, active, closed, reason, hot, adding, menu, onAdd, onCreate, onStopAdding, onShowOlder, onScroller }: LaneProps) {
+export function Lane({ lane, keys, cards, handlers, active, closed, reason, hot, adding, menu, templates = [], onAdd, onCreate, onStopAdding, onShowOlder, onScroller }: LaneProps) {
   const t = useT();
   const { column } = lane;
   const limit = column.wip_limit;
@@ -161,7 +166,7 @@ export function Lane({ lane, keys, cards, handlers, active, closed, reason, hot,
       <SortableContext id={column.id} items={[...keys]} strategy={verticalListSortingStrategy}>
         {body ? (
           <VirtualBody keys={keys} cards={cards} handlers={handlers} active={active} sortable={lane.sort === "manual"} closed={closed} setDroppable={setNodeRef} onScroller={setScrollTo}>
-            <LaneFooter lane={lane} adding={adding} onAdd={onAdd} onCreate={onCreate} onStopAdding={onStopAdding} onShowOlder={onShowOlder} />
+            <LaneFooter lane={lane} adding={adding} templates={templates} onAdd={onAdd} onCreate={onCreate} onStopAdding={onStopAdding} onShowOlder={onShowOlder} />
           </VirtualBody>
         ) : (
           <div ref={setNodeRef} className={styles.laneBody}>
@@ -169,7 +174,7 @@ export function Lane({ lane, keys, cards, handlers, active, closed, reason, hot,
               const card = cards.get(key);
               return card ? <SortableCard key={key} card={card} handlers={handlers} sortable={lane.sort === "manual"} dropDisabled={closed} /> : null;
             })}
-            <LaneFooter lane={lane} adding={adding} onAdd={onAdd} onCreate={onCreate} onStopAdding={onStopAdding} onShowOlder={onShowOlder} />
+            <LaneFooter lane={lane} adding={adding} templates={templates} onAdd={onAdd} onCreate={onCreate} onStopAdding={onStopAdding} onShowOlder={onShowOlder} />
           </div>
         )}
       </SortableContext>
@@ -177,7 +182,7 @@ export function Lane({ lane, keys, cards, handlers, active, closed, reason, hot,
   );
 }
 
-function LaneFooter({ lane, adding, onAdd, onCreate, onStopAdding, onShowOlder }: Pick<LaneProps, "lane" | "adding" | "onAdd" | "onCreate" | "onStopAdding" | "onShowOlder">) {
+function LaneFooter({ lane, adding, templates, onAdd, onCreate, onStopAdding, onShowOlder }: Pick<LaneProps, "lane" | "adding" | "templates" | "onAdd" | "onCreate" | "onStopAdding" | "onShowOlder">) {
   const t = useT();
   return (
     <>
@@ -187,7 +192,7 @@ function LaneFooter({ lane, adding, onAdd, onCreate, onStopAdding, onShowOlder }
         </button>
       )}
       {adding ? (
-        <AddTaskField name={lane.column.name} onCreate={onCreate} onStop={onStopAdding} />
+        <AddTaskField name={lane.column.name} templates={templates ?? []} onCreate={onCreate} onStop={onStopAdding} />
       ) : (
         <button type="button" className="add" onClick={onAdd}>
           <Plus className="ic s" />
@@ -198,38 +203,64 @@ function LaneFooter({ lane, adding, onAdd, onCreate, onStopAdding, onShowOlder }
   );
 }
 
-/** The inline title field: Enter creates and stays open for the next task, Escape closes. */
-function AddTaskField({ name, onCreate, onStop }: { name: string; onCreate: (title: string) => void; onStop: () => void }) {
+/** No template: the Add task field's first choice. */
+const NO_TEMPLATE = "none";
+
+/**
+ * The inline title field: Enter creates and stays open for the next task,
+ * Escape closes. With task templates, a choice of one to start from; the
+ * title may then stay empty for the template's own.
+ */
+function AddTaskField({ name, templates, onCreate, onStop }: { name: string; templates: readonly TemplateSummary[]; onCreate: (title: string, template: string | null) => void; onStop: () => void }) {
   const t = useT();
   const [title, setTitle] = useState("");
+  const [template, setTemplate] = useState(NO_TEMPLATE);
+  const wrapper = useRef<HTMLDivElement>(null);
+  const chosen = template === NO_TEMPLATE ? null : template;
   return (
-    <span className={classes("field", styles.addField)}>
-      <input
-        autoFocus
-        aria-label={t("lane-new-task-title", { name })}
-        placeholder={t("lane-new-task-placeholder")}
-        value={title}
-        onChange={(event) => {
-          setTitle(event.target.value);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && title.trim() !== "") {
-            event.preventDefault();
-            onCreate(title);
-            setTitle("");
-          } else if (event.key === "Escape") {
-            event.preventDefault();
-            event.stopPropagation();
-            onStop();
-          }
-        }}
-        onBlur={() => {
-          if (title.trim() === "") {
-            onStop();
-          }
-        }}
-      />
-    </span>
+    <div
+      ref={wrapper}
+      className={styles.addTask}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && !event.defaultPrevented) {
+          event.preventDefault();
+          event.stopPropagation();
+          onStop();
+        }
+      }}
+    >
+      <span className={classes("field", styles.addField)}>
+        <input
+          autoFocus
+          aria-label={t("lane-new-task-title", { name })}
+          placeholder={t("lane-new-task-placeholder")}
+          value={title}
+          onChange={(event) => {
+            setTitle(event.target.value);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && (title.trim() !== "" || chosen !== null)) {
+              event.preventDefault();
+              onCreate(title, chosen);
+              setTitle("");
+            }
+          }}
+          onBlur={(event) => {
+            if (title.trim() === "" && !(event.relatedTarget instanceof Node && wrapper.current?.contains(event.relatedTarget) === true)) {
+              onStop();
+            }
+          }}
+        />
+      </span>
+      {templates.length > 0 && (
+        <Select
+          label={t("template-picker")}
+          value={template}
+          options={[{ id: NO_TEMPLATE, label: t("template-none") }, ...templates.map((each) => ({ id: each.id, label: each.name }))]}
+          onChange={setTemplate}
+        />
+      )}
+    </div>
   );
 }
 

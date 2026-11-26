@@ -50,6 +50,8 @@ pub struct JobsReport {
     pub purged: u64,
     /// Stored files removed because nothing used them.
     pub unused_files: u64,
+    /// Occurrences of recurring tasks made because their day came.
+    pub occurrences: u64,
 }
 
 impl Engine {
@@ -124,7 +126,29 @@ impl Engine {
         report.unused_files =
             file::remove_unused_files(&self.store, &unused).map_err(OpError::from)?;
         report.unused_files += self.sweep_unused_files()?;
+        report.occurrences = self.make_occurrences(&ctx)?;
         Ok(report)
+    }
+
+    /// Runs `recurrence.run`: makes the occurrences of recurring tasks made
+    /// ahead whose day has come. Returns how many were made.
+    pub fn make_occurrences(&self, ctx: &Context) -> Result<u64, OpError> {
+        let f: CommandFn = Arc::new(|w, _| {
+            let run = crate::ops::recurrence::run(w)?;
+            serde_json::to_value(run).map_err(|e| {
+                Failure::Op(messages::storage(
+                    "storage-json",
+                    &[("error", e.to_string())],
+                ))
+            })
+        });
+        let desc =
+            descriptor("recurrence.run").ok_or_else(|| OpError::storage("no recurrence.run"))?;
+        let output = self.execute_command(ctx, desc, f, Value::Null)?;
+        Ok(output
+            .get("created")
+            .and_then(Value::as_array)
+            .map_or(0, |a| a.len() as u64))
     }
 
     /// For a one-shot command: makes the daily backup when the newest one

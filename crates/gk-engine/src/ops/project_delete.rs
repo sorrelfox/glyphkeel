@@ -257,6 +257,8 @@ pub(crate) fn purge_projects(
             "DELETE FROM versions WHERE project_id = ?1",
             "DELETE FROM project_key_aliases WHERE project_id = ?1",
             "DELETE FROM saved_views WHERE project_id = ?1",
+            "DELETE FROM templates WHERE project_id = ?1",
+            "DELETE FROM task_series WHERE project_id = ?1",
             "DELETE FROM search_docs WHERE project_id = ?1",
         ] {
             run(w, sql, *p)?;

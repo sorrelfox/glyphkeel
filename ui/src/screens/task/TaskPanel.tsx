@@ -45,6 +45,8 @@ import { DescriptionSection, type DescriptionView } from "./Description";
 import { FieldsSection } from "./FieldsSection";
 import { FilesSection, useFileDrop } from "./Files";
 import { LinksSection, SubtasksSection } from "./Sections";
+import { RecurrenceNote, RepeatValue } from "./Recurrence";
+import { SaveTemplateDialog } from "./SaveTemplate";
 import { QuickLog, ReminderValue, TimerButton } from "./Time";
 import { VersionPicker } from "./VersionPicker";
 import styles from "./TaskPanel.module.css";
@@ -136,6 +138,7 @@ function Loaded({
   const readOnly = project.state === "archived";
   const [descriptionView, setDescriptionView] = useState<DescriptionView>({ kind: "read" });
   const [moving, setMoving] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
   const blockers = (task.links ?? []).filter((link) => link.kind === "blocked_by" && !link.task.closed).map((link) => link.task.key);
   const copy = (withoutSubtasks: boolean) => {
     duplicate.mutate(
@@ -223,6 +226,7 @@ function Loaded({
                     ? [{ id: "release", label: t("panel-release"), disabled: readOnly, run: () => { release.mutate({ key: task.key, override_claim: true }); } }]
                     : []),
                   { id: "move", label: t("panel-move"), disabled: readOnly, run: () => { setMoving(true); } },
+                  { id: "save-template", label: t("panel-save-template"), disabled: readOnly, run: () => { setSavingTemplate(true); } },
                   "separator",
                   { id: "trash", label: t("trash-move", { count: 1 }), disabled: readOnly, run: () => { trash([task.key], onClose); } },
                 ]}
@@ -234,6 +238,14 @@ function Loaded({
           <X className="ic" />
         </Button>
       </div>
+      {savingTemplate && (
+        <SaveTemplateDialog
+          task={task}
+          onClose={() => {
+            setSavingTemplate(false);
+          }}
+        />
+      )}
       {moving && (
         <MoveTasksDialog
           keys={[task.key]}
@@ -390,9 +402,14 @@ function Loaded({
           <Prop label={t("prop-reminder")} full>
             <ReminderValue task={task} readOnly={readOnly} />
           </Prop>
+          <Prop label={t("prop-repeats")} full>
+            <RepeatValue task={task} readOnly={readOnly} />
+          </Prop>
         </div>
 
         <LockedNote locked={locked} status={task.status.name} project={task.project} />
+
+        <RecurrenceNote task={task} readOnly={readOnly} />
 
         <FieldsSection task={task} readOnly={readOnly} locked={locked} />
 

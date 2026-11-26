@@ -825,6 +825,8 @@ fn settings_can_be_set_back_to_their_default() {
 /// Takes a workspace back from schema version 4 to 3: the timer without
 /// pausing, reminders as version 3 had them.
 const BACK_TO_3: &str = "
+    DROP TABLE templates; DROP INDEX tasks_series; ALTER TABLE tasks DROP COLUMN series_id;
+    DROP TABLE task_series; ALTER TABLE task_types DROP COLUMN due_offset_days;
     ALTER TABLE statuses DROP COLUMN rules; ALTER TABLE projects DROP COLUMN agent_rules;
     DROP INDEX tasks_fix_version; ALTER TABLE tasks DROP COLUMN fix_version_id;
     DROP TABLE versions;

@@ -111,6 +111,12 @@ pub(crate) struct ProjectFile {
     /// that its tasks have values of (`shared`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) custom_fields: Vec<CustomField>,
+    /// The project's task templates.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) templates: Vec<TemplateLine>,
+    /// The project's recurring task series.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) series: Vec<SeriesLine>,
 }
 
 /// A custom field, in `project.json`.
@@ -144,6 +150,44 @@ pub(crate) struct CustomField {
 pub(crate) struct CustomValue {
     pub(crate) field_id: String,
     pub(crate) value: serde_json::Value,
+}
+
+/// A template: a task template in `project.json`, a project template in
+/// `templates.jsonl` at the archive root. Its content names statuses,
+/// types and labels by name.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct TemplateLine {
+    pub(crate) id: String,
+    /// `task` or `project`.
+    pub(crate) kind: String,
+    pub(crate) name: String,
+    #[serde(default)]
+    pub(crate) description: String,
+    pub(crate) content: serde_json::Value,
+    pub(crate) rank: String,
+    pub(crate) created_at: i64,
+    pub(crate) created_by_kind: String,
+    pub(crate) created_by_name: String,
+    pub(crate) updated_at: i64,
+}
+
+/// A recurring task series of the project: its rule, the details new
+/// occurrences get, and its current occurrence.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct SeriesLine {
+    pub(crate) id: String,
+    pub(crate) rule: serde_json::Value,
+    pub(crate) pattern: serde_json::Value,
+    pub(crate) current_task: Option<String>,
+    pub(crate) next_date: Option<String>,
+    pub(crate) made: u32,
+    pub(crate) ended_at: Option<i64>,
+    pub(crate) created_at: i64,
+    pub(crate) created_by_kind: String,
+    pub(crate) created_by_name: String,
+    pub(crate) updated_at: i64,
 }
 
 /// A saved view of the project.
@@ -234,6 +278,9 @@ pub(crate) struct TaskType {
     pub(crate) hue: String,
     pub(crate) rank: String,
     pub(crate) is_default: bool,
+    /// New tasks of the type are due this many days after they are made.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) due_offset_days: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -309,6 +356,9 @@ pub(crate) struct Task {
     /// Earlier keys of the task (after moves), which still find it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) key_aliases: Vec<String>,
+    /// The recurring series the task is an occurrence of.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) series_id: Option<String>,
     /// The version it is planned for: one of its project's or one an
     /// ancestor shares.
     #[serde(default, skip_serializing_if = "Option::is_none")]

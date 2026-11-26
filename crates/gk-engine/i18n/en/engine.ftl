@@ -233,6 +233,21 @@ value-day-format = "{ $text }" is not a date: expected YYYY-MM-DD, for example 2
 value-day-not-in-calendar = { $text } is not a day in the calendar.
 value-day-out-of-range = The date is outside the years 1 to 9999.
 value-day-start-after-due = The start date { $start } is after the due date { $due }.
+value-recurrence-interval = The interval must be 1 to { $max }.
+value-recurrence-month-day = The day of the month must be 1 to 31, or -1 for the last day.
+value-recurrence-week-of-month = The week of the month must be 1 to 5, or -1 for the last.
+value-recurrence-month = The month must be 1 to 12.
+value-recurrence-day-and-weekday = Give a day of the month or a weekday of the month, not both.
+value-recurrence-parts = { $unit ->
+        [day] A rule that repeats every few days can't fall on chosen weekdays, days of the month or months.
+        [week] A weekly rule falls on weekdays, not on days of the month or months.
+        [month] A monthly rule falls on a day of the month or a weekday of the month, not on chosen weekdays or months.
+       *[other] A yearly rule falls on a day or weekday of a month, not on chosen weekdays.
+    }
+value-recurrence-completion-pattern = A rule that repeats from completion can't fall on chosen days.
+value-recurrence-until-before-start = The rule ends on { $until }, before it starts on { $start }.
+value-recurrence-count = The number of occurrences must be 1 to { $max }.
+value-recurrence-text = "{ $text }" is not a rule: write, for example, every monday, every 2 weeks on mon and thu, monthly on the last fri, or 3 days after done.
 value-duration-empty = Enter a duration, for example 90m, 1.5h, 1:30, 2d or 1w.
 value-duration-malformed = "{ $text }" is not a duration: use for example 90m, 1.5h, 1:30, 2d, 1w or 1h 30m.
 value-duration-missing-unit = "{ $text }" needs a unit: m, h, d or w (for example { $text }m or { $text }h).
@@ -752,6 +767,126 @@ workspace-rename-failed = The workspace "{ $name }" could not be renamed: { $err
 workspace-choice-no-folder = There is no folder for the personal settings: no home folder is set.
 workspace-choice-not-saved = The workspace you chose could not be remembered: { $error }
 
+## Recurring tasks
+
+recurrence-rule-missing = Say how the task repeats: give `text` (every monday) or `every`.
+recurrence-number-range = The number is out of range.
+recurrence-weekday-missing = Give the weekday for the week of the month.
+recurrence-ahead-from-completion = Occurrences counted from completion can only be made when the last one is closed.
+recurrence-days-ahead = Make occurrences at most { $max } days ahead.
+recurrence-task-closed = { $task } is closed; make an open task recurring.
+recurrence-no-dates = The rule has no dates: it ends before its first one.
+recurrence-not-recurring = { $task } doesn't repeat.
+recurrence-unreadable = The task's recurrence rule can't be read.
+recurrence-no-more = The rule of { $task } has no more dates.
+# Lists of names, as in "Monday, Wednesday and Friday": two items; the
+# first item and the rest; an item in the middle and the rest; the last two.
+recurrence-list-two = { $first } and { $second }
+recurrence-list-start = { $first }, { $second }
+recurrence-list-middle = { $first }, { $second }
+recurrence-list-end = { $first } and { $second }
+recurrence-nth-weekday = { $nth ->
+        [1] first { $weekday }
+        [2] second { $weekday }
+        [3] third { $weekday }
+        [4] fourth { $weekday }
+        [5] fifth { $weekday }
+       *[other] last { $weekday }
+    }
+recurrence-daily = { $interval ->
+        [one] Every day
+       *[other] Every { $interval } days
+    }
+recurrence-weekly = { $interval ->
+        [one] Every week on { $days }
+       *[other] Every { $interval } weeks on { $days }
+    }
+recurrence-monthly-day = { $interval ->
+        [one] Every month on day { $day }
+       *[other] Every { $interval } months on day { $day }
+    }
+recurrence-monthly-last-day = { $interval ->
+        [one] Every month on the last day
+       *[other] Every { $interval } months on the last day
+    }
+recurrence-monthly-weekday = { $interval ->
+        [one] Every month on the { $weekday }
+       *[other] Every { $interval } months on the { $weekday }
+    }
+recurrence-yearly-day = { $interval ->
+        [one] Every year on { $month } { $day }
+       *[other] Every { $interval } years on { $month } { $day }
+    }
+recurrence-yearly-last-day = { $interval ->
+        [one] Every year on the last day of { $month }
+       *[other] Every { $interval } years on the last day of { $month }
+    }
+recurrence-yearly-weekday = { $interval ->
+        [one] Every year on the { $weekday } of { $month }
+       *[other] Every { $interval } years on the { $weekday } of { $month }
+    }
+recurrence-after-done-days = { $interval ->
+        [one] 1 day after it is done
+       *[other] { $interval } days after it is done
+    }
+recurrence-after-done-weeks = { $interval ->
+        [one] 1 week after it is done
+       *[other] { $interval } weeks after it is done
+    }
+recurrence-after-done-months = { $interval ->
+        [one] 1 month after it is done
+       *[other] { $interval } months after it is done
+    }
+recurrence-after-done-years = { $interval ->
+        [one] 1 year after it is done
+       *[other] { $interval } years after it is done
+    }
+recurrence-with-until = { $rule }, until { $until }
+recurrence-with-count = { $count ->
+        [one] { $rule }, once
+       *[other] { $rule }, { $count } times
+    }
+weekday-monday = Monday
+weekday-tuesday = Tuesday
+weekday-wednesday = Wednesday
+weekday-thursday = Thursday
+weekday-friday = Friday
+weekday-saturday = Saturday
+weekday-sunday = Sunday
+month-january = January
+month-february = February
+month-march = March
+month-april = April
+month-may = May
+month-june = June
+month-july = July
+month-august = August
+month-september = September
+month-october = October
+month-november = November
+month-december = December
+
+## Templates
+
+template-not-found = There is no template "{ $template }".
+template-not-found-hint = Name a project template, or a task template of the project given with `project`, or use its ID from template.list.
+template-name-ambiguous = Several templates are named "{ $template }".
+template-name-ambiguous-hint = Give `project`, or use the template's ID from template.list.
+template-name-taken = There is already a template named "{ $template }".
+template-name-taken-hint = Choose another name, or change that template.
+template-one-source = Give exactly one of `from_task`, `from_project`, `task` and `setup`.
+template-kind-mismatch = A task template holds a task, and a project template a project's set-up.
+template-needs-project = A task template belongs to a project: give `project`.
+template-unreadable = The template's content can't be read.
+template-project-gone = The project of the template "{ $template }" no longer exists; give `project`.
+template-project-needs-name = A project template makes a project: give its `name` and `key`.
+template-too-many-tasks = A template makes at most { $max } tasks.
+template-too-many-pages = A template makes at most { $max } wiki pages.
+template-under-later = A subtask can only sit under a subtask listed before it.
+template-name-twice = "{ $name }" is listed twice.
+template-needs-todo-status = The statuses need at least one to-do status for new tasks.
+template-one-default-type = Only one type can be the default.
+type-due-offset-range = The default due date of { $type } must be 0 to 3650 days after a task is made.
 ## Status rules and rules for agents
 
 rule-required = { $field ->

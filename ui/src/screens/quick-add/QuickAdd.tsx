@@ -4,6 +4,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { CalendarDays, Flag, Plus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useLocale } from "react-aria-components";
 
 import { useAppearance } from "../../appearance/AppearanceProvider";
 import { classes } from "../../classes";
@@ -11,14 +12,18 @@ import { ProjectMark } from "../../components/ProjectMark";
 import { Select } from "../../components/Select";
 import { useProjects } from "../../data/board";
 import { errorToast, useCall } from "../../data/hooks";
+import { useTemplates } from "../../data/recurrence";
 import { OpFailure } from "../../data/transport";
-import { type TaskChange, type TaskCreateInput } from "../../generated/ops";
+import { type TaskChange, type TaskCreateInput, type TemplateApplyInput } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { hideQuickAdd, onQuickAddShown } from "../../ipc/quickAdd";
 import { appWindow } from "../../ipc/window";
 import { appearanceFrom, readPref, writePref } from "../../prefs/store";
 import { parseQuickAdd } from "./parse";
 import styles from "./QuickAdd.module.css";
+
+/** No template: the template choice's first entry. */
+const NO_TEMPLATE = "none";
 
 /** The project new tasks went to last, kept for the next time. */
 const LAST_PROJECT = "quickAdd.project";
@@ -39,6 +44,7 @@ export function QuickAdd() {
   const call = useCall();
   const projects = useProjects();
   const { appearance, update } = useAppearance();
+  const { locale } = useLocale();
   const input = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
   const [keepDate, setKeepDate] = useState(false);
@@ -53,10 +59,15 @@ export function QuickAdd() {
   const parsed = parseQuickAdd(text, { projects: choices, keepDate });
   const fallback = active.find((project) => project.key === picked) ?? active[0];
   const project = parsed.project ?? fallback?.key;
+  // A task template of the chosen project to start from; another project's is none.
+  const [pickedTemplate, setTemplate] = useState<{ project: string; id: string } | null>(null);
+  const templates = useTemplates("task", project ?? "", project !== undefined);
+  const template = pickedTemplate !== null && pickedTemplate.project === project && (templates.data?.items ?? []).some((each) => each.id === pickedTemplate.id) ? pickedTemplate.id : null;
 
   const reset = () => {
     setText("");
     setKeepDate(false);
+    setTemplate(null);
     input.current?.focus();
   };
 
@@ -117,11 +128,29 @@ export function QuickAdd() {
     },
   });
 
+  const fromTemplate = useMutation({
+    mutationFn: (input: TemplateApplyInput) => call("template.apply", input),
+    onSuccess: async (applied) => {
+      const leftOut = applied.left_out ?? [];
+      setNote({
+        tone: "info",
+        text: leftOut.length > 0 ? t("template-left-out", { count: leftOut.length, names: new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(leftOut) }) : t("quick-add-added", { key: applied.task?.key ?? "" }),
+      });
+      reset();
+      if (leftOut.length === 0) {
+        await hideQuickAdd();
+      }
+    },
+    onError: (error) => {
+      setNote({ tone: "error", text: errorToast(t, error).text });
+    },
+  });
+
   const submit = () => {
-    if (create.isPending) {
+    if (create.isPending || fromTemplate.isPending) {
       return;
     }
-    if (parsed.title === "") {
+    if (parsed.title === "" && template === null) {
       setNote({ tone: "error", text: t("quick-add-need-title") });
       return;
     }
@@ -132,6 +161,10 @@ export function QuickAdd() {
     setNote(null);
     if (parsed.project === undefined) {
       writePref(LAST_PROJECT, project);
+    }
+    if (template !== null) {
+      fromTemplate.mutate({ template, project, ...(parsed.title === "" ? {} : { title: parsed.title }) });
+      return;
     }
     const base = { project, ...(parsed.priority === undefined ? {} : { priority: parsed.priority }) };
     const dates = parsed.dueText === undefined ? [] : [{ title: parsed.title, dueText: parsed.dueText }, ...(parsed.shorterDates ?? [])];
@@ -194,7 +227,19 @@ export function QuickAdd() {
             }}
           />
         )}
-        {parsed.dueText !== undefined && (
+        {(templates.data?.items.length ?? 0) > 0 && (
+          <Select
+            label={t("template-picker")}
+            className={styles.project}
+            value={template ?? NO_TEMPLATE}
+            options={[{ id: NO_TEMPLATE, label: t("template-none") }, ...(templates.data?.items ?? []).map((each) => ({ id: each.id, label: each.name }))]}
+            onChange={(id) => {
+              setTemplate(id === NO_TEMPLATE || project === undefined ? null : { project, id });
+              input.current?.focus();
+            }}
+          />
+        )}
+        {parsed.dueText !== undefined && template === null && (
           <span className={classes("chip outline", styles.chip)} data-testid="quick-add-due">
             <CalendarDays className="ic s" aria-hidden="true" />
             {t("quick-add-due", { words: parsed.dueText })}
@@ -211,7 +256,7 @@ export function QuickAdd() {
             </button>
           </span>
         )}
-        {parsed.priority !== undefined && (
+        {parsed.priority !== undefined && template === null && (
           <span className={classes("chip outline", styles.chip)} data-testid="quick-add-priority">
             <Flag className="ic s" aria-hidden="true" />
             {t(`priority-${parsed.priority}`)}

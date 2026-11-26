@@ -121,6 +121,8 @@ activity-entity-wiki_page = Wiki page
 activity-entity-settings = Settings
 activity-entity-timer = Timer
 activity-entity-description = Description
+activity-entity-series = Recurring series
+activity-entity-template = Template
 activity-entity-other = Item
 
 ## Backups

@@ -153,6 +153,7 @@ pub(super) fn register(r: &mut Registry) {
             glyph: i.glyph,
             hue: i.hue,
             make_default: i.make_default,
+            due_offset_days: i.due_offset_days,
             ..TypeChange::default()
         };
         apply_type(w, &p, &change)?;
@@ -166,6 +167,8 @@ pub(super) fn register(r: &mut Registry) {
             glyph: i.glyph,
             hue: i.hue,
             make_default: i.make_default,
+            due_offset_days: i.due_offset_days,
+            clear_due_offset: i.clear_due_offset,
             before: i.before,
             after: i.after,
             at: i.at,
@@ -412,7 +415,8 @@ pub(crate) fn load(tx: &Transaction<'_>, id: Id) -> Result<Project, Failure> {
     let types = {
         let mut stmt = tx.prepare_cached(
             "SELECT y.id, y.name, y.glyph, y.hue, y.is_default,
-                    (SELECT count(*) FROM tasks t WHERE t.type_id = y.id AND t.deleted_at IS NULL)
+                    (SELECT count(*) FROM tasks t WHERE t.type_id = y.id AND t.deleted_at IS NULL),
+                    y.due_offset_days
                FROM task_types y WHERE y.project_id = ?1 ORDER BY y.rank, y.id",
         )?;
         stmt.query_map([b(id)], |r| {
@@ -422,6 +426,9 @@ pub(crate) fn load(tx: &Transaction<'_>, id: Id) -> Result<Project, Failure> {
                 glyph: parse_enum(&r.get::<_, String>(2)?).unwrap_or(Glyph::Task),
                 hue: parse_enum(&r.get::<_, String>(3)?).unwrap_or(Hue::Grey),
                 is_default: r.get::<_, i64>(4)? != 0,
+                due_offset_days: r
+                    .get::<_, Option<i64>>(6)?
+                    .and_then(|d| u32::try_from(d).ok()),
                 tasks: r.get::<_, i64>(5)?.unsigned_abs(),
             })
         })?
@@ -667,7 +674,10 @@ fn check_key(tx: &Transaction<'_>, key: &str, except: Option<Id>) -> Result<Proj
     Ok(key)
 }
 
-fn create(w: &mut WriteCtx<'_>, input: ProjectCreateInput) -> Result<ProjectChange, Failure> {
+pub(crate) fn create(
+    w: &mut WriteCtx<'_>,
+    input: ProjectCreateInput,
+) -> Result<ProjectChange, Failure> {
     let name = clean_name("name", "name", &input.name, PROJECT_NAME_MAX)?;
     let key = check_key(w.tx(), &input.key, None)?;
     let parent = match &input.parent {
@@ -813,7 +823,8 @@ fn copy_configuration(w: &WriteCtx<'_>, id: Id, parent: Option<Id>) -> Result<()
             params![b(id), b(parent)],
         )?;
         let mut stmt = tx.prepare(
-            "SELECT name, name_fold, glyph, hue, rank, is_default FROM task_types WHERE project_id = ?1",
+            "SELECT name, name_fold, glyph, hue, rank, is_default, due_offset_days
+               FROM task_types WHERE project_id = ?1",
         )?;
         let rows = stmt
             .query_map([b(parent)], |r| {
@@ -824,14 +835,16 @@ fn copy_configuration(w: &WriteCtx<'_>, id: Id, parent: Option<Id>) -> Result<()
                     r.get::<_, String>(3)?,
                     r.get::<_, String>(4)?,
                     r.get::<_, i64>(5)?,
+                    r.get::<_, Option<i64>>(6)?,
                 ))
             })?
             .collect::<Result<Vec<_>, _>>()?;
-        for (name, name_fold, glyph, hue, rank, is_default) in rows {
+        for (name, name_fold, glyph, hue, rank, is_default, due) in rows {
             tx.execute(
-                "INSERT INTO task_types (id, project_id, name, name_fold, glyph, hue, rank, is_default)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-                params![b(new_id()), b(id), name, name_fold, glyph, hue, rank, is_default],
+                "INSERT INTO task_types (id, project_id, name, name_fold, glyph, hue, rank, is_default,
+                                         due_offset_days)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                params![b(new_id()), b(id), name, name_fold, glyph, hue, rank, is_default, due],
             )?;
         }
         let mut stmt =
@@ -956,9 +969,18 @@ fn update_parts(input: &Value) -> Vec<&'static str> {
             } else if flag(item, "remove") {
                 delete
             } else if ["before", "after", "at"].iter().any(|k| has(item, k))
-                && !["name", "category", "hue", "wip_limit", "glyph", "clear"]
-                    .iter()
-                    .any(|k| has(item, k))
+                && ![
+                    "name",
+                    "category",
+                    "hue",
+                    "wip_limit",
+                    "glyph",
+                    "clear",
+                    "due_offset_days",
+                    "clear_due_offset",
+                ]
+                .iter()
+                .any(|k| has(item, k))
                 && !flag(item, "make_default")
             {
                 reorder
@@ -1618,6 +1640,9 @@ fn apply_type(w: &mut WriteCtx<'_>, p: &ProjectRow, c: &TypeChange) -> Result<()
         )?;
         w.record_field(TYPE, id, pid, "created", None, Some(Value::Bool(true)));
         w.record_field(TYPE, id, pid, "name", None, text(name));
+        if let Some(days) = due_offset(c)? {
+            fields::set(w, TYPE, id, pid, "due_offset_days", Some(days.into()))?;
+        }
         if c.make_default {
             make_default(w, p, id)?;
         }
@@ -1643,6 +1668,18 @@ fn apply_type(w: &mut WriteCtx<'_>, p: &ProjectRow, c: &TypeChange) -> Result<()
     if let Some(hue) = c.hue {
         fields::set(w, TYPE, item.id, pid, "hue", text(enum_text(hue)))?;
     }
+    if c.clear_due_offset && c.due_offset_days.is_some() {
+        return Err(messages::invalid(
+            "clear_due_offset",
+            "field-given-and-cleared",
+            &[("field", "due_offset_days".to_owned())],
+        ));
+    }
+    if let Some(days) = due_offset(c)? {
+        fields::set(w, TYPE, item.id, pid, "due_offset_days", Some(days.into()))?;
+    } else if c.clear_due_offset {
+        fields::set(w, TYPE, item.id, pid, "due_offset_days", None)?;
+    }
     if c.make_default {
         make_default(w, p, item.id)?;
     }
@@ -1658,6 +1695,24 @@ fn apply_type(w: &mut WriteCtx<'_>, p: &ProjectRow, c: &TypeChange) -> Result<()
         fields::set(w, TYPE, item.id, pid, "rank", text(rank.as_str()))?;
     }
     Ok(())
+}
+
+/// The checked default due date offset of a type change.
+fn due_offset(c: &TypeChange) -> Result<Option<u32>, Failure> {
+    match c.due_offset_days {
+        Some(days) if days > 3650 => Err(messages::invalid(
+            "due_offset_days",
+            "type-due-offset-range",
+            &[(
+                "type",
+                c.name
+                    .clone()
+                    .or_else(|| c.task_type.clone())
+                    .unwrap_or_default(),
+            )],
+        )),
+        other => Ok(other),
+    }
 }
 
 fn default_type(tx: &Transaction<'_>, project: Id) -> Result<Option<Id>, Failure> {

@@ -12,6 +12,7 @@ use crate::ops::{
     query, report, rules, schedule, search, settings, task, time, today, transfer, trash, version,
     view, wiki, workspace,
 };
+use crate::ops::{recurrence, template};
 use crate::schema;
 
 /// One operation of the catalog, as a type: its name and its input and
@@ -203,6 +204,17 @@ pub static CATALOG: &[OpDescriptor] = &[
     task::TASK_RELEASE,
     task::RELATION_ADD,
     task::RELATION_REMOVE,
+    recurrence::RECURRENCE_SET,
+    recurrence::RECURRENCE_CLEAR,
+    recurrence::RECURRENCE_SKIP,
+    recurrence::RECURRENCE_PREVIEW,
+    recurrence::RECURRENCE_RUN,
+    template::TEMPLATE_LIST,
+    template::TEMPLATE_GET,
+    template::TEMPLATE_CREATE,
+    template::TEMPLATE_UPDATE,
+    template::TEMPLATE_DELETE,
+    template::TEMPLATE_APPLY,
     description::DESCRIPTION_HISTORY,
     description::DESCRIPTION_REVISION,
     description::MARKDOWN_RENDER,

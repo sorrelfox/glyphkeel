@@ -289,6 +289,9 @@ pub struct ListedTask {
     /// The agent that claimed it, while the claim lasts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub claim: Option<Claim>,
+    /// Whether it is the open occurrence of a recurring task.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub recurring: bool,
     /// Its place in its status column.
     pub rank: String,
     /// Who created it.

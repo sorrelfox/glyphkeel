@@ -392,6 +392,68 @@ pub(crate) fn map_custom_fields(rules: &mut Value, map: &dyn Fn(Id) -> Option<Id
     }
 }
 
+/// The rules of a status of project `p` as stored, from a project
+/// template: custom fields named by their ID in the template become the
+/// copies `copies` gives, then the rules are checked as `rules.update`
+/// checks them. `path` names them in errors.
+pub(crate) fn from_template(
+    tx: &Transaction<'_>,
+    p: &ProjectRow,
+    rules: &StatusRules,
+    copies: &BTreeMap<String, Id>,
+    path: &str,
+) -> Result<Option<String>, Failure> {
+    if rules.is_empty() {
+        return Ok(None);
+    }
+    let mut value = serde_json::to_value(rules).map_err(|e| {
+        Failure::Op(messages::storage(
+            "storage-json",
+            &[("error", e.to_string())],
+        ))
+    })?;
+    map_custom_fields(&mut value, &|id| copies.get(&id.to_string()).copied());
+    let mapped: StatusRules = serde_json::from_value(value).unwrap_or_default();
+    let rules = canonical(&mapped);
+    check_status_rules(tx, p, &rules).map_err(|e| at_path(e, path))?;
+    Ok(stored(&rules, rules.is_empty())?.map(|v| v.to_string()))
+}
+
+/// The rules for agents of project `p` as stored, from a project template,
+/// as [`from_template`] does for a status's rules.
+pub(crate) fn agents_from_template(
+    tx: &Transaction<'_>,
+    p: &ProjectRow,
+    rules: &AgentRules,
+    copies: &BTreeMap<String, Id>,
+) -> Result<Option<String>, Failure> {
+    if rules.is_empty() {
+        return Ok(None);
+    }
+    let read_only: Vec<String> = rules
+        .read_only
+        .iter()
+        .map(|f| {
+            let mapped = f
+                .strip_prefix(CUSTOM_FIELD_PREFIX)
+                .and_then(|id| id.parse::<Id>().ok())
+                .and_then(|id| copies.get(&id.to_string()))
+                .map(|id| format!("{CUSTOM_FIELD_PREFIX}{id}"));
+            canonical_field(mapped.as_deref().unwrap_or(f))
+        })
+        .collect();
+    check_list(
+        tx,
+        p,
+        "setup.agent_rules.read_only",
+        "agents",
+        &read_only,
+        |f| LOCKABLE_FIELDS.contains(&f),
+    )?;
+    let rules = AgentRules { read_only };
+    Ok(stored(&rules, rules.is_empty())?.map(|v| v.to_string()))
+}
+
 /// Makes the rules of project `project` (its statuses' and those for
 /// agents) name the copies `copies` gives of custom fields.
 pub(crate) fn map_project_fields(
@@ -512,7 +574,11 @@ fn id_of(v: Option<&Value>) -> Option<Id> {
 }
 
 /// Holds the tasks the command changed to the rules: refuses what they
-/// forbid and applies what statuses do to tasks entering them.
+/// forbid and applies what statuses do to tasks entering them. A task the
+/// engine made on its own (the next occurrence of a recurring task) gets
+/// what its status does on entering, but is never refused: the command
+/// that closed the last occurrence, or the daily run, must not fail for
+/// it, and a person fills in the rest later.
 pub(crate) fn enforce(w: &mut WriteCtx<'_>) -> Result<(), Failure> {
     if !applies_to(w.op()) {
         return Ok(());
@@ -534,7 +600,8 @@ pub(crate) fn enforce(w: &mut WriteCtx<'_>) -> Result<(), Failure> {
             check_unchanged(w, &now, &changed, agent)?;
         }
         if created || entered {
-            enter(w, task, &now, agent)?;
+            let automatic = created && w.is_automatic(task);
+            enter(w, task, &now, agent, automatic)?;
         }
     }
     Ok(())
@@ -581,12 +648,20 @@ fn check_unchanged(
 
 /// A task entered its status: refuses an agent where agents may not
 /// enter, applies the status's actions, then checks its required fields.
-fn enter(w: &mut WriteCtx<'_>, task: Id, now: &TaskFacts, agent: bool) -> Result<(), Failure> {
+/// A task the engine made on its own (`automatic`) is only given the
+/// actions.
+fn enter(
+    w: &mut WriteCtx<'_>,
+    task: Id,
+    now: &TaskFacts,
+    agent: bool,
+    automatic: bool,
+) -> Result<(), Failure> {
     let rules = status_rules(w.tx(), now.status)?;
     if rules.is_empty() {
         return Ok(());
     }
-    if agent && rules.agents_may_not_enter {
+    if agent && !automatic && rules.agents_may_not_enter {
         let error = messages::forbidden(
             "rule-agents-may-not-enter",
             &[
@@ -655,6 +730,9 @@ fn enter(w: &mut WriteCtx<'_>, task: Id, now: &TaskFacts, agent: bool) -> Result
     }
     if rules.release_claim && super::claim::raw(w.tx(), task)?.is_some() {
         super::claim::apply(w, task, pid, None)?;
+    }
+    if automatic {
+        return Ok(());
     }
     let missing = missing(w.tx(), task, &rules.required)?;
     if let Some(first) = missing.first() {

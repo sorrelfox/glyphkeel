@@ -119,6 +119,14 @@
   flex: none;
 }
 
+/* The Add task field, with the template choice under it. */
+.addTask {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 4px;
+}
+
 /* ---------- cards ---------- */
 .card {
   flex: none;

@@ -9,7 +9,7 @@ import { createContext, use, useRef, useState, type ReactNode } from "react";
 import { Menu, MenuItem, Popover, Text, useLocale } from "react-aria-components";
 
 import { classes } from "../../classes";
-import { PriorityGlyph, TypeGlyph, usePriorityName } from "../../components/Glyphs";
+import { PriorityGlyph, RecurringMark, TypeGlyph, usePriorityName } from "../../components/Glyphs";
 import { PRIORITIES, type Priority } from "../../data/catalog";
 import { useProject } from "../../data/board";
 import { fieldsOfCard } from "../../data/rules";
@@ -107,6 +107,7 @@ function TitleCell({ task }: { task: ListedTask }) {
     >
       <TypeGlyph glyph={task.type.glyph} label={task.type.name} />
       <span className={classes("truncate", task.closed_at !== undefined && styles.closed)}>{task.title}</span>
+      {task.recurring === true && <RecurringMark />}
       {task.blocked && <span className="chip hue-red">{t("list-blocked")}</span>}
     </span>
   );

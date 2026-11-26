@@ -32,6 +32,7 @@ use super::{
     agent, board, claim, comment, custom_field, desc, fields, file, gantt_layout, list_layout,
     lookup, project, relation, reminder, settings, task, time, trash, version, view, wiki,
 };
+use super::{recurrence, template};
 use crate::failure::Failure;
 use crate::messages;
 use crate::registry::{QueryCtx, Registry};
@@ -261,6 +262,7 @@ fn task_of(tx: &Transaction<'_>, entity: &str, id: &str) -> Result<Option<Activi
         fields::TASK => "?1",
         comment::ENTITY => "(SELECT task_id FROM comments WHERE id = ?1)",
         time::ENTRY => "(SELECT task_id FROM time_entries WHERE id = ?1)",
+        recurrence::ENTITY => "(SELECT current_task FROM task_series WHERE id = ?1)",
         file::ENTITY => {
             "(SELECT CASE a.owner_kind
                        WHEN 'task' THEN a.owner_id
@@ -407,6 +409,8 @@ fn current(
         (list_layout::ENTITY, list_layout::FIELD) => list_layout::raw(tx, id)?,
         (gantt_layout::ENTITY, gantt_layout::FIELD) => gantt_layout::raw(tx, id)?,
         (view::ENTITY, view::RECORD) => view::raw(tx, id)?,
+        (template::ENTITY, template::RECORD) => template::raw(tx, id)?,
+        (recurrence::ENTITY, recurrence::RECORD) => recurrence::raw(tx, id)?,
         (version::ENTITY, version::RECORD) => version::raw(tx, id)?,
         (_, "deleted" | trash::PURGED) => return Ok(None),
         (fields::PROJECT | fields::TASK | fields::WIKI, trash::TRASHED) => {
@@ -509,6 +513,18 @@ fn apply(
         (view::ENTITY, view::RECORD) => {
             let before = view::raw(w.tx(), id)?;
             view::write_raw(w, id, value.as_ref())?;
+            w.record_field(entity, id, project, field, before, value);
+            Ok(())
+        }
+        (template::ENTITY, template::RECORD) => {
+            let before = template::raw(w.tx(), id)?;
+            template::write_raw(w, id, value.as_ref())?;
+            w.record_field(entity, id, project, field, before, value);
+            Ok(())
+        }
+        (recurrence::ENTITY, recurrence::RECORD) => {
+            let before = recurrence::raw(w.tx(), id)?;
+            recurrence::write_raw(w, id, value.as_ref())?;
             w.record_field(entity, id, project, field, before, value);
             Ok(())
         }
