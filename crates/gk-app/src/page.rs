@@ -29,12 +29,14 @@ pub(crate) fn window<'a>(
     label: impl Into<String>,
     start: &StartData,
 ) -> WebviewWindowBuilder<'a, tauri::Wry, AppHandle> {
-    WebviewWindowBuilder::new(app, label, WebviewUrl::App(PAGE.into()))
+    let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App(PAGE.into()))
         .initialization_script(start.script())
         .zoom_hotkeys_enabled(false)
         // The page never leaves the app and never opens windows of its own.
         .on_navigation(navigation::is_app_url)
-        .on_new_window(|_url, _features| NewWindowResponse::Deny)
+        .on_new_window(|_url, _features| NewWindowResponse::Deny);
+    // The platform's rendering switches and the web view's features off.
+    crate::graphics::web_view(app, builder)
 }
 
 #[cfg(test)]

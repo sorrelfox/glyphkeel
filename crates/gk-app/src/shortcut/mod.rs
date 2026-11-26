@@ -19,6 +19,11 @@
 //! 3. Otherwise **the person binds `glyphkeel-app --quick-add`** to a key in
 //!    the desktop's own settings; Preferences says how.
 //!
+//! On Windows there is no portal: the app registers the key with the system
+//! as a hot key, through the same plugin as the grab ([`grab`]), and reports
+//! it as a grab. Only when another program holds the key does the person
+//! bind the command (or pick another key).
+//!
 //! When the person refuses the portal's request, nothing else is tried (they
 //! said no): the setting is switched off, and the entry KDE keeps even for a
 //! refused request is removed. Turning the shortcut off, or choosing another
@@ -190,6 +195,8 @@ pub(crate) struct Desktop {
     pub(crate) x_display: bool,
     /// A route forced for testing by `GLYPHKEEL_SHORTCUT_ROUTE`.
     pub(crate) forced: Option<Forced>,
+    /// Windows, where a hot key works everywhere and there is no portal.
+    pub(crate) windows: bool,
 }
 
 /// The route `GLYPHKEEL_SHORTCUT_ROUTE` forces: `portal`, `grab` or `manual`.
@@ -228,6 +235,15 @@ impl Desktop {
             kde,
             x_display: set("DISPLAY"),
             forced,
+            windows: false,
+        }
+    }
+
+    /// The desktop this process runs on.
+    pub(crate) fn current() -> Self {
+        Self {
+            windows: cfg!(windows),
+            ..Self::from_env(|name| std::env::var(name).ok())
         }
     }
 
@@ -235,12 +251,13 @@ impl Desktop {
     /// window: on X11, and on KDE's Wayland session through XWayland. Not
     /// on other Wayland compositors, which keep keys from X11 programs.
     pub(crate) fn grabs_work(&self) -> bool {
-        self.x_display
-            && match self.session {
-                Session::X11 => true,
-                Session::Wayland => self.kde,
-                Session::Other => false,
-            }
+        self.windows
+            || self.x_display
+                && match self.session {
+                    Session::X11 => true,
+                    Session::Wayland => self.kde,
+                    Session::Other => false,
+                }
     }
 }
 
@@ -311,6 +328,7 @@ pub(crate) fn next_step(desktop: &Desktop, tried: &[(Route, Outcome)]) -> Step {
         Some(Forced::Portal) => &[Route::Portal],
         Some(Forced::Grab) => &[Route::Grab],
         Some(Forced::Manual) => &[],
+        None if desktop.windows => &[Route::Grab],
         None if desktop.grabs_work() => &[Route::Portal, Route::Grab],
         None => &[Route::Portal],
     };
@@ -408,7 +426,7 @@ pub(crate) fn start(app: &AppHandle) {
         shortcut.apply(setting);
     }
     app.manage(shortcut);
-    let desktop = Desktop::from_env(|name| std::env::var(name).ok());
+    let desktop = Desktop::current();
     async_runtime::spawn(work(app.clone(), desktop, status, queue));
 }
 
@@ -705,6 +723,27 @@ mod tests {
             next_step(&x11(), &[(Route::Portal, Outcome::Unavailable)]),
             Step::Try(Route::Grab)
         );
+    }
+
+    #[test]
+    fn windows_registers_a_hot_key_without_the_portal() {
+        let windows = Desktop {
+            windows: true,
+            ..Desktop::from_env(env(&[]))
+        };
+        assert!(windows.grabs_work());
+        assert_eq!(next_step(&windows, &[]), Step::Try(Route::Grab));
+        assert_eq!(
+            next_step(&windows, &[(Route::Grab, Outcome::Bound)]),
+            Step::Done(State::Grab)
+        );
+        // Another program holds the key: the person binds the command.
+        assert_eq!(
+            next_step(&windows, &[(Route::Grab, Outcome::Unavailable)]),
+            Step::Done(State::Manual)
+        );
+        // The session's environment plays no part there.
+        assert!(!Desktop::from_env(env(&[])).windows);
     }
 
     #[test]

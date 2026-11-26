@@ -10,6 +10,12 @@
 //! - **The system title bar** (KDE Plasma and tiling window managers, where
 //!   apps don't draw their own): the window manager decorates the window, and
 //!   the page's header bar has no window buttons.
+//!
+//! On Windows the window always has the system title bar: it gives the
+//! window Snap Layouts and the system's own buttons, which a page can't draw
+//! with the same behaviour. The page learns it from the start data
+//! (`titleBar: "system"`, and `platform: "windows"`), and leaves out its
+//! window buttons.
 
 use serde::Serialize;
 
@@ -62,9 +68,31 @@ impl TitleBar {
         if system { Self::System } else { Self::App }
     }
 
+    /// The choice on a platform: Windows always has the system title bar,
+    /// whatever the override says.
+    pub(crate) fn choose_on(
+        windows: bool,
+        override_value: Option<&str>,
+        current_desktop: Option<&str>,
+    ) -> Self {
+        if windows {
+            Self::System
+        } else {
+            Self::choose(override_value, current_desktop)
+        }
+    }
+
     /// The choice for this process, from its environment.
     pub(crate) fn from_env() -> Self {
         let override_value = std::env::var(OVERRIDE_VAR).ok();
+        if cfg!(windows) {
+            if override_value.is_some() {
+                eprintln!(
+                    "glyphkeel-app: {OVERRIDE_VAR} is ignored on Windows, where the window has the system title bar"
+                );
+            }
+            return Self::choose_on(true, None, None);
+        }
         if let Some(value) = &override_value
             && !value.trim().eq_ignore_ascii_case("app")
             && !value.trim().eq_ignore_ascii_case("system")
@@ -118,6 +146,20 @@ mod tests {
         assert_eq!(TitleBar::choose(None, Some("sway")), TitleBar::System);
         assert_eq!(TitleBar::choose(None, Some("Hyprland")), TitleBar::System);
         assert_eq!(TitleBar::choose(None, Some("foo:kde")), TitleBar::System);
+    }
+
+    #[test]
+    fn windows_always_gets_the_system_title_bar() {
+        assert_eq!(
+            TitleBar::choose_on(true, Some("app"), Some("GNOME")),
+            TitleBar::System
+        );
+        assert_eq!(TitleBar::choose_on(true, None, None), TitleBar::System);
+        assert_eq!(TitleBar::choose_on(false, None, None), TitleBar::App);
+        assert_eq!(
+            TitleBar::choose_on(false, Some("system"), None),
+            TitleBar::System
+        );
     }
 
     #[test]

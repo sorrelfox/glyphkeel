@@ -6,6 +6,8 @@
 //! compositor passes key combinations on to XWayland even while a Wayland
 //! window has the focus.
 //!
+//! On Windows the same plugin registers the keys as a system hot key.
+//!
 //! The plugin is added only when this route is taken: it connects to the X
 //! server as it starts, which a Wayland session without XWayland doesn't
 //! have.

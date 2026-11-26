@@ -9,16 +9,19 @@
 //! processes and their memory are freed; the tray's "Open" or a new start
 //! of the app creates the main window again, with current data.
 //!
-//! The tray icon is a StatusNotifierItem through libappindicator, which
-//! gives a menu but no click events. Without a tray, as on GNOME without
-//! the extension, background mode still works: starting the app again
-//! brings its window back.
+//! On Linux the tray icon is a StatusNotifierItem through libappindicator,
+//! which gives a menu but no click events, so a left click shows the menu
+//! too. Without a tray, as on GNOME without the extension, background mode
+//! still works: starting the app again brings its window back.
+//!
+//! On Windows the icon sits in the notification area and gets clicks, as
+//! there: a left click opens the window, a right click shows the menu.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, PoisonError};
 
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
-use tauri::tray::{TrayIcon, TrayIconBuilder};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager};
 
 use crate::main_window;
@@ -105,6 +108,24 @@ const OPEN_ID: &str = "open";
 const QUICK_ADD_ID: &str = "quick-add";
 const QUIT_ID: &str = "quit";
 
+/// Whether the menu shows on a left click: where the tray gives no clicks
+/// (Linux), the menu is all there is.
+const MENU_ON_LEFT_CLICK: bool = !cfg!(windows);
+
+/// Whether a click on the tray icon opens the main window: a left click,
+/// when the button comes up, where the menu doesn't take left clicks.
+fn click_opens(menu_on_left_click: bool, event: &TrayIconEvent) -> bool {
+    !menu_on_left_click
+        && matches!(
+            event,
+            TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            }
+        )
+}
+
 /// Puts the app's icon in the tray, with Open, Quick add and Quit.
 fn build_tray(app: &AppHandle) -> tauri::Result<TrayIcon> {
     let label = |id: &str| messages::text(id, &[]);
@@ -124,12 +145,17 @@ fn build_tray(app: &AppHandle) -> tauri::Result<TrayIcon> {
         .menu(&menu)
         .tooltip(&tooltip)
         .title(&tooltip)
-        .show_menu_on_left_click(true)
+        .show_menu_on_left_click(MENU_ON_LEFT_CLICK)
         .on_menu_event(|app, event| match event.id().as_ref() {
             OPEN_ID => show_main(app, None, None),
             QUICK_ADD_ID => crate::quick_add::show(app, None),
             QUIT_ID => app.exit(0),
             _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if click_opens(MENU_ON_LEFT_CLICK, &event) {
+                show_main(tray.app_handle(), None, None);
+            }
         });
     if let Some(icon) = app.default_window_icon() {
         builder = builder.icon(icon.clone());
@@ -164,7 +190,38 @@ pub(crate) fn show_main(app: &AppHandle, task: Option<String>, token: Option<Str
 
 #[cfg(test)]
 mod tests {
-    use super::parse_switch;
+    use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent, TrayIconId};
+    use tauri::{PhysicalPosition, PhysicalSize, Position, Rect, Size};
+
+    use super::{click_opens, parse_switch};
+
+    fn click(button: MouseButton, button_state: MouseButtonState) -> TrayIconEvent {
+        TrayIconEvent::Click {
+            id: TrayIconId::new("main"),
+            position: PhysicalPosition::new(0.0, 0.0),
+            rect: Rect {
+                position: Position::Physical(PhysicalPosition::new(0, 0)),
+                size: Size::Physical(PhysicalSize::new(16, 16)),
+            },
+            button,
+            button_state,
+        }
+    }
+
+    #[test]
+    fn a_left_click_opens_the_window_where_the_menu_doesnt_take_it() {
+        let left_up = click(MouseButton::Left, MouseButtonState::Up);
+        assert!(click_opens(false, &left_up));
+        assert!(!click_opens(true, &left_up), "the menu shows instead");
+        assert!(!click_opens(
+            false,
+            &click(MouseButton::Left, MouseButtonState::Down)
+        ));
+        assert!(!click_opens(
+            false,
+            &click(MouseButton::Right, MouseButtonState::Up)
+        ));
+    }
 
     #[test]
     fn background_mode_is_on_unless_switched_off() {

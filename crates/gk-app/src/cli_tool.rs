@@ -7,6 +7,12 @@
 //! `~/.local/bin`, for installs that don't put it on the `PATH` themselves
 //! (an AppImage or an unpacked archive).
 //!
+//! On Windows the installer puts `glyphkeel.exe` next to the app and its
+//! folder on the person's `PATH`, so there is nothing to link. The `PATH`
+//! looked at there is also the one kept in the registry: a terminal opened
+//! now finds the tool even when this app was started before the installer
+//! changed it.
+//!
 //! The page never names a path: the link's place is fixed here.
 
 use std::ffi::OsString;
@@ -52,6 +58,9 @@ pub(crate) struct Env {
     exe_dir: Option<PathBuf>,
     home: Option<PathBuf>,
     flatpak_id: Option<String>,
+    /// The person's own `PATH` as the registry keeps it (Windows), with
+    /// `%NAME%` references already filled in.
+    user_path: Option<OsString>,
 }
 
 impl Env {
@@ -66,27 +75,85 @@ impl Env {
                 .filter(|home| !home.is_empty())
                 .map(PathBuf::from),
             flatpak_id: std::env::var("FLATPAK_ID").ok().filter(|id| !id.is_empty()),
+            user_path: user_path(),
         }
     }
 
-    /// The absolute folders of the `PATH`, in order.
+    /// The absolute folders of the `PATH`, in order, then those of the
+    /// person's own `PATH` in the registry that this process doesn't have.
     fn path_dirs(&self) -> Vec<PathBuf> {
-        self.path
-            .as_ref()
-            .map(|path| {
-                std::env::split_paths(path)
-                    .filter(|dir| dir.is_absolute())
-                    .collect()
-            })
-            .unwrap_or_default()
+        let mut dirs: Vec<PathBuf> = Vec::new();
+        for path in [&self.path, &self.user_path].into_iter().flatten() {
+            for dir in std::env::split_paths(path).filter(|dir| dir.is_absolute()) {
+                if !dirs.contains(&dir) {
+                    dirs.push(dir);
+                }
+            }
+        }
+        dirs
     }
 
-    /// `~/.local/bin`, the folder for a person's own programs.
+    /// `~/.local/bin`, the folder for a person's own programs. None on
+    /// Windows, where the installer puts the tool on the `PATH`.
     fn link_dir(&self) -> Option<PathBuf> {
+        if cfg!(windows) {
+            return None;
+        }
         self.home
             .as_ref()
             .map(|home| home.join(".local").join("bin"))
     }
+}
+
+/// The person's own `PATH` from the registry (`HKEY_CURRENT_USER\Environment`),
+/// where the installer adds the tool's folder.
+#[cfg(windows)]
+fn user_path() -> Option<OsString> {
+    let key = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
+        .open_subkey_with_flags("Environment", winreg::enums::KEY_READ)
+        .ok()?;
+    let value: String = key.get_value("Path").ok()?;
+    Some(OsString::from(expand(&value, |name| {
+        std::env::var(name).ok()
+    })))
+}
+
+#[cfg(not(windows))]
+fn user_path() -> Option<OsString> {
+    None
+}
+
+/// `text` with every `%NAME%` replaced by `lookup(NAME)`; unknown names
+/// and a lone `%` stay as they are, as the system leaves them.
+#[cfg(any(windows, test))]
+fn expand(text: &str, lookup: impl Fn(&str) -> Option<String>) -> String {
+    let mut out = String::new();
+    let mut rest = text;
+    while let Some(start) = rest.find('%') {
+        out.push_str(&rest[..start]);
+        let after = &rest[start + 1..];
+        match after.find('%') {
+            Some(end) => {
+                let name = &after[..end];
+                match (!name.is_empty()).then(|| lookup(name)).flatten() {
+                    Some(value) => {
+                        out.push_str(&value);
+                        rest = &after[end + 1..];
+                    }
+                    None => {
+                        out.push('%');
+                        rest = after;
+                    }
+                }
+            }
+            None => {
+                out.push('%');
+                rest = after;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
 }
 
 /// Whether `path` is a file that can be run.
@@ -211,6 +278,68 @@ pub(crate) fn install_cli() -> Result<CliStatus, OpError> {
     install(&Env::current())
 }
 
+#[cfg(test)]
+mod expand_tests {
+    use super::expand;
+
+    #[test]
+    fn references_in_the_registrys_path_are_filled_in() {
+        let lookup =
+            |name: &str| (name == "LOCALAPPDATA").then(|| r"C:\Users\a\AppData\Local".to_owned());
+        assert_eq!(
+            expand(r"%LOCALAPPDATA%\Programs\Glyphkeel;C:\bin", lookup),
+            r"C:\Users\a\AppData\Local\Programs\Glyphkeel;C:\bin"
+        );
+        assert_eq!(expand("%NOPE%;x", lookup), "%NOPE%;x");
+        assert_eq!(expand("100%", lookup), "100%");
+        assert_eq!(
+            expand("%%LOCALAPPDATA%", lookup),
+            r"%C:\Users\a\AppData\Local"
+        );
+        assert_eq!(expand("", lookup), "");
+    }
+}
+
+/// The status on Windows: the tool next to the app, on the `PATH` or only
+/// on the person's `PATH` in the registry, and never a link to make.
+#[cfg(all(test, windows))]
+mod windows_tests {
+    use std::ffi::OsString;
+
+    use super::{Env, TOOL, install, status};
+
+    #[test]
+    fn the_tool_next_to_the_app_is_found_on_the_users_path() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let app = dir.path().join("Programs").join("Glyphkeel");
+        std::fs::create_dir_all(&app).expect("dir");
+        std::fs::write(app.join(TOOL), "MZ").expect("write");
+        let env = Env {
+            path: Some(OsString::from(r"C:\Windows\System32")),
+            exe_dir: Some(app.clone()),
+            home: Some(dir.path().join("home")),
+            flatpak_id: None,
+            user_path: None,
+        };
+        let before = status(&env);
+        assert_eq!(before.bundled, Some(app.join(TOOL).display().to_string()));
+        assert_eq!(before.on_path, None);
+        assert_eq!(before.link, None, "the installer puts it on the PATH");
+        assert!(install(&env).is_err());
+        // The installer added the folder to the person's PATH after the app
+        // started: a new terminal finds it.
+        let quoted = format!("C:\\x;\"{}\"", app.display());
+        let env = Env {
+            user_path: Some(OsString::from(quoted)),
+            ..env
+        };
+        assert_eq!(
+            status(&env).on_path,
+            Some(app.join(TOOL).display().to_string())
+        );
+    }
+}
+
 #[cfg(all(test, unix))]
 mod tests {
     use std::ffi::OsString;
@@ -231,6 +360,7 @@ mod tests {
             exe_dir: Some(root.join("app")),
             home: Some(root.join("home")),
             flatpak_id: None,
+            user_path: None,
         }
     }
 

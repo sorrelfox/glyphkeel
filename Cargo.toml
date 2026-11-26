@@ -121,6 +121,10 @@ tauri-plugin-global-shortcut = "=2.4.1"
 # The WebKitGTK bindings Tauri itself uses, to switch off web-view features
 # the app never needs (Linux only).
 webkit2gtk = "=2.0.2"
+# The registry on Windows: starting with the system through the person's
+# `Run` key, and the person's `PATH` for the command-line tool's status
+# (already in the lock through tauri-build).
+winreg = "=0.56.0"
 # The async runtime: the MCP server uses only the single-threaded parts; the
 # development bridge adds its own features in its manifest.
 tokio = { version = "1.54.1", default-features = false, features = ["rt", "time", "macros"] }

@@ -43,6 +43,11 @@ zbus = { workspace = true }
 ashpd = { workspace = true }
 futures-util = { workspace = true }
 
+# Starting with the system and the command-line tool's status, through the
+# registry.
+[target.'cfg(windows)'.dependencies]
+winreg = { workspace = true }
+
 [dev-dependencies]
 schemars = { workspace = true }
 tempfile = { workspace = true }

@@ -21,12 +21,19 @@
 //!   draws badly, and costs smoothness and memory.
 //!
 //! A value the person has set in the environment always wins.
+//!
+//! On Windows the page is drawn by WebView2, which takes its rendering
+//! switches as browser arguments when its environment is made, so nothing
+//! has to be started again: safe rendering adds `--disable-gpu` to them. The
+//! switches have to be the same for every web view that shares a data
+//! folder, so safe rendering is decided once per run and gets a data folder
+//! of its own. The web views are also built here without the WebView2
+//! features the app never uses (see [`web_view`]).
 
 #[cfg(target_os = "linux")]
 use std::path::Path;
 
 /// The argument that asks for safe rendering for one start.
-#[cfg(target_os = "linux")]
 pub(crate) const SAFE_ARG: &str = "--safe-graphics";
 
 /// What safe rendering sets: no compositing on the GPU, no DMA-BUF renderer,
@@ -116,15 +123,169 @@ pub(crate) fn settings(session: Session, safe: bool) -> Vec<(&'static str, &'sta
 }
 
 /// Whether this start asks for safe rendering on its command line.
-#[cfg(target_os = "linux")]
 pub(crate) fn asked_on_command_line() -> bool {
     std::env::args().skip(1).any(|arg| arg == SAFE_ARG)
 }
 
-/// Whether this process runs with safe rendering: the app added its
-/// settings, or the person set them.
+/// Whether this process runs with safe rendering: on Linux the app added
+/// its settings, or the person set them; on Windows it was asked for when
+/// the run began.
 pub(crate) fn safe_in_use() -> bool {
-    std::env::var("WEBKIT_DISABLE_COMPOSITING_MODE").is_ok_and(|value| value == "1")
+    #[cfg(windows)]
+    {
+        safe_this_run()
+    }
+    #[cfg(not(windows))]
+    {
+        std::env::var("WEBKIT_DISABLE_COMPOSITING_MODE").is_ok_and(|value| value == "1")
+    }
+}
+
+/// Whether this run draws safely: asked for on the command line or kept in
+/// the app's settings, decided on first use and kept for the whole run.
+#[cfg(windows)]
+fn safe_this_run() -> bool {
+    static SAFE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *SAFE.get_or_init(|| {
+        asked_on_command_line()
+            || crate::app_settings::file()
+                .is_some_and(|file| crate::app_settings::load(&file).safe_rendering)
+    })
+}
+
+/// The switches WebView2 gets without the app's own: wry passes these only
+/// when the app passes none, so they are repeated here. They keep the
+/// browser's own pop-ups and SmartScreen's look-ups out.
+#[cfg(any(windows, test))]
+const WEBVIEW2_DEFAULT_ARGS: &str =
+    "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection";
+
+/// What safe rendering adds on Windows: no GPU, no GPU compositing.
+#[cfg(any(windows, test))]
+const WEBVIEW2_SAFE_ARGS: &str = "--disable-gpu --disable-gpu-compositing";
+
+/// The data folder of safe rendering's web views, inside Tauri's own:
+/// WebView2 refuses a data folder that is in use with other switches.
+#[cfg(windows)]
+const SAFE_DATA_FOLDER: &str = "safe-rendering";
+
+/// WebView2's browser arguments, with or without safe rendering.
+#[cfg(any(windows, test))]
+pub(crate) fn browser_args(safe: bool) -> String {
+    if safe {
+        format!("{WEBVIEW2_DEFAULT_ARGS} {WEBVIEW2_SAFE_ARGS}")
+    } else {
+        WEBVIEW2_DEFAULT_ARGS.to_owned()
+    }
+}
+
+/// Sets up a web view the way this platform needs. On Windows: the
+/// rendering switches of this run, and WebView2's own features off that the
+/// app never uses and that could keep or send what is typed (form autofill;
+/// saving passwords is off by default and stays off), no developer tools in
+/// release builds and no browser extensions. Its status bar is off already,
+/// the page keeps the browser's context menu and keys away (`native.ts`),
+/// and the page's navigation is held to the app by [`crate::page`]. On
+/// Linux nothing changes here: WebKitGTK reads its switches from the
+/// environment, and its settings are tightened once the view exists
+/// (`webkit`).
+pub(crate) fn web_view<'a>(
+    app: &tauri::AppHandle,
+    builder: tauri::WebviewWindowBuilder<'a, tauri::Wry, tauri::AppHandle>,
+) -> tauri::WebviewWindowBuilder<'a, tauri::Wry, tauri::AppHandle> {
+    #[cfg(windows)]
+    {
+        use tauri::Manager;
+
+        let safe = safe_this_run();
+        let mut builder = builder
+            .additional_browser_args(&browser_args(safe))
+            .general_autofill_enabled(false)
+            .browser_extensions_enabled(false)
+            .devtools(cfg!(debug_assertions));
+        if safe {
+            match app.path().app_local_data_dir() {
+                Ok(dir) => builder = builder.data_directory(dir.join(SAFE_DATA_FOLDER)),
+                Err(err) => {
+                    eprintln!("glyphkeel-app: no data folder of its own for safe rendering: {err}")
+                }
+            }
+        }
+        builder
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = app;
+        builder
+    }
+}
+
+/// The arguments a restart from Preferences starts with: this run's,
+/// without those that only made sense for how this run began (in the
+/// background, for quick add, with safe rendering asked for once). The
+/// restart is for the settings just changed, and the person is looking.
+#[cfg(any(not(target_os = "linux"), test))]
+pub(crate) fn restart_args(
+    args: impl IntoIterator<Item = std::ffi::OsString>,
+) -> Vec<std::ffi::OsString> {
+    args.into_iter()
+        .filter(|arg| {
+            ![crate::autostart::BACKGROUND_ARG, "--quick-add", SAFE_ARG]
+                .iter()
+                .any(|once| arg == *once)
+        })
+        .collect()
+}
+
+/// Starts the app again after this run ends, for a restart from
+/// Preferences; on Linux the process replaces itself instead
+/// (`memory_env::start_again`). Call when the app exits, after the single
+/// instance has been let go, or the new run would hand itself to this one.
+#[cfg(not(target_os = "linux"))]
+#[expect(
+    dead_code,
+    reason = "called when the app exits, once main wires the restart in"
+)]
+pub(crate) fn start_again() -> std::io::Result<()> {
+    let exe = std::env::current_exe()?;
+    std::process::Command::new(exe)
+        .args(restart_args(std::env::args_os().skip(1)))
+        .spawn()
+        .map(drop)
+}
+
+#[cfg(test)]
+mod web_view_tests {
+    use std::ffi::OsString;
+
+    use super::{SAFE_ARG, browser_args, restart_args};
+
+    #[test]
+    fn safe_rendering_adds_its_switches_to_webview2s_own() {
+        let normal = browser_args(false);
+        assert!(normal.contains("msSmartScreenProtection"), "{normal}");
+        assert!(!normal.contains("--disable-gpu"), "{normal}");
+        let safe = browser_args(true);
+        assert!(safe.starts_with(&normal), "{safe}");
+        assert!(safe.contains("--disable-gpu "), "{safe}");
+        assert!(safe.ends_with("--disable-gpu-compositing"), "{safe}");
+    }
+
+    #[test]
+    fn a_restart_leaves_out_what_only_this_start_asked_for() {
+        let args = [
+            "--background",
+            "--quick-add",
+            SAFE_ARG,
+            "glyphkeel://open/TM-1",
+            "--x",
+        ]
+        .map(OsString::from);
+        assert_eq!(
+            restart_args(args),
+            ["glyphkeel://open/TM-1", "--x"].map(OsString::from)
+        );
+    }
 }
 
 #[cfg(all(test, target_os = "linux"))]
