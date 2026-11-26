@@ -18,6 +18,10 @@ use tauri::AppHandle;
 use crate::messages::text;
 
 /// What the dialog says: its title, the question and the confirming button.
+#[cfg_attr(
+    not(any(target_os = "linux", test)),
+    expect(dead_code, reason = "no native dialog shows it on this platform yet")
+)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Wording {
     pub(crate) title: String,
@@ -28,6 +32,10 @@ pub(crate) struct Wording {
 
 /// The dialog's words for `op` with its `input`, from the app's messages:
 /// what exactly is deleted or replaced, named from the input.
+#[cfg_attr(
+    not(any(target_os = "linux", test)),
+    expect(dead_code, reason = "no native dialog shows it on this platform yet")
+)]
 pub(crate) fn wording(op: &str, summary: &str, input: &Value) -> Wording {
     let name = || {
         input

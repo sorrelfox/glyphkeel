@@ -38,8 +38,11 @@ fn workspace(dir: &Path) -> PathBuf {
 /// The program, with its data and settings inside `home`.
 fn glyphkeel(home: &Path) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_glyphkeel"));
-    cmd.env("XDG_DATA_HOME", home.join("data"))
-        .env("XDG_CONFIG_HOME", home.join("config"))
+    cmd.env(gk_store::DATA_DIR_ENV, home.join("data").join("glyphkeel"))
+        .env(
+            gk_store::CONFIG_DIR_ENV,
+            home.join("config").join("glyphkeel"),
+        )
         .env("HOME", home)
         .env("NO_COLOR", "1")
         .env_remove("GLYPHKEEL_WORKSPACE")

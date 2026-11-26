@@ -236,14 +236,27 @@ pub fn copy_blob(source: &Path, target: &Path) -> io::Result<BlobCopy> {
     if fs::hard_link(source, target).is_ok() {
         return Ok(BlobCopy::Linked);
     }
+    copy_synced(source, target)?;
+    Ok(BlobCopy::Copied)
+}
+
+/// Copies `source` to `target` through a temporary name, flushed to disk
+/// before the rename: where a hard link can't be made, such as on another
+/// volume or a file system without links.
+fn copy_synced(source: &Path, target: &Path) -> io::Result<()> {
     let name = target
         .file_name()
         .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
     let temp = target.with_file_name(format!(".{name}.part"));
-    fs::copy(source, &temp)?;
-    fs::File::open(&temp)?.sync_all()?;
-    fs::rename(&temp, target)?;
-    Ok(BlobCopy::Copied)
+    // Written and flushed through the one handle: a handle opened again
+    // only for reading can't flush on Windows, and the copy doesn't take
+    // over a read-only flag from the source.
+    let mut from = fs::File::open(source)?;
+    let mut to = fs::File::create(&temp)?;
+    io::copy(&mut from, &mut to)?;
+    to.sync_all()?;
+    drop(to);
+    fs::rename(&temp, target)
 }
 
 #[cfg(test)]
@@ -316,5 +329,26 @@ mod tests {
         assert_ne!(copy_blob(&source, &target).unwrap(), BlobCopy::Present);
         assert_eq!(copy_blob(&source, &target).unwrap(), BlobCopy::Present);
         assert_eq!(fs::read(&target).unwrap(), b"content");
+    }
+
+    #[test]
+    fn a_blob_that_cant_be_linked_is_copied_and_synced() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("a");
+        fs::write(&source, b"content").unwrap();
+        // A read-only source still gives a copy that can be flushed and
+        // replaced.
+        let mut readonly = fs::metadata(&source).unwrap().permissions();
+        readonly.set_readonly(true);
+        fs::set_permissions(&source, readonly).unwrap();
+        let target = dir.path().join("b").join("a");
+        fs::create_dir_all(target.parent().unwrap()).unwrap();
+        copy_synced(&source, &target).unwrap();
+        assert_eq!(fs::read(&target).unwrap(), b"content");
+        let leftovers: Vec<_> = fs::read_dir(target.parent().unwrap())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert_eq!(leftovers, [std::ffi::OsString::from("a")]);
     }
 }

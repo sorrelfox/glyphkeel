@@ -61,6 +61,20 @@ fn sync_dir(dir: &Path) -> io::Result<()> {
     }
 }
 
+/// Opens a file that is already written in order to flush it to disk.
+///
+/// The handle must be open for writing: Windows flushes only through a
+/// handle that may write and refuses a read-only one with "Access denied".
+/// Nothing is written through it.
+fn open_to_flush(path: &Path) -> io::Result<File> {
+    fs::OpenOptions::new().write(true).open(path)
+}
+
+/// Flushes a written file's contents to disk.
+pub(crate) fn sync_file(path: &Path) -> io::Result<()> {
+    open_to_flush(path)?.sync_all()
+}
+
 /// Stores `bytes` in the workspace's file store and returns its hash and
 /// size. A file that is already there with the right size is kept as is.
 pub fn store_file(layout: &WorkspaceLayout, bytes: &[u8]) -> io::Result<StoredFile> {
@@ -153,7 +167,7 @@ pub fn sync_files(layout: &WorkspaceLayout, sha256s: &[String]) -> io::Result<()
             .map(|part| {
                 scope.spawn(move || -> io::Result<()> {
                     for p in part {
-                        File::open(p)?.sync_all()?;
+                        sync_file(p)?;
                     }
                     Ok(())
                 })
@@ -333,6 +347,36 @@ mod tests {
         remove_file(&layout, &a.sha256).unwrap();
         remove_file(&layout, &a.sha256).unwrap();
         assert!(file_path(&layout, &a.sha256).is_none());
+    }
+
+    #[test]
+    fn files_are_flushed_through_a_handle_that_may_write() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("written");
+        fs::write(&path, b"content").unwrap();
+        // A handle that can't write fails even an empty write. Windows
+        // flushes only through one that can.
+        assert!(File::open(&path).unwrap().write(&[]).is_err());
+        assert_eq!(open_to_flush(&path).unwrap().write(&[]).unwrap(), 0);
+        sync_file(&path).unwrap();
+        assert_eq!(fs::read(&path).unwrap(), b"content");
+    }
+
+    #[test]
+    fn stored_files_are_synced_together() {
+        let dir = tempfile::tempdir().unwrap();
+        let layout = WorkspaceLayout::new(dir.path().join("W"));
+        let mut hashes = Vec::new();
+        for n in 0..20 {
+            let content = format!("file {n}");
+            let stored = store_reader_unsynced(&layout, &mut content.as_bytes(), 1024).unwrap();
+            hashes.push(stored.sha256);
+        }
+        sync_files(&layout, &hashes).unwrap();
+        sync_files(&layout, &[]).unwrap();
+        for hash in &hashes {
+            assert!(file_path(&layout, hash).is_some());
+        }
     }
 
     #[test]

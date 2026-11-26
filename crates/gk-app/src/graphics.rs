@@ -22,25 +22,31 @@
 //!
 //! A value the person has set in the environment always wins.
 
+#[cfg(target_os = "linux")]
 use std::path::Path;
 
 /// The argument that asks for safe rendering for one start.
+#[cfg(target_os = "linux")]
 pub(crate) const SAFE_ARG: &str = "--safe-graphics";
 
 /// What safe rendering sets: no compositing on the GPU, no DMA-BUF renderer,
 /// and painting on the CPU.
+#[cfg(target_os = "linux")]
 const SAFE: [(&str, &str); 3] = [
     ("WEBKIT_DISABLE_COMPOSITING_MODE", "1"),
     ("WEBKIT_DISABLE_DMABUF_RENDERER", "1"),
     ("WEBKIT_SKIA_ENABLE_CPU_RENDERING", "1"),
 ];
 /// NVIDIA's driver on Wayland.
+#[cfg(target_os = "linux")]
 const NVIDIA_WAYLAND: (&str, &str) = ("__NV_DISABLE_EXPLICIT_SYNC", "1");
 /// NVIDIA's driver on X11.
+#[cfg(target_os = "linux")]
 const NVIDIA_X11: (&str, &str) = ("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
 
 /// Every name this module may add, so that programs the app opens for the
 /// person get their environment without them.
+#[cfg(target_os = "linux")]
 pub(crate) const NAMES: [&str; 4] = [
     "WEBKIT_DISABLE_COMPOSITING_MODE",
     "WEBKIT_DISABLE_DMABUF_RENDERER",
@@ -49,6 +55,7 @@ pub(crate) const NAMES: [&str; 4] = [
 ];
 
 /// The machine and session the app starts in.
+#[cfg(target_os = "linux")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Session {
     /// NVIDIA's proprietary driver is loaded.
@@ -57,6 +64,7 @@ pub(crate) struct Session {
     pub(crate) wayland: bool,
 }
 
+#[cfg(target_os = "linux")]
 impl Session {
     /// The session as the environment and `/proc` describe it.
     pub(crate) fn detect() -> Self {
@@ -73,6 +81,7 @@ impl Session {
 
 /// Whether GTK draws through Wayland: a Wayland display, unless GTK is
 /// told to use X11 first.
+#[cfg(target_os = "linux")]
 fn is_wayland(display: Option<&str>, backend: Option<&str>) -> bool {
     display.is_some()
         && !backend.is_some_and(|backend| {
@@ -85,6 +94,7 @@ fn is_wayland(display: Option<&str>, backend: Option<&str>) -> bool {
 
 /// The settings to start with: the driver's workaround, and with `safe`
 /// the whole safe path. A name appears once.
+#[cfg(target_os = "linux")]
 pub(crate) fn settings(session: Session, safe: bool) -> Vec<(&'static str, &'static str)> {
     let mut out: Vec<(&'static str, &'static str)> = Vec::new();
     let mut add = |setting: (&'static str, &'static str)| {
@@ -106,6 +116,7 @@ pub(crate) fn settings(session: Session, safe: bool) -> Vec<(&'static str, &'sta
 }
 
 /// Whether this start asks for safe rendering on its command line.
+#[cfg(target_os = "linux")]
 pub(crate) fn asked_on_command_line() -> bool {
     std::env::args().skip(1).any(|arg| arg == SAFE_ARG)
 }
@@ -116,7 +127,7 @@ pub(crate) fn safe_in_use() -> bool {
     std::env::var("WEBKIT_DISABLE_COMPOSITING_MODE").is_ok_and(|value| value == "1")
 }
 
-#[cfg(test)]
+#[cfg(all(test, target_os = "linux"))]
 mod tests {
     use super::*;
 

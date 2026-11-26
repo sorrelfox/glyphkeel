@@ -233,12 +233,21 @@ fn permanent_operations_wait_for_the_native_answer_inside_the_call() {
     workspace.close();
 }
 
+/// The embedded page's origin: Tauri's own scheme, which WebView2 on
+/// Windows reaches as an `http` host instead. A request from any other
+/// origin finds no command.
+const PAGE_ORIGIN: &str = if cfg!(windows) {
+    "http://tauri.localhost"
+} else {
+    "tauri://localhost"
+};
+
 fn request(cmd: &str, body: Value) -> InvokeRequest {
     InvokeRequest {
         cmd: cmd.into(),
         callback: CallbackFn(0),
         error: CallbackFn(1),
-        url: "tauri://localhost".parse().unwrap(),
+        url: PAGE_ORIGIN.parse().unwrap(),
         body: InvokeBody::Json(body),
         headers: tauri::http::HeaderMap::default(),
         invoke_key: INVOKE_KEY.to_owned(),
