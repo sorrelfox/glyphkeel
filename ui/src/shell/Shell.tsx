@@ -149,9 +149,11 @@ export function Shell({ titleBar, openGallery, firstRun = false }: ShellProps) {
                 ? { to: "/projects/$key/list", params: { key: projectKey } }
                 : next === "calendar"
                   ? { to: "/projects/$key/calendar", params: { key: projectKey } }
-                  : next === "wiki"
-                    ? { to: "/projects/$key/wiki", params: { key: projectKey } }
-                    : { to: "/projects/$key", params: { key: projectKey } },
+                  : next === "gantt"
+                    ? { to: "/projects/$key/gantt", params: { key: projectKey } }
+                    : next === "wiki"
+                      ? { to: "/projects/$key/wiki", params: { key: projectKey } }
+                      : { to: "/projects/$key", params: { key: projectKey } },
             );
           }
         : null,

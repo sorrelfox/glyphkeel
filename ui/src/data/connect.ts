@@ -19,11 +19,13 @@ export function connect(): Transport {
   if (__FAKE__) {
     // Sample data in memory, for work on the screens without the engine;
     // also inside the app, when it loads a page built this way.
-    // `?tasks=20000` adds that many tasks, for long lists; `?wiki` adds sample wiki pages.
+    // `?tasks=20000` adds that many tasks, for long lists; `?links=300` gives them dates and
+    // dependencies, for a large Gantt chart; `?wiki` adds sample wiki pages.
     const search = new URLSearchParams(window.location.search);
     const extraTasks = Number(search.get("tasks") ?? 0) || 0;
+    const extraLinks = Number(search.get("links") ?? 0) || 0;
     const sampleWiki = search.has("wiki");
-    return deferredTransport(import("./fake/transport").then(({ fakeTransport }) => fakeTransport({ extraTasks, sampleWiki })));
+    return deferredTransport(import("./fake/transport").then(({ fakeTransport }) => fakeTransport({ extraTasks, extraLinks, sampleWiki })));
   }
   if (isTauri()) {
     return tauriTransport();

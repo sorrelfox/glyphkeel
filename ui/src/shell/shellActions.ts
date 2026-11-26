@@ -12,8 +12,8 @@ export interface ShellCommands {
   /** Shows the quick-add window; null where there is none (a plain browser). */
   quickAdd: (() => void) | null;
   setView: (view: "today" | "all-tasks" | "time" | "trash" | "activity") => void;
-  /** Shows the open project as a board, a list, a calendar or the wiki; null outside a project. */
-  projectView: ((view: "board" | "list" | "calendar" | "wiki") => void) | null;
+  /** Shows the open project as a board, a list, a calendar, a Gantt chart or the wiki; null outside a project. */
+  projectView: ((view: "board" | "list" | "calendar" | "gantt" | "wiki") => void) | null;
   toggleSidebar: () => void;
   showShortcuts: () => void;
   openPreferences: () => void;
@@ -53,7 +53,7 @@ export function shellActions(commands: ShellCommands): Action[] {
     action("view.board", "action-view-board", "navigation", () => commands.projectView?.("board"), commands.projectView ? {} : UNAVAILABLE),
     action("view.list", "action-view-list", "navigation", () => commands.projectView?.("list"), commands.projectView ? {} : UNAVAILABLE),
     action("view.calendar", "action-view-calendar", "navigation", () => commands.projectView?.("calendar"), commands.projectView ? {} : UNAVAILABLE),
-    action("view.gantt", "action-view-gantt", "navigation", nothing, UNAVAILABLE),
+    action("view.gantt", "action-view-gantt", "navigation", () => commands.projectView?.("gantt"), commands.projectView ? {} : UNAVAILABLE),
     action("view.wiki", "action-view-wiki", "navigation", () => commands.projectView?.("wiki"), commands.projectView ? {} : UNAVAILABLE),
     action("sidebar.toggle", "action-toggle-sidebar", "window", commands.toggleSidebar),
     action("focus.nextRegion", "action-next-region", "window", () => { focusRegion(1); }),

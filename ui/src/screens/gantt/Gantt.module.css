@@ -1,0 +1,518 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+   Copyright (C) 2026 Glyphkeel contributors
+
+   The Gantt chart: a toolbar, then one scroll container with the table
+   stuck to its start edge and the timeline beside it. Tokens only, logical
+   properties only; the timeline's SVG is mirrored for right-to-left. */
+
+.layout {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.screen {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* ---------- toolbar ---------- */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 6px 12px;
+  padding: 6px 12px 8px;
+}
+
+.toolbarItem {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: var(--h-control);
+}
+
+.range {
+  margin: 0;
+  padding-inline: 6px;
+  font-size: var(--fs-title);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.flip:dir(rtl) {
+  transform: scaleX(-1);
+}
+
+.note {
+  margin: 0;
+  padding: 0 12px 8px;
+  color: var(--fg-muted);
+  font-size: var(--fs-small);
+}
+
+.hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------- the chart ---------- */
+
+.chart {
+  --gantt-row: 32px;
+  --gantt-head: 48px;
+
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  border-block-start: 1px solid var(--border);
+}
+
+.scroll {
+  position: relative;
+  flex: 1 1 0;
+  overflow: auto;
+  outline: none;
+  background: var(--surface);
+  overscroll-behavior: contain;
+}
+
+.scroll:focus-visible {
+  box-shadow: inset 0 0 0 var(--focus-w) var(--focus);
+}
+
+.canvas {
+  display: grid;
+  grid-template-columns: var(--gantt-table) auto;
+  grid-template-rows: var(--gantt-head) auto;
+}
+
+.corner,
+.row {
+  display: grid;
+  grid-template-columns:
+    var(--gantt-col-key, 5em) minmax(4em, 1fr) var(--gantt-col-start, 5.5em)
+    var(--gantt-col-due, 5.5em) var(--gantt-col-progress, 3.5em);
+  column-gap: 8px;
+  align-items: center;
+  padding-inline: 12px;
+}
+
+.corner {
+  position: sticky;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  z-index: 4;
+  background: var(--sunken);
+  border-block-end: 1px solid var(--border);
+  border-inline-end: 1px solid var(--border);
+  color: var(--fg-muted);
+  font-size: var(--fs-small);
+  font-weight: 600;
+}
+
+.cell {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.corner .cell {
+  overflow: visible;
+}
+
+.num {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.columnHandle {
+  position: absolute;
+  inset-block: -12px;
+  inset-inline-end: -6px;
+  inline-size: 6px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.tableHandle {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: -4px;
+  inline-size: 8px;
+  cursor: col-resize;
+  touch-action: none;
+  outline: none;
+}
+
+.columnHandle:hover,
+.tableHandle:hover,
+.tableHandle:focus-visible {
+  background: var(--accent);
+}
+
+.head {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 3;
+  background: var(--sunken);
+  border-block-end: 1px solid var(--border);
+}
+
+.headRow {
+  position: relative;
+  block-size: 24px;
+}
+
+.headCell {
+  position: absolute;
+  inset-block: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  border-inline-start: 1px solid var(--border);
+  color: var(--fg-muted);
+  font-size: var(--fs-micro);
+  line-height: 24px;
+  text-align: center;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.headTop {
+  overflow: visible;
+  padding-inline-start: 6px;
+  color: var(--fg);
+  font-weight: 600;
+  text-align: start;
+}
+
+.headTop > span {
+  position: sticky;
+  inset-inline-start: calc(var(--gantt-table) + 6px);
+}
+
+.weekendHead {
+  color: var(--fg-faint);
+}
+
+.todayHead {
+  color: var(--gantt-today);
+  font-weight: 700;
+}
+
+/* ---------- table ---------- */
+
+.table {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 2;
+  background: var(--surface);
+  border-inline-end: 1px solid var(--border);
+}
+
+.row {
+  position: absolute;
+  inset-inline: 0;
+  box-sizing: border-box;
+  block-size: var(--gantt-row);
+  border-block-end: 1px solid var(--border);
+  font-size: var(--fs-small);
+}
+
+.row.focused {
+  background: var(--selected);
+}
+
+.row.open {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.row.open:dir(rtl) {
+  box-shadow: inset -2px 0 0 var(--accent);
+}
+
+.row.linking {
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}
+
+.titleText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.row.closed .titleText {
+  color: var(--fg-muted);
+  text-decoration: line-through;
+}
+
+.row.unscheduled {
+  cursor: grab;
+}
+
+.group {
+  display: flex;
+  background: var(--sunken);
+  color: var(--fg-muted);
+  font-weight: 600;
+}
+
+.key {
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.twisty,
+.twistySpace {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  inline-size: 1.25em;
+  block-size: 1.25em;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg-muted);
+}
+
+.warnSign {
+  display: inline-flex;
+  flex: none;
+  margin-inline-start: 4px;
+  color: var(--warning);
+}
+
+.dateButton {
+  inline-size: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-s);
+  background: none;
+  color: var(--fg-muted);
+  font: inherit;
+  text-align: end;
+  cursor: text;
+}
+
+.dateButton:disabled {
+  cursor: default;
+}
+
+.dateButton:hover:not(:disabled) {
+  background: var(--sunken);
+}
+
+.dateInput {
+  inline-size: 100%;
+  min-width: 0;
+  font: inherit;
+}
+
+/* ---------- timeline ---------- */
+
+.timeline {
+  position: relative;
+}
+
+.svg {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  display: block;
+}
+
+.weekend {
+  fill: var(--gantt-weekend);
+}
+
+.focusRow {
+  fill: var(--selected);
+}
+
+.dropDay {
+  fill: color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.today {
+  stroke: var(--gantt-today);
+  stroke-width: 2;
+}
+
+.link {
+  fill: none;
+  stroke: var(--fg-muted);
+  stroke-width: 1.5;
+}
+
+.link.warn {
+  stroke: var(--warning);
+}
+
+.linkHit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 8;
+  cursor: pointer;
+}
+
+.linkHit:hover + .link,
+.links g:hover .link {
+  stroke: var(--accent);
+}
+
+.arrowhead {
+  fill: var(--fg-muted);
+}
+
+.arrowhead.warn {
+  fill: var(--warning);
+}
+
+.linkDraft {
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+  pointer-events: none;
+}
+
+.diamond {
+  fill: var(--hue-purple);
+  cursor: grab;
+}
+
+.bracket {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.bar .body {
+  fill: var(--gantt-bar);
+  cursor: grab;
+}
+
+.bar .progress {
+  fill: var(--gantt-progress);
+}
+
+.shapeStart .body {
+  fill: color-mix(in srgb, var(--warning) 30%, var(--surface));
+}
+
+.bar.overdue .body {
+  fill: color-mix(in srgb, var(--danger) 30%, var(--surface));
+}
+
+.bar.overdue .progress {
+  fill: var(--danger);
+}
+
+.bar.closedBar {
+  opacity: 0.55;
+}
+
+.edge,
+.hit {
+  fill: transparent;
+  cursor: ew-resize;
+}
+
+.hit {
+  cursor: grab;
+}
+
+.handle {
+  fill: var(--surface);
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  opacity: 0;
+  cursor: crosshair;
+}
+
+.bar:hover .handle,
+.bar.focusedBar .handle {
+  opacity: 1;
+}
+
+.bar.focusedBar .body,
+.bar.focusedBar .diamond {
+  stroke: var(--focus);
+  stroke-width: 2;
+}
+
+.bar.target .body,
+.bar.target .diamond,
+.bar.target .bracket {
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+
+.shapeSummary rect {
+  fill: var(--fg-muted);
+}
+
+.notes {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.notes .note {
+  position: absolute;
+  padding: 0;
+  font-size: var(--fs-micro);
+  line-height: var(--gantt-row);
+  white-space: nowrap;
+}
+
+.danger {
+  color: var(--danger);
+}
+
+.warning {
+  color: var(--warning);
+}
+
+.tip {
+  position: absolute;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  padding: 2px 6px;
+  border-radius: var(--r-s);
+  background: var(--fg);
+  color: var(--bg);
+  font-size: var(--fs-small);
+  white-space: nowrap;
+}
+
+.chart[data-dragging] {
+  cursor: grabbing;
+  user-select: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .handle {
+    transition: none;
+  }
+}

@@ -4,7 +4,7 @@
 import { type Changed } from "../../generated/ops";
 import { type Transport } from "../transport";
 import { FakeError, FakeWorkspace } from "./engine";
-import { addManyTasks } from "./many";
+import { addManyLinks, addManyTasks } from "./many";
 import { seed } from "./seed";
 import { addSampleWiki } from "./wiki";
 
@@ -17,6 +17,8 @@ export interface FakeOptions {
   extraTasks?: number;
   /** Sample wiki pages in Task Manager, for the wiki's screens. */
   sampleWiki?: boolean;
+  /** Dates for those tasks and `blocks` links between them, for a large Gantt chart. */
+  extraLinks?: number;
 }
 
 /**
@@ -30,6 +32,9 @@ export function fakeTransport(options: FakeOptions = {}): Transport & { workspac
   const state = seed(today());
   if (options.extraTasks !== undefined && options.extraTasks > 0) {
     addManyTasks(state, options.extraTasks);
+    if (options.extraLinks !== undefined && options.extraLinks > 0) {
+      addManyLinks(state, options.extraLinks, today());
+    }
   }
   if (options.sampleWiki === true) {
     addSampleWiki(state, today());

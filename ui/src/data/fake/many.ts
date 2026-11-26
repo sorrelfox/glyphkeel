@@ -40,3 +40,31 @@ export function addManyTasks(state: FakeState, count: number): void {
     project.nextNumber += 1;
   }
 }
+
+/**
+ * Gives the added tasks dates around `today` (a few days each) and links
+ * `count` pairs of them with `blocks`, for checking that a large Gantt chart
+ * stays smooth: `?tasks=500&links=300`.
+ */
+export function addManyLinks(state: FakeState, count: number, today: Date): void {
+  const many = state.tasks.filter((task) => task.id.startsWith("t-many-"));
+  if (many.length < 2) {
+    return;
+  }
+  const rand = random(count + many.length);
+  const day = (offset: number) => new Date(today.getTime() + offset * 86_400_000).toISOString().slice(0, 10);
+  many.forEach((task, index) => {
+    const start = Math.floor(index / 4) - 30 + Math.floor(rand() * 10);
+    task.startDate = day(start);
+    task.dueDate = day(start + 1 + Math.floor(rand() * 6));
+  });
+  for (let index = 0; index < Math.min(count, MOST); index += 1) {
+    const from = Math.floor(rand() * (many.length - 1));
+    const to = Math.min(many.length - 1, from + 1 + Math.floor(rand() * 8));
+    const a = many[from];
+    const b = many[to];
+    if (a && b && a !== b) {
+      state.relations.push({ id: `r-many-${String(index)}`, from: a.id, to: b.id, kind: "blocks" });
+    }
+  }
+}
