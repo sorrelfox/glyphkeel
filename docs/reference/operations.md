@@ -89,6 +89,9 @@ The safety class decides who may run an operation:
 | `list.layout.update` | write | app | — | — |
 | `query.parse` | read | app | — | — |
 | `schedule.get` | read | app, command line, MCP | `get_schedule` | `glyphkeel schedule` |
+| `schedule.preview_move` | read | app | — | — |
+| `gantt.layout.get` | read | app | — | — |
+| `gantt.layout.update` | write | app | — | — |
 | `wiki.list` | read | app, command line, MCP | `list_wiki_pages` | `glyphkeel wiki list` |
 | `wiki.search` | read | app, command line, MCP | `search_wiki_pages` | `glyphkeel wiki search <text>` |
 | `wiki.get` | read | app, command line, MCP | `get_wiki_page` | `glyphkeel wiki get <page>` |
@@ -585,6 +588,30 @@ Not available to agents: It serves the app's query field as the person types; ag
 The schedule of a project or a query for the Gantt chart: dated tasks as a tree with summary ranges for parents, milestones, the tasks without dates, blocks links as finish-to-start dependencies, and problems such as a task starting before its blocker ends.
 
 Input: `ScheduleInput`. Output: `Schedule`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `schedule.preview_move`
+
+The tasks that "also move dependents" would move, and their new dates, if a task got the given dates; nothing is changed.
+
+Input: `SchedulePreviewInput`. Output: `SchedulePreview`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+Not available to agents: It previews a drag in the Gantt chart while the pointer moves; agents and scripts change dates with update_task and move_dependents, whose answer lists the tasks that moved.
+
+## `gantt.layout.get`
+
+The person's layout of a project's Gantt chart: zoom level, table and column widths, grouping, and whether moving a task also moves its dependents.
+
+Input: `GanttLayoutGetInput`. Output: `GanttLayoutChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+Not available to agents: It holds how the person's own Gantt chart looks, not the workspace's data; agents and scripts read the schedule itself.
+
+## `gantt.layout.update`
+
+Change the zoom level, table or column widths, grouping or the "also move dependents" switch of a project's Gantt chart, or go back to the default layout.
+
+Input: `GanttLayoutUpdateInput`. Output: `GanttLayoutChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+Not available to agents: It changes how the person's own Gantt chart looks, not the workspace's data; agents and scripts read the schedule itself.
 
 ## `wiki.list`
 

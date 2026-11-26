@@ -28,12 +28,15 @@ import {
 import { useLocale } from "react-aria-components";
 
 import { classes } from "../../classes";
-import { type Schedule, type ScheduleDependency, type ScheduleProblem, type ScheduledTask, type UnscheduledTask } from "../../generated/ops";
+import { useMovePreview } from "../../data/schedule";
+import { type GanttGrouping, type ReadOnlyReason, type Schedule, type ScheduleDependency, type SchedulePreviewInput, type ScheduleProblem, type ScheduledTask, type UnscheduledTask } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { addDays, asDate, daysBetween, firstDayOfWeek, weekday, type Day } from "../calendar/model";
 import { COLUMN_MAX, COLUMN_MIN, SIZED, TABLE_MAX, TABLE_MIN, type Column } from "./layout";
 import {
+  PLAIN_ORDER,
   ROW,
+  behindSchedule,
   buildRows,
   columnWindow,
   datesOf,
@@ -50,6 +53,7 @@ import {
   type Dates,
   type DragMode,
   type Geometry,
+  type GroupOrder,
   type Row,
 } from "./model";
 import { PX_PER_DAY, UNITS, centreOf, dayAt, dayX, headerCells, scrollFor, visibleDays, weekendDays, weekendsBetween, zoomStep, type HeaderCell, type Zoom } from "./scale";
@@ -65,13 +69,18 @@ const PAGE_ROWS = 15;
 export const DEFAULT_TABLE = 440;
 
 /** A task whose dates the chart can change. */
-export type Movable = Pick<ScheduledTask, "key" | "version" | "start_date" | "due_date"> & { dependents?: number };
+export type Movable = Pick<ScheduledTask, "key" | "version" | "start_date" | "due_date" | "read_only"> & { dependents?: number };
+
+/** How far two fingers must spread or pinch, as a share of where they began, to zoom one step. */
+const PINCH_STEP = 1.35;
 
 export interface GanttHandle {
   /** Scrolls so that today is in view. */
   goToday: () => void;
   /** Scrolls a screen's width earlier (-1) or later (1). */
   page: (by: -1 | 1) => void;
+  /** The rows as the chart shows them now, with its grouping and folds: for printing and pictures. */
+  rows: () => readonly Row[];
 }
 
 export interface GanttProps {
@@ -82,6 +91,11 @@ export interface GanttProps {
   table: number;
   widths: Partial<Record<Column, number>>;
   moveDependents: boolean;
+  groupBy: GanttGrouping;
+  /** How groups by status and label are ordered. */
+  groupOrder?: GroupOrder;
+  /** Nothing can be changed: on touch screens, where dates are edited in the task. */
+  readOnly?: boolean;
   openTask: string | undefined;
   /** Changes a task's dates; true once the change is made. */
   onDates: (task: Movable, next: Dates) => Promise<boolean>;
@@ -92,6 +106,8 @@ export interface GanttProps {
   onTable: (width: number) => void;
   onWidth: (column: Column, width: number) => void;
   onRange: (range: { from: Day; to: Day }) => void;
+  /** A change of a task that can't be changed was asked for. */
+  onRefused: (key: string, reason: ReadOnlyReason) => void;
   ref?: Ref<GanttHandle>;
 }
 
@@ -119,7 +135,7 @@ interface Editing {
 }
 
 /** Day formats, in the person's language; days are dates without a time, read in UTC. */
-function useFormats(locale: string, today: Day) {
+export function useFormats(locale: string, today: Day) {
   return useMemo(() => {
     const format = (options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat(locale, { ...options, timeZone: "UTC" });
     const short = format({ day: "numeric", month: "short" });
@@ -138,7 +154,23 @@ function useFormats(locale: string, today: Day) {
   }, [locale, today]);
 }
 
-type Formats = ReturnType<typeof useFormats>;
+export type Formats = ReturnType<typeof useFormats>;
+
+/** A header cell's label: a day's number, a week's first day, a month, a quarter or a year. */
+export function headerText(cell: HeaderCell, top: boolean, fmt: Formats, t: ReturnType<typeof useT>): string {
+  switch (cell.unit) {
+    case "day":
+      return fmt.day.format(asDate(cell.first));
+    case "week":
+      return fmt.week.format(asDate(cell.first));
+    case "month":
+      return top ? fmt.monthYear.format(asDate(cell.first)) : fmt.month.format(asDate(cell.first));
+    case "quarter":
+      return t("gantt-quarter", { quarter: Math.floor((Number(cell.first.slice(5, 7)) - 1) / 3) + 1 });
+    case "year":
+      return fmt.year.format(asDate(cell.first));
+  }
+}
 
 /** Puts the focus on the chart that holds `element`, where its keys work. */
 function focusChart(element: Element) {
@@ -159,6 +191,9 @@ export const Gantt = memo(function Gantt({
   table,
   widths: savedWidths,
   moveDependents,
+  groupBy,
+  groupOrder = PLAIN_ORDER,
+  readOnly = false,
   openTask,
   onDates,
   onLink,
@@ -168,6 +203,7 @@ export const Gantt = memo(function Gantt({
   onTable,
   onWidth,
   onRange,
+  onRefused,
   ref,
 }: GanttProps) {
   const t = useT();
@@ -196,7 +232,7 @@ export const Gantt = memo(function Gantt({
   // ---------- rows ----------
 
   const [folded, setFolded] = useState<ReadonlySet<string>>(() => new Set());
-  const { rows, index } = useMemo(() => buildRows(schedule.tasks, schedule.unscheduled, folded), [schedule.tasks, schedule.unscheduled, folded]);
+  const { rows, index } = useMemo(() => buildRows(schedule.tasks, schedule.unscheduled, folded, groupBy, groupOrder), [schedule.tasks, schedule.unscheduled, folded, groupBy, groupOrder]);
   const problems = useMemo(() => problemsByTask(schedule.problems), [schedule.problems]);
   const byKey = useMemo(() => new Map(schedule.tasks.map((task) => [task.key, task])), [schedule.tasks]);
   const toggle = useCallback((key: string) => {
@@ -283,6 +319,7 @@ export const Gantt = memo(function Gantt({
         setScrollX(Math.max(0, scrollX(el) + by * timelineWidth(el) * 0.8));
       }
     },
+    rows: () => rows,
   }));
 
   // ---------- focus and announcements ----------
@@ -349,6 +386,27 @@ export const Gantt = memo(function Gantt({
     }
   };
 
+  /**
+   * Whether the task's dates can't be changed; if so, says why. On touch
+   * screens nothing changes and nothing is said: they only read.
+   */
+  const refused = (task: Pick<ScheduledTask, "key" | "read_only">): boolean => {
+    if (readOnly) {
+      return true;
+    }
+    if (task.read_only !== undefined) {
+      onRefused(task.key, task.read_only);
+      setLive(t("gantt-read-only", { key: task.key, reason: task.read_only }));
+      return true;
+    }
+    return false;
+  };
+  /** The latest `refused`, for the handlers that stay the same between renders. */
+  const refusedRef = useRef(refused);
+  useLayoutEffect(() => {
+    refusedRef.current = refused;
+  });
+
   /** Asks for new dates; `then` runs once they are made. */
   const change = (task: Movable, next: Dates, then: () => void) => {
     const before: Dates = { start: task.start_date, due: task.due_date };
@@ -393,6 +451,62 @@ export const Gantt = memo(function Gantt({
     }
   };
 
+  // Two fingers spread or pinched zoom in or out a step at a time; one finger scrolls.
+  const pinchZoom = useEffectEvent((by: -1 | 1) => {
+    zoomBy(by);
+  });
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) {
+      return;
+    }
+    let base: number | null = null;
+    const spread = (touches: TouchList) => {
+      const [a, b] = [touches[0], touches[1]];
+      return a && b ? Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) : null;
+    };
+    const start = (event: TouchEvent) => {
+      base = event.touches.length === 2 ? spread(event.touches) : null;
+    };
+    const move = (event: TouchEvent) => {
+      if (event.touches.length !== 2) {
+        return;
+      }
+      event.preventDefault();
+      const now = spread(event.touches);
+      // The second finger may have come down outside the chart.
+      if (base === null || base === 0) {
+        base = now;
+        return;
+      }
+      if (now === null) {
+        return;
+      }
+      if (now / base >= PINCH_STEP) {
+        pinchZoom(-1);
+        base = now;
+      } else if (base / now >= PINCH_STEP) {
+        pinchZoom(1);
+        base = now;
+      }
+    };
+    const end = (event: TouchEvent) => {
+      if (event.touches.length < 2) {
+        base = null;
+      }
+    };
+    el.addEventListener("touchstart", start, { passive: true });
+    el.addEventListener("touchmove", move, { passive: false });
+    el.addEventListener("touchend", end, { passive: true });
+    el.addEventListener("touchcancel", end, { passive: true });
+    return () => {
+      el.removeEventListener("touchstart", start);
+      el.removeEventListener("touchmove", move);
+      el.removeEventListener("touchend", end);
+      el.removeEventListener("touchcancel", end);
+    };
+  }, []);
+
   // ---------- keyboard: a treegrid whose focus stays on the scroll container ----------
 
   const onKey = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -420,6 +534,10 @@ export const Gantt = memo(function Gantt({
     } else if (event.key === "End" && ctrl) {
       focusRow(rows.length - 1, -1);
     } else if (horizontal && event.altKey && !ctrl && task && task.shape !== "summary") {
+      if (refused(task)) {
+        event.preventDefault();
+        return;
+      }
       const next = draggedDates(datesOf(task), event.shiftKey ? "end" : "move", forward);
       change(task, next, () => {
         announceDates(task.key, next);
@@ -429,8 +547,12 @@ export const Gantt = memo(function Gantt({
         toggle(row.task.key);
       }
     } else if (event.key === "F2" && plain && movable) {
+      if (refused(movable)) {
+        event.preventDefault();
+        return;
+      }
       setEditing({ key: movable.key, field: event.shiftKey ? "due" : "start" });
-    } else if ((event.key === "l" || event.key === "L") && plain && !event.shiftKey && task) {
+    } else if ((event.key === "l" || event.key === "L") && plain && !event.shiftKey && task && !readOnly) {
       setLinkFrom(task.key);
       setLive(t("gantt-link-start", { key: task.key }));
     } else if (event.key === "Enter" && plain && linkFrom !== null && task) {
@@ -466,14 +588,20 @@ export const Gantt = memo(function Gantt({
   /** The drag now: the pointer's latest, unless a new drag began since. */
   const currentDrag = () => (dragRef.current !== null && dragRef.current.id === drag?.id ? dragRef.current : drag);
 
-  const onBarDown = useCallback((event: ReactPointerEvent, key: string, mode: Drag["mode"]) => {
-    if (event.button !== 0) {
+  /** Whether the last press was a finger's: touch screens scroll and zoom the chart, and a tap opens the task. */
+  const touched = useRef(false);
+  const onBarDown = useCallback((event: ReactPointerEvent, key: string, mode: Drag["mode"], task: ScheduledTask) => {
+    touched.current = event.pointerType === "touch";
+    if (event.button !== 0 || touched.current) {
       return;
     }
     event.stopPropagation();
     event.preventDefault();
     setFocusKey(key);
     focusChart(event.currentTarget);
+    if (mode !== "link" && refusedRef.current(task)) {
+      return;
+    }
     setDrag({ id: event.timeStamp, key, mode, clientX: event.clientX, clientY: event.clientY, moving: false, days: 0, x: 0, y: 0 });
   }, []);
 
@@ -598,13 +726,18 @@ export const Gantt = memo(function Gantt({
     };
   }, [dragging]);
 
-  const onUnscheduledDown = useCallback((event: ReactPointerEvent, key: string) => {
-    if (event.button !== 0 || (event.target instanceof Element && event.target.closest("button, input") !== null)) {
+  const onUnscheduledDown = useCallback((event: ReactPointerEvent, task: UnscheduledTask) => {
+    const key = task.key;
+    touched.current = event.pointerType === "touch";
+    if (event.button !== 0 || touched.current || (event.target instanceof Element && event.target.closest("button, input") !== null)) {
       return;
     }
     event.preventDefault();
     setFocusKey(key);
     focusChart(event.currentTarget);
+    if (refusedRef.current(task)) {
+      return;
+    }
     setDrag({ id: event.timeStamp, key, mode: "schedule", clientX: event.clientX, clientY: event.clientY, moving: false, days: 0, x: 0, y: 0 });
   }, []);
 
@@ -612,9 +745,20 @@ export const Gantt = memo(function Gantt({
     setFocusKey(key);
     focusChart(from);
   }, []);
-  const onEdit = useCallback((key: string, field: Editing["field"]) => {
-    setFocusKey(key);
-    setEditing({ key, field });
+  /** A tap on a bar opens its task: touch screens don't drag. */
+  const onTap = useCallback(
+    (key: string) => {
+      if (touched.current) {
+        onOpen(key);
+      }
+    },
+    [onOpen],
+  );
+  const onEdit = useCallback((task: Movable, field: Editing["field"]) => {
+    setFocusKey(task.key);
+    if (!refusedRef.current(task)) {
+      setEditing({ key: task.key, field });
+    }
   }, []);
   const onEditDone = (task: Movable, field: Editing["field"], value: string | null | undefined, then: "stay" | "next") => {
     if (value !== undefined) {
@@ -706,25 +850,30 @@ export const Gantt = memo(function Gantt({
   const shown = rows.slice(r0, r1);
   const dependencies = useMemo(() => visibleDependencies(schedule.dependencies, index, r0, r1), [schedule.dependencies, index, r0, r1]);
 
-  const cellLabel = (cell: HeaderCell, top: boolean) => {
-    switch (cell.unit) {
-      case "day":
-        return fmt.day.format(asDate(cell.first));
-      case "week":
-        return fmt.week.format(asDate(cell.first));
-      case "month":
-        return top ? fmt.monthYear.format(asDate(cell.first)) : fmt.month.format(asDate(cell.first));
-      case "quarter":
-        return t("gantt-quarter", { quarter: Math.floor((Number(cell.first.slice(5, 7)) - 1) / 3) + 1 });
-      case "year":
-        return fmt.year.format(asDate(cell.first));
-    }
-  };
+  const cellLabel = (cell: HeaderCell, top: boolean) => headerText(cell, top, fmt, t);
 
   /** A task's dates while it is dragged. */
   const draggedOf = (task: ScheduledTask): Dates | undefined =>
     drag?.moving === true && drag.key === task.key && drag.mode !== "link" && drag.mode !== "schedule" ? draggedDates(datesOf(task), drag.mode, drag.days) : undefined;
   const geoOf = (task: ScheduledTask) => geometry(task, origin, ppd, draggedOf(task));
+
+  // With "also move dependents" on, the engine works out which tasks the drop would move.
+  const previewInput = ((): SchedulePreviewInput | null => {
+    if (!moveDependents || !drag?.moving || drag.mode === "link" || drag.mode === "schedule") {
+      return null;
+    }
+    const task = byKey.get(drag.key);
+    if (!task || task.dependents === 0) {
+      return null;
+    }
+    const next = draggedDates(datesOf(task), drag.mode, drag.days);
+    if (!endsLater(datesOf(task), next)) {
+      return null;
+    }
+    return { key: task.key, ...(next.start === undefined ? {} : { start_date: next.start }), ...(next.due === undefined ? {} : { due_date: next.due }) };
+  })();
+  const preview = useMovePreview(previewInput);
+  const ghosts = preview.moved !== undefined && !preview.stale ? preview.moved : [];
 
   const tooltip = (() => {
     if (!drag?.moving || drag.mode === "link") {
@@ -745,8 +894,8 @@ export const Gantt = memo(function Gantt({
       return null;
     }
     const text = [first === last ? t("gantt-drag-day", { date: fmt.cell(first) }) : t("gantt-drag-dates", { from: fmt.cell(first), to: fmt.cell(last) })];
-    if (moveDependents && task.dependents > 0 && endsLater(datesOf(task), next)) {
-      text.push(t("gantt-drag-dependents", { count: task.dependents }));
+    if (previewInput !== null) {
+      text.push(preview.moved !== undefined && !preview.stale ? t("gantt-drag-will-move", { count: preview.moved.length }) : t("gantt-drag-dependents", { count: task.dependents }));
     }
     return { x: drag.x, y: at * ROW - 4 - 20 * text.length, text };
   })();
@@ -868,8 +1017,8 @@ export const Gantt = memo(function Gantt({
               const at = r0 + k;
               if (row.kind === "group") {
                 return (
-                  <div key="group" className={classes(styles.row, styles.group)} role="row" aria-rowindex={at + 2} style={{ insetBlockStart: at * ROW }}>
-                    <span role="gridcell">{t("gantt-unscheduled", { count: row.count })}</span>
+                  <div key={row.id} className={classes(styles.row, styles.group)} role="row" aria-rowindex={at + 2} style={{ insetBlockStart: at * ROW }} data-group={row.id}>
+                    <span role="gridcell">{groupText(t, row)}</span>
                   </div>
                 );
               }
@@ -892,6 +1041,8 @@ export const Gantt = memo(function Gantt({
                   onEditDone={onEditDone}
                   onUnscheduledDown={onUnscheduledDown}
                   onOpen={onOpen}
+                  today={today}
+                  readOnly={readOnly}
                 />
               );
             })}
@@ -914,6 +1065,7 @@ export const Gantt = memo(function Gantt({
               {drag?.mode === "schedule" && drag.day !== undefined && (
                 <rect className={styles.dropDay} x={dayX(origin, drag.day, ppd)} width={Math.max(2, ppd)} y={0} height={height} />
               )}
+              {shown.map((row, k) => (row.kind === "group" ? <rect key={row.id} className={styles.groupBand} x={x0} width={Math.max(0, Math.min(x1, width) - x0)} y={(r0 + k) * ROW} height={ROW} /> : null))}
               <line className={styles.today} x1={todayX + ppd / 2} x2={todayX + ppd / 2} y1={0} y2={height} />
               <g className={styles.links}>
                 {dependencies.map((dependency) => {
@@ -944,6 +1096,15 @@ export const Gantt = memo(function Gantt({
                   );
                 })}
               </g>
+              {ghosts.map((moved) => {
+                const task = byKey.get(moved.key);
+                const at = index.get(moved.key);
+                const geo = task && geometry(task, origin, ppd, { start: moved.start_date, due: moved.due_date });
+                if (!geo || at === undefined || at < r0 || at >= r1) {
+                  return null;
+                }
+                return <rect key={moved.key} className={styles.ghost} x={geo.x1} y={at * ROW + ROW / 2 - 9} width={Math.max(2, geo.x2 - geo.x1)} height={18} rx={4} data-ghost={moved.key} />;
+              })}
               {shown.map((row, k) =>
                 row.kind === "task" ? (
                   <Bar
@@ -953,8 +1114,11 @@ export const Gantt = memo(function Gantt({
                     y={(r0 + k) * ROW}
                     focused={focusKey === row.task.key}
                     target={drag?.target === row.task.key}
+                    behind={behindSchedule(row.task, today) !== undefined}
+                    readOnly={readOnly}
                     onDown={onBarDown}
                     onOpen={onOpen}
+                    onTap={onTap}
                   />
                 ) : null,
               )}
@@ -966,12 +1130,12 @@ export const Gantt = memo(function Gantt({
                   return null;
                 }
                 const geo = geoOf(row.task);
-                const note = noteOf(row.task, today, t);
+                const note = noteOf(row.task, today, t, fmt.percent);
                 if (!note || !geo) {
                   return null;
                 }
                 return (
-                  <span key={row.task.key} className={classes(styles.note, note.danger ? styles.danger : styles.warning)} style={{ insetInlineStart: geo.x2 + 6, insetBlockStart: (r0 + k) * ROW }}>
+                  <span key={row.task.key} className={classes(styles.note, note.tone === "danger" ? styles.danger : styles.warning)} style={{ insetInlineStart: geo.x2 + 6, insetBlockStart: (r0 + k) * ROW }}>
                     {note.text}
                   </span>
                 );
@@ -994,14 +1158,31 @@ export const Gantt = memo(function Gantt({
   );
 });
 
-function noteOf(task: ScheduledTask, today: Day, t: ReturnType<typeof useT>): { text: string; danger: boolean } | null {
+/** The note after a task's bar: overdue, behind schedule, or without a deadline. */
+export function noteOf(task: ScheduledTask, today: Day, t: ReturnType<typeof useT>, percent: Intl.NumberFormat): { text: string; tone: "danger" | "warning" } | null {
   if (task.overdue && task.shape !== "summary" && task.due_date !== undefined) {
-    return { text: t("gantt-overdue-by", { days: daysBetween(task.due_date, today) }), danger: true };
+    return { text: t("gantt-overdue-by", { days: daysBetween(task.due_date, today) }), tone: "danger" };
+  }
+  const behind = behindSchedule(task, today);
+  if (behind) {
+    return { text: t("gantt-behind", { done: percent.format(behind.done), expected: percent.format(behind.expected) }), tone: "warning" };
   }
   if (task.shape === "no_deadline" && !task.closed) {
-    return { text: t("gantt-no-deadline"), danger: false };
+    return { text: t("gantt-no-deadline"), tone: "warning" };
   }
   return null;
+}
+
+/** A group row's text: the tasks without dates, or a label's or status's tasks. */
+export function groupText(t: ReturnType<typeof useT>, row: Extract<Row, { kind: "group" }>): string {
+  switch (row.head.by) {
+    case "unscheduled":
+      return t("gantt-unscheduled", { count: row.count });
+    case "label":
+      return row.head.name === undefined ? t("gantt-group-no-label", { count: row.count }) : t("gantt-group-label", { name: row.head.name, count: row.count });
+    case "status":
+      return t("gantt-group-status", { name: row.head.name, count: row.count });
+  }
 }
 
 function ResizeHandle({
@@ -1051,13 +1232,15 @@ interface TableRowProps {
   problemText: (problem: ScheduleProblem) => string;
   onClick: (key: string, from: Element) => void;
   onToggle: (key: string) => void;
-  onEdit: (key: string, field: Editing["field"]) => void;
+  onEdit: (task: Movable, field: Editing["field"]) => void;
   onEditDone: (task: Movable, field: Editing["field"], value: string | null | undefined, then: "stay" | "next") => void;
-  onUnscheduledDown: (event: ReactPointerEvent, key: string) => void;
+  onUnscheduledDown: (event: ReactPointerEvent, task: UnscheduledTask) => void;
   onOpen: (key: string) => void;
+  today: Day;
+  readOnly: boolean;
 }
 
-const TableRow = memo(function TableRow({ id, row, at, focused, open, linking, editing, problems, fmt, problemText, onClick, onToggle, onEdit, onEditDone, onUnscheduledDown, onOpen }: TableRowProps) {
+const TableRow = memo(function TableRow({ id, row, at, focused, open, linking, editing, problems, fmt, problemText, onClick, onToggle, onEdit, onEditDone, onUnscheduledDown, onOpen, today, readOnly }: TableRowProps) {
   const t = useT();
   const task: ScheduledTask | UnscheduledTask = row.task;
   const scheduled = row.kind === "task" ? row.task : undefined;
@@ -1083,8 +1266,14 @@ const TableRow = memo(function TableRow({ id, row, at, focused, open, linking, e
       label = t("gantt-row-start", { key: task.key, title: task.title, start: fmt.full.format(asDate(first ?? "")) });
     }
   }
+  if (scheduled && behindSchedule(scheduled, today)) {
+    label = t("gantt-row-behind", { row: label });
+  }
   if (task.closed) {
     label = t("gantt-row-closed", { row: label });
+  }
+  if (task.read_only !== undefined) {
+    label = t("gantt-row-read-only", { row: label, reason: task.read_only });
   }
 
   const dateCell = (field: Editing["field"]) => {
@@ -1130,7 +1319,7 @@ const TableRow = memo(function TableRow({ id, row, at, focused, open, linking, e
         />
       );
     }
-    const editable = !(scheduled?.shape === "summary");
+    const editable = !(scheduled?.shape === "summary") && !readOnly;
     const text = shownValue === undefined ? "" : fmt.cell(shownValue);
     return (
       <button
@@ -1141,7 +1330,7 @@ const TableRow = memo(function TableRow({ id, row, at, focused, open, linking, e
         aria-label={t(field === "start" ? "gantt-edit-start-value" : "gantt-edit-due-value", { key: task.key, value: value === undefined ? t("gantt-none") : fmt.full.format(asDate(value)) })}
         onClick={(event) => {
           event.stopPropagation();
-          onEdit(task.key, field);
+          onEdit(task, field);
         }}
       >
         {text}
@@ -1152,7 +1341,7 @@ const TableRow = memo(function TableRow({ id, row, at, focused, open, linking, e
   return (
     <div
       id={id}
-      className={classes(styles.row, focused && styles.focused, open && styles.open, linking && styles.linking, task.closed && styles.closed, !scheduled && styles.unscheduled)}
+      className={classes(styles.row, focused && styles.focused, open && styles.open, linking && styles.linking, task.closed && styles.closed, !scheduled && !readOnly && task.read_only === undefined && styles.unscheduled)}
       role="row"
       aria-rowindex={at + 2}
       aria-level={row.kind === "task" ? row.level : 1}
@@ -1160,7 +1349,7 @@ const TableRow = memo(function TableRow({ id, row, at, focused, open, linking, e
       aria-selected={focused}
       aria-label={label}
       data-row={task.key}
-      title={scheduled ? undefined : t("gantt-drag-unscheduled", { key: task.key })}
+      title={task.read_only !== undefined ? t("gantt-read-only", { key: task.key, reason: task.read_only }) : scheduled || readOnly ? undefined : t("gantt-drag-unscheduled", { key: task.key })}
       style={{ insetBlockStart: at * ROW }}
       onClick={(event) => {
         onClick(task.key, event.currentTarget);
@@ -1169,10 +1358,10 @@ const TableRow = memo(function TableRow({ id, row, at, focused, open, linking, e
         onOpen(task.key);
       }}
       onPointerDown={
-        scheduled
+        row.kind === "task"
           ? undefined
           : (event) => {
-              onUnscheduledDown(event, task.key);
+              onUnscheduledDown(event, row.task);
             }
       }
     >
@@ -1237,28 +1426,35 @@ interface BarProps {
   y: number;
   focused: boolean;
   target: boolean;
-  onDown: (event: ReactPointerEvent, key: string, mode: Drag["mode"]) => void;
+  behind: boolean;
+  readOnly: boolean;
+  onDown: (event: ReactPointerEvent, key: string, mode: Drag["mode"], task: ScheduledTask) => void;
   onOpen: (key: string) => void;
+  onTap: (key: string) => void;
 }
 
 const Bar = memo(
-  function Bar({ task, geo, y, focused, target, onDown, onOpen }: BarProps) {
+  function Bar({ task, geo, y, focused, target, behind, readOnly, onDown, onOpen, onTap }: BarProps) {
     if (!geo) {
       return null;
     }
     const w = geo.x2 - geo.x1;
     const cy = y + ROW / 2;
     const down = (mode: Drag["mode"]) => (event: ReactPointerEvent) => {
-      onDown(event, task.key, mode);
+      onDown(event, task.key, mode, task);
     };
     const open = () => {
       onOpen(task.key);
     };
-    const cls = classes(styles.bar, SHAPE_CLASS[geo.shape], focused && styles.focusedBar, target && styles.target, task.closed && styles.closedBar, task.overdue && styles.overdue);
-    const handle = <circle className={styles.handle} cx={geo.x2 + 7} cy={cy} r={4} onPointerDown={down("link")} data-handle="link" />;
+    const tap = () => {
+      onTap(task.key);
+    };
+    const fixed = readOnly || task.read_only !== undefined;
+    const cls = classes(styles.bar, SHAPE_CLASS[geo.shape], focused && styles.focusedBar, target && styles.target, task.closed && styles.closedBar, task.overdue && styles.overdue, behind && styles.behind, fixed && styles.fixed);
+    const handle = readOnly ? null : <circle className={styles.handle} cx={geo.x2 + 7} cy={cy} r={4} onPointerDown={down("link")} data-handle="link" />;
     if (geo.shape === "summary") {
       return (
-        <g className={cls} data-bar={task.key} data-shape={geo.shape}>
+        <g className={cls} data-bar={task.key} data-shape={geo.shape} onClick={tap}>
           <rect x={geo.x1} y={cy - 4} width={w} height={8} rx={2} />
         </g>
       );
@@ -1266,7 +1462,7 @@ const Bar = memo(
     if (geo.shape === "milestone") {
       const cx = (geo.x1 + geo.x2) / 2;
       return (
-        <g className={cls} data-bar={task.key} data-shape={geo.shape} onDoubleClick={open}>
+        <g className={cls} data-bar={task.key} data-shape={geo.shape} data-read-only={fixed ? "" : undefined} onDoubleClick={open} onClick={tap}>
           <rect className={styles.diamond} x={cx - 5} y={cy - 5} width={10} height={10} rx={2} transform={`rotate(45 ${String(cx)} ${String(cy)})`} onPointerDown={down("move")} />
           {handle}
         </g>
@@ -1275,7 +1471,7 @@ const Bar = memo(
     if (geo.shape === "deadline") {
       const x = geo.x2;
       return (
-        <g className={cls} data-bar={task.key} data-shape={geo.shape} onDoubleClick={open}>
+        <g className={cls} data-bar={task.key} data-shape={geo.shape} data-read-only={fixed ? "" : undefined} onDoubleClick={open} onClick={tap}>
           <path className={styles.bracket} d={`M${String(x - 9)},${String(cy - 9)} h5 a4,4 0 0 1 4,4 v10 a4,4 0 0 1 -4,4 h-5`} />
           <rect className={styles.hit} x={x - 9} y={cy - 9} width={9} height={18} onPointerDown={down("move")} data-handle="move" />
           <rect className={styles.edge} x={x - 15} y={cy - 9} width={6} height={18} onPointerDown={down("start")} data-handle="start" />
@@ -1286,7 +1482,7 @@ const Bar = memo(
     const edge = Math.min(6, w / 4);
     const done = Math.max(0, Math.min(100, task.progress_percent));
     return (
-      <g className={cls} data-bar={task.key} data-shape={geo.shape} data-dependents={task.dependents} onDoubleClick={open}>
+      <g className={cls} data-bar={task.key} data-shape={geo.shape} data-dependents={task.dependents} data-read-only={fixed ? "" : undefined} onDoubleClick={open} onClick={tap}>
         <rect className={styles.body} x={geo.x1} y={cy - 9} width={w} height={18} rx={4} onPointerDown={down("move")} data-handle="move" />
         {done > 0 && geo.shape === "bar" && <rect className={styles.progress} x={geo.x1} y={cy - 9} width={(w * done) / 100} height={18} rx={4} pointerEvents="none" />}
         <rect className={styles.edge} x={geo.x1} y={cy - 9} width={edge} height={18} onPointerDown={down("start")} data-handle="start" />
@@ -1303,8 +1499,11 @@ const Bar = memo(
     a.geo?.shape === b.geo?.shape &&
     a.focused === b.focused &&
     a.target === b.target &&
+    a.behind === b.behind &&
+    a.readOnly === b.readOnly &&
     a.onDown === b.onDown &&
-    a.onOpen === b.onOpen,
+    a.onOpen === b.onOpen &&
+    a.onTap === b.onTap,
 );
 
 function Weekends({ origin, ppd, x0, x1, height, weekend }: { origin: Day; ppd: number; x0: number; x1: number; height: number; weekend: ReadonlySet<number> }) {

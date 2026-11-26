@@ -37412,6 +37412,90 @@
             ],
             "type": "object"
           },
+          "Hue": {
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
+            "oneOf": [
+              {
+                "const": "red",
+                "description": "Red.",
+                "type": "string"
+              },
+              {
+                "const": "orange",
+                "description": "Orange.",
+                "type": "string"
+              },
+              {
+                "const": "yellow",
+                "description": "Yellow.",
+                "type": "string"
+              },
+              {
+                "const": "green",
+                "description": "Green.",
+                "type": "string"
+              },
+              {
+                "const": "teal",
+                "description": "Teal.",
+                "type": "string"
+              },
+              {
+                "const": "blue",
+                "description": "Blue.",
+                "type": "string"
+              },
+              {
+                "const": "purple",
+                "description": "Purple.",
+                "type": "string"
+              },
+              {
+                "const": "pink",
+                "description": "Pink.",
+                "type": "string"
+              },
+              {
+                "const": "grey",
+                "description": "Grey.",
+                "type": "string"
+              }
+            ]
+          },
+          "LabelRef": {
+            "additionalProperties": false,
+            "description": "A label on a task.",
+            "properties": {
+              "hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "Its colour."
+              },
+              "id": {
+                "description": "The label's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "hue"
+            ],
+            "type": "object"
+          },
+          "ReadOnlyReason": {
+            "description": "Why a task's dates can't be changed from the chart.",
+            "oneOf": [
+              {
+                "const": "archived_project",
+                "description": "Its project is archived, so nothing in it changes.",
+                "type": "string"
+              }
+            ]
+          },
           "ScheduleDependency": {
             "additionalProperties": false,
             "description": "A finish-to-start dependency: a `blocks` link between two shown tasks.",
@@ -37590,6 +37674,13 @@
                 "description": "The task's key.",
                 "type": "string"
               },
+              "labels": {
+                "description": "Its labels, in the project's label order.",
+                "items": {
+                  "$ref": "#/$defs/LabelRef"
+                },
+                "type": "array"
+              },
               "overdue": {
                 "description": "Open and due before today.",
                 "type": "boolean"
@@ -37608,6 +37699,10 @@
               "project": {
                 "description": "Its project's key.",
                 "type": "string"
+              },
+              "read_only": {
+                "$ref": "#/$defs/ReadOnlyReason",
+                "description": "Why its dates can't be changed; left out when they can."
               },
               "shape": {
                 "$ref": "#/$defs/ScheduleShape",
@@ -37692,6 +37787,13 @@
                 "description": "The task's key.",
                 "type": "string"
               },
+              "labels": {
+                "description": "Its labels, in the project's label order.",
+                "items": {
+                  "$ref": "#/$defs/LabelRef"
+                },
+                "type": "array"
+              },
               "milestone": {
                 "description": "A task of a milestone type.",
                 "type": "boolean"
@@ -37703,6 +37805,10 @@
               "project": {
                 "description": "Its project's key.",
                 "type": "string"
+              },
+              "read_only": {
+                "$ref": "#/$defs/ReadOnlyReason",
+                "description": "Why its dates can't be changed; left out when they can."
               },
               "status": {
                 "$ref": "#/$defs/StatusRef",
@@ -37785,6 +37891,497 @@
       "output_name": "Schedule",
       "safety": "read",
       "summary": "The schedule of a project or a query for the Gantt chart: dated tasks as a tree with summary ranges for parents, milestones, the tasks without dates, blocks links as finish-to-start dependencies, and problems such as a task starting before its blocker ends."
+    },
+    {
+      "app_reason": "It previews a drag in the Gantt chart while the pointer moves; agents and scripts change dates with update_task and move_dependents, whose answer lists the tasks that moved.",
+      "exposure": "app",
+      "id": "schedule.preview_move",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Which change of dates to try out.",
+        "properties": {
+          "due_date": {
+            "description": "Its new due date (`YYYY-MM-DD`); left out: none.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "key": {
+            "description": "The task whose dates would change.",
+            "type": "string"
+          },
+          "start_date": {
+            "description": "Its new start date (`YYYY-MM-DD`); left out: none.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "title": "SchedulePreviewInput",
+        "type": "object"
+      },
+      "input_name": "SchedulePreviewInput",
+      "kind": "query",
+      "output": {
+        "$defs": {
+          "MovedTask": {
+            "additionalProperties": false,
+            "description": "A task that \"also move dependents\" moved.",
+            "properties": {
+              "days": {
+                "description": "How many days later it now is.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "due_date": {
+                "description": "Its new due date.",
+                "type": "string"
+              },
+              "id": {
+                "description": "The task's ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "The task's key.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its new start date.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "days",
+              "id"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "What \"also move dependents\" would do, without doing it.",
+        "properties": {
+          "moved": {
+            "description": "The tasks that would move and their new dates, blockers first.",
+            "items": {
+              "$ref": "#/$defs/MovedTask"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "moved"
+        ],
+        "title": "SchedulePreview",
+        "type": "object"
+      },
+      "output_name": "SchedulePreview",
+      "safety": "read",
+      "summary": "The tasks that \"also move dependents\" would move, and their new dates, if a task got the given dates; nothing is changed."
+    },
+    {
+      "app_reason": "It holds how the person's own Gantt chart looks, not the workspace's data; agents and scripts read the schedule itself.",
+      "exposure": "app",
+      "id": "gantt.layout.get",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Which Gantt layout to read.",
+        "properties": {
+          "project": {
+            "description": "The project (key or ID).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "title": "GanttLayoutGetInput",
+        "type": "object"
+      },
+      "input_name": "GanttLayoutGetInput",
+      "kind": "query",
+      "output": {
+        "$defs": {
+          "GanttGrouping": {
+            "description": "How the Gantt chart groups its rows.",
+            "oneOf": [
+              {
+                "const": "parent",
+                "description": "Subtasks under their parent tasks: the schedule's tree.",
+                "type": "string"
+              },
+              {
+                "const": "label",
+                "description": "By the first label in alphabetical order, as the list groups;\ntasks without one last.",
+                "type": "string"
+              },
+              {
+                "const": "status",
+                "description": "By status, in board order.",
+                "type": "string"
+              },
+              {
+                "const": "none",
+                "description": "One flat list, without groups or nesting.",
+                "type": "string"
+              }
+            ]
+          },
+          "GanttLayout": {
+            "additionalProperties": false,
+            "description": "The person's own layout of a project's Gantt chart: the zoom level, the\ntable's width and its columns' widths, the grouping, and whether moving\na task also moves the tasks that depend on it.\nUnlike saved views it belongs to the person, not to the workspace.",
+            "properties": {
+              "group_by": {
+                "$ref": "#/$defs/GanttGrouping",
+                "default": "parent",
+                "description": "How the rows are grouped."
+              },
+              "move_dependents": {
+                "default": false,
+                "description": "Whether a change of dates also moves the tasks that depend on the\ntask (\"also move dependents\").",
+                "type": "boolean"
+              },
+              "table": {
+                "description": "The table's width in pixels; left out: the default.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "widths": {
+                "additionalProperties": {
+                  "format": "uint32",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "default": {},
+                "description": "Column widths in pixels, by column; the columns left out keep their\ndefault width.",
+                "type": "object"
+              },
+              "zoom": {
+                "$ref": "#/$defs/GanttZoom",
+                "default": "day",
+                "description": "The zoom level."
+              }
+            },
+            "required": [
+              "zoom",
+              "widths",
+              "group_by",
+              "move_dependents"
+            ],
+            "type": "object"
+          },
+          "GanttZoom": {
+            "description": "A zoom level of the Gantt chart.",
+            "oneOf": [
+              {
+                "const": "day",
+                "description": "One column per day.",
+                "type": "string"
+              },
+              {
+                "const": "week",
+                "description": "Weeks.",
+                "type": "string"
+              },
+              {
+                "const": "month",
+                "description": "Months.",
+                "type": "string"
+              },
+              {
+                "const": "quarter",
+                "description": "Quarters.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A Gantt layout, after a change or as read.",
+        "properties": {
+          "group": {
+            "description": "The history group; left out when nothing changed.",
+            "type": "string"
+          },
+          "layout": {
+            "$ref": "#/$defs/GanttLayout",
+            "description": "The layout."
+          },
+          "project": {
+            "description": "The project's key.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project",
+          "layout"
+        ],
+        "title": "GanttLayoutChange",
+        "type": "object"
+      },
+      "output_name": "GanttLayoutChange",
+      "safety": "read",
+      "summary": "The person's layout of a project's Gantt chart: zoom level, table and column widths, grouping, and whether moving a task also moves its dependents."
+    },
+    {
+      "app_reason": "It changes how the person's own Gantt chart looks, not the workspace's data; agents and scripts read the schedule itself.",
+      "exposure": "app",
+      "id": "gantt.layout.update",
+      "input": {
+        "$defs": {
+          "GanttGrouping": {
+            "description": "How the Gantt chart groups its rows.",
+            "oneOf": [
+              {
+                "const": "parent",
+                "description": "Subtasks under their parent tasks: the schedule's tree.",
+                "type": "string"
+              },
+              {
+                "const": "label",
+                "description": "By the first label in alphabetical order, as the list groups;\ntasks without one last.",
+                "type": "string"
+              },
+              {
+                "const": "status",
+                "description": "By status, in board order.",
+                "type": "string"
+              },
+              {
+                "const": "none",
+                "description": "One flat list, without groups or nesting.",
+                "type": "string"
+              }
+            ]
+          },
+          "GanttZoom": {
+            "description": "A zoom level of the Gantt chart.",
+            "oneOf": [
+              {
+                "const": "day",
+                "description": "One column per day.",
+                "type": "string"
+              },
+              {
+                "const": "week",
+                "description": "Weeks.",
+                "type": "string"
+              },
+              {
+                "const": "month",
+                "description": "Months.",
+                "type": "string"
+              },
+              {
+                "const": "quarter",
+                "description": "Quarters.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Changes to a Gantt layout; fields left out keep their value.",
+        "properties": {
+          "group_by": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/GanttGrouping"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How the rows are grouped."
+          },
+          "move_dependents": {
+            "description": "Whether a change of dates also moves the dependent tasks.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "project": {
+            "description": "The project (key or ID).",
+            "type": "string"
+          },
+          "reset": {
+            "description": "Go back to the default layout first.",
+            "type": "boolean"
+          },
+          "table": {
+            "description": "The table's width in pixels (200 to 1200).",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "widths": {
+            "additionalProperties": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "description": "Widths to set, in pixels (24 to 600), by column; the others keep\ntheirs.",
+            "type": "object"
+          },
+          "zoom": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/GanttZoom"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The zoom level."
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "title": "GanttLayoutUpdateInput",
+        "type": "object"
+      },
+      "input_name": "GanttLayoutUpdateInput",
+      "kind": "command",
+      "output": {
+        "$defs": {
+          "GanttGrouping": {
+            "description": "How the Gantt chart groups its rows.",
+            "oneOf": [
+              {
+                "const": "parent",
+                "description": "Subtasks under their parent tasks: the schedule's tree.",
+                "type": "string"
+              },
+              {
+                "const": "label",
+                "description": "By the first label in alphabetical order, as the list groups;\ntasks without one last.",
+                "type": "string"
+              },
+              {
+                "const": "status",
+                "description": "By status, in board order.",
+                "type": "string"
+              },
+              {
+                "const": "none",
+                "description": "One flat list, without groups or nesting.",
+                "type": "string"
+              }
+            ]
+          },
+          "GanttLayout": {
+            "additionalProperties": false,
+            "description": "The person's own layout of a project's Gantt chart: the zoom level, the\ntable's width and its columns' widths, the grouping, and whether moving\na task also moves the tasks that depend on it.\nUnlike saved views it belongs to the person, not to the workspace.",
+            "properties": {
+              "group_by": {
+                "$ref": "#/$defs/GanttGrouping",
+                "default": "parent",
+                "description": "How the rows are grouped."
+              },
+              "move_dependents": {
+                "default": false,
+                "description": "Whether a change of dates also moves the tasks that depend on the\ntask (\"also move dependents\").",
+                "type": "boolean"
+              },
+              "table": {
+                "description": "The table's width in pixels; left out: the default.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "widths": {
+                "additionalProperties": {
+                  "format": "uint32",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "default": {},
+                "description": "Column widths in pixels, by column; the columns left out keep their\ndefault width.",
+                "type": "object"
+              },
+              "zoom": {
+                "$ref": "#/$defs/GanttZoom",
+                "default": "day",
+                "description": "The zoom level."
+              }
+            },
+            "required": [
+              "zoom",
+              "widths",
+              "group_by",
+              "move_dependents"
+            ],
+            "type": "object"
+          },
+          "GanttZoom": {
+            "description": "A zoom level of the Gantt chart.",
+            "oneOf": [
+              {
+                "const": "day",
+                "description": "One column per day.",
+                "type": "string"
+              },
+              {
+                "const": "week",
+                "description": "Weeks.",
+                "type": "string"
+              },
+              {
+                "const": "month",
+                "description": "Months.",
+                "type": "string"
+              },
+              {
+                "const": "quarter",
+                "description": "Quarters.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A Gantt layout, after a change or as read.",
+        "properties": {
+          "group": {
+            "description": "The history group; left out when nothing changed.",
+            "type": "string"
+          },
+          "layout": {
+            "$ref": "#/$defs/GanttLayout",
+            "description": "The layout."
+          },
+          "project": {
+            "description": "The project's key.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project",
+          "layout"
+        ],
+        "title": "GanttLayoutChange",
+        "type": "object"
+      },
+      "output_name": "GanttLayoutChange",
+      "safety": "write",
+      "summary": "Change the zoom level, table or column widths, grouping or the \"also move dependents\" switch of a project's Gantt chart, or go back to the default layout."
     },
     {
       "cli": "wiki list",

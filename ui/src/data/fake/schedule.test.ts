@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { fakeTransport } from "./transport";
 import { moveDependents, scheduleOf } from "./schedule";
-import { type ListedTask, type Schedule, type TaskChange } from "../../generated/ops";
+import { type GanttLayoutChange, type ListedTask, type Schedule, type SchedulePreview, type TaskChange } from "../../generated/ops";
 
 const TODAY = new Date("2026-11-11T10:00:00");
 
@@ -18,6 +18,7 @@ function listed(key: string, extra: Partial<ListedTask> = {}): ListedTask {
     progress_percent: 0,
     status: { id: "s", name: "To do", category: "todo", hue: "grey" },
     type: { id: "task", name: "Task", glyph: "task" },
+    labels: [],
     version: 1,
     ...extra,
   } as ListedTask;
@@ -81,10 +82,28 @@ describe("the sample schedule", () => {
       return;
     }
     const later = new Date(Date.parse(`${blocker.due_date}T00:00:00Z`) + 60 * 86_400_000).toISOString().slice(0, 10);
+    // The preview names exactly what the change then moves, and changes nothing.
+    const preview = (await transport.call("schedule.preview_move", { key: blocker.key, ...(blocker.start_date === undefined ? {} : { start_date: blocker.start_date }), due_date: later })) as SchedulePreview;
+    const unchanged = (await transport.call("schedule.get", { project: "TM" })) as Schedule;
+    expect(unchanged.tasks.find((task) => task.key === blocker.key)?.due_date).toBe(blocker.due_date);
     const change = (await transport.call("task.update", { key: blocker.key, due_date: later, move_dependents: true })) as TaskChange;
     expect(change.moved?.length ?? 0).toBeGreaterThan(0);
+    expect(preview.moved.map((task) => [task.key, task.due_date])).toEqual((change.moved ?? []).map((task) => [task.key, task.due_date]));
     await transport.call("history.undo", {});
     const again = (await transport.call("schedule.get", { project: "TM" })) as Schedule;
     expect(again.tasks.find((task) => task.key === blocker.key)?.due_date).toBe(blocker.due_date);
+  });
+
+  it("keeps the person's Gantt layout per project, as one change Undo takes back", async () => {
+    const transport = fakeTransport({ today: () => TODAY });
+    const empty = (await transport.call("gantt.layout.get", { project: "TM" })) as GanttLayoutChange;
+    expect(empty.layout).toEqual({ zoom: "day", widths: {}, group_by: "parent", move_dependents: false });
+    await transport.call("gantt.layout.update", { project: "TM", zoom: "week", widths: { key: 90 }, group_by: "label" });
+    const kept = (await transport.call("gantt.layout.get", { project: "TM" })) as GanttLayoutChange;
+    expect(kept.layout).toEqual({ zoom: "week", widths: { key: 90 }, group_by: "label", move_dependents: false });
+    expect(((await transport.call("gantt.layout.get", { project: "PER" })) as GanttLayoutChange).layout.zoom).toBe("day");
+    await expect(transport.call("gantt.layout.update", { project: "TM", widths: { key: 5 } })).rejects.toThrow();
+    await transport.call("history.undo", {});
+    expect(((await transport.call("gantt.layout.get", { project: "TM" })) as GanttLayoutChange).layout.zoom).toBe("day");
   });
 });

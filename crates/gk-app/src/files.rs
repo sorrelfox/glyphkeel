@@ -546,27 +546,75 @@ pub(crate) async fn save_file(
 /// The largest export the page may hand over to be saved.
 const EXPORT_MAX_BYTES: usize = 256 * 1024 * 1024;
 
-/// Saves an export the page made (the list's tasks as CSV or JSON) where the
-/// person chooses, starting with `name`. Returns whether it was saved.
+/// Saves an export the page made (the list's tasks as CSV or JSON, the
+/// Gantt chart as a PNG picture) where the person chooses, starting with
+/// `name`. A picture comes as base64 text (`base64: true`). Returns whether
+/// it was saved.
 #[tauri::command]
 pub(crate) async fn save_export(
     window: WebviewWindow,
     name: String,
     contents: String,
+    base64: Option<bool>,
 ) -> Result<bool, OpError> {
     if contents.len() > EXPORT_MAX_BYTES {
         return Err(OpError::invalid("The export is too large to save."));
     }
+    let bytes = if base64 == Some(true) {
+        decode_base64(&contents).ok_or_else(|| OpError::invalid("The export can't be read."))?
+    } else {
+        contents.into_bytes()
+    };
     let chosen = dialog::choose(&window, dialog::Mode::Save(safe_name(&name))).await?;
     let Some(target) = chosen.into_iter().next() else {
         return Ok(false);
     };
     blocking(move || {
-        std::fs::write(&target, contents.as_bytes())
+        std::fs::write(&target, &bytes)
             .map(|()| true)
             .map_err(|e| OpError::storage(format!("{name} can't be saved there: {e}.")))
     })
     .await
+}
+
+/// Standard base64 with padding, as the page's `btoa` writes it; `None`
+/// for anything else.
+fn decode_base64(text: &str) -> Option<Vec<u8>> {
+    const fn value(c: u8) -> Option<u32> {
+        match c {
+            b'A'..=b'Z' => Some((c - b'A') as u32),
+            b'a'..=b'z' => Some((c - b'a') as u32 + 26),
+            b'0'..=b'9' => Some((c - b'0') as u32 + 52),
+            b'+' => Some(62),
+            b'/' => Some(63),
+            _ => None,
+        }
+    }
+    let bytes = text.as_bytes();
+    if !bytes.len().is_multiple_of(4) {
+        return None;
+    }
+    let mut out = Vec::with_capacity(bytes.len() / 4 * 3);
+    let quads = bytes.len() / 4;
+    for (i, quad) in bytes.as_chunks::<4>().0.iter().enumerate() {
+        let last = i + 1 == quads;
+        let pad = if last {
+            quad.iter().rev().take_while(|&&c| c == b'=').count()
+        } else {
+            0
+        };
+        if pad > 2 {
+            return None;
+        }
+        let mut n = 0u32;
+        for &c in &quad[..4 - pad] {
+            n = (n << 6) | value(c)?;
+        }
+        n <<= 6 * pad as u32;
+        let three = [(n >> 16) as u8, (n >> 8) as u8, n as u8];
+        out.extend_from_slice(&three[..3 - pad]);
+    }
+    Some(out)
 }
 
 // ---------- the platform's dialogs and launcher ----------
@@ -780,6 +828,19 @@ mod tests {
     use gk_engine::{Confirmation, EngineConfig, Role};
     use gk_store::WorkspaceLayout;
     use tempfile::TempDir;
+
+    #[test]
+    fn base64_exports_decode_and_damaged_ones_are_refused() {
+        assert_eq!(decode_base64("").unwrap(), b"");
+        assert_eq!(decode_base64("Zg==").unwrap(), b"f");
+        assert_eq!(decode_base64("Zm8=").unwrap(), b"fo");
+        assert_eq!(decode_base64("Zm9v").unwrap(), b"foo");
+        assert_eq!(decode_base64("iVBORw0KGgo=").unwrap(), b"\x89PNG\r\n\x1a\n");
+        assert!(decode_base64("Zm9").is_none());
+        assert!(decode_base64("Zm=v").is_none());
+        assert!(decode_base64("Z===").is_none());
+        assert!(decode_base64("Zm9v!A==").is_none());
+    }
 
     /// The smallest PNG: one transparent pixel.
     const PNG: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";

@@ -498,3 +498,182 @@ fn a_whole_range_moves_later_or_earlier_and_back() {
     call(&e, "history.undo", json!({}));
     assert_eq!(dates(&e, &a), (json!("2026-12-10"), json!("2026-12-12")));
 }
+
+#[test]
+fn rows_carry_labels_and_tasks_of_archived_projects_are_read_only() {
+    let dir = tempfile::tempdir().unwrap();
+    let e = open(&dir);
+    call(
+        &e,
+        "project.create",
+        json!({ "name": "Tasks", "key": "TM" }),
+    );
+    call(&e, "label.create", json!({ "project": "TM", "name": "ui" }));
+    call(
+        &e,
+        "label.create",
+        json!({ "project": "TM", "name": "api" }),
+    );
+    let a = task(&e, "TM", "A", Some("2026-12-01"), Some("2026-12-02"));
+    call(
+        &e,
+        "task.update",
+        json!({ "key": a, "labels": ["api", "ui"] }),
+    );
+    let b = task(&e, "TM", "B", None, None);
+    call(&e, "task.update", json!({ "key": b, "labels": ["api"] }));
+
+    let s = call(&e, "schedule.get", json!({ "project": "TM" }));
+    let names: Vec<&str> = row(&s, &a)["labels"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|l| l["name"].as_str().unwrap())
+        .collect();
+    // The project's label order: the order they were made in.
+    assert_eq!(names, ["ui", "api"]);
+    assert!(row(&s, &a).get("read_only").is_none());
+    assert_eq!(s["unscheduled"][0]["labels"][0]["name"], "api");
+
+    call(&e, "project.archive", json!({ "project": "TM" }));
+    let s = call(&e, "schedule.get", json!({ "project": "TM" }));
+    assert_eq!(row(&s, &a)["read_only"], "archived_project");
+    assert_eq!(s["unscheduled"][0]["read_only"], "archived_project");
+}
+
+#[test]
+fn a_move_can_be_tried_out_without_changing_anything() {
+    let dir = tempfile::tempdir().unwrap();
+    let e = open(&dir);
+    call(
+        &e,
+        "project.create",
+        json!({ "name": "Tasks", "key": "TM" }),
+    );
+    let a = task(&e, "TM", "A", Some("2026-12-01"), Some("2026-12-04"));
+    let b = task(&e, "TM", "B", Some("2026-12-05"), Some("2026-12-06"));
+    let c = task(&e, "TM", "C", Some("2026-12-20"), Some("2026-12-21"));
+    let d = task(&e, "TM", "D", Some("2026-12-08"), Some("2026-12-09"));
+    blocks(&e, &a, &b);
+    blocks(&e, &b, &c);
+    blocks(&e, &b, &d);
+
+    let preview = call(
+        &e,
+        "schedule.preview_move",
+        json!({ "key": a, "start_date": "2026-12-03", "due_date": "2026-12-06" }),
+    );
+    // B moves two days; D after it moves one; C has room enough.
+    assert_eq!(keys(&preview["moved"]), [b.clone(), d.clone()]);
+    assert_eq!(preview["moved"][0]["days"], 2);
+    assert_eq!(preview["moved"][0]["start_date"], "2026-12-07");
+    assert_eq!(preview["moved"][1]["days"], 1);
+    assert_eq!(dates(&e, &b), (json!("2026-12-05"), json!("2026-12-06")));
+
+    // The same as the change itself then does.
+    let change = call(
+        &e,
+        "task.update",
+        json!({ "key": a, "start_date": "2026-12-03", "due_date": "2026-12-06", "move_dependents": true }),
+    );
+    assert_eq!(change["moved"], preview["moved"]);
+
+    // Earlier moves nothing; bad dates are refused.
+    let none = call(
+        &e,
+        "schedule.preview_move",
+        json!({ "key": a, "due_date": "2026-12-01" }),
+    );
+    assert_eq!(none["moved"], json!([]));
+    let err = e
+        .call(
+            &me(),
+            "schedule.preview_move",
+            json!({ "key": a, "start_date": "2026-12-09", "due_date": "2026-12-01" }),
+        )
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::Invalid);
+    let err = e
+        .call(
+            &me(),
+            "schedule.preview_move",
+            json!({ "key": a, "start_date": "next week" }),
+        )
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::Invalid);
+}
+
+#[test]
+fn the_gantt_layout_is_kept_per_project_and_can_be_undone() {
+    let dir = tempfile::tempdir().unwrap();
+    let e = open(&dir);
+    call(
+        &e,
+        "project.create",
+        json!({ "name": "Tasks", "key": "TM" }),
+    );
+    call(
+        &e,
+        "project.create",
+        json!({ "name": "Yard", "key": "YARD" }),
+    );
+
+    let empty = call(&e, "gantt.layout.get", json!({ "project": "TM" }));
+    assert_eq!(
+        empty["layout"],
+        json!({ "zoom": "day", "widths": {}, "group_by": "parent", "move_dependents": false })
+    );
+    let changed = call(
+        &e,
+        "gantt.layout.update",
+        json!({ "project": "TM", "zoom": "month", "table": 520, "widths": { "key": 90 } }),
+    );
+    assert_eq!(changed["project"], "TM");
+    assert!(changed["group"].is_string());
+    let more = call(
+        &e,
+        "gantt.layout.update",
+        json!({ "project": "TM", "group_by": "label", "move_dependents": true }),
+    );
+    assert_eq!(
+        more["layout"],
+        json!({
+            "zoom": "month", "table": 520, "widths": { "key": 90 },
+            "group_by": "label", "move_dependents": true
+        })
+    );
+    // Nothing changed: no history group.
+    let same = call(
+        &e,
+        "gantt.layout.update",
+        json!({ "project": "TM", "zoom": "month" }),
+    );
+    assert!(same.get("group").is_none());
+    // Per project.
+    assert_eq!(
+        call(&e, "gantt.layout.get", json!({ "project": "YARD" }))["layout"]["zoom"],
+        "day"
+    );
+    // Undo takes back the last change only.
+    call(&e, "history.undo", json!({}));
+    let back = call(&e, "gantt.layout.get", json!({ "project": "TM" }));
+    assert_eq!(back["layout"]["group_by"], "parent");
+    assert_eq!(back["layout"]["zoom"], "month");
+    // Reset goes back to the default, which isn't stored.
+    let reset = call(
+        &e,
+        "gantt.layout.update",
+        json!({ "project": "TM", "reset": true }),
+    );
+    assert_eq!(reset["layout"], empty["layout"]);
+    // Widths, columns and the table are checked.
+    for bad in [
+        json!({ "project": "TM", "widths": { "key": 5 } }),
+        json!({ "project": "TM", "widths": { "colour": 80 } }),
+        json!({ "project": "TM", "table": 50 }),
+        json!({ "project": "TM", "zoom": "year" }),
+    ] {
+        let err = e.call(&me(), "gantt.layout.update", bad).unwrap_err();
+        assert_eq!(err.code, ErrorCode::Invalid);
+    }
+}

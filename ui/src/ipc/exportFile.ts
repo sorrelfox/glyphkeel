@@ -10,16 +10,26 @@ import { invoke } from "@tauri-apps/api/core";
 import { OpFailure, toCallError } from "../data/transport";
 import { inApp } from "./files";
 
-/** Saves `contents` as a file starting with the name `name`; whether it was saved. */
-export async function saveExport(name: string, contents: string, type: string): Promise<boolean> {
+/** Bytes as base64 text, the way they cross to Rust. */
+function base64(bytes: Uint8Array): string {
+  let text = "";
+  const CHUNK = 0x8000;
+  for (let at = 0; at < bytes.length; at += CHUNK) {
+    text += String.fromCharCode(...bytes.subarray(at, at + CHUNK));
+  }
+  return btoa(text);
+}
+
+/** Saves `contents` (text, or the bytes of a picture) as a file starting with the name `name`; whether it was saved. */
+export async function saveExport(name: string, contents: string | Uint8Array, type: string): Promise<boolean> {
   if (inApp()) {
     try {
-      return await invoke<boolean>("save_export", { name, contents });
+      return await invoke<boolean>("save_export", typeof contents === "string" ? { name, contents } : { name, contents: base64(contents), base64: true });
     } catch (error: unknown) {
       throw new OpFailure("save_export", toCallError(error));
     }
   }
-  const url = URL.createObjectURL(new Blob([contents], { type }));
+  const url = URL.createObjectURL(new Blob([typeof contents === "string" ? contents : new Uint8Array(contents)], { type }));
   try {
     const link = document.createElement("a");
     link.href = url;

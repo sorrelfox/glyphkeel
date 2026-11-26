@@ -1024,6 +1024,60 @@ export type FileRef = {
   attachment: string;
 };
 
+/** How the Gantt chart groups its rows. */
+export type GanttGrouping = "parent" | "label" | "status" | "none";
+
+/** The person's own layout of a project's Gantt chart: the zoom level, the table's width and its columns' widths, the grouping, and whether moving a task also moves the tasks that depend on it. Unlike saved views it belongs to the person, not to the workspace. */
+export type GanttLayout = {
+  /** How the rows are grouped. */
+  group_by: GanttGrouping;
+  /** Whether a change of dates also moves the tasks that depend on the task ("also move dependents"). */
+  move_dependents: boolean;
+  /** The table's width in pixels; left out: the default. */
+  table?: number;
+  /** Column widths in pixels, by column; the columns left out keep their default width. */
+  widths: Record<string, number>;
+  /** The zoom level. */
+  zoom: GanttZoom;
+};
+
+/** A Gantt layout, after a change or as read. */
+export type GanttLayoutChange = {
+  /** The history group; left out when nothing changed. */
+  group?: string;
+  /** The layout. */
+  layout: GanttLayout;
+  /** The project's key. */
+  project: string;
+};
+
+/** Which Gantt layout to read. */
+export type GanttLayoutGetInput = {
+  /** The project (key or ID). */
+  project: string;
+};
+
+/** Changes to a Gantt layout; fields left out keep their value. */
+export type GanttLayoutUpdateInput = {
+  /** How the rows are grouped. */
+  group_by?: GanttGrouping | null;
+  /** Whether a change of dates also moves the dependent tasks. */
+  move_dependents?: boolean | null;
+  /** The project (key or ID). */
+  project: string;
+  /** Go back to the default layout first. */
+  reset?: boolean;
+  /** The table's width in pixels (200 to 1200). */
+  table?: number | null;
+  /** Widths to set, in pixels (24 to 600), by column; the others keep theirs. */
+  widths?: Record<string, number>;
+  /** The zoom level. */
+  zoom?: GanttZoom | null;
+};
+
+/** A zoom level of the Gantt chart. */
+export type GanttZoom = "day" | "week" | "month" | "quarter";
+
 /** The shape that shows a task's type. */
 export type Glyph = "task" | "bug" | "feature" | "milestone";
 
@@ -1695,6 +1749,9 @@ export type QueryToken = {
 /** What a piece of the query text is. */
 export type QueryTokenKind = "field" | "operator" | "value" | "comma" | "keyword" | "negation" | "paren" | "text" | "key" | "sort" | "error";
 
+/** Why a task's dates can't be changed from the chart. */
+export type ReadOnlyReason = "archived_project";
+
 /** A task that changed recently, with who changed it last. */
 export type RecentTask = {
   /** When (RFC 3339, UTC). */
@@ -2016,6 +2073,22 @@ export type ScheduleInput = {
   to?: string | null;
 };
 
+/** What "also move dependents" would do, without doing it. */
+export type SchedulePreview = {
+  /** The tasks that would move and their new dates, blockers first. */
+  moved: MovedTask[];
+};
+
+/** Which change of dates to try out. */
+export type SchedulePreviewInput = {
+  /** Its new due date (`YYYY-MM-DD`); left out: none. */
+  due_date?: string | null;
+  /** The task whose dates would change. */
+  key: string;
+  /** Its new start date (`YYYY-MM-DD`); left out: none. */
+  start_date?: string | null;
+};
+
 /** Something wrong with the schedule. */
 export type ScheduleProblem = {
   /** The message's arguments, by name. */
@@ -2056,6 +2129,8 @@ export type ScheduledTask = {
   id: string;
   /** The task's key. */
   key: string;
+  /** Its labels, in the project's label order. */
+  labels?: LabelRef[];
   /** Open and due before today. */
   overdue: boolean;
   /** The parent task's key, for a subtask. */
@@ -2064,6 +2139,8 @@ export type ScheduledTask = {
   progress_percent: number;
   /** Its project's key. */
   project: string;
+  /** Why its dates can't be changed; left out when they can. */
+  read_only?: ReadOnlyReason;
   /** How the chart draws it. */
   shape: ScheduleShape;
   /** Its own start date. */
@@ -3184,12 +3261,16 @@ export type UnscheduledTask = {
   id: string;
   /** The task's key. */
   key: string;
+  /** Its labels, in the project's label order. */
+  labels?: LabelRef[];
   /** A task of a milestone type. */
   milestone: boolean;
   /** The parent task's key, for a subtask. */
   parent?: string;
   /** Its project's key. */
   project: string;
+  /** Why its dates can't be changed; left out when they can. */
+  read_only?: ReadOnlyReason;
   /** Its status. */
   status: StatusRef;
   /** Its title. */
@@ -3693,6 +3774,9 @@ export interface OpMap {
   "list.layout.update": { input: ListLayoutUpdateInput; output: ListLayoutChange; safety: "write"; kind: "command" };
   "query.parse": { input: QueryParseInput; output: ParsedQuery; safety: "read"; kind: "query" };
   "schedule.get": { input: ScheduleInput; output: Schedule; safety: "read"; kind: "query" };
+  "schedule.preview_move": { input: SchedulePreviewInput; output: SchedulePreview; safety: "read"; kind: "query" };
+  "gantt.layout.get": { input: GanttLayoutGetInput; output: GanttLayoutChange; safety: "read"; kind: "query" };
+  "gantt.layout.update": { input: GanttLayoutUpdateInput; output: GanttLayoutChange; safety: "write"; kind: "command" };
   "wiki.list": { input: WikiListInput; output: WikiTree; safety: "read"; kind: "query" };
   "wiki.search": { input: WikiSearchInput; output: WikiSearchResult; safety: "read"; kind: "query" };
   "wiki.get": { input: WikiGetInput; output: WikiPage; safety: "read"; kind: "query" };
@@ -3810,6 +3894,9 @@ export const OP_SAFETY = {
   "list.layout.update": "write",
   "query.parse": "read",
   "schedule.get": "read",
+  "schedule.preview_move": "read",
+  "gantt.layout.get": "read",
+  "gantt.layout.update": "write",
   "wiki.list": "read",
   "wiki.search": "read",
   "wiki.get": "read",
@@ -3922,6 +4009,12 @@ export function makeOps(call: Call) {
       /** Move an attached file to the trash. (trash) */
       delete: (input: OpMap["file.delete"]["input"]) => call("file.delete", input),
     },
+    gantt: {
+      /** The person's layout of a project's Gantt chart: zoom level, table and column widths, grouping, and whether moving a task also moves its dependents. (read) */
+      layoutGet: (input: OpMap["gantt.layout.get"]["input"]) => call("gantt.layout.get", input),
+      /** Change the zoom level, table or column widths, grouping or the "also move dependents" switch of a project's Gantt chart, or go back to the default layout. (write) */
+      layoutUpdate: (input: OpMap["gantt.layout.update"]["input"]) => call("gantt.layout.update", input),
+    },
     history: {
       /** The activity log, newest first: who changed what, when and through which program; optionally the agent sessions. (read) */
       feed: (input: OpMap["history.feed"]["input"] = {}) => call("history.feed", input),
@@ -4001,6 +4094,8 @@ export function makeOps(call: Call) {
     schedule: {
       /** The schedule of a project or a query for the Gantt chart: dated tasks as a tree with summary ranges for parents, milestones, the tasks without dates, blocks links as finish-to-start dependencies, and problems such as a task starting before its blocker ends. (read) */
       get: (input: OpMap["schedule.get"]["input"] = {}) => call("schedule.get", input),
+      /** The tasks that "also move dependents" would move, and their new dates, if a task got the given dates; nothing is changed. (read) */
+      previewMove: (input: OpMap["schedule.preview_move"]["input"]) => call("schedule.preview_move", input),
     },
     search: {
       /** Search task titles and descriptions, comments, wiki pages and file names for words and fragments, ranked, with the matches marked; a task key finds that task. (read) */

@@ -4,8 +4,8 @@
 import { describe, expect, it } from "vitest";
 
 import { type ScheduleProblem, type ScheduledTask, type UnscheduledTask } from "../../generated/ops";
-import { layoutFrom } from "./layout";
-import { buildRows, columnWindow, datesUpdate, draggedDates, elbow, endsLater, geometry, isWarning, problemsByTask, ROW, rowWindow, visibleDependencies } from "./model";
+import { layoutFrom, layoutUpdate } from "./layout";
+import { behindSchedule, buildRows, columnWindow, firstLabel, datesUpdate, draggedDates, elbow, endsLater, geometry, isWarning, problemsByTask, ROW, rowWindow, visibleDependencies } from "./model";
 
 const status = { id: "s1", name: "To do", category: "todo" as const, hue: "grey" as const };
 
@@ -42,7 +42,7 @@ describe("rows", () => {
     expect(rows.map((row) => (row.kind === "group" ? "group" : row.task.key))).toEqual(["TM-1", "TM-2", "TM-3", "TM-4", "TM-5", "group", "TM-9"]);
     expect(rows[0]).toMatchObject({ kind: "task", level: 1, hasKids: true, open: true });
     expect(rows[1]).toMatchObject({ level: 2, hasKids: false });
-    expect(rows[5]).toEqual({ kind: "group", count: 1 });
+    expect(rows[5]).toEqual({ kind: "group", id: "unscheduled", head: { by: "unscheduled" }, count: 1 });
     expect(index.get("TM-9")).toBe(6);
   });
 
@@ -151,14 +151,75 @@ describe("windows", () => {
 });
 
 describe("the person's layout", () => {
-  it("takes what is stored and sound, and the defaults for the rest", () => {
-    expect(layoutFrom(undefined)).toEqual({ zoom: "day", table: undefined, widths: {}, moveDependents: false });
-    expect(layoutFrom({ zoom: "month", table: 5000, widths: { key: 12, due: 90, title: 300, start: "wide" }, moveDependents: true })).toEqual({
-      zoom: "month",
-      table: 900,
-      widths: { key: 32, due: 90 },
-      moveDependents: true,
+  it("takes what the engine keeps and is sound, and the defaults for the rest", () => {
+    expect(layoutFrom(undefined)).toEqual({ zoom: "day", table: undefined, widths: {}, groupBy: "parent", moveDependents: false });
+    const stored = { zoom: "month", table: 5000, widths: { key: 12, due: 90, title: 300 }, group_by: "label", move_dependents: true } as const;
+    expect(layoutFrom(stored)).toEqual({ zoom: "month", table: 900, widths: { key: 32, due: 90 }, groupBy: "label", moveDependents: true });
+    // Damaged values from an older or newer program.
+    expect(layoutFrom(JSON.parse('{"zoom":"decade","group_by":"colour","widths":{"start":"wide"}}') as Parameters<typeof layoutFrom>[0])).toEqual(layoutFrom(undefined));
+  });
+
+  it("sends the engine only what changed", () => {
+    expect(layoutUpdate("TM", { zoom: "week" })).toEqual({ project: "TM", zoom: "week" });
+    expect(layoutUpdate("TM", { widths: { key: 80 }, groupBy: "none", moveDependents: false, table: 400 })).toEqual({
+      project: "TM",
+      widths: { key: 80 },
+      group_by: "none",
+      move_dependents: false,
+      table: 400,
     });
-    expect(layoutFrom({ zoom: "decade" }).zoom).toBe("day");
+  });
+});
+
+describe("grouping", () => {
+  const label = (name: string, hue: "red" | "blue" = "red") => ({ id: `l-${name}`, name, hue });
+  const doing = { id: "s2", name: "Doing", category: "in_progress" as const };
+  const tasks = [
+    task("TM-1", 0, { shape: "summary", labels: [label("ui"), label("api", "blue")] }),
+    task("TM-2", 1, { status: doing }),
+    task("TM-3", 0, { labels: [label("ui")], status: doing }),
+  ];
+  const order = { statuses: new Map([["s2", 0], ["s1", 1]]), hues: new Map(), compare: (a: string, b: string) => a.localeCompare(b) };
+
+  it("by label: the first label in alphabetical order, the tasks without one last, flat", () => {
+    const { rows } = buildRows(tasks, [loose], new Set(), "label", order);
+    expect(rows.map((row) => (row.kind === "group" ? row.id : row.task.key))).toEqual(["label:api", "TM-1", "label:ui", "TM-3", "label:", "TM-2", "unscheduled", "TM-9"]);
+    expect(rows.every((row) => row.kind !== "task" || (row.level === 1 && !row.hasKids))).toBe(true);
+    expect(rows[0]).toMatchObject({ head: { by: "label", name: "api", hue: "blue" }, count: 1 });
+    expect(rows[4]).toMatchObject({ head: { by: "label", name: undefined }, count: 1 });
+  });
+
+  it("by status: in board order", () => {
+    const { rows, index } = buildRows(tasks, [], new Set(), "status", order);
+    expect(rows.map((row) => (row.kind === "group" ? row.id : row.task.key))).toEqual(["status:s2", "TM-2", "TM-3", "status:s1", "TM-1"]);
+    expect(index.get("TM-1")).toBe(4);
+  });
+
+  it("none: every task flat, in the schedule's order; folds don't matter", () => {
+    const { rows } = buildRows(tasks, [], new Set(["TM-1"]), "none");
+    expect(rows.map((row) => (row.kind === "group" ? row.id : row.task.key))).toEqual(["TM-1", "TM-2", "TM-3"]);
+  });
+
+  it("finds the first label in the person's order", () => {
+    expect(firstLabel({ labels: [label("b"), label("A")] }, (a, b) => a.localeCompare(b))?.name).toBe("A");
+    expect(firstLabel({}, (a, b) => a.localeCompare(b))).toBeUndefined();
+  });
+});
+
+describe("behind schedule", () => {
+  const bar = (extra: Parameters<typeof task>[2]) => task("TM-1", 0, { start_date: "2026-11-01", due_date: "2026-11-10", ...extra });
+
+  it("when today is further along the bar than its progress", () => {
+    // The 5th day of 10, to its middle: 45 % of the time.
+    expect(behindSchedule(bar({ progress_percent: 40 }), "2026-11-05")).toEqual({ done: 0.4, expected: 0.45 });
+    expect(behindSchedule(bar({ progress_percent: 50 }), "2026-11-05")).toBeUndefined();
+  });
+
+  it("only for open bars that have begun and aren't overdue", () => {
+    expect(behindSchedule(bar({}), "2026-10-31")).toBeUndefined();
+    expect(behindSchedule(bar({ closed: true }), "2026-11-05")).toBeUndefined();
+    expect(behindSchedule(bar({ overdue: true }), "2026-11-11")).toBeUndefined();
+    expect(behindSchedule(bar({ shape: "summary" }), "2026-11-05")).toBeUndefined();
+    expect(behindSchedule(bar({ shape: "deadline", start_date: undefined }), "2026-11-05")).toBeUndefined();
   });
 });

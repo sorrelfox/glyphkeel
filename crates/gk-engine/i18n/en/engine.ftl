@@ -127,6 +127,11 @@ schedule-move-loop = { $count ->
     }
 schedule-move-loop-hint = Remove one of the links in the loop with unlink_tasks first.
 schedule-dependent-archived = { $task } depends on this task but stays where it is, because its project { $project } is archived.
+schedule-preview-date = { $field } must be a date written as YYYY-MM-DD.
+schedule-preview-reversed = The start date comes after the due date.
+gantt-layout-table = The table is { $min } to { $max } pixels wide.
+gantt-layout-column = The chart's table has only these columns: { $columns }.
+gantt-layout-width = A column is { $min } to { $max } pixels wide.
 
 ## Export and import
 

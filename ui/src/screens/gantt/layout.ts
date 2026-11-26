@@ -2,11 +2,12 @@
 // Copyright (C) 2026 Glyphkeel contributors
 
 // The person's layout of a project's Gantt chart: the zoom level, the
-// table's width and its columns' widths, and whether moving a task also
-// moves the tasks that depend on it. Kept with the person's other settings
-// of this app (like the board's card size), per project ID.
+// table's width and its columns' widths, the grouping, and whether moving a
+// task also moves the tasks that depend on it. The engine keeps it per
+// project with the person's other view settings (`gantt.layout.*`), apart
+// from the workspace's settings.
 
-import { readPref, writePref } from "../../prefs/store";
+import { type GanttGrouping, type GanttLayout as EngineLayout, type GanttLayoutUpdateInput } from "../../generated/ops";
 import { ZOOMS, type Zoom } from "./scale";
 
 /** The table's columns, in order. */
@@ -15,6 +16,9 @@ export type Column = (typeof COLUMNS)[number];
 
 /** The columns whose width the person sets; the title takes the rest. */
 export const SIZED: readonly Column[] = ["key", "start", "due", "progress"];
+
+/** The ways to group the rows, as the toolbar offers them. */
+export const GROUPINGS: readonly GanttGrouping[] = ["parent", "label", "status", "none"];
 
 /** The narrowest and widest table and column, in pixels. */
 export const TABLE_MIN = 240;
@@ -28,37 +32,39 @@ export interface GanttLayout {
   table: number | undefined;
   /** Column widths in pixels; the columns left out keep their default. */
   widths: Partial<Record<Column, number>>;
+  groupBy: GanttGrouping;
   /** Whether a change of dates also moves the tasks that depend on the task. */
   moveDependents: boolean;
 }
 
-export const DEFAULT_LAYOUT: GanttLayout = { zoom: "day", table: undefined, widths: {}, moveDependents: false };
+export const DEFAULT_LAYOUT: GanttLayout = { zoom: "day", table: undefined, widths: {}, groupBy: "parent", moveDependents: false };
 
 const clamp = (value: number, min: number, max: number) => Math.round(Math.min(max, Math.max(min, value)));
 
-/** A layout as stored, checked: anything missing or out of range takes its default. */
-export function layoutFrom(stored: unknown): GanttLayout {
-  const value = typeof stored === "object" && stored !== null ? (stored as Record<string, unknown>) : {};
+/** The engine's layout, checked: anything missing or out of the chart's range takes its default or nearest value. */
+export function layoutFrom(stored: Partial<EngineLayout> | undefined): GanttLayout {
+  const value: Partial<EngineLayout> = stored ?? {};
   const zoom = ZOOMS.find((candidate) => candidate === value.zoom) ?? DEFAULT_LAYOUT.zoom;
   const table = typeof value.table === "number" && Number.isFinite(value.table) ? clamp(value.table, TABLE_MIN, TABLE_MAX) : undefined;
   const widths: Partial<Record<Column, number>> = {};
-  if (typeof value.widths === "object" && value.widths !== null) {
-    for (const column of SIZED) {
-      const width = (value.widths as Record<string, unknown>)[column];
-      if (typeof width === "number" && Number.isFinite(width)) {
-        widths[column] = clamp(width, COLUMN_MIN, COLUMN_MAX);
-      }
+  for (const column of SIZED) {
+    const width: unknown = value.widths?.[column];
+    if (typeof width === "number" && Number.isFinite(width)) {
+      widths[column] = clamp(width, COLUMN_MIN, COLUMN_MAX);
     }
   }
-  return { zoom, table, widths, moveDependents: value.moveDependents === true };
+  const groupBy = GROUPINGS.find((candidate) => candidate === value.group_by) ?? DEFAULT_LAYOUT.groupBy;
+  return { zoom, table, widths, groupBy, moveDependents: value.move_dependents === true };
 }
 
-const prefName = (project: string) => `gantt.layout.${project}`;
-
-export function loadLayout(project: string): GanttLayout {
-  return layoutFrom(readPref(prefName(project)));
-}
-
-export function saveLayout(project: string, layout: GanttLayout): void {
-  writePref(prefName(project), layout);
+/** The `gantt.layout.update` input that makes `change` to project `project`'s layout. */
+export function layoutUpdate(project: string, change: Partial<GanttLayout>): GanttLayoutUpdateInput {
+  return {
+    project,
+    ...(change.zoom === undefined ? {} : { zoom: change.zoom }),
+    ...(change.table === undefined ? {} : { table: change.table }),
+    ...(change.widths === undefined ? {} : { widths: Object.fromEntries(Object.entries(change.widths)) }),
+    ...(change.groupBy === undefined ? {} : { group_by: change.groupBy }),
+    ...(change.moveDependents === undefined ? {} : { move_dependents: change.moveDependents }),
+  };
 }
