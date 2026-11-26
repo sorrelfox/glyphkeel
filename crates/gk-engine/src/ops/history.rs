@@ -776,7 +776,15 @@ pub(crate) fn revert_groups(
                 if home {
                     task::set_home(w, row.id, row.project, before("project"), before("number"))?;
                 }
-                for field in revertible_fields(row) {
+                let mut order = revertible_fields(row);
+                if row.entity == fields::TASK
+                    && super::schedule::due_first(w.tx(), row.id, before("start_date").as_ref())?
+                {
+                    order.sort_by_key(|f| f.as_str() != "due_date");
+                } else {
+                    order.sort_by_key(|f| f.as_str() == "due_date");
+                }
+                for field in order {
                     if home && matches!(field.as_str(), "project" | "number") {
                         continue;
                     }

@@ -110,6 +110,24 @@ backup-folder-not-absolute = "{ $path }" is not a full path; give one that start
 backup-folder-inside-workspace = { $path } is inside the workspace's own folder; choose a folder outside it.
 backup-folder-unwritable = Backups can't be written to { $path }: { $error }
 
+## Schedule (the Gantt chart)
+
+schedule-scope-needed = Give a `project`, a `query`, or both.
+schedule-window-reversed = `to` comes before `from`.
+schedule-too-many = The schedule would show { $count } tasks; it shows at most { $max }.
+schedule-starts-before-blocker = { $task } starts on { $start }, before { $blocker } ends on { $end }.
+schedule-dependency-loop = { $task } is in a loop of { $count } tasks that block each other.
+schedule-starts-before-parent = { $task } starts on { $start }, before its parent { $parent } starts on { $parent_start }.
+schedule-ends-after-parent = { $task } ends on { $end }, after its parent { $parent } is due on { $parent_due }.
+schedule-overdue = { $task } was due on { $due }.
+schedule-no-due-date = { $task } starts on { $start } but has no due date.
+schedule-move-loop = { $count ->
+        [one] { $task } blocks itself, so the tasks that depend on this one can't be moved.
+       *[other] { $task } is in a loop of { $count } tasks that block each other, so the tasks that depend on this one can't be moved.
+    }
+schedule-move-loop-hint = Remove one of the links in the loop with unlink_tasks first.
+schedule-dependent-archived = { $task } depends on this task but stays where it is, because its project { $project } is archived.
+
 ## Export and import
 
 transfer-rejected-hint = Nothing was imported. Export the data again, or check where the archive came from.

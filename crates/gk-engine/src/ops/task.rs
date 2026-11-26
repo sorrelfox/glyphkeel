@@ -439,6 +439,7 @@ pub(crate) fn changed_with(
         group: w.group_if_changed(),
         warnings,
         description_save: None,
+        moved: Vec::new(),
     })
 }
 
@@ -1248,7 +1249,8 @@ pub(crate) fn update(w: &mut WriteCtx<'_>, input: TaskUpdateInput) -> Result<Tas
         (None, true) => Some(None),
         (None, false) => None,
     };
-    if start.is_some() || due.is_some() {
+    let dates_given = start.is_some() || due.is_some();
+    if dates_given {
         let start_after = match &start {
             Some(v) => v.clone(),
             None => fields::read(w.tx(), TASK, id, "start_date")?,
@@ -1258,11 +1260,20 @@ pub(crate) fn update(w: &mut WriteCtx<'_>, input: TaskUpdateInput) -> Result<Tas
             None => fields::read(w.tx(), TASK, id, "due_date")?,
         };
         check_dates(start_after.as_ref(), due_after.as_ref())?;
-        if let Some(v) = start {
-            fields::set(w, TASK, id, pid, "start_date", v)?;
-        }
-        if let Some(v) = due {
-            fields::set(w, TASK, id, pid, "due_date", v)?;
+        // A range moved later past its old due date needs the due date
+        // written first, or the start would pass it in between.
+        let due_first = super::schedule::due_first(w.tx(), id, start_after.as_ref())?;
+        let (start, due) = (
+            start.map(|v| ("start_date", v)),
+            due.map(|v| ("due_date", v)),
+        );
+        let writes = if due_first {
+            [due, start]
+        } else {
+            [start, due]
+        };
+        for (field, v) in writes.into_iter().flatten() {
+            fields::set(w, TASK, id, pid, field, v)?;
         }
     }
     if let Some(e) = &input.estimate {
@@ -1284,8 +1295,14 @@ pub(crate) fn update(w: &mut WriteCtx<'_>, input: TaskUpdateInput) -> Result<Tas
     if text_changed {
         refresh_text(w, id)?;
     }
+    let moved = if input.move_dependents && dates_given {
+        super::schedule::move_dependents(w, id, input.override_claim, &mut warnings)?
+    } else {
+        Vec::new()
+    };
     let mut change = changed(w, id, warnings)?;
     change.description_save = description_save;
+    change.moved = moved;
     Ok(change)
 }
 

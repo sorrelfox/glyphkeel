@@ -786,6 +786,14 @@ export type ConflictResolution = {
   text?: string | null;
 };
 
+/** A range of days, both included. */
+export type DayRange = {
+  /** The last day (`YYYY-MM-DD`). */
+  end: string;
+  /** The first day (`YYYY-MM-DD`). */
+  start: string;
+};
+
 /** Whose description history to list: a task's or a project's. */
 export type DescriptionHistoryInput = {
   /** The project: its key or ID. */
@@ -1343,6 +1351,20 @@ export type ModulesPatch = {
   time?: boolean | null;
   /** The wiki. */
   wiki?: boolean | null;
+};
+
+/** A task that "also move dependents" moved. */
+export type MovedTask = {
+  /** How many days later it now is. */
+  days: number;
+  /** Its new due date. */
+  due_date?: string;
+  /** The task's ID. */
+  id: string;
+  /** The task's key. */
+  key: string;
+  /** Its new start date. */
+  start_date?: string;
 };
 
 /** An operation failed. The message says what happened, the hint what to do next; both are written for the reader, person or agent. */
@@ -1944,6 +1966,112 @@ export type SavedView = {
   updated_at: string;
 };
 
+/** The schedule of a project or a query. */
+export type Schedule = {
+  /** The `blocks` links between the tasks shown. */
+  dependencies: ScheduleDependency[];
+  /** What is wrong with the schedule of the tasks shown, task by task. */
+  problems: ScheduleProblem[];
+  /** From the earliest to the latest day of the tasks shown; left out when none has a date. */
+  range?: DayRange;
+  /** The tasks with dates, and the tasks with subtasks that have dates, as the chart's rows: a tree in order, each task followed by its subtasks. */
+  tasks: ScheduledTask[];
+  /** Today in the workspace's time zone (`YYYY-MM-DD`), for the today line. */
+  today: string;
+  /** The tasks without dates, for the Unscheduled lane. */
+  unscheduled: UnscheduledTask[];
+};
+
+/** A finish-to-start dependency: a `blocks` link between two shown tasks. */
+export type ScheduleDependency = {
+  /** The blocking task's key. */
+  from: string;
+  /** The link's ID, for `unlink_tasks`. */
+  id: string;
+  /** Extra days between the two; left out when there are none. */
+  lag_days?: number;
+  /** The blocked task's key. */
+  to: string;
+  /** The blocked task begins before its blocker ends. */
+  violated: boolean;
+};
+
+/** Which tasks to schedule. */
+export type ScheduleInput = {
+  /** Leave out tasks that end before this day: `YYYY-MM-DD` or a natural date such as `today` or `-2w`. */
+  from?: string | null;
+  /** With `project`: its sub-projects' tasks too. Off unless asked. */
+  include_subprojects?: boolean;
+  /** The project (key or ID). Give this, `query`, or both. */
+  project?: string | null;
+  /** Only the tasks matching this query (`is:open label:release`); with `project`, inside that project. Its `sort:` orders the top-level rows; by default they go by start date, then due date. */
+  query?: string | null;
+  /** Leave out tasks that begin after this day, written as for `from`. */
+  to?: string | null;
+};
+
+/** Something wrong with the schedule. */
+export type ScheduleProblem = {
+  /** The message's arguments, by name. */
+  args?: Record<string, string>;
+  /** What kind of problem. */
+  kind: ScheduleProblemKind;
+  /** The problem in English. */
+  message: string;
+  /** The message's ID in the message files, for translation. */
+  message_id: string;
+  /** The other task: the blocker, or the parent. */
+  other?: string;
+  /** For a loop, the other tasks in it. */
+  others?: string[];
+  /** The task it is about. */
+  task: string;
+};
+
+/** What kind of problem. */
+export type ScheduleProblemKind = "starts_before_blocker_ends" | "dependency_loop" | "outside_parent" | "overdue" | "no_due_date";
+
+/** How the chart draws a task. */
+export type ScheduleShape = "bar" | "deadline" | "no_deadline" | "milestone" | "summary";
+
+/** One row of the chart. */
+export type ScheduledTask = {
+  /** A task that blocks it is still open. */
+  blocked: boolean;
+  /** Whether it is closed (done or cancelled). */
+  closed: boolean;
+  /** How many tasks depend on it, directly or through others: the tasks "also move dependents" may move. */
+  dependents: number;
+  /** How deep it is in the chart's tree: 0 for a top-level row. A task whose parent isn't shown is a top-level row. */
+  depth: number;
+  /** Its own due date. */
+  due_date?: string;
+  /** The task's ID. */
+  id: string;
+  /** The task's key. */
+  key: string;
+  /** Open and due before today. */
+  overdue: boolean;
+  /** The parent task's key, for a subtask. */
+  parent?: string;
+  /** Its progress in percent. */
+  progress_percent: number;
+  /** Its project's key. */
+  project: string;
+  /** How the chart draws it. */
+  shape: ScheduleShape;
+  /** Its own start date. */
+  start_date?: string;
+  /** Its status. */
+  status: StatusRef;
+  /** For a task with subtasks: from the earliest start to the latest due date among it and all its subtasks, at every level. */
+  summary?: DayRange;
+  /** Its title. */
+  title: string;
+  /** Its version, for `expected_version`. */
+  version: number;
+};
+
 /** One search result. */
 export type SearchHit = {
   /** The task's status category. */
@@ -2313,6 +2441,8 @@ export type TaskChange = {
   description_save?: DescriptionSave;
   /** The history group, for revert and Undo; left out when nothing changed. */
   group?: string;
+  /** The tasks "also move dependents" moved, blockers first. */
+  moved?: MovedTask[];
   /** The task after the change. */
   task: Task;
   /** Problems that did not stop the change, such as closing a task whose subtasks are still open. */
@@ -2549,6 +2679,8 @@ export type TaskUpdateInput = {
   key: string;
   /** Replace the labels with these. */
   labels?: string[] | null;
+  /** When the dates change, also move the tasks that depend on this one (through `blocks` links, and theirs in turn) later, as far as each must to begin after its blockers end. Their lengths stay, nothing moves earlier, and closed tasks stay where they are. One change in history with this one. */
+  move_dependents?: boolean;
   /** Change the task although another agent claimed it (full profile only). */
   override_claim?: boolean;
   /** A new parent task (same project, at most 5 levels, no loops). */
@@ -3025,6 +3157,28 @@ export type UndoResult = {
   target: string;
 };
 
+/** A task without dates, for the Unscheduled lane. */
+export type UnscheduledTask = {
+  /** Whether it is closed. */
+  closed: boolean;
+  /** The task's ID. */
+  id: string;
+  /** The task's key. */
+  key: string;
+  /** A task of a milestone type. */
+  milestone: boolean;
+  /** The parent task's key, for a subtask. */
+  parent?: string;
+  /** Its project's key. */
+  project: string;
+  /** Its status. */
+  status: StatusRef;
+  /** Its title. */
+  title: string;
+  /** Its version, for `expected_version`. */
+  version: number;
+};
+
 /** The program a change came through. */
 export type Via = "app" | "cli" | "mcp";
 
@@ -3487,6 +3641,7 @@ export interface OpMap {
   "list.layout.get": { input: ListLayoutGetInput; output: ListLayoutChange; safety: "read"; kind: "query" };
   "list.layout.update": { input: ListLayoutUpdateInput; output: ListLayoutChange; safety: "write"; kind: "command" };
   "query.parse": { input: QueryParseInput; output: ParsedQuery; safety: "read"; kind: "query" };
+  "schedule.get": { input: ScheduleInput; output: Schedule; safety: "read"; kind: "query" };
   "wiki.list": { input: WikiListInput; output: WikiTree; safety: "read"; kind: "query" };
   "wiki.search": { input: WikiSearchInput; output: WikiSearchResult; safety: "read"; kind: "query" };
   "wiki.get": { input: WikiGetInput; output: WikiPage; safety: "read"; kind: "query" };
@@ -3602,6 +3757,7 @@ export const OP_SAFETY = {
   "list.layout.get": "read",
   "list.layout.update": "write",
   "query.parse": "read",
+  "schedule.get": "read",
   "wiki.list": "read",
   "wiki.search": "read",
   "wiki.get": "read",
@@ -3788,6 +3944,10 @@ export function makeOps(call: Call) {
       due: (input: OpMap["reminder.due"]["input"] = {}) => call("reminder.due", input),
       /** Acknowledge reminders that were shown, so they don't come due again. (write) */
       acknowledge: (input: OpMap["reminder.acknowledge"]["input"]) => call("reminder.acknowledge", input),
+    },
+    schedule: {
+      /** The schedule of a project or a query for the Gantt chart: dated tasks as a tree with summary ranges for parents, milestones, the tasks without dates, blocks links as finish-to-start dependencies, and problems such as a task starting before its blocker ends. (read) */
+      get: (input: OpMap["schedule.get"]["input"] = {}) => call("schedule.get", input),
     },
     search: {
       /** Search task titles and descriptions, comments, wiki pages and file names for words and fragments, ranked, with the matches marked; a task key finds that task. (read) */

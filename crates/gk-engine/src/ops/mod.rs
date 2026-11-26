@@ -28,6 +28,7 @@ pub(crate) mod query;
 pub(crate) mod relation;
 pub(crate) mod reminder;
 pub(crate) mod rollup;
+pub(crate) mod schedule;
 pub(crate) mod search;
 pub(crate) mod settings;
 pub(crate) mod task;
@@ -65,6 +66,7 @@ pub(crate) fn register(r: &mut Registry) {
     query::register(r);
     bulk::register(r);
     view::register(r);
+    schedule::register(r);
     list_layout::register(r);
     search::register(r);
     today::register(r);

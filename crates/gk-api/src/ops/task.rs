@@ -18,6 +18,7 @@ use crate::ops::common::{Actor, Category, Edge, Glyph, Hue, Priority};
 use crate::ops::description::{
     ChecklistItem, ConflictResolution, DescriptionSave, RevisionInfo, TextEdit,
 };
+use crate::ops::schedule::MovedTask;
 use crate::ops::trash::TrashChange;
 
 /// A task's status, as tasks carry it.
@@ -310,6 +311,9 @@ pub struct TaskChange {
     /// or kept as a conflict copy.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description_save: Option<DescriptionSave>,
+    /// The tasks "also move dependents" moved, blockers first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub moved: Vec<MovedTask>,
 }
 
 /// Which tasks to read.
@@ -475,6 +479,13 @@ pub struct TaskUpdateInput {
     /// only).
     #[serde(default)]
     pub override_claim: bool,
+    /// When the dates change, also move the tasks that depend on this one
+    /// (through `blocks` links, and theirs in turn) later, as far as each
+    /// must to begin after its blockers end. Their lengths stay, nothing
+    /// moves earlier, and closed tasks stay where they are. One change in
+    /// history with this one.
+    #[serde(default)]
+    pub move_dependents: bool,
 }
 
 /// Where to move a task: another status, another place in its column, or

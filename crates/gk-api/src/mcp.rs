@@ -395,7 +395,9 @@ Example: create_task {\"project\": \"TM\", \"title\": \"Write the release notes\
         title: "Update a task",
         description: "Changes the given fields of a task only: `title`, `type`, `priority`, \
 `labels` (replace) or `add_labels`/`remove_labels`, `parent`, `start_date`, `due_date`, \
-`estimate`, `progress`, and the description. Prefer `description_edits` ([{old_text, new_text}], \
+`estimate`, `progress`, and the description. With new dates, `move_dependents: true` also \
+moves the tasks that depend on this one (blocks links, and theirs in turn) later, as far as each \
+must to begin after its blocker ends, in the same change; `moved` lists them. Prefer `description_edits` ([{old_text, new_text}], \
 each old_text found exactly once) for changes to part of the description; a whole new \
 `description` needs `base_revision` (the `description_revision` from get_task): if someone saved \
 in between, edits to different lines are merged, and edits to the same lines are kept as a \
@@ -909,6 +911,24 @@ Example: get_wiki_history {\"project\": \"TM\", \"page\": \"Release plan\"}",
         idempotent: true,
     },
     McpTool {
+        name: "get_schedule",
+        toolset: Toolset::Schedule,
+        title: "Get the schedule",
+        description: "The Gantt chart's data for a `project` (add `include_subprojects: true` for \
+its sub-projects) or a `query`, or both: dated tasks as a tree with `depth`, each parent's \
+`summary` range (earliest start to latest due date of it and its subtasks), milestones, \
+`unscheduled` tasks without dates, `dependencies` (blocks links, finish-to-start: a blocked task \
+may begin the day after its blocker's due date), how many tasks depend on each, and `problems`: \
+starts before its blocker ends, a loop of blocking tasks, a subtask outside its parent's dates, \
+overdue, a start without a due date. `from` and `to` leave out tasks entirely before or after \
+those days. Dates are changed with update_task (`move_dependents: true` also moves the tasks \
+that depend on it later, as far as they must) or bulk_update_tasks; links with link_tasks. \
+Example: get_schedule {\"project\": \"TM\", \"query\": \"is:open\", \"from\": \"today\"}",
+        main: "schedule.get",
+        covers: &["schedule.get"],
+        idempotent: true,
+    },
+    McpTool {
         name: "attach_file",
         toolset: Toolset::Files,
         title: "Attach a file",
@@ -1192,6 +1212,7 @@ mod tests {
                 "search_wiki_pages",
                 "get_wiki_page",
                 "get_wiki_history",
+                "get_schedule",
                 "read_attachment",
                 "list_trash",
                 "list_backups",

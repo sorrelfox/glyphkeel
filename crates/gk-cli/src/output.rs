@@ -18,7 +18,7 @@ const LEADING: &[&str] = &["key", "seq", "name", "title", "id"];
 
 /// Fields that only let the app translate a text shown next to them; people
 /// read the text.
-const FOR_TRANSLATION: &[&str] = &["reason_id", "reason_args"];
+const FOR_TRANSLATION: &[&str] = &["reason_id", "reason_args", "message_id", "args"];
 
 /// The JSON text of `value`: keys sorted at every level, so the output is
 /// the same whatever order the engine built it in.

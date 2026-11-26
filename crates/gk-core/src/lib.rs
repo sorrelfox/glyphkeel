@@ -21,6 +21,7 @@ pub mod message;
 pub mod palette;
 pub mod progress;
 pub mod rank;
+pub mod schedule;
 pub mod status;
 pub mod text;
 pub mod wiki;
@@ -42,6 +43,7 @@ pub use message::Message;
 pub use palette::{PALETTE, suggest_hue};
 pub use progress::{SubtaskProgress, progress, subtask_progress};
 pub use rank::{Rank, RankError};
+pub use schedule::{Dates, Dependency, Graph, Shift, ShiftError, shift_dependents};
 pub use status::{DEFAULT_STATUSES, DEFAULT_TASK_TYPES, StatusCategory, closed_at_after_move};
 pub use text::{
     TextError, check_comment, check_line, check_markdown, check_title, clean_line, fold,

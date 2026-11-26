@@ -88,6 +88,7 @@ The safety class decides who may run an operation:
 | `list.layout.get` | read | app | — | — |
 | `list.layout.update` | write | app | — | — |
 | `query.parse` | read | app | — | — |
+| `schedule.get` | read | app, command line, MCP | `get_schedule` | `glyphkeel schedule` |
 | `wiki.list` | read | app, command line, MCP | `list_wiki_pages` | `glyphkeel wiki list` |
 | `wiki.search` | read | app, command line, MCP | `search_wiki_pages` | `glyphkeel wiki search <text>` |
 | `wiki.get` | read | app, command line, MCP | `get_wiki_page` | `glyphkeel wiki get <page>` |
@@ -577,6 +578,12 @@ Read a task query for the query field: highlighted pieces, the chips of the cond
 Input: `QueryParseInput`. Output: `ParsedQuery`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 Not available to agents: It serves the app's query field as the person types; agents and scripts run queries with task.search, which reports the same mistakes.
+
+## `schedule.get`
+
+The schedule of a project or a query for the Gantt chart: dated tasks as a tree with summary ranges for parents, milestones, the tasks without dates, blocks links as finish-to-start dependencies, and problems such as a task starting before its blocker ends.
+
+Input: `ScheduleInput`. Output: `Schedule`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `wiki.list`
 
