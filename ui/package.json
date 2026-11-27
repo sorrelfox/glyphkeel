@@ -38,6 +38,7 @@
     "test:depth": "playwright test --config playwright.depth.config.ts",
     "test:a11y": "playwright test --config playwright.a11y.config.ts",
     "test:lock": "playwright test --config playwright.lock.config.ts",
+    "test:layout": "playwright test --config playwright.layout.config.ts",
     "tauri": "TAURI_APP_PATH=../crates/gk-app TAURI_FRONTEND_PATH=. tauri"
   },
   "dependencies": {

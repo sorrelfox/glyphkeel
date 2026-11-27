@@ -11,6 +11,7 @@ import { useToasts } from "../../components/Toasts";
 import { failureText, useCall, useUndo } from "../../data/hooks";
 import { type ColourRule } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
+import { QueryInput } from "../list/QueryInput";
 import { HuePicker } from "../project/HuePicker";
 import styles from "./ColourRules.module.css";
 
@@ -127,7 +128,6 @@ export function ColourRulesDialog({ project, rules, onClose }: ColourRulesDialog
           {list.map((rule, at) => {
             const number = at + 1;
             const wrong = error !== null && error.rule === at;
-            const messageId = `colour-rule-error-${String(rule.key)}`;
             return (
               <li key={rule.key} className={classes(styles.rule, wrong && styles.wrong)} aria-label={t("colour-rules-rule", { number })} data-rule={number}>
                 <div className={styles.ruleFields}>
@@ -144,29 +144,25 @@ export function ColourRulesDialog({ project, rules, onClose }: ColourRulesDialog
                       />
                     </span>
                   </label>
-                  <label className={styles.row}>
-                    <span className={styles.label}>{t("colour-rules-query")}</span>
-                    <span className="field">
-                      <input
-                        value={rule.query}
-                        // Query text is the query language, not words of the person's language.
-                        dir="ltr"
-                        spellCheck={false}
-                        autoFocus={at === list.length - 1 && rule.query === ""}
-                        placeholder={t("colour-rules-query-placeholder")}
-                        aria-invalid={wrong || undefined}
-                        aria-describedby={wrong ? messageId : undefined}
-                        onChange={(event) => {
-                          change(at, { query: event.target.value });
-                        }}
-                      />
+                  <div className={styles.row}>
+                    <span className={styles.label} aria-hidden="true">
+                      {t("colour-rules-query")}
                     </span>
-                  </label>
-                  {wrong && (
-                    <p id={messageId} className={styles.error} role="alert">
-                      {error.text}
-                    </p>
-                  )}
+                    <div className={styles.query}>
+                      <QueryInput
+                        project={project}
+                        value={rule.query}
+                        onChange={(query) => {
+                          change(at, { query });
+                        }}
+                        label={t("colour-rules-query")}
+                        placeholder={t("colour-rules-query-placeholder")}
+                        autoFocus={at === list.length - 1 && rule.query === ""}
+                        // The engine's mistake on saving, under the rule it is about.
+                        problem={wrong ? error.text : undefined}
+                      />
+                    </div>
+                  </div>
                   <div className={styles.row}>
                     <span className={styles.label} aria-hidden="true">
                       {t("colour-rules-hue")}

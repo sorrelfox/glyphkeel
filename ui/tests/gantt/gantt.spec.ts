@@ -539,6 +539,8 @@ test("touch screens: read only, a tap opens the task, two fingers zoom", async (
   await bar(grid, key).locator("[data-handle=move]").tap();
   await expect(page.getByRole("complementary").or(page.locator("[data-task-panel]")).first()).toBeVisible();
   expect(await datesOf(grid, key)).toEqual(before);
+  // In a window this narrow the panel lies over the chart; closed, the chart takes the fingers.
+  await page.getByRole("button", { name: "Close panel" }).tap();
 
   // Pinch out zooms in, pinch in zooms out: touch events through the browser's own protocol.
   const cdp = await context.newCDPSession(page);

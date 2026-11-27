@@ -41,7 +41,7 @@ body { margin: 0; }
 .statusbar { height: var(--h-statusbar); border-top: 1px solid var(--border); font-size: var(--fs-small); color: var(--fg-muted); }
 .win { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: var(--hover); flex: none; }
 .win:hover { background: var(--pressed); }
-@media (max-width: 760px) { .sidebar, .hide-narrow { display: none !important; } }
+@media (max-width: 760px) { .hide-narrow { display: none !important; } }
 
 /* ---------- buttons ---------- */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; flex: none; height: var(--h-control); padding: 0 10px; border-radius: var(--r-m); background: var(--hover); font-weight: 500; white-space: nowrap; }

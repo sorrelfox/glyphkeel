@@ -31,6 +31,7 @@ import { saveExport } from "../../ipc/exportFile";
 import { isoDay } from "../board/model";
 import { presetRange, startOfWeek } from "../time/TimeReport";
 import { bandColour, CLOSED, CREATED, CreatedClosedChart, CumulativeFlowChart, CycleTimeChart, OPEN, Swatch } from "./charts";
+import { QueryInput } from "../list/QueryInput";
 import styles from "./FlowReports.module.css";
 
 /** The list's key for "all projects", "any type", "any label" and "any version"; no name has this form. */
@@ -281,26 +282,23 @@ export function FlowReportsScreen() {
             options={[{ id: ANY, label: t("flow-any-version") }, ...versions.map((name) => ({ id: name, label: name }))]}
           />
         )}
-        <span className={classes("field", styles.queryField)}>
-          <input
-            type="search"
-            aria-label={t("flow-query")}
-            placeholder={t("flow-query-placeholder")}
+        <div className={styles.queryField} data-flow-query>
+          <QueryInput
+            project={project === "" ? undefined : project}
             value={queryText}
-            data-flow-query
-            onChange={(event) => {
-              setQueryText(event.target.value);
-              if (event.target.value === "") {
+            onChange={(text) => {
+              setQueryText(text);
+              if (text.trim() === "") {
                 setQuery("");
               }
             }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                setQuery(queryText.trim());
-              }
+            onSubmit={() => {
+              setQuery(queryText.trim());
             }}
+            label={t("flow-query")}
+            placeholder={t("flow-query-placeholder")}
           />
-        </span>
+        </div>
       </div>
       <Tabs
         selectedKey={tab}

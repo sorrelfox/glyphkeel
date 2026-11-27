@@ -4,6 +4,7 @@
 import { startCompletion } from "@codemirror/autocomplete";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import { useLocalization } from "@fluent/react";
 import { Filter } from "lucide-react";
 import { useEffect, useId, useImperativeHandle, useRef, type Ref } from "react";
 
@@ -54,9 +55,14 @@ export function QueryField({ value, onChange, reading, problem, fields, names, l
   const view = useRef<EditorView | null>(null);
   const messageId = useId();
   // The editor reads these when it needs them, so it is made once.
-  const latest = useRef({ onChange, onSubmit, onEscape, fields, names });
+  const { l10n } = useLocalization();
+  const help = (name: string) => {
+    const id = `query-help-${name}`;
+    return l10n.getBundle(id) ? l10n.getString(id) : undefined;
+  };
+  const latest = useRef({ onChange, onSubmit, onEscape, fields, names, help });
   useEffect(() => {
-    latest.current = { onChange, onSubmit, onEscape, fields, names };
+    latest.current = { onChange, onSubmit, onEscape, fields, names, help };
   });
 
   useEffect(() => {
@@ -70,9 +76,16 @@ export function QueryField({ value, onChange, reading, problem, fields, names, l
         extensions: queryFieldExtensions({
           label,
           placeholder,
-          environment: { fields: () => latest.current.fields, names: () => latest.current.names },
+          environment: { fields: () => latest.current.fields, names: () => latest.current.names, help: (name) => latest.current.help(name) },
           onSubmit: () => latest.current.onSubmit?.(),
-          onEscape: () => latest.current.onEscape?.(),
+          onEscape: () => {
+            const handler = latest.current.onEscape;
+            if (!handler) {
+              return false;
+            }
+            handler();
+            return true;
+          },
           onText: (text) => {
             latest.current.onChange(text);
           },

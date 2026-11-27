@@ -301,6 +301,14 @@
   color: var(--fg-muted);
 }
 
+/* The query field with its conditions under it. */
+.queryCell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  min-width: 0;
+}
+
 .help {
   margin: 0;
   color: var(--fg-muted);

@@ -419,7 +419,7 @@ function LoadedGantt({ project, openTask, onOpen, saved, views }: GanttViewProps
           <GroupMenu value={groupBy} onChange={group} />
           <MilestonesButton project={project} includeSubprojects={includeSubprojects} onShow={(key) => chart.current?.show(key) ?? false} onOpen={onOpen} />
           <MenuTrigger>
-            <Button className="btn flat" isDisabled={!schedule}>
+            <Button className="btn flat" aria-label={t("gantt-export")} isDisabled={!schedule}>
               <Download className="ic" aria-hidden="true" />
               <span className="hide-narrow">{t("gantt-export")}</span>
             </Button>
