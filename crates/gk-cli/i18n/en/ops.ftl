@@ -1380,7 +1380,7 @@ op-file-cover--task = The task: its key or ID.
 
 ## glyphkeel agents sessions
 
-op-agent-sessions = List agent sessions, newest first, with their client, profile, times and counts of reads and writes.
+op-agent-sessions = List agent sessions, newest first, with their client, profile, times and counts of reads, writes and reads refused by the read limits.
 op-agent-sessions--limit = At most this many, newest first (default 50, at most 200).
 op-agent-sessions--running-only = Only sessions that haven't ended.
 
