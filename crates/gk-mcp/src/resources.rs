@@ -17,7 +17,9 @@
 //! does. Notifications are throttled: at most one per URI a second.
 //!
 //! The reads and watches happen within the agent's project when the
-//! session is limited to one; every profile may read.
+//! session is limited to one; every profile may read. The limit is checked
+//! again on every change, where the task or project is now: one that moves
+//! out of it is no longer watched.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::hash::{Hash, Hasher};
@@ -206,6 +208,15 @@ impl Target {
         })
     }
 
+    /// The resource this target watches, by ID.
+    fn resource(&self) -> Resource {
+        match self {
+            Self::Task(id) => Resource::Task(id.clone()),
+            Self::Project(id) => Resource::Project(id.clone()),
+            Self::Query { query, .. } => Resource::Query(query.clone()),
+        }
+    }
+
     /// Whether `event` may have changed the resource.
     fn touched_by(&self, event: &Changed) -> bool {
         match self {
@@ -270,28 +281,52 @@ pub(crate) fn note(
 
 /// Of the `dirty` URIs, those that really changed: a query's only when its
 /// result differs from the last one, read again for `ctx`.
+///
+/// When `ctx` is limited to a project, a watched task or project is looked
+/// up again by its ID within that limit, where it is now: one that has
+/// moved out of it is no longer watched and its change is not sent.
+/// `unlimited` is the same caller without the limit, to tell a resource
+/// that moved away from one that is gone (whose change is still sent).
 pub(crate) fn changed(
     engine: &Engine,
     ctx: &Context,
+    unlimited: &Context,
     watched: &Watched,
     dirty: BTreeSet<String>,
 ) -> Vec<String> {
     let mut watched = watched.lock().unwrap_or_else(PoisonError::into_inner);
-    dirty
-        .into_iter()
-        .filter(|uri| match watched.get_mut(uri) {
+    let mut out = Vec::new();
+    for uri in dirty {
+        let keep = match watched.get_mut(&uri) {
             Some(Target::Query { query, last }) => {
                 let now = read(engine, ctx, &Resource::Query(query.clone()))
                     .ok()
                     .map(|v| hash(&v));
                 let differs = now != *last;
                 *last = now;
-                differs
+                if differs {
+                    out.push(uri.clone());
+                }
+                true
             }
-            Some(_) => true,
-            None => false,
-        })
-        .collect()
+            Some(target) => {
+                let in_scope = ctx.project_scope.is_none() || {
+                    let resource = target.resource();
+                    read(engine, ctx, &resource).is_ok()
+                        || read(engine, unlimited, &resource).is_err()
+                };
+                if in_scope {
+                    out.push(uri.clone());
+                }
+                in_scope
+            }
+            None => true,
+        };
+        if !keep {
+            watched.remove(&uri);
+        }
+    }
+    out
 }
 
 /// The workspace's change events for watchers, started on first use. One

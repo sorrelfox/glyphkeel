@@ -202,7 +202,7 @@ function newWidget(host: DashboardHost, spec: WidgetSpec, pinned: string | null,
 /** The starter widgets, as the engine's. */
 export function starter(): WidgetSpec[] {
   return [
-    { kind: "query_count", title: "Open tasks", settings: { query: "is:open" } },
+    { kind: "query_count", settings: { query: "is:open" } },
     { kind: "overdue" },
     { kind: "due_soon" },
     { kind: "tasks_by_field", settings: { field: "status" } },

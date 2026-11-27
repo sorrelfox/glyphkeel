@@ -1168,5 +1168,3 @@ dashboard-too-many-widgets = A dashboard holds at most { $max } widgets.
 dashboard-position = Give a place from 1 to { $max }.
 dashboard-project-gone = The widget's project ({ $project }) no longer exists.
 dashboard-project-gone-hint = Choose another project for the widget, or remove it.
-# The title of the starter dashboard's first widget, which counts the open tasks.
-dashboard-starter-open = Open tasks

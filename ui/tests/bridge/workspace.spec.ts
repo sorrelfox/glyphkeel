@@ -124,7 +124,7 @@ test("a project's board on the engine: create a project and a task, drag the tas
   const panel = page.getByRole("complementary", { name: /^Task / });
   await expect(panel).toHaveAccessibleName(new RegExp(key));
   await panel.getByRole("button", { name: /^Priority:/ }).click();
-  await page.getByRole("menuitem", { name: "High" }).click();
+  await page.getByRole("menuitemradio", { name: "High" }).click();
   await expect(panel.getByRole("button", { name: /^Priority:/ })).toHaveAccessibleName(/High/);
   await panel.getByRole("button", { name: /Estimate\u2069?:/ }).click();
   await page.keyboard.type("1:30");

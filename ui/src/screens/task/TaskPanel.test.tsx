@@ -299,7 +299,7 @@ describe("comments and history", () => {
   it("lists the task's changes and reverts the latest", async () => {
     const { panel } = await renderPanel();
     fireEvent.click(within(panel).getByRole("button", { name: named(/^Priority:/) }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: /High/ }));
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /High/ }));
     await waitFor(() => {
       expect(plain(within(panel).getByRole("button", { name: named(/^Priority:/) }).getAttribute("aria-label"))).toBe("Priority: High");
     });

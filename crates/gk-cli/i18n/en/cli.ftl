@@ -165,6 +165,8 @@ cli-dashboard-run = { $at }  { $rule }: { $message }
 ## The widgets' own titles
 
 cli-widget-query-count = Matching tasks
+# The title of a widget that counts the open tasks (query is:open), as the starter dashboard has.
+cli-widget-open-tasks = Open tasks
 cli-widget-query-list = Task list
 cli-widget-created-closed = Created and closed
 cli-widget-cumulative-flow = Cumulative flow

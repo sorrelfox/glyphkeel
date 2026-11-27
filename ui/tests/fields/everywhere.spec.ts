@@ -43,7 +43,7 @@ test("a board card shows a custom field the board's options choose", async ({ pa
   const shown = page.locator(`section[data-lane] [data-card="${key ?? ""}"]`);
   await expect(shown).not.toContainText("Back end");
   await page.getByRole("button", { name: /^Board options/ }).click();
-  await page.getByRole("menuitem", { name: "Area" }).click();
+  await page.getByRole("menuitemcheckbox", { name: "Area" }).click();
   await expect(shown.getByLabel(/Area.*Back end/)).toBeVisible();
   await expect.poll(async () => plain(await shown.innerText())).toContain("Back end");
 });

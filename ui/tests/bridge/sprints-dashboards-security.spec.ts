@@ -103,7 +103,7 @@ test("a sprint is planned, filled, started and a task joins it from its panel", 
   await backlog.getByRole("row", { name: loose(`${pick} `, false) }).click();
   const panel = page.getByRole("complementary", { name: /^Task / });
   await panel.getByRole("button", { name: loose("Sprint: Backlog") }).click();
-  await page.getByRole("menuitem", { name: loose("Sprint 1 (active)") }).click();
+  await page.getByRole("menuitemradio", { name: loose("Sprint 1 (active)") }).click();
   await expect(panel.getByRole("button", { name: loose("Sprint: Sprint 1") })).toBeVisible();
   await expect.poll(() => (shown(pick)["sprint"] as { name?: string } | undefined)?.name).toBe("Sprint 1");
 });
@@ -167,7 +167,7 @@ test("the board colours cards by priority and shows their first image, as the en
   await openProject(page, "Gatehouse");
   const options = async (item: string) => {
     await page.getByRole("button", { name: /^Board options/ }).click();
-    await page.getByRole("menuitem", { name: item }).click();
+    await page.getByRole("menuitemradio", { name: item }).click();
   };
   await options("By priority");
   await expect(page.locator(`[data-card="${gate}"][data-edge=red]`)).toBeVisible();

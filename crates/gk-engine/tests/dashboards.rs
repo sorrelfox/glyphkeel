@@ -92,7 +92,8 @@ fn the_starter_dashboard_shows_counts_lists_bars_reports_and_activity() {
             "activity"
         ]
     );
-    assert_eq!(widgets[0]["title"], "Open tasks");
+    // No title is stored, so each program shows its own in its language.
+    assert!(widgets.iter().all(|w| w["title"].is_null()), "{widgets:?}");
     assert_eq!(widgets[4]["width"], 2, "charts start two columns wide");
     assert_eq!(made["dashboard"]["created_by"]["kind"], "user");
 

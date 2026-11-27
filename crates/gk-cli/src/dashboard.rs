@@ -51,8 +51,12 @@ pub(crate) fn widget(value: &Value) -> String {
     out
 }
 
-/// The kind's own title.
-fn kind_title(kind: &str) -> String {
+/// The title of widget `w` that has none of its own: the kind's own, or
+/// "Open tasks" for a count of the open tasks (as the starter dashboard has).
+fn kind_title(kind: &str, w: &Value) -> String {
+    if kind == "query_count" && w["settings"]["query"].as_str().map(str::trim) == Some("is:open") {
+        return text("cli-widget-open-tasks", &[]);
+    }
     let id = match kind {
         "query_count" => "cli-widget-query-count",
         "query_list" => "cli-widget-query-list",
@@ -87,7 +91,7 @@ fn widget_text(out: &mut String, place: usize, value: &Value) {
     let w = &value["widget"];
     let kind = str_of(w, "kind");
     let title = match str_of(w, "title") {
-        "" => kind_title(kind),
+        "" => kind_title(kind, w),
         t => t.to_owned(),
     };
     let heading = if place == 0 {
