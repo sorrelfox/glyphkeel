@@ -160,11 +160,11 @@ test("the list on the engine: groups, a second sort key, columns dragged and res
   // Two urgent tasks, and one moved on to To do.
   for (const title of ["Water roses", "Dig beds"]) {
     await rows(page).filter({ hasText: title }).getByRole("button", { name: /^Priority of / }).click();
-    await page.getByRole("menuitem", { name: /Urgent/ }).click();
+    await page.getByRole("menuitemradio", { name: /Urgent/ }).click();
     await expect(rows(page).filter({ hasText: title }).getByRole("button", { name: /^Priority of .*Urgent/ })).toBeVisible();
   }
   await rows(page).filter({ hasText: "Plant beans" }).getByRole("button", { name: /^Status of / }).click();
-  await page.getByRole("menuitem", { name: /To do/ }).click();
+  await page.getByRole("menuitemradio", { name: /To do/ }).click();
   await expect(rows(page).filter({ hasText: "Plant beans" }).getByRole("button", { name: /^Status of .*To do/ })).toBeVisible();
 
   // Grouped by status: a header per status with its count; a group collapses.

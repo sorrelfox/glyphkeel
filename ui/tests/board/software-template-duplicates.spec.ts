@@ -108,7 +108,7 @@ test("closing from the list's status cell and from the bulk bar asks about the d
 
   // The status cell: Done, and the question.
   await row(page, original).getByRole("button", { name: /^Status of / }).click();
-  await page.getByRole("menuitem", { name: "Done" }).click();
+  await page.getByRole("menuitemradio", { name: "Done" }).click();
   const ask = page.getByRole("dialog", { name: "Close the duplicate too?" });
   await expect(ask).toBeVisible();
   await expect(ask).toContainText(copy);

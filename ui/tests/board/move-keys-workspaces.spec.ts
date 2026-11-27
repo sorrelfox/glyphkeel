@@ -108,7 +108,7 @@ test("make another workspace, work in it, and switch back", async ({ page }) => 
   await dialog.getByRole("button", { name: "Rename", exact: true }).click();
   await expect(switcher).toContainText("Hobby");
   await switcher.click();
-  await page.getByRole("menuitem", { name: "Sample workspace" }).click();
+  await page.getByRole("menuitemradio", { name: "Sample workspace" }).click();
   await expect(switcher).toContainText("Sample workspace");
   await expect(page.getByRole("row", { name: /Task Manager/ }).first()).toBeVisible();
 });

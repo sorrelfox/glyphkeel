@@ -13,6 +13,8 @@ sprint-state-closed = Completed
 
 prop-sprint = Sprint
 prop-sprint-value = Sprint: { $value }
+# The sprint picker's name when the sprint runs or has ended: its name, then its state (Active, Completed).
+prop-sprint-value-state = Sprint: { $value } { $state }
 prop-sprint-active = { $name } (active)
 prop-sprint-loading = Loading sprints…
 prop-sprint-none-open = No planned or active sprints

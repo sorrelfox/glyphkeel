@@ -3,7 +3,7 @@
 
 import { Check, HardDrive } from "lucide-react";
 import { useState } from "react";
-import { Button, Menu, MenuItem, MenuTrigger, Popover, Separator } from "react-aria-components";
+import { Button, Menu, MenuItem, MenuSection, MenuTrigger, Popover, Separator } from "react-aria-components";
 
 import { Dialog } from "../components/Dialog";
 import { errorToast } from "../data/hooks";
@@ -56,12 +56,15 @@ export function WorkspaceSwitcher({ name, title }: { name: string; title?: strin
               }
             }}
           >
-            {view.items.map((item) => (
-              <MenuItem key={item.name} id={`open:${item.name}`} className="item" textValue={item.name} data-testid={`workspace-${item.name}`}>
-                <Check className="ic s" aria-hidden="true" style={{ visibility: item.current ? "visible" : "hidden" }} />
-                <span className="grow truncate">{item.name}</span>
-              </MenuItem>
-            ))}
+            {/* The workspaces are a choice: the open one is checked (aria-checked). */}
+            <MenuSection selectionMode="single" selectedKeys={view.items.filter((item) => item.current).map((item) => `open:${item.name}`)}>
+              {view.items.map((item) => (
+                <MenuItem key={item.name} id={`open:${item.name}`} className="item" textValue={item.name} data-testid={`workspace-${item.name}`}>
+                  <Check className="ic s" aria-hidden="true" style={{ visibility: item.current ? "visible" : "hidden" }} />
+                  <span className="grow truncate">{item.name}</span>
+                </MenuItem>
+              ))}
+            </MenuSection>
             {view.items.length > 0 && <Separator className="menuSeparator" />}
             <MenuItem id={NEW} className="item" textValue={t("workspace-new")}>
               <span className="grow truncate">{t("workspace-new")}</span>

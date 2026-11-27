@@ -104,7 +104,7 @@ test("a sprint is planned, filled, started and a task joins it from its panel", 
   const panel = page.getByRole("complementary", { name: /^Task / });
   await panel.getByRole("button", { name: loose("Sprint: Backlog") }).click();
   await page.getByRole("menuitemradio", { name: loose("Sprint 1 (active)") }).click();
-  await expect(panel.getByRole("button", { name: loose("Sprint: Sprint 1") })).toBeVisible();
+  await expect(panel.getByRole("button", { name: loose("Sprint: Sprint 1 Active") })).toBeVisible();
   await expect.poll(() => (shown(pick)["sprint"] as { name?: string } | undefined)?.name).toBe("Sprint 1");
 });
 

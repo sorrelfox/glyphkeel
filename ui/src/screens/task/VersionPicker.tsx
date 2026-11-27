@@ -50,9 +50,22 @@ export function VersionPicker({ task, readOnly, onChange }: VersionPickerProps) 
         }
       }}
     >
-      <Button className="val" isDisabled={readOnly} aria-label={t("prop-version-value", { value: current?.name ?? t("prop-none") })}>
+      {/* The name holds all the text shown: the version and, unless it is open, its status. */}
+      <Button
+        className="val"
+        isDisabled={readOnly}
+        aria-label={
+          current === undefined
+            ? t("prop-version-value", { value: t("prop-none") })
+            : current.status === "open"
+              ? t("prop-version-value", { value: current.name })
+              : t("prop-version-value-status", { value: current.name, status: t(`version-status-${current.status}`) })
+        }
+      >
         <Milestone className="ic s muted" aria-hidden="true" />
         {current === undefined ? <span className="faint">{t("prop-none")}</span> : <span className="truncate">{current.name}</span>}
+        {/* A space, so the name and the state read as two words. */}
+        {current !== undefined && " "}
         {current !== undefined && current.status !== "open" && <span className="chip sm">{t(`version-status-${current.status}`)}</span>}
       </Button>
       <Popover className="pop menuPopover" placement="bottom start" offset={4}>

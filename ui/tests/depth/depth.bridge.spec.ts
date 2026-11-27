@@ -132,8 +132,8 @@ test("a status rule set from the command line refuses a move in the board, and t
   gk("task", "edit", "RU-1", "--estimate", "2h");
   const panel = await openPanel(page, "Needs an estimate");
   await panel.getByRole("button", { name: /^Status:/ }).click();
-  await expect(page.getByRole("menuitem", { name: /^Done/ })).toBeEnabled();
-  await page.getByRole("menuitem", { name: /^Done/ }).click();
+  await expect(page.getByRole("menuitemradio", { name: /^Done/ })).toBeEnabled();
+  await page.getByRole("menuitemradio", { name: /^Done/ }).click();
   await expect.poll(() => show("RU-1").status.name).toBe("Done");
 });
 

@@ -74,12 +74,12 @@ describe("the task panel's sprint picker", () => {
     expect(isChecked(current)).toBe(true);
     fireEvent.click(within(again).getByRole("menuitemradio", { name: named(/^Sprint 2 \(active\)$/) }));
     await waitFor(() => {
-      expect(within(picker(panel, "Sprint 2")).getByText("Active")).toBeTruthy();
+      expect(within(picker(panel, "Sprint 2 Active")).getByText("Active")).toBeTruthy();
     });
     expect(await sprintOf()).toBe("Sprint 2");
 
     // And back to the backlog.
-    fireEvent.click(picker(panel, "Sprint 2"));
+    fireEvent.click(picker(panel, "Sprint 2 Active"));
     const last = await screen.findByRole("menu");
     fireEvent.click(within(last).getByRole("menuitemradio", { name: "Backlog" }));
     await waitFor(() => {
