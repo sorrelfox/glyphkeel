@@ -1284,3 +1284,37 @@ fn stop(w: &mut WriteCtx<'_>, input: TimerStopInput) -> Result<TimerChange, Fail
     write_timer(w, None)?;
     timer_change(w, entry, warnings)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::csv_line;
+
+    fn line(cells: &[&str]) -> String {
+        let mut out = String::new();
+        csv_line(&mut out, cells);
+        out
+    }
+
+    #[test]
+    fn formula_starts_get_an_apostrophe() {
+        for lead in ["=", "+", "-", "@", "\t", "\r"] {
+            let cell = format!("{lead}1+1");
+            let out = line(&[&cell]);
+            assert!(
+                out.starts_with("'") || out.starts_with("\"'"),
+                "{lead:?}: {out:?}"
+            );
+        }
+        assert_eq!(line(&["=A1", "x"]), "'=A1,x\r\n");
+        assert_eq!(line(&["\r=A1"]), "\"'\r=A1\"\r\n");
+    }
+
+    #[test]
+    fn numbers_and_plain_text_stay_as_they_are() {
+        assert_eq!(
+            line(&["90", "Write, \"docs\"", ""]),
+            "90,\"Write, \"\"docs\"\"\",\r\n"
+        );
+        assert_eq!(line(&["a=b"]), "a=b\r\n");
+    }
+}

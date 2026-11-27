@@ -53,6 +53,7 @@ How to use the desktop app.
 | [Connecting MCP clients](mcp-clients.md) | Set-up for Claude Code, Claude Desktop, Codex, Cursor and VS Code |
 | [Data and settings](data-and-settings.md) | Where your data and settings are kept, and how to move them |
 | [Glyphkeel on Windows](windows.md) | Installing, updating and removing Glyphkeel on Windows |
+| [Security](security.md) | What Glyphkeel protects you against, the local endpoint for agents, reporting a problem |
 
 ## Reference
 

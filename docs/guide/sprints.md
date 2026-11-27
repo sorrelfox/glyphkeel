@@ -29,7 +29,19 @@ you like. A sprint has:
   or **Backlog** under **Move to**. This works from the keyboard too.
 - In the task panel, set the task's **Sprint** field.
 
-Tasks that move to another project leave their sprint.
+Tasks that move to another project leave their sprint: a task can only be in
+a sprint of its own project. The move dialog lists the sprints they leave.
+
+A **duplicate** of a task stays in the task's sprint, unless that sprint is
+completed; then the copy goes to the backlog.
+
+A **task template** never names a planned or completed sprint. It may say
+`active`: a task made from it then joins the sprint running at that moment,
+and goes to the backlog when none is. A template saved from a task in the
+running sprint says `active`. A **recurring task** follows the same rule: when
+the series was set up on a task in the running sprint, each new occurrence
+joins the sprint running when it is made; otherwise new occurrences start in
+the backlog.
 
 ## Starting and completing
 

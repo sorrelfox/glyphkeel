@@ -19,13 +19,13 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 use super::model::{
-    Activity, AgentSession, Attachment, Comment, Manifest, ProjectFile, Revision, Task,
-    TemplateLine, TimeEntry, WikiPage,
+    Activity, AgentSession, Attachment, AutomationLine, Comment, Manifest, ProjectFile, Revision,
+    Task, TemplateLine, TimeEntry, WikiPage,
 };
 use super::source::{Source, safe_path};
 use super::{
-    FORMAT_NAME, FORMAT_VERSION, Limits, Progress, Rejected, TEMPLATES, plain_project_dir,
-    project_dir, report,
+    AUTOMATIONS, FORMAT_NAME, FORMAT_VERSION, Limits, Progress, Rejected, TEMPLATES,
+    plain_project_dir, project_dir, report,
 };
 use crate::context::Context;
 use crate::engine::Engine;
@@ -68,6 +68,8 @@ pub(crate) struct Parsed {
     pub(crate) sessions: Vec<AgentSession>,
     /// The workspace's project templates.
     pub(crate) templates: Vec<TemplateLine>,
+    /// The workspace's own automation rules.
+    pub(crate) automations: Vec<AutomationLine>,
     /// Parents before their sub-projects.
     pub(crate) projects: Vec<Proj>,
     /// Stored files by SHA-256, with their sizes.
@@ -107,7 +109,7 @@ fn is_hash(s: &str) -> bool {
 fn classify(path: &str, keys: &HashMap<String, String>) -> Option<Class> {
     match path {
         MANIFEST => return Some(Class::Manifest),
-        SESSIONS | TEMPLATES => return Some(Class::Sessions),
+        SESSIONS | TEMPLATES | AUTOMATIONS => return Some(Class::Sessions),
         FIXTURES => return Some(Class::Fixtures),
         _ => {}
     }
@@ -269,6 +271,10 @@ pub(crate) fn read(
         Some(bytes) => lines(TEMPLATES, &bytes, limits, &mut records)?,
         None => Vec::new(),
     };
+    let automations = match texts.remove(AUTOMATIONS) {
+        Some(bytes) => lines(AUTOMATIONS, &bytes, limits, &mut records)?,
+        None => Vec::new(),
+    };
     let mut projects = Vec::new();
     for mp in &manifest.projects {
         // The folder the manifest names: checked to be the key's.
@@ -321,6 +327,7 @@ pub(crate) fn read(
         manifest,
         sessions,
         templates,
+        automations,
         projects,
         blobs,
     };
@@ -377,6 +384,38 @@ fn rank_ok(path: &str, line: usize, rank: &str) -> Result<(), Rejected> {
 
 /// The references between records, sizes and enumerations the schema
 /// doesn't already enforce, and the counts of the manifest.
+/// Checks an automation rule of the archive: its rank, its name (unique in
+/// its scope) and the size of what it does. What it names is checked when
+/// it runs, as for a rule kept here.
+fn check_automation(
+    path: &str,
+    line: usize,
+    r: &AutomationLine,
+    names: &mut HashSet<String>,
+) -> Result<(), Rejected> {
+    use gk_api::ops::automation::AUTOMATION_ACTIONS_MAX;
+    rank_ok(path, line, &r.rank)?;
+    let size = serde_json::to_string(&(&r.trigger, &r.condition, &r.actions))
+        .map_or(usize::MAX, |t| t.len());
+    if r.name.trim().is_empty()
+        || r.name.chars().count() > 100
+        || r.actions.is_empty()
+        || r.actions.len() > AUTOMATION_ACTIONS_MAX
+        || size > 200_000
+        || !matches!(r.created_by_kind.as_str(), "user" | "agent" | "automation")
+        || !matches!(r.updated_by_kind.as_str(), "user" | "agent" | "automation")
+        || !names.insert(fold(&r.name))
+    {
+        return Err(bad_with(
+            path.to_owned(),
+            line,
+            "transfer-invalid-automation",
+            &[("rule", &r.name)],
+        ));
+    }
+    Ok(())
+}
+
 fn check(parsed: &mut Parsed) -> Result<(), Rejected> {
     let mut ids: HashSet<Id> = HashSet::new();
     let mut unique = |path: &str, line: usize, text: &str| -> Result<Id, Rejected> {
@@ -394,6 +433,11 @@ fn check(parsed: &mut Parsed) -> Result<(), Rejected> {
     };
     for (i, s) in parsed.sessions.iter().enumerate() {
         unique(SESSIONS, i + 1, &s.id)?;
+    }
+    let mut rule_names = HashSet::new();
+    for (i, r) in parsed.automations.iter().enumerate() {
+        unique(AUTOMATIONS, i + 1, &r.id)?;
+        check_automation(AUTOMATIONS, i + 1, r, &mut rule_names)?;
     }
     let archive_projects: HashSet<String> = parsed
         .projects
@@ -509,6 +553,11 @@ fn check(parsed: &mut Parsed) -> Result<(), Rejected> {
         for v in &proj.file.views {
             unique(&pj, 1, &v.id)?;
             rank_ok(&pj, 1, &v.rank)?;
+        }
+        let mut rule_names = HashSet::new();
+        for r in &proj.file.automations {
+            unique(&pj, 1, &r.id)?;
+            check_automation(&pj, 1, r, &mut rule_names)?;
         }
         let tp = format!("{dir}/tasks.jsonl");
         super::custom_fields::check(&pj, &tp, &proj.file.custom_fields, &proj.tasks)?;
@@ -900,8 +949,14 @@ pub(crate) fn plan(
     for t in &parsed.templates {
         replace("templates", &t.id)?;
     }
+    for r in &parsed.automations {
+        replace("automation_rules", &r.id)?;
+    }
     for p in &parsed.projects {
         replace("projects", &p.file.project.id)?;
+        for r in &p.file.automations {
+            replace("automation_rules", &r.id)?;
+        }
         for s in &p.file.statuses {
             replace("statuses", &s.id)?;
         }
@@ -2060,6 +2115,22 @@ fn write(
         }
     }
 
+    // Automation rules, once the tasks they may have acted on are here.
+    let today = w.zone().day_of(now);
+    for r in &parsed.automations {
+        // A workspace rule whose name is taken here is left out, as a
+        // project template is.
+        if !crate::ops::automation::name_taken(tx, None, &r.name)? {
+            insert_automation(tx, plan, r, None, now, today)?;
+        }
+    }
+    for proj in &parsed.projects {
+        let id = plan.id(&proj.file.project.id);
+        for r in &proj.file.automations {
+            insert_automation(tx, plan, r, Some(id), now, today)?;
+        }
+    }
+
     // History, in its original order across the archive.
     let mut rows: Vec<(&Activity, Id)> = parsed
         .projects
@@ -2121,6 +2192,51 @@ fn write(
 
 /// Inserts an archive's template; a project template whose name the
 /// workspace has already is left out.
+/// Stores an automation rule of the archive, with its run state reset. The
+/// custom fields it names by ID take the IDs the fields get here.
+fn insert_automation(
+    tx: &Transaction<'_>,
+    plan: &Plan,
+    r: &AutomationLine,
+    project: Option<Id>,
+    now: i64,
+    today: gk_core::Day,
+) -> Result<(), Failure> {
+    use gk_api::ops::rules::CUSTOM_FIELD_PREFIX;
+    let field_id = |text: &str| -> Option<String> {
+        let id: Id = text.parse().ok()?;
+        plan.ids.get(&id).map(Id::to_string)
+    };
+    let mut trigger = r.trigger.clone();
+    for f in &mut trigger.fields {
+        if let Some(new) = f.strip_prefix(CUSTOM_FIELD_PREFIX).and_then(field_id) {
+            *f = format!("{CUSTOM_FIELD_PREFIX}{new}");
+        }
+    }
+    let mut actions = r.actions.clone();
+    for a in &mut actions {
+        a.fields = std::mem::take(&mut a.fields)
+            .into_iter()
+            .map(|(k, v)| (field_id(k.trim()).unwrap_or(k), v))
+            .collect();
+    }
+    let record = crate::ops::automation::Record {
+        project: project.map(|p| p.to_string()),
+        name: r.name.clone(),
+        enabled: r.enabled,
+        trigger,
+        condition: r.condition.clone(),
+        actions,
+        rank: r.rank.clone(),
+        created_at: r.created_at,
+        created_by_kind: r.created_by_kind.clone(),
+        created_by_name: r.created_by_name.clone(),
+        updated_at: r.updated_at,
+        updated_by_kind: r.updated_by_kind.clone(),
+    };
+    crate::ops::automation::insert_imported(tx, plan.id(&r.id), &record, now, today)
+}
+
 fn insert_template(
     tx: &Transaction<'_>,
     plan: &Plan,

@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { type ListedTask, type SprintBurndown, type SprintChange, type SprintList, type Task } from "../../generated/ops";
+import { type ListedTask, type MoveCheck, type SprintBurndown, type SprintChange, type SprintList, type Task, type TaskBlueprint, type TaskChange, type TemplateApplied, type TemplateChange } from "../../generated/ops";
 import { FakeError, FakeWorkspace } from "./engine";
 import { seed } from "./seed";
 
@@ -82,5 +82,24 @@ describe("the sample workspace's sprints", () => {
     expect(burndown.days[0]?.date).toBe("2026-11-18");
     expect(burndown.days.at(-1)?.date).toBe("2026-11-23");
     expect(code(() => ws.call("sprint.burndown", { sprint: "Sprint 3", project: "TM" }))).toBe("conflict");
+  });
+
+  it("keeps a copy in its sprint, previews leaving it, and lets templates name only the active one", () => {
+    const ws = workspace();
+    const list = call<SprintList>(ws, "sprint.list", { project: "TM", include_tasks: true });
+    const running = list.items[1]?.tasks?.[0]?.key ?? "";
+    const finished = list.items[0]?.tasks?.[0]?.key ?? "";
+    const check = call<MoveCheck>(ws, "task.move_check", { keys: [running], project: "PER" });
+    expect(check.sprints).toEqual([{ name: "Sprint 2", tasks: expect.any(Number) as number }]);
+    const copy = call<TaskChange>(ws, "task.duplicate", { key: running }).task;
+    expect(copy.sprint?.name).toBe("Sprint 2");
+    const old = call<TaskChange>(ws, "task.duplicate", { key: finished }).task;
+    expect(old.sprint).toBeUndefined();
+    const made = call<TemplateChange>(ws, "template.create", { name: "Sprint chore", from_task: running });
+    expect((made.template.task as TaskBlueprint | undefined)?.sprint).toBe("active");
+    const used = call<TemplateApplied>(ws, "template.apply", { template: "Sprint chore", project: "TM" });
+    const task = call<{ items: Task[] }>(ws, "task.get", { keys: [used.task?.key] }).items[0];
+    expect(task?.sprint?.name).toBe("Sprint 2");
+    expect(code(() => ws.call("template.create", { name: "Planned", project: "TM", task: { title: "X", sprint: "Sprint 3" } }))).toBe("invalid");
   });
 });

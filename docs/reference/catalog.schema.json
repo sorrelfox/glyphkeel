@@ -28908,6 +28908,14 @@
             },
             "type": "array"
           },
+          "sprints": {
+            "default": [],
+            "description": "The sprints they are in. A task is only ever in a sprint of its own\nproject, so the move takes them out of these: there is no target.",
+            "items": {
+              "$ref": "#/$defs/MoveMatch"
+            },
+            "type": "array"
+          },
           "statuses": {
             "description": "The statuses the tasks have now.",
             "items": {
@@ -28939,6 +28947,7 @@
           "labels",
           "fields",
           "versions",
+          "sprints",
           "fallback_status",
           "fallback_type"
         ],
@@ -45894,6 +45903,13 @@
                 "$ref": "#/$defs/Priority",
                 "description": "The priority; left out for none."
               },
+              "sprint": {
+                "description": "`active`: the task goes into the project's active sprint, when one\nis running as it is made. Without it the task is in no sprint (the\nbacklog); a template never names a planned or closed sprint.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "start_in_days": {
                 "description": "The start date: this many days after the day the template is used\n(negative: before).",
                 "format": "int32",
@@ -46883,6 +46899,13 @@
               "priority": {
                 "$ref": "#/$defs/Priority",
                 "description": "The priority; left out for none."
+              },
+              "sprint": {
+                "description": "`active`: the task goes into the project's active sprint, when one\nis running as it is made. Without it the task is in no sprint (the\nbacklog); a template never names a planned or closed sprint.",
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "start_in_days": {
                 "description": "The start date: this many days after the day the template is used\n(negative: before).",

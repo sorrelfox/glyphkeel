@@ -105,6 +105,7 @@ automation-every-weekly = Every week
 automation-at-time = At
 automation-weekday = On
 automation-condition = Only for tasks that match
+automation-condition-placeholder = Every task
 automation-condition-hint = A query, as in the list: for example type:Bug priority:high. Leave it empty for every task; a scheduled rule needs one, such as is:open.
 automation-actions = Then
 automation-add-action = Add an action

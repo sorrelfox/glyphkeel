@@ -25,6 +25,7 @@ import {
   type TaskSearchResult,
   type ViewKind,
 } from "../generated/ops";
+import { csvCell } from "./csv";
 import { csvFieldText } from "./fields";
 import { formatDuration, type DurationUnits } from "./duration";
 import { useCall, useOp } from "./hooks";
@@ -290,12 +291,6 @@ function exportValue(task: ListedTask, column: (typeof EXPORT_COLUMNS)[number], 
   }
 }
 
-/** A CSV field: quoted when it holds a separator, a quote or a line break. Formula starts are defused. */
-function csvField(value: string): string {
-  const safe = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
-  return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
-}
-
 /**
  * Tasks as CSV (RFC 4180, CRLF line ends, a header row). Values stay
  * locale-neutral: ISO dates, durations in the workspace's units and in
@@ -304,9 +299,9 @@ function csvField(value: string): string {
 export function toCsv(tasks: readonly ListedTask[], units: DurationUnits, fields: readonly string[] = []): string {
   // Custom fields follow, as `cf.<name>`: the ones given, then any other a task has.
   const custom = [...new Set([...fields.map((field) => field.replace(/^cf\./, "")), ...tasks.flatMap((task) => Object.keys(task.fields ?? {}))])];
-  const lines = [[...EXPORT_COLUMNS, ...custom.map((name) => csvField(`cf.${name}`))].join(",")];
+  const lines = [[...EXPORT_COLUMNS, ...custom.map((name) => csvCell(`cf.${name}`))].join(",")];
   for (const task of tasks) {
-    lines.push([...EXPORT_COLUMNS.map((column) => csvField(exportValue(task, column, units))), ...custom.map((name) => csvField(csvFieldText(task.fields?.[name])))].join(","));
+    lines.push([...EXPORT_COLUMNS.map((column) => csvCell(exportValue(task, column, units))), ...custom.map((name) => csvCell(csvFieldText(task.fields?.[name])))].join(","));
   }
   return `${lines.join("\r\n")}\r\n`;
 }

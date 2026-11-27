@@ -28,7 +28,7 @@ async function openSprints(page: Page) {
 
 /** A whole name, whatever isolation marks Fluent put around its placeables. */
 const loose = (text: string, whole = true) => {
-  const body = [...text].map((c) => c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[⁨⁩]*");
+  const body = Array.from(text, (c) => c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[⁨⁩]*");
   return new RegExp(whole ? `^[⁨⁩]*${body}[⁨⁩]*$` : `^[⁨⁩]*${body}`);
 };
 

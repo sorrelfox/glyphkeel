@@ -4,8 +4,6 @@
 // Generated from the operation catalog by `cargo xtask gen`. Do not edit:
 // change the catalog in crates/gk-api and run `cargo xtask gen` again.
 
-/* eslint-disable */
-
 /** What an action does. */
 export type ActionKind = "set_fields" | "add_label" | "remove_label" | "move_to_status" | "add_comment" | "create_subtask" | "create_linked_task" | "notify";
 
@@ -2586,6 +2584,8 @@ export type MoveCheck = {
   project: string;
   /** The target's required custom fields (shown for the type a task would have there) that moving tasks would have no value of. A field with a default gives it; without one the move is refused unless `fields` gives a value. */
   required_fields?: MoveRequiredField[];
+  /** The sprints they are in. A task is only ever in a sprint of its own project, so the move takes them out of these: there is no target. */
+  sprints: MoveMatch[];
   /** The statuses the tasks have now. */
   statuses: MoveMatch[];
   /** Their types. */
@@ -4321,6 +4321,8 @@ export type TaskBlueprint = {
   labels?: string[];
   /** The priority; left out for none. */
   priority?: Priority;
+  /** `active`: the task goes into the project's active sprint, when one is running as it is made. Without it the task is in no sprint (the backlog); a template never names a planned or closed sprint. */
+  sprint?: string | null;
   /** The start date: this many days after the day the template is used (negative: before). */
   start_in_days?: number | null;
   /** Its subtasks at every level, each after the one it sits under, in order. */

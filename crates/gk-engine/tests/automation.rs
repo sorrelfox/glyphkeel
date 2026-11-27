@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicI64, Ordering};
 
 use gk_api::ops::common::Via;
 use gk_api::{ErrorCode, OpError, Profile};
-use gk_engine::{Context, Engine, EngineConfig, Role, SessionStart};
+use gk_engine::{Confirmation, Context, Engine, EngineConfig, Role, SessionStart};
 use gk_store::WorkspaceLayout;
 use serde_json::{Value, json};
 use tempfile::TempDir;
@@ -754,4 +754,194 @@ fn renaming_a_label_rewrites_the_conditions_that_name_it() {
         json!({ "rule": "Urgent ones", "project": "AU" }),
     );
     assert_eq!(rule["condition"], "label:hot");
+}
+
+#[test]
+fn renames_reach_the_names_in_triggers_and_actions() {
+    let ws = open();
+    ws.call(
+        "field.create",
+        json!({ "project": "AU", "name": "Area", "kind": "select", "options": ["Front", "Back"] }),
+    );
+    ws.rule(json!({
+        "project": "AU",
+        "name": "Review",
+        "trigger": { "on": "moved_to_status", "status": "In progress" },
+        "condition": "cf.area:front",
+        "actions": [
+            { "kind": "move_to_status", "status": "Review" },
+            { "kind": "add_label", "label": "triage" },
+            { "kind": "set_fields", "fields": { "type": "Bug", "Area": "Front" } },
+        ],
+    }));
+    ws.call(
+        "project.update",
+        json!({ "project": "AU",
+                "statuses": [{ "status": "in progress", "name": "Doing" },
+                             { "status": "Review", "name": "Checking" }],
+                "labels": [{ "label": "triage", "name": "sorting" }],
+                "types": [{ "type": "Bug", "name": "Defect" }] }),
+    );
+    ws.call(
+        "field.update",
+        json!({ "project": "AU", "field": "Area", "name": "Part",
+                "rename_options": [{ "from": "Front", "to": "UI" }] }),
+    );
+    let rule = ws.call(
+        "automation.get",
+        json!({ "rule": "Review", "project": "AU" }),
+    );
+    assert_eq!(rule["trigger"]["status"], "Doing");
+    assert_eq!(rule["actions"][0]["status"], "Checking");
+    assert_eq!(rule["actions"][1]["label"], "sorting");
+    assert_eq!(
+        rule["actions"][2]["fields"],
+        json!({ "type": "Defect", "Part": "UI" })
+    );
+    assert_eq!(
+        rule["condition"], "cf.part:UI",
+        "custom field renames reach conditions"
+    );
+    assert_eq!(rule["enabled"], true);
+    // One Undo takes the rename back, the rule's names with it.
+    ws.call("history.undo", json!({}));
+    let rule = ws.call(
+        "automation.get",
+        json!({ "rule": "Review", "project": "AU" }),
+    );
+    assert_eq!(
+        rule["actions"][2]["fields"],
+        json!({ "type": "Defect", "Area": "Front" })
+    );
+}
+
+#[test]
+fn deleting_a_name_a_rule_uses_turns_it_off_and_says_why() {
+    let ws = open();
+    ws.call(
+        "field.create",
+        json!({ "project": "AU", "name": "Points", "kind": "integer" }),
+    );
+    ws.call(
+        "project.update",
+        json!({ "project": "AU", "statuses": [{ "name": "Parked" }] }),
+    );
+    for (name, action) in [
+        (
+            "Park",
+            json!({ "kind": "move_to_status", "status": "Parked" }),
+        ),
+        ("Tag", json!({ "kind": "remove_label", "label": "urgent" })),
+        (
+            "Size",
+            json!({ "kind": "set_fields", "fields": { "Points": 3 } }),
+        ),
+        ("Other", json!({ "kind": "add_label", "label": "triage" })),
+    ] {
+        ws.rule(json!({
+            "project": "AU",
+            "name": name,
+            "trigger": { "on": "comment_added" },
+            "actions": [action],
+        }));
+    }
+    let sure = Context::user(Via::Cli).with_confirmation(Confirmation::Given);
+    ws.call_as(
+        &sure,
+        "project.update",
+        json!({ "project": "AU", "statuses": [{ "status": "Parked", "remove": true }],
+                "labels": [{ "label": "urgent", "remove": true }] }),
+    );
+    ws.call_as(
+        &sure,
+        "field.delete",
+        json!({ "project": "AU", "field": "Points", "expected_task_count": 0 }),
+    );
+    for (name, what) in [("Park", "Parked"), ("Tag", "urgent"), ("Size", "Points")] {
+        let rule = ws.call("automation.get", json!({ "rule": name, "project": "AU" }));
+        assert_eq!(rule["enabled"], false, "{name}");
+        let runs = ws.runs(name);
+        assert_eq!(runs.len(), 1, "{name}");
+        assert_eq!(runs[0]["result"], "failed");
+        let message = runs[0]["error"]["message"].as_str().unwrap();
+        assert!(
+            message.contains("turned off") && message.contains(what),
+            "{message}"
+        );
+    }
+    let other = ws.call(
+        "automation.get",
+        json!({ "rule": "Other", "project": "AU" }),
+    );
+    assert_eq!(other["enabled"], true);
+    assert!(ws.runs("Other").is_empty());
+}
+
+#[test]
+fn rules_travel_in_archives_with_their_run_state_reset() {
+    let ws = open();
+    ws.call(
+        "field.create",
+        json!({ "project": "AU", "name": "Points", "kind": "integer" }),
+    );
+    ws.rule(json!({
+        "project": "AU",
+        "name": "Size",
+        "trigger": { "on": "field_changed", "fields": ["priority"] },
+        "actions": [{ "kind": "set_fields", "fields": { "Points": 5 } }],
+    }));
+    ws.rule(json!({
+        "name": "Everywhere",
+        "enabled": false,
+        "trigger": { "on": "comment_added" },
+        "actions": [{ "kind": "notify", "text": "{key}" }],
+    }));
+    let key = ws.new_task(&app(), json!({ "project": "AU", "title": "One" }));
+    ws.call("task.update", json!({ "key": key, "priority": "high" }));
+    assert_eq!(ws.runs("Size").len(), 1);
+
+    let zip = ws._dir.path().join("au.zip");
+    ws.call("transfer.export", json!({ "path": zip.to_string_lossy() }));
+    let other = open_empty();
+    other.call("transfer.import", json!({ "path": zip.to_string_lossy() }));
+    let rules = other.call("automation.list", json!({}))["items"].clone();
+    let names: Vec<&str> = rules
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["Everywhere", "Size"]);
+    assert_eq!(rules[0]["enabled"], false);
+    assert!(rules[1].get("last_run").is_none(), "{}", rules[1]);
+    assert!(other.runs("Size").is_empty());
+    // It runs in its new home.
+    other.call("task.update", json!({ "key": key, "priority": "low" }));
+    assert_eq!(other.runs("Size").len(), 1);
+    assert_eq!(other.task(&key)["fields"][0]["value"], 5);
+
+    // A second import keeps the workspace's own rule once, and the
+    // project's rules come with the project under its new key.
+    other.call(
+        "transfer.import",
+        json!({ "path": zip.to_string_lossy(), "keys": [{ "from": "AU", "to": "AV" }] }),
+    );
+    let all = other.call("automation.list", json!({}))["items"].clone();
+    assert_eq!(all.as_array().unwrap().len(), 3, "{all}");
+}
+
+/// A workspace with no projects.
+fn open_empty() -> Ws {
+    let dir = TempDir::new().unwrap();
+    let clock = Arc::new(AtomicI64::new(START + DAY));
+    let tick = Arc::clone(&clock);
+    let mut config = EngineConfig::new(Role::App);
+    config.clock = Arc::new(move || tick.fetch_add(1, Ordering::SeqCst));
+    config.time_zone = Some("Europe/Berlin".into());
+    let engine = Engine::open(&WorkspaceLayout::new(dir.path().join("Other")), config).unwrap();
+    Ws {
+        engine,
+        clock,
+        _dir: dir,
+    }
 }

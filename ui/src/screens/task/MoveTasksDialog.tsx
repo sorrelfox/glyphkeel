@@ -145,7 +145,7 @@ export function MoveTasksDialog({ keys, from, to, onClose }: MoveTasksDialogProp
   );
 }
 
-/** The new keys, a choice for each status, type and label without a match, and the custom fields whose values are left off, and the versions taken off. */
+/** The new keys, a choice for each status, type and label without a match, and the custom fields whose values are left off, the versions taken off and the sprints left. */
 function Plan({ roots, check, project, choices, onChoose }: { roots: number; check: MoveCheck; project: Project; choices: Choices; onChoose: (choices: Choices) => void }) {
   const t = useT();
   const [first] = check.keys;
@@ -167,6 +167,7 @@ function Plan({ roots, check, project, choices, onChoose }: { roots: number; che
   const kinds = (["statuses", "types", "labels"] as const).filter((kind) => missing[kind].length > 0);
   const lost = check.fields.filter((match) => match.target === undefined);
   const unplanned = check.versions.filter((match) => match.target === undefined);
+  const sprints = check.sprints;
   return (
     <>
       <p data-testid="move-keys">
@@ -213,6 +214,16 @@ function Plan({ roots, check, project, choices, onChoose }: { roots: number; che
           <ul>
             {unplanned.map((match) => (
               <li key={match.name}>{t("move-to-versions-row", { name: match.name, count: match.tasks })}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {sprints.length > 0 && (
+        <div data-testid="move-sprints-left">
+          <p className="meta">{t("move-to-sprints-left", { project: project.key })}</p>
+          <ul>
+            {sprints.map((match) => (
+              <li key={match.name}>{t("move-to-sprints-row", { name: match.name, count: match.tasks })}</li>
             ))}
           </ul>
         </div>

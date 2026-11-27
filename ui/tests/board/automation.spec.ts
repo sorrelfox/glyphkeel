@@ -31,7 +31,13 @@ test("a rule is written, tried, saved, acts on a new task, logs its run and can 
   await settings.getByRole("button", { name: "New rule" }).click();
   const editor = settings.getByRole("form", { name: "New rule" });
   await editor.getByRole("textbox", { name: "Name" }).fill("Triage crashes");
-  await editor.getByRole("textbox", { name: "Only for tasks that match" }).fill("title:crash");
+  const condition = editor.getByRole("textbox", { name: "Only for tasks that match" });
+  // The condition is the list's query field: a mistake shows under it, and a
+  // query it reads shows as chips.
+  await condition.fill("priority:");
+  await expect(editor.getByRole("alert")).toBeVisible();
+  await condition.fill("title:crash");
+  await expect(editor.getByRole("group", { name: "Conditions" }).getByRole("button", { name: /Remove/ })).toHaveCount(1);
   // The first action adds the project's first label; a second one comments.
   await editor.getByRole("button", { name: "Add an action" }).click();
   await editor.getByRole("group", { name: /^Action .?2.?$/ }).getByRole("textbox", { name: "Text" }).fill("Triaged {key} by {rule}");

@@ -6374,6 +6374,10 @@
                             }
                           ]
                         },
+                        "sprint": {
+                          "description": "`active`: the task goes into the project's active sprint, when one\nis running as it is made. Without it the task is in no sprint (the\nbacklog); a template never names a planned or closed sprint.",
+                          "type": "string"
+                        },
                         "start_in_days": {
                           "description": "The start date: this many days after the day the template is used\n(negative: before).",
                           "type": "integer"
@@ -6553,6 +6557,10 @@
                           "type": "string"
                         }
                       ]
+                    },
+                    "sprint": {
+                      "description": "`active`: the task goes into the project's active sprint, when one\nis running as it is made. Without it the task is in no sprint (the\nbacklog); a template never names a planned or closed sprint.",
+                      "type": "string"
                     },
                     "start_in_days": {
                       "description": "The start date: this many days after the day the template is used\n(negative: before).",
@@ -6867,6 +6875,10 @@
                     "type": "string"
                   }
                 ]
+              },
+              "sprint": {
+                "description": "`active`: the task goes into the project's active sprint, when one\nis running as it is made. Without it the task is in no sprint (the\nbacklog); a template never names a planned or closed sprint.",
+                "type": "string"
               },
               "start_in_days": {
                 "description": "The start date: this many days after the day the template is used\n(negative: before).",
@@ -7605,6 +7617,10 @@
                             }
                           ]
                         },
+                        "sprint": {
+                          "description": "`active`: the task goes into the project's active sprint, when one\nis running as it is made. Without it the task is in no sprint (the\nbacklog); a template never names a planned or closed sprint.",
+                          "type": "string"
+                        },
                         "start_in_days": {
                           "description": "The start date: this many days after the day the template is used\n(negative: before).",
                           "type": "integer"
@@ -7784,6 +7800,10 @@
                           "type": "string"
                         }
                       ]
+                    },
+                    "sprint": {
+                      "description": "`active`: the task goes into the project's active sprint, when one\nis running as it is made. Without it the task is in no sprint (the\nbacklog); a template never names a planned or closed sprint.",
+                      "type": "string"
                     },
                     "start_in_days": {
                       "description": "The start date: this many days after the day the template is used\n(negative: before).",
@@ -8098,6 +8118,10 @@
                     "type": "string"
                   }
                 ]
+              },
+              "sprint": {
+                "description": "`active`: the task goes into the project's active sprint, when one\nis running as it is made. Without it the task is in no sprint (the\nbacklog); a template never names a planned or closed sprint.",
+                "type": "string"
               },
               "start_in_days": {
                 "description": "The start date: this many days after the day the template is used\n(negative: before).",
@@ -31052,6 +31076,35 @@
             },
             "type": "array"
           },
+          "sprints": {
+            "default": [],
+            "description": "The sprints they are in. A task is only ever in a sprint of its own\nproject, so the move takes them out of these: there is no target.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A status, type, label or custom field of the moving tasks, and its match\nin the target project.",
+              "properties": {
+                "name": {
+                  "description": "Its name.",
+                  "type": "string"
+                },
+                "target": {
+                  "description": "The target's item of the same name; absent when it has none.",
+                  "type": "string"
+                },
+                "tasks": {
+                  "description": "How many of the moving tasks have it.",
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "name",
+                "tasks"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
           "statuses": {
             "description": "The statuses the tasks have now.",
             "items": {
@@ -31146,6 +31199,7 @@
           "labels",
           "fields",
           "versions",
+          "sprints",
           "fallback_status",
           "fallback_type"
         ],
