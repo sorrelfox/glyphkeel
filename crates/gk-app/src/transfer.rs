@@ -444,6 +444,16 @@ mod tests {
             "folder",
             "a folder of projects in the sidebar, by ID or name",
         ),
+        (
+            "project.create",
+            "folder",
+            "a folder of projects in the sidebar, by ID or name",
+        ),
+        (
+            "template.apply",
+            "folder",
+            "a folder of projects in the sidebar, by ID or name",
+        ),
     ];
 
     /// The top-level fields of an input schema, also those of each variant.

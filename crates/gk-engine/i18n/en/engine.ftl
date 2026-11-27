@@ -1160,6 +1160,7 @@ folder-not-found-hint = Name a folder by its name or its ID from folder.list.
 folder-name-taken = There is already a folder named "{ $folder }".
 folder-name-taken-hint = Choose another name, or use that folder.
 folder-not-itself = A folder can't be placed next to itself.
+folder-with-parent = A sub-project follows its parent, so it can't go into a folder: give either `parent` or `folder`.
 folder-subproject = { $project } is a sub-project; only top-level projects go into folders, and sub-projects follow their parent.
 folder-not-a-neighbour = { $neighbour } is not another project of the folder { $project } goes to, so { $project } can't be placed next to it.
 dashboard-not-found = There is no dashboard "{ $dashboard }".

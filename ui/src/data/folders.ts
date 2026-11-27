@@ -115,3 +115,19 @@ export function stepMove(top: TopLevel, key: string, direction: "up" | "down"): 
   }
   return { op: "folder.move", input: { project: key, [direction === "up" ? "before" : "after"]: next.key } };
 }
+
+/**
+ * The folder project `key` counts as in: a top-level project's own folder,
+ * or, for a sub-project, its top-level project's; none for a project in no
+ * folder or one that isn't listed.
+ */
+export function folderOfProject(projects: readonly ProjectSummary[], key: string | undefined): string | undefined {
+  let project = projects.find((item) => item.key === key);
+  const seen = new Set<string>();
+  while (project?.parent !== undefined && !seen.has(project.key)) {
+    seen.add(project.key);
+    const parent: string = project.parent;
+    project = projects.find((item) => item.key === parent);
+  }
+  return project?.folder;
+}

@@ -3,7 +3,8 @@
 
 //! Project folders through MCP: a read-only agent lists them but can't
 //! change them; a standard agent makes one and puts a project in it, and
-//! its changes are its own in history.
+//! its changes are its own in history, and it creates a project straight
+//! into a folder.
 
 #![allow(clippy::unwrap_used)]
 
@@ -74,6 +75,19 @@ async fn read_only_agents_list_folders_and_standard_agents_arrange_them() {
         )
         .await;
     assert_eq!(renamed.is_error, Some(false), "{}", text(&renamed));
+    let made = c
+        .call(
+            "create_project",
+            json!({ "name": "Orchard", "key": "OR", "folder": "Customers" }),
+        )
+        .await;
+    assert_eq!(made.is_error, Some(false), "{}", text(&made));
+    let listed = c
+        .call("list_folders", json!({}))
+        .await
+        .structured_content
+        .unwrap();
+    assert_eq!(listed["items"][0]["projects"], json!(["TM", "OR"]));
     let unknown = c.call("delete_folder", json!({ "folder": "Nope" })).await;
     assert!(
         text(&unknown).starts_with("Error (not_found)"),

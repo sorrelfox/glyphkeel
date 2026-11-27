@@ -69,7 +69,7 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel label edit` | `label.update` | Rename or recolour a label. |
 | `glyphkeel project archive <project>` | `project.archive` | Archive a project and its sub-projects: they become read-only and leave the sidebar. |
 | `glyphkeel project brief <project>` | `project.brief` | The project's instructions for agents: the wiki page marked as the brief, else the project's description. |
-| `glyphkeel project create` | `project.create` | Create a project, or a sub-project that copies its parent's statuses, types and labels; without a colour it gets one its sibling projects don't use yet. |
+| `glyphkeel project create` | `project.create` | Create a project, optionally in a folder, or a sub-project that copies its parent's statuses, types and labels; without a colour it gets one its sibling projects don't use yet. |
 | `glyphkeel project delete <project>` | `project.delete` | Move a project and its sub-projects, with everything in them, to the trash. Agents need the full profile. |
 | `glyphkeel project edit <project>` | `project.update` | Change a project: name, description, colour, icon, modules, key, place in the tree, archived; add, change, reorder or remove statuses, types and labels, all in one change. |
 | `glyphkeel project list` | `project.list` | The project tree in sidebar order, with keys, names and open-task counts; archived projects on request. |

@@ -83,4 +83,16 @@ describe("project folders in the fake engine", () => {
     call(ws, "project.move", { project: "LAB", parent: "PER" });
     expect(call<FolderList>(ws, "folder.list").items[0]?.projects).toEqual([]);
   });
+
+  it("take a new project straight into a folder, in one change", () => {
+    const ws = workspace();
+    call(ws, "folder.create", { name: "Work" });
+    call(ws, "project.create", { name: "Orchard", key: "ORC", folder: "work" });
+    expect(call<FolderList>(ws, "folder.list").items[0]?.projects).toEqual(["ORC"]);
+    expect(code(() => ws.call("project.create", { name: "Kid", key: "KID", parent: "PER", folder: "Work" }))).toBe("invalid");
+    expect(code(() => ws.call("project.create", { name: "Kid", key: "KID", folder: "Nope" }))).toBe("not_found");
+    ws.call("history.undo", {});
+    expect(call<FolderList>(ws, "folder.list").items[0]?.projects).toEqual([]);
+    expect(tree(ws).some((row) => row.startsWith("ORC"))).toBe(false);
+  });
 });
