@@ -62660,6 +62660,11 @@
                   "const": "description",
                   "description": "The description.",
                   "type": "string"
+                },
+                {
+                  "const": "pin_to",
+                  "description": "The project it is pinned to: it then belongs to the whole workspace.",
+                  "type": "string"
                 }
               ]
             },
@@ -62675,6 +62680,10 @@
           },
           "name": {
             "description": "A new name.",
+            "type": "string"
+          },
+          "pin_to": {
+            "description": "Pins it to this project (key or ID); its widgets that name no\nproject then look at that project.",
             "type": "string"
           },
           "project": {

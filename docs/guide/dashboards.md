@@ -12,6 +12,13 @@ A dashboard belongs to the whole workspace, or is pinned to one project. On a
 project's dashboard, every widget looks at that project and its sub-projects
 unless it names another.
 
+Inside a project, its menu (the project's name in the header) lists the
+dashboards pinned to it under **Dashboards**; choosing one opens it. **Pin a
+dashboard here…** (or **All dashboards…**) opens the Dashboards page from the
+project, and the dashboard menu (**⋯**) then has **Pin to** and the project's
+key, which pins the dashboard shown to it. **Rename or describe…** also changes
+what a dashboard is pinned to, or makes it the whole workspace's again.
+
 ## Your first dashboard
 
 With no dashboard yet, the page offers **Create a starter dashboard**: open
@@ -44,7 +51,9 @@ dashboard back, and the same goes for every change to its widgets.
 The query is the [task query language](../query-language.md): `is:open
 label:bug`, `due:this-week`, `sort:-priority`. Relative dates in it are worked
 out each time the widget shows. Renaming a status, type, label or sprint
-updates the queries of the widgets that look at its project.
+updates the queries of the widgets that look at its project, and of the
+workspace's widgets whose query keeps them to that project (`project:TM`).
+Renaming a project key updates every widget's query.
 
 Periods are days (the last 30), weeks (the last 12) or months (the last 12).
 A chart reads without seeing it, as on the **Reports** page: focus it and the
@@ -72,6 +81,15 @@ narrow window shows one column.
 What widgets show is worked out by Glyphkeel's engine, one widget at a time, and
 follows every change as it happens, from the app, the command line or an agent.
 
+## Export and import
+
+An [archive](export-import.md) carries the dashboards pinned to each project
+with the project, and an export of the whole workspace also carries the
+workspace's own dashboards. On import, the projects widgets name are the
+imported projects, and a project that comes in under a new key is named by
+that key in the widgets' queries. A workspace dashboard whose name is already
+taken in the workspace you import into is left out.
+
 ## From the command line and for agents
 
 ```sh
@@ -79,6 +97,8 @@ glyphkeel dashboard create --name Team --project TM --starter true
 glyphkeel dashboard add-widget Team --project TM \
   --widget '{"kind": "query_count", "title": "Open bugs", "settings": {"query": "is:open label:bug"}}'
 glyphkeel dashboard edit-widget Team 1 --project TM --width 2 --position 3
+glyphkeel dashboard edit Team --project TM --pin-to ZZ    # pin it to another project
+glyphkeel dashboard edit Team --project ZZ --clear pin_to # the whole workspace's again
 glyphkeel dashboard show Team --project TM
 glyphkeel dashboard show Team --project TM --json
 glyphkeel dashboard widget Team 2 --project TM

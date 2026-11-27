@@ -19,9 +19,9 @@ Data and backups › **Export and import**. Then choose:
 - the **Format**: **One .zip file** or **A folder**.
 
 Glyphkeel then shows what it wrote: projects, tasks, comments, files, wiki pages
-and time entries. Each project's automation rules go with it; an export of the
-whole workspace also takes the project templates and the workspace's own
-automation rules. Rules start afresh when they are imported (see
+and time entries. Each project's automation rules and the dashboards pinned to
+it go with it; an export of the whole workspace also takes the project
+templates, the workspace's own automation rules and its own dashboards. Rules start afresh when they are imported (see
 [Automation rules](automation.md#export-and-import)).
 
 ### Importing
@@ -32,7 +32,9 @@ archive are added as new projects; nothing that is in the workspace already
 changes.
 
 If a project key of the archive is taken in this workspace, give that project a
-new key under **Taken project keys**.
+new key under **Taken project keys**. The queries that name the old key follow
+the new one: those of saved views, automation rules, board colour rules and
+dashboard widgets, in `project:OLD` and in task keys such as `OLD-12`.
 
 From the command line:
 

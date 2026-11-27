@@ -98,35 +98,36 @@ pub(super) fn register(r: &mut Registry) {
 
 /// A widget as stored: its project, if any, by ID.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct Stored {
-    id: String,
-    kind: WidgetKind,
+#[serde(deny_unknown_fields)]
+pub(crate) struct Stored {
+    pub(crate) id: String,
+    pub(crate) kind: WidgetKind,
     #[serde(default, skip_serializing_if = "String::is_empty")]
-    title: String,
-    width: u8,
+    pub(crate) title: String,
+    pub(crate) width: u8,
     #[serde(default)]
-    settings: WidgetSettings,
+    pub(crate) settings: WidgetSettings,
 }
 
 /// A dashboard as history records it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct Record {
+pub(crate) struct Record {
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    project: Option<String>,
-    name: String,
+    pub(crate) project: Option<String>,
+    pub(crate) name: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
-    description: String,
+    pub(crate) description: String,
     #[serde(default)]
-    widgets: Vec<Stored>,
-    rank: String,
-    created_at: i64,
-    created_by_kind: String,
-    created_by_name: String,
-    updated_at: i64,
+    pub(crate) widgets: Vec<Stored>,
+    pub(crate) rank: String,
+    pub(crate) created_at: i64,
+    pub(crate) created_by_kind: String,
+    pub(crate) created_by_name: String,
+    pub(crate) updated_at: i64,
 }
 
 impl Record {
-    fn project_id(&self) -> Option<Id> {
+    pub(crate) fn project_id(&self) -> Option<Id> {
         self.project.as_deref().and_then(|p| p.parse().ok())
     }
 }
@@ -245,6 +246,84 @@ fn rows(tx: &Transaction<'_>) -> Result<Vec<(Id, Record)>, Failure> {
         .into_iter()
         .filter(|(_, r)| r.project_id().is_none_or(crate::scope::sees))
         .collect())
+}
+
+/// The dashboards of exactly `project` (`None`: the workspace's own), in
+/// order, for an export.
+pub(crate) fn of_scope(
+    tx: &Transaction<'_>,
+    project: Option<Id>,
+) -> Result<Vec<(Id, Record)>, Failure> {
+    Ok(rows(tx)?
+        .into_iter()
+        .filter(|(_, r)| r.project_id() == project)
+        .collect())
+}
+
+/// Whether the workspace's own dashboards (`project` `None`) or a
+/// project's already have one named `name`.
+pub(crate) fn name_taken(
+    tx: &Transaction<'_>,
+    project: Option<Id>,
+    name: &str,
+) -> Result<bool, Failure> {
+    let wanted = fold(name);
+    Ok(of_scope(tx, project)?
+        .iter()
+        .any(|(_, r)| fold(&r.name) == wanted))
+}
+
+/// The widgets of an archive's dashboard, if each one is a widget as this
+/// program keeps it: known kind and settings, a width of 1 to 3, its own ID,
+/// and no more than a dashboard holds.
+pub(crate) fn archived_widgets(values: &[Value]) -> Option<Vec<Stored>> {
+    if values.len() > WIDGETS_MAX {
+        return None;
+    }
+    let mut ids = std::collections::HashSet::new();
+    let mut out = Vec::with_capacity(values.len());
+    for v in values {
+        let w: Stored = serde_json::from_value(v.clone()).ok()?;
+        if !(1..=3).contains(&w.width)
+            || w.title.chars().count() > TITLE_MAX
+            || w.id.parse::<Id>().is_err()
+            || !ids.insert(w.id.clone())
+        {
+            return None;
+        }
+        out.push(w);
+    }
+    Some(out)
+}
+
+/// Stores dashboard `id` from an archive, outside history (an import is
+/// one change of its own).
+pub(crate) fn insert_imported(
+    tx: &Transaction<'_>,
+    id: Id,
+    record: &Record,
+) -> Result<(), Failure> {
+    let widgets = serde_json::to_string(&record.widgets)
+        .map_err(|e| Failure::Store(StoreError::Corrupt(e.to_string())))?;
+    tx.execute(
+        "INSERT INTO dashboards (id, project_id, name, name_fold, description, widgets, rank,
+                                 created_at, created_by_kind, created_by_name, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        params![
+            b(id),
+            record.project_id().map(b),
+            record.name,
+            fold(&record.name),
+            record.description,
+            widgets,
+            record.rank,
+            record.created_at,
+            record.created_by_kind,
+            record.created_by_name,
+            record.updated_at,
+        ],
+    )?;
+    Ok(())
 }
 
 /// Deletes the dashboards pinned to `project`, which is being deleted for
@@ -790,6 +869,22 @@ fn update(w: &mut WriteCtx<'_>, input: DashboardUpdateInput) -> Result<Dashboard
     if clears_description {
         r.description.clear();
     }
+    let unpins = input.clear.contains(&DashboardField::PinTo);
+    if input.pin_to.is_some() && unpins {
+        return Err(messages::invalid(
+            "clear",
+            "field-given-and-cleared",
+            &[("field", "pin_to".to_owned())],
+        ));
+    }
+    if let Some(p) = &input.pin_to {
+        let p = lookup::project(w.tx(), "pin_to", p)?;
+        lookup::ensure_active(&p)?;
+        r.project = Some(p.id.to_string());
+    }
+    if unpins {
+        r.project = None;
+    }
     if r != old {
         r.updated_at = w.now();
         check_unique(w.tx(), id, &r)?;
@@ -934,12 +1029,18 @@ pub(crate) fn rewrite_queries(
                 Some(p) => p.parse::<Id>().ok(),
                 None => pinned,
             };
-            if project.is_some() && looks_at != project {
+            let Some(q) = widget.settings.query.as_deref() else {
+                continue;
+            };
+            // A workspace-wide widget follows a project's change when its
+            // query keeps it to that project.
+            if let Some(p) = project
+                && looks_at != Some(p)
+                && !(looks_at.is_none() && super::lookup::query_limits_to(w.tx(), q, p)?)
+            {
                 continue;
             }
-            if let Some(q) = widget.settings.query.as_deref()
-                && let Some(new) = rewrite(q)
-            {
+            if let Some(new) = rewrite(q) {
                 widget.settings.query = Some(new);
                 touched = true;
             }

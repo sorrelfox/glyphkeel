@@ -961,10 +961,16 @@ pub(crate) fn rewrite_conditions(
     rewrite: &dyn Fn(&str) -> Option<String>,
 ) -> Result<(), Failure> {
     for (id, mut record) in rows(w.tx(), false)? {
-        if project.is_some() && record.project_id() != project {
+        if record.condition.is_empty() {
             continue;
         }
-        if record.condition.is_empty() {
+        // A project's change reaches its own rules, and the workspace's
+        // rules whose condition keeps them to that project.
+        if let Some(p) = project
+            && record.project_id() != Some(p)
+            && !(record.project_id().is_none()
+                && lookup::query_limits_to(w.tx(), &record.condition, p)?)
+        {
             continue;
         }
         if let Some(condition) = rewrite(&record.condition) {
@@ -1029,12 +1035,63 @@ fn each_name(record: &mut Record, kind: Named, f: &mut dyn FnMut(&mut String) ->
     changed
 }
 
+impl Named {
+    const fn list(self) -> List {
+        match self {
+            Self::Status => List::Statuses,
+            Self::Label => List::Labels,
+            Self::Type => List::Types,
+        }
+    }
+}
+
 /// The rules of `project` (every rule for `None`), as they are stored.
 fn rules_of(tx: &Transaction<'_>, project: Option<Id>) -> Result<Vec<(Id, Record)>, Failure> {
     Ok(rows(tx, false)?
         .into_iter()
         .filter(|(_, r)| project.is_none() || r.project_id() == project)
         .collect())
+}
+
+/// Whether workspace rule `r` is about `project`: its condition keeps it to
+/// that project.
+fn about(tx: &Transaction<'_>, r: &Record, project: Id) -> Result<bool, Failure> {
+    Ok(r.project_id().is_none()
+        && !r.condition.is_empty()
+        && lookup::query_limits_to(tx, &r.condition, project)?)
+}
+
+/// The rules a change to `project`'s item of `kind` called `name` reaches:
+/// the project's own, and the workspace's rules that are about the project
+/// or name an item only this project has.
+fn rules_naming(
+    tx: &Transaction<'_>,
+    project: Id,
+    kind: Named,
+    name: &str,
+) -> Result<Vec<(Id, Record)>, Failure> {
+    let mut out = Vec::new();
+    let mut only_here: Option<bool> = None;
+    for (id, r) in rows(tx, false)? {
+        let keep = match r.project_id() {
+            Some(p) => p == project,
+            None => {
+                about(tx, &r, project)?
+                    || match only_here {
+                        Some(v) => v,
+                        None => {
+                            let v = !lookup::named_elsewhere(tx, kind.list(), project, name)?;
+                            only_here = Some(v);
+                            v
+                        }
+                    }
+            }
+        };
+        if keep {
+            out.push((id, r));
+        }
+    }
+    Ok(out)
 }
 
 /// Turns rule `id` off, in the running command, and says why in its run
@@ -1080,8 +1137,9 @@ pub(crate) fn rename_in_rules(
     old: &str,
     new: &str,
 ) -> Result<(), Failure> {
+    let old_name = old;
     let old = fold(old);
-    for (id, mut record) in rules_of(w.tx(), Some(project))? {
+    for (id, mut record) in rules_naming(w.tx(), project, kind, old_name)? {
         let renamed = each_name(&mut record, kind, &mut |name| {
             if fold(name) == old {
                 new.clone_into(name);
@@ -1106,7 +1164,7 @@ pub(crate) fn name_removed(
     name: &str,
 ) -> Result<(), Failure> {
     let gone = fold(name);
-    for (id, mut record) in rules_of(w.tx(), Some(project))? {
+    for (id, mut record) in rules_naming(w.tx(), project, kind, name)? {
         if each_name(&mut record, kind, &mut |n| fold(n) == gone) {
             turn_off(
                 w,
@@ -1156,15 +1214,60 @@ fn field_rules(
     scope: Option<Id>,
     field: &FieldNames<'_>,
 ) -> Result<Vec<(Id, Record)>, Failure> {
-    Ok(rules_of(tx, scope)?
-        .into_iter()
-        .filter(|(_, r)| {
-            r.trigger.fields.iter().any(|f| field.is_watched(f))
-                || r.actions
-                    .iter()
-                    .any(|a| a.fields.keys().any(|k| field.is_key(k)))
-        })
-        .collect())
+    let names_it = |r: &Record| {
+        r.trigger.fields.iter().any(|f| field.is_watched(f))
+            || r.actions
+                .iter()
+                .any(|a| a.fields.keys().any(|k| field.is_key(k)))
+    };
+    let Some(project) = scope else {
+        return Ok(rules_of(tx, None)?
+            .into_iter()
+            .filter(|(_, r)| names_it(r))
+            .collect());
+    };
+    // A project's field: its own rules, and the workspace's rules that
+    // name it by ID, are about the project, or name it by a name no other
+    // field has.
+    let mut shared: Option<bool> = None;
+    let mut out = Vec::new();
+    for (id, r) in rows(tx, false)? {
+        if !names_it(&r) {
+            continue;
+        }
+        let keep = match r.project_id() {
+            Some(p) => p == project,
+            None => {
+                let by_id = r.trigger.fields.iter().any(|f| field.is_watched(f))
+                    || r.actions.iter().any(|a| {
+                        a.fields.keys().any(|k| {
+                            let k = k.trim();
+                            let bare = k.strip_prefix(CUSTOM_FIELD_PREFIX).unwrap_or(k);
+                            bare.parse::<Id>().is_ok_and(|id| id == field.id)
+                        })
+                    });
+                by_id
+                    || about(tx, &r, project)?
+                    || !match shared {
+                        Some(v) => v,
+                        None => {
+                            let v: bool = tx.query_row(
+                                "SELECT EXISTS (SELECT 1 FROM custom_fields
+                                   WHERE id <> ?1 AND (name_fold = ?2 OR query_name = ?3))",
+                                params![b(field.id), fold(field.name), field.query_name],
+                                |row| row.get(0),
+                            )?;
+                            shared = Some(v);
+                            v
+                        }
+                    }
+            }
+        };
+        if keep {
+            out.push((id, r));
+        }
+    }
+    Ok(out)
 }
 
 /// Custom field `old` is now called `new_name`: `set_fields` actions that

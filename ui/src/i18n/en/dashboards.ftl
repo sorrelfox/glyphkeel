@@ -32,6 +32,9 @@ dashboards-changed = Dashboard "{ $name }" changed.
 dashboards-deleted = Dashboard "{ $name }" deleted.
 dashboards-menu = Dashboard menu
 dashboards-rename = Rename or describe…
+# In the dashboard menu, when the page was opened from a project: pins the dashboard shown to it.
+dashboards-pin-here = Pin to { $project }
+dashboards-pinned = Dashboard "{ $name }" pinned to { $project }.
 dashboards-delete = Delete dashboard
 dashboards-delete-confirm = Delete the dashboard "{ $name }"? What its widgets show stays as it is; Undo brings the dashboard back.
 dashboards-no-widgets = This dashboard has no widgets yet.
@@ -157,3 +160,10 @@ widget-field-text = Note
 widget-field-width = Width
 widget-add = Add
 widget-save = Save
+
+## The project menu in the header: the dashboards pinned to the project
+
+project-dashboards = Dashboards
+# Opens the dashboards page from a project, to pin a dashboard to it, when none is pinned yet.
+project-dashboards-pin = Pin a dashboard here…
+project-dashboards-all = All dashboards…

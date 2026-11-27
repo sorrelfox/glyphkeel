@@ -66,7 +66,9 @@ pages:
   **Save this project as a template**
   ([Templates](recurring-and-templates.md#templates)).
 
-Renaming a status, type or label updates the saved views that name it.
+Renaming a status, type or label updates the saved views that name it, and
+the workspace's saved views, dashboard widgets and automation rules whose query
+keeps them to the project (`project:TM`).
 
 ## Archiving
 

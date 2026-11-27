@@ -123,6 +123,27 @@ pub(crate) struct ProjectFile {
     /// The project's automation rules.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) automations: Vec<AutomationLine>,
+    /// The dashboards pinned to the project.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) dashboards: Vec<DashboardLine>,
+}
+
+/// A dashboard: one pinned to a project in its `project.json`, the
+/// workspace's own in `dashboards.jsonl`. A widget names a project by ID
+/// and looks at tasks with a query, as the workspace keeps it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct DashboardLine {
+    pub(crate) id: String,
+    pub(crate) name: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub(crate) description: String,
+    pub(crate) widgets: Vec<serde_json::Value>,
+    pub(crate) rank: String,
+    pub(crate) created_at: i64,
+    pub(crate) created_by_kind: String,
+    pub(crate) created_by_name: String,
+    pub(crate) updated_at: i64,
 }
 
 /// An automation rule: a project's in `project.json`, the workspace's in
