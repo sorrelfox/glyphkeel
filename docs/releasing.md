@@ -3,16 +3,22 @@
 Releases are built by GitHub Actions, and only when a release tag is pushed.
 Pushes to branches and pull requests start no runs.
 
-1. On `main`, set the final version everywhere (`Cargo.toml`,
-   `ui/package.json`, `crates/gk-app/tauri.conf.json`) and write its section
-   in `CHANGELOG.md`.
-2. Push a pre-release tag such as `v0.1.0-rc.1`. The pre-release workflow
+1. On `main`, set the final version everywhere (`Cargo.toml` and the lock
+   files, `ui/package.json`, the `<release>` entry of
+   `crates/gk-app/packaging/io.github.sorrelfox.Glyphkeel.metainfo.xml` and
+   `pkgver` in `crates/gk-app/packaging/arch/PKGBUILD`) and write its
+   section in `CHANGELOG.md`. `cargo xtask check-versions` checks that they
+   all agree; `crates/gk-app/tauri.conf.json` takes the version from Cargo.
+2. Add the release's sample workspace and run the release check on your own
+   machine (below). Fix what fails and run it again.
+3. Push a pre-release tag such as `v0.1.0-rc.1`. The pre-release workflow
    (`.github/workflows/prerelease.yml`) runs every suite, builds the deb, the
    rpm, the Arch Linux package, the Flatpak bundle and the Windows installer
    (NSIS, per-user, unsigned), and publishes them as a GitHub pre-release
    with the source tarball, the files for the AUR and Flathub, an SBOM,
    `SHA256SUMS` and build-provenance attestations.
-3. When the pre-release is good, push the final tag (`v0.1.0`) on the same
+4. Test the pre-release by hand (below) and record the results.
+5. When the pre-release is good, push the final tag (`v0.1.0`) on the same
    commit. The release workflow (`.github/workflows/release.yml`) builds
    nothing: it checks the pre-release's files and republishes them unchanged.
    Then it publishes the Flatpak, APT and DNF repositories on GitHub Pages
@@ -22,6 +28,87 @@ Timings and memory are measured in the pre-release, but only reported: the
 table is in the run's summary and in the `check-results` artifact. The
 budgets are checked on the reference machine with
 `cargo xtask ci --suite perf --perf-enforce`.
+
+## The release check
+
+`cargo xtask release-check` runs, in order, everything a release needs
+before its tag, on this machine and in containers, and writes a record of
+the results to `target/release-check/release-check-<version>.md`: the
+version, the commit, the tools, each step with its command, result and
+time, and the checks that are made by hand, to fill in. It stops at the
+first failure unless `--keep-going` is given.
+
+```sh
+cargo xtask release-check --dry-run      # the steps and their commands
+cargo xtask release-check --release-dir ~/releases --engine podman
+cargo xtask release-check --only versions,migration-samples,store-upgrades
+```
+
+The steps:
+
+| Step | What it checks |
+| --- | --- |
+| `clean-tree` | no uncommitted changes, so the record names what was checked (`--allow-dirty` leaves it out) |
+| `versions` | `cargo xtask check-versions` |
+| `migration-samples` | a sample workspace of every schema version a release shipped, and no migration changed after a release shipped it |
+| `store-upgrades`, `engine-upgrades` | every sample upgrades, keeps its rows and opens in the app's engine with its data |
+| `fmt`, `headers`, `deps`, `gen`, `clippy`, `notices` | the static checks |
+| `ui-build`, `bundle` | the release UI, checked for remote addresses |
+| `ci-<distribution>` | the default suites (`static`, `rust`, `ui`, `app`) on Ubuntu 22.04 and 24.04, Debian 12 and Fedora |
+| `ci-deny-audit` | cargo-deny and pnpm audit |
+| `ci-packages` | the deb and rpm installed in clean containers, and never online |
+| `ci-perf`, `ci-pseudo` | performance with data set L (report only) and the pseudo-locale screenshots |
+| `ci-arch`, `ci-flatpak`, `ci-flathub`, `ci-repos` | the Arch Linux package, the Flatpak, the Flathub manifest and the signed repositories |
+| `ci-windows` | the Windows build, its unit tests under Wine and the installer |
+| `checksums` | with `--release-dir DIR`: writes and checks `DIR/<version>/SHA256SUMS` over every file there |
+| `signatures` | with `--repos DIR`: checks the signatures of repositories built by `cargo xtask repos --out DIR` with their own public key (`InRelease`, `Release.gpg`, `repomd.xml.asc` and the rpm) |
+
+`--only` and `--skip` choose steps by name; `--engine` and `--cache-dir`
+are passed to every `cargo xtask ci` run. The container runs take hours, so
+they come after the quick checks.
+
+### Sample workspaces
+
+Every release must open the workspaces that earlier releases wrote. The
+samples in `crates/gk-store/tests/samples/` are such workspaces, one per
+release that changed the schema, kept as SQL. Each is made by running a
+released `glyphkeel` program: a fixed set of commands builds a small
+workspace (projects, tasks, comments, time, reminders, a timer, wiki pages,
+versions, custom fields and more, as far as that release has them) in a
+throwaway home folder, and the database is dumped. The tests in
+`crates/gk-store/tests/migration_samples.rs` and
+`crates/gk-engine/tests/migration_samples.rs` upgrade every sample and check
+that nothing is lost.
+
+```sh
+cargo xtask migration-samples --check
+cargo xtask migration-samples --binary /usr/bin/glyphkeel   # from an installed package
+cargo xtask migration-samples --commit v0.2.0               # built from the tag
+```
+
+When a release adds a migration, make its sample from the release's own
+program before the final tag (`--binary target/debug/glyphkeel` after
+`cargo build -p gk-cli`, or `--commit` once the release commit exists).
+Samples are never edited or made again: they stand for the workspaces
+people have. A migration that a release shipped never changes either;
+`--check` compares each one with the release commits.
+
+### By hand
+
+These are recorded in the release check's record, under "By hand":
+
+- the manual test matrix: the pre-release installed and used on Ubuntu
+  22.04 and 24.04, Debian 12 and Fedora (current and previous), on GNOME
+  and KDE Plasma with Wayland and X11, with Intel, AMD and NVIDIA graphics,
+  at display scaling of 100, 125, 150 and 200 % and on mixed-DPI monitors,
+  and once on a machine that has never been online;
+- the MCP client matrix: `glyphkeel mcp` set up and used from each
+  supported client as [MCP clients](mcp-clients.md) describes;
+- the signing keys and GitHub Pages set up as below;
+- after the final release: `SHA256SUMS` and the attestations on the release
+  page, and `apt update` and `dnf makecache` accepting the repositories;
+- the documentation, README, changelog and AppStream notes describe the
+  release.
 
 ## The Flatpak
 
