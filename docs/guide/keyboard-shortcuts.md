@@ -18,6 +18,7 @@ has the focus.
 | Ctrl+Z | Undo |
 | Ctrl+Shift+Z | Redo |
 | Ctrl+, | Preferences |
+| Ctrl+Shift+L | Lock Glyphkeel ([Encryption and the app lock](encryption-and-lock.md)) |
 | ? | Keyboard shortcuts |
 | Ctrl+Q | Quit |
 

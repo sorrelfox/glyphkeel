@@ -21,7 +21,7 @@ always see the same workspaces.
 | Backups | `<data folder>/backups/<name>/` | `<data folder>\backups\<name>\` |
 | Configuration folder | `$XDG_CONFIG_HOME/glyphkeel`, normally `~/.config/glyphkeel` | `%APPDATA%\Glyphkeel` |
 | Personal settings (time zone, the folders agents may use, the agents' HTTP endpoint and its token, and the like; readable by you only) | `<configuration folder>/settings.json` | `<configuration folder>\settings.json` |
-| The app's settings (background mode, notifications, safe rendering) | `<configuration folder>/app.json` | `<configuration folder>\app.json` |
+| The app's settings (background mode, notifications, safe rendering, the app lock) | `<configuration folder>/app.json` | `<configuration folder>\app.json` |
 | Window size and position | `$XDG_STATE_HOME/glyphkeel/main-window.json`, normally under `~/.local/state` | `<configuration folder>\main-window.json` |
 | Starting when you sign in | `~/.config/autostart/io.github.sorrelfox.Glyphkeel.desktop` | the value `Glyphkeel` under `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run` |
 
@@ -43,6 +43,11 @@ on Linux and Windows, for the app, the command line and the MCP server:
 | `GLYPHKEEL_DATA_DIR` | The data folder (workspaces and backups) |
 | `GLYPHKEEL_CONFIG_DIR` | The configuration folder (settings). On every platform the window's size and position then go there too |
 | `GLYPHKEEL_WORKSPACE` | The workspace to open: a name in the data folder, or the path of a workspace folder |
+
+One more gives the passphrase of an encrypted workspace to programs that
+can't ask for it, such as agent servers and scripts:
+`GLYPHKEEL_PASSPHRASE` ([Encryption and the app lock](guide/encryption-and-lock.md),
+with its trade-offs in [Security](security.md#encrypted-workspaces)).
 
 `GLYPHKEEL_DATA_DIR` and `GLYPHKEEL_CONFIG_DIR` take an absolute path; a
 relative or empty value is ignored. Set them for every program that should

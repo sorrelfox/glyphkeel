@@ -90,6 +90,16 @@ The workspace's **Name** and **Location**, the **Program version** and the
 **Database version**, and **Trash**: **Keep items in the trash for** a number of
 days (30 by default).
 
+## Security
+
+- **Encryption:** whether the workspace is encrypted, and **Encrypt…**,
+  **Change passphrase…** or **Decrypt…**.
+- **App lock:** **Lock when idle** (never, or after one minute to an hour),
+  the **Lock passphrase** for a workspace that isn't encrypted, and **Lock
+  now**.
+
+See [Encryption and the app lock](encryption-and-lock.md).
+
 ## Data and backups
 
 - **Backups:** the **Backup folder**, the **Last backup**, **Back up now**, and

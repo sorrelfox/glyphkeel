@@ -13,6 +13,7 @@ import { useUndo } from "../data/hooks";
 import { useTimerCommands } from "../data/time";
 import { useTimeZone } from "../data/zone";
 import { useT } from "../i18n/I18n";
+import { lockApp, useLock, useLockMutation } from "../ipc/lock";
 import { hasQuickAddWindow, showQuickAdd } from "../ipc/quickAdd";
 import { appWindow } from "../ipc/window";
 import { CommandPalette } from "../screens/palette/CommandPalette";
@@ -141,6 +142,8 @@ export function Shell({ titleBar, openGallery, firstRun = false }: ShellProps) {
     [],
   );
 
+  const lockState = useLock();
+  const lockNow = useLockMutation(() => lockApp());
   const windowActions = shellActions({
     openPalette: () => {
       setPaletteOpen(true);
@@ -198,6 +201,11 @@ export function Shell({ titleBar, openGallery, firstRun = false }: ShellProps) {
     importCsv: () => {
       setImportingCsv({ project: view === "project" ? projectKey : undefined });
     },
+    lock: lockState.data?.can_lock === true
+      ? () => {
+          lockNow.mutate(undefined);
+        }
+      : null,
     openGallery,
   });
   const actions = screenActions.length === 0 ? windowActions : [...windowActions, ...screenActions];

@@ -223,6 +223,10 @@ impl Engine {
                 .clone()
                 .unwrap_or_else(|| default_folder(layout)),
         );
+        // An encrypted workspace opens with a passphrase this process
+        // knows, the environment's or the one saved in the keyring; the
+        // caller asks the person when none is there.
+        gk_store::unlock_without_asking(&layout.database()).map_err(|e| store_error(&e))?;
         let mut store_config = config.store.clone();
         let mut before_upgrade = None;
         if config.role == Role::App

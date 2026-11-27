@@ -142,6 +142,26 @@ pub fn store_error(e: &StoreError) -> OpError {
         StoreError::Io {
             path: p, source, ..
         } => messages::storage("storage-io", &[path(p), ("error", source.to_string())]),
+        StoreError::PassphraseRequired(p) => messages::hint(
+            messages::forbidden("storage-passphrase-required", &[path(p)]),
+            "storage-passphrase-required-hint",
+            &[],
+        )
+        .with_detail("passphrase", "required"),
+        StoreError::WrongPassphrase(p) => messages::hint(
+            messages::forbidden("storage-passphrase-wrong", &[path(p)]),
+            "storage-passphrase-wrong-hint",
+            &[],
+        )
+        .with_detail("passphrase", "wrong"),
+        StoreError::EncryptionUnavailable => {
+            messages::storage("storage-encryption-unavailable", &[])
+        }
+        StoreError::InUse(p) => messages::hint(
+            messages::error(ErrorCode::Busy, "storage-in-use", &[path(p)]),
+            "storage-in-use-hint",
+            &[],
+        ),
         StoreError::Sqlite(source) => {
             messages::storage("storage-sqlite", &[("error", source.to_string())])
         }

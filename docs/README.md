@@ -36,6 +36,7 @@ How to use the desktop app.
 | [Time tracking and reports](guide/time.md) | Logged time, the timer, reminders, the time report and flow reports |
 | [Today, search and the palette](guide/search.md) | Finding things and moving around quickly, quick add |
 | [Workspaces](guide/workspaces.md) | Keeping separate sets of projects |
+| [Encryption and the app lock](guide/encryption-and-lock.md) | Encrypting a workspace with a passphrase, locking the app |
 | [History, undo and the trash](guide/history-and-trash.md) | Undo, the history of a task, the activity log, revert, the trash |
 | [Export and import](guide/export-import.md) | Archives, and tasks from CSV files (Jira and Redmine) |
 | [Preferences](guide/preferences.md) | Every page of Preferences |

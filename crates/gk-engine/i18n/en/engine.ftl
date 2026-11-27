@@ -559,6 +559,18 @@ storage-corrupt = The workspace database holds invalid data: { $error }
 storage-io = { $path } could not be used: { $error }
 storage-sqlite = Database error: { $error }
 storage-json = Data could not be read or written as JSON: { $error }
+storage-passphrase-required = { $path } is encrypted: it needs its passphrase.
+storage-passphrase-required-hint = Enter the passphrase, or set it in the environment variable GLYPHKEEL_PASSPHRASE.
+storage-passphrase-wrong = The passphrase does not open { $path }.
+storage-passphrase-wrong-hint = Check the passphrase and try again.
+storage-encryption-unavailable = This build of Glyphkeel cannot open or make encrypted workspaces.
+storage-in-use = Another program has { $path } open.
+storage-in-use-hint = Close the other Glyphkeel windows, commands and agent servers on this workspace, then try again.
+encryption-not-encrypted = The workspace is not encrypted.
+encryption-backups-left-plain = { $count ->
+        [one] One backup could not be encrypted and stays readable without the passphrase.
+       *[other] { $count } backups could not be encrypted and stay readable without the passphrase.
+    }
 
 ## The engine
 

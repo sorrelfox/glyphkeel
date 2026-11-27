@@ -26,6 +26,7 @@ import enRules from "./en/rules.ftl?raw";
 import enRoadmap from "./en/roadmap.ftl?raw";
 import enSafety from "./en/safety.ftl?raw";
 import enSearch from "./en/search.ftl?raw";
+import enSecurity from "./en/security.ftl?raw";
 import enSprints from "./en/sprints.ftl?raw";
 import enToday from "./en/today.ftl?raw";
 import enWiki from "./en/wiki.ftl?raw";
@@ -39,7 +40,7 @@ import enDesktop from "../../../crates/gk-app/i18n/en/app.ftl?raw";
 
 /** The languages the app has text for, with their message files. */
 export const MESSAGES: Readonly<Record<string, readonly string[]>> = {
-  en: [enAgents, enApp, enAutomation, enCalendar, enCsv, enDashboards, enDesktop, enDev, enEditor, enEngine, enFields, enFirstRun, enGantt, enList, enPalette, enPrefs, enQuery, enReader, enRepeat, enReports, enRoadmap, enRules, enSafety, enSearch, enSprints, enToday, enWiki],
+  en: [enAgents, enApp, enAutomation, enCalendar, enCsv, enDashboards, enDesktop, enDev, enEditor, enEngine, enFields, enFirstRun, enGantt, enList, enPalette, enPrefs, enQuery, enReader, enRepeat, enReports, enRoadmap, enRules, enSafety, enSearch, enSecurity, enSprints, enToday, enWiki],
 };
 
 /** The language the app falls back to. */

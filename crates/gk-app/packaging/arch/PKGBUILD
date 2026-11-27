@@ -27,6 +27,8 @@ depends=(
   'hicolor-icon-theme'
   'libgcc'
   'libsoup3'
+  # libcrypto, for encrypted workspaces (SQLCipher).
+  'openssl'
   'webkit2gtk-4.1'
 )
 makedepends=(

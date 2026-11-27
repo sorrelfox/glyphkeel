@@ -90,6 +90,21 @@ pub enum StoreError {
         #[source]
         source: std::io::Error,
     },
+    /// The workspace is encrypted and no passphrase was given for it.
+    #[error("{0} is encrypted: give its passphrase to open it")]
+    PassphraseRequired(PathBuf),
+    /// The workspace is encrypted and none of the passphrases given opens
+    /// it.
+    #[error("the passphrase does not open {0}")]
+    WrongPassphrase(PathBuf),
+    /// The workspace is encrypted, or should be, and this build of the
+    /// program has no encryption.
+    #[error("this build of Glyphkeel cannot open or make encrypted workspaces")]
+    EncryptionUnavailable,
+    /// The operation needs the workspace to itself, and another program has
+    /// it open.
+    #[error("another program has {0} open; close it and try again")]
+    InUse(PathBuf),
     /// Any other SQLite error.
     #[error("database error: {0}")]
     Sqlite(#[from] rusqlite::Error),

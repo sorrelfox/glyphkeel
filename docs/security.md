@@ -181,11 +181,62 @@ token too, as it could read the workspace itself.
 `--yes`, and it never asks an agent: agents use the MCP server and its
 profiles.
 
+## Encrypted workspaces
+
+A workspace can be encrypted with a passphrase
+([Encryption and the app lock](guide/encryption-and-lock.md)). It is off by
+default; for the strongest protection at rest, use your system's disk
+encryption, which covers everything.
+
+- **How.** The database is encrypted with SQLCipher 4: AES-256 in CBC mode
+  on each page, with an HMAC-SHA512 per page, so a changed page is noticed.
+  The key comes from the passphrase with PBKDF2-HMAC-SHA512, 256 000
+  rounds, and a random salt kept at the start of the file. These are
+  SQLCipher's own defaults, so the file also opens in SQLCipher's tools with
+  the passphrase. The write-ahead log is encrypted the same way. On Linux the
+  cryptography is the system's OpenSSL.
+- **What is encrypted:** the database (tasks, wiki pages, comments, history,
+  settings) and the backups of an encrypted workspace.
+- **What isn't:** attached files and their thumbnails, exports, the settings
+  files, and copies other programs keep. Encrypting a workspace writes a new
+  file and removes the old one, but the old blocks may stay on the disk,
+  above all on SSDs; disk encryption covers them.
+- **The passphrase is never stored.** Each program keeps it in memory while
+  it has the workspace open, wiped when it ends. Glyphkeel doesn't use the
+  system's keyring.
+- **Several programs.** The app, commands and agent servers each need the
+  passphrase. The app and commands ask for it; for scripts and agent servers
+  there is the environment variable `GLYPHKEEL_PASSPHRASE`. Anything that
+  can read that variable, or the file it is set in (such as an MCP client's
+  configuration), can open the workspace; other programs running as you can
+  often read a process's environment. Use it only where that file is as
+  private as the workspace, and prefer typing the passphrase.
+- **Changes need the workspace to themselves.** Encrypting, changing the
+  passphrase and decrypting refuse while another program has the workspace
+  open, make a backup first, and check the new file before it replaces the
+  old one in one step.
+- **No recovery.** Without the passphrase the data can't be read, by anyone.
+- **Windows.** The Windows build can't encrypt yet; it opens plain
+  workspaces only.
+
+## The app lock
+
+The app can lock after an idle time or on demand
+([Encryption and the app lock](guide/encryption-and-lock.md#the-app-lock)).
+While it is locked, the app refuses every request for data from its windows
+(not only hides it), the windows drop what they had loaded, and reminder
+notifications don't name the task. It unlocks with the encrypted workspace's
+passphrase, or with a lock passphrase, kept only as a salted PBKDF2 check in
+the app's settings. The account's password is not used. The lock is a
+screen lock for the app: the workspace stays open, so it doesn't protect
+against programs running as you.
+
 ## What Glyphkeel doesn't protect against
 
 - **Your own account.** Anything that runs as you can read and change your
-  workspace folder directly. Glyphkeel doesn't encrypt its data; use your
-  system's disk encryption.
+  workspace folder directly, and while a program has an encrypted workspace
+  open, its key is in that program's memory. Attached files are never
+  encrypted. Use your system's disk encryption.
 - **Programs you open files with.** A document opened from an attachment is
   shown by your desktop's program, with that program's protections.
 - **Files you put where agents may look.** Anything in the `exports` folder

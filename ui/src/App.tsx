@@ -13,6 +13,7 @@ import { type Client } from "./data/transport";
 import { I18n } from "./i18n/I18n";
 import { loadAppearance, saveAppearance } from "./prefs/store";
 import { createAppRouter, initialPath } from "./router";
+import { LockGate } from "./shell/lock/LockGate";
 import { readStart, type StartData } from "./start";
 
 interface AppProps {
@@ -31,8 +32,10 @@ export function App({ start = readStart(), client = defaultClient(), path }: App
       <I18n locale={start.locale}>
         <ToastProvider>
           <DataProvider client={client}>
-            <RouterProvider router={router} />
-            <DuplicatePromptHost />
+            <LockGate>
+              <RouterProvider router={router} />
+              <DuplicatePromptHost />
+            </LockGate>
           </DataProvider>
         </ToastProvider>
       </I18n>

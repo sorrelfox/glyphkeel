@@ -17,8 +17,12 @@ workspace = true
 [dependencies]
 directories = { workspace = true }
 gk-core = { workspace = true }
+# The salt of a stored passphrase check (the app lock).
+getrandom = { workspace = true }
 icu_collator = { workspace = true }
-rusqlite = { workspace = true }
+# The key of an encrypted workspace from its passphrase, as SQLCipher
+# derives it.
+pbkdf2 = { workspace = true }
 # The personal settings file.
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -26,6 +30,17 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+zeroize = { workspace = true }
+
+# SQLite: SQLCipher's build everywhere but Windows, where the bundled
+# SQLite stays plain until an OpenSSL can be built for it in the cross
+# build. The program checks at run time which one it has.
+[target.'cfg(not(windows))'.dependencies]
+rusqlite = { workspace = true, features = ["bundled-sqlcipher"] }
+
+[target.'cfg(windows)'.dependencies]
+rusqlite = { workspace = true, features = ["bundled"] }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+

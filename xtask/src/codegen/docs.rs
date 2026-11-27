@@ -105,6 +105,8 @@ commands work on the workspaces of the data folder rather than inside one:\n\n";
     s += "| `glyphkeel workspace list` | List the workspaces; the one commands work in is marked |\n";
     s += "| `glyphkeel workspace create <name>` | Make a new, empty workspace |\n";
     s += "| `glyphkeel workspace rename <old> <new>` | Rename a workspace that nobody has open |\n";
+    s += "| `glyphkeel workspace encrypt` | Encrypt the workspace with a passphrase, or give it a new one; nobody may have it open |\n";
+    s += "| `glyphkeel workspace decrypt` | Store the workspace unencrypted again; nobody may have it open |\n";
     s += "| `glyphkeel workspace open <name or path>` | Work in this workspace from now on: \
 commands, agents and the app's next start use it |\n";
     s += "\n## Exit codes\n\n";

@@ -178,6 +178,8 @@ A command works in the workspace `--workspace` names (a name in the data folder,
 | `glyphkeel workspace list` | List the workspaces; the one commands work in is marked |
 | `glyphkeel workspace create <name>` | Make a new, empty workspace |
 | `glyphkeel workspace rename <old> <new>` | Rename a workspace that nobody has open |
+| `glyphkeel workspace encrypt` | Encrypt the workspace with a passphrase, or give it a new one; nobody may have it open |
+| `glyphkeel workspace decrypt` | Store the workspace unencrypted again; nobody may have it open |
 | `glyphkeel workspace open <name or path>` | Work in this workspace from now on: commands, agents and the app's next start use it |
 
 ## Exit codes

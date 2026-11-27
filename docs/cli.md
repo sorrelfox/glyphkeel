@@ -148,9 +148,17 @@ glyphkeel workspace list
 glyphkeel workspace create Work
 glyphkeel workspace open Work
 glyphkeel -w Home task list
+glyphkeel workspace encrypt          # encrypt it, or give it a new passphrase
+glyphkeel workspace decrypt
 ```
 
 See [Workspaces](guide/workspaces.md).
+
+An encrypted workspace needs its passphrase: the command asks for it on the
+terminal, or reads it from `GLYPHKEEL_PASSPHRASE` when there is no terminal.
+`workspace encrypt` asks for the new passphrase twice, or reads it as one
+line from standard input. See
+[Encryption and the app lock](guide/encryption-and-lock.md).
 
 ## Shell completions and the man page
 

@@ -25,6 +25,7 @@ ENV PATH=/usr/local/cargo/bin:$PATH
 RUN dnf install -y --setopt=install_weak_deps=False \
       gcc gcc-c++ make curl file git pkgconf-pkg-config tzdata xz tar \
       webkit2gtk4.1-devel gtk3-devel libsoup3-devel librsvg2-devel \
+      openssl-devel \
       xorg-x11-server-Xvfb xorg-x11-xauth \
       nss nspr atk at-spi2-atk at-spi2-core cups-libs libdrm libxkbcommon \
       libXcomposite libXdamage libXfixes libXrandr mesa-libgbm pango cairo \

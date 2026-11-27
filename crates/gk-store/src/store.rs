@@ -127,6 +127,18 @@ impl Store {
                 schema::migrate(&mut conn, MIGRATIONS, |tx| init_workspace(tx, &version))?;
             }
         }
+        // A file replaced by its encrypted or decrypted copy while this
+        // program waited to open it.
+        let retired: Option<String> = conn
+            .query_row(
+                "SELECT value FROM meta WHERE key = ?1",
+                [crate::cipher::RETIRED_KEY],
+                |r| r.get(0),
+            )
+            .optional()?;
+        if retired.is_some() {
+            return Err(StoreError::WorkspaceReplaced);
+        }
         let workspace_id = read_workspace_id(&conn)?;
         let generation = crate::snapshot::generation(&conn)?;
         optimize(&conn, "open");

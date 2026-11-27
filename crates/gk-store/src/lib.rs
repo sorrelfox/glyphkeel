@@ -54,6 +54,7 @@
 
 mod changes;
 mod checkpoint;
+mod cipher;
 mod connection;
 mod error;
 mod files;
@@ -72,6 +73,11 @@ pub use changes::{
 pub use checkpoint::{
     CHECKPOINT_BUSY_BUDGET, CheckpointOutcome, CheckpointPolicy, CheckpointSchedule, Checkpointer,
 };
+pub use cipher::{
+    Encryption, PASSPHRASE_ENV, Passphrase, PassphraseCheck, Unlocked, can_open, decrypt_workspace,
+    encrypt_file, encrypt_workspace, encryption_available, encryption_of, forget_passphrases,
+    passphrase_opens, remember_passphrase, unlock_without_asking,
+};
 pub use connection::{COLLATION, JOURNAL_SIZE_LIMIT, collate};
 pub use error::{Result, StoreError, WriteError};
 pub use files::{
@@ -86,8 +92,8 @@ pub use layout::{
 pub use requests::{REQUEST_WINDOW_MS, RequestKey, purge_requests, remember, remembered};
 pub use schema::{SCHEMA_VERSION, SchemaState};
 pub use snapshot::{
-    BlobCopy, check_integrity, copy_blob, generation_of, put_back_before_upgrade, replace_database,
-    schema_version_of, upgrade_copy, vacuum_into,
+    BlobCopy, check_integrity, copy_blob, generation_of, open_read_only, put_back_before_upgrade,
+    replace_database, schema_version_of, upgrade_copy, vacuum_into,
 };
 pub use store::{Store, StoreConfig, open_raw};
 pub use user_settings::{

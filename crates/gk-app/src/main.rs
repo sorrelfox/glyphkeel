@@ -18,6 +18,7 @@ mod instance;
 mod ipc;
 mod legal;
 mod links;
+mod lock;
 mod main_window;
 #[cfg(target_os = "linux")]
 mod memory_env;
@@ -161,7 +162,13 @@ fn main() -> ExitCode {
             workspaces::open_workspace,
             workspaces::rename_workspace,
             quit_app,
-            legal::legal_text
+            legal::legal_text,
+            lock::lock_state,
+            lock::app_activity,
+            lock::lock_app,
+            lock::unlock_app,
+            lock::update_lock,
+            lock::change_encryption
         ])
         // Attached images, by attachment ID, for the page's <img> elements.
         .register_asynchronous_uri_scheme_protocol(files::SCHEME, |ctx, request, responder| {
@@ -190,7 +197,12 @@ fn main() -> ExitCode {
             );
             // Reminders show whether or not a window is open, as
             // notifications while Preferences has them on.
-            let notifier = app.state::<AppSettings>().switched(notifier(app.handle()));
+            lock::configure(&app.state::<AppSettings>(), &app.state::<Arc<Workspace>>());
+            // While the app is locked, notifications name no task.
+            let notifier = lock::masked(
+                Arc::clone(app.state::<Arc<Workspace>>().app_lock()),
+                app.state::<AppSettings>().switched(notifier(app.handle())),
+            );
             app.state::<Arc<Workspace>>().start_reminders(notifier);
             background::start(app.handle());
             // A task named by the first link opens with the window; the

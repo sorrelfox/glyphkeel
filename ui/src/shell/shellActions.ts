@@ -31,6 +31,8 @@ export interface ShellCommands {
   importData: () => void;
   /** Opens the dialog that imports tasks from a CSV file, into the open project when there is one. */
   importCsv: () => void;
+  /** Locks the app; null when there is no passphrase to unlock with. */
+  lock: (() => void) | null;
   /** Opens the development gallery; absent in release builds. */
   openGallery?: (() => void) | undefined;
 }
@@ -74,6 +76,7 @@ export function shellActions(commands: ShellCommands): Action[] {
     action("app.export", "action-export", "app", commands.exportData),
     action("help.shortcuts", "action-shortcuts", "app", commands.showShortcuts),
     action("app.preferences", "action-preferences", "app", commands.openPreferences),
+    action("app.lock", "action-lock", "app", commands.lock ?? nothing, commands.lock ? {} : UNAVAILABLE),
     action("app.about", "action-about", "app", nothing, UNAVAILABLE),
     action("window.close", "action-close-window", "window", () => void appWindow.close()),
     // Quitting ends the app, also when it would keep running in the background.
