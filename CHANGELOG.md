@@ -5,6 +5,32 @@ Conventional Commits, and versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-11-27
+
+### Features
+
+- **Dates:** Start and Due open a picker with one text field ("next fri",
+  "+3d" or a date), a preview of the day and a calendar.
+- **Dashboards:** included in exports and imports; a project's menu lists
+  its pinned dashboards.
+- **Renames and imports:** workspace rules, dashboard widgets and saved
+  views tied to one project follow its renames; an import under a new
+  key updates stored queries.
+- **Command line:** `glyphkeel board` prints lanes and cards as a table.
+
+### Fixes
+
+- Editor suggestions (`[[`, `#`) are no longer hidden under the status
+  bar and look like the app's menus.
+- Task-panel popovers such as Repeats fit the window and keep their
+  buttons visible; relative dates no longer break mid-phrase.
+- An agent limited to some projects no longer sees other projects
+  through dashboards or a watched task that moved.
+- Menus announce the checked choice; the sprint and version pickers
+  name their state.
+- Windows: agent folders and backup checks with long path forms, and
+  renaming a workspace by case.
+
 ## [0.1.8] - 2026-11-27
 
 ### Features
