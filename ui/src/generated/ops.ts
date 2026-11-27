@@ -15,6 +15,8 @@ export type ActivityEntry = {
   actor: Actor;
   /** When (RFC 3339, UTC). */
   at: string;
+  /** Whether the person allowed this change when the agent asked for it, through the agent's client. */
+  confirmed_by_person?: boolean;
   /** What kind of item changed. */
   entity: string;
   /** The changed fields, each with its value before and after. */
@@ -143,6 +145,8 @@ export type AgentLimitsPatch = {
 
 /** The agent policy to set. */
 export type AgentPolicyPatch = {
+  /** Whether agents whose client can ask the person may ask to make one change beyond their profile, or one that deletes for good or deletes many items; left out: unchanged. */
+  confirmations?: boolean | null;
   /** The most an agent may do, whatever profile it asks for. */
   max_profile: Profile;
 };
@@ -226,6 +230,8 @@ export type Attachment = {
   added_by: Actor;
   /** The comment's ID, for a file attached to a comment. */
   comment?: string;
+  /** Whether it is chosen as its task's cover on the board. */
+  cover?: boolean;
   /** When it was attached (RFC 3339, UTC). */
   created_at: string;
   /** An image's height in pixels. */
@@ -637,8 +643,14 @@ export type BoardLayout = {
   card_fields: string[];
   /** Collapsed columns, as status IDs. */
   collapsed: string[];
+  /** What colours the edge of the cards. */
+  colour_by: CardColourBy;
+  /** The colour rules for `colour_by: query`, in order; the first whose query a card matches colours it. */
+  colour_rules: ColourRule[];
   /** Sort modes of single columns, by status ID. */
   column_sort: Record<string, SortMode>;
+  /** Which image the cards show as their cover. */
+  covers: CoverMode;
   /** Hidden columns, as status IDs. */
   hidden: string[];
   /** Cards closed more than this many days ago are hidden behind "Show older"; 0 shows every card. */
@@ -686,6 +698,8 @@ export type BulkChanges = {
   shift_due?: string | null;
   /** Move start dates by calendar days, weeks, months or years (`+2d`, `-1w`); tasks without one keep none. */
   shift_start?: string | null;
+  /** Put them in the sprint of this name (in each task's project), or `active` for each project's active sprint. */
+  sprint?: string | null;
   /** The start date: `YYYY-MM-DD`, or `today`, `fri`, `next mon`, `+3d`. */
   start_date?: string | null;
   /** Move to the status of this name (in each task's project). */
@@ -744,6 +758,20 @@ export type BulkUpdateInput = {
   query?: string | null;
 };
 
+/** One day of a burndown, as it stood at the end of the day (or at the moment the sprint was completed, on that day). */
+export type BurndownDay = {
+  /** The day (`YYYY-MM-DD`). */
+  date: string;
+  /** The open tasks' estimates added up, in minutes. */
+  open_estimate_minutes: number;
+  /** The tasks in the sprint that were still open. */
+  open_tasks: number;
+  /** All the tasks' estimates added up, in minutes. */
+  total_estimate_minutes: number;
+  /** All the tasks in the sprint, open or closed (its scope). */
+  total_tasks: number;
+};
+
 /** The caller of an operation as the engine sees it. */
 export type Caller = {
   /** The person or the agent. */
@@ -768,8 +796,12 @@ export type Card = {
   closed_at?: string;
   /** How many comments it has. */
   comment_count: number;
+  /** Its cover image, as the layout's `covers` chooses; left out when it has none. */
+  cover?: CardCover;
   /** The due date. */
   due_date?: string;
+  /** Its coloured edge, as the layout's `colour_by` chooses; left out when it has none. */
+  edge?: CardEdge;
   /** The estimate in minutes. */
   estimate_minutes?: number;
   /** Its values of the custom fields the layout shows on cards, by query name (without `cf.`); left out when it has none of them. */
@@ -796,6 +828,8 @@ export type Card = {
   recurring?: boolean;
   /** Logged time in minutes. */
   spent_minutes: number;
+  /** The sprint it is in. */
+  sprint?: SprintRef;
   /** The start date. */
   start_date?: string;
   /** When it entered its status. */
@@ -810,6 +844,33 @@ export type Card = {
   updated_at: string;
   /** Its version, for `expected_version`. */
   version: number;
+};
+
+/** What colours the edge of a card. */
+export type CardColourBy = "none" | "type" | "priority" | "label" | "query";
+
+/** The image a card shows as its cover. */
+export type CardCover = {
+  /** The attachment's ID. */
+  attachment: string;
+  /** Its height in pixels, when known. */
+  height?: number;
+  /** Its media type. */
+  mime: string;
+  /** Its file name, for the image's text. */
+  name: string;
+  /** Its width in pixels, when known. */
+  width?: number;
+};
+
+/** The coloured edge of a card and the rule that gave it. */
+export type CardEdge = {
+  /** What chose it. */
+  by: CardColourBy;
+  /** The colour. */
+  hue: Hue;
+  /** What it stands for: the type's or label's name, the priority, or the rule's name (its query when it has none). */
+  name: string;
 };
 
 /** What a status means for the work in it. */
@@ -921,6 +982,16 @@ export type Claim = {
   session: string;
   /** When the claim ends unless renewed (RFC 3339, UTC). */
   until: string;
+};
+
+/** One colour rule: the cards a query matches get its colour. */
+export type ColourRule = {
+  /** The colour of the cards it matches. */
+  hue: Hue;
+  /** A name for the rule, shown with the edge; empty shows the query. */
+  name?: string;
+  /** A query in the query language, such as `label:urgent due<today`. */
+  query: string;
 };
 
 /** One column: a status, or with sub-projects, every status of that name. */
@@ -1061,6 +1132,9 @@ export type ConflictResolution = {
   /** The text to save, for `use_text`. */
   text?: string | null;
 };
+
+/** Which image a card shows as its cover. */
+export type CoverMode = "off" | "chosen" | "first_image";
 
 /** When the next occurrence is made. */
 export type CreateWhen = "on_close" | "ahead";
@@ -1832,6 +1906,24 @@ export type FileContent = {
   truncated: boolean;
 };
 
+/** A task's cover after a change. */
+export type FileCoverChange = {
+  /** The chosen cover; left out when none is chosen. */
+  cover?: Attachment;
+  /** The history group, for revert and Undo; left out when nothing changed. */
+  group?: string;
+  /** The task's key. */
+  task: string;
+};
+
+/** Which image a task's board card shows as its cover. */
+export type FileCoverInput = {
+  /** The image attached to the task itself to show, by its ID; left out to choose none. */
+  attachment?: string | null;
+  /** The task: its key or ID. */
+  task: string;
+};
+
 /** What a file holds, which decides how it is shown. */
 export type FileKind = "image" | "text" | "executable" | "other";
 
@@ -2118,8 +2210,14 @@ export type LayoutUpdateInput = {
   card_fields?: string[] | null;
   /** Columns to collapse. */
   collapse?: string[];
+  /** What colours the edge of the cards: `none`, `type`, `priority`, `label` or `query` (the colour rules). */
+  colour_by?: CardColourBy | null;
+  /** The colour rules, in order, replacing the old ones: each a query and a colour, and an optional name. At most 20. */
+  colour_rules?: ColourRule[] | null;
   /** Sort modes of single columns, by status name or ID; `manual` columns can be reordered by hand. */
   column_sort?: Record<string, SortMode> | null;
+  /** Which image the cards show as their cover: `off`, `chosen` or `first_image`. */
+  covers?: CoverMode | null;
   /** Columns to expand again. */
   expand?: string[];
   /** Columns to hide, by status name or ID. */
@@ -2274,6 +2372,8 @@ export type ListedTask = {
   remaining_minutes?: number;
   /** Logged time in minutes. */
   spent_minutes: number;
+  /** The sprint it is in. */
+  sprint?: SprintRef;
   /** The start date. */
   start_date?: string;
   /** Its status. */
@@ -3441,6 +3541,8 @@ export type SettingKey = "trash_days" | "reminder_time" | "hours_per_day" | "day
 
 /** The workspace's settings, with defaults filled in. */
 export type Settings = {
+  /** Whether an agent whose client can ask the person may ask to make one change its profile doesn't allow, or one that deletes for good or deletes many items; the person allows or declines each. */
+  agent_confirmations: boolean;
   /** The limits on every agent session. Only the person sets them, in the app. */
   agent_limits: AgentLimits;
   /** The most an agent may do, whatever profile it asks for. */
@@ -3510,6 +3612,236 @@ export type SkippedGroup = {
 
 /** How a column's cards are ordered. */
 export type SortMode = "manual" | "priority" | "due" | "updated";
+
+/** A sprint. */
+export type Sprint = {
+  /** When it was completed (RFC 3339, UTC). */
+  completed_at?: string;
+  /** When it was created (RFC 3339, UTC). */
+  created_at: string;
+  /** Its last day (`YYYY-MM-DD`). */
+  end_date?: string;
+  /** What the sprint is meant to achieve: plain text. */
+  goal?: string;
+  /** Its ID. */
+  id: string;
+  /** Its name, unique in its project (ignoring case). */
+  name: string;
+  /** Its progress. */
+  progress: SprintProgress;
+  /** The key of the project it belongs to. */
+  project: string;
+  /** Its place among the project's sprints. */
+  rank: string;
+  /** Its first day (`YYYY-MM-DD`). */
+  start_date?: string;
+  /** When it was started (RFC 3339, UTC). */
+  started_at?: string;
+  /** Where it stands. */
+  state: SprintState;
+  /** Its tasks, when asked for: by board order. */
+  tasks?: SprintTask[];
+  /** When it last changed. */
+  updated_at: string;
+};
+
+/** Tasks to put in a sprint. */
+export type SprintAddTasksInput = {
+  /** With a name or `active`: the sprint's project (key or ID). */
+  project?: string | null;
+  /** The sprint (planned or active): its ID, its name, or `active`. */
+  sprint: string;
+  /** The tasks (keys or IDs), of the sprint's project; up to 500. A task in another sprint moves to this one. */
+  tasks: string[];
+};
+
+/** How a sprint's open work went down, day by day. */
+export type SprintBurndown = {
+  /** Its days from the first to the last (or to today, for an active sprint that runs over); days still to come are left out. */
+  days: BurndownDay[];
+  /** The sprint. */
+  sprint: SprintRef;
+  /** The estimates at the start, in minutes. */
+  start_estimate_minutes: number;
+  /** The work at the start: the first day's totals. */
+  start_tasks: number;
+};
+
+/** Which sprint's burndown to read. */
+export type SprintBurndownInput = {
+  /** With a name or `active`: the sprint's project (key or ID). */
+  project?: string | null;
+  /** The sprint (active or closed): its ID, its name, or `active`. */
+  sprint: string;
+};
+
+/** A sprint after a change. */
+export type SprintChange = {
+  /** Whether it was deleted. */
+  deleted?: boolean;
+  /** The history group, for revert and Undo; left out when nothing changed. */
+  group?: string;
+  /** The sprint after the change (before it, for a deletion); left out when tasks were only taken out of their sprints. */
+  sprint?: Sprint;
+  /** The keys of the tasks whose sprint changed: added, taken out, moved on when it was completed, or cleared by a deletion. */
+  tasks_changed?: string[];
+  /** The saved views whose query was rewritten because they named the sprint (renamed or deleted), by name. */
+  views_rewritten?: string[];
+};
+
+/** Which sprint to complete, and where its unfinished tasks go. */
+export type SprintCompleteInput = {
+  /** Where its open tasks go: a planned sprint of the project (name or ID), or `backlog` (the default) for no sprint. Closed tasks stay in the completed sprint. */
+  move_open_tasks_to?: string | null;
+  /** With a name or `active`: the sprint's project (key or ID). */
+  project?: string | null;
+  /** The sprint (active): its ID, its name, or `active`. */
+  sprint: string;
+};
+
+/** A new sprint. */
+export type SprintCreateInput = {
+  /** Its last day: `YYYY-MM-DD`, or `today`, `fri`, `+2w`, `dec 12`. */
+  end_date?: string | null;
+  /** What it is meant to achieve: plain text, up to 4,000 characters. */
+  goal?: string | null;
+  /** Its name, up to 100 characters, unique in the project; not `active`, `none` or `backlog`. */
+  name: string;
+  /** The project (key or ID). */
+  project: string;
+  /** Its first day: `YYYY-MM-DD`, or `today`, `mon`, `+1w`, `dec 1`. */
+  start_date?: string | null;
+  /** Tasks to put in it straight away (keys or IDs, of the project). */
+  tasks?: string[];
+};
+
+/** Which sprint to delete. */
+export type SprintDeleteInput = {
+  /** With a name: the sprint's project (key or ID). */
+  project?: string | null;
+  /** The sprint: its ID or its name. An active sprint is completed first, not deleted. */
+  sprint: string;
+};
+
+/** A sprint field that can be cleared. */
+export type SprintField = "goal" | "start_date" | "end_date";
+
+/** One sprint to read. */
+export type SprintGetInput = {
+  /** With a name or `active`: the project (key or ID). */
+  project?: string | null;
+  /** The sprint: its ID, its name, or `active` for the project's active sprint. */
+  sprint: string;
+};
+
+/** Sprints: closed ones first, then the active one, then planned ones, each by their order. */
+export type SprintList = {
+  /** With `include_tasks`: the project's open tasks in no sprint, by board order. */
+  backlog?: SprintTask[];
+  /** The sprints. */
+  items: Sprint[];
+  /** How many. */
+  total: number;
+};
+
+/** Which sprints to list. */
+export type SprintListInput = {
+  /** Include each sprint's tasks and the backlog, for the sprints page. */
+  include_tasks?: boolean;
+  /** The project (key or ID). */
+  project: string;
+  /** Only sprints in these states; default: all. */
+  state?: SprintState[];
+};
+
+/** How far a sprint has come. */
+export type SprintProgress = {
+  /** How many of them are closed. */
+  closed: number;
+  /** The estimates of the closed ones, in minutes. */
+  closed_estimate_minutes: number;
+  /** Their estimates added up, in minutes. */
+  estimate_minutes: number;
+  /** The tasks in it (not in the trash). */
+  total: number;
+};
+
+/** A sprint as a task shows it. */
+export type SprintRef = {
+  /** Its last day (`YYYY-MM-DD`). */
+  end_date?: string;
+  /** Its ID. */
+  id: string;
+  /** Its name. */
+  name: string;
+  /** Its first day (`YYYY-MM-DD`). */
+  start_date?: string;
+  /** Where it stands. */
+  state: SprintState;
+};
+
+/** Tasks to take out of their sprint, back to the backlog. */
+export type SprintRemoveTasksInput = {
+  /** The tasks (keys or IDs); up to 500. Tasks in no sprint are left as they are. */
+  tasks: string[];
+};
+
+/** Which sprint to start, and its dates. */
+export type SprintStartInput = {
+  /** Its last day; default: its end date, or two weeks after the start. */
+  end_date?: string | null;
+  /** A new goal. */
+  goal?: string | null;
+  /** With a name: the sprint's project (key or ID). */
+  project?: string | null;
+  /** The sprint (planned): its ID or its name. */
+  sprint: string;
+  /** Its first day; default: its start date, or today. */
+  start_date?: string | null;
+};
+
+/** Where a sprint stands. */
+export type SprintState = "planned" | "active" | "closed";
+
+/** A task of a sprint or of the backlog, as the sprints page lists it. */
+export type SprintTask = {
+  /** Whether it is closed (done or cancelled). */
+  closed: boolean;
+  /** Its estimate in minutes. */
+  estimate_minutes?: number;
+  /** Its ID. */
+  id: string;
+  /** Its key. */
+  key: string;
+  /** The parent task's key, for a subtask. */
+  parent?: string;
+  /** Its priority. */
+  priority: Priority;
+  /** Its status. */
+  status: StatusRef;
+  /** Its title. */
+  title: string;
+  /** Its type's name. */
+  type: string;
+};
+
+/** Changes to a sprint; fields left out keep their value. Start and complete it with `sprint.start` and `sprint.complete`. */
+export type SprintUpdateInput = {
+  /** Fields to clear. */
+  clear?: SprintField[];
+  /** A new end date. */
+  end_date?: string | null;
+  /** A new goal. */
+  goal?: string | null;
+  /** A new name; saved views that name the old one are rewritten. */
+  name?: string | null;
+  /** With a name or `active`: the sprint's project (key or ID). */
+  project?: string | null;
+  /** The sprint: its ID, its name, or `active`. */
+  sprint: string;
+  /** A new start date. */
+  start_date?: string | null;
+};
 
 /** A status: one board column. */
 export type Status = {
@@ -3798,6 +4130,8 @@ export type Task = {
   revisions?: RevisionInfo[];
   /** Logged time in minutes. */
   spent_minutes: number;
+  /** The sprint it is in. */
+  sprint?: SprintRef;
   /** The start date. */
   start_date?: string;
   /** Its status. */
@@ -3908,6 +4242,8 @@ export type TaskCreateInput = {
   priority?: Priority | null;
   /** The project: its key (current or old) or ID. */
   project: string;
+  /** The sprint it goes in (name or ID, or `active`): a planned or active sprint of the project. */
+  sprint?: string | null;
   /** The start date: `YYYY-MM-DD`, or `today`, `fri`, `next mon`, `+3d`, `in 2 weeks`, `dec 1`, in the workspace's time zone. */
   start_date?: string | null;
   /** The status; default: the project's first to-do status. */
@@ -3939,7 +4275,7 @@ export type TaskDuplicateInput = {
 };
 
 /** A task field that can be cleared. */
-export type TaskField = "description" | "parent" | "start_date" | "due_date" | "estimate" | "progress" | "labels" | "fix_version";
+export type TaskField = "description" | "parent" | "start_date" | "due_date" | "estimate" | "progress" | "labels" | "fix_version" | "sprint";
 
 /** Which tasks to read. */
 export type TaskGetInput = {
@@ -4136,6 +4472,8 @@ export type TaskUpdateInput = {
   remove_labels?: string[];
   /** Resolve a conflict copy of the description. */
   resolve_conflict?: ConflictResolution | null;
+  /** Put it in this sprint (name or ID, or `active`): a planned or active sprint of the project. */
+  sprint?: string | null;
   /** A new start date: `YYYY-MM-DD`, or a natural date such as `fri` or `in 3d`. */
   start_date?: string | null;
   /** A new title. */
@@ -5612,6 +5950,16 @@ export interface OpMap {
   "version.create": { input: VersionCreateInput; output: VersionChange; safety: "write"; kind: "command" };
   "version.update": { input: VersionUpdateInput; output: VersionChange; safety: "write"; kind: "command" };
   "version.delete": { input: VersionDeleteInput; output: VersionChange; safety: "write"; kind: "command" };
+  "sprint.list": { input: SprintListInput; output: SprintList; safety: "read"; kind: "query" };
+  "sprint.get": { input: SprintGetInput; output: Sprint; safety: "read"; kind: "query" };
+  "sprint.create": { input: SprintCreateInput; output: SprintChange; safety: "write"; kind: "command" };
+  "sprint.update": { input: SprintUpdateInput; output: SprintChange; safety: "write"; kind: "command" };
+  "sprint.delete": { input: SprintDeleteInput; output: SprintChange; safety: "write"; kind: "command" };
+  "sprint.start": { input: SprintStartInput; output: SprintChange; safety: "write"; kind: "command" };
+  "sprint.complete": { input: SprintCompleteInput; output: SprintChange; safety: "write"; kind: "command" };
+  "sprint.add_tasks": { input: SprintAddTasksInput; output: SprintChange; safety: "write"; kind: "command" };
+  "sprint.remove_tasks": { input: SprintRemoveTasksInput; output: SprintChange; safety: "write"; kind: "command" };
+  "sprint.burndown": { input: SprintBurndownInput; output: SprintBurndown; safety: "read"; kind: "query" };
   "field.list": { input: CustomFieldListInput; output: CustomFieldList; safety: "read"; kind: "query" };
   "field.create": { input: CustomFieldCreateInput; output: CustomFieldChange; safety: "write"; kind: "command" };
   "field.update": { input: CustomFieldUpdateInput; output: CustomFieldChange; safety: "write"; kind: "command" };
@@ -5707,6 +6055,7 @@ export interface OpMap {
   "file.thumbnail": { input: FileRef; output: Thumbnail; safety: "read"; kind: "query" };
   "file.attach": { input: FileAttachInput; output: FileChange; safety: "write"; kind: "command" };
   "file.delete": { input: FileRef; output: FileChange; safety: "trash"; kind: "command" };
+  "file.cover": { input: FileCoverInput; output: FileCoverChange; safety: "write"; kind: "command" };
   "agent.sessions": { input: AgentSessionsInput; output: AgentSessionList; safety: "read"; kind: "query" };
   "agent.policy.update": { input: AgentPolicyPatch; output: SettingsChange; safety: "app"; kind: "command" };
   "agent.limits.update": { input: AgentLimitsPatch; output: SettingsChange; safety: "app"; kind: "command" };
@@ -5774,6 +6123,16 @@ export const OP_SAFETY = {
   "version.create": "write",
   "version.update": "write",
   "version.delete": "write",
+  "sprint.list": "read",
+  "sprint.get": "read",
+  "sprint.create": "write",
+  "sprint.update": "write",
+  "sprint.delete": "write",
+  "sprint.start": "write",
+  "sprint.complete": "write",
+  "sprint.add_tasks": "write",
+  "sprint.remove_tasks": "write",
+  "sprint.burndown": "read",
   "field.list": "read",
   "field.create": "write",
   "field.update": "write",
@@ -5869,6 +6228,7 @@ export const OP_SAFETY = {
   "file.thumbnail": "read",
   "file.attach": "write",
   "file.delete": "trash",
+  "file.cover": "write",
   "agent.sessions": "read",
   "agent.policy.update": "app",
   "agent.limits.update": "app",
@@ -5911,7 +6271,7 @@ export function makeOps(call: Call) {
     agent: {
       /** List agent sessions, newest first, with their client, profile, times and counts of reads and writes. (read) */
       sessions: (input: OpMap["agent.sessions"]["input"] = {}) => call("agent.sessions", input),
-      /** Set the most an agent may do, whatever profile it asks for. (app) */
+      /** Set the most an agent may do, whatever profile it asks for, and whether agents may ask the person to allow one change beyond it. (app) */
       policyUpdate: (input: OpMap["agent.policy.update"]["input"]) => call("agent.policy.update", input),
       /** Change the limits on agent sessions: changes a minute, new tasks a day, and items moved to the trash per call and per hour. Each is a number or no limit. (app) */
       limitsUpdate: (input: OpMap["agent.limits.update"]["input"] = {}) => call("agent.limits.update", input),
@@ -6011,6 +6371,8 @@ export function makeOps(call: Call) {
       attach: (input: OpMap["file.attach"]["input"] = {}) => call("file.attach", input),
       /** Move an attached file to the trash. (trash) */
       delete: (input: OpMap["file.delete"]["input"]) => call("file.delete", input),
+      /** Choose the PNG, JPEG, GIF or WebP image attached to a task that its board card shows as its cover, or choose none; boards show covers when their layout's covers setting is on. (write) */
+      cover: (input: OpMap["file.cover"]["input"]) => call("file.cover", input),
     },
     gantt: {
       /** The person's layout of a project's Gantt chart: zoom level, table and column widths, grouping, and whether moving a task also moves its dependents. (read) */
@@ -6037,9 +6399,9 @@ export function makeOps(call: Call) {
       delete: (input: OpMap["label.delete"]["input"]) => call("label.delete", input),
     },
     layout: {
-      /** The person's layout of a project's board: column order, hidden and collapsed columns, sort modes, card fields. (read) */
+      /** The person's layout of a project's board: column order, hidden and collapsed columns, sort modes, card fields, card colours and covers. (read) */
       get: (input: OpMap["layout.get"]["input"]) => call("layout.get", input),
-      /** Hide, show, collapse or reorder board columns, set sort modes, card fields and older closed cards, or reset to the project's layout. (write) */
+      /** Hide, show, collapse or reorder board columns, set sort modes, card fields, card colours (by type, priority, label or ordered query rules), covers and older closed cards, or reset to the project's layout. (write) */
       update: (input: OpMap["layout.update"]["input"]) => call("layout.update", input),
     },
     list: {
@@ -6133,6 +6495,28 @@ export function makeOps(call: Call) {
       get: (input: OpMap["settings.get"]["input"] = {}) => call("settings.get", input),
       /** Change workspace settings that are not about agents: trash retention, reminder time, working hours and days, first day of the week, the timer reminder. (write) */
       update: (input: OpMap["settings.update"]["input"] = {}) => call("settings.update", input),
+    },
+    sprint: {
+      /** The sprints of a project with their state, dates and progress; with their tasks and the backlog for the sprints page. (read) */
+      list: (input: OpMap["sprint.list"]["input"]) => call("sprint.list", input),
+      /** One sprint with its progress and its tasks. (read) */
+      get: (input: OpMap["sprint.get"]["input"]) => call("sprint.get", input),
+      /** Plan a sprint in a project: name, goal, start and end dates, and tasks to put in it. (write) */
+      create: (input: OpMap["sprint.create"]["input"]) => call("sprint.create", input),
+      /** Rename a sprint or change its goal or dates. (write) */
+      update: (input: OpMap["sprint.update"]["input"]) => call("sprint.update", input),
+      /** Delete a planned or closed sprint; its tasks go back to the backlog. Revert brings both back. (write) */
+      delete: (input: OpMap["sprint.delete"]["input"]) => call("sprint.delete", input),
+      /** Start a planned sprint, with its dates; a project has one active sprint at a time. (write) */
+      start: (input: OpMap["sprint.start"]["input"]) => call("sprint.start", input),
+      /** Complete the active sprint and move its open tasks to a planned sprint or back to the backlog. (write) */
+      complete: (input: OpMap["sprint.complete"]["input"]) => call("sprint.complete", input),
+      /** Put tasks in a planned or active sprint of their project, moving them from any other sprint. (write) */
+      addTasks: (input: OpMap["sprint.add_tasks"]["input"]) => call("sprint.add_tasks", input),
+      /** Take tasks out of their sprint, back to the backlog. (write) */
+      removeTasks: (input: OpMap["sprint.remove_tasks"]["input"]) => call("sprint.remove_tasks", input),
+      /** The burndown of an active or closed sprint: its open and total tasks and estimates at the end of each day. (read) */
+      burndown: (input: OpMap["sprint.burndown"]["input"]) => call("sprint.burndown", input),
     },
     status: {
       /** Add a status (a board column) to a project. (write) */

@@ -87,9 +87,7 @@ pub(crate) fn agent_profile(
         return Ok(None);
     }
     let cap = settings::load(tx)?.agent_max_profile;
-    Ok(Some(
-        ctx.profile.unwrap_or(Profile::Standard).capped_by(cap),
-    ))
+    Ok(Some(ctx.agent_profile_under(cap)))
 }
 
 /// Refuses an agent below the full profile.

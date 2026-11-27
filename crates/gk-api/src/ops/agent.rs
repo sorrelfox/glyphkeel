@@ -248,6 +248,11 @@ pub struct AgentSessionList {
 pub struct AgentPolicyPatch {
     /// The most an agent may do, whatever profile it asks for.
     pub max_profile: Profile,
+    /// Whether agents whose client can ask the person may ask to make one
+    /// change beyond their profile, or one that deletes for good or
+    /// deletes many items; left out: unchanged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confirmations: Option<bool>,
 }
 
 op!(
@@ -283,7 +288,7 @@ pub(crate) const AGENT_SESSIONS: OpDescriptor = OpDescriptor::of::<AgentSessions
 });
 
 pub(crate) const AGENT_POLICY_UPDATE: OpDescriptor = OpDescriptor::of::<AgentPolicyUpdate>(Meta {
-    summary: "Set the most an agent may do, whatever profile it asks for.",
+    summary: "Set the most an agent may do, whatever profile it asks for, and whether agents may ask the person to allow one change beyond it.",
     kind: OpKind::Command,
     safety: Safety::App,
     exposure: Exposure::App {

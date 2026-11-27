@@ -7,6 +7,7 @@
 // Release builds on Windows have no console window.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod agent_http;
 mod app_settings;
 mod autostart;
 mod background;
@@ -145,6 +146,9 @@ fn main() -> ExitCode {
             app_settings::time_zones,
             app_settings::set_autostart,
             app_settings::restart_app,
+            agent_http::agent_http,
+            agent_http::update_agent_http,
+            agent_http::regenerate_agent_token,
             quick_add::show_quick_add,
             quick_add::hide_quick_add,
             quick_add::watch_quick_add,
@@ -179,6 +183,11 @@ fn main() -> ExitCode {
             // The workspace opens before the window, so the page's first
             // calls find it.
             app.manage(Arc::new(open_workspace(app.handle())));
+            // The agents' HTTP endpoint, when the person left it on.
+            agent_http::start_saved(
+                &app.state::<AppSettings>(),
+                &app.state::<Arc<Workspace>>(),
+            );
             // Reminders show whether or not a window is open, as
             // notifications while Preferences has them on.
             let notifier = app.state::<AppSettings>().switched(notifier(app.handle()));

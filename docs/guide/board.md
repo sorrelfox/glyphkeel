@@ -42,6 +42,32 @@ Checklist, Subtasks, Start date, Estimate, Days in column, and custom fields),
 the card size (**Regular** or **Compact**) and **Hide closed cards after** a
 number of days. A column with hidden closed cards has **Show older**.
 
+## Card colours and covers
+
+**Card colour** in the board options gives each card a coloured edge:
+
+- **By type**, **By priority** (urgent red, high orange, normal blue, low
+  grey) or **By label** (the card's first label);
+- **By rules**: **Edit colour rules…** lists queries in the
+  [query language](../query-language.md), each with a colour and an optional
+  name. A card takes the colour of the first rule it matches, so put the most
+  important rule first. A rule that no longer reads, say after its label was
+  deleted, colours nothing.
+
+The colour is never the only sign: hovering the edge names the rule
+(**Colour: priority Urgent**), and screen readers read it with the card.
+
+**Covers** shows an image at the top of each card. In the task's **Files**,
+an image's menu has **Use as card cover**. **Chosen images** shows only the
+images chosen that way; **Chosen or first image** also shows the first image
+of a task without one. A cover is the image's thumbnail, loaded when the card
+comes into view.
+
+Colours and covers are part of your layout, so Undo takes a change back. From
+the command line: `glyphkeel board layout set TM --colour-by priority`,
+`glyphkeel file cover TM-41 --attachment <id>`; agents use the
+`set_board_layout` and `set_card_cover` tools.
+
 ## Filtering
 
 The filter bar above the board narrows the cards:

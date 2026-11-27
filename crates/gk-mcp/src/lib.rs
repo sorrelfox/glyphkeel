@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Glyphkeel contributors
 
 //! The MCP server: tools built from the operation catalog, served over
-//! standard input and output.
+//! standard input and output, or over an opt-in local HTTP endpoint.
 //!
 //! An agent's MCP client starts `glyphkeel mcp`, which calls [`run_stdio`]
 //! with the arguments after `mcp`. The server opens the workspace directly,
@@ -18,18 +18,23 @@
 //! The prompts come from the catalog crate's prompt list, filtered the
 //! same way: a prompt is listed when every tool it uses is listed.
 
+mod confirm;
 mod errors;
 mod guard;
+mod http;
 mod messages;
 mod options;
 mod prompts;
+mod random;
 mod render;
+mod resources;
 mod server;
 mod session;
 mod tools;
 
 use std::ffi::OsString;
 use std::process::ExitCode;
+use std::sync::Arc;
 use std::time::Duration;
 
 use gk_api::OpError;
@@ -40,8 +45,10 @@ use rmcp::transport::async_rw::AsyncRwTransport;
 
 pub use errors::error_text;
 pub use guard::WRITES_PER_MINUTE;
+pub use http::HttpEndpoint;
 pub use options::{DEFAULT_WORKSPACE, Options, workspace_layout};
-pub use server::{INSTRUCTIONS, SERVER_NAME, Server};
+pub use random::new_token;
+pub use server::{INSTRUCTIONS, SERVER_NAME, Server, Setup};
 pub use session::{ClientInfo, display_name};
 
 /// How often the server does its background work (taking over the jobs
@@ -79,6 +86,10 @@ pub fn run_stdio(args: &[OsString]) -> ExitCode {
             return ExitCode::from(4);
         }
     };
+    if options.http {
+        drop(runtime);
+        return run_http(&options);
+    }
     let result = runtime.block_on(async {
         let server = open(&options)?;
         serve(server, stdio_transport()).await;
@@ -91,6 +102,78 @@ pub fn run_stdio(args: &[OsString]) -> ExitCode {
             ExitCode::from(e.code.exit_code())
         }
     }
+}
+
+/// `glyphkeel mcp --http`: the HTTP endpoint without the app, until Ctrl+C
+/// or a newer program upgrades the workspace.
+fn run_http(options: &Options) -> ExitCode {
+    let started = open_engine(options).and_then(|engine| {
+        let (token, port) = http_settings(options)?;
+        let port = options.port.or(port).unwrap_or(0);
+        HttpEndpoint::start(Arc::new(engine), options.setup(), port, token, true)
+    });
+    let endpoint = match started {
+        Ok(endpoint) => endpoint,
+        Err(e) => {
+            eprintln!("glyphkeel mcp: {}", error_text(&e));
+            return ExitCode::from(e.code.exit_code());
+        }
+    };
+    eprintln!(
+        "{}",
+        messages::text("mcp-http-listening", &[("url", endpoint.url())])
+    );
+    let stop = endpoint.stopper();
+    let _ = std::thread::Builder::new()
+        .name("stop-signal".to_owned())
+        .spawn(move || {
+            if let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+            {
+                runtime.block_on(async {
+                    tokio::select! {
+                        _ = tokio::signal::ctrl_c() => stop.cancel(),
+                        () = stop.cancelled() => {}
+                    }
+                });
+            }
+        });
+    endpoint.wait();
+    ExitCode::SUCCESS
+}
+
+/// The token and port of the HTTP endpoint from the personal settings; a
+/// token is created and saved when there is none.
+fn http_settings(options: &Options) -> Result<(String, Option<u16>), OpError> {
+    let file = options
+        .settings_file
+        .clone()
+        .or_else(gk_store::user_settings_file)
+        .ok_or_else(|| messages::error("mcp-http-no-settings-file", &[], OpError::storage))?;
+    let mut settings = gk_store::UserSettings::load(&file);
+    let http = settings.agent_http.get_or_insert_with(Default::default);
+    let port = http.port;
+    let shown = [("file", file.display().to_string())];
+    if let Some(token) = http.token.clone().filter(|t| !t.trim().is_empty()) {
+        eprintln!("{}", messages::text("mcp-http-token-where", &shown));
+        return Ok((token, port));
+    }
+    let token = random::new_token();
+    http.token = Some(token.clone());
+    settings.save(&file).map_err(|e| {
+        messages::error(
+            "mcp-http-failed",
+            &[
+                ("port", port.unwrap_or(0).to_string()),
+                ("error", e.to_string()),
+            ],
+            OpError::storage,
+        )
+    })?;
+    eprintln!("{}", messages::text("mcp-http-token-created", &shown));
+    eprintln!("{}", messages::text("mcp-http-token-where", &shown));
+    Ok((token, port))
 }
 
 /// The largest message a client may send: one line of JSON-RPC. A longer
@@ -120,6 +203,21 @@ where
 /// # Errors
 /// When the workspace can't be found, opened or is too new.
 pub fn open(options: &Options) -> Result<Server, OpError> {
+    let engine = open_engine(options)?;
+    Ok(Server::new(
+        engine,
+        options.profile,
+        options.toolsets(),
+        options.project.clone(),
+        options.agent_name.clone(),
+    ))
+}
+
+/// Opens the workspace the options name for agents.
+///
+/// # Errors
+/// As [`open`].
+pub fn open_engine(options: &Options) -> Result<Engine, OpError> {
     let layout = options.layout()?;
     let mut config = EngineConfig::new(Role::Mcp);
     let settings = match &options.settings_file {
@@ -138,13 +236,7 @@ pub fn open(options: &Options) -> Result<Server, OpError> {
         profile = %options.profile,
         "workspace open"
     );
-    Ok(Server::new(
-        engine,
-        options.profile,
-        options.toolsets(),
-        options.project.clone(),
-        options.agent_name.clone(),
-    ))
+    Ok(engine)
 }
 
 /// Serves `server` over `transport` until the client closes it or a newer

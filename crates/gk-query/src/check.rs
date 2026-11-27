@@ -136,6 +136,16 @@ pub enum Cond {
         /// Tasks without a version match.
         none: bool,
     },
+    /// In a sprint of one of these names, (`active`) in its project's
+    /// active sprint, or (`none`) in no sprint.
+    Sprints {
+        /// The sprints.
+        names: Vec<NameRef>,
+        /// Tasks in an active sprint match.
+        active: bool,
+        /// Tasks in no sprint match.
+        none: bool,
+    },
     /// Priority within any of these bounds (0 none to 4 urgent).
     Priority(Vec<Bounds>),
     /// A subtask of one of these tasks, or (`none`) of no task.
@@ -231,6 +241,8 @@ pub enum WasTest {
     Labels(Vec<NameRef>),
     /// Versions of these names.
     Versions(Vec<NameRef>),
+    /// Sprints of these names.
+    Sprints(Vec<NameRef>),
     /// A value of the custom field with this query name that passes the
     /// test.
     Custom {
@@ -328,6 +340,8 @@ pub enum NameKind {
     Label,
     /// A version.
     Version,
+    /// A sprint.
+    Sprint,
     /// A project key.
     Project,
     /// A task key.
@@ -464,11 +478,13 @@ fn collect_names(f: &Filter, out: &mut Vec<NameUse>) {
             Cond::Types(n) => names(NameKind::Type, n, out),
             Cond::Labels { names: n, .. } => names(NameKind::Label, n, out),
             Cond::Versions { names: n, .. } => names(NameKind::Version, n, out),
+            Cond::Sprints { names: n, .. } => names(NameKind::Sprint, n, out),
             Cond::Was(w) => match w {
                 WasTest::Statuses(n) => names(NameKind::Status, n, out),
                 WasTest::Types(n) => names(NameKind::Type, n, out),
                 WasTest::Labels(n) => names(NameKind::Label, n, out),
                 WasTest::Versions(n) => names(NameKind::Version, n, out),
+                WasTest::Sprints(n) => names(NameKind::Sprint, n, out),
                 WasTest::Categories(_) | WasTest::Priorities(_) | WasTest::Custom { .. } => {}
             },
             Cond::Projects(p) => out.extend(p.iter().map(|p| NameUse {
@@ -904,6 +920,11 @@ fn is_none(v: &Value) -> bool {
     matches!(&v.kind, ValueKind::Word { text, quoted: false } if text.eq_ignore_ascii_case("none"))
 }
 
+/// The word `active` (not quoted): a sprint that is running.
+fn is_active(v: &Value) -> bool {
+    matches!(&v.kind, ValueKind::Word { text, quoted: false } if text.eq_ignore_ascii_case("active"))
+}
+
 fn is_any(v: &Value) -> bool {
     matches!(&v.kind, ValueKind::Word { text, quoted: false } if text.eq_ignore_ascii_case("any"))
 }
@@ -1136,6 +1157,15 @@ fn condition(
                 .filter(|v| !is_none(v))
                 .map(|v| name_ref(v, field))
                 .collect::<Result<_, _>>()?,
+            none: values.iter().any(is_none),
+        },
+        FieldType::Sprint => Cond::Sprints {
+            names: values
+                .iter()
+                .filter(|v| !is_none(v) && !is_active(v))
+                .map(|v| name_ref(v, field))
+                .collect::<Result<_, _>>()?,
+            active: values.iter().any(is_active),
             none: values.iter().any(is_none),
         },
         FieldType::Category => {
@@ -1443,6 +1473,12 @@ fn history_predicate(
                     .collect::<Result<_, _>>()?,
             ),
             FieldType::Version => WasTest::Versions(
+                p.values
+                    .iter()
+                    .map(|v| name_ref(v, field))
+                    .collect::<Result<_, _>>()?,
+            ),
+            FieldType::Sprint => WasTest::Sprints(
                 p.values
                     .iter()
                     .map(|v| name_ref(v, field))

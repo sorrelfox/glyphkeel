@@ -888,6 +888,8 @@ fn settings_can_be_set_back_to_their_default() {
 const BACK_TO_3: &str = "
     DROP TABLE automation_notices; DROP TABLE automation_fired; DROP TABLE automation_runs;
     DROP TABLE automation_rules;
+    DROP INDEX tasks_sprint; ALTER TABLE tasks DROP COLUMN sprint_id; DROP TABLE sprints;
+    ALTER TABLE tasks DROP COLUMN cover_id;
     ALTER TABLE timer DROP COLUMN work_kind_id;
     DROP INDEX time_entries_work_kind; ALTER TABLE time_entries DROP COLUMN work_kind_id;
     DROP TABLE work_kinds; ALTER TABLE statuses DROP COLUMN wip_min;

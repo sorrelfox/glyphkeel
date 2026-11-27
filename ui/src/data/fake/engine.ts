@@ -31,6 +31,8 @@ import {
   type GanttLayout,
   type ListLayout,
   type Card,
+  type CardCover,
+  type CardEdge,
   type Column,
   type Comment,
   type CommentChange,
@@ -55,6 +57,7 @@ import {
   type OpId,
   type OpMap,
   OP_SAFETY,
+  type Priority,
   type Project,
   type ProjectChange,
   type ProjectIcon,
@@ -101,6 +104,7 @@ import { createRule, DEPTH_MAX, fill, findRule, fits, listRules, listRuns, logRu
 /** The Gantt chart's layout until the person changes it. */
 const DEFAULT_GANTT_LAYOUT: GanttLayout = { zoom: "day", widths: {}, group_by: "parent", move_dependents: false };
 import { linksIn, placePage, subtree, type TextLink } from "./wiki";
+import { addSprintTasks, completeSprint, createSprint, deleteSprint, getSprint, listSprints, removeSprintTasks, sprintBurndown, sprintForTask, sprintRef, startSprint, updateSprint, type SprintHost } from "./sprints";
 import { createVersion, deleteVersion, getVersion, listVersions, updateVersion, versionForTask, versionRef, visibleVersions, type VersionHost } from "./versions";
 import { createView, deleteView, listViews, matchingKeys, parseQuery, queryError, searchTasks, updateView, type GroupInfo, type QueryNames, type TaskHistory } from "./query";
 import { createdClosed, cumulativeFlow, cycleTime, defaultFrom, flowPeriods, type FlowEvent, type FlowInput, type FlowStatus, type FlowTask } from "./reports";
@@ -155,7 +159,19 @@ const DEFAULT_LAYOUT: Readonly<BoardLayout> = {
   hide_done_after_days: 14,
   card_fields: ["type", "priority", "due", "labels", "checklist"],
   include_subprojects: false,
+  colour_by: "none",
+  colour_rules: [],
+  covers: "off",
 };
+
+/** The colour of each priority's edge; none has none. */
+const PRIORITY_EDGE: Partial<Record<Priority, Hue>> = { urgent: "red", high: "orange", normal: "blue", low: "grey" };
+
+/** The images a card can show as its cover. */
+const COVER_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+
+/** The most colour rules a board keeps. */
+const MAX_COLOUR_RULES = 20;
 
 /** `{ [key]: value }` when there is a value; nothing otherwise. */
 function some<K extends string, V>(key: K, value: V | null | undefined): { [P in K]?: V } {
@@ -913,6 +929,7 @@ export class FakeWorkspace {
       priority: task.priority,
       labels: this.labelRefs(task),
       ...some("parent", parent && this.keyOf(parent)),
+      ...some("sprint", sprintRef(this.sprintHost, task)),
       ...some("start_date", task.startDate),
       ...some("due_date", task.dueDate),
       ...some("estimate_minutes", task.estimateMin),
@@ -927,12 +944,64 @@ export class FakeWorkspace {
     };
   }
 
-  /** A card with its values of the custom fields `shown` (query names), as the board gives them. */
-  private boardCard(task: FakeTask, shown: readonly string[]): Card {
+  /** A card with its values of the custom fields `shown` (query names), its edge and its cover, as the board gives them. */
+  private boardCard(task: FakeTask, shown: readonly string[], edgeOf: (card: Card) => CardEdge | undefined, covers: BoardLayout["covers"]): Card {
     const card = this.card(task);
     const values = shown.length === 0 ? undefined : listedValues(this.state, task);
     const fields = Object.fromEntries(Object.entries(values ?? {}).filter(([name]) => shown.includes(name)));
-    return Object.keys(fields).length === 0 ? card : { ...card, fields };
+    const edge = edgeOf(card);
+    const cover = covers === "off" ? undefined : this.coverOf(task, covers === "first_image");
+    return { ...card, ...(Object.keys(fields).length === 0 ? {} : { fields }), ...some("edge", edge), ...some("cover", cover) };
+  }
+
+  /** The task's own live images, oldest first. */
+  private coverImages(task: FakeTask): FakeFile[] {
+    return this.state.files.filter((file) => file.taskId === task.id && file.commentId === null && file.pageId === undefined && file.deletedAt === null && COVER_TYPES.has(file.mime));
+  }
+
+  /** The cover a card shows: the chosen image while it is live, or with `firstImage`, the first image. */
+  private coverOf(task: FakeTask, firstImage: boolean): CardCover | undefined {
+    const images = this.coverImages(task);
+    const file = images.find((each) => each.id === task.coverId) ?? (firstImage ? images[0] : undefined);
+    return file && { attachment: file.id, name: file.name, mime: file.mime, ...some("width", file.width), ...some("height", file.height) };
+  }
+
+  /** How the board's cards get their edge, worked out once per board. */
+  private edges(layout: BoardLayout, onBoard: readonly FakeProject[]): (card: Card) => CardEdge | undefined {
+    switch (layout.colour_by) {
+      case "none":
+        return () => undefined;
+      case "priority":
+        return (card) => {
+          const hue = PRIORITY_EDGE[card.priority];
+          return hue && { hue, by: "priority", name: card.priority };
+        };
+      case "label":
+        return (card) => {
+          const label = card.labels[0];
+          return label && { hue: label.hue, by: "label", name: label.name };
+        };
+      case "type": {
+        const hues = new Map(onBoard.flatMap((project) => project.types.map((type) => [type.id, type.hue] as const)));
+        return (card) => ({ hue: hues.get(card.type.id) ?? "grey", by: "type", name: card.type.name });
+      }
+      case "query": {
+        const keys = new Set(onBoard.map((project) => project.key));
+        const listed = this.listedTasks().filter((task) => keys.has(task.project));
+        const rules = layout.colour_rules.flatMap((rule) => {
+          try {
+            return [{ rule, keys: new Set(matchingKeys(listed, rule.query, this.queryNames(), this.archivedKeys())) }];
+          } catch {
+            // A rule that no longer reads colours nothing.
+            return [];
+          }
+        });
+        return (card) => {
+          const found = rules.find((each) => each.keys.has(card.key));
+          return found && { hue: found.rule.hue, by: "query", name: (found.rule.name ?? "").trim() || found.rule.query };
+        };
+      }
+    }
   }
 
   private fullTask(task: FakeTask): Task {
@@ -955,6 +1024,7 @@ export class FakeWorkspace {
       ...(taskValues(this.state, task).length > 0 ? { fields: taskValues(this.state, task) } : {}),
       ...some("parent", parent && this.keyOf(parent)),
       ...some("fix_version", versionRef(this.versionHost, task)),
+      ...some("sprint", sprintRef(this.sprintHost, task)),
       ...some("start_date", task.startDate),
       ...some("due_date", task.dueDate),
       ...some("estimate_minutes", task.estimateMin),
@@ -1019,6 +1089,7 @@ export class FakeWorkspace {
     let hiddenTasks = 0;
     // The custom fields the cards show, by query name.
     const cardFields = layout.card_fields.filter((field) => field.startsWith("cf.")).map((field) => field.slice(3));
+    const edgeOf = this.edges(layout, onBoard);
     for (const column of ordered) {
       const statusIds = new Set(Object.values(column.statuses));
       const all = tasks.filter((task) => statusIds.has(task.statusId));
@@ -1034,7 +1105,7 @@ export class FakeWorkspace {
         hiddenColumns += 1;
         hiddenTasks += all.length;
       } else {
-        column.cards = shown.map((task) => this.boardCard(task, cardFields));
+        column.cards = shown.map((task) => this.boardCard(task, cardFields, edgeOf, layout.covers));
       }
     }
     return {
@@ -1162,6 +1233,7 @@ export class FakeWorkspace {
       ...some("height", file.height),
       added_by: { kind: "user", name: "You" },
       created_at: file.createdAt,
+      ...(task?.coverId === file.id && file.commentId === null ? { cover: true } : {}),
     };
   }
 
@@ -1384,6 +1456,11 @@ export class FakeWorkspace {
       if (planned !== undefined && !visibleVersions(this.versionHost, to).some((each) => each.version.id === one.fixVersionId)) {
         one.fixVersionId = null;
         warn(`Version "${planned.name}" isn't available in ${to.key} and was taken off.`);
+      }
+      const sprint = sprintRef(this.sprintHost, one);
+      if (sprint !== undefined && one.projectId !== to.id) {
+        one.sprintId = null;
+        warn(`The task left sprint "${sprint.name}", because sprints belong to one project and it moved to ${to.key}.`);
       }
       one.projectId = to.id;
       one.number = to.nextNumber;
@@ -1790,6 +1867,7 @@ export class FakeWorkspace {
       labels: card.labels,
       ...some("fields", listedValues(this.state, task)),
       ...some("fix_version", versionRef(this.versionHost, task)),
+      ...some("sprint", card.sprint),
       ...some("parent", card.parent),
       priority: card.priority,
       progress_percent: card.progress_percent,
@@ -2205,6 +2283,7 @@ export class FakeWorkspace {
         labels: this.labelRefs(task),
         ...some("fields", listedValues(this.state, task)),
         ...some("parent", parent && this.keyOf(parent)),
+        ...some("sprint", sprintRef(this.sprintHost, task)),
         priority: task.priority,
         progress_percent: progress(task),
         project: project.key,
@@ -2249,12 +2328,13 @@ export class FakeWorkspace {
     const types = new Map(this.state.projects.flatMap((project) => project.types.map((type) => [type.id, type.name] as const)));
     const labels = new Map(this.state.projects.flatMap((project) => project.labels.map((label) => [label.id, label.name] as const)));
     const versions = new Map((this.state.versions ?? []).map((version) => [version.id, version.name] as const));
+    const sprints = new Map((this.state.sprints ?? []).map((sprint) => [sprint.id, sprint.name] as const));
     const nameOf = (field: string, value: unknown): unknown => {
       const one = (id: unknown) => {
         if (typeof id !== "string") {
           return id;
         }
-        return field === "status" ? (statuses.get(id)?.name ?? id) : field === "type" ? (types.get(id) ?? id) : field === "labels" ? (labels.get(id) ?? id) : field === "fix_version" ? (versions.get(id) ?? id) : id;
+        return field === "status" ? (statuses.get(id)?.name ?? id) : field === "type" ? (types.get(id) ?? id) : field === "labels" ? (labels.get(id) ?? id) : field === "fix_version" ? (versions.get(id) ?? id) : field === "sprint" ? (sprints.get(id) ?? id) : id;
       };
       return Array.isArray(value) ? (value as unknown[]).map(one) : one(value);
     };
@@ -2436,6 +2516,8 @@ export class FakeWorkspace {
           ...some("estimate", change.estimate),
           ...some("type", change.type),
           ...some("parent", change.parent),
+          ...some("sprint", change.sprint),
+          ...some("fix_version", change.fix_version),
           ...(change.add_labels && change.add_labels.length > 0 ? { add_labels: change.add_labels } : {}),
           ...(change.remove_labels && change.remove_labels.length > 0 ? { remove_labels: change.remove_labels } : {}),
           ...(change.clear && change.clear.length > 0 ? { clear: change.clear } : {}),
@@ -2463,6 +2545,34 @@ export class FakeWorkspace {
   }
 
   /** The change event of a saved view. */
+  /** What the sprints need of this workspace. */
+  private readonly sprintHost: SprintHost = {
+    sprints: () => (this.state.sprints ??= []),
+    tasks: () => this.state.tasks,
+    projects: () => this.state.projects,
+    project: (ref) => this.project(ref),
+    writable: (ref) => this.writable(ref),
+    task: (ref) => this.task(ref),
+    keyOf: (task) => this.keyOf(task),
+    statusOf: (task) => {
+      const status = this.statusIn(this.projectOf(task), task.statusId);
+      return { id: status.id, name: status.name, category: status.category };
+    },
+    typeName: (task) => this.typeRef(task).name,
+    formerly: (sprint) => {
+      const ids = new Set(this.state.activity.filter((entry) => entry.entity === "task" && (entry.fields.sprint?.before === sprint || entry.fields.sprint?.after === sprint)).map((entry) => entry.id));
+      return this.state.tasks.filter((task) => ids.has(task.id));
+    },
+    touch: (task) => {
+      this.touch(task);
+    },
+    now: () => this.today().toISOString(),
+    today: () => localDay(this.today()),
+    dayOf: (moment) => localDay(new Date(moment)),
+    newId: () => nextUuid(),
+    fail: (code, message, path) => fail(code, message, path === undefined ? {} : { details: { path } }),
+  };
+
   /** What the versions need of this workspace. */
   private readonly versionHost: VersionHost = {
     versions: () => (this.state.versions ??= []),
@@ -3076,6 +3186,35 @@ export class FakeWorkspace {
       if (input.include_subprojects !== null && input.include_subprojects !== undefined) {
         next.include_subprojects = input.include_subprojects;
       }
+      if (input.colour_by !== null && input.colour_by !== undefined) {
+        next.colour_by = input.colour_by;
+      }
+      if (input.colour_rules !== null && input.colour_rules !== undefined) {
+        if (input.colour_rules.length > MAX_COLOUR_RULES) {
+          fail("invalid", `A board can have at most ${String(MAX_COLOUR_RULES)} colour rules.`, { details: { path: "colour_rules", message_id: "board-colour-rules-max" } });
+        }
+        next.colour_rules = input.colour_rules.map((rule, at) => {
+          const path = `colour_rules[${String(at)}].query`;
+          const query = rule.query.trim();
+          if (query === "") {
+            fail("invalid", "A colour rule needs a query.", { details: { path, message_id: "board-colour-rule-empty" } });
+          }
+          try {
+            matchingKeys([], query, this.queryNames(), this.archivedKeys());
+          } catch (error: unknown) {
+            const problem = queryError(error);
+            if (problem) {
+              fail("invalid", problem.message, { details: { ...problem.details, path } });
+            }
+            throw error;
+          }
+          const name = (rule.name ?? "").trim();
+          return { query, hue: rule.hue, ...(name === "" ? {} : { name }) };
+        });
+      }
+      if (input.covers !== null && input.covers !== undefined) {
+        next.covers = input.covers;
+      }
       this.state.layouts[project.id] = next;
       return {
         output: { project: project.key, layout: structuredClone(next) },
@@ -3322,6 +3461,21 @@ export class FakeWorkspace {
       ]);
       return { output: { items: chosen.map((deletion) => deletion.entry), total: changes.length }, changes };
     },
+    "agent.policy.update": (patch) => {
+      // Like the engine: the most an agent may do, and whether agents may ask
+      // the person to allow more.
+      const before = this.settingsNow();
+      const changed: string[] = [];
+      if (patch.max_profile !== before.agent_max_profile) {
+        this.state.settings.agent_max_profile = patch.max_profile;
+        changed.push("agent_max_profile");
+      }
+      if (typeof patch.confirmations === "boolean" && patch.confirmations !== before.agent_confirmations) {
+        this.state.settings.agent_confirmations = patch.confirmations;
+        changed.push("agent_confirmations");
+      }
+      return { output: { changed, settings: this.settingsNow() }, changes: changed.length ? [{ entity: "settings", id: "w-1", fields: changed }] : [] };
+    },
     "agent.limits.update": (patch) => {
       // Like the engine: only the app reaches it; numbers from 1 to 1000000,
       // lifted limits left out, and a reset brings back the default.
@@ -3477,6 +3631,30 @@ export class FakeWorkspace {
       const file = this.liveFile(attachment);
       file.deletedAt = this.today().toISOString();
       return this.fileChange(file, ["trashed"]);
+    },
+    "file.cover": ({ task: key, attachment }) => {
+      const task = this.task(key);
+      this.writable(this.projectOf(task).key);
+      let chosen: FakeFile | null = null;
+      if (attachment !== null && attachment !== undefined && attachment.trim() !== "") {
+        const file = this.liveFile(attachment.trim());
+        if (file.taskId !== task.id || file.commentId !== null) {
+          fail("invalid", `"${attachment}" isn't attached to this task itself, so it can't be its cover.`, { details: { path: "attachment", message_id: "file-cover-other-task" } });
+        }
+        if (!COVER_TYPES.has(file.mime)) {
+          fail("invalid", `A cover must be a PNG, JPEG, GIF or WebP image, not ${file.mime}.`, { details: { path: "attachment", message_id: "file-cover-not-image" } });
+        }
+        chosen = file;
+      }
+      const before = task.coverId ?? null;
+      task.coverId = chosen?.id ?? null;
+      if (before !== task.coverId) {
+        this.touch(task, false);
+      }
+      return {
+        output: { task: this.keyOf(task), ...(chosen ? { cover: this.attachment(chosen) } : {}) },
+        changes: before === task.coverId ? [] : [{ entity: "task", id: task.id, fields: ["cover"], project: this.projectOf(task).key }],
+      };
     },
     "today.get": ({ project: ref, limit }) => {
       const day = localDay(this.today());
@@ -4146,6 +4324,16 @@ export class FakeWorkspace {
     "version.create": (input) => createVersion(this.versionHost, input),
     "version.update": (input) => updateVersion(this.versionHost, input),
     "version.delete": (input) => deleteVersion(this.versionHost, input),
+    "sprint.list": (input) => listSprints(this.sprintHost, input),
+    "sprint.get": (input) => getSprint(this.sprintHost, input),
+    "sprint.burndown": (input) => sprintBurndown(this.sprintHost, input),
+    "sprint.create": (input) => createSprint(this.sprintHost, input),
+    "sprint.update": (input) => updateSprint(this.sprintHost, input),
+    "sprint.delete": (input) => deleteSprint(this.sprintHost, input),
+    "sprint.start": (input) => startSprint(this.sprintHost, input),
+    "sprint.complete": (input) => completeSprint(this.sprintHost, input),
+    "sprint.add_tasks": (input) => addSprintTasks(this.sprintHost, input),
+    "sprint.remove_tasks": (input) => removeSprintTasks(this.sprintHost, input),
     "view.create": (input) => {
       if (input.query.trim() !== "") {
         this.runQuery(() => searchTasks([], { query: input.query }, this.queryNames(), { archived: new Set(), scoped: false, statusOrder: () => 0 }));
@@ -4192,9 +4380,10 @@ export class FakeWorkspace {
       }
       return { output: { reverted, skipped }, changes: [{ entity: "workspace", id: "w-1", fields: ["*"] }] };
     },
-    "task.create": ({ project: ref, title, status, description, priority, before, after, at, parent: parentKey, start_date, due_date, type: typeName, labels, estimate, fix_version, fields }) => {
+    "task.create": ({ project: ref, title, status, description, priority, before, after, at, parent: parentKey, start_date, due_date, type: typeName, labels, estimate, fix_version, sprint, fields }) => {
       const project = this.writable(ref);
       const fixVersion = fix_version === null || fix_version === undefined ? null : versionForTask(this.versionHost, project, fix_version).id;
+      const sprintId = sprint === null || sprint === undefined ? null : sprintForTask(this.sprintHost, project, sprint).id;
       const startDate = start_date === null || start_date === undefined ? null : this.dayInput(start_date, "start_date");
       let dueDate = due_date === null || due_date === undefined ? null : this.dayInput(due_date, "due_date");
       if (startDate !== null && dueDate !== null && startDate > dueDate) {
@@ -4230,6 +4419,9 @@ export class FakeWorkspace {
       }, { before, after, at }, (made) => {
         if (fixVersion !== null) {
           made.fixVersionId = fixVersion;
+        }
+        if (sprintId !== null) {
+          made.sprintId = sprintId;
         }
         applyValues(this.state, made, type.name, fields, true, fail);
       });
@@ -4302,6 +4494,17 @@ export class FakeWorkspace {
       if (clear.includes("fix_version") && (task.fixVersionId ?? null) !== null) {
         task.fixVersionId = null;
         fields.push("fix_version");
+      }
+      if (input.sprint !== null && input.sprint !== undefined) {
+        const sprint = sprintForTask(this.sprintHost, project, input.sprint).id;
+        if (sprint !== task.sprintId) {
+          task.sprintId = sprint;
+          fields.push("sprint");
+        }
+      }
+      if (clear.includes("sprint") && (task.sprintId ?? null) !== null) {
+        task.sprintId = null;
+        fields.push("sprint");
       }
       const typed = (text: string | null | undefined, path: string) => (text === null || text === undefined ? null : this.dayInput(text, path));
       const start = clear.includes("start_date") ? null : (typed(input.start_date, "start_date") ?? task.startDate);

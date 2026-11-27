@@ -45,6 +45,10 @@ agents-profile-full = Full
 agents-profile-read-only-about = Agents can read, search and report, but change nothing.
 agents-profile-standard-about = Agents can create and change tasks, and move items to the trash, but delete nothing for good.
 agents-profile-full-about = Agents can do everything you can, including emptying the trash and deleting projects.
+agents-ask = Agents may ask you
+agents-ask-about = An agent whose MCP client can show you a question may ask to make one change its profile doesn't allow, or one that deletes a lot. Only what you allow there runs, once, and the history notes that you confirmed it.
+agents-ask-on = On
+agents-ask-off = Off
 agents-raise = Letting agents do more
 agents-raise-about = Letting agents do more, or raising their limits, asks you in a window of the desktop, so that an agent can't widen its own rights.
 
@@ -122,3 +126,27 @@ agents-reverted = { $skipped ->
        *[other] { $skipped } were left alone
     }
 }
+
+## The local HTTP endpoint
+
+agents-http = Local HTTP endpoint
+agents-http-serve = Serve agents over HTTP
+agents-http-serve-about = For MCP clients that connect to an address instead of starting a program. The app listens on this computer only (127.0.0.1) while it runs, and only clients that send the token get in. Turning it on asks you in a window of the desktop.
+agents-http-outside-app = Only the app serves agents over HTTP. Here the set-up is shown, but nothing listens.
+agents-http-on = On
+agents-http-off = Off
+agents-http-port = Port
+agents-http-port-about = The port on 127.0.0.1, from 1024 to 65535; or a free one each time the app starts.
+agents-http-any-port = Any free port
+agents-http-url = Address
+agents-http-url-about = Clients connect here. Add /read-only or /full for that profile; the most an agent may do still applies.
+agents-http-copy-url = Copy the address
+agents-http-token = Token
+agents-http-token-about = Clients send it as "Authorization: Bearer" followed by the token. Keep it secret; a new token locks out every client that has the old one.
+agents-http-token-hidden = ••••••••••••••••
+agents-http-token-show = Show the token
+agents-http-token-hide = Hide the token
+agents-http-copy-token = Copy the token
+agents-http-regenerate = New token
+agents-http-client = Set-up for a client that connects over HTTP:
+agents-http-snippet = HTTP set-up

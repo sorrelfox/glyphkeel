@@ -32,7 +32,11 @@ pub(super) fn register(r: &mut Registry) {
     });
     r.command::<AgentPolicyUpdate, _>(desc::<AgentPolicyUpdate>(), |w, input| {
         let value = Value::String(input.max_profile.as_str().to_owned());
-        settings::set_all(w, &[("agent_max_profile", value)])
+        let mut wanted = vec![("agent_max_profile", value)];
+        if let Some(on) = input.confirmations {
+            wanted.push(("agent_confirmations", Value::Bool(on)));
+        }
+        settings::set_all(w, &wanted)
     });
     // Only the app reaches it: it is an app operation without a command, so
     // the pipeline refuses agents and the command line.

@@ -20,7 +20,7 @@ always see the same workspaces.
 | Workspaces | `<data folder>/workspaces/<name>/` | `<data folder>\workspaces\<name>\` |
 | Backups | `<data folder>/backups/<name>/` | `<data folder>\backups\<name>\` |
 | Configuration folder | `$XDG_CONFIG_HOME/glyphkeel`, normally `~/.config/glyphkeel` | `%APPDATA%\Glyphkeel` |
-| Personal settings (time zone, the folders agents may use and the like) | `<configuration folder>/settings.json` | `<configuration folder>\settings.json` |
+| Personal settings (time zone, the folders agents may use, the agents' HTTP endpoint and its token, and the like; readable by you only) | `<configuration folder>/settings.json` | `<configuration folder>\settings.json` |
 | The app's settings (background mode, notifications, safe rendering) | `<configuration folder>/app.json` | `<configuration folder>\app.json` |
 | Window size and position | `$XDG_STATE_HOME/glyphkeel/main-window.json`, normally under `~/.local/state` | `<configuration folder>\main-window.json` |
 | Starting when you sign in | `~/.config/autostart/io.github.sorrelfox.Glyphkeel.desktop` | the value `Glyphkeel` under `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run` |

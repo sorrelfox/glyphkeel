@@ -31,6 +31,11 @@ pub struct Context {
     /// sub-projects: other projects don't appear in lists or searches and
     /// can't be named or changed. `None`: the whole workspace.
     pub project_scope: Option<String>,
+    /// Whether the person allowed this one call of an agent when it was
+    /// asked for, through the agent's client: the call then runs as if
+    /// the agent had the full profile, without the limits on the trash,
+    /// and its history records the confirmation.
+    pub person_confirmed: bool,
 }
 
 impl Context {
@@ -49,6 +54,7 @@ impl Context {
             request_id: None,
             confirm: Confirmation::Refuse,
             project_scope: None,
+            person_confirmed: false,
         }
     }
 
@@ -66,6 +72,7 @@ impl Context {
             request_id: None,
             confirm: Confirmation::Refuse,
             project_scope: None,
+            person_confirmed: false,
         }
     }
 
@@ -85,6 +92,7 @@ impl Context {
             request_id: None,
             confirm: Confirmation::Refuse,
             project_scope: None,
+            person_confirmed: false,
         }
     }
 
@@ -93,6 +101,25 @@ impl Context {
     pub fn with_confirmation(mut self, confirm: Confirmation) -> Self {
         self.confirm = confirm;
         self
+    }
+
+    /// The same agent, for one call the person allowed when asked.
+    #[must_use]
+    pub fn confirmed_by_person(mut self) -> Self {
+        self.person_confirmed = true;
+        self
+    }
+
+    /// The profile an agent works with under the workspace's `cap`: the one
+    /// it asked for, capped; the full profile for a call the person
+    /// allowed.
+    #[must_use]
+    pub fn agent_profile_under(&self, cap: Profile) -> Profile {
+        if self.person_confirmed {
+            Profile::Full
+        } else {
+            self.profile.unwrap_or(Profile::Standard).capped_by(cap)
+        }
     }
 
     /// The same caller limited to `project` (a key or ID) and its

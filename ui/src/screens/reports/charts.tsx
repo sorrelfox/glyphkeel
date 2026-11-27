@@ -316,3 +316,62 @@ export function CycleTimeChart({
     </ChartFrame>
   );
 }
+
+// ---------------------------------------------------------------------
+
+export const REMAINING = "var(--accent)";
+export const IDEAL = "var(--fg-faint)";
+export const SCOPE = "var(--hue-grey)";
+
+/**
+ * A sprint's burndown: the work still open at the end of each day, the
+ * ideal line from the work at the start down to none on the last day, and
+ * the sprint's scope (all its work), which rises when work is added.
+ * `remaining` and `scope` are left out for the days still to come.
+ */
+export function BurndownChart({
+  remaining,
+  scope,
+  ideal,
+  labels,
+  label,
+  summary,
+  describe,
+  legend,
+  format,
+}: {
+  remaining: readonly (number | undefined)[];
+  scope: readonly (number | undefined)[];
+  ideal: readonly number[];
+  labels: readonly string[];
+  label: string;
+  summary: string;
+  describe: (i: number) => ReactNode;
+  legend: ReactNode;
+  format: (n: number) => string;
+}) {
+  const known = (values: readonly (number | undefined)[]) => values.flatMap((v) => (v === undefined ? [] : [v]));
+  const axis = niceAxis(Math.max(1, ...ideal, ...known(remaining), ...known(scope)));
+  return (
+    <ChartFrame label={label} summary={summary} count={labels.length} describe={describe} legend={legend}>
+      {({ width, rtl, chosen }) => {
+        const s = slots(labels.length, width, rtl);
+        const y = yScale(axis.max, HEIGHT);
+        const points = (values: readonly (number | undefined)[]) => values.flatMap((v, i) => (v === undefined ? [] : [[s.centre(i), y(v)] as const]));
+        return (
+          <>
+            <Axes width={width} rtl={rtl} max={axis.max} ticks={axis.ticks} format={format} labels={labels} chosen={chosen} />
+            <g aria-hidden="true">
+              <path className={styles.level} d={linePath(ideal.map((v, i) => [s.centre(i), y(v)]))} stroke={IDEAL} data-line="ideal" />
+              <path className={styles.line} d={linePath(points(scope))} stroke={SCOPE} strokeOpacity={0.6} data-line="scope" />
+              <path className={styles.line} d={linePath(points(remaining))} stroke={REMAINING} data-line="remaining" />
+              {points(remaining).map(([cx, cy]) => (
+                <circle key={`${String(cx)}-${String(cy)}`} cx={cx} cy={cy} r={2.5} fill={REMAINING} />
+              ))}
+            </g>
+          </>
+        );
+      }}
+    </ChartFrame>
+  );
+}

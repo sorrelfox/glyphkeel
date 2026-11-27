@@ -62,6 +62,7 @@ fn parts(input: &Value) -> Vec<&'static str> {
         "add_labels",
         "remove_labels",
         "fix_version",
+        "sprint",
         "parent",
         "start_date",
         "due_date",
@@ -125,6 +126,7 @@ fn summary(
     };
     let labels: Vec<String> = task_labels(tx, id)?.into_iter().map(|l| l.name).collect();
     let fix_version = super::version::of_task(tx, id)?.map(|v| v.name);
+    let sprint = super::sprint::of_task(tx, id)?.map(|s| s.name);
     let fields: Vec<(&str, Option<String>)> = vec![
         ("project", Some(project)),
         ("status", Some(status)),
@@ -132,6 +134,7 @@ fn summary(
         ("priority", Some(priority_name(priority).to_owned())),
         ("labels", (!labels.is_empty()).then(|| labels.join(", "))),
         ("fix_version", fix_version),
+        ("sprint", sprint),
         ("parent", parent),
         ("start_date", start),
         ("due_date", due),
@@ -303,6 +306,7 @@ fn apply(
         add_labels: c.add_labels.clone(),
         remove_labels: c.remove_labels.clone(),
         fix_version: c.fix_version.clone(),
+        sprint: c.sprint.clone(),
         parent: c.parent.clone(),
         start_date,
         due_date,
@@ -333,11 +337,7 @@ fn most(w: &WriteCtx<'_>) -> Result<usize, Failure> {
         return Ok(MAX_FULL);
     }
     let cap = super::settings::load(w.tx())?.agent_max_profile;
-    let profile = w
-        .caller()
-        .profile
-        .unwrap_or(Profile::Standard)
-        .capped_by(cap);
+    let profile = w.caller().agent_profile_under(cap);
     Ok(if profile == Profile::Full {
         MAX_FULL
     } else {

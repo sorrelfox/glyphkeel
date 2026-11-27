@@ -30,7 +30,7 @@ use serde_json::{Map, Value};
 use super::description::{self, Owner};
 use super::{
     agent, board, claim, comment, custom_field, desc, fields, file, gantt_layout, list_layout,
-    lookup, project, relation, reminder, settings, task, time, trash, version, view, wiki,
+    lookup, project, relation, reminder, settings, sprint, task, time, trash, version, view, wiki,
     work_kind,
 };
 use super::{automation, recurrence, template};
@@ -299,8 +299,13 @@ fn id_at(r: &Row<'_>, i: usize) -> gk_store::rusqlite::Result<Option<String>> {
 
 fn entry(r: &Row<'_>) -> gk_store::rusqlite::Result<ActivityEntry> {
     let changes: String = r.get(11)?;
-    let mut fields = serde_json::from_str::<Value>(&changes)
-        .ok()
+    let changes = serde_json::from_str::<Value>(&changes).ok();
+    let confirmed_by_person = changes
+        .as_ref()
+        .and_then(|v| v.get("confirmed"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let mut fields = changes
         .and_then(|v| v.get("fields").cloned())
         .and_then(|f| serde_json::from_value::<BTreeMap<String, FieldChange>>(f).ok())
         .unwrap_or_default();
@@ -330,6 +335,7 @@ fn entry(r: &Row<'_>) -> gk_store::rusqlite::Result<ActivityEntry> {
         fields,
         task: None,
         reverted_by: id_at(r, 12)?,
+        confirmed_by_person,
     })
 }
 
@@ -410,6 +416,7 @@ fn current(
         (recurrence::ENTITY, recurrence::RECORD) => recurrence::raw(tx, id)?,
         (automation::ENTITY, automation::RECORD) => automation::raw(tx, id)?,
         (version::ENTITY, version::RECORD) => version::raw(tx, id)?,
+        (sprint::ENTITY, sprint::RECORD) => sprint::raw(tx, id)?,
         (_, "deleted" | trash::PURGED) => return Ok(None),
         (fields::PROJECT | fields::TASK | fields::WIKI, trash::TRASHED) => {
             trash::raw_trashed(tx, entity, id)?
@@ -538,6 +545,12 @@ fn apply(
         (version::ENTITY, version::RECORD) => {
             let before = version::raw(w.tx(), id)?;
             version::write_raw(w, id, value.as_ref())?;
+            w.record_field(entity, id, project, field, before, value);
+            Ok(())
+        }
+        (sprint::ENTITY, sprint::RECORD) => {
+            let before = sprint::raw(w.tx(), id)?;
+            sprint::write_raw(w, id, value.as_ref())?;
             w.record_field(entity, id, project, field, before, value);
             Ok(())
         }
@@ -745,6 +758,7 @@ fn group_rows(tx: &Transaction<'_>, group: Id) -> Result<Vec<GroupRow>, StoreErr
 /// else leaves them alone.
 const APP_ONLY_SETTINGS: &[&str] = &[
     "agent_max_profile",
+    "agent_confirmations",
     super::agent::LIMITS_SETTING,
     crate::backup::SETTING,
 ];

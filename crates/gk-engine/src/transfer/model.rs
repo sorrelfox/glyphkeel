@@ -102,6 +102,9 @@ pub(crate) struct ProjectFile {
     /// The project's versions (releases).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) versions: Vec<Version>,
+    /// The project's sprints.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) sprints: Vec<Sprint>,
     pub(crate) views: Vec<SavedView>,
     pub(crate) layouts: Vec<Layout>,
     /// Earlier keys of the project, which still find it.
@@ -314,6 +317,27 @@ pub(crate) struct Version {
     pub(crate) updated_at: i64,
 }
 
+/// A sprint of the project.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct Sprint {
+    pub(crate) id: String,
+    pub(crate) name: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub(crate) goal: String,
+    /// `planned`, `active` or `closed`.
+    pub(crate) state: String,
+    pub(crate) start_date: Option<String>,
+    pub(crate) end_date: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) started_at: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) completed_at: Option<i64>,
+    pub(crate) rank: String,
+    pub(crate) created_at: i64,
+    pub(crate) updated_at: i64,
+}
+
 /// One line of `projects/<KEY>/tasks.jsonl`. The description itself is in
 /// `projects/<KEY>/tasks/<KEY>-<number>.md` (absent when empty) and in
 /// `revisions.jsonl`.
@@ -366,6 +390,12 @@ pub(crate) struct Task {
     /// ancestor shares.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) fix_version_id: Option<String>,
+    /// The sprint it is in: one of its project's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) sprint_id: Option<String>,
+    /// The image attached to it that its board card shows as its cover.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) cover_id: Option<String>,
     /// Its custom field values, one per stored value.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) custom_values: Vec<CustomValue>,

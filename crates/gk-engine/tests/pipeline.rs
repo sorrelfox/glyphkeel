@@ -313,6 +313,7 @@ fn profiles_and_the_workspace_cap() {
             &app(),
             &AgentPolicyPatch {
                 max_profile: Profile::ReadOnly,
+                confirmations: None,
             },
         )
         .unwrap();
@@ -409,6 +410,7 @@ fn permanent_operations_need_a_confirmation_inside_the_call() {
             &app(),
             &AgentPolicyPatch {
                 max_profile: Profile::Full,
+                confirmations: None,
             },
         )
         .unwrap();
@@ -422,6 +424,36 @@ fn permanent_operations_need_a_confirmation_inside_the_call() {
     );
     let full = agent(&engine, Profile::Full);
     engine.call(&full, "test.purge", json!({})).unwrap();
+
+    // A call the person allowed when the agent asked runs once, as if the
+    // agent had the full profile, beyond even the workspace's cap, and its
+    // history says so.
+    engine
+        .run::<AgentPolicyUpdate>(
+            &app(),
+            &AgentPolicyPatch {
+                max_profile: Profile::ReadOnly,
+                confirmations: None,
+            },
+        )
+        .unwrap();
+    let reader = agent(&engine, Profile::ReadOnly);
+    let e = engine.call(&reader, "test.purge", json!({})).unwrap_err();
+    assert_eq!(e.code, ErrorCode::Forbidden);
+    engine
+        .call(
+            &reader.clone().confirmed_by_person(),
+            "test.purge",
+            json!({}),
+        )
+        .unwrap();
+    let page = engine
+        .run::<HistoryFeed>(&app(), &ActivityQuery::default())
+        .unwrap();
+    let newest = &page.items[0];
+    assert_eq!(newest.actor.kind, ActorKind::Agent);
+    assert!(newest.confirmed_by_person);
+    assert!(!page.items[1].confirmed_by_person);
 }
 
 #[test]

@@ -43,6 +43,7 @@ pub mod rules;
 pub mod schedule;
 pub mod search;
 pub mod settings;
+pub mod sprint;
 pub mod task;
 pub mod template;
 pub mod time;

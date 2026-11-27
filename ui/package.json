@@ -29,6 +29,7 @@
     "test:wiki": "playwright test --config playwright.wiki.config.ts",
     "test:planning": "playwright test --config playwright.planning.config.ts",
     "test:roadmap": "playwright test --config playwright.roadmap.config.ts",
+    "test:sprints": "playwright test --config playwright.sprints.config.ts",
     "test:fields": "playwright test --config playwright.fields.config.ts",
     "test:csv": "playwright test --config playwright.csv.config.ts",
     "test:windows": "playwright test --config playwright.windows.config.ts",

@@ -19,7 +19,8 @@ pub const DEFAULT_WORKSPACE: &str = gk_store::DEFAULT_WORKSPACE;
 /// Serve Glyphkeel to an AI agent over MCP, on standard input and output.
 ///
 /// The agent's MCP client starts this command. Logs go to standard error;
-/// standard output carries the protocol only.
+/// standard output carries the protocol only. With `--http`, it serves
+/// clients that connect to a local URL instead.
 #[derive(Debug, Clone, Parser)]
 #[command(name = "glyphkeel mcp", no_binary_name = true, version)]
 pub struct Options {
@@ -58,6 +59,18 @@ pub struct Options {
     #[arg(long, value_name = "LEVEL", default_value = "warn", value_parser = parse_level)]
     pub log_level: tracing::level_filters::LevelFilter,
 
+    /// Serve over HTTP on 127.0.0.1 instead of standard input and output,
+    /// for clients that can't start a program. Clients send the token from
+    /// the personal settings (`agent_http.token`, created when missing) as
+    /// "Authorization: Bearer <token>".
+    #[arg(long)]
+    pub http: bool,
+
+    /// The port of `--http`. Default: the personal setting
+    /// `agent_http.port`, else a free port.
+    #[arg(long, value_name = "PORT", requires = "http")]
+    pub port: Option<u16>,
+
     /// The folders the agent may name files in besides the workspace's
     /// `exports` folder, in place of the personal setting `agent_folders`
     /// (for tests and embedders); `None`: the personal setting. Not an
@@ -93,8 +106,21 @@ impl Options {
             agent_name: None,
             tz: None,
             log_level: tracing::level_filters::LevelFilter::WARN,
+            http: false,
+            port: None,
             agent_folders: None,
             settings_file: None,
+        }
+    }
+
+    /// Who the agent is and what it may use.
+    #[must_use]
+    pub fn setup(&self) -> crate::Setup {
+        crate::Setup {
+            profile: self.profile,
+            toolsets: self.toolsets(),
+            project: self.project.clone(),
+            agent_name: self.agent_name.clone(),
         }
     }
 

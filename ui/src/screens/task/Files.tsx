@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { Download, ExternalLink, File, FileCode, FileImage, FileText, MoreHorizontal, Paperclip, Trash2 } from "lucide-react";
+import { Download, ExternalLink, File, FileCode, FileImage, FileText, Image as ImageIcon, MoreHorizontal, Paperclip, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { Button, Menu, MenuTrigger, Popover, useLocale } from "react-aria-components";
 
@@ -256,12 +256,18 @@ export function Thumbnail({ file }: { file: Attachment }) {
   );
 }
 
-/** One attached file: a thumbnail or an icon, its name and size; open, save, remove. */
+/** The images a card can show as its cover, as the engine takes them. */
+const COVER_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+
+/** One attached file: a thumbnail or an icon, its name and size; open, save, use as the card's cover, remove. */
 export function FileRow({ file, readOnly }: { file: Attachment; readOnly: boolean }) {
   const t = useT();
   const toasts = useToasts();
   const size = useSizeFormat();
   const remove = useCommand("file.delete", { undoable: t("files-removed", { name: file.name }) });
+  const cover = useCommand("file.cover", { undoable: file.cover === true ? t("files-cover-cleared") : t("files-cover-set", { name: file.name }) });
+  // Only images attached to the task itself can be its card's cover.
+  const coverable = file.task !== "" && file.comment === undefined && file.page === undefined && COVER_TYPES.has(file.mime);
   const [preview, setPreview] = useState(false);
   const image = file.kind === "image";
   const app = inApp();
@@ -284,6 +290,7 @@ export function FileRow({ file, readOnly }: { file: Attachment; readOnly: boolea
           {/* Named by its text; the spaces keep the parts apart in the name. */}
           {image ? <Thumbnail file={file} /> : <KindIcon kind={file.kind} />}
           <span className="truncate grow">{file.name}</span>{" "}
+          {file.cover === true && <span className="chip outline">{t("files-cover")}</span>}{" "}
           <span className={classes("num faint", styles.small)}>{size(file.size)}</span>
         </Button>
         <MenuTrigger>
@@ -312,6 +319,19 @@ export function FileRow({ file, readOnly }: { file: Attachment; readOnly: boolea
                       saveAttachment(file.id).catch(fail);
                     },
                   },
+                  ...(coverable
+                    ? [
+                        {
+                          id: "cover",
+                          label: file.cover === true ? t("files-stop-cover") : t("files-use-as-cover"),
+                          icon: <ImageIcon className="ic s" />,
+                          disabled: readOnly,
+                          run: () => {
+                            cover.mutate(file.cover === true ? { task: file.task } : { task: file.task, attachment: file.id });
+                          },
+                        },
+                      ]
+                    : []),
                   "separator",
                   {
                     id: "remove",

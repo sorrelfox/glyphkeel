@@ -53,6 +53,21 @@ const ALLOWED: &[(&str, &str, &str)] = &[
     ),
     (
         "crates/gk-engine/src/jobs.rs",
+        "no automation.run",
+        "an invariant: the operation is in the catalog",
+    ),
+    (
+        "crates/gk-engine/src/ops/automation.rs",
+        "no handler for {op}",
+        "an invariant: a rule's actions are commands of the catalog",
+    ),
+    (
+        "crates/gk-engine/src/ops/automation.rs",
+        "{op} is not a command",
+        "an invariant: a rule's actions are commands of the catalog",
+    ),
+    (
+        "crates/gk-engine/src/jobs.rs",
         "no trash.purge",
         "an invariant: the operation is in the catalog",
     ),

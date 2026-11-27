@@ -61,6 +61,8 @@ pub(crate) struct Workspace {
     lost: Mutex<Option<OpError>>,
     /// Whether opening it made it: it didn't exist before this start.
     created: bool,
+    /// The local HTTP endpoint for agents, over the open engine.
+    agents: crate::agent_http::AgentEndpoint,
 }
 
 /// How the workspace was opened, to open it the same way again.
@@ -115,6 +117,7 @@ impl Workspace {
             }),
             lost: Mutex::new(None),
             created,
+            agents: crate::agent_http::AgentEndpoint::default(),
         }
     }
 
@@ -138,6 +141,7 @@ impl Workspace {
             }),
             lost: Mutex::new(None),
             created: false,
+            agents: crate::agent_http::AgentEndpoint::default(),
         }
     }
 
@@ -205,6 +209,7 @@ impl Workspace {
         self.close_within(REOPEN_WAIT);
         match start(layout, config, &self.windows) {
             Ok((engine, background)) => {
+                self.agents.resume(Arc::clone(&engine));
                 *lock(&self.engine) = Some(engine);
                 *lock(&self.background) = Some(background);
                 *lock(&self.lost) = None;
@@ -294,7 +299,13 @@ impl Workspace {
             .and_then(Value::as_str)
             .and_then(|name| name.parse::<Profile>().ok())
             .unwrap_or(Profile::ReadOnly);
-        if !raises(current, wanted) {
+        let asks_now = settings
+            .get("agent_confirmations")
+            .and_then(Value::as_bool)
+            .unwrap_or(true);
+        let confirmations_on =
+            !asks_now && input.get("confirmations").and_then(Value::as_bool) == Some(true);
+        if !raises(current, wanted) && !confirmations_on {
             return Ok(());
         }
         self.ask(POLICY_OP, input, "confirm-agent-raise-refused")
@@ -338,6 +349,27 @@ impl Workspace {
         } else {
             Err(crate::messages::error(refused, &[], OpError::forbidden))
         }
+    }
+
+    /// Serves agents over local HTTP as `wanted` (`None`: off), over the
+    /// open workspace and the ones opened later.
+    pub(crate) fn set_agent_http(&self, wanted: Option<crate::agent_http::Wanted>) {
+        self.agents.set(wanted, self.engine().ok());
+    }
+
+    /// Where the agents' endpoint serves now, and why it doesn't.
+    pub(crate) fn agent_http_status(&self) -> (Option<String>, Option<OpError>) {
+        self.agents.status()
+    }
+
+    /// Asks the person, in the native dialog, before the agents' endpoint
+    /// opens, so that script in the page can't open it alone.
+    pub(crate) fn confirm_agent_http(&self) -> Result<(), OpError> {
+        self.ask(
+            POLICY_OP,
+            &serde_json::json!({ "agent_http": true }),
+            "confirm-agent-http-refused",
+        )
     }
 
     /// The time zone the engine counts "today" and local times in, by its
@@ -417,6 +449,8 @@ impl Workspace {
     /// still running to end, so that the engine closes cleanly and lets go
     /// of the workspace.
     fn close_within(&self, wait: Duration) {
+        // The agents' endpoint holds the engine; it stops first.
+        self.agents.pause();
         if let Some(mut background) = lock(&self.background).take() {
             if let Some(reminders) = background.reminders.take() {
                 reminders.stop();

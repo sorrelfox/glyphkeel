@@ -63,11 +63,18 @@ pub(crate) fn wording(op: &str, summary: &str, input: &Value) -> Wording {
             text("confirm-backup-delete", &[("name", name())]),
             "confirm-delete",
         ),
+        "agent.policy.update" if input.get("agent_http").and_then(Value::as_bool) == Some(true) => {
+            (text("confirm-agent-http-on", &[]), "confirm-agent-raise")
+        }
         "agent.policy.update" => {
             // Only a raise asks; to anything but the full profile it is to
-            // the standard one.
+            // the standard one. Setting the same profile again asks only to
+            // let agents ask the person.
             let question = match input.get("max_profile").and_then(Value::as_str) {
                 Some("full") => "confirm-agent-raise-full",
+                _ if input.get("confirmations").and_then(Value::as_bool) == Some(true) => {
+                    "confirm-agent-confirmations-on"
+                }
                 _ => "confirm-agent-raise-standard",
             };
             (text(question, &[]), "confirm-agent-raise")

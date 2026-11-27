@@ -10,6 +10,7 @@ import {
   formatMinutes,
   matches,
   moveColumn,
+  BACKLOG,
   NO_FILTERS,
   orderColumns,
   parseDuration,
@@ -28,6 +29,9 @@ const LAYOUT: BoardLayout = {
   hide_done_after_days: 14,
   card_fields: ["type", "priority", "due", "labels", "checklist"],
   include_subprojects: false,
+  colour_by: "none",
+  colour_rules: [],
+  covers: "off",
 };
 
 function card(key: string, overrides: Partial<Card> = {}): Card {
@@ -98,6 +102,10 @@ describe("matches", () => {
     expect(matches(card("TM-6", { due_date: "2026-11-20" }), { ...NO_FILTERS, due: ["overdue"] }, NOW)).toBe(true);
     expect(matches(card("TM-6", { due_date: "2026-11-20", closed_at: NOW.toISOString() }), { ...NO_FILTERS, due: ["overdue"] }, NOW)).toBe(false);
     expect(matches(card("TM-7"), { ...NO_FILTERS, due: ["none"] }, NOW)).toBe(true);
+    const inSprint = card("TM-8", { sprint: { id: "s-1", name: "Sprint 1", state: "active" } });
+    expect(matches(inSprint, { ...NO_FILTERS, sprints: ["s-1"] }, NOW)).toBe(true);
+    expect(matches(inSprint, { ...NO_FILTERS, sprints: [BACKLOG] }, NOW)).toBe(false);
+    expect(matches(card("TM-9"), { ...NO_FILTERS, sprints: [BACKLOG] }, NOW)).toBe(true);
   });
 });
 

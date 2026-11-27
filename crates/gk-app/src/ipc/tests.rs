@@ -494,6 +494,32 @@ fn raising_what_agents_may_do_asks_natively_and_lowering_does_not() {
         .unwrap();
     assert_eq!(cap(&workspace), "full");
     assert_eq!(asked.load(Ordering::SeqCst), 2);
+
+    // Turning off agents' questions to the person goes through; turning
+    // them on again asks.
+    let confirmations = |workspace: &Workspace| {
+        workspace.call("settings.get", Value::Null, None).unwrap()["agent_confirmations"].clone()
+    };
+    workspace
+        .call(
+            "agent.policy.update",
+            json!({ "max_profile": "full", "confirmations": false }),
+            None,
+        )
+        .unwrap();
+    assert_eq!(confirmations(&workspace), false);
+    assert_eq!(asked.load(Ordering::SeqCst), 2);
+    *answer.lock().unwrap() = false;
+    let refused = workspace
+        .call(
+            "agent.policy.update",
+            json!({ "max_profile": "full", "confirmations": true }),
+            None,
+        )
+        .unwrap_err();
+    assert_eq!(refused.code, ErrorCode::Forbidden);
+    assert_eq!(confirmations(&workspace), false);
+    assert_eq!(asked.load(Ordering::SeqCst), 3);
     workspace.close();
 }
 

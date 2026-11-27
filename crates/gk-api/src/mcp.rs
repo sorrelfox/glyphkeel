@@ -618,6 +618,126 @@ Example: test_automation {\"task\": \"TM-41\", \"draft\": {\"trigger\": {\"on\":
         idempotent: true,
     },
     McpTool {
+        name: "list_sprints",
+        toolset: Toolset::Projects,
+        title: "List sprints",
+        description: "Lists the sprints of a `project`: closed ones, then the active one, then \
+planned ones, with name, goal, state (planned, active, closed), dates and progress (tasks closed \
+of total, estimates). `include_tasks: true` adds each sprint's tasks and the `backlog` (open \
+tasks in no sprint), like the sprints page; `state` filters. \
+Example: list_sprints {\"project\": \"TM\", \"state\": [\"active\", \"planned\"]}",
+        main: "sprint.list",
+        covers: &["sprint.list"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "get_sprint",
+        toolset: Toolset::Projects,
+        title: "Get a sprint",
+        description: "Returns one sprint with its progress and its tasks, named by ID, by name \
+with its `project`, or `active` with its `project`. \
+Example: get_sprint {\"sprint\": \"active\", \"project\": \"TM\"}",
+        main: "sprint.get",
+        covers: &["sprint.get"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "create_sprint",
+        toolset: Toolset::Projects,
+        title: "Plan a sprint",
+        description: "Plans a sprint in a project: `name` (unique in the project; not `active`, \
+`none` or `backlog`), optional `goal`, `start_date`, `end_date` and `tasks` to put in it. It \
+starts as planned; start it with start_sprint. Only plan sprints the person asked for. \
+Example: create_sprint {\"project\": \"TM\", \"name\": \"Sprint 4\", \"goal\": \"Ship the \
+importer\", \"tasks\": [\"TM-41\", \"TM-42\"]}",
+        main: "sprint.create",
+        covers: &["sprint.create"],
+        idempotent: false,
+    },
+    McpTool {
+        name: "update_sprint",
+        toolset: Toolset::Projects,
+        title: "Change a sprint",
+        description: "Renames a sprint (saved views follow) or changes its `goal`, `start_date` \
+or `end_date`; `clear` empties them. Name it by ID, or by name (or `active`) with its \
+`project`. Starting and completing are start_sprint and complete_sprint. \
+Example: update_sprint {\"sprint\": \"Sprint 4\", \"project\": \"TM\", \"end_date\": \
+\"2026-12-18\"}",
+        main: "sprint.update",
+        covers: &["sprint.update"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "delete_sprint",
+        toolset: Toolset::Projects,
+        title: "Delete a sprint",
+        description: "Deletes a planned or closed sprint; its tasks go back to the backlog and \
+saved views stop naming it. An active sprint is completed instead. revert_changes brings both \
+back. Example: delete_sprint {\"sprint\": \"Sprint 4\", \"project\": \"TM\"}",
+        main: "sprint.delete",
+        covers: &["sprint.delete"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "start_sprint",
+        toolset: Toolset::Projects,
+        title: "Start a sprint",
+        description: "Starts a planned sprint; a project has one active sprint at a time. \
+`start_date` defaults to the sprint's own or today, `end_date` to its own or two weeks later; \
+`goal` sets a new goal. Example: start_sprint {\"sprint\": \"Sprint 4\", \"project\": \"TM\", \
+\"end_date\": \"+2w\"}",
+        main: "sprint.start",
+        covers: &["sprint.start"],
+        idempotent: false,
+    },
+    McpTool {
+        name: "complete_sprint",
+        toolset: Toolset::Projects,
+        title: "Complete a sprint",
+        description: "Completes the active sprint. Its open tasks go to `move_open_tasks_to`: a \
+planned sprint of the project (name or ID), or `backlog` (the default); closed tasks stay in \
+the completed sprint. `tasks_changed` lists the tasks moved. Ask the person where unfinished \
+work goes when it isn't clear. \
+Example: complete_sprint {\"sprint\": \"active\", \"project\": \"TM\", \"move_open_tasks_to\": \
+\"Sprint 5\"}",
+        main: "sprint.complete",
+        covers: &["sprint.complete"],
+        idempotent: false,
+    },
+    McpTool {
+        name: "add_tasks_to_sprint",
+        toolset: Toolset::Projects,
+        title: "Put tasks in a sprint",
+        description: "Puts `tasks` (keys, up to 500, of the sprint's project) in a planned or \
+active sprint, taking them out of any other sprint, in one change. `tasks_changed` lists the \
+ones that moved. Example: add_tasks_to_sprint {\"sprint\": \"active\", \"project\": \"TM\", \
+\"tasks\": [\"TM-41\", \"TM-43\"]}",
+        main: "sprint.add_tasks",
+        covers: &["sprint.add_tasks"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "remove_tasks_from_sprint",
+        toolset: Toolset::Projects,
+        title: "Take tasks out of their sprint",
+        description: "Takes `tasks` (keys, up to 500) out of whatever sprint they are in, back \
+to the backlog, in one change. Example: remove_tasks_from_sprint {\"tasks\": [\"TM-41\"]}",
+        main: "sprint.remove_tasks",
+        covers: &["sprint.remove_tasks"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "get_sprint_burndown",
+        toolset: Toolset::Projects,
+        title: "Get a sprint burndown",
+        description: "Returns the burndown of an active or closed sprint: for each day from its \
+start, the open and total tasks and their estimates at the end of the day (scope changes \
+show in the totals). Example: get_sprint_burndown {\"sprint\": \"active\", \"project\": \"TM\"}",
+        main: "sprint.burndown",
+        covers: &["sprint.burndown"],
+        idempotent: true,
+    },
+    McpTool {
         name: "search_tasks",
         toolset: Toolset::Tasks,
         title: "Search tasks",
@@ -628,7 +748,8 @@ logged time. The query language: `is:open`, `status:\"In progress\"`, `label:bug
 the history with `was:status:Review` (had that value at any time), `changed:due>-7d` (changed \
 in the last week) and `changed-by:agent`, custom fields as `cf.story-points>3` (also in \
 `was:cf.area:Backend` and `changed:cf.area`), \
-`estimate:1h..4h`, `has:due`, `parent:TM-12`, \
+`estimate:1h..4h`, `has:due`, `parent:TM-12`, `sprint:active` (or a sprint's name, or `none` \
+for the backlog), \
 `project:TM/*` (with sub-projects), `(a OR b)`, words and \"phrases\" for full text, a bare key \
 `TM-41`, and `sort:due,-priority`. Dates: 2026-12-31, today, +7d, -1m, this-week, next-month. \
 A mistake comes back as `invalid` with the place and a suggestion. Use the `query` it echoes when \
@@ -668,7 +789,7 @@ Example: get_task {\"keys\": [\"TM-41\"], \"include\": [\"checklist\", \"comment
         toolset: Toolset::Tasks,
         title: "Create a task",
         description: "Creates a task in a project from a title alone, or with `description`, \
-`status`, `type`, `priority` (none, low, normal, high, urgent), `labels`, `fix_version`, `parent`, \
+`status`, `type`, `priority` (none, low, normal, high, urgent), `labels`, `fix_version`, `sprint`, `parent`, \
 `start_date`, `due_date` (YYYY-MM-DD), `estimate` (`1d 4h`, `90m`) and custom `fields` by name (see \
 list_custom_fields; a required field needs a value). It lands in the first to-do status at \
 the bottom unless told otherwise, and gets the project's next key. Pass `client_request_id` so \
@@ -685,7 +806,7 @@ Example: create_task {\"project\": \"TM\", \"title\": \"Write the release notes\
         title: "Update a task",
         description: "Changes the given fields of a task only: `title`, `type`, `priority`, \
 `labels` (replace) or `add_labels`/`remove_labels`, `fix_version` (an open version, see \
-list_versions), `parent`, `start_date`, `due_date`, `estimate`, `progress`, custom `fields` \
+list_versions), `sprint` (a planned or active sprint, or `active`), `parent`, `start_date`, `due_date`, `estimate`, `progress`, custom `fields` \
 ({\"Story points\": 3}; null clears one), and the description. With new dates, \
 `move_dependents: true` also \
 moves the tasks that depend on this one (blocks links, and theirs in turn) later, as far as each \
@@ -1210,7 +1331,8 @@ Example: get_today {\"limit\": 20}",
 hidden ones flagged (and their cards left out), WIP limits and whether a column is over it, and \
 compact cards. `include_subprojects: true` adds the sub-projects' tasks, matching columns by \
 status name. Closed cards older than the layout's limit are counted, not listed, unless \
-`show_older: true`. \
+`show_older: true`. Cards carry their coloured `edge` (colour and the rule that gave it) and \
+their `cover` image when the layout sets them. \
 Example: get_board {\"project\": \"TM\"}",
         main: "board.get",
         covers: &["board.get", "layout.get"],
@@ -1223,8 +1345,10 @@ Example: get_board {\"project\": \"TM\"}",
         description: "Changes the person's own layout of a project's board: `hide`, `show`, \
 `collapse`, `expand` columns (by status name), set their `order`, the `sort_mode` (manual, \
 priority, due, updated) or per-column `column_sort`, `card_fields`, `hide_done_after_days`, \
-`include_subprojects`, or `reset` to the project's layout. It never changes the project's \
-statuses. Only change the layout when the person asked. \
+`include_subprojects`, the cards' coloured edge (`colour_by`: none, type, priority, label, \
+or query with ordered `colour_rules` of `query`, `hue` and `name`, first match wins), \
+`covers` (off, chosen, first_image), or `reset` to the project's layout. It never changes the \
+project's statuses. Only change the layout when the person asked. \
 Example: set_board_layout {\"project\": \"TM\", \"hide\": [\"Backlog\"]}",
         main: "layout.update",
         covers: &["layout.update"],
@@ -1466,6 +1590,19 @@ by the attachment's ID. \
 Example: delete_attachment {\"attachment\": \"0193b2a4-5c6d-7e8f-9a0b-1c2d3e4f5a6b\"}",
         main: "file.delete",
         covers: &["file.delete"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "set_card_cover",
+        toolset: Toolset::Files,
+        title: "Choose a card's cover image",
+        description: "Chooses the image attached to a `task` (key) that its board card shows as its \
+cover, by the `attachment`'s ID (a PNG, JPEG, GIF or WebP file attached to the task itself), or \
+leave `attachment` out to choose none. Boards show covers only when their layout's `covers` is \
+`chosen` or `first_image`. Only change it when the person asked. \
+Example: set_card_cover {\"task\": \"TM-41\", \"attachment\": \"0193b2a4-5c6d-7e8f-9a0b-1c2d3e4f5a6b\"}",
+        main: "file.cover",
+        covers: &["file.cover"],
         idempotent: true,
     },
     McpTool {
@@ -1769,6 +1906,9 @@ mod tests {
                 "list_automations",
                 "get_automation",
                 "get_automation_runs",
+                "list_sprints",
+                "get_sprint",
+                "get_sprint_burndown",
                 "search_tasks",
                 "get_task",
                 "check_move",

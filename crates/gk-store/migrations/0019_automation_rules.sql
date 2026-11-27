@@ -1,7 +1,7 @@
 -- SPDX-License-Identifier: GPL-3.0-or-later
 -- Copyright (C) 2026 Glyphkeel contributors
 --
--- Schema version 17: automation rules. A rule says what happens when
+-- Schema version 19: automation rules. A rule says what happens when
 -- something happens to a task: a trigger (a task created, a field changed,
 -- a task moved to a status, a comment added, a due date reached or passed,
 -- a time of day or week), an optional query the task must match, and the

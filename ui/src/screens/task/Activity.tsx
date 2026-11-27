@@ -22,6 +22,7 @@ import { useT, type Translate } from "../../i18n/I18n";
 import { MarkdownReader } from "../../markdown/Reader";
 import { formatDuration, type DurationUnits } from "../../data/duration";
 import { useDurationUnits } from "../../data/time";
+import { useSprints } from "../../data/sprints";
 import { useVersions } from "../../data/versions";
 import { useTimeZone } from "../../data/zone";
 import { FileRow, useAttach } from "./Files";
@@ -323,7 +324,7 @@ function CommentsList({ task, readOnly, onOpenTask }: { task: Task; readOnly: bo
 const LABELLED_FIELDS = new Set([
   "title", "description", "status", "type", "priority", "labels", "parent", "start_date", "due_date", "estimate", "progress", "rank", "project",
   "claim", "reminder", "name", "hue", "icon", "modules", "key", "state", "category", "wip_limit", "glyph", "is_default", "slug", "body",
-  "date", "minutes", "note", "agent_brief", "home", "template", "fix_version", "rules", "agent_rules", "wip_min", "work_kind",
+  "date", "minutes", "note", "agent_brief", "home", "template", "fix_version", "sprint", "rules", "agent_rules", "wip_min", "work_kind", "cover",
 ]);
 
 /** A recorded field's name as people read it; nothing for a field that isn't shown. */
@@ -342,6 +343,8 @@ interface Names {
   locale?: string;
   /** Version names by ID, as far as the panel knows them. */
   versions?: ReadonlyMap<string, string>;
+  /** Sprint names by ID, as far as the panel knows them. */
+  sprints?: ReadonlyMap<string, string>;
   /** Kinds of work by ID. */
   kinds?: ReadonlyMap<string, string>;
 }
@@ -383,10 +386,14 @@ function shown(t: Translate, names: Names, field: string, value: unknown): strin
       return typeof value === "number" ? formatDuration(value, names.units) : plainText(value);
     case "parent":
       return names.keys.get(plainText(value)) ?? plainText(value);
+    case "cover":
+      return names.task.files?.find((file) => file.id === value)?.name ?? t("history-cover-gone");
     case "work_kind":
       return names.kinds?.get(plainText(value)) ?? t("history-work-kind-gone");
     case "fix_version":
       return names.versions?.get(plainText(value)) ?? (names.task.fix_version?.id === value ? names.task.fix_version.name : t("history-version-gone"));
+    case "sprint":
+      return names.sprints?.get(plainText(value)) ?? (names.task.sprint?.id === value ? names.task.sprint.name : t("history-sprint-gone"));
     default:
       // A custom field's options, listed.
       return Array.isArray(value) ? new Intl.ListFormat(names.locale, { style: "long", type: "conjunction" }).format(value.map(plainText)) : plainText(value);
@@ -508,6 +515,8 @@ function HistoryList({
   const keys = new Map<string, string>([[task.id, task.key]]);
   const versionList = useVersions(task.project);
   const versions = new Map((versionList.data?.items ?? []).map((version) => [version.id, version.name]));
+  const sprintList = useSprints(task.project);
+  const sprints = new Map((sprintList.data?.items ?? []).map((sprint) => [sprint.id, sprint.name]));
   const kindList = useOp("work_kind.list", { include_archived: true });
   const kinds = new Map((kindList.data?.items ?? []).map((kind) => [kind.id, kind.name]));
   for (const link of task.links ?? []) {
@@ -563,7 +572,7 @@ function HistoryList({
     {who}
     <ol className={styles.history} aria-label={t("history-title")}>
       {entries.map((entry) => {
-        const lines = describeEntry(t, { task, project, keys, units, locale, versions, kinds }, entry);
+        const lines = describeEntry(t, { task, project, keys, units, locale, versions, sprints, kinds }, entry);
         if (lines.length === 0) {
           return null;
         }
@@ -591,6 +600,11 @@ function HistoryList({
               <span className={classes("faint", styles.small)}>
                 {t(entry.reverted_by === undefined ? "history-by" : "history-by-reverted", { actor: entry.actor.kind === "user" ? t("comment-me") : entry.actor.name, via: t(`via-${entry.via}`), time: moment(entry.at) })}
               </span>
+              {entry.confirmed_by_person === true && (
+                <span className={classes("faint", styles.small)} data-testid="history-confirmed">
+                  {t("history-confirmed-by-you")}
+                </span>
+              )}
             </div>
             {first && revertible(entry) && !readOnly && (
               <Button className="btn flat icon sm" aria-label={t("history-revert", { time: moment(entry.at) })} onPress={() => { revert(entry.group); }}>

@@ -223,6 +223,15 @@ fn every_field_of_the_registry_filters_data_set_s() {
         ),
         // And a recorded change of status, for the history.
         ("task.move", json!({ "key": "TM-2", "status": "Review" })),
+        // Nor sprints.
+        (
+            "sprint.create",
+            json!({ "project": "TM", "name": "Sprint 1", "tasks": ["TM-1"] }),
+        ),
+        (
+            "sprint.start",
+            json!({ "project": "TM", "sprint": "Sprint 1" }),
+        ),
     ] {
         e.call(&Context::user(Via::App), op, input).unwrap();
     }
@@ -243,6 +252,7 @@ fn every_field_of_the_registry_filters_data_set_s() {
             FieldType::Priority => format!("{name}>=high"),
             FieldType::Label => format!("{name}:frontend"),
             FieldType::Version => format!("{name}:1.0"),
+            FieldType::Sprint => format!("{name}:\"Sprint 1\",active"),
             FieldType::Parent | FieldType::Under => format!("{name}:{parent}"),
             FieldType::Link(_) => format!("{name}:any"),
             FieldType::Date(_) | FieldType::Moment(_) | FieldType::Span => {

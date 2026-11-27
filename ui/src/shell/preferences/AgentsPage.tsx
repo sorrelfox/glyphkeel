@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Glyphkeel contributors
 
 import { useQueryClient } from "@tanstack/react-query";
-import { Copy, FolderPlus, Terminal, X } from "lucide-react";
+import { Copy, Eye, EyeOff, FolderPlus, RefreshCw, Terminal, X } from "lucide-react";
 import { useState } from "react";
 import { Button } from "react-aria-components";
 
@@ -16,6 +16,7 @@ import { skippedReason, useFailureToast } from "../../data/safety";
 import { Switch } from "../../components/Switch";
 import { type AgentLimit, type AgentLimitsPatch, type AgentSession, type Profile } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
+import { httpSnippet, PORT_MAX, PORT_MIN, servesAgentHttp, useAgentHttp, useChangeAgentHttp } from "../../ipc/agentHttp";
 import { canAddAgentFolders, useAgentFolders, useAppSettings } from "../../ipc/appSettings";
 import { useCliStatus, useInstallCli, type CliStatus } from "../../ipc/cli";
 import { platform, type Platform } from "../../platform";
@@ -31,7 +32,9 @@ const BARE_COMMAND: readonly string[] = ["glyphkeel"];
 
 /**
  * Agents & CLI: where the command-line tool is (and a link to install it),
- * the set-up to copy into common MCP clients, the most an agent may do, the
+ * the set-up to copy into common MCP clients, the local HTTP endpoint for
+ * clients that can't start a program, the most an agent may do and whether
+ * agents may ask you to allow more, the
  * folders whose files agents may name by path, the limits on each agent session (only the person changes them, here), and
  * the agent sessions, each of which can be reverted.
  */
@@ -42,6 +45,7 @@ export function AgentsPage() {
     <>
       <CliGroup status={cli.data} isPending={cli.isPending} />
       <ClientsGroup command={command} />
+      <HttpGroup />
       <PolicyGroup />
       <FilesGroup />
       <LimitsGroup />
@@ -194,6 +198,149 @@ function ClientsGroup({ command }: { command: readonly string[] }) {
   );
 }
 
+// ---------- the local HTTP endpoint ----------
+
+/** Copies `text`, saying so in a toast. */
+function useCopy(): (text: string) => void {
+  const t = useT();
+  const toasts = useToasts();
+  return (text) => {
+    navigator.clipboard.writeText(text).then(
+      () => {
+        toasts.show({ tone: "info", text: t("agents-copied") });
+      },
+      () => {
+        toasts.show({ tone: "error", text: t("agents-copy-failed") });
+      },
+    );
+  };
+}
+
+/**
+ * The endpoint for clients that connect to a URL instead of starting a
+ * program: off by default, on 127.0.0.1 only, with a token. Turning it on
+ * asks in a window of the desktop.
+ */
+export function HttpGroup() {
+  const t = useT();
+  const http = useAgentHttp();
+  const change = useChangeAgentHttp();
+  const copy = useCopy();
+  const [shown, setShown] = useState(false);
+  if (http.isError) {
+    return (
+      <Group title={t("agents-http")}>
+        <p className={styles.error}>{failureText(t, http.error)}</p>
+      </Group>
+    );
+  }
+  if (!http.data) {
+    return null;
+  }
+  const { enabled, port, url, token, error } = http.data;
+  const anyPort = port === undefined;
+  return (
+    <Group title={t("agents-http")}>
+      <Row label={t("agents-http-serve")} about={t(servesAgentHttp() ? "agents-http-serve-about" : "agents-http-outside-app")}>
+        <Switch
+          aria-label={t("agents-http-serve")}
+          isSelected={enabled}
+          isDisabled={change.isPending}
+          onChange={(on) => {
+            change.update({ enabled: on });
+          }}
+        >
+          {t(enabled ? "agents-http-on" : "agents-http-off")}
+        </Switch>
+      </Row>
+      <Row label={t("agents-http-port")} about={t("agents-http-port-about")}>
+        <NumberSetting
+          label={t("agents-http-port")}
+          value={port ?? PORT_MIN * 8}
+          min={PORT_MIN}
+          max={PORT_MAX}
+          unit=""
+          isDisabled={anyPort || change.isPending}
+          wide
+          onSave={(number) => {
+            change.update({ port: number });
+          }}
+        />
+        <Switch
+          aria-label={t("agents-http-any-port")}
+          isSelected={anyPort}
+          isDisabled={change.isPending}
+          onChange={(any) => {
+            change.update({ port: any ? 0 : PORT_MIN * 8 });
+          }}
+        >
+          {t("agents-http-any-port")}
+        </Switch>
+      </Row>
+      {enabled && error !== undefined && <p className={styles.error} data-testid="agent-http-error">{failureText(t, error)}</p>}
+      {enabled && url !== undefined && (
+        <Row label={t("agents-http-url")} about={t("agents-http-url-about")}>
+          <code className={classes("selectable", styles.command)} data-testid="agent-http-url">
+            {url}
+          </code>
+          <Button
+            className="btn sm"
+            aria-label={t("agents-http-copy-url")}
+            onPress={() => {
+              copy(url);
+            }}
+          >
+            <Copy className="ic s" />
+            {t("agents-copy")}
+          </Button>
+        </Row>
+      )}
+      {token !== undefined && (
+        <Row label={t("agents-http-token")} about={t("agents-http-token-about")}>
+          <code className={classes("selectable", styles.command, styles.folder)} data-testid="agent-http-token">
+            {shown ? token : t("agents-http-token-hidden")}
+          </code>
+          <Button
+            className="btn sm icon"
+            aria-label={t(shown ? "agents-http-token-hide" : "agents-http-token-show")}
+            onPress={() => {
+              setShown(!shown);
+            }}
+          >
+            {shown ? <EyeOff className="ic s" /> : <Eye className="ic s" />}
+          </Button>
+          <Button
+            className="btn sm"
+            aria-label={t("agents-http-copy-token")}
+            onPress={() => {
+              copy(token);
+            }}
+          >
+            <Copy className="ic s" />
+            {t("agents-copy")}
+          </Button>
+          <Button
+            className="btn sm"
+            isDisabled={change.isPending}
+            onPress={() => {
+              change.regenerate();
+            }}
+          >
+            <RefreshCw className="ic s" />
+            {t("agents-http-regenerate")}
+          </Button>
+        </Row>
+      )}
+      {enabled && url !== undefined && token !== undefined && (
+        <div className={styles.snippetBlock}>
+          <p className={styles.snippetWhere}>{t("agents-http-client")}</p>
+          <Snippet text={httpSnippet(url, token)} label={t("agents-http-snippet")} />
+        </div>
+      )}
+    </Group>
+  );
+}
+
 // ---------- what agents may do ----------
 
 /** One limit on agent sessions, as the page shows it. */
@@ -252,6 +399,24 @@ function PolicyGroup() {
             );
           }}
         />
+      </Row>
+      <Row label={t("agents-ask")} about={t("agents-ask-about")}>
+        <Switch
+          aria-label={t("agents-ask")}
+          isSelected={settings.data.agent_confirmations}
+          onChange={(confirmations) => {
+            update.mutate(
+              { max_profile: current, confirmations },
+              {
+                onSettled: () => {
+                  void queryClient.invalidateQueries({ queryKey: opPrefix("settings.get") });
+                },
+              },
+            );
+          }}
+        >
+          {t(settings.data.agent_confirmations ? "agents-ask-on" : "agents-ask-off")}
+        </Switch>
       </Row>
       <Row label={t("agents-raise")} about={t("agents-raise-about")} />
     </Group>

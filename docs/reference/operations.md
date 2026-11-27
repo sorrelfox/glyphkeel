@@ -44,6 +44,16 @@ The safety class decides who may run an operation:
 | `version.create` | write | app, command line, MCP | `create_version` | `glyphkeel version create` |
 | `version.update` | write | app, command line, MCP | `update_version` | `glyphkeel version edit <version>` |
 | `version.delete` | write | app, command line, MCP | `delete_version` | `glyphkeel version delete <version>` |
+| `sprint.list` | read | app, command line, MCP | `list_sprints` | `glyphkeel sprint list <project>` |
+| `sprint.get` | read | app, command line, MCP | `get_sprint` | `glyphkeel sprint show <sprint>` |
+| `sprint.create` | write | app, command line, MCP | `create_sprint` | `glyphkeel sprint create` |
+| `sprint.update` | write | app, command line, MCP | `update_sprint` | `glyphkeel sprint edit <sprint>` |
+| `sprint.delete` | write | app, command line, MCP | `delete_sprint` | `glyphkeel sprint delete <sprint>` |
+| `sprint.start` | write | app, command line, MCP | `start_sprint` | `glyphkeel sprint start <sprint>` |
+| `sprint.complete` | write | app, command line, MCP | `complete_sprint` | `glyphkeel sprint complete <sprint>` |
+| `sprint.add_tasks` | write | app, command line, MCP | `add_tasks_to_sprint` | `glyphkeel sprint add <sprint>` |
+| `sprint.remove_tasks` | write | app, command line, MCP | `remove_tasks_from_sprint` | `glyphkeel sprint remove` |
+| `sprint.burndown` | read | app, command line, MCP | `get_sprint_burndown` | `glyphkeel sprint burndown <sprint>` |
 | `field.list` | read | app, command line, MCP | `list_custom_fields` | `glyphkeel field list` |
 | `field.create` | write | app, command line, MCP | `create_custom_field` | `glyphkeel field add` |
 | `field.update` | write | app, command line, MCP | `update_custom_field` | `glyphkeel field edit` |
@@ -139,6 +149,7 @@ The safety class decides who may run an operation:
 | `file.thumbnail` | read | app | — | — |
 | `file.attach` | write | app, command line, MCP | `attach_file` | `glyphkeel file attach` |
 | `file.delete` | trash | app, command line, MCP | `delete_attachment` | `glyphkeel file delete <attachment>` |
+| `file.cover` | write | app, command line, MCP | `set_card_cover` | `glyphkeel file cover <task>` |
 | `agent.sessions` | read | app, command line, MCP | `get_activity` | `glyphkeel agents sessions` |
 | `agent.policy.update` | app | app, command line | — | `glyphkeel agents policy` |
 | `agent.limits.update` | app | app | — | — |
@@ -344,6 +355,66 @@ Input: `VersionUpdateInput`. Output: `VersionChange`. Schemas: [catalog.schema.j
 Delete a version; its tasks are planned for no version. Revert brings both back.
 
 Input: `VersionDeleteInput`. Output: `VersionChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `sprint.list`
+
+The sprints of a project with their state, dates and progress; with their tasks and the backlog for the sprints page.
+
+Input: `SprintListInput`. Output: `SprintList`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `sprint.get`
+
+One sprint with its progress and its tasks.
+
+Input: `SprintGetInput`. Output: `Sprint`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `sprint.create`
+
+Plan a sprint in a project: name, goal, start and end dates, and tasks to put in it.
+
+Input: `SprintCreateInput`. Output: `SprintChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `sprint.update`
+
+Rename a sprint or change its goal or dates.
+
+Input: `SprintUpdateInput`. Output: `SprintChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `sprint.delete`
+
+Delete a planned or closed sprint; its tasks go back to the backlog. Revert brings both back.
+
+Input: `SprintDeleteInput`. Output: `SprintChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `sprint.start`
+
+Start a planned sprint, with its dates; a project has one active sprint at a time.
+
+Input: `SprintStartInput`. Output: `SprintChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `sprint.complete`
+
+Complete the active sprint and move its open tasks to a planned sprint or back to the backlog.
+
+Input: `SprintCompleteInput`. Output: `SprintChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `sprint.add_tasks`
+
+Put tasks in a planned or active sprint of their project, moving them from any other sprint.
+
+Input: `SprintAddTasksInput`. Output: `SprintChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `sprint.remove_tasks`
+
+Take tasks out of their sprint, back to the backlog.
+
+Input: `SprintRemoveTasksInput`. Output: `SprintChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `sprint.burndown`
+
+The burndown of an active or closed sprint: its open and total tasks and estimates at the end of each day.
+
+Input: `SprintBurndownInput`. Output: `SprintBurndown`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `field.list`
 
@@ -737,13 +808,13 @@ Input: `BoardGetInput`. Output: `Board`. Schemas: [catalog.schema.json](catalog.
 
 ## `layout.get`
 
-The person's layout of a project's board: column order, hidden and collapsed columns, sort modes, card fields.
+The person's layout of a project's board: column order, hidden and collapsed columns, sort modes, card fields, card colours and covers.
 
 Input: `LayoutGetInput`. Output: `LayoutChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `layout.update`
 
-Hide, show, collapse or reorder board columns, set sort modes, card fields and older closed cards, or reset to the project's layout.
+Hide, show, collapse or reorder board columns, set sort modes, card fields, card colours (by type, priority, label or ordered query rules), covers and older closed cards, or reset to the project's layout.
 
 Input: `LayoutUpdateInput`. Output: `LayoutChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
@@ -941,6 +1012,12 @@ Move an attached file to the trash.
 
 Input: `FileRef`. Output: `FileChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
+## `file.cover`
+
+Choose the PNG, JPEG, GIF or WebP image attached to a task that its board card shows as its cover, or choose none; boards show covers when their layout's covers setting is on.
+
+Input: `FileCoverInput`. Output: `FileCoverChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
 ## `agent.sessions`
 
 List agent sessions, newest first, with their client, profile, times and counts of reads and writes.
@@ -949,7 +1026,7 @@ Input: `AgentSessionsInput`. Output: `AgentSessionList`. Schemas: [catalog.schem
 
 ## `agent.policy.update`
 
-Set the most an agent may do, whatever profile it asks for.
+Set the most an agent may do, whatever profile it asks for, and whether agents may ask the person to allow one change beyond it.
 
 Input: `AgentPolicyPatch`. Output: `SettingsChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 

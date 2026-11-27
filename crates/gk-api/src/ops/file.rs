@@ -64,6 +64,9 @@ pub struct Attachment {
     pub added_by: Actor,
     /// When it was attached (RFC 3339, UTC).
     pub created_at: String,
+    /// Whether it is chosen as its task's cover on the board.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub cover: bool,
 }
 
 /// A file to attach: from a local path, or as Base64 data with a name.
@@ -158,6 +161,33 @@ pub struct FileChange {
     pub group: Option<String>,
 }
 
+/// Which image a task's board card shows as its cover.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct FileCoverInput {
+    /// The task: its key or ID.
+    pub task: String,
+    /// The image attached to the task itself to show, by its ID; left out
+    /// to choose none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attachment: Option<String>,
+}
+
+/// A task's cover after a change.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct FileCoverChange {
+    /// The task's key.
+    pub task: String,
+    /// The chosen cover; left out when none is chosen.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cover: Option<Attachment>,
+    /// The history group, for revert and Undo; left out when nothing
+    /// changed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
+}
+
 op!(
     /// An attached file's details.
     FileGet,
@@ -185,6 +215,13 @@ op!(
     "file.delete",
     FileRef,
     FileChange
+);
+op!(
+    /// Chooses the image a task's board card shows as its cover.
+    FileCover,
+    "file.cover",
+    FileCoverInput,
+    FileCoverChange
 );
 op!(
     /// A thumbnail of an attached image.
@@ -232,6 +269,16 @@ pub(crate) const FILE_DELETE: OpDescriptor = OpDescriptor::of::<FileDelete>(Meta
     cli: Some("file delete <attachment>"),
     input_name: "FileRef",
     output_name: "FileChange",
+});
+
+pub(crate) const FILE_COVER: OpDescriptor = OpDescriptor::of::<FileCover>(Meta {
+    summary: "Choose the PNG, JPEG, GIF or WebP image attached to a task that its board card shows as its cover, or choose none; boards show covers when their layout's covers setting is on.",
+    kind: OpKind::Command,
+    safety: Safety::Write,
+    exposure: Exposure::Data,
+    cli: Some("file cover <task>"),
+    input_name: "FileCoverInput",
+    output_name: "FileCoverChange",
 });
 
 pub(crate) const FILE_THUMBNAIL: OpDescriptor = OpDescriptor::of::<FileThumbnail>(Meta {

@@ -33,6 +33,7 @@ import {
   type TrashEntry,
   type Via,
 } from "../../generated/ops";
+import { type FakeSprint } from "./sprints";
 import { type FakeVersion } from "./versions";
 import { type FakeField, type FieldValue } from "./fields";
 
@@ -123,10 +124,14 @@ export interface FakeTask {
   version: number;
   /** The version (release) it is planned for. */
   fixVersionId?: string | null;
+  /** The sprint it is in. */
+  sprintId?: string | null;
   /** Custom field values by field ID; none until one is set. */
   fields?: Record<string, FieldValue>;
   /** The recurring series it is an occurrence of. */
   seriesId?: string;
+  /** The attached image its board card shows as its cover. */
+  coverId?: string | null;
 }
 
 /** A recurring task's series: its rule and the details each new occurrence starts from. */
@@ -340,6 +345,8 @@ export interface FakeState {
   backups?: Backup[];
   /** Versions (releases) of the projects; none until one is made. */
   versions?: FakeVersion[];
+  /** Sprints of the projects; none until one is made. */
+  sprints?: FakeSprint[];
   /** Custom fields, in order; none until one is made. */
   customFields?: FakeField[];
   /** Automation rules, in the order they run; none until one is made. */

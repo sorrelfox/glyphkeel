@@ -6,7 +6,9 @@ Glyphkeel has an [MCP](https://modelcontextprotocol.io/) server, so AI agents
 such as Claude Code, Codex or Cursor can read and change your tasks. The agent's
 client starts the server itself, as the command `glyphkeel mcp`, and talks to it
 over standard input and output. Nothing listens on the network, and the server
-works while the app is closed.
+works while the app is closed. For clients that can only connect to an
+address, the app can also serve agents on 127.0.0.1
+([Local HTTP endpoint](#local-http-endpoint)).
 
 To connect a client, see [Connecting MCP clients](mcp-clients.md), or copy the
 set-up from Preferences › Agents & CLI.
@@ -18,7 +20,7 @@ An agent can do what you can do in the app, through MCP tools in these groups:
 | Group | Tools for |
 |---|---|
 | workspace | The workspace and its rules, search, the activity log, revert |
-| projects | Projects, custom fields, templates, versions, the agent brief |
+| projects | Projects, custom fields, templates, versions, sprints, the agent brief |
 | tasks | Finding, creating, changing, moving, linking, duplicating and claiming tasks; checklists; recurrence |
 | comments | Adding, editing and deleting comments |
 | time | Logging time, the timer, reminders, kinds of work, the time and flow reports |
@@ -57,6 +59,27 @@ for.
 Raising that setting, or raising the limits below, asks you in a window of the
 desktop app, so an agent can't widen its own rights. Only you, in the app, can
 change these settings; agents and the command line can't.
+
+## Asking you first
+
+When an agent's client can show you a question (MCP's *elicitation*), the
+agent sees every tool, and two kinds of change ask you before they run:
+
+- a change its profile doesn't allow, such as a read-only agent creating a
+  task;
+- a change that deletes a lot: deleting a project, purging items from the
+  trash, or moving more tasks to the trash than the limit for one call.
+
+The client shows the question, for example "Claude Code wants to delete the
+project Home lab with 42 tasks for good. Allow?". If you allow it, that one
+change runs, as if the agent had the full profile, and the history shows it
+with the agent's name and **You allowed this when the agent asked**. If you
+decline, or don't answer within five minutes, the agent is told it wasn't
+allowed, as it would be without asking.
+
+Clients that can't show questions work as before: the profile decides. To
+turn the questions off, switch off **Agents may ask you** in Preferences ›
+Agents & CLI; turning it on again asks you in a window of the desktop.
 
 ## Limits on each session
 
@@ -138,6 +161,57 @@ Only you can change it: no tool changes it, and the app adds a folder only
 from the folder chooser. Your own commands, in the app and with `glyphkeel`,
 are not limited.
 
+## Watching for changes
+
+Agents can read a task, a project or the result of a query as a resource,
+and subscribe to hear when it changes, including changes you make in the app:
+
+| Resource | What it is |
+|---|---|
+| `glyphkeel://tasks/TM-41` | A task, as `get_task` returns it |
+| `glyphkeel://projects/TM` | A project; it changes when anything in it does |
+| `glyphkeel://queries?query=status%3Aopen%20label%3Aui` | The first 50 tasks a [query](query-language.md) finds; it changes when the result does |
+
+Clients of the 2026-07-28 protocol subscribe with `subscriptions/listen`,
+older ones with `resources/subscribe`. Notifications come at most once a
+second for each resource, and an agent limited to one project can watch only
+what is in it.
+
+## Local HTTP endpoint
+
+Some clients connect to a URL instead of starting a program. For them,
+switch on **Serve agents over HTTP** in Preferences › Agents & CLI › **Local
+HTTP endpoint**. The app asks you to confirm, then serves agents at
+`http://127.0.0.1:<port>/mcp` while it runs, and follows the workspace you
+have open. Preferences shows the address, the token (hidden until you show
+it), a **New token** button and the set-up to copy:
+
+```json
+{
+  "mcpServers": {
+    "glyphkeel": {
+      "type": "http",
+      "url": "http://127.0.0.1:41000/mcp",
+      "headers": { "Authorization": "Bearer <token>" }
+    }
+  }
+}
+```
+
+- The port is a free one each time the app starts, unless you choose one
+  (1024 to 65535); choose one if your client's set-up should stay the same.
+- `/mcp` serves the standard profile, `/mcp/read-only` and `/mcp/full` those
+  profiles; **Most an agent may do** still caps them.
+- Agents get the same tools, limits and history as over standard input and
+  output. Each client's work is one agent session.
+
+Without the app, `glyphkeel mcp --http` serves the same endpoint for the
+workspace it opens, with the same token, until you press Ctrl+C. `--port`
+chooses the port, and `--profile`, `--project` and `--toolsets` apply to
+`/mcp`. The first run without a token makes one and says where it is kept.
+[Security](security.md#the-local-http-endpoint-for-agents) explains how the
+endpoint is protected.
+
 ## Telling agents how to work
 
 - **The agent brief:** mark a wiki page with **Use as the agent brief**, or
@@ -197,10 +271,12 @@ glyphkeel activity --actor-kind agent
 
 ## Safety in short
 
-- The server is a local process that the client starts. Glyphkeel contains no
-  network code.
+- The server is a local process that the client starts. Glyphkeel makes no
+  connection to the network; the optional HTTP endpoint listens on 127.0.0.1
+  only, with a token, and is off unless you turn it on.
 - An agent works only in the workspace, and with `--project` only in that
   project.
-- You choose the most it may do, and only you can raise it.
+- You choose the most it may do, and only you can raise it. A change beyond
+  it, or one that deletes a lot, runs only when you allow it.
 - Everything it changes can be seen and reverted.
 - It reads and writes files only in the [folders agents may use](#files-on-disk).

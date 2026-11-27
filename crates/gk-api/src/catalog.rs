@@ -9,8 +9,8 @@ use serde::de::DeserializeOwned;
 
 use crate::ops::{
     agent, backup, board, bulk, comment, csv_import, description, draft, field, file, history,
-    link, project, query, report, rules, schedule, search, settings, task, time, today, transfer,
-    trash, version, view, wiki, workspace,
+    link, project, query, report, rules, schedule, search, settings, sprint, task, time, today,
+    transfer, trash, version, view, wiki, workspace,
 };
 use crate::ops::{automation, recurrence, template};
 use crate::schema;
@@ -184,6 +184,16 @@ pub static CATALOG: &[OpDescriptor] = &[
     version::VERSION_CREATE,
     version::VERSION_UPDATE,
     version::VERSION_DELETE,
+    sprint::SPRINT_LIST,
+    sprint::SPRINT_GET,
+    sprint::SPRINT_CREATE,
+    sprint::SPRINT_UPDATE,
+    sprint::SPRINT_DELETE,
+    sprint::SPRINT_START,
+    sprint::SPRINT_COMPLETE,
+    sprint::SPRINT_ADD_TASKS,
+    sprint::SPRINT_REMOVE_TASKS,
+    sprint::SPRINT_BURNDOWN,
     field::FIELD_LIST,
     field::FIELD_CREATE,
     field::FIELD_UPDATE,
@@ -279,6 +289,7 @@ pub static CATALOG: &[OpDescriptor] = &[
     file::FILE_THUMBNAIL,
     file::FILE_ATTACH,
     file::FILE_DELETE,
+    file::FILE_COVER,
     agent::AGENT_SESSIONS,
     agent::AGENT_POLICY_UPDATE,
     agent::AGENT_LIMITS_UPDATE,

@@ -29,6 +29,9 @@ confirm-agent-raise-standard = Let agents change tasks and move items to the tra
 confirm-agent-raise-full = Let agents do everything, including deleting for good? Every agent connected through MCP may then empty the trash and delete projects, unless it asks for less.
 confirm-agent-raise-refused = Agents may do no more than before: the change was not confirmed.
 confirm-agent-limits-raise = Raise the limits on agents? Every agent connected through MCP may then make more changes, create more tasks or move more items to the trash than before.
+confirm-agent-confirmations-on = Let agents ask you to allow a change their profile doesn't allow, or one that deletes a lot? Each time, their MCP client shows you the question, and only what you allow there runs.
+confirm-agent-http-on = Let agents connect to the app over local HTTP? Any program on this computer that has the token may then work in the open workspace as an agent.
+confirm-agent-http-refused = The HTTP endpoint for agents stays off: the change was not confirmed.
 confirm-agent-limits-refused = The limits on agents stay as they were: the change was not confirmed.
 
 ## Notifications of reminders
@@ -164,3 +167,9 @@ task-window-failed = The task window can't be opened: { $error }.
 wiki-window-bad-id = { $id } isn't a page ID.
 wiki-window-failed = The wiki window can't be opened: { $error }.
 shortcut-not-a-choice = "{ $keys }" is not one of the shortcuts to choose from.
+
+## The agents' HTTP endpoint
+
+agent-http-no-settings-file = The HTTP endpoint's settings can't be stored: there is no home folder for the personal settings.
+agent-http-not-stored = The HTTP endpoint's settings couldn't be stored in { $file }: { $error }
+agent-http-port-range = Port { $port } can't be used: choose one from 1024 to 65535, or let the app choose a free one.

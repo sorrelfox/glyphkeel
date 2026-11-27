@@ -324,6 +324,8 @@ export interface ListNames {
   projects: string[];
   /** The versions of those projects (and those their ancestors share). */
   versions: string[];
+  /** The sprints of those projects. */
+  sprints: string[];
   /** The names of the statuses that close a task (done or cancelled) in any of them. */
   closing: ReadonlySet<string>;
   /** Status colours by status ID. */
@@ -353,6 +355,12 @@ export function useListNames(project: string | undefined): ListNames {
       queryFn: () => call("version.list", { project: each.key }),
     })),
   });
+  const sprintLists = useQueries({
+    queries: covered.map((each) => ({
+      queryKey: opKey("sprint.list", { project: each.key }),
+      queryFn: () => call("sprint.list", { project: each.key }),
+    })),
+  });
   const unique = (names: string[]) => [...new Set(names)];
   const projects: Project[] = details.flatMap((result) => (result.data ? [result.data] : []));
   return {
@@ -361,6 +369,7 @@ export function useListNames(project: string | undefined): ListNames {
     labels: unique(projects.flatMap((each) => each.labels.map((label) => label.name))),
     projects: all.map((each) => each.key),
     versions: unique(versionLists.flatMap((result) => (result.data ? result.data.items.map((version) => version.name) : []))),
+    sprints: unique(sprintLists.flatMap((result) => (result.data ? result.data.items.map((sprint) => sprint.name) : []))),
     closing: new Set(projects.flatMap((each) => each.statuses.filter((status) => status.category === "done" || status.category === "cancelled").map((status) => status.name))),
     hues: new Map(projects.flatMap((each) => each.statuses.map((status) => [status.id, status.hue] as const))),
   };

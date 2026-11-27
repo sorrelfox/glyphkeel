@@ -264,6 +264,9 @@ pub struct ListedTask {
     /// The version it is planned for.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fix_version: Option<VersionRef>,
+    /// The sprint it is in.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sprint: Option<crate::ops::sprint::SprintRef>,
     /// The parent task's key, for a subtask.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,
