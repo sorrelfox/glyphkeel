@@ -53,6 +53,8 @@ pub const PASSPHRASE_ENV: &str = "GLYPHKEEL_PASSPHRASE";
 
 /// The first 16 bytes of every plain SQLite database.
 const PLAIN_HEADER: &[u8; 16] = b"SQLite format 3\0";
+/// SQLCipher 4's page size: an encrypted file is a whole number of them.
+const PAGE_SIZE: u64 = 4096;
 /// Length of the salt at the start of an encrypted file.
 const SALT_LEN: usize = 16;
 /// SQLCipher 4's default rounds of PBKDF2-HMAC-SHA512.
@@ -217,6 +219,16 @@ fn read_salt(path: &Path) -> Result<Option<[u8; SALT_LEN]>> {
         }
     }
     if read < SALT_LEN || &head == PLAIN_HEADER {
+        return Ok(None);
+    }
+    // Only a file that could be SQLCipher's counts as encrypted: whole
+    // pages, at least one. Anything else (a text file, a cut-off copy) is
+    // left to SQLite, which reports it as not a database.
+    let size = file
+        .metadata()
+        .map_err(|e| StoreError::io("reading", path, e))?
+        .len();
+    if size < PAGE_SIZE || size % PAGE_SIZE != 0 {
         return Ok(None);
     }
     Ok(Some(head))
@@ -762,6 +774,17 @@ mod tests {
         let short = dir.path().join("short.db");
         fs::write(&short, b"abc").unwrap();
         assert_eq!(encryption_of(&short).unwrap(), Encryption::Plain);
+        // Not SQLite's header, but not whole pages either: not a database
+        // rather than an encrypted one.
+        let text = dir.path().join("text.db");
+        fs::write(&text, "this is not a database at all").unwrap();
+        assert_eq!(encryption_of(&text).unwrap(), Encryption::Plain);
+        let ragged = dir.path().join("ragged.db");
+        fs::write(&ragged, vec![7u8; 5000]).unwrap();
+        assert_eq!(encryption_of(&ragged).unwrap(), Encryption::Plain);
+        let pages = dir.path().join("pages.db");
+        fs::write(&pages, vec![7u8; 8192]).unwrap();
+        assert_eq!(encryption_of(&pages).unwrap(), Encryption::Encrypted);
         let plain = dir.path().join("plain.db");
         Connection::open(&plain)
             .unwrap()

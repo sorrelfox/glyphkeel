@@ -99,6 +99,20 @@ fn an_encrypted_workspace_from_the_command_line_and_the_agent_server() {
         "{}",
         stderr(&wrong)
     );
+    // As JSON: exit 3 (`forbidden`) with the reason, not a broken database.
+    for (env, why) in [(None, "required"), (Some("not it"), "wrong")] {
+        let out = run(
+            home,
+            &env.map(|p| (gk_store::PASSPHRASE_ENV, p))
+                .into_iter()
+                .collect::<Vec<_>>(),
+            &["--json", w[0], w[1], "project", "list"],
+        );
+        assert_eq!(code(&out), 3, "{}", stderr(&out));
+        let error: Value = serde_json::from_slice(&out.stderr).unwrap();
+        assert_eq!(error["code"], "forbidden", "{error}");
+        assert_eq!(error["details"]["passphrase"], why, "{error}");
+    }
 
     // With it in the environment, commands work.
     let env = [(gk_store::PASSPHRASE_ENV, PASSPHRASE)];
