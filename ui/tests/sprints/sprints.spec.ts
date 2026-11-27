@@ -130,3 +130,56 @@ test("the sprints page has no accessibility findings", async ({ page }) => {
   const results = await new AxeBuilder({ page }).withTags(TAGS).analyze();
   expect(results.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
 });
+
+test("a task dragged far up the page scrolls it to the sprint it is dropped on", async ({ page }) => {
+  // A window short enough that the backlog's last task and the running
+  // sprint are never on screen together.
+  await page.setViewportSize({ width: 1400, height: 760 });
+  await openSprints(page);
+  const screen = page.getByRole("region", { name: /Sprints of/ });
+  const target = list(page, "Tasks of Sprint 2");
+  const first = target.getByRole("row").first();
+  const source = list(page, "Backlog").getByRole("row").last();
+  await source.scrollIntoViewIfNeeded();
+  const key = plain(await source.locator(".key").textContent());
+  const view = await screen.boundingBox();
+  if (view === null) {
+    throw new Error("the sprints page isn't laid out");
+  }
+  // The sprint's list is above the part of the page shown, a long way up.
+  await expect(first).not.toBeInViewport();
+  const scrolled = await screen.evaluate((element) => element.scrollTop);
+  expect(scrolled).toBeGreaterThan(view.height);
+
+  // Pick the task up and hold it at the page's top edge: the page scrolls
+  // until its top.
+  const from = await source.boundingBox();
+  if (from === null) {
+    throw new Error("the task isn't shown");
+  }
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2 - 20, { steps: 4 });
+  const edge = { x: view.x + view.width / 2, y: view.y + 6 };
+  let wiggle = 0;
+  await expect
+    .poll(
+      async () => {
+        wiggle = 1 - wiggle;
+        await page.mouse.move(edge.x + wiggle, edge.y, { steps: 2 });
+        return screen.evaluate((element) => element.scrollTop);
+      },
+      { timeout: 20_000, intervals: [50] },
+    )
+    .toBe(0);
+  // At the top, the running sprint's list is in view: drop the task on it.
+  await expect(first).toBeInViewport();
+  const to = await first.boundingBox();
+  if (to === null) {
+    throw new Error("the sprint's list isn't shown");
+  }
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await expect(target.getByRole("row", { name: loose(`${key} `, false) })).toBeVisible();
+  await expect(list(page, "Backlog").getByRole("row", { name: loose(`${key} `, false) })).toHaveCount(0);
+});

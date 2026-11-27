@@ -240,13 +240,31 @@ export class FakeWorkspace {
       }
     }
     // Subtasks keep the order they were shown in: by status, then by place in the column.
+    // Grouped by parent once, so a workspace with many tasks opens quickly.
+    const children = new Map<string, FakeTask[]>();
+    for (const task of state.tasks) {
+      if (task.parentId !== null) {
+        const siblings = children.get(task.parentId);
+        if (siblings === undefined) {
+          children.set(task.parentId, [task]);
+        } else {
+          siblings.push(task);
+        }
+      }
+    }
     for (const parent of state.tasks) {
+      const subtasks = children.get(parent.id);
+      if (subtasks === undefined) {
+        continue;
+      }
       const statuses = this.projectOf(parent).statuses.map((status) => status.id);
-      state.tasks
-        .filter((candidate) => candidate.parentId === parent.id && candidate.subtaskRank === undefined)
+      let last = Math.max(0, ...subtasks.map((sub) => sub.subtaskRank ?? 0));
+      subtasks
+        .filter((sub) => sub.subtaskRank === undefined)
         .sort((a, b) => statuses.indexOf(a.statusId) - statuses.indexOf(b.statusId) || a.rank - b.rank)
         .forEach((sub) => {
-          sub.subtaskRank = this.lastSubtaskRank(parent.id);
+          last += 1;
+          sub.subtaskRank = last;
         });
     }
     // One task in progress is claimed by an agent, as agents do while they work.
@@ -2238,7 +2256,12 @@ export class FakeWorkspace {
     const children = new Map<string, FakeTask[]>();
     for (const task of this.state.tasks) {
       if (task.parentId !== null) {
-        children.set(task.parentId, [...(children.get(task.parentId) ?? []), task]);
+        const siblings = children.get(task.parentId);
+        if (siblings === undefined) {
+          children.set(task.parentId, [task]);
+        } else {
+          siblings.push(task);
+        }
       }
     }
     const open = new Set(this.state.tasks.filter((task) => task.closedAt === null).map((task) => task.id));

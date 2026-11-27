@@ -9,7 +9,9 @@
 
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Child, ChildStdin, ChildStdout, Command, Output, Stdio};
+use std::process::{Child, ChildStdin, Command, Output, Stdio};
+use std::sync::mpsc::{Receiver, RecvTimeoutError};
+use std::time::{Duration, Instant};
 
 use gk_engine::{Engine, EngineConfig, Role};
 use gk_store::WorkspaceLayout;
@@ -154,9 +156,16 @@ pub fn dates(schedule: &Value, key: &str) -> (Value, Value) {
 pub struct Agent {
     child: Child,
     input: Option<ChildStdin>,
-    output: BufReader<ChildStdout>,
+    /// The server's messages, one a line, read on a thread of their own so
+    /// that waiting for one can time out.
+    output: Receiver<Value>,
+    /// Notifications read while waiting for an answer.
+    notifications: Vec<Value>,
     next_id: u64,
 }
+
+/// How long an answer may take before the test fails instead of hanging.
+const ANSWER_TIME: Duration = Duration::from_secs(120);
 
 impl Agent {
     /// Starts the server on `workspace` and goes through the handshake as
@@ -178,11 +187,22 @@ impl Agent {
             .spawn()
             .unwrap();
         let input = child.stdin.take().unwrap();
-        let output = BufReader::new(child.stdout.take().unwrap());
+        let stdout = BufReader::new(child.stdout.take().unwrap());
+        let (sink, output) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            for line in stdout.lines() {
+                let Ok(line) = line else { return };
+                let message: Value = serde_json::from_str(&line).unwrap();
+                if sink.send(message).is_err() {
+                    return;
+                }
+            }
+        });
         let mut agent = Self {
             child,
             input: Some(input),
             output,
+            notifications: Vec::new(),
             next_id: 1,
         };
         agent.request(
@@ -211,15 +231,39 @@ impl Agent {
         self.next_id += 1;
         self.send(&json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params }));
         loop {
-            let mut line = String::new();
-            assert!(
-                self.output.read_line(&mut line).unwrap() > 0,
-                "the server closed"
-            );
-            let message: Value = serde_json::from_str(&line).unwrap();
+            let message = match self.output.recv_timeout(ANSWER_TIME) {
+                Ok(message) => message,
+                Err(RecvTimeoutError::Timeout) => panic!("no answer to {method}"),
+                Err(RecvTimeoutError::Disconnected) => panic!("the server closed"),
+            };
             if message["id"] == id {
                 assert!(message.get("error").is_none(), "{message}");
                 return message["result"].clone();
+            }
+            if message.get("id").is_none() {
+                self.notifications.push(message);
+            }
+        }
+    }
+
+    /// The next notification called `method` within `wait`, if one comes.
+    pub fn notification(&mut self, method: &str, wait: Duration) -> Option<Value> {
+        if let Some(at) = self
+            .notifications
+            .iter()
+            .position(|n| n["method"] == method)
+        {
+            return Some(self.notifications.remove(at));
+        }
+        let until = Instant::now() + wait;
+        loop {
+            let left = until.checked_duration_since(Instant::now())?;
+            let message = self.output.recv_timeout(left).ok()?;
+            if message["method"] == method {
+                return Some(message);
+            }
+            if message.get("id").is_none() {
+                self.notifications.push(message);
             }
         }
     }

@@ -292,3 +292,102 @@ async fn subscriptions_listen_hears_of_task_and_query_changes() {
     drop(subscription);
     c.close().await;
 }
+
+#[tokio::test]
+#[allow(deprecated)]
+async fn notifications_are_throttled_to_one_a_second_per_resource() {
+    let (_, mode, asked, _) = lifecycles().remove(0);
+    let (_dir, options) = workspace();
+    let mut c = connect_person(&options, mode, asked, ElicitationAction::Accept).await;
+    home_lab(&c, 1).await;
+    let task = "glyphkeel://tasks/ZZ-1";
+    c.client
+        .subscribe(rmcp::model::SubscribeRequestParams::new(task))
+        .await
+        .unwrap();
+
+    output(
+        &c.call("update_task", json!({ "key": "ZZ-1", "title": "Rack 0" }))
+            .await,
+    );
+    assert_eq!(next_update(&mut c).await, task);
+    let first = std::time::Instant::now();
+
+    // A burst of changes right after a notification: one more, a second
+    // after the first at the earliest.
+    for n in 1..=8 {
+        output(
+            &c.call(
+                "update_task",
+                json!({ "key": "ZZ-1", "title": format!("Rack {n}") }),
+            )
+            .await,
+        );
+    }
+    assert_eq!(next_update(&mut c).await, task);
+    let gap = first.elapsed();
+    assert!(
+        gap >= Duration::from_millis(900),
+        "the second notification came after {gap:?}"
+    );
+    // The burst is told once.
+    let more = tokio::time::timeout(Duration::from_millis(2500), c.updates.recv()).await;
+    assert!(more.is_err(), "another notification: {more:?}");
+    c.close().await;
+}
+
+/// A query URI that matches a word.
+fn query_uri(n: usize) -> String {
+    format!("glyphkeel://queries?query=rack{n}")
+}
+
+#[tokio::test]
+#[allow(deprecated)]
+async fn a_session_watches_at_most_a_hundred_resources() {
+    let (_, mode, asked, _) = lifecycles().remove(0);
+    let (_dir, options) = workspace();
+    let c = connect_person(&options, mode, asked, ElicitationAction::Accept).await;
+    home_lab(&c, 0).await;
+    let subscribe = |uri: String| {
+        c.client
+            .subscribe(rmcp::model::SubscribeRequestParams::new(uri))
+    };
+    for n in 0..100 {
+        subscribe(query_uri(n)).await.unwrap();
+    }
+    let refused = subscribe(query_uri(100)).await.unwrap_err();
+    let refused = refused.to_string();
+    assert!(refused.contains("100"), "{refused}");
+    // Subscribing again to one it watches is no new subscription.
+    subscribe(query_uri(7)).await.unwrap();
+    // Once one is dropped, there is room for another.
+    c.client
+        .unsubscribe(rmcp::model::UnsubscribeRequestParams::new(query_uri(7)))
+        .await
+        .unwrap();
+    subscribe(query_uri(100)).await.unwrap();
+    subscribe(query_uri(101)).await.unwrap_err();
+    c.close().await;
+}
+
+#[tokio::test]
+async fn subscriptions_listen_accepts_at_most_a_hundred_resources() {
+    let (_, mode, asked, _) = lifecycles().remove(1);
+    let (_dir, options) = workspace();
+    let c = connect_person(&options, mode, asked, ElicitationAction::Accept).await;
+    home_lab(&c, 0).await;
+    let uris: Vec<String> = (0..120).map(query_uri).collect();
+    let filter = SubscriptionFilter::builder()
+        .resource_subscriptions(uris.clone())
+        .build();
+    let subscription = c.client.peer().listen(filter).await.unwrap();
+    let accepted = subscription
+        .acknowledged()
+        .resource_subscriptions
+        .clone()
+        .unwrap();
+    assert_eq!(accepted.len(), 100);
+    assert!(accepted.iter().all(|uri| uris.contains(uri)));
+    drop(subscription);
+    c.close().await;
+}

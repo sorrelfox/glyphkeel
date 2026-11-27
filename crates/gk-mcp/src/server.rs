@@ -29,7 +29,6 @@ use rmcp::model::{
 use rmcp::service::{RequestContext, SubscriptionContext, SubscriptionSink};
 use rmcp::{ErrorData as McpError, Peer, RoleServer, ServerHandler};
 use serde_json::{Map, Value};
-use tokio::sync::broadcast::error::RecvError;
 use tokio_util::sync::CancellationToken;
 
 use crate::confirm::{self, Asker, Pending, Reason};
@@ -622,10 +621,8 @@ async fn watch(server: Weak<Inner>, watched: Watched, sink: Sink, stop: Cancella
     loop {
         tokio::select! {
             () = stop.cancelled() => return,
-            event = events.recv() => match event {
-                Ok(event) => resources::touched(&watched, &event, &mut dirty),
-                Err(RecvError::Lagged(_)) => resources::all(&watched, &mut dirty),
-                Err(RecvError::Closed) => return,
+            event = events.recv() => if !resources::note(event, &watched, &mut dirty) {
+                return;
             },
             _ = tick.tick() => {}
         }

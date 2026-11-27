@@ -1014,7 +1014,10 @@ fn value(
     }
 }
 
-/// The project a widget looks at, by key: its own, else its dashboard's.
+/// The project a widget looks at, by key: its own, else its dashboard's,
+/// else, for a caller limited to a project, that project (the widgets
+/// read through the engine's own functions, so they get the limit here).
+/// A widget's project outside the caller's limit is as good as gone.
 fn scope_key(
     q: &QueryCtx<'_>,
     record: &Record,
@@ -1022,8 +1025,13 @@ fn scope_key(
 ) -> Result<Option<String>, Failure> {
     let id = match &stored.settings.project {
         Some(p) => Some(p.parse::<Id>().map_err(|_| project_gone(p))?),
-        None => record.project_id(),
+        None => record.project_id().or_else(crate::scope::root),
     };
+    if let Some(id) = id
+        && !crate::scope::sees(id)
+    {
+        return Err(project_gone(&id.to_string()));
+    }
     match id {
         Some(id) => match project_key(q.tx, Some(id))? {
             Some(key) => Ok(Some(key)),
