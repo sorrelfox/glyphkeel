@@ -23,6 +23,8 @@ gk-api = { workspace = true }
 # File names that are valid on every system, for saved and opened copies.
 gk-core = { workspace = true }
 gk-engine = { workspace = true }
+# The agents' local HTTP endpoint, served over the open workspace.
+gk-mcp = { workspace = true }
 # The workspace folder's layout and the change watcher's handle.
 gk-store = { workspace = true }
 # The moments the reminder list answers with (RFC 3339), for the scheduler.

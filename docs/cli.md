@@ -174,5 +174,6 @@ glyphkeel completions powershell | Out-String | Invoke-Expression
 
 ## Agents
 
-`glyphkeel mcp` runs the MCP server for agents. See
+`glyphkeel mcp` runs the MCP server for agents, and `glyphkeel mcp --http` serves
+them on a local address instead. See
 [Working with AI agents](mcp.md).

@@ -299,8 +299,13 @@ fn id_at(r: &Row<'_>, i: usize) -> gk_store::rusqlite::Result<Option<String>> {
 
 fn entry(r: &Row<'_>) -> gk_store::rusqlite::Result<ActivityEntry> {
     let changes: String = r.get(11)?;
-    let mut fields = serde_json::from_str::<Value>(&changes)
-        .ok()
+    let changes = serde_json::from_str::<Value>(&changes).ok();
+    let confirmed_by_person = changes
+        .as_ref()
+        .and_then(|v| v.get("confirmed"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let mut fields = changes
         .and_then(|v| v.get("fields").cloned())
         .and_then(|f| serde_json::from_value::<BTreeMap<String, FieldChange>>(f).ok())
         .unwrap_or_default();
@@ -334,6 +339,7 @@ fn entry(r: &Row<'_>) -> gk_store::rusqlite::Result<ActivityEntry> {
         fields,
         task: None,
         reverted_by: id_at(r, 12)?,
+        confirmed_by_person,
     })
 }
 
@@ -749,6 +755,7 @@ fn group_rows(tx: &Transaction<'_>, group: Id) -> Result<Vec<GroupRow>, StoreErr
 /// else leaves them alone.
 const APP_ONLY_SETTINGS: &[&str] = &[
     "agent_max_profile",
+    "agent_confirmations",
     super::agent::LIMITS_SETTING,
     crate::backup::SETTING,
 ];

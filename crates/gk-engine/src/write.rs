@@ -433,7 +433,7 @@ impl<'a> WriteCtx<'a> {
                     change.project.map(|p| p.as_bytes().to_vec()),
                     change.entity,
                     change.id.as_bytes().as_slice(),
-                    json!({ "fields": fields }).to_string(),
+                    changes_json(fields, ctx.person_confirmed),
                     json!({ "set": inverse }).to_string(),
                 ])?;
                 seq = Some(self.tx.last_insert_rowid());
@@ -486,5 +486,15 @@ impl Finished {
             },
             changes: self.changes.clone(),
         })
+    }
+}
+
+/// The `changes` column of one history row: the fields, and for a call the
+/// person allowed when an agent asked, `confirmed`.
+fn changes_json(fields: Map<String, Value>, confirmed: bool) -> String {
+    if confirmed {
+        json!({ "fields": fields, "confirmed": true }).to_string()
+    } else {
+        json!({ "fields": fields }).to_string()
     }
 }

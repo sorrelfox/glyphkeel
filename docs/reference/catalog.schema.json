@@ -384,6 +384,10 @@
             "additionalProperties": false,
             "description": "The workspace's settings, with defaults filled in.",
             "properties": {
+              "agent_confirmations": {
+                "description": "Whether an agent whose client can ask the person may ask to make\none change its profile doesn't allow, or one that deletes for good\nor deletes many items; the person allows or declines each.",
+                "type": "boolean"
+              },
               "agent_limits": {
                 "$ref": "#/$defs/AgentLimits",
                 "description": "The limits on every agent session. Only the person sets them, in the\napp."
@@ -443,6 +447,7 @@
               "week_start",
               "file_max_mb",
               "agent_max_profile",
+              "agent_confirmations",
               "agent_limits",
               "timer_reminder_hours"
             ],
@@ -795,6 +800,10 @@
         "additionalProperties": false,
         "description": "The workspace's settings, with defaults filled in.",
         "properties": {
+          "agent_confirmations": {
+            "description": "Whether an agent whose client can ask the person may ask to make\none change its profile doesn't allow, or one that deletes for good\nor deletes many items; the person allows or declines each.",
+            "type": "boolean"
+          },
           "agent_limits": {
             "$ref": "#/$defs/AgentLimits",
             "description": "The limits on every agent session. Only the person sets them, in the\napp."
@@ -854,6 +863,7 @@
           "week_start",
           "file_max_mb",
           "agent_max_profile",
+          "agent_confirmations",
           "agent_limits",
           "timer_reminder_hours"
         ],
@@ -1069,6 +1079,10 @@
             "additionalProperties": false,
             "description": "The workspace's settings, with defaults filled in.",
             "properties": {
+              "agent_confirmations": {
+                "description": "Whether an agent whose client can ask the person may ask to make\none change its profile doesn't allow, or one that deletes for good\nor deletes many items; the person allows or declines each.",
+                "type": "boolean"
+              },
               "agent_limits": {
                 "$ref": "#/$defs/AgentLimits",
                 "description": "The limits on every agent session. Only the person sets them, in the\napp."
@@ -1128,6 +1142,7 @@
               "week_start",
               "file_max_mb",
               "agent_max_profile",
+              "agent_confirmations",
               "agent_limits",
               "timer_reminder_hours"
             ],
@@ -66827,6 +66842,13 @@
         "additionalProperties": false,
         "description": "The agent policy to set.",
         "properties": {
+          "confirmations": {
+            "description": "Whether agents whose client can ask the person may ask to make one\nchange beyond their profile, or one that deletes for good or\ndeletes many items; left out: unchanged.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
           "max_profile": {
             "$ref": "#/$defs/Profile",
             "description": "The most an agent may do, whatever profile it asks for."
@@ -66897,6 +66919,10 @@
             "additionalProperties": false,
             "description": "The workspace's settings, with defaults filled in.",
             "properties": {
+              "agent_confirmations": {
+                "description": "Whether an agent whose client can ask the person may ask to make\none change its profile doesn't allow, or one that deletes for good\nor deletes many items; the person allows or declines each.",
+                "type": "boolean"
+              },
               "agent_limits": {
                 "$ref": "#/$defs/AgentLimits",
                 "description": "The limits on every agent session. Only the person sets them, in the\napp."
@@ -66956,6 +66982,7 @@
               "week_start",
               "file_max_mb",
               "agent_max_profile",
+              "agent_confirmations",
               "agent_limits",
               "timer_reminder_hours"
             ],
@@ -67011,7 +67038,7 @@
       },
       "output_name": "SettingsChange",
       "safety": "app",
-      "summary": "Set the most an agent may do, whatever profile it asks for."
+      "summary": "Set the most an agent may do, whatever profile it asks for, and whether agents may ask the person to allow one change beyond it."
     },
     {
       "app_reason": "It sets how much agents may do; an agent that could call it would raise its own limits beyond what the person allowed.",
@@ -67162,6 +67189,10 @@
             "additionalProperties": false,
             "description": "The workspace's settings, with defaults filled in.",
             "properties": {
+              "agent_confirmations": {
+                "description": "Whether an agent whose client can ask the person may ask to make\none change its profile doesn't allow, or one that deletes for good\nor deletes many items; the person allows or declines each.",
+                "type": "boolean"
+              },
               "agent_limits": {
                 "$ref": "#/$defs/AgentLimits",
                 "description": "The limits on every agent session. Only the person sets them, in the\napp."
@@ -67221,6 +67252,7 @@
               "week_start",
               "file_max_mb",
               "agent_max_profile",
+              "agent_confirmations",
               "agent_limits",
               "timer_reminder_hours"
             ],
@@ -68132,6 +68164,10 @@
               "at": {
                 "description": "When (RFC 3339, UTC).",
                 "type": "string"
+              },
+              "confirmed_by_person": {
+                "description": "Whether the person allowed this change when the agent asked for it,\nthrough the agent's client.",
+                "type": "boolean"
               },
               "entity": {
                 "description": "What kind of item changed.",
@@ -69998,6 +70034,10 @@
             "additionalProperties": false,
             "description": "The workspace's settings, with defaults filled in.",
             "properties": {
+              "agent_confirmations": {
+                "description": "Whether an agent whose client can ask the person may ask to make\none change its profile doesn't allow, or one that deletes for good\nor deletes many items; the person allows or declines each.",
+                "type": "boolean"
+              },
               "agent_limits": {
                 "$ref": "#/$defs/AgentLimits",
                 "description": "The limits on every agent session. Only the person sets them, in the\napp."
@@ -70057,6 +70097,7 @@
               "week_start",
               "file_max_mb",
               "agent_max_profile",
+              "agent_confirmations",
               "agent_limits",
               "timer_reminder_hours"
             ],

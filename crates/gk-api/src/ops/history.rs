@@ -109,6 +109,10 @@ pub struct ActivityEntry {
     /// The group that reverted this change, if one did.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reverted_by: Option<String>,
+    /// Whether the person allowed this change when the agent asked for it,
+    /// through the agent's client.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub confirmed_by_person: bool,
 }
 
 /// A task as the activity log names it.

@@ -28,6 +28,10 @@ pub struct Settings {
     pub file_max_mb: u32,
     /// The most an agent may do, whatever profile it asks for.
     pub agent_max_profile: Profile,
+    /// Whether an agent whose client can ask the person may ask to make
+    /// one change its profile doesn't allow, or one that deletes for good
+    /// or deletes many items; the person allows or declines each.
+    pub agent_confirmations: bool,
     /// The limits on every agent session. Only the person sets them, in the
     /// app.
     pub agent_limits: AgentLimits,
@@ -50,6 +54,7 @@ impl Default for Settings {
             week_start: WeekStart::Monday,
             file_max_mb: 100,
             agent_max_profile: Profile::Standard,
+            agent_confirmations: true,
             agent_limits: AgentLimits::DEFAULT,
             timer_reminder_hours: 8,
             backup_folder: None,

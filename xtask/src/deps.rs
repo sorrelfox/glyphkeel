@@ -7,6 +7,8 @@
 //!   command line (which also serves MCP) and every library stay lean, so they
 //!   build and run without a display.
 //! - Neither shipped program links an HTTP client: the app never goes online.
+//!   The one HTTP crate allowed is hyper as a server, for the opt-in local
+//!   endpoint for agents (127.0.0.1 only); its client features stay off.
 //! - Neither shipped program links a keyring or secret-store client: the app
 //!   never touches the keyring.
 
@@ -27,10 +29,9 @@ const DESKTOP_ONLY: &[&str] = &[
     "javascriptcore-rs",
 ];
 
-/// HTTP clients and servers, banned from both shipped programs.
+/// HTTP clients and other network stacks, banned from both shipped programs.
 const NETWORK: &[&str] = &[
     "reqwest",
-    "hyper",
     "ureq",
     "curl",
     "isahc",
@@ -40,6 +41,13 @@ const NETWORK: &[&str] = &[
     "rustls",
     "native-tls",
     "openssl",
+];
+
+/// HTTP crates the shipped programs may link as a server only, with the
+/// features that would make them a client.
+const SERVER_ONLY: &[(&str, &[&str])] = &[
+    ("hyper", &["client"]),
+    ("hyper-util", &["client", "client-legacy", "client-proxy"]),
 ];
 
 /// Keyring and secret-store clients, banned from both shipped programs.
@@ -91,6 +99,11 @@ pub(crate) fn run(root: &Path) -> Result<bool> {
             program,
             "a keyring client",
             &graph.banned_in(program, KEYRING)?,
+        );
+        ok &= report(
+            program,
+            "an HTTP client feature",
+            &client_features(root, program)?,
         );
     }
     if ok {
@@ -201,6 +214,46 @@ impl Graph {
     }
 }
 
+/// The client features of the [`SERVER_ONLY`] crates that `program` builds
+/// with, on any shipped target, as `crate/feature`. `cargo tree` resolves
+/// the features exactly as a build does; `cargo metadata` would mix in the
+/// features of dev-dependencies.
+fn client_features(root: &Path, program: &str) -> Result<BTreeSet<String>> {
+    let mut found = BTreeSet::new();
+    for target in SHIPPED_TARGETS {
+        for (krate, banned) in SERVER_ONLY {
+            let output = Command::new(crate::cargo())
+                .args(["tree", "--locked", "-p", program, "-e", "normal,features"])
+                .args(["--target", target, "-i", krate, "--prefix", "none"])
+                .current_dir(root)
+                .output()
+                .context("cannot run `cargo tree`")?;
+            if !output.status.success() {
+                // The program doesn't reach the crate on this target.
+                continue;
+            }
+            found.extend(features_named(
+                &String::from_utf8_lossy(&output.stdout),
+                krate,
+                banned,
+            ));
+        }
+    }
+    Ok(found)
+}
+
+/// The features of `krate` from `banned` in the output of `cargo tree -e
+/// features -i <krate> --prefix none`, as `crate/feature`.
+fn features_named(tree: &str, krate: &str, banned: &[&str]) -> BTreeSet<String> {
+    let prefix = format!("{krate} feature \"");
+    tree.lines()
+        .filter_map(|line| line.trim().strip_prefix(&prefix))
+        .filter_map(|rest| rest.split('"').next())
+        .filter(|feature| banned.contains(feature))
+        .map(|feature| format!("{krate}/{feature}"))
+        .collect()
+}
+
 /// A dependency edge is normal when one of its kinds is neither `dev` nor
 /// `build` (cargo writes `null` for normal).
 fn is_normal(dep: &Value) -> bool {
@@ -215,7 +268,7 @@ mod tests {
 
     use std::path::Path;
 
-    use super::{Graph, KEYRING};
+    use super::{Graph, KEYRING, features_named};
 
     fn graph() -> Graph {
         let normal = json!([{ "kind": null }]);
@@ -275,6 +328,15 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn a_server_only_crate_with_a_client_feature_is_found() {
+        let tree = "hyper v1.12.0\nhyper feature \"default\"\nhyper feature \"server\"\nhyper feature \"client\"\n";
+        let found = features_named(tree, "hyper", &["client"]);
+        assert_eq!(found.into_iter().collect::<Vec<_>>(), ["hyper/client"]);
+        let server = "hyper v1.12.0\nhyper feature \"http1\"\nhyper feature \"server\"\n";
+        assert!(features_named(server, "hyper", &["client"]).is_empty());
     }
 
     #[test]

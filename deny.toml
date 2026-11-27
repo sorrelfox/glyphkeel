@@ -91,12 +91,15 @@ workspace-default-features = "allow"
 external-default-features = "allow"
 allow = []
 # The app never goes online: no HTTP client or TLS stack in what ships. It
-# never touches the keyring either.
+# never touches the keyring either. The one exception is the opt-in local
+# endpoint for agents in gk-mcp: an HTTP/1 server on 127.0.0.1, so hyper is
+# allowed there (and under hyper-util's runtime glue) with its client
+# features denied below.
 # `cargo xtask check-deps` checks the same per program.
 deny = [
     { crate = "reqwest", reason = "the app has no network access" },
     { crate = "ureq", reason = "the app has no network access" },
-    { crate = "hyper", reason = "the app has no network access" },
+    { crate = "hyper", wrappers = ["gk-mcp", "hyper-util"], reason = "only the local endpoint for agents, a server on 127.0.0.1, may use it" },
     { crate = "isahc", reason = "the app has no network access" },
     { crate = "curl", reason = "the app has no network access" },
     { crate = "attohttpc", reason = "the app has no network access" },
@@ -115,6 +118,18 @@ deny = [
 ]
 skip = []
 skip-tree = []
+
+# The local endpoint for agents serves; nothing in what ships makes HTTP
+# requests.
+[[bans.features]]
+crate = "hyper"
+deny = ["client"]
+reason = "the app has no network access: hyper is a server only"
+
+[[bans.features]]
+crate = "hyper-util"
+deny = ["client", "client-legacy", "client-proxy"]
+reason = "the app has no network access: hyper is a server only"
 
 # ---------------------------------------------------------------------------
 [sources]

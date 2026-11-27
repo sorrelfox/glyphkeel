@@ -52,6 +52,10 @@ const KNOWN_HOSTS: &[(&str, &str)] = &[
         "localhost",
         "the router's fallback origin, never a request target",
     ),
+    (
+        "127.0.0.1",
+        "the agents' local HTTP endpoint as Preferences shows it outside the app; the page never connects to it",
+    ),
 ];
 
 /// Text that marks a remote address: a scheme and `//`.

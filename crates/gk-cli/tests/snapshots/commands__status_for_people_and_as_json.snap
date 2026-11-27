@@ -15,6 +15,7 @@ guide: Projects have keys (TM); tasks have keys (TM-41), and an old key still fi
 program_version: [version]
 schema_version: 18
 settings:
+  agent_confirmations: yes
   agent_limits:
     trash_items_per_call: 20
     trash_items_per_hour: 50

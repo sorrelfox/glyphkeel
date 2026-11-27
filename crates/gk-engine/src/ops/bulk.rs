@@ -337,11 +337,7 @@ fn most(w: &WriteCtx<'_>) -> Result<usize, Failure> {
         return Ok(MAX_FULL);
     }
     let cap = super::settings::load(w.tx())?.agent_max_profile;
-    let profile = w
-        .caller()
-        .profile
-        .unwrap_or(Profile::Standard)
-        .capped_by(cap);
+    let profile = w.caller().agent_profile_under(cap);
     Ok(if profile == Profile::Full {
         MAX_FULL
     } else {

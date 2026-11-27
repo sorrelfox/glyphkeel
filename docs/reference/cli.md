@@ -10,7 +10,7 @@ With `--json` a command prints exactly the operation's output, as described in [
 | Command | Operation | What it does |
 |---|---|---|
 | `glyphkeel activity` | `history.feed` | The activity log, newest first: who changed what, when and through which program; optionally the agent sessions. |
-| `glyphkeel agents policy` | `agent.policy.update` | Set the most an agent may do, whatever profile it asks for. |
+| `glyphkeel agents policy` | `agent.policy.update` | Set the most an agent may do, whatever profile it asks for, and whether agents may ask the person to allow one change beyond it. |
 | `glyphkeel agents sessions` | `agent.sessions` | List agent sessions, newest first, with their client, profile, times and counts of reads and writes. |
 | `glyphkeel backup create` | `backup.create` | Make a backup of the workspace now: a checked copy of the database and its stored files. |
 | `glyphkeel backup delete <name>` | `backup.delete` | Delete a backup and the stored files only it used. |

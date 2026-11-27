@@ -1018,7 +1018,7 @@ Input: `AgentSessionsInput`. Output: `AgentSessionList`. Schemas: [catalog.schem
 
 ## `agent.policy.update`
 
-Set the most an agent may do, whatever profile it asks for.
+Set the most an agent may do, whatever profile it asks for, and whether agents may ask the person to allow one change beyond it.
 
 Input: `AgentPolicyPatch`. Output: `SettingsChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 

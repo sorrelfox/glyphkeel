@@ -147,3 +147,99 @@ pub fn golden_names(profile: &str) -> Vec<String> {
         .map(|v| v.as_str().unwrap().to_owned())
         .collect()
 }
+
+/// A client whose person answers every confirmation with `answer`, and
+/// that passes on the URIs of resource updates.
+#[derive(Clone)]
+pub struct Person {
+    pub answer: rmcp::model::ElicitationAction,
+    pub asked: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+    pub updates: tokio::sync::mpsc::UnboundedSender<String>,
+    pub version: ProtocolVersion,
+}
+
+impl rmcp::ClientHandler for Person {
+    fn get_info(&self) -> ClientConfig {
+        let mut config = ClientConfig::new(
+            ClientCapabilities::builder().enable_elicitation().build(),
+            Implementation::new("claude-code", "2.1.330"),
+        );
+        config.protocol_version = self.version.clone();
+        config
+    }
+
+    async fn create_elicitation(
+        &self,
+        request: rmcp::model::ElicitRequestParams,
+        _context: rmcp::service::RequestContext<RoleClient>,
+    ) -> Result<rmcp::model::ElicitResult, rmcp::ErrorData> {
+        if let rmcp::model::ElicitRequestParams::FormElicitationParams { message, .. } = request {
+            self.asked.lock().unwrap().push(message);
+        }
+        Ok(rmcp::model::ElicitResult::new(self.answer.clone()))
+    }
+
+    async fn on_resource_updated(
+        &self,
+        params: rmcp::model::ResourceUpdatedNotificationParam,
+        _context: rmcp::service::NotificationContext<RoleClient>,
+    ) {
+        let _ = self.updates.send(params.uri);
+    }
+}
+
+/// A running server and a client whose person answers `answer`.
+pub struct PersonConnection {
+    pub client: RunningService<RoleClient, Person>,
+    pub server: JoinHandle<()>,
+    pub asked: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+    pub updates: tokio::sync::mpsc::UnboundedReceiver<String>,
+}
+
+/// Starts the server for `options` and connects a client that can ask the
+/// person, who answers `answer`.
+pub async fn connect_person(
+    options: &Options,
+    mode: ClientLifecycleMode,
+    version: ProtocolVersion,
+    answer: rmcp::model::ElicitationAction,
+) -> PersonConnection {
+    let server = gk_mcp::open(options).unwrap();
+    let (client_io, server_io) = tokio::io::duplex(1 << 20);
+    let server = tokio::spawn(gk_mcp::serve(server, server_io));
+    let (updates, received) = tokio::sync::mpsc::unbounded_channel();
+    let asked = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let person = Person {
+        answer,
+        asked: asked.clone(),
+        updates,
+        version,
+    };
+    let client = person.serve_with_lifecycle(client_io, mode).await.unwrap();
+    PersonConnection {
+        client,
+        server,
+        asked,
+        updates: received,
+    }
+}
+
+impl PersonConnection {
+    /// Calls `tool` with `args`.
+    pub async fn call(&self, tool: &str, args: Value) -> CallToolResult {
+        let args = args.as_object().cloned().unwrap_or_default();
+        let request = CallToolRequestParams::new(tool.to_owned()).with_arguments(args);
+        self.client.call_tool(request).await.unwrap()
+    }
+
+    /// The questions the person was asked so far.
+    pub fn questions(&self) -> Vec<String> {
+        self.asked.lock().unwrap().clone()
+    }
+
+    /// Closes the client and waits until the server has closed.
+    pub async fn close(self) {
+        self.client.cancel().await.unwrap();
+        self.server.await.unwrap();
+    }
+}

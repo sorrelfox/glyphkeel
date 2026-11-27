@@ -591,6 +591,11 @@ function HistoryList({
               <span className={classes("faint", styles.small)}>
                 {t(entry.reverted_by === undefined ? "history-by" : "history-by-reverted", { actor: entry.actor.kind === "user" ? t("comment-me") : entry.actor.name, via: t(`via-${entry.via}`), time: moment(entry.at) })}
               </span>
+              {entry.confirmed_by_person === true && (
+                <span className={classes("faint", styles.small)} data-testid="history-confirmed">
+                  {t("history-confirmed-by-you")}
+                </span>
+              )}
             </div>
             {first && revertible(entry) && !readOnly && (
               <Button className="btn flat icon sm" aria-label={t("history-revert", { time: moment(entry.at) })} onPress={() => { revert(entry.group); }}>

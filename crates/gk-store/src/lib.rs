@@ -91,7 +91,7 @@ pub use snapshot::{
 };
 pub use store::{Store, StoreConfig, open_raw};
 pub use user_settings::{
-    CONFIG_DIR_ENV, SYSTEM_TIME_ZONE, USER_SETTINGS_FILE, UserSettings, config_dir,
+    AgentHttp, CONFIG_DIR_ENV, SYSTEM_TIME_ZONE, USER_SETTINGS_FILE, UserSettings, config_dir,
     user_settings_file,
 };
 pub use writer::{SlowWrite, WriterStats};
