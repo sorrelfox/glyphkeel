@@ -5,6 +5,47 @@ Conventional Commits, and versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-11-27
+
+### Features
+
+- **Agents' files:** paths an agent gives for exports, imports and
+  attachments are limited to the workspace's exports folder and folders
+  you add in Preferences.
+- **Accessibility:** every screen checked in light, dark, sand and slate;
+  stronger contrast, names that match the visible text, the page's
+  language and direction from the locale, reduced motion and forced
+  colours, a menu on every resize handle.
+- **Column widths:** a saved width can be reset from the handle's menu or
+  with a double-click.
+- **Task shortcuts:** E edits the description; S, P, L and D open the
+  status, priority, labels and due date of the open task.
+- **Gantt:** tasks without dates no longer count against the chart's
+  limit; a note counts them and shows them in the list.
+- **About:** the licence and third-party notices in Preferences.
+- **Packages:** an Arch package, signed APT and DNF repositories, and a
+  manifest ready for Flathub.
+- **Translation:** every message people see, in the app, the engine and
+  the command line, comes from the message files.
+
+### Performance
+
+- CSV import of 10,000 rows in about half a second instead of 12.
+- Large boards and schedules open in a fraction of a second: the store
+  refreshes its statistics when they are stale.
+
+### Fixes
+
+- Several security fixes from a review of the web view, file access,
+  diagrams and the MCP server.
+- `glyphkeel board` no longer fails on very long table cells.
+- `label:none` finds tasks without labels.
+
+### Documentation
+
+- A user guide, the query language, the command line, MCP set-up for
+  agents, backup and restore, and the release procedure.
+
 ## [0.1.6] - 2026-11-26
 
 ### Features

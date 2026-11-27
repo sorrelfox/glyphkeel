@@ -88,6 +88,11 @@
   </supports>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.1.7" date="2026-11-27">
+      <description>
+        <p>Hardening for 1.0: a security review with limits on agents' file paths, accessibility fixes in every theme, much faster CSV import, boards and schedules, translatable messages throughout, an About page with third-party notices, an Arch package and signed APT and DNF repositories, column width reset, and new task shortcuts.</p>
+      </description>
+    </release>
     <release version="0.1.6" date="2026-11-26">
       <description>
         <p>Custom fields, versions and a roadmap, status and agent rules, recurring tasks and templates, CSV import with Jira and Redmine presets, flow reports, history in queries, and prompts for agents.</p>
