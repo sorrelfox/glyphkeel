@@ -3,7 +3,7 @@
 
 # Command line
 
-`glyphkeel <area> <verb> [arguments] [--options]`. Every command runs one operation of the catalog ([operations.md](operations.md)). Global options: `--workspace`, `--json`, `--quiet`, `--no-color`.
+`glyphkeel <area> <verb> [arguments] [--options]`. Every command runs one operation of the catalog ([operations.md](operations.md)). Global options: `--workspace`, `--json`, `--quiet`, `--no-color`, `--tz`, `--lang`.
 
 With `--json` a command prints exactly the operation's output, as described in [catalog.schema.json](catalog.schema.json).
 
@@ -181,6 +181,10 @@ A command works in the workspace `--workspace` names (a name in the data folder,
 | `glyphkeel workspace encrypt` | Encrypt the workspace with a passphrase, or give it a new one; nobody may have it open |
 | `glyphkeel workspace decrypt` | Store the workspace unencrypted again; nobody may have it open |
 | `glyphkeel workspace open <name or path>` | Work in this workspace from now on: commands, agents and the app's next start use it |
+
+## Language
+
+Help, output for people and error messages are in the language `--lang` names (a language tag such as `de` or `pt-BR`), else the one `GLYPHKEEL_LANG` names, else the language chosen in the app's Preferences, else the system's (`LANGUAGE`, `LC_ALL`, `LC_MESSAGES`, `LANG`; on Windows the display language), else English. A message not yet translated shows in English. Numbers and dates in the output for people follow the language. `en-XA` is a pseudo-language for testing translations. Machine text stays English: `--json` output (an error's `message`, with its `message_id` and `args` for translating it), command and option names, and everything `glyphkeel mcp` serves to agents.
 
 ## Exit codes
 

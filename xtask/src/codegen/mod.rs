@@ -11,12 +11,15 @@
 //!   which prompts each profile gets;
 //! - `docs/reference/operations.md`, `docs/reference/cli.md` and
 //!   `docs/reference/mcp-prompts.md`: the reference pages;
-//! - `ui/src/generated/ops.ts`: the TypeScript client.
+//! - `ui/src/generated/ops.ts`: the TypeScript client;
+//! - `crates/gk-cli/i18n/en/ops.ftl`: the help of the command line's
+//!   commands and options as messages, for translation.
 //!
 //! `--check` writes nothing and fails when a file differs from what the
 //! catalog generates now.
 
 mod docs;
+mod ftl;
 mod ts;
 
 use std::fs;
@@ -62,6 +65,10 @@ pub(crate) fn outputs() -> Result<Vec<Output>> {
         Output {
             path: "ui/src/generated/ops.ts",
             content: ts::generate(&catalog)?,
+        },
+        Output {
+            path: "crates/gk-cli/i18n/en/ops.ftl",
+            content: ftl::cli_ops()?,
         },
     ])
 }

@@ -11,6 +11,12 @@ without changing the program.
 Choose the language in Preferences › **Language** › **Language of the
 interface**. **System** follows your computer, and falls back to English when
 Glyphkeel has no text in that language. The change applies at once.
+It applies to the app's own windows, notifications and tray menu too.
+
+The command line uses the same choice. To give it another language, set
+`GLYPHKEEL_LANG` (for example `GLYPHKEEL_LANG=de`) or add `--lang de` to one
+command; see [the command line](../cli.md). What the MCP server tells agents
+stays in English.
 
 ## Dates, numbers and durations
 

@@ -177,6 +177,7 @@ impl AppSettings {
     pub(crate) fn load() -> Self {
         let file = file();
         let stored = file.as_deref().map(load).unwrap_or_default();
+        crate::messages::follow_preferences(&stored.ui);
         let mut settings = Self::new(file, stored);
         settings.user_file = gk_store::user_settings_file();
         settings
@@ -588,13 +589,22 @@ pub(crate) fn time_zones() -> Vec<gk_engine::ZoneChoice> {
 }
 
 /// Keeps one of the page's preferences for the next start; `null` removes it.
+/// A new language applies at once to the app's own text too: its dialogs,
+/// notifications and tray menu.
 #[tauri::command]
 pub(crate) fn set_ui_pref(
+    app: AppHandle,
     settings: State<'_, AppSettings>,
     name: String,
     value: Value,
 ) -> Result<(), OpError> {
-    settings.set_ui(name, value)
+    let language = name == gk_engine::language::UI_LANGUAGE_PREF;
+    settings.set_ui(name, value)?;
+    if language {
+        crate::messages::follow_preferences(&settings.ui());
+        crate::background::relabel_tray(&app);
+    }
+    Ok(())
 }
 
 #[cfg(test)]

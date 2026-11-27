@@ -10,7 +10,7 @@ use std::fmt::Write as _;
 use gk_api::OpError;
 use serde_json::{Map, Value};
 
-use crate::messages::text;
+use crate::messages::{self, text};
 
 /// Columns that lead a table when present, in this order; the rest follow
 /// alphabetically.
@@ -68,10 +68,10 @@ pub(crate) fn error(e: &OpError, as_json: bool) -> String {
     if as_json {
         return json(&serde_json::to_value(e).unwrap_or(Value::Null));
     }
-    let mut out = text("cli-error", &[("message", e.message.clone())]);
+    let mut out = text("cli-error", &[("message", messages::shown_message(e))]);
     out.push('\n');
-    if let Some(hint) = &e.hint {
-        let _ = writeln!(out, "{}", text("cli-hint", &[("hint", hint.clone())]));
+    if let Some(hint) = messages::shown_hint(e) {
+        let _ = writeln!(out, "{}", text("cli-hint", &[("hint", hint)]));
     }
     if let Some(choices) = e.details.get("choices").and_then(Value::as_array) {
         let words: Vec<String> = choices.iter().map(cell).collect();
@@ -255,13 +255,14 @@ fn order(keys: &mut [String]) {
     });
 }
 
-/// One value on one line.
+/// One value on one line: numbers and days in the language's formats.
 fn cell(v: &Value) -> String {
     match v {
         Value::Null => String::new(),
+        Value::String(s) if messages::is_day(s) => gk_engine::language::format_date(s),
         Value::String(s) => s.replace('\n', " "),
         Value::Bool(b) => text(if *b { "cli-true" } else { "cli-false" }, &[]),
-        Value::Number(n) => n.to_string(),
+        Value::Number(n) => gk_engine::language::format_number(&n.to_string()),
         Value::Array(a) => a.iter().map(cell).collect::<Vec<_>>().join(", "),
         Value::Object(o) if is_field_changes(o) => o
             .iter()
