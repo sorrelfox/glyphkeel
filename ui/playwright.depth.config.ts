@@ -8,19 +8,20 @@ import { join, resolve } from "node:path";
 
 import { defineConfig, devices } from "@playwright/test";
 
+import { flowPort } from "./tests/ports";
+
 // Versions, custom fields, rules, repeating tasks, the CSV import and the
 // reports against the real engine: the development bridge serves a fresh
 // workspace, and a `--mode bridge` build of the UI talks to it. The flows
 // make their data with the `glyphkeel` command line on the same workspace,
 // as another process would, and check the engine's answer the same way.
-// Ports of their own (the bridge takes 5320–5329 and pages 5310–5319). The
-// flows use the planning flows' helpers, which read the same variables.
-const UI_PORT = Number(process.env.GK_DEPTH_UI_PORT ?? 5310);
-const BRIDGE_PORT = Number(process.env.GK_DEPTH_BRIDGE_PORT ?? 5320);
+// Ports of their own (GK_UI_PORT and GK_BRIDGE_PORT move them). The flows
+// use the planning flows' helpers, which read the same variables.
+const UI_PORT = flowPort("depth", "ui");
+const BRIDGE_PORT = flowPort("depth", "bridge");
 
 process.env.GK_BRIDGE_TOKEN ??= randomBytes(16).toString("hex");
 process.env.GK_BRIDGE_WORKSPACE ??= join(mkdtempSync(join(tmpdir(), "glyphkeel-depth-")), "Personal");
-process.env.GK_PLANNING_BRIDGE_PORT = String(BRIDGE_PORT);
 process.env.GK_PLANNING_UI_URL = `http://127.0.0.1:${String(UI_PORT)}`;
 // The command line the flows run; the bridge's server command builds it.
 process.env.GK_PLANNING_CLI ??= resolve(process.env.CARGO_TARGET_DIR ?? "../target", "debug", "glyphkeel");

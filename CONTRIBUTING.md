@@ -123,6 +123,9 @@ pnpm --filter ui exec vitest related src/shell/HeaderBar.tsx --run
 pnpm --filter ui exec playwright test tests/flow/smoke.spec.ts
 ```
 
+Browser flows can run side by side, each on ports of its own; see
+[Browser flows side by side](#browser-flows-side-by-side).
+
 Before every push, run the static checks:
 
 ```sh
@@ -221,6 +224,54 @@ last pre-release) builds nothing: it republishes that pre-release's files.
 Because of that, `Cargo.toml` already carries the final version while the
 pre-releases are made. [docs/releasing.md](docs/releasing.md) has the steps,
 the Flatpak repository on GitHub Pages and its one-time set-up.
+
+### Browser flows side by side
+
+Each Playwright configuration in `ui/` is a flow; `ui/tests/flows.json` lists
+them with their default ports. `pnpm test:flow` runs one on ports of its own,
+so several can run at the same time, from one checkout or from several:
+
+```sh
+pnpm --filter ui test:flow --flows        # the flows and their default ports
+pnpm --filter ui test:flow palette        # on free ports, picked for this run
+pnpm --filter ui test:flow editor --port 5341 -- --grep "Source mode"
+pnpm --filter ui test:flow list --port 5342 --port-2 5343 --bridge-port 5344
+```
+
+Without a name it runs `flow`. Arguments after `--`, and any it doesn't know,
+go to Playwright. The ports it picks are free on 127.0.0.1, within
+`GK_PORT_RANGE`, none of the flows' defaults, and not held by another run of
+it. It prints the process IDs of Playwright and of each server it starts, and
+stops whatever is still running when it ends, on Ctrl-C, or when you stop it
+with `kill <its pid>`. Each run writes its results to
+`ui/test-results/<flow>-<port>`.
+
+The configurations take their ports from the environment, so a flow can also
+run by its own script (`pnpm test:palette`) on ports you choose:
+
+| Variable | Sets |
+|---|---|
+| `GK_UI_PORT` | the page server |
+| `GK_UI_PORT_2` | a second page server (the list's flows on sample data) |
+| `GK_BRIDGE_PORT` | the development bridge |
+| `GK_BRIDGE_PORT_2` | a second bridge (the bridge flows' untouched workspace) |
+| `GK_PORT_RANGE` | the ports the bridge accepts, for itself and for the pages it lets in: `5300-5399` unless set |
+
+Unset, each port is the flow's default from `flows.json`, which
+`cargo xtask ci` sets explicitly as it runs the flows one after another. The
+older names per configuration (`GK_PALETTE_UI_PORT`, `GK_CSV_PORT` and the
+others listed under `deprecated` in `flows.json`) are deprecated: they still
+work, with a warning, and will be removed.
+
+The bridge listens on loopback only and lets in pages from the UI ports it
+was started for (`--ui-port`, repeatable) and from nowhere else: the origin
+must be exactly `http://127.0.0.1:<port>` or `http://localhost:<port>`, and
+the page must send the bridge's token.
+
+A server left running is stopped by its process ID, the one `pnpm test:flow`
+printed or the one `ss -ltnp 'sport = :5341'` shows, with `kill <pid>`. Never
+stop servers by name (`pkill -f vite`): that also stops other runs on the
+same machine.
 
 ## Dependencies
 

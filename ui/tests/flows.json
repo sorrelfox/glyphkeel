@@ -1,0 +1,186 @@
+{
+  "port_range": [5300, 5399],
+  "flows": [
+    {
+      "name": "flow",
+      "config": "playwright.config.ts",
+      "about": "the release build: smoke test and themes",
+      "ports": { "ui": 5310 }
+    },
+    {
+      "name": "board",
+      "config": "playwright.fake.config.ts",
+      "about": "project screens and preferences on sample data",
+      "ports": { "ui": 5310 },
+      "deprecated": { "ui": ["GK_FAKE_PORT"] }
+    },
+    {
+      "name": "editor",
+      "config": "playwright.editor.config.ts",
+      "about": "the Markdown editor",
+      "ports": { "ui": 5317 }
+    },
+    {
+      "name": "bridge",
+      "config": "playwright.bridge.config.ts",
+      "about": "workspace, zones, labels and toolbar against the engine",
+      "ports": { "ui": 5310, "bridge": 5321, "bridge2": 5322 },
+      "deprecated": { "ui": ["GK_BRIDGE_UI_PORT"], "bridge2": ["GK_BRIDGE_FRESH_PORT"] }
+    },
+    {
+      "name": "list",
+      "config": "playwright.list.config.ts",
+      "about": "the list, against the engine and on sample data",
+      "ports": { "ui": 5316, "ui2": 5317, "bridge": 5327 },
+      "deprecated": { "ui": ["GK_LIST_UI_PORT"], "ui2": ["GK_LIST_FAKE_PORT"], "bridge": ["GK_LIST_BRIDGE_PORT"] }
+    },
+    {
+      "name": "palette",
+      "config": "playwright.palette.config.ts",
+      "about": "command palette and quick add against the engine",
+      "ports": { "ui": 5318, "bridge": 5328 },
+      "deprecated": { "ui": ["GK_PALETTE_UI_PORT"], "bridge": ["GK_PALETTE_BRIDGE_PORT"] }
+    },
+    {
+      "name": "today",
+      "config": "playwright.today.config.ts",
+      "about": "Today, search and editor links against the engine",
+      "ports": { "ui": 5317, "bridge": 5327 },
+      "deprecated": { "ui": ["GK_TODAY_UI_PORT"], "bridge": ["GK_TODAY_BRIDGE_PORT"] }
+    },
+    {
+      "name": "safety",
+      "config": "playwright.safety.config.ts",
+      "about": "trash, activity, backups, export and import against the engine",
+      "ports": { "ui": 5314, "bridge": 5324 },
+      "deprecated": { "ui": ["GK_SAFETY_UI_PORT"], "bridge": ["GK_SAFETY_BRIDGE_PORT"] }
+    },
+    {
+      "name": "prefs",
+      "config": "playwright.prefs.config.ts",
+      "about": "preferences, first run and agent set-up against the engine",
+      "ports": { "ui": 5318, "bridge": 5328 },
+      "deprecated": { "ui": ["GK_PREFS_UI_PORT"], "bridge": ["GK_PREFS_BRIDGE_PORT"] }
+    },
+    {
+      "name": "wiki",
+      "config": "playwright.wiki.config.ts",
+      "about": "the wiki on sample data",
+      "ports": { "ui": 5323 },
+      "deprecated": { "ui": ["GK_WIKI_PORT"] }
+    },
+    {
+      "name": "gantt",
+      "config": "playwright.gantt.config.ts",
+      "about": "the Gantt chart on sample data",
+      "ports": { "ui": 5324 },
+      "deprecated": { "ui": ["GK_GANTT_PORT"] }
+    },
+    {
+      "name": "calendar",
+      "config": "playwright.calendar.config.ts",
+      "about": "the calendar and the time report on sample data",
+      "ports": { "ui": 5321 },
+      "deprecated": { "ui": ["GK_CALENDAR_PORT"] }
+    },
+    {
+      "name": "planning",
+      "config": "playwright.planning.config.ts",
+      "about": "wiki, Gantt chart and calendar against the engine",
+      "ports": { "ui": 5319, "bridge": 5329 },
+      "deprecated": { "ui": ["GK_PLANNING_UI_PORT"], "bridge": ["GK_PLANNING_BRIDGE_PORT"] }
+    },
+    {
+      "name": "windows",
+      "config": "playwright.windows.config.ts",
+      "about": "the page as it starts on Windows, on sample data",
+      "ports": { "ui": 5320 },
+      "deprecated": { "ui": ["GK_WINDOWS_PORT"] }
+    },
+    {
+      "name": "fields",
+      "config": "playwright.fields.config.ts",
+      "about": "custom fields on sample data",
+      "ports": { "ui": 5311 },
+      "deprecated": { "ui": ["GK_FIELDS_PORT"] }
+    },
+    {
+      "name": "roadmap",
+      "config": "playwright.roadmap.config.ts",
+      "about": "versions and the roadmap on sample data",
+      "ports": { "ui": 5312 },
+      "deprecated": { "ui": ["GK_ROADMAP_PORT"] }
+    },
+    {
+      "name": "reports",
+      "config": "playwright.reports.config.ts",
+      "about": "the flow reports on sample data",
+      "ports": { "ui": 5313 },
+      "deprecated": { "ui": ["GK_REPORTS_PORT"] }
+    },
+    {
+      "name": "sprints",
+      "config": "playwright.sprints.config.ts",
+      "about": "sprints, the backlog and the burndown on sample data",
+      "ports": { "ui": 5321 },
+      "deprecated": { "ui": ["GK_SPRINTS_PORT"] }
+    },
+    {
+      "name": "dashboards",
+      "config": "playwright.dashboards.config.ts",
+      "about": "dashboards and their widgets on sample data",
+      "ports": { "ui": 5324 },
+      "deprecated": { "ui": ["GK_DASHBOARDS_PORT"] }
+    },
+    {
+      "name": "folders",
+      "config": "playwright.folders.config.ts",
+      "about": "project folders in the sidebar on sample data",
+      "ports": { "ui": 5323 },
+      "deprecated": { "ui": ["GK_FOLDERS_PORT"] }
+    },
+    {
+      "name": "layout",
+      "config": "playwright.layout.config.ts",
+      "about": "every screen at small window sizes, with no sideways scroll, on sample data",
+      "ports": { "ui": 5325 },
+      "deprecated": { "ui": ["GK_LAYOUT_PORT"] }
+    },
+    {
+      "name": "csv",
+      "config": "playwright.csv.config.ts",
+      "about": "importing tasks from a CSV file on sample data",
+      "ports": { "ui": 5315 },
+      "deprecated": { "ui": ["GK_CSV_PORT"] }
+    },
+    {
+      "name": "depth",
+      "config": "playwright.depth.config.ts",
+      "about": "versions, fields, rules, repeats, CSV import and reports against the engine",
+      "ports": { "ui": 5310, "bridge": 5320 },
+      "deprecated": { "ui": ["GK_DEPTH_UI_PORT"], "bridge": ["GK_DEPTH_BRIDGE_PORT"] }
+    },
+    {
+      "name": "a11y",
+      "config": "playwright.a11y.config.ts",
+      "about": "accessibility checks on sample data: axe, keyboard, motion, contrast, direction",
+      "ports": { "ui": 5318 },
+      "deprecated": { "ui": ["GK_A11Y_PORT"] }
+    },
+    {
+      "name": "lock",
+      "config": "playwright.lock.config.ts",
+      "about": "the app lock and the encryption settings on sample data",
+      "ports": { "ui": 5325 },
+      "deprecated": { "ui": ["GK_LOCK_PORT"] }
+    },
+    {
+      "name": "pseudo",
+      "config": "playwright.pseudo.config.ts",
+      "about": "screenshots in a pseudo-locale, on the development server (the pseudo suite)",
+      "suite": "pseudo",
+      "ports": { "ui": 5411 },
+      "deprecated": { "ui": ["GK_PSEUDO_PORT"] }
+    }
+  ]
+}

@@ -9,7 +9,7 @@ import { expect, test, type Page } from "@playwright/test";
 // check the whole workspace, starting with an empty Undo stack (see
 // playwright.bridge.config.ts).
 const token = process.env.GK_BRIDGE_TOKEN ?? "";
-const BRIDGE = process.env.GK_BRIDGE_FRESH_PORT ?? "5322";
+const BRIDGE = process.env.GK_BRIDGE_PORT_2 ?? "";
 const PAGE = `/?bridge=${BRIDGE}&token=${token}`;
 
 async function openPreferences(page: Page) {

@@ -8,23 +8,23 @@ import { join, resolve } from "node:path";
 
 import { defineConfig, devices } from "@playwright/test";
 
+import { flowPort } from "./tests/ports";
+
 // Flows against the real engine: the development bridge serves a fresh
 // workspace on loopback, and a `--mode bridge` build of the UI talks to it
 // from Chromium. Playwright starts both and stops them afterwards.
-// The bridge takes the UI's port only: 5310 unless GK_BRIDGE_UI_PORT names
-// another of 5310–5319. Its own port can be another of 5320–5329, so that a
-// bridge left running doesn't stop a run.
+// The bridges let in pages from the UI's port only. GK_UI_PORT moves the
+// page server and GK_BRIDGE_PORT and GK_BRIDGE_PORT_2 the two bridges, so
+// that a server left running doesn't stop a run.
 //
 // Two bridges, each on a workspace of its own. workspace.spec.ts checks
 // what the whole workspace holds (an empty Undo stack, the first change of
 // a setting), so it gets a workspace that no other file has touched, on
-// GK_BRIDGE_FRESH_PORT. The other files make their own projects and share
+// GK_BRIDGE_PORT_2. The other files make their own projects and share
 // the second workspace, on GK_BRIDGE_PORT, in whatever order they run.
-const UI_PORT = Number(process.env.GK_BRIDGE_UI_PORT ?? 5310);
-process.env.GK_BRIDGE_PORT ??= "5321";
-process.env.GK_BRIDGE_FRESH_PORT ??= "5322";
-const BRIDGE_PORT = Number(process.env.GK_BRIDGE_PORT);
-const FRESH_PORT = Number(process.env.GK_BRIDGE_FRESH_PORT);
+const UI_PORT = flowPort("bridge", "ui");
+const BRIDGE_PORT = flowPort("bridge", "bridge");
+const FRESH_PORT = flowPort("bridge", "bridge2");
 const BRIDGE_DIST = "node_modules/.cache/bridge-dist";
 
 // The workers inherit these, so every test sees the same token and folders.

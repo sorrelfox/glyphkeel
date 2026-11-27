@@ -3,12 +3,14 @@
 
 import { defineConfig, devices } from "@playwright/test";
 
+import { flowPort } from "./tests/ports";
+
 // Accessibility checks on sample data: axe-core on every screen and main
 // dialog, in the light and the dark theme, against the WCAG 2.2 A and AA
 // rules; the page's direction from its locale; motion, contrast and forced
 // colours from the desktop's media queries. A `--mode fake` build, on a port
-// of its own (GK_A11Y_PORT moves it).
-const PORT = Number(process.env.GK_A11Y_PORT ?? 5318);
+// of its own (GK_UI_PORT moves it).
+const PORT = flowPort("a11y", "ui");
 const DIST = "node_modules/.cache/a11y-fake-dist";
 
 export default defineConfig({

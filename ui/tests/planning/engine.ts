@@ -9,7 +9,7 @@ import { expect, type Page } from "@playwright/test";
 // command line on the bridge's workspace, and dates around today.
 
 const BASE = process.env.GK_PLANNING_UI_URL ?? "";
-export const PAGE = `${BASE}/?bridge=${process.env.GK_PLANNING_BRIDGE_PORT ?? ""}&token=${process.env.GK_BRIDGE_TOKEN ?? ""}`;
+export const PAGE = `${BASE}/?bridge=${process.env.GK_BRIDGE_PORT ?? ""}&token=${process.env.GK_BRIDGE_TOKEN ?? ""}`;
 
 /** Runs `glyphkeel --json <args>` on the bridge's workspace, as another process, and returns its output. */
 export function gk(...args: string[]): unknown {

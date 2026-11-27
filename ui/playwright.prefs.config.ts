@@ -8,17 +8,19 @@ import { join } from "node:path";
 
 import { defineConfig, devices } from "@playwright/test";
 
+import { flowPort } from "./tests/ports";
+
 // Preferences, the first-run set-up, the project tree's menu and the
 // pseudo-locale, against the real engine: the development bridge serves a
 // fresh workspace and a `--mode bridge` build of the UI talks to it. Ports
-// of their own within the bridge's ranges, so these run beside the other
-// flows. `GK_SHOTS` names a folder to save screenshots of the new screens in.
-const UI_PORT = Number(process.env.GK_PREFS_UI_PORT ?? 5318);
-const BRIDGE_PORT = Number(process.env.GK_PREFS_BRIDGE_PORT ?? 5328);
+// of their own (GK_UI_PORT and GK_BRIDGE_PORT move them), so these run
+// beside the other flows. `GK_SHOTS` names a folder to save screenshots of
+// the new screens in.
+const UI_PORT = flowPort("prefs", "ui");
+const BRIDGE_PORT = flowPort("prefs", "bridge");
 
 process.env.GK_BRIDGE_TOKEN ??= randomBytes(16).toString("hex");
 process.env.GK_BRIDGE_WORKSPACE ??= join(mkdtempSync(join(tmpdir(), "glyphkeel-prefs-")), "Personal");
-process.env.GK_PREFS_BRIDGE_PORT = String(BRIDGE_PORT);
 const token = process.env.GK_BRIDGE_TOKEN;
 const workspace = process.env.GK_BRIDGE_WORKSPACE;
 

@@ -3,9 +3,11 @@
 
 import { defineConfig, devices } from "@playwright/test";
 
+import { flowPort } from "./tests/ports";
+
 // The sprints page on the sample data: a production build in the fake mode,
-// served on a port of its own.
-const PORT = Number(process.env.GK_SPRINTS_PORT ?? 5321);
+// served on a port of its own (GK_UI_PORT moves it).
+const PORT = flowPort("sprints", "ui");
 const DIST = "node_modules/.cache/sprints-fake-dist";
 
 export default defineConfig({

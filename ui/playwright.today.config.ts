@@ -8,15 +8,16 @@ import { join } from "node:path";
 
 import { defineConfig, devices } from "@playwright/test";
 
+import { flowPort } from "./tests/ports";
+
 // Today, the search page and links in the editor, against the real engine:
 // the development bridge serves a workspace of their own, so the changes
 // they make (projects, an Undo stack) never meet the other bridge flows,
-// which expect a fresh one. Ports of their own (the bridge takes 5320–5329
-// and pages 5310–5319), so these run beside the other flows.
+// which expect a fresh one. Ports of their own (GK_UI_PORT and
+// GK_BRIDGE_PORT move them), so these run beside the other flows.
 // `GK_SCREENSHOT_DIR` names a folder for the screenshots.
-const UI_PORT = Number(process.env.GK_TODAY_UI_PORT ?? 5317);
-process.env.GK_BRIDGE_PORT = process.env.GK_TODAY_BRIDGE_PORT ?? "5327";
-const BRIDGE_PORT = Number(process.env.GK_BRIDGE_PORT);
+const UI_PORT = flowPort("today", "ui");
+const BRIDGE_PORT = flowPort("today", "bridge");
 const DIST = "node_modules/.cache/today-bridge-dist";
 
 process.env.GK_BRIDGE_TOKEN ??= randomBytes(16).toString("hex");

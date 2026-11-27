@@ -3,6 +3,8 @@
 
 import { defineConfig, devices } from "@playwright/test";
 
+import { flowPort } from "./tests/ports";
+
 // Screenshots of the main screens in a pseudo-locale, so that text missing
 // from the message files, clipped text and joined strings show up. Run by
 // `cargo xtask ci --suite pseudo`, which sets the locale (GK_PSEUDO_LOCALE,
@@ -10,9 +12,9 @@ import { defineConfig, devices } from "@playwright/test";
 //
 // The pseudo-locale exists only in development builds, so this runs the
 // development server on sample data (`--mode fake`). The tests skip when the
-// page doesn't show the locale. GK_PSEUDO_PORT moves the server off its
+// page doesn't show the locale. GK_UI_PORT moves the server off its
 // usual port.
-const PORT = Number(process.env["GK_PSEUDO_PORT"] ?? 5411);
+const PORT = flowPort("pseudo", "ui");
 const LOCALE = process.env["GK_PSEUDO_LOCALE"] ?? "en-XA";
 
 export default defineConfig({

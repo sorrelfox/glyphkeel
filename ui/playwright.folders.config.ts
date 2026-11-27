@@ -3,9 +3,11 @@
 
 import { defineConfig, devices } from "@playwright/test";
 
+import { flowPort } from "./tests/ports";
+
 // The project folders of the sidebar on the sample data: a production build in the fake mode,
-// served on a port of its own.
-const PORT = Number(process.env.GK_FOLDERS_PORT ?? 5323);
+// served on a port of its own (GK_UI_PORT moves it).
+const PORT = flowPort("folders", "ui");
 const DIST = "node_modules/.cache/folders-fake-dist";
 
 export default defineConfig({

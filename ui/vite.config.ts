@@ -13,6 +13,20 @@ import { frozenPrototype } from "./scripts/frozen-prototype";
 // in development; release builds embed the files from `dist/`.
 const DEV_PORT = 5310;
 
+// The ports the bridge page may find the development bridge on: the range
+// the bridge itself accepts, GK_PORT_RANGE (`first-last`) or 5300–5399, as in
+// tests/flows.json.
+function bridgePorts(): [number, number] {
+  const text = process.env.GK_PORT_RANGE?.trim() || "5300-5399";
+  const range = /^(\d+)-(\d+)$/u.exec(text);
+  const first = Number(range?.[1]);
+  const last = Number(range?.[2]);
+  if (range === null || first < 1024 || first > last || last > 65_535) {
+    throw new Error(`GK_PORT_RANGE=${text} is not a range of ports such as 5300-5399`);
+  }
+  return [first, last];
+}
+
 // The product's version, from the workspace's Cargo.toml, for the sample data
 // that stands in for the engine.
 function workspaceVersion(): string {
@@ -35,6 +49,7 @@ export default defineConfig(({ mode }) => ({
     __BRIDGE__: JSON.stringify(mode === "bridge"),
     __FAKE__: JSON.stringify(mode === "fake"),
     __VERSION__: JSON.stringify(workspaceVersion()),
+    __BRIDGE_PORTS__: JSON.stringify(bridgePorts()),
   },
   clearScreen: false,
   server: {

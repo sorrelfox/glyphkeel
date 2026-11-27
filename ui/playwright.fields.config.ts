@@ -3,10 +3,12 @@
 
 import { defineConfig, devices } from "@playwright/test";
 
+import { flowPort } from "./tests/ports";
+
 // Custom fields on sample data: a `--mode fake` build of the UI keeps a
 // workspace in memory. A port of its own, so these run beside the other
-// flows; `GK_FIELDS_PORT` moves it.
-const PORT = Number(process.env.GK_FIELDS_PORT ?? 5311);
+// flows; `GK_UI_PORT` moves it.
+const PORT = flowPort("fields", "ui");
 const FAKE_DIST = "node_modules/.cache/fields-fake-dist";
 
 export default defineConfig({

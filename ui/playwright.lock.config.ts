@@ -3,11 +3,13 @@
 
 import { defineConfig, devices } from "@playwright/test";
 
+import { flowPort } from "./tests/ports";
+
 // The app lock on sample data: Preferences, Security, locking by hand, by
 // the shortcut and after idle time, the lock screen (with axe), and the
 // encryption settings. A `--mode fake` build, on a port of its own
-// (GK_LOCK_PORT moves it).
-const PORT = Number(process.env.GK_LOCK_PORT ?? 5325);
+// (GK_UI_PORT moves it).
+const PORT = flowPort("lock", "ui");
 const DIST = "node_modules/.cache/lock-fake-dist";
 
 export default defineConfig({

@@ -3,11 +3,13 @@
 
 import { defineConfig, devices } from "@playwright/test";
 
+import { flowPort } from "./tests/ports";
+
 // Flows of the project screens on sample data: a `--mode fake` build of the
 // UI keeps a workspace in memory, so these run without the engine. The same
 // flows against the engine run through the development bridge.
-// `GK_FAKE_PORT` moves the server, so these can run beside the development server.
-const PORT = Number(process.env.GK_FAKE_PORT ?? 5310);
+// `GK_UI_PORT` moves the server, so these can run beside the development server.
+const PORT = flowPort("board", "ui");
 const FAKE_DIST = "node_modules/.cache/fake-dist";
 
 export default defineConfig({

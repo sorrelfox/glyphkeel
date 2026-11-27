@@ -10,7 +10,11 @@
 //! - it listens on 127.0.0.1 only;
 //! - a connection must carry the bridge's random token (`?token=`), or it
 //!   gets HTTP 401;
-//! - its `Origin` must be the UI's development server, or it gets HTTP 403;
+//! - its `Origin` must be exactly the address of one of the UI's servers
+//!   it was started for (`http://127.0.0.1:<port>` or
+//!   `http://localhost:<port>`), or it gets HTTP 403;
+//! - its own port and the UI's are within a range of loopback ports
+//!   ([`DEFAULT_PORTS`], or `GK_PORT_RANGE`);
 //! - it is a separate program that the app never links, and it refuses to
 //!   run from a release build.
 //!
@@ -22,6 +26,7 @@
 //! - bridge → page: `{ "event": <Changed> }` after every commit.
 
 use std::net::{Ipv4Addr, SocketAddr};
+use std::ops::RangeInclusive;
 use std::sync::Arc;
 
 use futures_util::{SinkExt, StreamExt};
@@ -35,12 +40,63 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::handshake::server::{ErrorResponse, Request, Response};
 use tokio_tungstenite::tungstenite::http::StatusCode;
 
-/// The ports the bridge may use.
-pub const PORTS: std::ops::RangeInclusive<u16> = 5320..=5329;
+/// The ports the bridge and the UI's servers may use unless
+/// [`PORT_RANGE_VAR`] names others. The browser tests' table
+/// (ui/tests/flows.json) has the same range.
+pub const DEFAULT_PORTS: RangeInclusive<u16> = 5300..=5399;
+/// The variable that names other ports, as `first-last`.
+pub const PORT_RANGE_VAR: &str = "GK_PORT_RANGE";
 /// The bridge's default port.
 pub const DEFAULT_PORT: u16 = 5321;
-/// The UI's development server, the only origin allowed to connect.
+/// The UI's development server, whose pages are let in unless others are
+/// named.
 pub const UI_PORT: u16 = 5310;
+
+/// Reads a range of ports written `first-last`, such as `5300-5399`. Only
+/// ports from 1024 up, which need no privileges.
+///
+/// # Errors
+/// When the text isn't such a range.
+pub fn parse_ports(text: &str) -> Result<RangeInclusive<u16>, String> {
+    let wrong = || format!("{PORT_RANGE_VAR}={text} is not a range of ports such as 5300-5399");
+    let (first, last) = text.trim().split_once('-').ok_or_else(wrong)?;
+    let first: u16 = first.parse().map_err(|_| wrong())?;
+    let last: u16 = last.parse().map_err(|_| wrong())?;
+    if first < 1024 || first > last {
+        return Err(wrong());
+    }
+    Ok(first..=last)
+}
+
+/// The ports from [`PORT_RANGE_VAR`], or [`DEFAULT_PORTS`] when it is unset.
+///
+/// # Errors
+/// When the variable is set to something that isn't a range.
+pub fn ports_from_env() -> Result<RangeInclusive<u16>, String> {
+    match std::env::var(PORT_RANGE_VAR) {
+        Ok(text) if !text.trim().is_empty() => parse_ports(&text),
+        _ => Ok(DEFAULT_PORTS),
+    }
+}
+
+fn outside(port: u16, ports: &RangeInclusive<u16>) -> String {
+    format!(
+        "port {port} is outside {}–{} ({PORT_RANGE_VAR})",
+        ports.start(),
+        ports.end()
+    )
+}
+
+/// Checks that every one of the UI's ports is within `ports`.
+///
+/// # Errors
+/// Names the first port outside them.
+pub fn check_ui_ports(ui_ports: &[u16], ports: &RangeInclusive<u16>) -> Result<(), String> {
+    match ui_ports.iter().find(|port| !ports.contains(port)) {
+        Some(&port) => Err(outside(port, ports)),
+        None => Ok(()),
+    }
+}
 
 /// How many events wait for a slow page before it is disconnected.
 const EVENT_BACKLOG: usize = 65_536;
@@ -58,13 +114,24 @@ impl Guard {
     /// A guard with `token`, for pages from the UI's development server.
     #[must_use]
     pub fn new(token: String) -> Self {
-        Self {
-            token,
-            origins: vec![
-                format!("http://127.0.0.1:{UI_PORT}"),
-                format!("http://localhost:{UI_PORT}"),
-            ],
-        }
+        Self::for_ui_ports(token, &[UI_PORT])
+    }
+
+    /// A guard with `token`, for pages from the UI's servers on these
+    /// loopback ports, and from nowhere else: the origin must be exactly
+    /// `http://127.0.0.1:<port>` or `http://localhost:<port>`.
+    #[must_use]
+    pub fn for_ui_ports(token: String, ui_ports: &[u16]) -> Self {
+        let origins = ui_ports
+            .iter()
+            .flat_map(|port| {
+                [
+                    format!("http://127.0.0.1:{port}"),
+                    format!("http://localhost:{port}"),
+                ]
+            })
+            .collect();
+        Self { token, origins }
     }
 
     /// Checks a WebSocket upgrade: the origin first, then the token.
@@ -116,17 +183,13 @@ pub fn random_token() -> std::io::Result<String> {
 /// Binds to `port` on loopback only.
 ///
 /// # Errors
-/// When the port is taken or outside [`PORTS`] (0 picks a free one, for
+/// When the port is taken or outside `ports` (0 picks a free one, for
 /// tests).
-pub async fn bind(port: u16) -> std::io::Result<TcpListener> {
-    if port != 0 && !PORTS.contains(&port) {
+pub async fn bind(port: u16, ports: &RangeInclusive<u16>) -> std::io::Result<TcpListener> {
+    if port != 0 && !ports.contains(&port) {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            format!(
-                "the bridge's port must be within {}–{}",
-                PORTS.start(),
-                PORTS.end()
-            ),
+            outside(port, ports),
         ));
     }
     TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, port))).await
