@@ -11,14 +11,17 @@ import { classes } from "../../classes";
 import { ProjectMark } from "../../components/ProjectMark";
 import { Select } from "../../components/Select";
 import { useProjects } from "../../data/board";
+import { useDayInWords } from "../../data/dayWords";
 import { errorToast, useCall } from "../../data/hooks";
 import { useTemplates } from "../../data/recurrence";
 import { OpFailure } from "../../data/transport";
+import { useToday } from "../../data/zone";
 import { type TaskChange, type TaskCreateInput, type TemplateApplied, type TemplateApplyInput } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { hideQuickAdd, onQuickAddShown } from "../../ipc/quickAdd";
 import { appWindow } from "../../ipc/window";
 import { appearanceFrom, readPref, writePref } from "../../prefs/store";
+import { asDate } from "../calendar/model";
 import { parseQuickAdd } from "./parse";
 import styles from "./QuickAdd.module.css";
 
@@ -57,6 +60,10 @@ export function QuickAdd() {
   const active = (projects.data?.items ?? []).filter((project) => project.state === "active");
   const choices = active.map((project) => ({ key: project.key, name: project.name }));
   const parsed = parseQuickAdd(text, { projects: choices, keepDate });
+  // The day the engine reads in the date words, shown beside them; saving
+  // sends the words, which the engine reads the same way.
+  const dueDay = useDayInWords(parsed.dueText ?? "", useToday()).day;
+  const dueShown = dueDay === null ? null : new Intl.DateTimeFormat(locale, { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }).format(asDate(dueDay));
   const fallback = active.find((project) => project.key === picked) ?? active[0];
   const project = parsed.project ?? fallback?.key;
   // A task template of the chosen project to start from; another project's is none.
@@ -259,7 +266,7 @@ export function QuickAdd() {
         {parsed.dueText !== undefined && (
           <span className={classes("chip outline", styles.chip)} data-testid="quick-add-due">
             <CalendarDays className="ic s" aria-hidden="true" />
-            {t("quick-add-due", { words: parsed.dueText })}
+            {dueShown === null ? t("quick-add-due", { words: parsed.dueText }) : t("quick-add-due-on", { words: parsed.dueText, day: dueShown })}
             <button
               type="button"
               className={styles.drop}

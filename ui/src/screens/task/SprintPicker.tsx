@@ -64,7 +64,7 @@ export function SprintPicker({ task, readOnly, onChange }: SprintPickerProps) {
         }
       >
         <IterationCw className="ic s muted" aria-hidden="true" />
-        {current === undefined ? <span className="faint">{t("prop-sprint-clear")}</span> : <span className="truncate">{current.name}</span>}
+        {current === undefined ? <span className="faint">{t("prop-sprint-clear")}</span> : <span className="truncate" title={current.name}>{current.name}</span>}
         {/* A space, so the name and the state read as two words. */}
         {current !== undefined && " "}
         {current !== undefined && current.state !== "planned" && <span className="chip sm">{t(`sprint-state-${current.state}`)}</span>}

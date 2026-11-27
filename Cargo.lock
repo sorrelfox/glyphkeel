@@ -6780,6 +6780,7 @@ version = "0.1.9"
 dependencies = [
  "anyhow",
  "gk-api",
+ "gk-query",
  "serde_json",
  "toml 1.2.2+spec-1.1.0",
 ]

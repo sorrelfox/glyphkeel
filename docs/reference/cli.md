@@ -11,7 +11,7 @@ With `--json` a command prints exactly the operation's output, as described in [
 |---|---|---|
 | `glyphkeel activity` | `history.feed` | The activity log, newest first: who changed what, when and through which program; optionally the agent sessions. |
 | `glyphkeel agents policy` | `agent.policy.update` | Set the most an agent may do, whatever profile it asks for, and whether agents may ask the person to allow one change beyond it. |
-| `glyphkeel agents sessions` | `agent.sessions` | List agent sessions, newest first, with their client, profile, times and counts of reads and writes. |
+| `glyphkeel agents sessions` | `agent.sessions` | List agent sessions, newest first, with their client, profile, times and counts of reads, writes and reads refused by the read limits. |
 | `glyphkeel automation create` | `automation.create` | Make an automation rule: when a trigger happens to a task that matches a query, set fields, change labels, move it, comment, create a subtask or linked task, or leave a notification. |
 | `glyphkeel automation delete <rule>` | `automation.delete` | Delete an automation rule; revert brings it back. |
 | `glyphkeel automation edit <rule>` | `automation.update` | Change an automation rule: its name, trigger, condition or actions, or switch it on or off. |
