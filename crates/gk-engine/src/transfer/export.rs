@@ -307,7 +307,7 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
                 t.checklist_total, t.spent_min, t.claim_session, t.claim_name, t.claim_until,
                 t.created_at, t.created_by_kind, t.created_by_name, t.edited_at, t.updated_at,
                 t.closed_at, t.deleted_at, t.deleted_group, t.version, t.subtask_rank,
-                t.fix_version_id, t.series_id, t.sprint_id
+                t.fix_version_id, t.series_id, t.sprint_id, t.cover_id
            FROM tasks t WHERE t.project_id = ?1 ORDER BY t.number",
         &pid,
         |r| {
@@ -360,6 +360,7 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
                     custom_values: Vec::new(),
                     series_id: opt_id(r, 32)?,
                     sprint_id: opt_id(r, 33)?,
+                    cover_id: opt_id(r, 34)?,
                 },
                 description,
             ))

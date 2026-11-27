@@ -19,7 +19,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 use crate::error::{Result, StoreError};
 
 /// The schema version this program is built for.
-pub const SCHEMA_VERSION: i64 = 17;
+pub const SCHEMA_VERSION: i64 = 18;
 
 /// One migration: the SQL that takes the schema from `version - 1` to
 /// `version`.
@@ -97,7 +97,11 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     },
     Migration {
         version: 17,
-        sql: include_str!("../migrations/0017_sprints.sql"),
+        sql: include_str!("../migrations/0017_card_covers.sql"),
+    },
+    Migration {
+        version: 18,
+        sql: include_str!("../migrations/0018_sprints.sql"),
     },
 ];
 
@@ -778,6 +782,44 @@ mod tests {
             .is_err(),
             "tasks still need a type that exists"
         );
+    }
+
+    #[test]
+    fn card_covers_keep_tasks_and_take_an_id_or_nothing() {
+        let mut conn = memory();
+        let before = MIGRATIONS
+            .iter()
+            .position(|m| m.sql.contains("ADD COLUMN cover_id"))
+            .unwrap();
+        migrate(&mut conn, &MIGRATIONS[..before], |_| Ok(())).unwrap();
+        conn.execute_batch(
+            "INSERT INTO projects (id, rank, key, name, name_fold, hue, modules, created_at,
+                                   updated_at)
+             VALUES (x'01010101010101010101010101010101', 'i', 'CV', 'CV', 'cv', 'blue', '{}',
+                     0, 0);
+             INSERT INTO statuses (id, project_id, name, name_fold, category, hue, rank)
+             VALUES (x'02020202020202020202020202020202', x'01010101010101010101010101010101',
+                     'To do', 'to do', 'todo', 'blue', 'i');
+             INSERT INTO task_types (id, project_id, name, name_fold, glyph, hue, rank)
+             VALUES (x'03030303030303030303030303030303', x'01010101010101010101010101010101',
+                     'Task', 'task', 'task', 'blue', 'i');
+             INSERT INTO tasks (id, project_id, number, title, title_fold, status_id, type_id,
+                                rank, status_entered_at, created_at, created_by_kind,
+                                created_by_name, edited_at, updated_at)
+             VALUES (x'04040404040404040404040404040404', x'01010101010101010101010101010101',
+                     1, 'Crash', 'crash', x'02020202020202020202020202020202',
+                     x'03030303030303030303030303030303', 'i', 0, 0, 'user', 'You', 0, 0);",
+        )
+        .unwrap();
+        migrate(&mut conn, MIGRATIONS, |_| Ok(())).unwrap();
+        let cover: Option<Vec<u8>> = conn
+            .query_row("SELECT cover_id FROM tasks", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(cover, None);
+        let set = |value: &str| conn.execute(&format!("UPDATE tasks SET cover_id = {value}"), []);
+        set("randomblob(16)").unwrap();
+        assert!(set("randomblob(3)").is_err(), "a cover is an ID");
+        set("NULL").unwrap();
     }
 
     #[test]

@@ -17,6 +17,11 @@
 //!
 //! History records an attachment's `created` (its life) and `trashed`.
 //!
+//! One image attached to a task itself can be its cover, which board cards
+//! show (`tasks.cover_id`, recorded as the task's `cover`). A cover whose
+//! file is in the trash is kept but not shown, so restoring the file brings
+//! it back.
+//!
 //! An image's thumbnail is made right after it is attached, outside the
 //! transaction; a failure there only leaves it to be made when first asked
 //! for (`file.thumbnail`).
@@ -24,8 +29,8 @@
 use std::sync::Arc;
 
 use gk_api::ops::file::{
-    Attachment, FileAttach, FileAttachInput, FileChange, FileContent, FileDelete, FileGet,
-    FileKind, FileRead, FileRef, FileThumbnail, Thumbnail,
+    Attachment, FileAttach, FileAttachInput, FileChange, FileContent, FileCover, FileCoverChange,
+    FileCoverInput, FileDelete, FileGet, FileKind, FileRead, FileRef, FileThumbnail, Thumbnail,
 };
 use gk_api::{ErrorCode, OpError, Operation, descriptor};
 use gk_core::Id;
@@ -34,7 +39,7 @@ use gk_store::rusqlite::{OptionalExtension, Row, Transaction, params};
 use serde_json::Value;
 
 use super::desc;
-use super::fields::text;
+use super::fields::{self, text};
 use super::lookup::{self, b, id_at};
 use super::relation::bump;
 use crate::failure::Failure;
@@ -116,6 +121,98 @@ pub(super) fn register(r: &mut Registry) {
         )?;
         changed(w, id)
     });
+    r.command::<FileCover, _>(desc::<FileCover>(), cover);
+}
+
+/// Sets or clears the cover of a task.
+fn cover(w: &mut WriteCtx<'_>, input: FileCoverInput) -> Result<FileCoverChange, Failure> {
+    let task = lookup::task(w.tx(), "task", &input.task)?;
+    ensure_active(w.tx(), task.id)?;
+    let chosen = match input.attachment.as_deref().map(str::trim) {
+        None | Some("") => None,
+        Some(text) => {
+            let id = find(w.tx(), text)?;
+            let (kind, owner, mime): (String, Vec<u8>, String) = w.tx().query_row(
+                "SELECT owner_kind, owner_id, mime FROM attachments WHERE id = ?1",
+                [b(id)],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )?;
+            if kind != "task" || owner.as_slice() != task.id.as_bytes().as_slice() {
+                return Err(messages::invalid(
+                    "attachment",
+                    "file-cover-other-task",
+                    &[("file", text.to_owned())],
+                ));
+            }
+            if !crate::thumbs::supported(&mime) {
+                return Err(messages::invalid(
+                    "attachment",
+                    "file-cover-not-image",
+                    &[("mime", mime)],
+                ));
+            }
+            Some(id)
+        }
+    };
+    fields::set(
+        w,
+        fields::TASK,
+        task.id,
+        Some(task.project),
+        "cover",
+        chosen.and_then(fields::id_value),
+    )?;
+    let key = lookup::task_key(w.tx(), task.project, task.number)?;
+    Ok(FileCoverChange {
+        task: key,
+        cover: chosen.map(|id| load(w.tx(), id)).transpose()?,
+        group: w.group_if_changed(),
+    })
+}
+
+/// The cover a board card shows for task `task`: its chosen image while
+/// that is live, or with `first_image`, else its first attached image.
+pub(crate) fn card_cover(
+    tx: &Transaction<'_>,
+    task: Id,
+    first_image: bool,
+) -> Result<Option<gk_api::ops::board::CardCover>, Failure> {
+    const IMAGES: &str = "a.mime IN ('image/png', 'image/jpeg', 'image/gif', 'image/webp')";
+    let chosen = tx
+        .prepare_cached(&format!(
+            "SELECT a.id, a.file_name, a.mime, a.width, a.height
+               FROM tasks t JOIN attachments a ON a.id = t.cover_id
+              WHERE t.id = ?1 AND a.owner_kind = 'task' AND a.owner_id = t.id
+                AND a.deleted_at IS NULL AND {IMAGES}"
+        ))?
+        .query_row([b(task)], cover_row)
+        .optional()?;
+    if chosen.is_some() || !first_image {
+        return Ok(chosen);
+    }
+    Ok(tx
+        .prepare_cached(&format!(
+            "SELECT a.id, a.file_name, a.mime, a.width, a.height FROM attachments a
+              WHERE a.owner_kind = 'task' AND a.owner_id = ?1 AND a.deleted_at IS NULL
+                AND {IMAGES}
+              ORDER BY a.created_at, a.id LIMIT 1"
+        ))?
+        .query_row([b(task)], cover_row)
+        .optional()?)
+}
+
+fn cover_row(r: &Row<'_>) -> gk_store::rusqlite::Result<gk_api::ops::board::CardCover> {
+    let size = |i| -> gk_store::rusqlite::Result<Option<u32>> {
+        Ok(r.get::<_, Option<i64>>(i)?
+            .and_then(|v| u32::try_from(v).ok()))
+    };
+    Ok(gk_api::ops::board::CardCover {
+        attachment: id_at(r, 0)?.to_string(),
+        name: r.get(1)?,
+        mime: r.get(2)?,
+        width: size(3)?,
+        height: size(4)?,
+    })
 }
 
 fn kind(mime: &str, name: &str) -> FileKind {
@@ -161,6 +258,7 @@ fn row(r: &Row<'_>) -> gk_store::rusqlite::Result<(Attachment, String, Id)> {
                 name: r.get(10)?,
             },
             created_at: rfc3339(r.get(11)?),
+            cover: false,
         },
         r.get(7)?,
         id_at(r, 8)?,
@@ -196,6 +294,17 @@ fn owned(
     };
     if let Some(t) = lookup::task_by_id(tx, task)? {
         a.task = lookup::task_key(tx, t.project, t.number)?;
+    }
+    if owner_kind == "task" {
+        let cover: Option<Vec<u8>> = tx
+            .prepare_cached("SELECT cover_id FROM tasks WHERE id = ?1")?
+            .query_row([b(task)], |r| r.get(0))
+            .optional()?
+            .flatten();
+        a.cover = cover.is_some_and(|c| {
+            a.id.parse::<Id>()
+                .is_ok_and(|id| c.as_slice() == id.as_bytes().as_slice())
+        });
     }
     Ok(a)
 }
@@ -626,27 +735,30 @@ pub(crate) fn insert(w: &mut WriteCtx<'_>, a: &NewAttachment<'_>) -> Result<Id, 
 /// Copies task `from`'s live attachments to task `to`, sharing their stored
 /// files.
 pub(crate) fn copy_to(w: &mut WriteCtx<'_>, from: Id, to: Id, project: Id) -> Result<(), Failure> {
-    type Copied = (String, String, i64, String, Option<u32>, Option<u32>);
+    type Copied = (Id, String, String, i64, String, Option<u32>, Option<u32>);
     let rows: Vec<Copied> = {
         let mut stmt = w.tx().prepare_cached(
-            "SELECT file_name, mime, size, sha256, width, height FROM attachments
+            "SELECT id, file_name, mime, size, sha256, width, height FROM attachments
               WHERE owner_kind = 'task' AND owner_id = ?1 AND deleted_at IS NULL
               ORDER BY created_at, id",
         )?;
         stmt.query_map([b(from)], |r| {
             Ok((
-                r.get(0)?,
+                id_at(r, 0)?,
                 r.get(1)?,
                 r.get(2)?,
                 r.get(3)?,
                 r.get(4)?,
                 r.get(5)?,
+                r.get(6)?,
             ))
         })?
         .collect::<Result<Vec<_>, _>>()?
     };
-    for (name, mime, size, sha256, width, height) in rows {
-        insert(
+    // The copy of the original's cover is the copy's cover.
+    let cover: Option<Value> = fields::read(w.tx(), fields::TASK, from, "cover")?;
+    for (old, name, mime, size, sha256, width, height) in rows {
+        let new = insert(
             w,
             &NewAttachment {
                 owner_kind: "task",
@@ -661,6 +773,16 @@ pub(crate) fn copy_to(w: &mut WriteCtx<'_>, from: Id, to: Id, project: Id) -> Re
                 height,
             },
         )?;
+        if cover.as_ref().and_then(Value::as_str) == Some(old.to_string().as_str()) {
+            fields::set(
+                w,
+                fields::TASK,
+                to,
+                Some(project),
+                "cover",
+                fields::id_value(new),
+            )?;
+        }
     }
     Ok(())
 }

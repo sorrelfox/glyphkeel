@@ -316,7 +316,7 @@ function CommentsList({ task, readOnly, onOpenTask }: { task: Task; readOnly: bo
 const LABELLED_FIELDS = new Set([
   "title", "description", "status", "type", "priority", "labels", "parent", "start_date", "due_date", "estimate", "progress", "rank", "project",
   "claim", "reminder", "name", "hue", "icon", "modules", "key", "state", "category", "wip_limit", "glyph", "is_default", "slug", "body",
-  "date", "minutes", "note", "agent_brief", "home", "template", "fix_version", "sprint", "rules", "agent_rules", "wip_min", "work_kind",
+  "date", "minutes", "note", "agent_brief", "home", "template", "fix_version", "sprint", "rules", "agent_rules", "wip_min", "work_kind", "cover",
 ]);
 
 /** A recorded field's name as people read it; nothing for a field that isn't shown. */
@@ -378,6 +378,8 @@ function shown(t: Translate, names: Names, field: string, value: unknown): strin
       return typeof value === "number" ? formatDuration(value, names.units) : plainText(value);
     case "parent":
       return names.keys.get(plainText(value)) ?? plainText(value);
+    case "cover":
+      return names.task.files?.find((file) => file.id === value)?.name ?? t("history-cover-gone");
     case "work_kind":
       return names.kinds?.get(plainText(value)) ?? t("history-work-kind-gone");
     case "fix_version":

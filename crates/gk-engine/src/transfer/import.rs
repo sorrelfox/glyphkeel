@@ -2044,6 +2044,22 @@ fn write(
         }
     }
 
+    // Covers: an image attached to the task itself in the archive.
+    for proj in &parsed.projects {
+        let own: HashSet<(&String, &String)> = proj
+            .files
+            .iter()
+            .filter(|a| a.owner_kind == "task")
+            .map(|a| (&a.id, &a.owner_id))
+            .collect();
+        for t in &proj.tasks {
+            if let Some(c) = t.cover_id.as_ref().filter(|c| own.contains(&(*c, &t.id))) {
+                tx.prepare_cached("UPDATE tasks SET cover_id = ?2 WHERE id = ?1")?
+                    .execute(params![b(plan.id(&t.id)), b(plan.id(c))])?;
+            }
+        }
+    }
+
     // History, in its original order across the archive.
     let mut rows: Vec<(&Activity, Id)> = parsed
         .projects

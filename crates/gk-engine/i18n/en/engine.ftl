@@ -451,6 +451,8 @@ link-not-found-hint = get_task with include ["links"] lists a task's links.
 board-column-not-found = The board of { $project } has no column "{ $column }".
 board-hide-done-range = Use 0 to { $max } days.
 board-card-field = Cards can't show "{ $field }".
+board-colour-rules-max = A board can have at most { $max } colour rules.
+board-colour-rule-empty = A colour rule needs a query.
 board-card-custom-field = { $project } has no custom field "{ $field }" to show on cards.
 view-field-name = Each entry is a field name of 1 to { $max } characters.
 list-layout-columns = A list layout names at most { $max } columns.
@@ -772,6 +774,8 @@ file-data-needs-name = A file given as `data_base64` needs a `name`.
 file-not-stored = The file can't be stored: { $error }.
 file-task-or-comment = Name the task, the comment or the wiki page.
 file-content-gone = The file's content is no longer stored, so it can't come back.
+file-cover-other-task = "{ $file }" isn't attached to this task itself, so it can't be its cover.
+file-cover-not-image = A cover must be a PNG, JPEG, GIF or WebP image, not { $mime }.
 
 ## Time entries and the timer
 

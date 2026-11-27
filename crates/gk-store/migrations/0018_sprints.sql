@@ -1,7 +1,7 @@
 -- SPDX-License-Identifier: GPL-3.0-or-later
 -- Copyright (C) 2026 Glyphkeel contributors
 --
--- Schema version 17: sprints of a project, short time-boxed cycles of work,
+-- Schema version 18: sprints of a project, short time-boxed cycles of work,
 -- and the sprint a task is in.
 --
 -- A sprint is planned, active or closed; a project has at most one active

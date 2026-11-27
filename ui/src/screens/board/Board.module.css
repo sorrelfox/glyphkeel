@@ -138,6 +138,54 @@
   box-shadow: 0 0 0 2px var(--focus);
 }
 
+/* A coloured edge on the inline start, from the layout's colour rule. */
+.edged {
+  position: relative;
+  padding-inline-start: calc(var(--pad-card) + 3px);
+}
+
+.edge {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  inline-size: 4px;
+  border-start-start-radius: var(--r-m);
+  border-end-start-radius: var(--r-m);
+  background: var(--h);
+}
+
+/* The cover: the full width of the card at a fixed shape, cropped to fill it. */
+.cover {
+  aspect-ratio: 16 / 9;
+  margin-block-start: calc(-1 * var(--pad-card));
+  margin-inline: calc(-1 * var(--pad-card));
+  overflow: hidden;
+  border-start-start-radius: var(--r-m);
+  border-start-end-radius: var(--r-m);
+  background: var(--sunken);
+}
+
+.edged .cover {
+  margin-inline-start: calc(-1 * var(--pad-card) - 3px);
+}
+
+.cover > img {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+/* Words for screen readers that the card shows another way. */
+.hiddenText {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .cardTop {
   display: flex;
   align-items: center;

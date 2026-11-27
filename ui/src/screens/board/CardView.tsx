@@ -2,14 +2,16 @@
 // Copyright (C) 2026 Glyphkeel contributors
 
 import { Bot, CalendarClock, CalendarDays, Check, Clock, Hourglass, MessageSquare, Paperclip, SquareCheck, Timer, Workflow } from "lucide-react";
-import { forwardRef, Fragment, type CSSProperties, type HTMLAttributes } from "react";
+import { forwardRef, Fragment, useEffect, useRef, useState, type CSSProperties, type HTMLAttributes } from "react";
 import { useLocale } from "react-aria-components";
 
 import { classes } from "../../classes";
 import { PriorityGlyph, RecurringMark, TypeGlyph } from "../../components/Glyphs";
 import { type Card, type CardField } from "../../data/catalog";
 import { useFieldText } from "../../data/fields";
-import { type CustomField } from "../../generated/ops";
+import { useOp } from "../../data/hooks";
+import { inApp, thumbnailUrl } from "../../ipc/files";
+import { type CardCover, type CustomField } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { useDurations } from "../../data/time";
 import { dueState } from "./model";
@@ -37,8 +39,89 @@ export function useDayFormat(): (day: string) => string {
   return (day) => format.format(new Date(`${day}T00:00:00Z`));
 }
 
+/** What a card's coloured edge stands for, in words: the edge is never the only sign of it. */
+function useEdgeText(): (card: Card) => string | undefined {
+  const t = useT();
+  return ({ edge }) => {
+    if (edge === undefined) {
+      return undefined;
+    }
+    switch (edge.by) {
+      case "type":
+        return t("card-edge-type", { name: edge.name });
+      case "priority":
+        return t("card-edge-priority", { priority: t(`priority-${edge.name}`) });
+      case "label":
+        return t("card-edge-label", { name: edge.name });
+      default:
+        return t("card-edge-rule", { name: edge.name });
+    }
+  };
+}
+
+/** Whether `element` has come near the screen; it stays true once it has. */
+function useSeen<T extends Element>(): [React.RefObject<T | null>, boolean] {
+  const ref = useRef<T>(null);
+  // Without an observer to ask (a test page, an old browser), it counts as seen.
+  const [seen, setSeen] = useState(() => typeof IntersectionObserver === "undefined");
+  useEffect(() => {
+    const element = ref.current;
+    if (seen || element === null) {
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setSeen(true);
+        }
+      },
+      { rootMargin: "200px" },
+    );
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+    };
+  }, [seen]);
+  return [ref, seen];
+}
+
 /**
- * A task on the board. Rows, each left out when empty: type, key, the
+ * A card's cover: the image at a fixed shape, cropped to fill it. In the app
+ * it is the engine's thumbnail from `gk-file:`, loaded when the card comes
+ * near the screen; in a browser, which can't reach the app's files, the
+ * image's content once the card is seen. It is named by its file name.
+ */
+function Cover({ cover }: { cover: CardCover }) {
+  const app = inApp();
+  const [ref, seen] = useSeen<HTMLDivElement>();
+  const [broken, setBroken] = useState(false);
+  const content = useOp("file.read", { attachment: cover.attachment }, { enabled: !app && seen });
+  if (broken) {
+    return null;
+  }
+  const data = content.data?.data_base64;
+  const source = app ? thumbnailUrl(cover.attachment) : data === undefined ? undefined : `data:${cover.mime};base64,${data}`;
+  return (
+    <div ref={ref} className={styles.cover} data-cover={cover.name}>
+      {source !== undefined && (seen || app) && (
+        <img
+          src={source}
+          alt={cover.name}
+          loading="lazy"
+          decoding="async"
+          draggable={false}
+          onError={() => {
+            setBroken(true);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * A task on the board. Its cover image first, when the layout shows covers;
+ * its coloured edge, named in words too. Rows, each left out when empty: type, key, the
  * recurring mark, Blocked, an agent's claim and priority; the title; labels; start and due dates,
  * checklist, subtasks, estimate and days in the column, as the personal
  * card fields choose, and the custom fields they name, each as its name and
@@ -134,14 +217,20 @@ export const CardView = forwardRef<HTMLElement, CardViewProps>(function CardView
     ),
   ].filter(Boolean);
   const labels = show("labels") ? card.labels : [];
+  const edgeText = useEdgeText()(card);
 
   return (
     <article
       ref={ref}
-      className={classes("card", styles.card, selected && "sel", closed && "done", ghost && styles.ghost, lifted && styles.lifted, className)}
+      className={classes("card", styles.card, selected && "sel", closed && "done", ghost && styles.ghost, lifted && styles.lifted, card.edge && styles.edged, className)}
       data-card={card.key}
+      {...(card.edge ? { "data-edge": card.edge.hue } : {})}
       {...rest}
     >
+      {card.edge && (
+        <span className={classes(styles.edge, `hue-${card.edge.hue}`)} title={edgeText} aria-hidden="true" />
+      )}
+      {!compact && card.cover && <Cover key={card.cover.attachment} cover={card.cover} />}
       {/* Named by its text, all of it, so that the name holds what is on the
           card; the spaces keep the parts apart in the name. */}
       <div className={styles.cardTop}>
@@ -157,6 +246,7 @@ export const CardView = forwardRef<HTMLElement, CardViewProps>(function CardView
         )}
         <PriorityGlyph priority={card.priority} label={t(`priority-${card.priority}`)} />
       </div>{" "}
+      {edgeText !== undefined && <span className={styles.hiddenText}>{edgeText} </span>}
       <div className={classes("card-title", styles.cardTitle, compact && styles.compactTitle)}>{card.title}</div>{" "}
       {labels.length > 0 && (
         <div className={styles.cardLabels}>
