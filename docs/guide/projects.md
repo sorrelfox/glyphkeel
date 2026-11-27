@@ -48,12 +48,20 @@ queries or tasks. Folders hold projects, never other folders.
   choose **Move to folder** and the folder. **No folder** takes it out again.
   Only top-level projects go into folders; a project's sub-projects come along
   with it. A project that you move under another project leaves its folder.
+- **Make a project in a folder**: click the folder (or move the focus to it
+  with the keyboard) to select it, then choose **New project** (**+**); or
+  choose **New project in this folder** from the folder's menu. The dialog's
+  **Folder** field starts with the selected folder, or with the folder of the
+  open project, and you can change it there. With no folder selected the
+  project goes to the top level. A sub-project has no folder of its own: it
+  follows its parent.
 - **Order**: drag a project before or after another one, or a folder before or
   after another folder. With the keyboard, focus a project or a folder in the
   sidebar and press **Alt+↑** or **Alt+↓**; the menus have **Move up** and
   **Move down** too.
-- **Open and close a folder** with its arrow, or with **←** and **→** on the
-  keyboard. Glyphkeel remembers which folders you closed.
+- **Open and close a folder** with its arrow (clicking its name selects it),
+  or with **←** and **→** on the keyboard. Glyphkeel remembers which folders
+  you closed.
 - **Rename** a folder or change its colour from its menu (right-click it, or
   press **Shift+F10**). **Delete folder** keeps its projects: they go back to
   the top level. Undo brings the folder back with its projects.
@@ -62,7 +70,8 @@ The folder's number is the open tasks of all its projects. Folders come first
 in the sidebar, then the projects in no folder.
 
 On the command line: `glyphkeel folder list`, `glyphkeel folder create --name
-Clients`, `glyphkeel folder move <project> --folder Clients` (or `--none true`
+Clients`, `glyphkeel project create --name Garden --key GA --folder Clients`,
+`glyphkeel folder move <project> --folder Clients` (or `--none true`
 to take it out), `glyphkeel folder rename <folder> <name>` and `glyphkeel folder
 delete <folder>`. Agents have the matching tools, such as `list_folders` and
 `move_project_to_folder`. An export takes each project's folder along, and an

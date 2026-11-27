@@ -55,10 +55,13 @@ op-project-get--project = The project: its key (current or old) or ID.
 
 ## glyphkeel project create
 
-op-project-create = Create a project, or a sub-project that copies its parent's statuses, types and labels; without a colour it gets one its sibling projects don't use yet.
+op-project-create = Create a project, optionally in a folder, or a sub-project that copies its parent's statuses, types and labels; without a colour it gets one its sibling projects don't use yet.
 op-project-create--client-request-id = Your own ID for this request; repeating it within 24 hours returns
     the first answer instead of creating a second project.
 op-project-create--description = The description (Markdown).
+op-project-create--folder = The folder to put the new top-level project in (ID or name), as
+    its last project; default: no folder. Not with `parent`: a
+    sub-project follows its parent.
 op-project-create--hue = The colour; default: the first palette colour that no sibling
     project uses yet (the least-used one when all are taken).
 op-project-create--icon = An icon shown instead of the circle; default: none (the circle).
@@ -816,6 +819,8 @@ op-template-apply--date = The day the template's dates count from (a date: `2026
     `next mon`); default today.
 op-template-apply--due-date = With a task template: the new task's due date instead of the
     template's (a date: `2026-12-01`, or `fri`, `next mon`, `+3d`).
+op-template-apply--folder = A project template: the folder to put the new top-level project in
+    (ID or name); not with `parent_project`.
 op-template-apply--hue = A project template: its colour.
 op-template-apply--key = A project template: the new project's key.
 op-template-apply--name = A project template: the new project's name.

@@ -24,6 +24,10 @@ import styles from "./Project.module.css";
 interface ProjectTreeProps {
   /** The open project. */
   current: string | undefined;
+  /** The folder picked in the tree (its ID), shown selected instead of the open project. */
+  selectedFolder: string | undefined;
+  /** A folder row was clicked or focused (its ID), or a project opened from the tree (null). */
+  onSelectFolder: (folder: string | null) => void;
   onNewProject: (request: NewProjectRequest) => void;
   onSettings: (key: string) => void;
   /** Opens the export dialog with this project chosen. */
@@ -60,12 +64,14 @@ export function childrenByParent(projects: readonly ProjectSummary[]): Map<strin
  *
  * Folders come first, each holding top-level projects (with their
  * sub-projects); the projects in no folder follow. A folder opens and
- * closes like a parent, and its count is its projects' open tasks. A
+ * closes like a parent, with its chevron or the arrow keys; clicking or
+ * focusing its row selects it, so that a new project goes into it. Its
+ * count is its projects' open tasks. A
  * top-level project is dragged onto a folder, or next to another
  * top-level project, and a folder next to another folder; Alt with the up
  * and down arrows moves the focused one a place, and the menus do both.
  */
-export function ProjectTree({ current, onNewProject, onSettings, onExport, onImportCsv, onDelete, onRenameFolder }: ProjectTreeProps) {
+export function ProjectTree({ current, selectedFolder, onSelectFolder, onNewProject, onSettings, onExport, onImportCsv, onDelete, onRenameFolder }: ProjectTreeProps) {
   const t = useT();
   const navigate = useNavigate();
   const projects = useProjects();
@@ -155,6 +161,8 @@ export function ProjectTree({ current, onNewProject, onSettings, onExport, onImp
     const up = stepMove(top, folderKey(folder.id), "up");
     const down = stepMove(top, folderKey(folder.id), "down");
     return [
+      { id: "new-project", label: t("folder-new-project"), run: () => { onNewProject({ parent: null, folder: folder.id }); } },
+      "separator",
       { id: "rename", label: t("folder-rename"), run: () => { onRenameFolder(folder); } },
       { id: "move-up", label: t("folder-move-up"), disabled: up === null, run: () => { run(up); } },
       { id: "move-down", label: t("folder-move-down"), disabled: down === null, run: () => { run(down); } },
@@ -198,7 +206,7 @@ export function ProjectTree({ current, onNewProject, onSettings, onExport, onImp
     const count = hasChildren && !isExpanded ? project.open_tasks_with_subprojects : project.open_tasks;
     return (
       <div
-        className={classes("nav", styles.treeRow, project.key === current && "on", isDropTarget && styles.dropTarget)}
+        className={classes("nav", styles.treeRow, project.key === current && selectedFolder === undefined && "on", isDropTarget && styles.dropTarget)}
         onContextMenu={(event) => {
           menu.open(event, entries(project));
         }}
@@ -239,7 +247,7 @@ export function ProjectTree({ current, onNewProject, onSettings, onExport, onImp
           const Icon = isExpanded && members.length > 0 ? FolderOpen : Folder;
           return (
             <div
-              className={classes("nav", styles.treeRow, styles.folderRow, isDropTarget === true && styles.dropTarget)}
+              className={classes("nav", styles.treeRow, styles.folderRow, folder.id === selectedFolder && "on", isDropTarget === true && styles.dropTarget)}
               onContextMenu={(event) => {
                 folderMenu.open(event, folderMenuEntries(folder));
               }}
@@ -276,6 +284,14 @@ export function ProjectTree({ current, onNewProject, onSettings, onExport, onImp
   return (
     <>
       <div
+        onFocus={(event) => {
+          // Focusing a folder's row, by keyboard or by clicking, selects the folder.
+          const key = (event.target as Element).closest("[data-key]")?.getAttribute("data-key") ?? "";
+          const folder = folderOfKey(key);
+          if (folder !== undefined && folder !== selectedFolder) {
+            onSelectFolder(folder);
+          }
+        }}
         onKeyDownCapture={(event) => {
           const row = (event.target as Element).closest("[data-key]");
           const key = row?.getAttribute("data-key") ?? "";
@@ -316,14 +332,12 @@ export function ProjectTree({ current, onNewProject, onSettings, onExport, onImp
           aria-label={t("sidebar-projects")}
           className={classes(styles.tree)}
           onAction={(key) => {
+            // A folder row selects its folder; its chevron (or the arrow keys) opens and closes it.
             const folder = folderOfKey(String(key));
+            onSelectFolder(folder ?? null);
             if (folder === undefined) {
               open(String(key));
-              return;
             }
-            const next = closedFolders.includes(folder) ? closedFolders.filter((id) => id !== folder) : [...closedFolders, folder];
-            setClosedFolders(next);
-            saveCollapsedFolders(next);
           }}
           expandedKeys={expanded}
           onExpandedChange={(keys: Set<Key>) => {

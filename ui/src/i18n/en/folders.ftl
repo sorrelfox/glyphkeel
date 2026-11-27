@@ -21,11 +21,17 @@ folder-rename = Rename…
 folder-move-up = Move up
 folder-move-down = Move down
 folder-delete = Delete folder
+# In a folder's menu: opens the new-project dialog with this folder chosen.
+folder-new-project = New project in this folder
 # The open tasks of all projects in a folder, read out on its row.
 folder-open-tasks = { $count ->
     [one] { $count } open task
    *[other] { $count } open tasks
 }
+
+# In the new-project dialog: the folder the new top-level project goes into.
+project-folder = Folder
+project-folder-none = No folder
 
 # In the project menu: put a top-level project into a folder, or take it out.
 project-move-to-folder = Move to folder

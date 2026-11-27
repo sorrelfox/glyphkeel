@@ -7,7 +7,8 @@ import { useState } from "react";
 import { useAction } from "../actions/ActionsProvider";
 import { Kbd } from "../components/Kbd";
 import { classes } from "../classes";
-import { useCounts } from "../data/board";
+import { useCounts, useProjects } from "../data/board";
+import { folderOfProject, useFolders } from "../data/folders";
 import { useSidebarCounts } from "../data/today";
 import { useT } from "../i18n/I18n";
 import { dragRegion, type TitleBar } from "../start";
@@ -40,6 +41,9 @@ interface SidebarProps {
  * command palette keeps its own key), Today and All
  * tasks with their counts, the dashboards, the time report, the reports, the activity, the project tree (with its folders and the buttons for a new folder and a new project), the
  * timer chip while a timer runs, then Trash and Preferences.
+ *
+ * A new project goes into the selected folder: the folder row picked in
+ * the tree (until another project opens), or else the open project's.
  */
 export function Sidebar({ view, project, width, titleBar = "app", onNewProject, onProjectSettings, onExportProject, onDeleteProject, onImportCsv }: SidebarProps) {
   const t = useT();
@@ -53,6 +57,13 @@ export function Sidebar({ view, project, width, titleBar = "app", onNewProject, 
   const preferences = useAction("app.preferences");
   const counts = useCounts();
   const [folderDialog, setFolderDialog] = useState<FolderRequest | null>(null);
+  // The folder picked in the tree, with the project open then: opening another project ends it.
+  const [picked, setPicked] = useState<{ folder: string; project: string | undefined } | null>(null);
+  const folders = useFolders();
+  const projects = useProjects();
+  const selectedFolder =
+    picked !== null && picked.project === project && (folders.data?.items ?? []).some((folder) => folder.id === picked.folder) ? picked.folder : undefined;
+  const newProjectFolder = selectedFolder ?? folderOfProject(projects.data?.items ?? [], project);
   const sidebarCounts = useSidebarCounts();
   // Until Today's counts are in, the project tree's.
   const allCount = sidebarCounts?.open ?? counts?.all;
@@ -117,14 +128,19 @@ export function Sidebar({ view, project, width, titleBar = "app", onNewProject, 
           className="btn flat icon sm"
           aria-label={t("sidebar-new-project")}
           onClick={() => {
-            onNewProject({ parent: null });
+            onNewProject({ parent: null, folder: newProjectFolder ?? null });
           }}
         >
           <Plus className="ic s" />
         </button>
       </div>
       <div className={styles.projectTree}>
-        <ProjectTree current={project} onNewProject={onNewProject} onSettings={onProjectSettings} onExport={onExportProject} onImportCsv={onImportCsv}
+        <ProjectTree current={project}
+          selectedFolder={selectedFolder}
+          onSelectFolder={(folder) => {
+            setPicked(folder === null ? null : { folder, project });
+          }}
+          onNewProject={onNewProject} onSettings={onProjectSettings} onExport={onExportProject} onImportCsv={onImportCsv}
           onDelete={onDeleteProject}
           onRenameFolder={(folder) => {
             setFolderDialog({ kind: "rename", folder });

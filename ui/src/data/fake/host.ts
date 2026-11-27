@@ -51,6 +51,6 @@ export interface FakeHost {
   insertTask(project: FakeProject, task: NewTask): FakeTask;
   fullTask(task: FakeTask): Task;
   fullProject(project: FakeProject): Project;
-  createProject(input: { name: string; key: string; parent: string | null; hue: Hue | null; description: string }): FakeProject;
+  createProject(input: { name: string; key: string; parent: string | null; folder: string | null; hue: Hue | null; description: string }): FakeProject;
   createPage(project: FakeProject, title: string, body: string, parentTitle: string | null): void;
 }

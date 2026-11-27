@@ -83,7 +83,8 @@ export function listFolders(host: FolderHost) {
   return { items, total: items.length };
 }
 
-function find(host: FolderHost, text: string, path = "folder"): FakeFolder {
+/** The folder `text` names: its ID, or its name (ignoring case). */
+export function find(host: FolderHost, text: string, path = "folder"): FakeFolder {
   const found = host.folders().find((folder) => folder.id === text.trim()) ?? host.folders().find((folder) => fold(folder.name) === fold(text));
   return found ?? host.fail("not_found", `There is no folder "${text.trim()}".`, path);
 }

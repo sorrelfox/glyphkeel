@@ -304,6 +304,11 @@ pub struct ProjectCreateInput {
     /// An icon shown instead of the circle; default: none (the circle).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub icon: Option<ProjectIcon>,
+    /// The folder to put the new top-level project in (ID or name), as
+    /// its last project; default: no folder. Not with `parent`: a
+    /// sub-project follows its parent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub folder: Option<String>,
     /// Your own ID for this request; repeating it within 24 hours returns
     /// the first answer instead of creating a second project.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1009,7 +1014,7 @@ pub(crate) const PROJECT_GET: OpDescriptor = OpDescriptor::of::<ProjectGet>(quer
     "Project",
 ));
 pub(crate) const PROJECT_CREATE: OpDescriptor = OpDescriptor::of::<ProjectCreate>(command(
-    "Create a project, or a sub-project that copies its parent's statuses, types and labels; without a colour it gets one its sibling projects don't use yet.",
+    "Create a project, optionally in a folder, or a sub-project that copies its parent's statuses, types and labels; without a colour it gets one its sibling projects don't use yet.",
     Safety::Write,
     "project create",
     "ProjectCreateInput",

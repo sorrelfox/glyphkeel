@@ -477,6 +477,10 @@ pub struct TemplateApplyInput {
     /// A project template: the parent project, for a sub-project.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent_project: Option<String>,
+    /// A project template: the folder to put the new top-level project in
+    /// (ID or name); not with `parent_project`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub folder: Option<String>,
     /// A project template: its colour.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hue: Option<Hue>,

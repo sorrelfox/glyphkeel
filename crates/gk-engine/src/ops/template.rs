@@ -1381,6 +1381,7 @@ fn apply(w: &mut WriteCtx<'_>, input: TemplateApplyInput) -> Result<TemplateAppl
                     name: name.clone(),
                     key: key.clone(),
                     parent: input.parent_project.clone(),
+                    folder: input.folder.clone(),
                     description: (!setup.description.is_empty()).then(|| setup.description.clone()),
                     hue: input.hue,
                     ..ProjectCreateInput::default()
