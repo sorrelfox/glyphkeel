@@ -9,13 +9,19 @@
 //! column it follows there. With sub-projects included, columns are matched
 //! by status name; statuses only sub-projects have become extra columns at
 //! the end.
+//!
+//! Card colours and covers are worked out here with the board, for the
+//! cards shown only: each colour rule's query runs once over the board's
+//! projects, and a card takes the colour of the first rule that matched it.
+//! A rule whose query no longer reads (a label renamed away, say) colours
+//! nothing rather than failing the board.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use gk_api::OpError;
 use gk_api::ops::board::{
-    Board, BoardGet, BoardGetInput, BoardLayout, Card, Column, LayoutChange, LayoutGet,
-    LayoutGetInput, LayoutUpdate, LayoutUpdateInput, SortMode,
+    Board, BoardGet, BoardGetInput, BoardLayout, Card, CardColourBy, CardEdge, ColourRule, Column,
+    CoverMode, LayoutChange, LayoutGet, LayoutGetInput, LayoutUpdate, LayoutUpdateInput, SortMode,
 };
 use gk_api::ops::common::{Category, Glyph, Hue, Priority};
 use gk_api::ops::task::{Checklist, TypeRef};
@@ -57,6 +63,8 @@ const CARD_FIELDS: &[&str] = &[
     "updated",
 ];
 const DAY_MS: i64 = 24 * 60 * 60 * 1000;
+/// The most colour rules a board keeps.
+const MAX_COLOUR_RULES: usize = 20;
 
 pub(super) fn register(r: &mut Registry) {
     r.query::<BoardGet, _>(desc::<BoardGet>(), board);
@@ -249,6 +257,7 @@ fn board(q: &QueryCtx<'_>, input: BoardGetInput) -> Result<Board, Failure> {
         .iter()
         .filter_map(|f| gk_query::fields::strip_custom_prefix(f).map(str::to_owned))
         .collect();
+    let colours = Colours::load(q, &layout, &p.key, include)?;
     for column in &mut columns {
         column.hidden = layout.hidden.contains(&column.id);
         column.collapsed = layout.collapsed.contains(&column.id);
@@ -286,6 +295,14 @@ fn board(q: &QueryCtx<'_>, input: BoardGetInput) -> Result<Board, Failure> {
                 if !custom.is_empty() {
                     card_values(q.tx, &mut card, &custom)?;
                 }
+                card.edge = colours.edge(&card);
+                if layout.covers != CoverMode::Off
+                    && card.file_count > 0
+                    && let Ok(id) = card.id.parse::<Id>()
+                {
+                    card.cover =
+                        super::file::card_cover(q.tx, id, layout.covers == CoverMode::FirstImage)?;
+                }
                 shown.push(card);
             }
             column.cards = shown;
@@ -301,6 +318,115 @@ fn board(q: &QueryCtx<'_>, input: BoardGetInput) -> Result<Board, Failure> {
         hidden_columns,
         hidden_tasks,
     })
+}
+
+/// What the board's cards are coloured by, read once per board.
+enum Colours {
+    None,
+    /// Type colours by type ID.
+    Types(HashMap<String, Hue>),
+    Priority,
+    Label,
+    /// Each rule with the tasks its query matched.
+    Rules(Vec<(ColourRule, HashSet<String>)>),
+}
+
+impl Colours {
+    fn load(
+        q: &QueryCtx<'_>,
+        layout: &BoardLayout,
+        project: &str,
+        include: bool,
+    ) -> Result<Self, Failure> {
+        Ok(match layout.colour_by {
+            CardColourBy::None => Self::None,
+            CardColourBy::Priority => Self::Priority,
+            CardColourBy::Label => Self::Label,
+            CardColourBy::Type => {
+                let mut stmt = q.tx.prepare_cached("SELECT id, hue FROM task_types")?;
+                let hues = stmt
+                    .query_map([], |r| {
+                        Ok((
+                            id_at(r, 0)?.to_string(),
+                            parse_enum(&r.get::<_, String>(1)?).unwrap_or(Hue::Grey),
+                        ))
+                    })?
+                    .collect::<Result<HashMap<_, _>, _>>()?;
+                Self::Types(hues)
+            }
+            CardColourBy::Query => {
+                let mut rules = Vec::with_capacity(layout.colour_rules.len());
+                for rule in &layout.colour_rules {
+                    let Ok((_, checked)) =
+                        super::query::try_compile(q.tx, &q.env.zone, q.now, &rule.query)?
+                    else {
+                        continue;
+                    };
+                    let compiled = gk_query::Compiled::new(
+                        &checked,
+                        &gk_query::SqlEnv {
+                            now: q.now,
+                            scope: Some(gk_query::Scope {
+                                project: project.to_owned(),
+                                subprojects: include,
+                            }),
+                            default_sort: Vec::new(),
+                        },
+                    );
+                    let ids = super::query::matching_ids(q.tx, &compiled)?
+                        .into_iter()
+                        .map(|id| id.to_string())
+                        .collect();
+                    rules.push((rule.clone(), ids));
+                }
+                Self::Rules(rules)
+            }
+        })
+    }
+
+    /// The edge of `card`, which has its labels.
+    fn edge(&self, card: &Card) -> Option<CardEdge> {
+        let edge = |hue, by, name: &str| {
+            Some(CardEdge {
+                hue,
+                by,
+                name: name.to_owned(),
+            })
+        };
+        match self {
+            Self::None => None,
+            Self::Types(hues) => edge(
+                hues.get(&card.task_type.id).copied().unwrap_or(Hue::Grey),
+                CardColourBy::Type,
+                &card.task_type.name,
+            ),
+            Self::Priority => {
+                let (hue, name) = match card.priority {
+                    Priority::None => return None,
+                    Priority::Low => (Hue::Grey, "low"),
+                    Priority::Normal => (Hue::Blue, "normal"),
+                    Priority::High => (Hue::Orange, "high"),
+                    Priority::Urgent => (Hue::Red, "urgent"),
+                };
+                edge(hue, CardColourBy::Priority, name)
+            }
+            Self::Label => card
+                .labels
+                .first()
+                .and_then(|l| edge(l.hue, CardColourBy::Label, &l.name)),
+            Self::Rules(rules) => rules
+                .iter()
+                .find(|(_, ids)| ids.contains(&card.id))
+                .and_then(|(rule, _)| {
+                    let name = if rule.name.trim().is_empty() {
+                        rule.query.trim()
+                    } else {
+                        rule.name.trim()
+                    };
+                    edge(rule.hue, CardColourBy::Query, name)
+                }),
+        }
+    }
 }
 
 /// How many live cards of `status` closed before `cutoff`, which the
@@ -383,6 +509,8 @@ fn cards_of(
                     version: r.get(18)?,
                     id: id_at(r, 0)?.to_string(),
                     fields: BTreeMap::new(),
+                    edge: None,
+                    cover: None,
                 },
                 closed,
             ))
@@ -468,6 +596,55 @@ pub(crate) fn rewrite_card_fields(
         if touched {
             let mut after = before.clone();
             after["card_fields"] = Value::Array(kept);
+            write_raw(w, id, Some(&after))?;
+            w.record_field(ENTITY, id, Some(id), "settings", Some(before), Some(after));
+        }
+    }
+    Ok(())
+}
+
+/// After a project, status, type, label or custom field was renamed or
+/// removed: the colour rules of the board layouts of `project` (of every
+/// project when `None`) read as `rewrite` gives them (`None` keeps a
+/// query).
+pub(crate) fn rewrite_colour_rules(
+    w: &mut WriteCtx<'_>,
+    project: Option<Id>,
+    rewrite: &dyn Fn(&str) -> Option<String>,
+) -> Result<(), Failure> {
+    let scopes: Vec<String> = {
+        let mut stmt = w.tx().prepare_cached(
+            "SELECT scope FROM view_settings WHERE view_kind = ?1 ORDER BY scope",
+        )?;
+        stmt.query_map([VIEW], |r| r.get(0))?
+            .collect::<Result<_, _>>()?
+    };
+    for scope in scopes {
+        let Ok(id) = scope.parse::<Id>() else {
+            continue;
+        };
+        if project.is_some_and(|p| p != id) {
+            continue;
+        }
+        let Some(before) = raw(w.tx(), id)? else {
+            continue;
+        };
+        let Some(rules) = before.get("colour_rules").and_then(Value::as_array) else {
+            continue;
+        };
+        let mut touched = false;
+        let mut kept = Vec::with_capacity(rules.len());
+        for rule in rules {
+            let mut rule = rule.clone();
+            if let Some(new) = rule.get("query").and_then(Value::as_str).and_then(rewrite) {
+                rule["query"] = Value::String(new);
+                touched = true;
+            }
+            kept.push(rule);
+        }
+        if touched {
+            let mut after = before.clone();
+            after["colour_rules"] = Value::Array(kept);
             write_raw(w, id, Some(&after))?;
             w.record_field(ENTITY, id, Some(id), "settings", Some(before), Some(after));
         }
@@ -644,6 +821,36 @@ fn update(w: &mut WriteCtx<'_>, input: LayoutUpdateInput) -> Result<LayoutChange
     }
     if let Some(include) = input.include_subprojects {
         layout.include_subprojects = include;
+    }
+    if let Some(by) = input.colour_by {
+        layout.colour_by = by;
+    }
+    if let Some(rules) = &input.colour_rules {
+        if rules.len() > MAX_COLOUR_RULES {
+            return Err(messages::invalid(
+                "colour_rules",
+                "board-colour-rules-max",
+                &[("max", MAX_COLOUR_RULES.to_string())],
+            ));
+        }
+        let mut kept = Vec::with_capacity(rules.len());
+        for (i, rule) in rules.iter().enumerate() {
+            let field = format!("colour_rules[{i}].query");
+            let query = rule.query.trim();
+            if query.is_empty() {
+                return Err(messages::invalid(&field, "board-colour-rule-empty", &[]));
+            }
+            super::query::compile(w.tx(), w.zone(), w.now(), query, &field)?;
+            kept.push(ColourRule {
+                query: query.to_owned(),
+                hue: rule.hue,
+                name: rule.name.trim().to_owned(),
+            });
+        }
+        layout.colour_rules = kept;
+    }
+    if let Some(covers) = input.covers {
+        layout.covers = covers;
     }
     let before = raw(w.tx(), p.id)?;
     let after = if layout == BoardLayout::default() {

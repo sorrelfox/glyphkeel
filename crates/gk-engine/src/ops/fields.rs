@@ -140,6 +140,7 @@ const SPECS: &[Spec] = &[
     spec(TASK, "number", "tasks", "number", Enc::Int),
     spec(TASK, "series", "tasks", "series_id", Enc::Id),
     spec(TASK, "fix_version", "tasks", "fix_version_id", Enc::Id),
+    spec(TASK, "cover", "tasks", "cover_id", Enc::Id),
     folded(WIKI, "title", "wiki_pages"),
     spec(WIKI, "slug", "wiki_pages", "slug", Enc::Text),
     spec(WIKI, "parent", "wiki_pages", "parent_id", Enc::Id),

@@ -125,6 +125,8 @@ export interface FakeTask {
   fields?: Record<string, FieldValue>;
   /** The recurring series it is an occurrence of. */
   seriesId?: string;
+  /** The attached image its board card shows as its cover. */
+  coverId?: string | null;
 }
 
 /** A recurring task's series: its rule and the details each new occurrence starts from. */

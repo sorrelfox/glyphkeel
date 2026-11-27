@@ -26,6 +26,8 @@ import {
   type GanttLayout,
   type ListLayout,
   type Card,
+  type CardCover,
+  type CardEdge,
   type Column,
   type Comment,
   type CommentChange,
@@ -50,6 +52,7 @@ import {
   type OpId,
   type OpMap,
   OP_SAFETY,
+  type Priority,
   type Project,
   type ProjectChange,
   type ProjectIcon,
@@ -149,7 +152,19 @@ const DEFAULT_LAYOUT: Readonly<BoardLayout> = {
   hide_done_after_days: 14,
   card_fields: ["type", "priority", "due", "labels", "checklist"],
   include_subprojects: false,
+  colour_by: "none",
+  colour_rules: [],
+  covers: "off",
 };
+
+/** The colour of each priority's edge; none has none. */
+const PRIORITY_EDGE: Partial<Record<Priority, Hue>> = { urgent: "red", high: "orange", normal: "blue", low: "grey" };
+
+/** The images a card can show as its cover. */
+const COVER_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+
+/** The most colour rules a board keeps. */
+const MAX_COLOUR_RULES = 20;
 
 /** `{ [key]: value }` when there is a value; nothing otherwise. */
 function some<K extends string, V>(key: K, value: V | null | undefined): { [P in K]?: V } {
@@ -645,12 +660,64 @@ export class FakeWorkspace {
     };
   }
 
-  /** A card with its values of the custom fields `shown` (query names), as the board gives them. */
-  private boardCard(task: FakeTask, shown: readonly string[]): Card {
+  /** A card with its values of the custom fields `shown` (query names), its edge and its cover, as the board gives them. */
+  private boardCard(task: FakeTask, shown: readonly string[], edgeOf: (card: Card) => CardEdge | undefined, covers: BoardLayout["covers"]): Card {
     const card = this.card(task);
     const values = shown.length === 0 ? undefined : listedValues(this.state, task);
     const fields = Object.fromEntries(Object.entries(values ?? {}).filter(([name]) => shown.includes(name)));
-    return Object.keys(fields).length === 0 ? card : { ...card, fields };
+    const edge = edgeOf(card);
+    const cover = covers === "off" ? undefined : this.coverOf(task, covers === "first_image");
+    return { ...card, ...(Object.keys(fields).length === 0 ? {} : { fields }), ...some("edge", edge), ...some("cover", cover) };
+  }
+
+  /** The task's own live images, oldest first. */
+  private coverImages(task: FakeTask): FakeFile[] {
+    return this.state.files.filter((file) => file.taskId === task.id && file.commentId === null && file.pageId === undefined && file.deletedAt === null && COVER_TYPES.has(file.mime));
+  }
+
+  /** The cover a card shows: the chosen image while it is live, or with `firstImage`, the first image. */
+  private coverOf(task: FakeTask, firstImage: boolean): CardCover | undefined {
+    const images = this.coverImages(task);
+    const file = images.find((each) => each.id === task.coverId) ?? (firstImage ? images[0] : undefined);
+    return file && { attachment: file.id, name: file.name, mime: file.mime, ...some("width", file.width), ...some("height", file.height) };
+  }
+
+  /** How the board's cards get their edge, worked out once per board. */
+  private edges(layout: BoardLayout, onBoard: readonly FakeProject[]): (card: Card) => CardEdge | undefined {
+    switch (layout.colour_by) {
+      case "none":
+        return () => undefined;
+      case "priority":
+        return (card) => {
+          const hue = PRIORITY_EDGE[card.priority];
+          return hue && { hue, by: "priority", name: card.priority };
+        };
+      case "label":
+        return (card) => {
+          const label = card.labels[0];
+          return label && { hue: label.hue, by: "label", name: label.name };
+        };
+      case "type": {
+        const hues = new Map(onBoard.flatMap((project) => project.types.map((type) => [type.id, type.hue] as const)));
+        return (card) => ({ hue: hues.get(card.type.id) ?? "grey", by: "type", name: card.type.name });
+      }
+      case "query": {
+        const keys = new Set(onBoard.map((project) => project.key));
+        const listed = this.listedTasks().filter((task) => keys.has(task.project));
+        const rules = layout.colour_rules.flatMap((rule) => {
+          try {
+            return [{ rule, keys: new Set(matchingKeys(listed, rule.query, this.queryNames(), this.archivedKeys())) }];
+          } catch {
+            // A rule that no longer reads colours nothing.
+            return [];
+          }
+        });
+        return (card) => {
+          const found = rules.find((each) => each.keys.has(card.key));
+          return found && { hue: found.rule.hue, by: "query", name: (found.rule.name ?? "").trim() || found.rule.query };
+        };
+      }
+    }
   }
 
   private fullTask(task: FakeTask): Task {
@@ -737,6 +804,7 @@ export class FakeWorkspace {
     let hiddenTasks = 0;
     // The custom fields the cards show, by query name.
     const cardFields = layout.card_fields.filter((field) => field.startsWith("cf.")).map((field) => field.slice(3));
+    const edgeOf = this.edges(layout, onBoard);
     for (const column of ordered) {
       const statusIds = new Set(Object.values(column.statuses));
       const all = tasks.filter((task) => statusIds.has(task.statusId));
@@ -752,7 +820,7 @@ export class FakeWorkspace {
         hiddenColumns += 1;
         hiddenTasks += all.length;
       } else {
-        column.cards = shown.map((task) => this.boardCard(task, cardFields));
+        column.cards = shown.map((task) => this.boardCard(task, cardFields, edgeOf, layout.covers));
       }
     }
     return {
@@ -880,6 +948,7 @@ export class FakeWorkspace {
       ...some("height", file.height),
       added_by: { kind: "user", name: "You" },
       created_at: file.createdAt,
+      ...(task?.coverId === file.id && file.commentId === null ? { cover: true } : {}),
     };
   }
 
@@ -2794,6 +2863,35 @@ export class FakeWorkspace {
       if (input.include_subprojects !== null && input.include_subprojects !== undefined) {
         next.include_subprojects = input.include_subprojects;
       }
+      if (input.colour_by !== null && input.colour_by !== undefined) {
+        next.colour_by = input.colour_by;
+      }
+      if (input.colour_rules !== null && input.colour_rules !== undefined) {
+        if (input.colour_rules.length > MAX_COLOUR_RULES) {
+          fail("invalid", `A board can have at most ${String(MAX_COLOUR_RULES)} colour rules.`, { details: { path: "colour_rules", message_id: "board-colour-rules-max" } });
+        }
+        next.colour_rules = input.colour_rules.map((rule, at) => {
+          const path = `colour_rules[${String(at)}].query`;
+          const query = rule.query.trim();
+          if (query === "") {
+            fail("invalid", "A colour rule needs a query.", { details: { path, message_id: "board-colour-rule-empty" } });
+          }
+          try {
+            matchingKeys([], query, this.queryNames(), this.archivedKeys());
+          } catch (error: unknown) {
+            const problem = queryError(error);
+            if (problem) {
+              fail("invalid", problem.message, { details: { ...problem.details, path } });
+            }
+            throw error;
+          }
+          const name = (rule.name ?? "").trim();
+          return { query, hue: rule.hue, ...(name === "" ? {} : { name }) };
+        });
+      }
+      if (input.covers !== null && input.covers !== undefined) {
+        next.covers = input.covers;
+      }
       this.state.layouts[project.id] = next;
       return {
         output: { project: project.key, layout: structuredClone(next) },
@@ -3195,6 +3293,30 @@ export class FakeWorkspace {
       const file = this.liveFile(attachment);
       file.deletedAt = this.today().toISOString();
       return this.fileChange(file, ["trashed"]);
+    },
+    "file.cover": ({ task: key, attachment }) => {
+      const task = this.task(key);
+      this.writable(this.projectOf(task).key);
+      let chosen: FakeFile | null = null;
+      if (attachment !== null && attachment !== undefined && attachment.trim() !== "") {
+        const file = this.liveFile(attachment.trim());
+        if (file.taskId !== task.id || file.commentId !== null) {
+          fail("invalid", `"${attachment}" isn't attached to this task itself, so it can't be its cover.`, { details: { path: "attachment", message_id: "file-cover-other-task" } });
+        }
+        if (!COVER_TYPES.has(file.mime)) {
+          fail("invalid", `A cover must be a PNG, JPEG, GIF or WebP image, not ${file.mime}.`, { details: { path: "attachment", message_id: "file-cover-not-image" } });
+        }
+        chosen = file;
+      }
+      const before = task.coverId ?? null;
+      task.coverId = chosen?.id ?? null;
+      if (before !== task.coverId) {
+        this.touch(task, false);
+      }
+      return {
+        output: { task: this.keyOf(task), ...(chosen ? { cover: this.attachment(chosen) } : {}) },
+        changes: before === task.coverId ? [] : [{ entity: "task", id: task.id, fields: ["cover"], project: this.projectOf(task).key }],
+      };
     },
     "today.get": ({ project: ref, limit }) => {
       const day = localDay(this.today());

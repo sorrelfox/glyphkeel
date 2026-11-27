@@ -91,10 +91,13 @@ export function layoutUpdate(project: string, before: BoardLayout, change: Layou
     return {
       project,
       reset: true,
-      // Reset brings back the project's columns; the card fields and the rest stay.
+      // Reset brings back the project's columns; the card fields, colours, covers and the rest stay.
       card_fields: before.card_fields,
       hide_done_after_days: before.hide_done_after_days,
       include_subprojects: before.include_subprojects,
+      colour_by: before.colour_by,
+      colour_rules: before.colour_rules,
+      covers: before.covers,
     };
   }
   const input: LayoutUpdateInput = { project };
@@ -125,6 +128,15 @@ export function layoutUpdate(project: string, before: BoardLayout, change: Layou
   }
   if (change.include_subprojects !== undefined) {
     input.include_subprojects = change.include_subprojects;
+  }
+  if (change.colour_by !== undefined) {
+    input.colour_by = change.colour_by;
+  }
+  if (change.colour_rules !== undefined) {
+    input.colour_rules = change.colour_rules;
+  }
+  if (change.covers !== undefined) {
+    input.covers = change.covers;
   }
   return input;
 }

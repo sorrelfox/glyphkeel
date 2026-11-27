@@ -28,6 +28,9 @@ const LAYOUT: BoardLayout = {
   hide_done_after_days: 14,
   card_fields: ["type", "priority", "due", "labels", "checklist"],
   include_subprojects: false,
+  colour_by: "none",
+  colour_rules: [],
+  covers: "off",
 };
 
 function card(key: string, overrides: Partial<Card> = {}): Card {

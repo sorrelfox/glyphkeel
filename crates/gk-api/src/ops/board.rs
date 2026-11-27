@@ -4,8 +4,9 @@
 //! A project's board, and the person's own layout of it.
 //!
 //! The layout (hidden, collapsed and ordered columns, sort modes, card
-//! fields, older closed cards, sub-projects) is personal and kept per
-//! project; it changes how the board looks, never the project's statuses.
+//! fields, card colours and covers, older closed cards, sub-projects) is
+//! personal and kept per project; it changes how the board looks, never the
+//! project's statuses.
 
 use std::collections::BTreeMap;
 
@@ -31,6 +32,50 @@ pub enum SortMode {
     Updated,
 }
 
+/// What colours the edge of a card.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CardColourBy {
+    /// No coloured edge (the default).
+    #[default]
+    None,
+    /// The colour of the task's type.
+    Type,
+    /// A colour for each priority: urgent red, high orange, normal blue,
+    /// low grey; none has no edge.
+    Priority,
+    /// The colour of the task's first label.
+    Label,
+    /// The first of the layout's colour rules whose query the task matches.
+    Query,
+}
+
+/// One colour rule: the cards a query matches get its colour.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ColourRule {
+    /// A query in the query language, such as `label:urgent due<today`.
+    pub query: String,
+    /// The colour of the cards it matches.
+    pub hue: Hue,
+    /// A name for the rule, shown with the edge; empty shows the query.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub name: String,
+}
+
+/// Which image a card shows as its cover.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CoverMode {
+    /// No covers (the default).
+    #[default]
+    Off,
+    /// The image chosen as the task's cover (`file.cover`), if it has one.
+    Chosen,
+    /// The chosen image, or else the task's first attached image.
+    FirstImage,
+}
+
 /// The person's layout of one project's board.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -53,6 +98,16 @@ pub struct BoardLayout {
     pub card_fields: Vec<String>,
     /// Whether the sub-projects' tasks are on the board too.
     pub include_subprojects: bool,
+    /// What colours the edge of the cards.
+    #[serde(default)]
+    pub colour_by: CardColourBy,
+    /// The colour rules for `colour_by: query`, in order; the first whose
+    /// query a card matches colours it.
+    #[serde(default)]
+    pub colour_rules: Vec<ColourRule>,
+    /// Which image the cards show as their cover.
+    #[serde(default)]
+    pub covers: CoverMode,
 }
 
 impl Default for BoardLayout {
@@ -68,8 +123,42 @@ impl Default for BoardLayout {
                 .map(str::to_owned)
                 .to_vec(),
             include_subprojects: false,
+            colour_by: CardColourBy::None,
+            colour_rules: Vec::new(),
+            covers: CoverMode::Off,
         }
     }
+}
+
+/// The coloured edge of a card and the rule that gave it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CardEdge {
+    /// The colour.
+    pub hue: Hue,
+    /// What chose it.
+    pub by: CardColourBy,
+    /// What it stands for: the type's or label's name, the priority, or the
+    /// rule's name (its query when it has none).
+    pub name: String,
+}
+
+/// The image a card shows as its cover.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CardCover {
+    /// The attachment's ID.
+    pub attachment: String,
+    /// Its file name, for the image's text.
+    pub name: String,
+    /// Its media type.
+    pub mime: String,
+    /// Its width in pixels, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub width: Option<u32>,
+    /// Its height in pixels, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub height: Option<u32>,
 }
 
 /// One card.
@@ -138,6 +227,14 @@ pub struct Card {
     /// name (without `cf.`); left out when it has none of them.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub fields: BTreeMap<String, serde_json::Value>,
+    /// Its coloured edge, as the layout's `colour_by` chooses; left out
+    /// when it has none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub edge: Option<CardEdge>,
+    /// Its cover image, as the layout's `covers` chooses; left out when it
+    /// has none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cover: Option<CardCover>,
 }
 
 /// One column: a status, or with sub-projects, every status of that name.
@@ -257,6 +354,18 @@ pub struct LayoutUpdateInput {
     /// Show the sub-projects' tasks too.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub include_subprojects: Option<bool>,
+    /// What colours the edge of the cards: `none`, `type`, `priority`,
+    /// `label` or `query` (the colour rules).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub colour_by: Option<CardColourBy>,
+    /// The colour rules, in order, replacing the old ones: each a query and
+    /// a colour, and an optional name. At most 20.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub colour_rules: Option<Vec<ColourRule>>,
+    /// Which image the cards show as their cover: `off`, `chosen` or
+    /// `first_image`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub covers: Option<CoverMode>,
 }
 
 /// A layout after a change.
@@ -313,7 +422,7 @@ pub(crate) const BOARD_GET: OpDescriptor = OpDescriptor::of::<BoardGet>(Meta {
 });
 
 pub(crate) const LAYOUT_GET: OpDescriptor = OpDescriptor::of::<LayoutGet>(Meta {
-    summary: "The person's layout of a project's board: column order, hidden and collapsed columns, sort modes, card fields.",
+    summary: "The person's layout of a project's board: column order, hidden and collapsed columns, sort modes, card fields, card colours and covers.",
     kind: OpKind::Query,
     safety: Safety::Read,
     exposure: Exposure::Data,
@@ -323,7 +432,7 @@ pub(crate) const LAYOUT_GET: OpDescriptor = OpDescriptor::of::<LayoutGet>(Meta {
 });
 
 pub(crate) const LAYOUT_UPDATE: OpDescriptor = OpDescriptor::of::<LayoutUpdate>(Meta {
-    summary: "Hide, show, collapse or reorder board columns, set sort modes, card fields and older closed cards, or reset to the project's layout.",
+    summary: "Hide, show, collapse or reorder board columns, set sort modes, card fields, card colours (by type, priority, label or ordered query rules), covers and older closed cards, or reset to the project's layout.",
     kind: OpKind::Command,
     safety: Safety::Write,
     exposure: Exposure::Data,

@@ -223,6 +223,8 @@ export type Attachment = {
   added_by: Actor;
   /** The comment's ID, for a file attached to a comment. */
   comment?: string;
+  /** Whether it is chosen as its task's cover on the board. */
+  cover?: boolean;
   /** When it was attached (RFC 3339, UTC). */
   created_at: string;
   /** An image's height in pixels. */
@@ -393,8 +395,14 @@ export type BoardLayout = {
   card_fields: string[];
   /** Collapsed columns, as status IDs. */
   collapsed: string[];
+  /** What colours the edge of the cards. */
+  colour_by: CardColourBy;
+  /** The colour rules for `colour_by: query`, in order; the first whose query a card matches colours it. */
+  colour_rules: ColourRule[];
   /** Sort modes of single columns, by status ID. */
   column_sort: Record<string, SortMode>;
+  /** Which image the cards show as their cover. */
+  covers: CoverMode;
   /** Hidden columns, as status IDs. */
   hidden: string[];
   /** Cards closed more than this many days ago are hidden behind "Show older"; 0 shows every card. */
@@ -524,8 +532,12 @@ export type Card = {
   closed_at?: string;
   /** How many comments it has. */
   comment_count: number;
+  /** Its cover image, as the layout's `covers` chooses; left out when it has none. */
+  cover?: CardCover;
   /** The due date. */
   due_date?: string;
+  /** Its coloured edge, as the layout's `colour_by` chooses; left out when it has none. */
+  edge?: CardEdge;
   /** The estimate in minutes. */
   estimate_minutes?: number;
   /** Its values of the custom fields the layout shows on cards, by query name (without `cf.`); left out when it has none of them. */
@@ -566,6 +578,33 @@ export type Card = {
   updated_at: string;
   /** Its version, for `expected_version`. */
   version: number;
+};
+
+/** What colours the edge of a card. */
+export type CardColourBy = "none" | "type" | "priority" | "label" | "query";
+
+/** The image a card shows as its cover. */
+export type CardCover = {
+  /** The attachment's ID. */
+  attachment: string;
+  /** Its height in pixels, when known. */
+  height?: number;
+  /** Its media type. */
+  mime: string;
+  /** Its file name, for the image's text. */
+  name: string;
+  /** Its width in pixels, when known. */
+  width?: number;
+};
+
+/** The coloured edge of a card and the rule that gave it. */
+export type CardEdge = {
+  /** What chose it. */
+  by: CardColourBy;
+  /** The colour. */
+  hue: Hue;
+  /** What it stands for: the type's or label's name, the priority, or the rule's name (its query when it has none). */
+  name: string;
 };
 
 /** What a status means for the work in it. */
@@ -677,6 +716,16 @@ export type Claim = {
   session: string;
   /** When the claim ends unless renewed (RFC 3339, UTC). */
   until: string;
+};
+
+/** One colour rule: the cards a query matches get its colour. */
+export type ColourRule = {
+  /** The colour of the cards it matches. */
+  hue: Hue;
+  /** A name for the rule, shown with the edge; empty shows the query. */
+  name?: string;
+  /** A query in the query language, such as `label:urgent due<today`. */
+  query: string;
 };
 
 /** One column: a status, or with sub-projects, every status of that name. */
@@ -817,6 +866,9 @@ export type ConflictResolution = {
   /** The text to save, for `use_text`. */
   text?: string | null;
 };
+
+/** Which image a card shows as its cover. */
+export type CoverMode = "off" | "chosen" | "first_image";
 
 /** When the next occurrence is made. */
 export type CreateWhen = "on_close" | "ahead";
@@ -1588,6 +1640,24 @@ export type FileContent = {
   truncated: boolean;
 };
 
+/** A task's cover after a change. */
+export type FileCoverChange = {
+  /** The chosen cover; left out when none is chosen. */
+  cover?: Attachment;
+  /** The history group, for revert and Undo; left out when nothing changed. */
+  group?: string;
+  /** The task's key. */
+  task: string;
+};
+
+/** Which image a task's board card shows as its cover. */
+export type FileCoverInput = {
+  /** The image attached to the task itself to show, by its ID; left out to choose none. */
+  attachment?: string | null;
+  /** The task: its key or ID. */
+  task: string;
+};
+
 /** What a file holds, which decides how it is shown. */
 export type FileKind = "image" | "text" | "executable" | "other";
 
@@ -1874,8 +1944,14 @@ export type LayoutUpdateInput = {
   card_fields?: string[] | null;
   /** Columns to collapse. */
   collapse?: string[];
+  /** What colours the edge of the cards: `none`, `type`, `priority`, `label` or `query` (the colour rules). */
+  colour_by?: CardColourBy | null;
+  /** The colour rules, in order, replacing the old ones: each a query and a colour, and an optional name. At most 20. */
+  colour_rules?: ColourRule[] | null;
   /** Sort modes of single columns, by status name or ID; `manual` columns can be reordered by hand. */
   column_sort?: Record<string, SortMode> | null;
+  /** Which image the cards show as their cover: `off`, `chosen` or `first_image`. */
+  covers?: CoverMode | null;
   /** Columns to expand again. */
   expand?: string[];
   /** Columns to hide, by status name or ID. */
@@ -5454,6 +5530,7 @@ export interface OpMap {
   "file.thumbnail": { input: FileRef; output: Thumbnail; safety: "read"; kind: "query" };
   "file.attach": { input: FileAttachInput; output: FileChange; safety: "write"; kind: "command" };
   "file.delete": { input: FileRef; output: FileChange; safety: "trash"; kind: "command" };
+  "file.cover": { input: FileCoverInput; output: FileCoverChange; safety: "write"; kind: "command" };
   "agent.sessions": { input: AgentSessionsInput; output: AgentSessionList; safety: "read"; kind: "query" };
   "agent.policy.update": { input: AgentPolicyPatch; output: SettingsChange; safety: "app"; kind: "command" };
   "agent.limits.update": { input: AgentLimitsPatch; output: SettingsChange; safety: "app"; kind: "command" };
@@ -5608,6 +5685,7 @@ export const OP_SAFETY = {
   "file.thumbnail": "read",
   "file.attach": "write",
   "file.delete": "trash",
+  "file.cover": "write",
   "agent.sessions": "read",
   "agent.policy.update": "app",
   "agent.limits.update": "app",
@@ -5724,6 +5802,8 @@ export function makeOps(call: Call) {
       attach: (input: OpMap["file.attach"]["input"] = {}) => call("file.attach", input),
       /** Move an attached file to the trash. (trash) */
       delete: (input: OpMap["file.delete"]["input"]) => call("file.delete", input),
+      /** Choose the PNG, JPEG, GIF or WebP image attached to a task that its board card shows as its cover, or choose none; boards show covers when their layout's covers setting is on. (write) */
+      cover: (input: OpMap["file.cover"]["input"]) => call("file.cover", input),
     },
     gantt: {
       /** The person's layout of a project's Gantt chart: zoom level, table and column widths, grouping, and whether moving a task also moves its dependents. (read) */
@@ -5750,9 +5830,9 @@ export function makeOps(call: Call) {
       delete: (input: OpMap["label.delete"]["input"]) => call("label.delete", input),
     },
     layout: {
-      /** The person's layout of a project's board: column order, hidden and collapsed columns, sort modes, card fields. (read) */
+      /** The person's layout of a project's board: column order, hidden and collapsed columns, sort modes, card fields, card colours and covers. (read) */
       get: (input: OpMap["layout.get"]["input"]) => call("layout.get", input),
-      /** Hide, show, collapse or reorder board columns, set sort modes, card fields and older closed cards, or reset to the project's layout. (write) */
+      /** Hide, show, collapse or reorder board columns, set sort modes, card fields, card colours (by type, priority, label or ordered query rules), covers and older closed cards, or reset to the project's layout. (write) */
       update: (input: OpMap["layout.update"]["input"]) => call("layout.update", input),
     },
     list: {
