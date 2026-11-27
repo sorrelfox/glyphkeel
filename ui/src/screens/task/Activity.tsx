@@ -11,7 +11,7 @@ import { Segmented } from "../../components/Segmented";
 import { skippedReason } from "../../data/safety";
 import { useToasts } from "../../components/Toasts";
 import { type Project } from "../../data/catalog";
-import { errorToast, useCall, useCommand, useOp } from "../../data/hooks";
+import { errorToast, failureText, useCall, useCommand, useOp } from "../../data/hooks";
 import { appendQuote, commentLink, commentShown, isComment, linkedComments, quoteMarkdown, useCommentRequests, useRequestedComment } from "../../data/commentLinks";
 import { readDraft, useDraft, useTaskDrafts, writeDraft, type DraftTarget } from "../../data/drafts";
 import { toggleChecklist, useRendered } from "../../data/markdown";
@@ -534,7 +534,7 @@ function HistoryList({
     </div>
   );
   if (history.isError) {
-    return <p className="faint">{history.error.error.message}</p>;
+    return <p className="faint">{failureText(t, history.error)}</p>;
   }
   if (!history.data) {
     return actor === "all" ? null : who;

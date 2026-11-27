@@ -26,21 +26,66 @@ export function useOp<K extends QueryOp>(
   return useQuery({ queryKey: opKey(op, input), queryFn: () => call(op, input), enabled: options.enabled ?? true });
 }
 
+/**
+ * A message from the engine or the app in the person's language: message
+ * `id` with its arguments where the message files have it, else the English
+ * text that came with it.
+ */
+export function engineText(t: Translate, id: unknown, args: unknown, english: string): string;
+export function engineText(t: Translate, id: unknown, args: unknown, english: string | undefined): string | undefined;
+export function engineText(t: Translate, id: unknown, args: unknown, english: string | undefined): string | undefined {
+  if (typeof id !== "string" || t.has?.(id) !== true) return english;
+  const vars = typeof args === "object" && args !== null ? Object.fromEntries(Object.entries(args).map(([key, value]) => [key, String(value)])) : {};
+  return t(id, vars);
+}
+
+/** The error of a failed call: an `OpFailure`'s, one already unwrapped, or anything else as the transport's. */
+function callError(error: unknown): CallError {
+  if (error instanceof OpFailure) {
+    return error.error;
+  }
+  if (typeof error === "object" && error !== null && "code" in error && "message" in error && typeof error.code === "string" && typeof error.message === "string") {
+    return error as CallError;
+  }
+  return { code: "ipc", message: String(error) };
+}
+
+/**
+ * What a failed call says, for people: the engine's message in the person's
+ * language; for the transport, ours with its own words after it.
+ */
+export function failureText(t: Translate, error: unknown): string {
+  // An OpFailure, a CallError or anything thrown.
+  const failure = callError(error);
+  if (failure.code === "ipc") {
+    return t("error-ipc-detail", { detail: failure.message });
+  }
+  return engineText(t, failure.details?.message_id, failure.details?.args, failure.message);
+}
+
+/** What a failed call says to do next, if anything, in the person's language. */
+export function failureHint(t: Translate, error: unknown): string | undefined {
+  const failure = callError(error);
+  if (failure.code === "ipc") {
+    return undefined;
+  }
+  return engineText(t, failure.details?.hint_id, failure.details?.hint_args, failure.hint);
+}
+
 /** The text of an error toast: the engine's own message and hint; for the transport, ours. */
 export function errorToast(t: Translate, error: unknown): Toast {
-  const failure: CallError = error instanceof OpFailure ? error.error : { code: "ipc", message: String(error) };
+  const failure = callError(error);
   if (failure.code === "ipc") {
     return { tone: "error", text: t("error-ipc"), detail: failure.message };
   }
-  // The engine's newer errors name their message, so that it shows in the person's language.
-  const translated = (id: unknown, args: unknown, english: string | undefined): string | undefined => {
-    if (typeof id !== "string" || t.has?.(id) !== true) return english;
-    const vars = typeof args === "object" && args !== null ? Object.fromEntries(Object.entries(args).map(([key, value]) => [key, String(value)])) : {};
-    return t(id, vars);
-  };
-  const hint = translated(failure.details?.hint_id, failure.details?.hint_args, failure.hint);
-  const text = translated(failure.details?.message_id, failure.details?.args, failure.message) ?? failure.message;
-  return { tone: "error", text, detail: hint };
+  // The engine's errors name their message, so that it shows in the person's language.
+  return { tone: "error", text: failureText(t, error), detail: failureHint(t, error) };
+}
+
+/** Turns a failed call into its text, in the person's language. */
+export function useFailureText(): (error: unknown) => string {
+  const t = useT();
+  return (error) => failureText(t, error);
 }
 
 /** The names of the saved views a change rewrote, from its output. */

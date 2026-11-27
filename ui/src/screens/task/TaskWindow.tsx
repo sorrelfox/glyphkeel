@@ -11,6 +11,7 @@ import { useTimerCommands } from "../../data/time";
 import { useOp } from "../../data/hooks";
 import { inApp } from "../../ipc/files";
 import { appWindow } from "../../ipc/window";
+import { useT } from "../../i18n/I18n";
 import { projectOfKey } from "../../start";
 import { TaskPanel } from "./TaskPanel";
 import styles from "./TaskPanel.module.css";
@@ -26,11 +27,12 @@ export function TaskWindowScreen() {
   const navigate = useNavigate();
   const task = useTaskDetails(key).data?.items[0];
   const timer = useTimerCommands();
+  const t = useT();
   useEffect(() => {
     if (task) {
-      void appWindow.setTitle(`${task.key} · ${task.title}`);
+      void appWindow.setTitle(t("task-window-title", { key: task.key, title: task.title }).replace(/[⁨⁩]/g, ""));
     }
-  }, [task]);
+  }, [task, t]);
   const actions: Action[] = [
     {
       id: "timer.toggle",

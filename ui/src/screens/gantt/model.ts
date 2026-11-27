@@ -208,7 +208,7 @@ export function milestonesOf(schedule: Pick<Schedule, "tasks" | "unscheduled" | 
     .filter((task) => task.milestone)
     .map((task): Milestone => ({ key: task.key, title: task.title, date: undefined, status: task.status.name, state: task.closed ? "done" : "open", late: 0 }));
   const byKey = (a: Milestone, b: Milestone) => a.key.localeCompare(b.key, "en", { numeric: true });
-  dated.sort((a, b) => (a.date ?? "").localeCompare(b.date ?? "") || byKey(a, b));
+  dated.sort((a, b) => (a.date ?? "").localeCompare(b.date ?? "", "en") || byKey(a, b));
   undated.sort(byKey);
   return [...dated, ...undated];
 }

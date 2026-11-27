@@ -232,8 +232,10 @@ pub(crate) fn show_quick_add(app: AppHandle) {
 #[tauri::command]
 pub(crate) fn hide_quick_add(app: AppHandle, window: WebviewWindow) -> Result<(), OpError> {
     if window.label() != LABEL {
-        return Err(OpError::forbidden(
-            "Only the quick-add window hides itself.",
+        return Err(crate::messages::error(
+            "quick-add-hide-only",
+            &[],
+            OpError::forbidden,
         ));
     }
     if let Err(err) = window.hide() {
@@ -251,8 +253,10 @@ pub(crate) fn watch_quick_add(
     channel: Channel<Value>,
 ) -> Result<(), OpError> {
     if window.label() != LABEL {
-        return Err(OpError::forbidden(
-            "Only the quick-add window listens here.",
+        return Err(crate::messages::error(
+            "quick-add-listen-only",
+            &[],
+            OpError::forbidden,
         ));
     }
     *state.channel.lock().unwrap_or_else(PoisonError::into_inner) = Some(channel);

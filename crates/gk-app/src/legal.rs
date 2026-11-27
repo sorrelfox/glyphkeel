@@ -18,8 +18,6 @@ use std::path::{Path, PathBuf};
 use gk_api::OpError;
 use serde::Deserialize;
 
-use crate::messages::text;
-
 /// The two texts the page can show.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -77,9 +75,10 @@ fn read(which: LegalText, dirs: &[PathBuf]) -> Result<String, OpError> {
         }
     }
     let name = which.file_names()[0];
-    Err(OpError::not_found(
-        text("legal-text-missing", &[("file", name.to_owned())]),
-        &[],
+    Err(crate::messages::error(
+        "legal-text-missing",
+        &[("file", name.to_owned())],
+        |m| OpError::not_found(m, &[]),
     ))
 }
 

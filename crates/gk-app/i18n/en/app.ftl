@@ -2,8 +2,10 @@
 # Copyright (C) 2026 Glyphkeel contributors
 #
 # The desktop app's own text, shown by Rust: the native confirmation
-# dialogs, the file choosers, the tray menu and the autostart entry, in
-# English. One message per line; a plural continues on indented lines;
+# dialogs, the file choosers, the tray menu, the autostart entry, the
+# reminders' notifications and the errors of the app's own commands, in
+# English. The page loads this file too, so that it shows these errors in
+# the person's language. One message per line; a plural continues on indented lines;
 # placeables are { $name }.
 
 ## Confirmations of operations that can't be undone
@@ -32,6 +34,27 @@ confirm-agent-limits-refused = The limits on agents stay as they were: the chang
 ## Notifications of reminders
 
 notification-open = Open
+# $key is a task key, such as TM-41.
+notification-reminder = Reminder: { $key }
+# $day is the due date as the task has it, such as 2026-11-24.
+notification-due = { $key } is due { $day }
+notification-due-soon = { $key } is due soon
+notification-timer = The timer is still running on { $key }
+# A reminder that came due while the app wasn't running. $what is one of the
+# notification titles above.
+notification-missed = Missed: { $what }
+# The text under a notification: the task's title, then the reminder's own note.
+notification-body-with-note = { $title }
+    { $note }
+notification-missed-many = { $count ->
+    [one] One missed reminder
+   *[other] { $count } missed reminders
+    }
+# $keys is a list of task keys; $more is how many more are left out (0 when none).
+notification-missed-many-body = { $more ->
+    [0] They came due while Glyphkeel was closed: { $keys }
+   *[other] They came due while Glyphkeel was closed: { $keys }, …
+    }
 
 ## The command-line tool
 
@@ -87,3 +110,55 @@ autostart-no-home = There is no home folder to keep the autostart entry in.
 autostart-failed = The autostart entry { $path } could not be changed: { $reason }
 autostart-portal-failed = The desktop did not let Glyphkeel start with the system: { $reason }
 autostart-run-key-failed = Glyphkeel could not change its place among the apps that start when you sign in: { $reason }
+
+## Errors of the app's own commands. $error is the system's own words.
+
+preference-bad-name = "{ $name }" is not a preference name.
+preference-too-large = The preference "{ $name }" is too large.
+preferences-too-many = There are too many preferences.
+time-zone-not-stored = Can't store the time zone in { $file }: { $error }.
+workspace-closed = The workspace is closed.
+workspace-closed-quitting-hint = The app is quitting.
+workspace-no-data-folder = The data folder could not be found.
+workspace-no-data-folder-hint = Set XDG_DATA_HOME or HOME.
+workspace-no-data-folder-env-hint = Set XDG_DATA_HOME or HOME, or name a folder in GLYPHKEEL_WORKSPACE.
+operation-stopped = The operation stopped unexpectedly: { $error }.
+command-stopped = The command stopped unexpectedly: { $error }.
+app-quitting = The app is quitting.
+file-details-unreadable = The file's details can't be read: { $error }.
+file-content-missing = The stored content of { $name } is missing.
+file-content-missing-hint = Restore the workspace from a backup.
+file-thumbnail-unreadable = The thumbnail can't be read: { $error }.
+file-attach-owner = Name either the task or the wiki page to attach the files to.
+file-path-not-text = The path of { $name } can't be read as text.
+file-drop-unknown = Those dropped files are no longer known.
+file-drop-unknown-hint = Drop them again.
+file-runs-programs = { $name } can run programs, so it isn't opened.
+file-runs-programs-hint = Save it, and look at it first.
+file-copy-failed = { $name } can't be copied to open it: { $error }.
+file-save-failed = { $name } can't be saved there: { $error }.
+file-open-name-failed = The file can't be named for opening: { $error }.
+file-open-failed = The file can't be opened: { $error }.
+file-no-app = No app opened the file: { $error }.
+file-no-app-hint = Save it and open it yourself.
+file-open-unsupported = Files can't be opened on this platform yet.
+export-too-large = The export is too large to save.
+export-unreadable = The export can't be read.
+chooser-failed = The file chooser can't be shown: { $error }.
+chooser-unsupported = Files can't be chosen on this platform yet.
+archive-unknown = The chosen archive is no longer known.
+archive-unknown-hint = Choose the archive again.
+link-too-long = The address is too long to open.
+link-not-an-address = That isn't an address: { $error }.
+link-not-external = Only web (http, https) and mail addresses are opened outside the app.
+link-open-failed = The link can't be opened: { $error }.
+link-no-program = No program opened the link: { $error }.
+link-unsupported = Links can't be opened on this platform yet.
+links-main-window-only = Only the main window opens links.
+quick-add-hide-only = Only the quick-add window hides itself.
+quick-add-listen-only = Only the quick-add window listens here.
+task-window-bad-key = { $key } isn't a task key.
+task-window-failed = The task window can't be opened: { $error }.
+wiki-window-bad-id = { $id } isn't a page ID.
+wiki-window-failed = The wiki window can't be opened: { $error }.
+shortcut-not-a-choice = "{ $keys }" is not one of the shortcuts to choose from.

@@ -21,6 +21,9 @@ let segmenter: Intl.Segmenter | null | undefined;
 /** The line's words, spaces and punctuation, in order, by the platform's word rules (which know scripts without spaces). */
 export function tokens(line: string): string[] {
   if (segmenter === undefined) {
+    // Word breaks follow Unicode's rules, which don't depend on the
+    // interface's language; the text compared may be in any language.
+    // eslint-disable-next-line no-restricted-syntax -- no locale to pass
     segmenter = typeof Intl.Segmenter === "function" ? new Intl.Segmenter(undefined, { granularity: "word" }) : null;
   }
   if (segmenter !== null) {

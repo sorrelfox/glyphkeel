@@ -5,6 +5,8 @@
 
 gallery-title = Themes and components
 gallery-theme = Theme
+# The HTML attribute that picks a theme; keep it as it is.
+gallery-theme-attribute = data-theme="{ $theme }"
 gallery-accent = Accent
 gallery-accent-default = Theme default
 gallery-density = Density

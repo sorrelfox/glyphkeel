@@ -10,8 +10,7 @@ import { useAppearance } from "../appearance/AppearanceProvider";
 import { classes } from "../classes";
 import { Dialog } from "../components/Dialog";
 import { Segmented } from "../components/Segmented";
-import { useCall, useOp } from "../data/hooks";
-import { OpFailure } from "../data/transport";
+import { failureText, useCall, useOp } from "../data/hooks";
 import { useT } from "../i18n/I18n";
 import { useAppSettings } from "../ipc/appSettings";
 import { readPref, writePref } from "../prefs/store";
@@ -217,7 +216,7 @@ function ProjectStep({ onCreated }: { onCreated: () => void }) {
       },
       (failure: unknown) => {
         setBusy(false);
-        setError(failure instanceof OpFailure ? failure.error.message : String(failure));
+        setError(failureText(t, failure));
       },
     );
   };

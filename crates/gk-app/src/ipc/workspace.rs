@@ -16,14 +16,13 @@ use std::time::Duration;
 use gk_api::Profile;
 use gk_api::ops::agent::{AgentLimits, AgentLimitsPatch};
 use gk_api::ops::common::{Actor, ActorKind, Via};
-use gk_api::{Changed, EntityChange, ErrorCode, OpError, Origin};
+use gk_api::{Changed, EntityChange, OpError, Origin};
 use gk_engine::{ConfirmRequest, Confirmation, Context, Engine, EngineConfig, system_clock};
 use gk_store::{WatcherHandle, WorkspaceLayout};
 use serde_json::Value;
 use tauri::ipc::Channel;
 
 use super::windows::Windows;
-use crate::messages::text;
 use crate::reminders::{self, Notifier};
 
 /// How often other programs' commits are looked for.
@@ -196,9 +195,9 @@ impl Workspace {
             (reopen.config.clone(), reopen.notifier.clone())
         };
         let Some(mut config) = config else {
-            return Err(self
-                .failure()
-                .unwrap_or_else(|| OpError::new(ErrorCode::Storage, "The workspace is closed.")));
+            return Err(self.failure().unwrap_or_else(|| {
+                crate::messages::error("workspace-closed", &[], OpError::storage)
+            }));
         };
         if let Some(zone) = self.time_zone() {
             config.time_zone = Some(zone);
@@ -337,7 +336,7 @@ impl Workspace {
         if confirmed {
             Ok(())
         } else {
-            Err(OpError::forbidden(text(refused, &[])))
+            Err(crate::messages::error(refused, &[], OpError::forbidden))
         }
     }
 
@@ -454,8 +453,11 @@ impl Workspace {
             return Ok(Arc::clone(engine));
         }
         Err(self.failure().unwrap_or_else(|| {
-            OpError::new(ErrorCode::Storage, "The workspace is closed.")
-                .with_hint("The app is quitting.")
+            crate::messages::hint(
+                crate::messages::error("workspace-closed", &[], OpError::storage),
+                "workspace-closed-quitting-hint",
+                &[],
+            )
         }))
     }
 }

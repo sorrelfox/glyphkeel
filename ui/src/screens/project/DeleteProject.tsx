@@ -10,7 +10,7 @@ import { Dialog } from "../../components/Dialog";
 import { useToasts } from "../../components/Toasts";
 import { useProject } from "../../data/board";
 import { type Project } from "../../data/catalog";
-import { useCall, useOp } from "../../data/hooks";
+import { failureText, useCall, useOp } from "../../data/hooks";
 import { useFailureToast, skippedReason } from "../../data/safety";
 import { useT } from "../../i18n/I18n";
 import styles from "./Project.module.css";
@@ -102,7 +102,7 @@ export function DeleteProjectDialog({ projectKey, onClose }: { projectKey: strin
       }}
     >
       <div className={styles.deleteDialog}>
-        {project.isError && <p className="faint">{project.error.error.message}</p>}
+        {project.isError && <p className="faint">{failureText(t, project.error)}</p>}
         {project.data && <DeleteQuestion project={project.data} onCancel={onClose} onDeleted={onClose} />}
       </div>
     </Dialog>

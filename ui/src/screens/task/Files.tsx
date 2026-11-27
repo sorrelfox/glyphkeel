@@ -9,7 +9,7 @@ import { classes } from "../../classes";
 import { MenuEntries } from "../../components/ContextMenu";
 import { useToasts } from "../../components/Toasts";
 import { type Attachment, type FileKind } from "../../generated/ops";
-import { errorToast, useCall, useCommand, useOp } from "../../data/hooks";
+import { errorToast, failureText, useCall, useCommand, useOp } from "../../data/hooks";
 import { useT } from "../../i18n/I18n";
 import {
   attachBrowserFiles,
@@ -53,7 +53,7 @@ function useReportAttached(): (attached: Attached) => void {
       toasts.show({ tone: "info", text: t("files-attached", { count: attached.files.length }) });
     }
     for (const failure of attached.failed) {
-      toasts.show({ tone: "error", text: t("files-attach-failed", { name: failure.name }), detail: failure.error.message });
+      toasts.show({ tone: "error", text: t("files-attach-failed", { name: failure.name }), detail: failureText(t, failure.error) });
     }
   };
 }

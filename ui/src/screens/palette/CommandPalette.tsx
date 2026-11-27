@@ -14,9 +14,8 @@ import { classes } from "../../classes";
 import { Kbd } from "../../components/Kbd";
 import { ProjectMark } from "../../components/ProjectMark";
 import { useProjects } from "../../data/board";
-import { useCall } from "../../data/hooks";
+import { failureText, useCall } from "../../data/hooks";
 import { opKey } from "../../data/queries";
-import { OpFailure } from "../../data/transport";
 import { useT } from "../../i18n/I18n";
 import { openTaskWindow } from "../../ipc/taskWindow";
 import { readPref, writePref } from "../../prefs/store";
@@ -111,7 +110,7 @@ function PaletteBody({ close }: { close: () => void }) {
       }
     }
   }
-  const searchError = showsTasks && settled !== "" && key === null && search.error ? (search.error instanceof OpFailure ? search.error.error.message : String(search.error)) : null;
+  const searchError = showsTasks && settled !== "" && key === null && search.error ? failureText(t, search.error) : null;
 
   const keep = (item: Recent) => {
     const next = remember(recent, item);

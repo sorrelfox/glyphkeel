@@ -55,8 +55,13 @@ struct FileInfo {
 
 fn file_info(workspace: &Workspace, attachment: &str) -> Result<FileInfo, OpError> {
     let value = workspace.call("file.get", json!({ "attachment": attachment }), None)?;
-    serde_json::from_value(value)
-        .map_err(|e| OpError::storage(format!("The file's details can't be read: {e}.")))
+    serde_json::from_value(value).map_err(|e| {
+        crate::messages::error(
+            "file-details-unreadable",
+            &[("error", e.to_string())],
+            OpError::storage,
+        )
+    })
 }
 
 /// The stored content of `info`.
@@ -65,8 +70,15 @@ fn stored_path(workspace: &Workspace, info: &FileInfo) -> Result<PathBuf, OpErro
         .layout()
         .and_then(|layout| gk_store::file_path(&layout, &info.sha256))
         .ok_or_else(|| {
-            OpError::storage(format!("The stored content of {} is missing.", info.name))
-                .with_hint("Restore the workspace from a backup.")
+            crate::messages::hint(
+                crate::messages::error(
+                    "file-content-missing",
+                    &[("name", info.name.clone())],
+                    OpError::storage,
+                ),
+                "file-content-missing-hint",
+                &[],
+            )
         })
 }
 
@@ -158,8 +170,13 @@ fn thumbnail(workspace: &Workspace, info: &FileInfo) -> Response<Vec<u8>> {
     let made = workspace
         .call("file.thumbnail", json!({ "attachment": info.id }), None)
         .and_then(|value| {
-            serde_json::from_value::<ThumbInfo>(value)
-                .map_err(|e| OpError::storage(format!("The thumbnail can't be read: {e}.")))
+            serde_json::from_value::<ThumbInfo>(value).map_err(|e| {
+                crate::messages::error(
+                    "file-thumbnail-unreadable",
+                    &[("error", e.to_string())],
+                    OpError::storage,
+                )
+            })
         });
     let thumb = match made {
         Ok(thumb) => thumb,
@@ -259,8 +276,10 @@ fn owner(task: Option<String>, page: Option<String>) -> Result<Value, OpError> {
     match (task, page) {
         (Some(task), None) => Ok(json!({ "task": task })),
         (None, Some(page)) => Ok(json!({ "page": page })),
-        _ => Err(OpError::invalid(
-            "Name either the task or the wiki page to attach the files to.",
+        _ => Err(crate::messages::error(
+            "file-attach-owner",
+            &[],
+            OpError::invalid,
         )),
     }
 }
@@ -275,10 +294,11 @@ fn attach_paths(workspace: &Workspace, owner: &Value, paths: &[PathBuf]) -> Atta
                 input["path"] = json!(text);
                 workspace.call("file.attach", input, None)
             }
-            None => Err(OpError::invalid(format!(
-                "The path of {} can't be read as text.",
-                display_name(path)
-            ))),
+            None => Err(crate::messages::error(
+                "file-path-not-text",
+                &[("name", display_name(path))],
+                OpError::invalid,
+            )),
         };
         match result {
             Ok(change) => attached.files.push(change),
@@ -311,7 +331,13 @@ pub(crate) async fn blocking<T: Send + 'static>(
 ) -> Result<T, OpError> {
     tauri::async_runtime::spawn_blocking(work)
         .await
-        .map_err(|e| OpError::storage(format!("The command stopped unexpectedly: {e}.")))?
+        .map_err(|e| {
+            crate::messages::error(
+                "command-stopped",
+                &[("error", e.to_string())],
+                OpError::storage,
+            )
+        })?
 }
 
 // ---------- drops from the desktop ----------
@@ -431,8 +457,11 @@ pub(crate) async fn attach_drop(
 ) -> Result<Attached, OpError> {
     let owner = owner(task, page)?;
     let paths = drops.take(window.label(), drop).ok_or_else(|| {
-        OpError::not_found("Those dropped files are no longer known.", &[])
-            .with_hint("Drop them again.")
+        crate::messages::hint(
+            crate::messages::error("file-drop-unknown", &[], |m| OpError::not_found(m, &[])),
+            "file-drop-unknown-hint",
+            &[],
+        )
     })?;
     let workspace = Arc::clone(&workspace);
     blocking(move || Ok(attach_paths(&workspace, &owner, &paths))).await
@@ -571,23 +600,31 @@ pub(crate) async fn open_file(
     let copy = blocking(move || {
         let info = file_info(&workspace, &attachment)?;
         if !may_open(&info.name, &info.mime, &info.kind) {
-            return Err(OpError::forbidden(format!(
-                "{} can run programs, so it isn't opened.",
-                info.name
-            ))
-            .with_hint("Save it, and look at it first.")
+            return Err(crate::messages::hint(
+                crate::messages::error(
+                    "file-runs-programs",
+                    &[("name", info.name.clone())],
+                    OpError::forbidden,
+                ),
+                "file-runs-programs-hint",
+                &[],
+            )
             .with_detail("kind", info.kind));
         }
         let source = stored_path(&workspace, &info)?;
         let layout = workspace
             .layout()
-            .ok_or_else(|| OpError::storage("The workspace is closed."))?;
+            .ok_or_else(|| crate::messages::error("workspace-closed", &[], OpError::storage))?;
         let folder = layout.cache_dir().join("open").join(&info.id);
         let target = folder.join(safe_name(&info.name));
         std::fs::create_dir_all(&folder)
             .and_then(|()| std::fs::copy(&source, &target))
             .map_err(|e| {
-                OpError::storage(format!("{} can't be copied to open it: {e}.", info.name))
+                crate::messages::error(
+                    "file-copy-failed",
+                    &[("name", info.name.clone()), ("error", e.to_string())],
+                    OpError::storage,
+                )
             })?;
         Ok(target)
     })
@@ -613,9 +650,13 @@ pub(crate) async fn save_file(
     };
     blocking(move || {
         let source = stored_path(&workspace, &info)?;
-        std::fs::copy(&source, &target)
-            .map(|_| true)
-            .map_err(|e| OpError::storage(format!("{} can't be saved there: {e}.", info.name)))
+        std::fs::copy(&source, &target).map(|_| true).map_err(|e| {
+            crate::messages::error(
+                "file-save-failed",
+                &[("name", info.name.clone()), ("error", e.to_string())],
+                OpError::storage,
+            )
+        })
     })
     .await
 }
@@ -635,10 +676,15 @@ pub(crate) async fn save_export(
     base64: Option<bool>,
 ) -> Result<bool, OpError> {
     if contents.len() > EXPORT_MAX_BYTES {
-        return Err(OpError::invalid("The export is too large to save."));
+        return Err(crate::messages::error(
+            "export-too-large",
+            &[],
+            OpError::invalid,
+        ));
     }
     let bytes = if base64 == Some(true) {
-        decode_base64(&contents).ok_or_else(|| OpError::invalid("The export can't be read."))?
+        decode_base64(&contents)
+            .ok_or_else(|| crate::messages::error("export-unreadable", &[], OpError::invalid))?
     } else {
         contents.into_bytes()
     };
@@ -647,9 +693,13 @@ pub(crate) async fn save_export(
         return Ok(false);
     };
     blocking(move || {
-        std::fs::write(&target, &bytes)
-            .map(|()| true)
-            .map_err(|e| OpError::storage(format!("{name} can't be saved there: {e}.")))
+        std::fs::write(&target, &bytes).map(|()| true).map_err(|e| {
+            crate::messages::error(
+                "file-save-failed",
+                &[("name", name.clone()), ("error", e.to_string())],
+                OpError::storage,
+            )
+        })
     })
     .await
 }
@@ -829,7 +879,13 @@ pub(crate) mod dialog {
         let target = window.clone();
         window
             .run_on_main_thread(move || show(&target, mode, answer))
-            .map_err(|e| OpError::storage(format!("The file chooser can't be shown: {e}.")))?;
+            .map_err(|e| {
+                crate::messages::error(
+                    "chooser-failed",
+                    &[("error", e.to_string())],
+                    OpError::storage,
+                )
+            })?;
         super::blocking(move || Ok(answered.recv().unwrap_or_default())).await
     }
 
@@ -906,8 +962,10 @@ pub(crate) mod dialog {
         _window: &WebviewWindow,
         _mode: Mode,
     ) -> Result<Vec<PathBuf>, OpError> {
-        Err(OpError::forbidden(
-            "Files can't be chosen on this platform yet.",
+        Err(crate::messages::error(
+            "chooser-unsupported",
+            &[],
+            OpError::forbidden,
         ))
     }
 }
@@ -924,7 +982,13 @@ mod system {
     /// portal inside a sandbox).
     pub(crate) async fn open(app: &AppHandle, path: &Path) -> Result<(), OpError> {
         let uri = gtk::glib::filename_to_uri(path, None)
-            .map_err(|e| OpError::storage(format!("The file can't be named for opening: {e}.")))?
+            .map_err(|e| {
+                crate::messages::error(
+                    "file-open-name-failed",
+                    &[("error", e.to_string())],
+                    OpError::storage,
+                )
+            })?
             .to_string();
         let (answer, answered) = std::sync::mpsc::channel();
         app.run_on_main_thread(move || {
@@ -935,14 +999,23 @@ mod system {
             .map_err(|e| e.to_string());
             let _ = answer.send(result);
         })
-        .map_err(|e| OpError::storage(format!("The file can't be opened: {e}.")))?;
+        .map_err(|e| {
+            crate::messages::error(
+                "file-open-failed",
+                &[("error", e.to_string())],
+                OpError::storage,
+            )
+        })?;
         super::blocking(move || {
             answered
                 .recv()
-                .unwrap_or_else(|_| Err("the app is quitting".to_owned()))
+                .map_err(|_| crate::messages::error("app-quitting", &[], OpError::storage))?
                 .map_err(|e| {
-                    OpError::storage(format!("No app opened the file: {e}."))
-                        .with_hint("Save it and open it yourself.")
+                    crate::messages::hint(
+                        crate::messages::error("file-no-app", &[("error", e)], OpError::storage),
+                        "file-no-app-hint",
+                        &[],
+                    )
                 })
         })
         .await
@@ -964,8 +1037,15 @@ mod system {
         super::blocking(move || {
             crate::platform::windows::mark_as_downloaded(&path);
             crate::platform::windows::open_path(&path).map_err(|e| {
-                OpError::storage(format!("No app opened the file: {e}."))
-                    .with_hint("Save it and open it yourself.")
+                crate::messages::hint(
+                    crate::messages::error(
+                        "file-no-app",
+                        &[("error", e.to_string())],
+                        OpError::storage,
+                    ),
+                    "file-no-app-hint",
+                    &[],
+                )
             })
         })
         .await
@@ -980,8 +1060,10 @@ mod system {
     use tauri::AppHandle;
 
     pub(crate) async fn open(_app: &AppHandle, _path: &Path) -> Result<(), OpError> {
-        Err(OpError::forbidden(
-            "Files can't be opened on this platform yet.",
+        Err(crate::messages::error(
+            "file-open-unsupported",
+            &[],
+            OpError::forbidden,
         ))
     }
 }

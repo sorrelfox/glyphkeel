@@ -18,7 +18,7 @@ test("a CSV file is checked, mapped and imported from the project menu, then und
   await dialog.getByRole("button", { name: "Check" }).click();
 
   // The preset is detected; each column shows its examples and where it goes.
-  await expect(dialog.getByRole("button", { name: "Preset", exact: true })).toContainText(/Detected: .?jira/);
+  await expect(dialog.getByRole("button", { name: /^Preset:/ })).toContainText(/Detected: .?jira/);
   const summary = dialog.getByTestId("csv-summary");
   await expect.poll(async () => plain(await summary.innerText())).toContain("2 new tasks");
   await expect.poll(async () => plain(await summary.innerText())).toContain("One row is left out");
@@ -53,12 +53,12 @@ test("the main menu opens the CSV import, with a project to choose, and keeps a 
   await page.getByRole("menuitem", { name: /Import tasks from a CSV file/ }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("heading", { name: "Import from CSV" })).toBeVisible();
-  await expect(dialog.getByRole("button", { name: "Project", exact: true })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: /^Project:/ })).toBeVisible();
   await dialog.getByRole("textbox", { name: "CSV file in the exports folder" }).fill("tasks.csv");
   await dialog.getByRole("button", { name: "Check" }).click();
   await expect.poll(async () => plain(await dialog.getByTestId("csv-summary").innerText())).toContain("2 new tasks");
   await dialog.getByRole("textbox", { name: "Preset name" }).fill("Our Jira");
   await dialog.getByRole("button", { name: "Save as preset" }).click();
   await expect(page.getByText(/Saved the preset .?Our Jira/)).toBeVisible();
-  await expect(dialog.getByRole("button", { name: "Preset", exact: true })).toContainText("Our Jira");
+  await expect(dialog.getByRole("button", { name: /^Preset:/ })).toContainText("Our Jira");
 });

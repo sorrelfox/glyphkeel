@@ -262,8 +262,19 @@ fn cell(v: &Value) -> String {
         Value::Object(o) if is_field_changes(o) => o
             .iter()
             .map(|(field, change)| {
-                let side = |s: &str| change.get(s).map_or_else(|| "–".to_owned(), cell);
-                format!("{field}: {} → {}", side("before"), side("after"))
+                let side = |s: &str| {
+                    change
+                        .get(s)
+                        .map_or_else(|| text("cli-no-value", &[]), cell)
+                };
+                text(
+                    "cli-field-change",
+                    &[
+                        ("field", field.clone()),
+                        ("before", side("before")),
+                        ("after", side("after")),
+                    ],
+                )
             })
             .collect::<Vec<_>>()
             .join("; "),

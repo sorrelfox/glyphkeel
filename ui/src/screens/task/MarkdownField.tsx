@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 
 import { classes } from "../../classes";
 import { useToasts } from "../../components/Toasts";
-import { useCall } from "../../data/hooks";
+import { failureText, useCall } from "../../data/hooks";
 import { useLinkCompletion } from "../../data/linking";
 import { useBlockRenderer } from "../../data/markdown";
 import { type Attachment } from "../../generated/ops";
@@ -90,7 +90,7 @@ export function MarkdownField({ label, value, onChange, onSubmit, onCancel, mode
     }
     const attached = await attachBrowserFiles(call, attachTo, files);
     for (const failure of attached.failed) {
-      toasts.show({ tone: "error", text: t("files-attach-failed", { name: failure.name }), detail: failure.error.message });
+      toasts.show({ tone: "error", text: t("files-attach-failed", { name: failure.name }), detail: failureText(t, failure.error) });
     }
     return attached.files.map((change) => attachmentMarkdown(change.file)).join(" ");
   };

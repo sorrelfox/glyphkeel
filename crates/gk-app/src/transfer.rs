@@ -19,7 +19,6 @@ use tauri::{State, WebviewWindow};
 
 use crate::files::{blocking, dialog, safe_name};
 use crate::ipc::Workspace;
-use crate::messages::text;
 
 /// Archives chosen for an import that the page may still name, newest last.
 const KEPT_CHOICES: usize = 4;
@@ -54,8 +53,11 @@ impl ImportChoices {
             .find(|(t, _)| t == token)
             .map(|(_, path)| path.clone())
             .ok_or_else(|| {
-                OpError::not_found("The chosen archive is no longer known.", &[])
-                    .with_hint("Choose the archive again.")
+                crate::messages::hint(
+                    crate::messages::error("archive-unknown", &[], |m| OpError::not_found(m, &[])),
+                    "archive-unknown-hint",
+                    &[],
+                )
             })
     }
 }
@@ -94,10 +96,11 @@ pub(crate) fn page_may_run(op: &str, input: &Value) -> Result<(), OpError> {
         .iter()
         .find(|(o, field)| *o == op && names(field));
     match refused {
-        Some((op, field)) => Err(OpError::forbidden(text(
+        Some((op, field)) => Err(crate::messages::error(
             "page-path-refused",
             &[("op", (*op).to_owned()), ("field", (*field).to_owned())],
-        ))
+            OpError::forbidden,
+        )
         .with_detail("path", *field)),
         None => Ok(()),
     }
@@ -308,10 +311,11 @@ pub(crate) async fn import_csv(
 ) -> Result<Value, OpError> {
     let path = choices.path(&token)?;
     let Value::Object(mut input) = input else {
-        return Err(OpError::invalid(crate::messages::text(
+        return Err(crate::messages::error(
             "csv-input-not-an-object",
             &[],
-        )));
+            OpError::invalid,
+        ));
     };
     input.insert("path".to_owned(), json!(path.to_string_lossy()));
     let workspace = Arc::clone(&workspace);

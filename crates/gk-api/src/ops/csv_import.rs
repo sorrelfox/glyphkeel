@@ -239,8 +239,14 @@ pub struct CsvProblem {
     pub column: Option<String>,
     /// A stable code, such as `bad_date`.
     pub code: String,
-    /// What is wrong, for people.
+    /// What is wrong, for people, in English.
     pub message: String,
+    /// The message's ID in the message files, for translation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message_id: Option<String>,
+    /// The message's arguments, by name.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub args: BTreeMap<String, String>,
 }
 
 /// What became of a row.

@@ -12,6 +12,7 @@ import { LEGAL_FILES, useLegalText, type LegalText } from "../../ipc/legal";
 import { openLink } from "../../ipc/links";
 import { Group, Row } from "../PreferenceRows";
 import styles from "../Preferences.module.css";
+import { failureText } from "../../data/hooks";
 
 /** Where the source code is, as the licence asks the program to say. */
 export const SOURCE_URL = "https://github.com/sorrelfox/glyphkeel";
@@ -110,7 +111,7 @@ function TextView({ which, onBack }: { which: LegalText; onBack: () => void }) {
         </p>
       ) : text.isError ? (
         <p className={styles.legalMissing} role="alert">
-          {text.error.error.message}
+          {failureText(t, text.error)}
         </p>
       ) : text.data === null ? (
         <p className={styles.legalMissing} role="status">

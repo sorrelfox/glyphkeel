@@ -208,6 +208,11 @@ fn problem(
         column: column.map(str::to_owned),
         code: code.to_owned(),
         message: messages::text(id, args),
+        message_id: Some(id.to_owned()),
+        args: args
+            .iter()
+            .map(|(k, v)| ((*k).to_owned(), v.clone()))
+            .collect(),
     }
 }
 
@@ -222,6 +227,24 @@ fn refused(severity: CsvSeverity, column: Option<&str>, code: &str, e: &OpError)
         column: column.map(str::to_owned),
         code: code.to_owned(),
         message: e.message.clone(),
+        message_id: e
+            .details
+            .get("message_id")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned),
+        args: e
+            .details
+            .get("args")
+            .and_then(serde_json::Value::as_object)
+            .map(|args| {
+                args.iter()
+                    .map(|(k, v)| {
+                        let text = v.as_str().map_or_else(|| v.to_string(), str::to_owned);
+                        (k.clone(), text)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
     }
 }
 

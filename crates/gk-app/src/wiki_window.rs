@@ -42,15 +42,23 @@ fn label(id: &str) -> String {
 #[tauri::command]
 pub(crate) fn open_wiki_window(app: AppHandle, id: String) -> Result<(), OpError> {
     if !is_page_id(&id) {
-        return Err(OpError::invalid_at("id", format!("{id} isn't a page ID.")));
+        return Err(crate::messages::error(
+            "wiki-window-bad-id",
+            &[("id", id.clone())],
+            |m| OpError::invalid_at("id", m),
+        ));
     }
     if let Some(window) = app.get_webview_window(&label(&id)) {
         task_window::show(&window);
         return Ok(());
     }
-    open(&app, &id)
-        .map(drop)
-        .map_err(|e| OpError::storage(format!("The wiki window can't be opened: {e}.")))
+    open(&app, &id).map(drop).map_err(|e| {
+        crate::messages::error(
+            "wiki-window-failed",
+            &[("error", e.to_string())],
+            OpError::storage,
+        )
+    })
 }
 
 fn open(app: &AppHandle, id: &str) -> tauri::Result<WebviewWindow> {

@@ -143,7 +143,7 @@ function ThemeColumn({ theme, accent, density }: ThemeColumnProps) {
       <header className={styles.columnHeader}>
         <div className={styles.row}>
           <h2 className={styles.columnTitle}>{t(`theme-${theme}`)}</h2>
-          <span className="key">{`data-theme="${theme}"`}</span>
+          <span className="key">{t("gallery-theme-attribute", { theme })}</span>
         </div>
         <span className="muted">{t(`theme-note-${theme}`)}</span>
       </header>

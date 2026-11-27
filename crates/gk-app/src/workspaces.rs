@@ -72,9 +72,11 @@ fn view(data_dir: Option<&Path>, open: Option<&WorkspaceLayout>) -> WorkspacesVi
 }
 
 fn no_data_dir() -> OpError {
-    OpError::storage("The data folder could not be found.")
-        .with_hint("Set XDG_DATA_HOME or HOME.")
-        .with_detail("message_id", "workspace-no-data-folder")
+    crate::messages::hint(
+        crate::messages::error("workspace-no-data-folder", &[], OpError::storage),
+        "workspace-no-data-folder-hint",
+        &[],
+    )
 }
 
 /// Closes the windows of the workspace that was open: its tasks' and wiki

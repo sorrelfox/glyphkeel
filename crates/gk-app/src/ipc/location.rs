@@ -32,9 +32,12 @@ impl AppLocation {
         let data_dir: Option<PathBuf> =
             gk_store::data_dir().or_else(|| fallback_data_dir.map(Path::to_path_buf));
         self.0.layout(data_dir.as_deref()).map_err(|e| match e {
-            StoreError::NoDataDir => OpError::storage("The data folder could not be found.")
-                .with_hint("Set XDG_DATA_HOME or HOME, or name a folder in GLYPHKEEL_WORKSPACE."),
-            e => OpError::invalid(format!("{e}.")),
+            StoreError::NoDataDir => crate::messages::hint(
+                crate::messages::error("workspace-no-data-folder", &[], OpError::storage),
+                "workspace-no-data-folder-env-hint",
+                &[],
+            ),
+            e => gk_engine::store_error(&e),
         })
     }
 }

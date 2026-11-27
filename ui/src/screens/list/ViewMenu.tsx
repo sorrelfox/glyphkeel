@@ -10,7 +10,7 @@ import { MenuEntries, type MenuEntry } from "../../components/ContextMenu";
 import { Dialog } from "../../components/Dialog";
 import { Segmented } from "../../components/Segmented";
 import { Switch } from "../../components/Switch";
-import { errorToast, useCall, useUndo } from "../../data/hooks";
+import { errorToast, failureText, useCall, useUndo } from "../../data/hooks";
 import { OpFailure } from "../../data/transport";
 import { useToasts } from "../../components/Toasts";
 import { type SavedView, type ViewKind } from "../../generated/ops";
@@ -77,7 +77,7 @@ export function useViewCommands({ project, kind = "list", views, active, setup, 
       return true;
     } catch (error: unknown) {
       if (error instanceof OpFailure && error.error.code !== "ipc") {
-        return error.error.message;
+        return failureText(t, error);
       }
       toasts.show(errorToast(t, error));
       return false;

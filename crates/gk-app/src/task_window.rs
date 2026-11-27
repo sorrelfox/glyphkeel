@@ -52,18 +52,23 @@ fn label(key: &str) -> String {
 #[tauri::command]
 pub(crate) fn open_task_window(app: AppHandle, key: String) -> Result<(), OpError> {
     if !is_task_key(&key) {
-        return Err(OpError::invalid_at(
-            "key",
-            format!("{key} isn't a task key."),
+        return Err(crate::messages::error(
+            "task-window-bad-key",
+            &[("key", key.clone())],
+            |m| OpError::invalid_at("key", m),
         ));
     }
     if let Some(window) = app.get_webview_window(&label(&key)) {
         show(&window);
         return Ok(());
     }
-    open(&app, &key)
-        .map(drop)
-        .map_err(|e| OpError::storage(format!("The task window can't be opened: {e}.")))
+    open(&app, &key).map(drop).map_err(|e| {
+        crate::messages::error(
+            "task-window-failed",
+            &[("error", e.to_string())],
+            OpError::storage,
+        )
+    })
 }
 
 fn open(app: &AppHandle, key: &str) -> tauri::Result<WebviewWindow> {

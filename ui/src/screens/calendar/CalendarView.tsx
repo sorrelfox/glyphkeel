@@ -17,7 +17,7 @@ import { useToasts } from "../../components/Toasts";
 import { useCreateTask } from "../../data/board";
 import { useFieldSummary } from "../../data/fields";
 import { useCalendarTasks } from "../../data/calendar";
-import { useCommand, useUndo } from "../../data/hooks";
+import { failureText, useCommand, useUndo } from "../../data/hooks";
 import { useListNames, useParsedQuery, useQueryFields } from "../../data/list";
 import { useToday } from "../../data/zone";
 import { type ListedTask, type QueryProblem } from "../../generated/ops";
@@ -567,7 +567,7 @@ export function CalendarView({ project, openTask, onOpen }: CalendarViewProps) {
       </div>
       {data.error !== null && (
         <p className={styles.note} role="alert">
-          {t("calendar-error", { message: data.error.error.message })}
+          {t("calendar-error", { message: failureText(t, data.error) })}
         </p>
       )}
       {data.total > data.tasks.length && (

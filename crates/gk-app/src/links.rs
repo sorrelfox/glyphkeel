@@ -14,21 +14,27 @@ const MAX_LINK: usize = 8 * 1024;
 /// The address, if it is a web or mail address the desktop may open.
 pub(crate) fn external(url: &str) -> Result<Url, OpError> {
     if url.len() > MAX_LINK {
-        return Err(OpError::limit(
-            "The address is too long to open.",
-            MAX_LINK as u64,
-        ));
+        return Err(crate::messages::error("link-too-long", &[], |m| {
+            OpError::limit(m, MAX_LINK as u64)
+        }));
     }
-    let parsed =
-        Url::parse(url).map_err(|e| OpError::invalid(format!("That isn't an address: {e}.")))?;
+    let parsed = Url::parse(url).map_err(|e| {
+        crate::messages::error(
+            "link-not-an-address",
+            &[("error", e.to_string())],
+            OpError::invalid,
+        )
+    })?;
     let usable = match parsed.scheme() {
         "http" | "https" => parsed.host_str().is_some_and(|host| !host.is_empty()),
         "mailto" => true,
         _ => false,
     };
     if !usable || !parsed.username().is_empty() || parsed.password().is_some() {
-        return Err(OpError::forbidden(
-            "Only web (http, https) and mail addresses are opened outside the app.",
+        return Err(crate::messages::error(
+            "link-not-external",
+            &[],
+            OpError::forbidden,
         ));
     }
     Ok(parsed)
@@ -59,15 +65,29 @@ mod system {
             .map_err(|e| e.to_string());
             let _ = answer.send(result);
         })
-        .map_err(|e| OpError::storage(format!("The link can't be opened: {e}.")))?;
+        .map_err(|e| {
+            crate::messages::error(
+                "link-open-failed",
+                &[("error", e.to_string())],
+                OpError::storage,
+            )
+        })?;
         tauri::async_runtime::spawn_blocking(move || {
             answered
                 .recv()
-                .unwrap_or_else(|_| Err("the app is quitting".to_owned()))
-                .map_err(|e| OpError::storage(format!("No program opened the link: {e}.")))
+                .map_err(|_| crate::messages::error("app-quitting", &[], OpError::storage))?
+                .map_err(|e| {
+                    crate::messages::error("link-no-program", &[("error", e)], OpError::storage)
+                })
         })
         .await
-        .map_err(|e| OpError::storage(format!("The command stopped unexpectedly: {e}.")))?
+        .map_err(|e| {
+            crate::messages::error(
+                "command-stopped",
+                &[("error", e.to_string())],
+                OpError::storage,
+            )
+        })?
     }
 }
 
@@ -80,8 +100,13 @@ mod system {
     pub(crate) async fn open(_app: &AppHandle, uri: &str) -> Result<(), OpError> {
         let uri = uri.to_owned();
         crate::files::blocking(move || {
-            crate::platform::windows::open_url(&uri)
-                .map_err(|e| OpError::storage(format!("No program opened the link: {e}.")))
+            crate::platform::windows::open_url(&uri).map_err(|e| {
+                crate::messages::error(
+                    "link-no-program",
+                    &[("error", e.to_string())],
+                    OpError::storage,
+                )
+            })
         })
         .await
     }
@@ -93,8 +118,10 @@ mod system {
     use tauri::AppHandle;
 
     pub(crate) async fn open(_app: &AppHandle, _uri: &str) -> Result<(), OpError> {
-        Err(OpError::forbidden(
-            "Links can't be opened on this platform yet.",
+        Err(crate::messages::error(
+            "link-unsupported",
+            &[],
+            OpError::forbidden,
         ))
     }
 }

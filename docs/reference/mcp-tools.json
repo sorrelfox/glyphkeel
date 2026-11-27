@@ -52746,6 +52746,13 @@
                     "additionalProperties": false,
                     "description": "A problem with one row.",
                     "properties": {
+                      "args": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "The message's arguments, by name.",
+                        "type": "object"
+                      },
                       "code": {
                         "description": "A stable code, such as `bad_date`.",
                         "type": "string"
@@ -52755,7 +52762,11 @@
                         "type": "string"
                       },
                       "message": {
-                        "description": "What is wrong, for people.",
+                        "description": "What is wrong, for people, in English.",
+                        "type": "string"
+                      },
+                      "message_id": {
+                        "description": "The message's ID in the message files, for translation.",
                         "type": "string"
                       },
                       "severity": {

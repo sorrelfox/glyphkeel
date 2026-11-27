@@ -11,7 +11,7 @@ import { ProjectMark } from "../../components/ProjectMark";
 import { Select } from "../../components/Select";
 import { Switch } from "../../components/Switch";
 import { useToasts } from "../../components/Toasts";
-import { errorToast, useCall, useOp } from "../../data/hooks";
+import { errorToast, failureText, useCall, useOp } from "../../data/hooks";
 import { useDurations } from "../../data/time";
 import { useToday } from "../../data/zone";
 import { type TimeGroupBy, type TimeReportCsv, type TimeReportInput, type TimeReportRow, type WeekStart } from "../../generated/ops";
@@ -253,7 +253,7 @@ export function TimeReportScreen() {
           </Popover>
         </MenuTrigger>
       </div>
-      {report.isError && <p className="faint">{report.error.error.message}</p>}
+      {report.isError && <p className="faint">{failureText(t, report.error)}</p>}
       {report.data && report.data.items.length === 0 && <p className={classes("faint", styles.empty)}>{t("report-none")}</p>}
       {report.data && report.data.items.length > 0 && (
         <table className={styles.table} aria-label={t("report-table", { from, to })}>

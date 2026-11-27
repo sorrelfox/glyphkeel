@@ -76,7 +76,6 @@ workspace-new-note = A workspace keeps its own projects, tasks and wiki, apart f
 workspace-rename-note = Agents and commands working in this workspace must stop first.
 workspace-opened = Opened the workspace “{ $name }”.
 workspace-renamed = The workspace is called “{ $name }” now.
-workspace-no-data-folder = The data folder could not be found.
 
 ## Actions: their names in menus, tooltips and the shortcut sheet
 
@@ -205,6 +204,11 @@ toast-undo = Undo
 toast-settings-changed = Settings changed
 # The app couldn't reach its workspace at all (not an error of an operation).
 error-ipc = The workspace could not be reached
+# The same, where there is room for one line only; $detail is the system's own
+# words, which may be in English.
+error-ipc-detail = The workspace could not be reached: { $detail }
+# An error and what to do next, shown together on one line.
+error-with-hint = { $message } { $hint }
 
 ## Shortcut sheet
 
@@ -754,6 +758,8 @@ panel-blocked-by =
     }
 panel-claimed = Claimed by { $agent } until { $time }
 task-window-missing = This task can't be shown.
+# The title of a task's own window: the task's key and its title.
+task-window-title = { $key } · { $title }
 
 subtasks-title = Subtasks
 subtasks-add = Add subtask

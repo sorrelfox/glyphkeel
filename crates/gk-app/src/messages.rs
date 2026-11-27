@@ -17,6 +17,40 @@ pub(crate) fn text(id: &str, args: &[(&str, String)]) -> String {
     }
 }
 
+fn args_value(args: &[(&str, String)]) -> serde_json::Value {
+    serde_json::Value::Object(
+        args.iter()
+            .map(|(k, v)| ((*k).to_owned(), serde_json::Value::from(v.clone())))
+            .collect(),
+    )
+}
+
+/// The error `make` builds from message `id`'s English text, with the ID
+/// and its arguments (`message_id`, `args`) added, so that the page shows
+/// it in the person's language: `error("link-too-long", &[], |m|
+/// OpError::limit(m, max))`.
+pub(crate) fn error(
+    id: &str,
+    args: &[(&str, String)],
+    make: impl FnOnce(String) -> gk_api::OpError,
+) -> gk_api::OpError {
+    let mut error = make(text(id, args)).with_detail("message_id", id);
+    if !args.is_empty() {
+        error = error.with_detail("args", args_value(args));
+    }
+    error
+}
+
+/// Sets `error`'s hint to message `id`, with its ID and arguments
+/// (`hint_id`, `hint_args`).
+pub(crate) fn hint(error: gk_api::OpError, id: &str, args: &[(&str, String)]) -> gk_api::OpError {
+    let mut error = error.with_hint(text(id, args)).with_detail("hint_id", id);
+    if !args.is_empty() {
+        error = error.with_detail("hint_args", args_value(args));
+    }
+    error
+}
+
 /// The pattern of message `id`: its first line and the indented lines that
 /// continue it (the variants of a plural).
 fn pattern(id: &str) -> Option<String> {
@@ -139,6 +173,41 @@ mod tests {
             assert!(!shown.trim().is_empty(), "{id}");
             assert!(!shown.contains(['{', '}', '[']), "{id}: {shown}");
         }
+    }
+
+    /// The Rust sources of the app, without their tests.
+    fn sources(dir: &std::path::Path, out: &mut Vec<String>) {
+        for entry in std::fs::read_dir(dir).expect("source folder") {
+            let path = entry.expect("source entry").path();
+            if path.is_dir() {
+                sources(&path, out);
+            } else if path.extension().is_some_and(|e| e == "rs")
+                && path.file_name().is_some_and(|n| n != "tests.rs")
+            {
+                out.push(std::fs::read_to_string(&path).expect("source file"));
+            }
+        }
+    }
+
+    #[test]
+    fn every_message_the_app_names_exists_and_every_message_is_named() {
+        let mut texts = Vec::new();
+        sources(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
+            &mut texts,
+        );
+        let refs: Vec<&str> = texts.iter().map(String::as_str).collect();
+        // Window labels and their prefixes, not messages.
+        let labels = ["quick-add", "task-", "wiki-"];
+        let (missing, unused) = gk_engine::Messages(MESSAGES_FTL).check_usage(&refs, &labels);
+        assert!(
+            missing.is_empty(),
+            "named in the code but not in app.ftl: {missing:?}"
+        );
+        assert!(
+            unused.is_empty(),
+            "in app.ftl but named nowhere: {unused:?}"
+        );
     }
 
     #[test]
