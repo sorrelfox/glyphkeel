@@ -33,7 +33,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::confirm::{self, Asker, Pending, Reason};
 use crate::errors::{error_text, tool_error};
-use crate::guard::RateLimit;
+use crate::guard::{RateLimit, ReadLimit, ReadLimits};
 use crate::messages;
 use crate::prompts;
 use crate::render;
@@ -58,7 +58,9 @@ When your client can ask the person, a change beyond your profile or one that de
 asks first; if the person declines, the tool returns a forbidden error: don't ask again unless \
 the person tells you to.
 Resources glyphkeel://tasks/{key}, glyphkeel://projects/{key} and \
-glyphkeel://queries?query=... can be read and subscribed to, to hear when they change.";
+glyphkeel://queries?query=... can be read and subscribed to, to hear when they change.
+Reads are limited per session (get_workspace shows agent_limits); a rate_limited error says \
+how many seconds to wait: wait, then read fewer or smaller results.";
 
 /// How long clients may cache the discovery result.
 const DISCOVER_TTL_MS: u64 = 60 * 60 * 1000;
@@ -94,6 +96,8 @@ struct Inner {
     project: Option<String>,
     client: Mutex<Option<ClientInfo>>,
     writes: RateLimit,
+    /// The session's reads, against its read limits.
+    reads: ReadLimit,
     /// What the tool list was last served for.
     listed_for: Mutex<Option<Listing>>,
     /// The profile the prompt list was last served for.
@@ -159,6 +163,7 @@ impl Server {
                 project: setup.project.clone(),
                 client: Mutex::new(None),
                 writes: RateLimit::writes(),
+                reads: ReadLimit::default(),
                 listed_for: Mutex::new(None),
                 prompts_listed_for: Mutex::new(None),
                 pending: Pending::default(),
@@ -243,6 +248,30 @@ impl Server {
             .and_then(|p| p.parse::<Profile>().ok())
             .unwrap_or(Profile::Standard);
         self.inner.session.requested_profile().capped_by(cap)
+    }
+
+    /// The session's read limits in `settings`, for its profile.
+    fn read_limits_in(&self, settings: &Value) -> ReadLimits {
+        ReadLimits::of(&agent_limits(settings), self.profile_in(settings))
+    }
+
+    /// Takes one read from the session's read limits; a refusal is
+    /// counted in the session.
+    fn take_read(&self, limits: &ReadLimits) -> Result<(), OpError> {
+        self.inner
+            .reads
+            .check(Instant::now(), limits)
+            .inspect_err(|_| {
+                if let Some(session) = self.inner.session.id() {
+                    self.inner.engine.note_rate_limited(session);
+                }
+                tracing::debug!("read refused by the session's read limits");
+            })
+    }
+
+    /// Takes what a read returned from the session's read limits.
+    fn returned(&self, limits: &ReadLimits, bytes: usize) {
+        self.inner.reads.returned(Instant::now(), limits, bytes);
     }
 
     /// The agent's profile after the workspace's cap, read now.
@@ -488,7 +517,11 @@ impl Server {
                 &[],
             ));
         }
-        if tool.safety() >= Safety::Write {
+        let reading = tool.safety() == Safety::Read;
+        let read_limits = self.read_limits_in(&settings);
+        if reading {
+            self.take_read(&read_limits)?;
+        } else {
             self.inner
                 .writes
                 .check(Instant::now(), writes_per_minute(&settings))?;
@@ -501,7 +534,11 @@ impl Server {
             .inner
             .engine
             .call(&ctx, tool.main, Value::Object(args))?;
-        Ok((render::markdown(tool.name, &output), output))
+        let text = render::markdown(tool.name, &output);
+        if reading {
+            self.returned(&read_limits, text.len() + output.to_string().len());
+        }
+        Ok((text, output))
     }
 
     /// The agent's own context, in its session and project.
@@ -555,13 +592,18 @@ fn confirmations_on(settings: &Value) -> bool {
         .unwrap_or(true)
 }
 
-/// The workspace's limit on items moved to the trash in one call.
-fn trash_per_call(settings: &Value) -> Option<u32> {
+/// The workspace's limits on agent sessions in `settings`. Settings that
+/// don't say keep the defaults.
+fn agent_limits(settings: &Value) -> AgentLimits {
     settings
         .get("agent_limits")
         .and_then(|l| serde_json::from_value::<AgentLimits>(l.clone()).ok())
         .unwrap_or_default()
-        .trash_items_per_call
+}
+
+/// The workspace's limit on items moved to the trash in one call.
+fn trash_per_call(settings: &Value) -> Option<u32> {
+    agent_limits(settings).trash_items_per_call
 }
 
 /// Where a watcher sends its notifications.
@@ -615,6 +657,8 @@ async fn watch(server: Weak<Inner>, watched: Watched, sink: Sink, stop: Cancella
         inner.feed.receiver(&inner.engine)
     };
     let mut dirty = BTreeSet::new();
+    // Changes found but not yet sent, because the session's reads ran out.
+    let mut held = BTreeSet::new();
     let mut last: Option<Instant> = None;
     let mut tick = tokio::time::interval(resources::THROTTLE);
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -636,17 +680,29 @@ async fn watch(server: Weak<Inner>, watched: Watched, sink: Sink, stop: Cancella
         if !sink.lists_changed(&server).await {
             return;
         }
-        if dirty.is_empty() {
+        if dirty.is_empty() && held.is_empty() {
             continue;
         }
-        let uris = resources::changed(
-            server.engine(),
-            &server.lookup_context(),
-            &server.inner.session.housekeeping_context(),
-            &watched,
-            std::mem::take(&mut dirty),
+        if !dirty.is_empty() {
+            held.extend(resources::changed(
+                server.engine(),
+                &server.lookup_context(),
+                &server.inner.session.housekeeping_context(),
+                &watched,
+                std::mem::take(&mut dirty),
+            ));
+        }
+        // Each notification costs a little of the session's reads; when
+        // they run out, the rest wait for the next round.
+        let limits = server.settings().map_or(
+            ReadLimits::of(&AgentLimits::DEFAULT, Profile::Standard),
+            |s| server.read_limits_in(&s),
         );
-        for uri in uris {
+        while let Some(uri) = held.first().cloned() {
+            if !server.inner.reads.notify(Instant::now(), &limits) {
+                break;
+            }
+            held.remove(&uri);
             if !sink.updated(uri).await {
                 return;
             }
@@ -658,11 +714,7 @@ async fn watch(server: Weak<Inner>, watched: Watched, sink: Sink, stop: Cancella
 /// The workspace's limit on changing calls a minute in `settings`; `None`
 /// when the person lifted it. Settings that don't say keep the default.
 fn writes_per_minute(settings: &Value) -> Option<usize> {
-    let limits = settings
-        .get("agent_limits")
-        .and_then(|l| serde_json::from_value::<AgentLimits>(l.clone()).ok())
-        .unwrap_or_default();
-    limits
+    agent_limits(settings)
         .writes_per_minute
         .map(|n| usize::try_from(n).unwrap_or(usize::MAX))
 }
@@ -674,6 +726,13 @@ fn protocol_error(e: &OpError) -> McpError {
     use gk_api::ErrorCode;
     let text = error_text(e);
     match e.code {
+        ErrorCode::RateLimited => McpError::invalid_params(
+            text,
+            Some(serde_json::json!({
+                "code": e.code.as_str(),
+                "retry_after": e.details.get("retry_after"),
+            })),
+        ),
         ErrorCode::Busy
         | ErrorCode::Storage
         | ErrorCode::WorkspaceUpgraded
@@ -780,6 +839,11 @@ impl ServerHandler for Server {
     ) -> Result<GetPromptResponse, McpError> {
         self.note_client(context.client_info());
         let started = Instant::now();
+        let limits = self
+            .settings()
+            .map(|s| self.read_limits_in(&s))
+            .map_err(|e| protocol_error(&e))?;
+        self.take_read(&limits).map_err(|e| protocol_error(&e))?;
         let result = self.listed_prompt(&request.name).and_then(|prompt| {
             prompts::get(
                 &self.inner.engine,
@@ -790,6 +854,10 @@ impl ServerHandler for Server {
             )
         });
         tracing::debug!(prompt = %request.name, micros = started.elapsed().as_micros(), ok = result.is_ok(), "prompt");
+        if let Ok(prompt) = &result {
+            let bytes = serde_json::to_string(prompt).map_or(0, |t| t.len());
+            self.returned(&limits, bytes);
+        }
         result.map(Into::into).map_err(|e| protocol_error(&e))
     }
 
@@ -862,11 +930,18 @@ impl ServerHandler for Server {
         self.note_client(context.client_info());
         let resource = Resource::parse(&request.uri)
             .ok_or_else(|| protocol_error(&resources::unknown(&request.uri)))?;
+        let limits = self
+            .settings()
+            .map(|s| self.read_limits_in(&s))
+            .map_err(|e| protocol_error(&e))?;
+        self.take_read(&limits).map_err(|e| protocol_error(&e))?;
         let value = self
             .agent_context()
             .and_then(|ctx| resources::read(&self.inner.engine, &ctx, &resource))
             .map_err(|e| protocol_error(&e))?;
-        Ok(ReadResourceResult::new(vec![resources::contents(&request.uri, &value)]).into())
+        let contents = resources::contents(&request.uri, &value);
+        self.returned(&limits, value.to_string().len());
+        Ok(ReadResourceResult::new(vec![contents]).into())
     }
 
     async fn subscribe(

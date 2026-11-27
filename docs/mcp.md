@@ -91,8 +91,36 @@ Preferences › Agents & CLI › **Limits on each agent session**:
 | New tasks a day | No limit |
 | Items to the trash at a time (Standard profile) | 20 |
 | Items to the trash an hour (Standard profile) | 50 |
+| Reads at once | 60 |
+| Reads a minute | 600 (10 a second) |
+| Data read a minute | 8 MB |
 
-An agent that reaches a limit is told so, and its change is not made.
+An agent that reaches a limit on changes is told so, and its change is not
+made.
+
+The read limits work like a bucket: an agent may read 60 times in a row,
+then as fast as the bucket refills, ten a second. Tools that read, reading a
+resource and getting a prompt each count as one read; an update to a
+subscription counts a tenth, and waits when the bucket is empty. The data
+limit counts the size of the results, so an agent that pages through the
+whole workspace slows down while one that works on a few tasks never notices.
+An agent with the read-only profile may read twice as much. Lifting **Reads a
+minute** lifts the limit on reads; lifting **Reads at once** leaves a minute's
+worth.
+
+An agent that reads faster gets a `rate_limited` error. Its text starts with
+`Error (rate_limited)` and has a `Retry after (s): N` line; over JSON-RPC
+(resources and prompts) the error's data has `"code": "rate_limited"` and
+`"retry_after": N`. The agent should wait that many seconds, then read fewer
+or smaller results. Refused reads are counted in the session and shown in
+**Agent sessions**. Only agents are limited: your own use in the app and with
+`glyphkeel` is not, and changes keep their own limit.
+
+The limits hold per session, the same over standard input and output and
+over HTTP. Each `glyphkeel mcp` process is one session, and each client of
+the HTTP endpoint has its own; they don't share a bucket, and a new session
+starts with a full one. A change to the limits counts at once, also in
+sessions already running.
 
 ## One project only
 

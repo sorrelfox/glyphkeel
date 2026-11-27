@@ -314,6 +314,21 @@
                 "minimum": 0,
                 "type": "integer"
               },
+              "read_burst": {
+                "description": "Reads a session may make at once before `reads_per_minute` applies;\nleft out: one minute's worth.",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "read_mb_per_minute": {
+                "description": "Megabytes of results a session may read in a minute; left out: no\nlimit.",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "reads_per_minute": {
+                "description": "Reads (tool calls that read, resources read, prompts) a session may\nmake in a minute, sustained; left out: no limit on reads.",
+                "minimum": 0,
+                "type": "integer"
+              },
               "trash_items_per_call": {
                 "description": "Items a standard agent may move to the trash in one call; left out:\nno limit.",
                 "minimum": 0,
@@ -456,6 +471,21 @@
                 "properties": {
                   "new_tasks_per_day": {
                     "description": "Tasks a session may create in any 24 hours; left out: no limit.",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "read_burst": {
+                    "description": "Reads a session may make at once before `reads_per_minute` applies;\nleft out: one minute's worth.",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "read_mb_per_minute": {
+                    "description": "Megabytes of results a session may read in a minute; left out: no\nlimit.",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "reads_per_minute": {
+                    "description": "Reads (tool calls that read, resources read, prompts) a session may\nmake in a minute, sustained; left out: no limit on reads.",
                     "minimum": 0,
                     "type": "integer"
                   },
@@ -1362,6 +1392,12 @@
                     }
                   ]
                 },
+                "rate_limited": {
+                  "default": 0,
+                  "description": "Reads refused because the session read faster than its limits.",
+                  "minimum": 0,
+                  "type": "integer"
+                },
                 "reads": {
                   "description": "Operations that read.",
                   "minimum": 0,
@@ -1384,7 +1420,8 @@
                 "started_at",
                 "last_seen_at",
                 "reads",
-                "writes"
+                "writes",
+                "rate_limited"
               ],
               "type": "object"
             },
@@ -13278,6 +13315,11 @@
                               "type": "string"
                             },
                             {
+                              "const": "rate_limited",
+                              "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
+                              "type": "string"
+                            },
+                            {
                               "const": "busy",
                               "description": "Another program kept the workspace locked; trying again later works.",
                               "type": "string"
@@ -13470,6 +13512,11 @@
                               {
                                 "const": "limit",
                                 "description": "A size limit, a cap on bulk changes or a rate limit.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "rate_limited",
+                                "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
                                 "type": "string"
                               },
                               {
@@ -14036,6 +14083,11 @@
                         "type": "string"
                       },
                       {
+                        "const": "rate_limited",
+                        "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
+                        "type": "string"
+                      },
+                      {
                         "const": "busy",
                         "description": "Another program kept the workspace locked; trying again later works.",
                         "type": "string"
@@ -14228,6 +14280,11 @@
                         {
                           "const": "limit",
                           "description": "A size limit, a cap on bulk changes or a rate limit.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "rate_limited",
+                          "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
                           "type": "string"
                         },
                         {
@@ -15052,6 +15109,11 @@
                             "type": "string"
                           },
                           {
+                            "const": "rate_limited",
+                            "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
+                            "type": "string"
+                          },
+                          {
                             "const": "busy",
                             "description": "Another program kept the workspace locked; trying again later works.",
                             "type": "string"
@@ -15244,6 +15306,11 @@
                             {
                               "const": "limit",
                               "description": "A size limit, a cap on bulk changes or a rate limit.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "rate_limited",
+                              "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
                               "type": "string"
                             },
                             {
@@ -16076,6 +16143,11 @@
                             "type": "string"
                           },
                           {
+                            "const": "rate_limited",
+                            "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
+                            "type": "string"
+                          },
+                          {
                             "const": "busy",
                             "description": "Another program kept the workspace locked; trying again later works.",
                             "type": "string"
@@ -16268,6 +16340,11 @@
                             {
                               "const": "limit",
                               "description": "A size limit, a cap on bulk changes or a rate limit.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "rate_limited",
+                              "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
                               "type": "string"
                             },
                             {
@@ -16838,6 +16915,11 @@
                             "type": "string"
                           },
                           {
+                            "const": "rate_limited",
+                            "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
+                            "type": "string"
+                          },
+                          {
                             "const": "busy",
                             "description": "Another program kept the workspace locked; trying again later works.",
                             "type": "string"
@@ -17030,6 +17112,11 @@
                             {
                               "const": "limit",
                               "description": "A size limit, a cap on bulk changes or a rate limit.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "rate_limited",
+                              "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
                               "type": "string"
                             },
                             {
@@ -17408,6 +17495,11 @@
                         {
                           "const": "limit",
                           "description": "A size limit, a cap on bulk changes or a rate limit.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "rate_limited",
+                          "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
                           "type": "string"
                         },
                         {
@@ -17935,6 +18027,11 @@
                   {
                     "const": "limit",
                     "description": "A size limit, a cap on bulk changes or a rate limit.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "rate_limited",
+                    "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
                     "type": "string"
                   },
                   {
@@ -58685,6 +58782,11 @@
                           "type": "string"
                         },
                         {
+                          "const": "rate_limited",
+                          "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
+                          "type": "string"
+                        },
+                        {
                           "const": "busy",
                           "description": "Another program kept the workspace locked; trying again later works.",
                           "type": "string"
@@ -58780,6 +58882,11 @@
                               {
                                 "const": "limit",
                                 "description": "A size limit, a cap on bulk changes or a rate limit.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "rate_limited",
+                                "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
                                 "type": "string"
                               },
                               {
@@ -60777,6 +60884,11 @@
                     "type": "string"
                   },
                   {
+                    "const": "rate_limited",
+                    "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
+                    "type": "string"
+                  },
+                  {
                     "const": "busy",
                     "description": "Another program kept the workspace locked; trying again later works.",
                     "type": "string"
@@ -60872,6 +60984,11 @@
                         {
                           "const": "limit",
                           "description": "A size limit, a cap on bulk changes or a rate limit.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "rate_limited",
+                          "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
                           "type": "string"
                         },
                         {
@@ -73357,6 +73474,21 @@
                 "properties": {
                   "new_tasks_per_day": {
                     "description": "Tasks a session may create in any 24 hours; left out: no limit.",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "read_burst": {
+                    "description": "Reads a session may make at once before `reads_per_minute` applies;\nleft out: one minute's worth.",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "read_mb_per_minute": {
+                    "description": "Megabytes of results a session may read in a minute; left out: no\nlimit.",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "reads_per_minute": {
+                    "description": "Reads (tool calls that read, resources read, prompts) a session may\nmake in a minute, sustained; left out: no limit on reads.",
                     "minimum": 0,
                     "type": "integer"
                   },

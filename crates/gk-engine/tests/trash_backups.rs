@@ -521,6 +521,9 @@ fn only_the_person_changes_the_limits_on_agents_in_the_app() {
         "writes_per_minute": 120,
         "trash_items_per_call": 20,
         "trash_items_per_hour": 50,
+        "read_burst": 60,
+        "reads_per_minute": 600,
+        "read_mb_per_minute": 8,
     });
     assert_eq!(ws.call("settings.get", json!({}))["agent_limits"], defaults);
 
@@ -530,7 +533,13 @@ fn only_the_person_changes_the_limits_on_agents_in_the_app() {
         json!({ "writes_per_minute": 30, "no_limit": ["trash_items_per_hour"] }),
     );
     assert_eq!(changed["changed"], json!(["agent_limits"]), "{changed}");
-    let limits = json!({ "writes_per_minute": 30, "trash_items_per_call": 20 });
+    let limits = json!({
+        "writes_per_minute": 30,
+        "trash_items_per_call": 20,
+        "read_burst": 60,
+        "reads_per_minute": 600,
+        "read_mb_per_minute": 8,
+    });
     assert_eq!(changed["settings"]["agent_limits"], limits, "{changed}");
     assert_eq!(ws.call("workspace.get", json!({}))["agent_limits"], limits);
     let same = ws.as_(
@@ -606,6 +615,70 @@ fn only_the_person_changes_the_limits_on_agents_in_the_app() {
         ws.count("SELECT count(*) FROM settings WHERE key = 'agent_limits'"),
         0
     );
+}
+
+#[test]
+fn the_person_sets_the_read_limits_and_refused_reads_are_counted() {
+    let dir = TempDir::new().unwrap();
+    let ws = setup(&dir);
+    let app = Context::user(Via::App);
+    let changed = ws.as_(
+        &app,
+        "agent.limits.update",
+        json!({ "read_burst": 10, "reads_per_minute": 120, "no_limit": ["read_mb_per_minute"] }),
+    );
+    assert_eq!(changed["changed"], json!(["agent_limits"]), "{changed}");
+    let limits = &changed["settings"]["agent_limits"];
+    assert_eq!(limits["read_burst"], 10, "{limits}");
+    assert_eq!(limits["reads_per_minute"], 120, "{limits}");
+    assert!(limits.get("read_mb_per_minute").is_none(), "{limits}");
+    // The change is in the history, and only the person makes it.
+    let feed = ws.call("history.feed", json!({}));
+    assert!(
+        feed["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|e| e["op"] == "agent.limits.update"),
+        "{feed}"
+    );
+    for input in [
+        json!({ "read_burst": 0 }),
+        json!({ "reads_per_minute": 1_000_001 }),
+    ] {
+        let err = ws.fails(&app, "agent.limits.update", input.clone());
+        assert_eq!(err.code, ErrorCode::Invalid, "{input}: {err:?}");
+    }
+    let agent = ws.agent("Reader", Profile::Full);
+    let err = ws.fails(
+        &agent,
+        "agent.limits.update",
+        json!({ "no_limit": ["reads_per_minute"] }),
+    );
+    assert_eq!(err.code, ErrorCode::Forbidden);
+    let back = ws.as_(
+        &app,
+        "agent.limits.update",
+        json!({ "reset": ["read_burst", "reads_per_minute", "read_mb_per_minute"] }),
+    );
+    assert_eq!(back["settings"]["agent_limits"]["read_burst"], 60, "{back}");
+    assert_eq!(back["settings"]["agent_limits"]["reads_per_minute"], 600);
+    assert_eq!(back["settings"]["agent_limits"]["read_mb_per_minute"], 8);
+
+    // Refusals are counted in the session: the first at once, the rest
+    // when the session ends.
+    let session = agent.session.unwrap();
+    for _ in 0..3 {
+        ws.engine.note_rate_limited(session);
+    }
+    let count = || {
+        ws.call("agent.sessions", json!({}))["items"][0]["rate_limited"]
+            .as_u64()
+            .unwrap()
+    };
+    assert_eq!(count(), 1);
+    ws.engine.end_session(session).unwrap();
+    assert_eq!(count(), 3);
 }
 
 #[test]

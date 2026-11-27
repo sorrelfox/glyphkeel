@@ -28,6 +28,9 @@ pub enum ErrorCode {
     Forbidden,
     /// A size limit, a cap on bulk changes or a rate limit.
     Limit,
+    /// An agent read faster than its session's read limits allow;
+    /// `details.retry_after` says how many seconds to wait.
+    RateLimited,
     /// Another program kept the workspace locked; trying again later works.
     Busy,
     /// A newer program upgraded the workspace while this one was running.
@@ -47,7 +50,7 @@ impl ErrorCode {
         match self {
             Self::Invalid => 1,
             Self::NotFound => 2,
-            Self::Conflict | Self::Forbidden | Self::Limit => 3,
+            Self::Conflict | Self::Forbidden | Self::Limit | Self::RateLimited => 3,
             Self::Busy | Self::WorkspaceUpgraded | Self::WorkspaceTooNew | Self::Storage => 4,
         }
     }
@@ -61,6 +64,7 @@ impl ErrorCode {
             Self::Conflict => "conflict",
             Self::Forbidden => "forbidden",
             Self::Limit => "limit",
+            Self::RateLimited => "rate_limited",
             Self::Busy => "busy",
             Self::WorkspaceUpgraded => "workspace_upgraded",
             Self::WorkspaceTooNew => "workspace_too_new",
@@ -133,6 +137,11 @@ impl OpError {
         Self::new(ErrorCode::Limit, message).with_detail("max", max)
     }
 
+    /// `rate_limited`, with the seconds to wait in `details.retry_after`.
+    pub fn rate_limited(message: impl Into<String>, retry_after: u64) -> Self {
+        Self::new(ErrorCode::RateLimited, message).with_detail("retry_after", retry_after)
+    }
+
     /// `storage`.
     pub fn storage(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::Storage, message)
@@ -200,6 +209,7 @@ mod tests {
             ErrorCode::Conflict,
             ErrorCode::Forbidden,
             ErrorCode::Limit,
+            ErrorCode::RateLimited,
             ErrorCode::Busy,
             ErrorCode::WorkspaceUpgraded,
             ErrorCode::WorkspaceTooNew,

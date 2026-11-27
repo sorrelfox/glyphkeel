@@ -623,3 +623,51 @@ fn many_2026_clients_over_http_have_a_session_each() {
     }
     engine.close();
 }
+
+#[test]
+fn reads_over_http_have_the_same_limits() {
+    let (_dir, options) = workspace();
+    let (engine, person) = open_as_person(&options);
+    engine
+        .call(
+            &person,
+            "agent.limits.update",
+            json!({ "read_burst": 2, "reads_per_minute": 1 }),
+        )
+        .unwrap();
+    engine.close();
+    let endpoint = start(&options);
+    let meta = json!({
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientInfo": { "name": "claude-code", "version": "2.1.330" },
+        "io.modelcontextprotocol/clientCapabilities": {}
+    });
+    let headers = vec![
+        ("MCP-Protocol-Version", "2026-07-28".to_owned()),
+        ("Mcp-Method", "tools/call".to_owned()),
+        ("Mcp-Name", "get_workspace".to_owned()),
+    ];
+    let mut errors = Vec::new();
+    for id in 1..=3 {
+        let call = post(
+            &endpoint,
+            "/mcp",
+            &headers,
+            &json!({ "jsonrpc": "2.0", "id": id, "method": "tools/call", "params": { "name": "get_workspace", "arguments": {}, "_meta": meta } }),
+        );
+        assert_eq!(call.status, 200, "{:?}", call.messages);
+        errors.push(call.result(id)["isError"].as_bool().unwrap_or(false));
+        if id == 3 {
+            let text = call.result(id)["content"][0]["text"].as_str().unwrap();
+            assert!(text.starts_with("Error (rate_limited)"), "{text}");
+            assert!(text.contains("Retry after (s): "), "{text}");
+        }
+    }
+    assert_eq!(errors, [false, false, true]);
+    endpoint.stop();
+
+    let (engine, person) = open_as_person(&options);
+    let sessions = engine.call(&person, "agent.sessions", json!({})).unwrap();
+    assert_eq!(sessions["items"][0]["rate_limited"], 1, "{sessions}");
+    engine.close();
+}

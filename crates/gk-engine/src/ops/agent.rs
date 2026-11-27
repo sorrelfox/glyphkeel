@@ -101,7 +101,7 @@ pub(crate) fn list(
     )?;
     let mut stmt = tx.prepare(&format!(
         "SELECT id, display_name, client_id, client_version, profile, started_at,
-                last_seen_at, ended_at, reads, writes
+                last_seen_at, ended_at, reads, writes, rate_limited
            FROM agent_sessions {filter}
           ORDER BY started_at DESC, id DESC LIMIT ?1"
     ))?;
@@ -128,5 +128,6 @@ fn session(r: &Row<'_>) -> gk_store::rusqlite::Result<AgentSession> {
         ended_at: r.get::<_, Option<i64>>(7)?.map(rfc3339),
         reads: u64::try_from(r.get::<_, i64>(8)?).unwrap_or(0),
         writes: u64::try_from(r.get::<_, i64>(9)?).unwrap_or(0),
+        rate_limited: u64::try_from(r.get::<_, i64>(10)?).unwrap_or(0),
     })
 }
