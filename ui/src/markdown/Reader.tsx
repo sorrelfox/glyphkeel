@@ -15,7 +15,7 @@ import { useT, type Translate } from "../i18n/I18n";
 import { openAttachment } from "../ipc/files";
 import { openLink } from "../ipc/links";
 import { attachmentOf, drawReader } from "./draw";
-import { insertSanitized } from "./insert";
+import { insertSanitized, tickedItems, withoutTicks } from "./insert";
 import styles from "./Reader.module.css";
 
 // A wiki link opens its page read only; loaded on the first such click.
@@ -73,19 +73,41 @@ export function MarkdownReader({ html, onToggle, onOpenTask, references, onOpenP
       box.disabled = !toggleable;
     }
   }, [toggleable]);
+  // The items whose click the engine hasn't answered yet, by number.
+  const saving = useRef(new Set<string>());
+  // What the reader shows now: the text without its ticks, in which theme, with which links missing.
+  const shown = useRef<{ text: string; theme: string; missing: string | null } | null>(null);
 
-  // Insert and draw again when the text or the theme changes.
+  // Insert and draw again when the text or the theme changes. A tick
+  // changes the text only in what is ticked: the boxes shown take the new
+  // ticks, so the focus, the selection, the scroll position and what was
+  // drawn stay as they are.
   useLayoutEffect(() => {
     const element = root.current;
     if (!element) {
       return;
     }
+    const text = withoutTicks(html);
+    const was = shown.current;
+    if (was !== null && was.text === text && was.theme === theme && was.missing === missing) {
+      const boxes = element.querySelectorAll<HTMLInputElement>("input[data-item]");
+      tickedItems(html).forEach(({ item, checked }, index) => {
+        const box = boxes[index];
+        if (box?.dataset.item === item && !saving.current.has(item)) {
+          box.checked = checked;
+        }
+      });
+      return;
+    }
+    shown.current = { text, theme, missing };
     drawing.current += 1;
     const generation = drawing.current;
+    const place = keepPlace(element);
     insertSanitized(element, html, "reader");
     for (const box of element.querySelectorAll<HTMLInputElement>("input[data-item]")) {
       box.disabled = !takesClicks.current;
     }
+    place.restore();
     markMissing(element, missing === null ? null : new Set(missing.split("\n")), latest.current.t);
     void drawReader(element, {
       text: (id, args) => latest.current.t(id, args),
@@ -94,21 +116,33 @@ export function MarkdownReader({ html, onToggle, onOpenTask, references, onOpenP
     });
   }, [html, theme, missing]);
 
-  const toggle = (box: HTMLInputElement) => {
-    const number = Number(box.dataset.item);
+  const toggle = (box: HTMLInputElement, event: MouseEvent) => {
+    const item = box.dataset.item ?? "";
+    const number = Number(item);
     if (!onToggle || !Number.isInteger(number)) {
       return;
     }
-    // The box shows the click at once and goes back if the engine refuses it.
+    // One click at a time per item: another before the engine answers is undone.
+    if (saving.current.has(item)) {
+      event.preventDefault();
+      return;
+    }
+    // The box shows the click at once and goes back if the engine refuses
+    // it. It stays enabled meanwhile, as a disabled box would lose the focus.
     const checked = box.checked;
-    box.disabled = true;
+    saving.current.add(item);
+    box.setAttribute("aria-busy", "true");
+    const current = () => root.current?.querySelector<HTMLInputElement>(`input[data-item="${CSS.escape(item)}"]`) ?? box;
     onToggle({ number, checked }).then(
       () => {
-        box.disabled = false;
+        saving.current.delete(item);
+        current().removeAttribute("aria-busy");
       },
       (error: unknown) => {
-        box.checked = !checked;
-        box.disabled = false;
+        saving.current.delete(item);
+        const shownBox = current();
+        shownBox.removeAttribute("aria-busy");
+        shownBox.checked = !checked;
         toasts.show(errorToast(t, error));
       },
     );
@@ -188,7 +222,7 @@ export function MarkdownReader({ html, onToggle, onOpenTask, references, onOpenP
         onClick={(event) => {
           const target = event.target as HTMLElement;
           if (target instanceof HTMLInputElement && target.dataset.item !== undefined) {
-            toggle(target);
+            toggle(target, event);
             return;
           }
           activate(target, event);
@@ -229,6 +263,33 @@ export function MarkdownReader({ html, onToggle, onOpenTask, references, onOpenP
       )}
     </div>
   );
+}
+
+/**
+ * Keeps the reader's place while its text is put in again: the scroll
+ * position of every box it scrolls in, and the focus on a checkbox, which
+ * goes to the same item's new box.
+ */
+function keepPlace(element: HTMLElement): { restore: () => void } {
+  const scrolled: { box: Element; top: number; left: number }[] = [];
+  for (let box = element.parentElement; box; box = box.parentElement) {
+    if (box.scrollTop !== 0 || box.scrollLeft !== 0) {
+      scrolled.push({ box, top: box.scrollTop, left: box.scrollLeft });
+    }
+  }
+  const focused = document.activeElement;
+  const item = focused instanceof HTMLInputElement && element.contains(focused) ? focused.dataset.item : undefined;
+  return {
+    restore: () => {
+      for (const { box, top, left } of scrolled) {
+        box.scrollTop = top;
+        box.scrollLeft = left;
+      }
+      if (item !== undefined && !element.contains(document.activeElement)) {
+        element.querySelector<HTMLInputElement>(`input[data-item="${CSS.escape(item)}"]`)?.focus({ preventScroll: true });
+      }
+    },
+  };
 }
 
 /**

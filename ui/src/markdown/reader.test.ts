@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 
 import { attachmentOf, drawReader } from "./draw";
-import { insertSanitized } from "./insert";
+import { insertSanitized, tickedItems, withoutTicks } from "./insert";
 
 function inserted(html: string, profile: "reader" | "diagram" | "code" = "reader"): HTMLElement {
   const element = document.createElement("div");
@@ -46,6 +46,24 @@ describe("the one insertion point", () => {
     expect(element.querySelector("pre")?.getAttribute("style")).toContain("--syn-background");
     expect(element.querySelector("span")?.getAttribute("style")).toContain("--syn-token-keyword");
     expect(element.querySelector("img, [onclick]")).toBeNull();
+  });
+});
+
+describe("ticks", () => {
+  const before = '<ul><li class="task-item"><input type="checkbox" data-item="1" checked="" /> One</li><li class="task-item"><input type="checkbox" data-item="2" /> Two</li></ul>';
+  const after = '<ul><li class="task-item"><input type="checkbox" data-item="1" /> One</li><li class="task-item"><input type="checkbox" data-item="2" checked="" /> Two</li></ul>';
+
+  it("read the same text whatever is ticked, and another text as another", () => {
+    expect(withoutTicks(before)).toBe(withoutTicks(after));
+    expect(withoutTicks(before)).not.toBe(withoutTicks(after.replace("Two", "Three")));
+    expect(withoutTicks('<p>checked=""</p>')).toBe('<p>checked=""</p>');
+  });
+
+  it("are read by item, in reading order", () => {
+    expect(tickedItems(after)).toEqual([
+      { item: "1", checked: false },
+      { item: "2", checked: true },
+    ]);
   });
 });
 
