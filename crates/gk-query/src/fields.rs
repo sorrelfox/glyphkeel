@@ -34,6 +34,8 @@ pub enum FieldType {
     Label,
     /// The names of versions (releases), or `none`.
     Version,
+    /// The names of sprints, `active`, or `none`.
+    Sprint,
     /// The parent task, or `none`.
     Parent,
     /// Any ancestor task.
@@ -194,6 +196,7 @@ pub const HAS_PARTS: &[&str] = &[
     "description",
     "labels",
     "version",
+    "sprint",
     "files",
     "comments",
     "subtasks",
@@ -204,7 +207,9 @@ pub const HAS_PARTS: &[&str] = &[
 ];
 
 /// The fields `was:` looks up in the history.
-pub const WAS_FIELDS: &[&str] = &["status", "category", "type", "priority", "label", "version"];
+pub const WAS_FIELDS: &[&str] = &[
+    "status", "category", "type", "priority", "label", "version", "sprint",
+];
 /// The fields `changed:` looks up in the history.
 pub const CHANGED_FIELDS: &[&str] = &[
     "status",
@@ -219,6 +224,7 @@ pub const CHANGED_FIELDS: &[&str] = &[
     "parent",
     "label",
     "version",
+    "sprint",
     "project",
     "closed",
 ];
@@ -364,6 +370,15 @@ pub static FIELDS: &[Field] = &[
         false,
         true,
         "version names, or none",
+    ),
+    field(
+        "sprint",
+        &["sprints"],
+        FieldType::Sprint,
+        NAME_OPS,
+        false,
+        true,
+        "sprint names, active, or none",
     ),
     field(
         "parent",
@@ -713,6 +728,7 @@ pub const fn history_key(ty: FieldType) -> Option<&'static str> {
         FieldType::Parent => "parent",
         FieldType::Label => "labels",
         FieldType::Version => "fix_version",
+        FieldType::Sprint => "sprint",
         FieldType::Project => "project",
         FieldType::Moment(MomentColumn::Closed) => "closed_at",
         _ => return None,

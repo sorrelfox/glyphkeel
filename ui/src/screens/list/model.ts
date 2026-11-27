@@ -6,7 +6,7 @@
 // selections.
 
 import { PRIORITIES } from "../../data/catalog";
-import { type CustomField, type CustomFieldKind, type ListGrouping, type QueryToken, type SavedView, type TaskCreateInput, type TextRange } from "../../generated/ops";
+import { type CustomField, type CustomFieldKind, type ListGrouping, type QueryChip, type QueryToken, type SavedView, type TaskCreateInput, type TextRange } from "../../generated/ops";
 
 /** Every column the list offers, in their default order. */
 export const COLUMNS = [
@@ -18,6 +18,7 @@ export const COLUMNS = [
   "priority",
   "labels",
   "version",
+  "sprint",
   "start",
   "due",
   "estimate",
@@ -57,6 +58,7 @@ export const COLUMN_WIDTH: Record<BuiltinColumn, string> = {
   priority: "108px",
   labels: "168px",
   version: "112px",
+  sprint: "120px",
   start: "92px",
   due: "92px",
   estimate: "84px",
@@ -87,6 +89,7 @@ export const SORT_KEY: Partial<Record<BuiltinColumn, string>> = {
   status: "status",
   priority: "priority",
   version: "version",
+  sprint: "sprint",
   start: "start",
   due: "due",
   estimate: "estimate",
@@ -313,6 +316,21 @@ export function withSort(text: string, tokens: readonly QueryToken[], sort: read
   }
   const replaced = text.slice(0, token.range.from) + term + text.slice(token.range.to);
   return term === "" ? replaced.replace(/\s{2,}/g, " ").trim() : replaced;
+}
+
+/**
+ * The query with its sprint condition replaced by `sprint:<value>` (or
+ * taken out, for none). The condition is found among the query's chips;
+ * the rest of the text stays as typed.
+ */
+export function withSprint(text: string, chips: readonly QueryChip[], value: string | undefined): string {
+  const ranges = chips.filter((chip) => !chip.negated && (chip.field === "sprint" || chip.field === "sprints")).flatMap((chip) => chip.ranges);
+  const rest = removeRanges(text, ranges);
+  if (value === undefined) {
+    return rest;
+  }
+  const term = `sprint:${/[\s,()"]/.test(value) ? `"${value.replace(/"/g, "")}"` : value}`;
+  return rest === "" ? term : `${term} ${rest}`;
 }
 
 /** What the list shows, compared with the saved view it came from. */

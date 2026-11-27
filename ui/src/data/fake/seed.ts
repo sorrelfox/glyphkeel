@@ -6,6 +6,7 @@
 
 import { type Category as StatusCategory, type Glyph, type Hue, type Priority } from "../../generated/ops";
 import { type FakeProject, type FakeState, type FakeTask } from "./state";
+import { type FakeSprint } from "./sprints";
 import { type FakeVersion } from "./versions";
 
 /** A small deterministic random generator (mulberry32). */
@@ -305,11 +306,39 @@ export function seed(today: Date, seedNumber = 7): FakeState {
       }
     });
 
+  // Sprints of Task Manager: one completed, one running (started five days
+  // ago, two weeks long) and one planned; open tasks are spread over them.
+  const sprint = (name: string, state: FakeSprint["state"], startDays: number, goal: string, rank: number): FakeSprint => ({
+    id: nextId("s"),
+    projectId: tm.id,
+    name,
+    goal,
+    state,
+    startDate: dayOffset(today, startDays),
+    endDate: dayOffset(today, startDays + 13),
+    startedAt: state === "planned" ? null : new Date(now + startDays * 86_400_000).toISOString(),
+    completedAt: state === "closed" ? new Date(now + (startDays + 13) * 86_400_000).toISOString() : null,
+    rank,
+    createdAt: new Date(now - 40 * 86_400_000).toISOString(),
+    updatedAt: new Date(now - 40 * 86_400_000).toISOString(),
+  });
+  const sprints = [sprint("Sprint 1", "closed", -19, "The board and the list.", 1), sprint("Sprint 2", "active", -5, "The task panel, ready for daily use.", 2), sprint("Sprint 3", "planned", 9, "", 3)];
+  const [lastSprint, thisSprint, nextSprint] = sprints;
+  tasks
+    .filter((task) => task.projectId === tm.id && task.parentId === null)
+    .forEach((task, index) => {
+      const into = task.closedAt !== null ? (index % 2 === 0 ? lastSprint : index % 3 === 1 ? thisSprint : undefined) : index % 3 === 0 ? thisSprint : index % 5 === 1 ? nextSprint : undefined;
+      if (into) {
+        task.sprintId = into.id;
+      }
+    });
+
   return {
     projects,
     tasks,
     relations,
     versions,
+    sprints,
     comments: [],
     files: [],
     claims: [],

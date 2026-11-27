@@ -1,0 +1,256 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+   Copyright (C) 2026 Glyphkeel contributors
+
+   The sprints page: the active sprint with its burndown, the planned
+   sprints and the backlog, each a card with its tasks. Tokens only,
+   logical properties only; nothing is sized for one language's words. */
+
+.layout {
+  display: flex;
+  flex: 1 1 0;
+  min-block-size: 0;
+}
+
+.screen {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 16px;
+  min-inline-size: 0;
+  padding-block: 16px;
+  padding-inline: 20px;
+  overflow: auto;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.moveBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-block: 4px;
+  padding-inline: 12px;
+  border-radius: var(--r-m);
+  background: var(--selected);
+}
+
+.note {
+  margin: 0;
+  color: var(--fg-muted);
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-block: 32px;
+  color: var(--fg-muted);
+  text-align: center;
+}
+
+.sprints {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-inline-size: 64rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card,
+.backlog {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-inline-size: 64rem;
+  padding-block: 12px;
+  padding-inline: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-m);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.card.active {
+  border-color: var(--accent);
+}
+
+.cardHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.name {
+  margin: 0;
+  font-size: var(--fs-title);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.subTitle {
+  margin: 0;
+  font-size: inherit;
+  font-weight: 600;
+}
+
+.dates {
+  margin-inline-start: auto;
+}
+
+.goal {
+  margin: 0;
+  color: var(--fg-muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.progress > :first-child {
+  flex: 1 1 8rem;
+}
+
+.burndown {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.burndownHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tasks {
+  display: flex;
+  flex-direction: column;
+  min-block-size: 2.5rem;
+  padding: 2px;
+  border-radius: var(--r-s);
+}
+
+.tasks[data-drop-target] {
+  background: var(--selected);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.task {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-block: 4px;
+  padding-inline: 4px;
+  border-radius: var(--r-s);
+  cursor: default;
+}
+
+.task[data-hovered] {
+  background: var(--hover);
+}
+
+.task[data-selected],
+.task.open {
+  background: var(--selected);
+}
+
+.task[data-dragging] {
+  opacity: 0.5;
+}
+
+.task[data-drop-target] {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.title {
+  flex: 1 1 12rem;
+  min-inline-size: 0;
+}
+
+.task.closed .title {
+  color: var(--fg-muted);
+  text-decoration: line-through;
+}
+
+.key {
+  flex: none;
+}
+
+.check {
+  display: inline-flex;
+  flex: none;
+}
+
+.box {
+  display: inline-block;
+  inline-size: 16px;
+  block-size: 16px;
+  border-radius: var(--r-s);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1.5px var(--border-strong);
+}
+
+.box.on {
+  background: var(--accent);
+  box-shadow: none;
+}
+
+.box.on::after {
+  content: "";
+  display: block;
+  inline-size: 4px;
+  block-size: 8px;
+  margin-block-start: 2px;
+  margin-inline-start: 6px;
+  border: solid var(--on-accent);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.dropHere {
+  margin: 0;
+  padding-block: 8px;
+  padding-inline: 4px;
+  color: var(--fg-muted);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  inline-size: min(36rem, 80vw);
+}
+
+.formRow {
+  display: grid;
+  grid-template-columns: minmax(max-content, 10rem) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.formLabel {
+  color: var(--fg-muted);
+}
+
+.error {
+  margin: 0;
+  color: var(--danger);
+}

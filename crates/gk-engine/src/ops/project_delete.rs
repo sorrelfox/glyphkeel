@@ -255,6 +255,9 @@ pub(crate) fn purge_projects(
             "UPDATE tasks SET fix_version_id = NULL
               WHERE fix_version_id IN (SELECT id FROM versions WHERE project_id = ?1)",
             "DELETE FROM versions WHERE project_id = ?1",
+            "UPDATE tasks SET sprint_id = NULL
+              WHERE sprint_id IN (SELECT id FROM sprints WHERE project_id = ?1)",
+            "DELETE FROM sprints WHERE project_id = ?1",
             "DELETE FROM project_key_aliases WHERE project_id = ?1",
             "DELETE FROM saved_views WHERE project_id = ?1",
             "DELETE FROM templates WHERE project_id = ?1",

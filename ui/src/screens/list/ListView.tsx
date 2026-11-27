@@ -3,7 +3,7 @@
 
 import { useLocalization } from "@fluent/react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ChevronDown, Columns3, Download, Filter } from "lucide-react";
+import { ChevronDown, Columns3, Download, Filter, IterationCw } from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Button, Menu, MenuItem, MenuTrigger, Popover } from "react-aria-components";
 
@@ -20,8 +20,9 @@ import { Switch } from "../../components/Switch";
 import { keysOf } from "../../actions/actions";
 import { errorToast, failureText, useCall, useCommand } from "../../data/hooks";
 import { allRows, defaultView, LIST_PAGE, toCsv, toJson, useListLayout, useListNames, useListRows, useParsedQuery, useQueryFields, useSavedViews, useUnfilteredCount, type ListScope } from "../../data/list";
+import { joinable, useSprints } from "../../data/sprints";
 import { useDurationUnits } from "../../data/time";
-import { type CustomField, type ListedTask, type ListGroup, type ListLayout, type QueryProblem, type SavedView } from "../../generated/ops";
+import { type CustomField, type ListedTask, type ListGroup, type ListLayout, type QueryChip, type QueryProblem, type SavedView } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { saveExport } from "../../ipc/exportFile";
 import { useStatus, useTimerTask } from "../../shell/context";
@@ -31,7 +32,7 @@ import { CellContext, type CellActions } from "./cells";
 import { Chips } from "./Chips";
 import { SaveControls, useViewCommands, ViewPicker } from "./ViewMenu";
 import { ListTable } from "./ListTable";
-import { changedFrom, clickRow, COLUMNS, exportName, FIXED_COLUMNS, GROUPINGS, GROUPING_FIELD_KINDS, groupTaskInput, isCustomColumn, isGrouping, listLines, moveColumn, nextSort, NO_SELECTION, removeRanges, viewColumns, withSort, type ColumnId, type Grouping, type Selection } from "./model";
+import { changedFrom, clickRow, COLUMNS, exportName, FIXED_COLUMNS, GROUPINGS, GROUPING_FIELD_KINDS, groupTaskInput, isCustomColumn, isGrouping, listLines, moveColumn, nextSort, NO_SELECTION, removeRanges, viewColumns, withSort, withSprint, type ColumnId, type Grouping, type Selection } from "./model";
 import { useCustomFields } from "../../data/fields";
 import styles from "./List.module.css";
 
@@ -485,6 +486,15 @@ function LoadedList({ project, views, layout, openTask, onOpen, initialQuery }: 
               </Switch>
             </div>
           )}
+          {project !== undefined && (
+            <SprintMenu
+              project={project}
+              chips={parsed.data?.valid === true && !parsed.data.advanced ? parsed.data.chips : undefined}
+              onChange={(value) => {
+                setText(withSprint(text, parsed.data?.chips ?? [], value));
+              }}
+            />
+          )}
           <GroupMenu value={groupBy} withProject={workspaceWide || includeSubprojects} fields={customFields} onChange={group} />
           <ColumnMenu columns={columns} fields={customFields} onChange={changeColumns} />
           <MenuTrigger>
@@ -626,6 +636,48 @@ function GroupMenu({ value, withProject, fields, onChange }: { value: Grouping |
           {[...choices, "none" as const].map((grouping) => (
             <MenuItem key={grouping} id={grouping} className="item">
               {name(grouping === "none" ? undefined : grouping)}
+            </MenuItem>
+          ))}
+        </Menu>
+      </Popover>
+    </MenuTrigger>
+  );
+}
+
+/** The sprint the list shows: the active one, a planned one, the backlog, or any; it edits the query's `sprint:` condition. */
+function SprintMenu({ project, chips, onChange }: { project: string; chips: readonly QueryChip[] | undefined; onChange: (value: string | undefined) => void }) {
+  const t = useT();
+  const sprints = useSprints(project);
+  const current = chips?.find((chip) => !chip.negated && (chip.field === "sprint" || chip.field === "sprints"))?.values;
+  const chosen = current?.length === 1 ? current[0]?.toLowerCase() : undefined;
+  const options = [
+    { id: "active", label: t("list-sprint-active") },
+    ...joinable(sprints.data?.items ?? []).filter((sprint) => sprint.state === "planned").map((sprint) => ({ id: sprint.name, label: sprint.name })),
+    { id: "none", label: t("list-sprint-backlog") },
+  ];
+  const selected = options.find((option) => option.id.toLowerCase() === chosen);
+  const label = selected?.label ?? (current === undefined ? t("list-sprint-any") : current.join(", "));
+  return (
+    <MenuTrigger>
+      <Button className={classes("btn", current === undefined ? "flat" : "on")} aria-label={t("list-sprint-button", { sprint: label })}>
+        <IterationCw className="ic" aria-hidden="true" />
+        <span className="hide-narrow">{label}</span>
+        <ChevronDown className="ic s muted" aria-hidden="true" />
+      </Button>
+      <Popover className="pop menuPopover" placement="bottom end" offset={4}>
+        <Menu
+          className="menu"
+          aria-label={t("list-sprint")}
+          selectionMode="single"
+          selectedKeys={[selected?.id ?? (current === undefined ? "*any" : "")]}
+          onAction={(id) => {
+            const value = String(id);
+            onChange(value === "*any" ? undefined : value);
+          }}
+        >
+          {[...options, { id: "*any", label: t("list-sprint-any") }].map((option) => (
+            <MenuItem key={option.id} id={option.id} className="item">
+              {option.label}
             </MenuItem>
           ))}
         </Menu>

@@ -70,9 +70,8 @@ fn predicate(p: &Predicate, kind: NameKind, old: &str, new: &str, edits: &mut Ve
             (NameKind::Status, FieldType::Status)
             | (NameKind::Type, FieldType::Type)
             | (NameKind::Label, FieldType::Label)
-            | (NameKind::Version, FieldType::Version) => {
-                same_name(text, old).then(|| new.to_owned())
-            }
+            | (NameKind::Version, FieldType::Version)
+            | (NameKind::Sprint, FieldType::Sprint) => same_name(text, old).then(|| new.to_owned()),
             (NameKind::Project, FieldType::Project) => match text.strip_suffix("/*") {
                 Some(key) if key.eq_ignore_ascii_case(old) => Some(format!("{new}/*")),
                 None if text.eq_ignore_ascii_case(old) => Some(new.to_owned()),
@@ -133,6 +132,13 @@ pub fn remove_label(src: &str, name: &str) -> Option<String> {
 #[must_use]
 pub fn remove_version(src: &str, name: &str) -> Option<String> {
     remove_name(src, FieldType::Version, name)
+}
+
+/// `src` without the sprint `name` (any case), as [`remove_label`] takes
+/// out a label.
+#[must_use]
+pub fn remove_sprint(src: &str, name: &str) -> Option<String> {
+    remove_name(src, FieldType::Sprint, name)
 }
 
 fn remove_name(src: &str, ty: FieldType, name: &str) -> Option<String> {
@@ -442,6 +448,25 @@ mod tests {
             remove_label("was:label:bug is:open", "bug").as_deref(),
             Some("is:open")
         );
+    }
+
+    #[test]
+    fn sprints_are_renamed_and_removed() {
+        assert_eq!(
+            rename(
+                "sprint:\"Sprint 3\",active version:\"Sprint 3\"",
+                NameKind::Sprint,
+                "sprint 3",
+                "Sprint 3b"
+            )
+            .as_deref(),
+            Some("sprint:\"Sprint 3b\",active version:\"Sprint 3\"")
+        );
+        assert_eq!(
+            remove_sprint("sprint:\"Sprint 3\" is:open", "Sprint 3").as_deref(),
+            Some("is:open")
+        );
+        assert_eq!(remove_sprint("sprint:active", "Sprint 3"), None);
     }
 
     #[test]

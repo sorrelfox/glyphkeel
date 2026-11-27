@@ -26,6 +26,16 @@
       "create_version",
       "update_version",
       "delete_version",
+      "list_sprints",
+      "get_sprint",
+      "create_sprint",
+      "update_sprint",
+      "delete_sprint",
+      "start_sprint",
+      "complete_sprint",
+      "add_tasks_to_sprint",
+      "remove_tasks_from_sprint",
+      "get_sprint_burndown",
       "search_tasks",
       "get_task",
       "create_task",
@@ -101,6 +111,9 @@
       "get_template",
       "list_versions",
       "get_version",
+      "list_sprints",
+      "get_sprint",
+      "get_sprint_burndown",
       "search_tasks",
       "get_task",
       "check_move",
@@ -147,6 +160,16 @@
       "create_version",
       "update_version",
       "delete_version",
+      "list_sprints",
+      "get_sprint",
+      "create_sprint",
+      "update_sprint",
+      "delete_sprint",
+      "start_sprint",
+      "complete_sprint",
+      "add_tasks_to_sprint",
+      "remove_tasks_from_sprint",
+      "get_sprint_burndown",
       "search_tasks",
       "get_task",
       "create_task",
@@ -10800,6 +10823,54 @@
                 "description": "Logged time in minutes.",
                 "type": "integer"
               },
+              "sprint": {
+                "additionalProperties": false,
+                "description": "The sprint it is in.",
+                "properties": {
+                  "end_date": {
+                    "description": "Its last day (`YYYY-MM-DD`).",
+                    "type": "string"
+                  },
+                  "id": {
+                    "description": "Its ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  },
+                  "start_date": {
+                    "description": "Its first day (`YYYY-MM-DD`).",
+                    "type": "string"
+                  },
+                  "state": {
+                    "description": "Where it stands.",
+                    "oneOf": [
+                      {
+                        "const": "planned",
+                        "description": "Being planned; not started yet (the default).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "active",
+                        "description": "Running: started and not completed. One per project at most.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "closed",
+                        "description": "Completed.",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "state",
+                  "id"
+                ],
+                "type": "object"
+              },
               "start_date": {
                 "description": "The start date.",
                 "type": "string"
@@ -12791,12 +12862,3050 @@
         "idempotentHint": true,
         "openWorldHint": false,
         "readOnlyHint": true,
+        "title": "List sprints"
+      },
+      "covers": [
+        "sprint.list"
+      ],
+      "description": "Lists the sprints of a `project`: closed ones, then the active one, then planned ones, with name, goal, state (planned, active, closed), dates and progress (tasks closed of total, estimates). `include_tasks: true` adds each sprint's tasks and the `backlog` (open tasks in no sprint), like the sprints page; `state` filters. Example: list_sprints {\"project\": \"TM\", \"state\": [\"active\", \"planned\"]}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Which sprints to list.",
+        "properties": {
+          "include_tasks": {
+            "description": "Include each sprint's tasks and the backlog, for the sprints page.",
+            "type": "boolean"
+          },
+          "project": {
+            "description": "The project (key or ID).",
+            "type": "string"
+          },
+          "state": {
+            "description": "Only sprints in these states; default: all.",
+            "items": {
+              "description": "Where a sprint stands.",
+              "oneOf": [
+                {
+                  "const": "planned",
+                  "description": "Being planned; not started yet (the default).",
+                  "type": "string"
+                },
+                {
+                  "const": "active",
+                  "description": "Running: started and not completed. One per project at most.",
+                  "type": "string"
+                },
+                {
+                  "const": "closed",
+                  "description": "Completed.",
+                  "type": "string"
+                }
+              ]
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "title": "SprintListInput",
+        "type": "object"
+      },
+      "name": "list_sprints",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "Sprints: closed ones first, then the active one, then planned ones, each\nby their order.",
+        "properties": {
+          "backlog": {
+            "description": "With `include_tasks`: the project's open tasks in no sprint, by\nboard order.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A task of a sprint or of the backlog, as the sprints page lists it.",
+              "properties": {
+                "closed": {
+                  "description": "Whether it is closed (done or cancelled).",
+                  "type": "boolean"
+                },
+                "estimate_minutes": {
+                  "description": "Its estimate in minutes.",
+                  "type": "integer"
+                },
+                "id": {
+                  "description": "Its ID.",
+                  "type": "string"
+                },
+                "key": {
+                  "description": "Its key.",
+                  "type": "string"
+                },
+                "parent": {
+                  "description": "The parent task's key, for a subtask.",
+                  "type": "string"
+                },
+                "priority": {
+                  "description": "Its priority.",
+                  "oneOf": [
+                    {
+                      "const": "none",
+                      "description": "No priority (the default).",
+                      "type": "string"
+                    },
+                    {
+                      "const": "low",
+                      "description": "Low.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "normal",
+                      "description": "Normal.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "high",
+                      "description": "High.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "urgent",
+                      "description": "Urgent.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "status": {
+                  "additionalProperties": false,
+                  "description": "Its status.",
+                  "properties": {
+                    "category": {
+                      "description": "Its category.",
+                      "oneOf": [
+                        {
+                          "const": "todo",
+                          "description": "Not started.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "in_progress",
+                          "description": "Being worked on.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "done",
+                          "description": "Finished; closes the task.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "cancelled",
+                          "description": "Dropped; closes the task.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "id": {
+                      "description": "The status's ID.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "category"
+                  ],
+                  "type": "object"
+                },
+                "title": {
+                  "description": "Its title.",
+                  "type": "string"
+                },
+                "type": {
+                  "description": "Its type's name.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "title",
+                "status",
+                "closed",
+                "type",
+                "priority",
+                "id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "items": {
+            "description": "The sprints.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A sprint.",
+              "properties": {
+                "completed_at": {
+                  "description": "When it was completed (RFC 3339, UTC).",
+                  "type": "string"
+                },
+                "created_at": {
+                  "description": "When it was created (RFC 3339, UTC).",
+                  "type": "string"
+                },
+                "end_date": {
+                  "description": "Its last day (`YYYY-MM-DD`).",
+                  "type": "string"
+                },
+                "goal": {
+                  "description": "What the sprint is meant to achieve: plain text.",
+                  "type": "string"
+                },
+                "id": {
+                  "description": "Its ID.",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "Its name, unique in its project (ignoring case).",
+                  "type": "string"
+                },
+                "progress": {
+                  "additionalProperties": false,
+                  "description": "Its progress.",
+                  "properties": {
+                    "closed": {
+                      "description": "How many of them are closed.",
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "closed_estimate_minutes": {
+                      "description": "The estimates of the closed ones, in minutes.",
+                      "type": "integer"
+                    },
+                    "estimate_minutes": {
+                      "description": "Their estimates added up, in minutes.",
+                      "type": "integer"
+                    },
+                    "total": {
+                      "description": "The tasks in it (not in the trash).",
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "total",
+                    "closed",
+                    "estimate_minutes",
+                    "closed_estimate_minutes"
+                  ],
+                  "type": "object"
+                },
+                "project": {
+                  "description": "The key of the project it belongs to.",
+                  "type": "string"
+                },
+                "rank": {
+                  "description": "Its place among the project's sprints.",
+                  "type": "string"
+                },
+                "start_date": {
+                  "description": "Its first day (`YYYY-MM-DD`).",
+                  "type": "string"
+                },
+                "started_at": {
+                  "description": "When it was started (RFC 3339, UTC).",
+                  "type": "string"
+                },
+                "state": {
+                  "description": "Where it stands.",
+                  "oneOf": [
+                    {
+                      "const": "planned",
+                      "description": "Being planned; not started yet (the default).",
+                      "type": "string"
+                    },
+                    {
+                      "const": "active",
+                      "description": "Running: started and not completed. One per project at most.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "closed",
+                      "description": "Completed.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "tasks": {
+                  "description": "Its tasks, when asked for: by board order.",
+                  "items": {
+                    "additionalProperties": false,
+                    "description": "A task of a sprint or of the backlog, as the sprints page lists it.",
+                    "properties": {
+                      "closed": {
+                        "description": "Whether it is closed (done or cancelled).",
+                        "type": "boolean"
+                      },
+                      "estimate_minutes": {
+                        "description": "Its estimate in minutes.",
+                        "type": "integer"
+                      },
+                      "id": {
+                        "description": "Its ID.",
+                        "type": "string"
+                      },
+                      "key": {
+                        "description": "Its key.",
+                        "type": "string"
+                      },
+                      "parent": {
+                        "description": "The parent task's key, for a subtask.",
+                        "type": "string"
+                      },
+                      "priority": {
+                        "description": "Its priority.",
+                        "oneOf": [
+                          {
+                            "const": "none",
+                            "description": "No priority (the default).",
+                            "type": "string"
+                          },
+                          {
+                            "const": "low",
+                            "description": "Low.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "normal",
+                            "description": "Normal.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "high",
+                            "description": "High.",
+                            "type": "string"
+                          },
+                          {
+                            "const": "urgent",
+                            "description": "Urgent.",
+                            "type": "string"
+                          }
+                        ]
+                      },
+                      "status": {
+                        "additionalProperties": false,
+                        "description": "Its status.",
+                        "properties": {
+                          "category": {
+                            "description": "Its category.",
+                            "oneOf": [
+                              {
+                                "const": "todo",
+                                "description": "Not started.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "in_progress",
+                                "description": "Being worked on.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "done",
+                                "description": "Finished; closes the task.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "cancelled",
+                                "description": "Dropped; closes the task.",
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "id": {
+                            "description": "The status's ID.",
+                            "type": "string"
+                          },
+                          "name": {
+                            "description": "Its name.",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "category"
+                        ],
+                        "type": "object"
+                      },
+                      "title": {
+                        "description": "Its title.",
+                        "type": "string"
+                      },
+                      "type": {
+                        "description": "Its type's name.",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "title",
+                      "status",
+                      "closed",
+                      "type",
+                      "priority",
+                      "id"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "updated_at": {
+                  "description": "When it last changed.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "project",
+                "state",
+                "progress",
+                "rank",
+                "created_at",
+                "updated_at",
+                "id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "total": {
+            "description": "How many.",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "SprintList",
+        "type": "object"
+      },
+      "title": "List sprints",
+      "toolset": "projects"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Get a sprint"
+      },
+      "covers": [
+        "sprint.get"
+      ],
+      "description": "Returns one sprint with its progress and its tasks, named by ID, by name with its `project`, or `active` with its `project`. Example: get_sprint {\"sprint\": \"active\", \"project\": \"TM\"}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "One sprint to read.",
+        "properties": {
+          "project": {
+            "description": "With a name or `active`: the project (key or ID).",
+            "type": "string"
+          },
+          "sprint": {
+            "description": "The sprint: its ID, its name, or `active` for the project's active\nsprint.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sprint"
+        ],
+        "title": "SprintGetInput",
+        "type": "object"
+      },
+      "name": "get_sprint",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "A sprint.",
+        "properties": {
+          "completed_at": {
+            "description": "When it was completed (RFC 3339, UTC).",
+            "type": "string"
+          },
+          "created_at": {
+            "description": "When it was created (RFC 3339, UTC).",
+            "type": "string"
+          },
+          "end_date": {
+            "description": "Its last day (`YYYY-MM-DD`).",
+            "type": "string"
+          },
+          "goal": {
+            "description": "What the sprint is meant to achieve: plain text.",
+            "type": "string"
+          },
+          "id": {
+            "description": "Its ID.",
+            "type": "string"
+          },
+          "name": {
+            "description": "Its name, unique in its project (ignoring case).",
+            "type": "string"
+          },
+          "progress": {
+            "additionalProperties": false,
+            "description": "Its progress.",
+            "properties": {
+              "closed": {
+                "description": "How many of them are closed.",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "closed_estimate_minutes": {
+                "description": "The estimates of the closed ones, in minutes.",
+                "type": "integer"
+              },
+              "estimate_minutes": {
+                "description": "Their estimates added up, in minutes.",
+                "type": "integer"
+              },
+              "total": {
+                "description": "The tasks in it (not in the trash).",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "total",
+              "closed",
+              "estimate_minutes",
+              "closed_estimate_minutes"
+            ],
+            "type": "object"
+          },
+          "project": {
+            "description": "The key of the project it belongs to.",
+            "type": "string"
+          },
+          "rank": {
+            "description": "Its place among the project's sprints.",
+            "type": "string"
+          },
+          "start_date": {
+            "description": "Its first day (`YYYY-MM-DD`).",
+            "type": "string"
+          },
+          "started_at": {
+            "description": "When it was started (RFC 3339, UTC).",
+            "type": "string"
+          },
+          "state": {
+            "description": "Where it stands.",
+            "oneOf": [
+              {
+                "const": "planned",
+                "description": "Being planned; not started yet (the default).",
+                "type": "string"
+              },
+              {
+                "const": "active",
+                "description": "Running: started and not completed. One per project at most.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Completed.",
+                "type": "string"
+              }
+            ]
+          },
+          "tasks": {
+            "description": "Its tasks, when asked for: by board order.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A task of a sprint or of the backlog, as the sprints page lists it.",
+              "properties": {
+                "closed": {
+                  "description": "Whether it is closed (done or cancelled).",
+                  "type": "boolean"
+                },
+                "estimate_minutes": {
+                  "description": "Its estimate in minutes.",
+                  "type": "integer"
+                },
+                "id": {
+                  "description": "Its ID.",
+                  "type": "string"
+                },
+                "key": {
+                  "description": "Its key.",
+                  "type": "string"
+                },
+                "parent": {
+                  "description": "The parent task's key, for a subtask.",
+                  "type": "string"
+                },
+                "priority": {
+                  "description": "Its priority.",
+                  "oneOf": [
+                    {
+                      "const": "none",
+                      "description": "No priority (the default).",
+                      "type": "string"
+                    },
+                    {
+                      "const": "low",
+                      "description": "Low.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "normal",
+                      "description": "Normal.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "high",
+                      "description": "High.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "urgent",
+                      "description": "Urgent.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "status": {
+                  "additionalProperties": false,
+                  "description": "Its status.",
+                  "properties": {
+                    "category": {
+                      "description": "Its category.",
+                      "oneOf": [
+                        {
+                          "const": "todo",
+                          "description": "Not started.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "in_progress",
+                          "description": "Being worked on.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "done",
+                          "description": "Finished; closes the task.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "cancelled",
+                          "description": "Dropped; closes the task.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "id": {
+                      "description": "The status's ID.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "category"
+                  ],
+                  "type": "object"
+                },
+                "title": {
+                  "description": "Its title.",
+                  "type": "string"
+                },
+                "type": {
+                  "description": "Its type's name.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "title",
+                "status",
+                "closed",
+                "type",
+                "priority",
+                "id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "updated_at": {
+            "description": "When it last changed.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "project",
+          "state",
+          "progress",
+          "rank",
+          "created_at",
+          "updated_at",
+          "id"
+        ],
+        "title": "Sprint",
+        "type": "object"
+      },
+      "title": "Get a sprint",
+      "toolset": "projects"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Plan a sprint"
+      },
+      "covers": [
+        "sprint.create"
+      ],
+      "description": "Plans a sprint in a project: `name` (unique in the project; not `active`, `none` or `backlog`), optional `goal`, `start_date`, `end_date` and `tasks` to put in it. It starts as planned; start it with start_sprint. Only plan sprints the person asked for. Example: create_sprint {\"project\": \"TM\", \"name\": \"Sprint 4\", \"goal\": \"Ship the importer\", \"tasks\": [\"TM-41\", \"TM-42\"]}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "A new sprint.",
+        "properties": {
+          "end_date": {
+            "description": "Its last day: `YYYY-MM-DD`, or `today`, `fri`, `+2w`, `dec 12`.",
+            "type": "string"
+          },
+          "goal": {
+            "description": "What it is meant to achieve: plain text, up to 4,000 characters.",
+            "type": "string"
+          },
+          "name": {
+            "description": "Its name, up to 100 characters, unique in the project; not `active`,\n`none` or `backlog`.",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project (key or ID).",
+            "type": "string"
+          },
+          "start_date": {
+            "description": "Its first day: `YYYY-MM-DD`, or `today`, `mon`, `+1w`, `dec 1`.",
+            "type": "string"
+          },
+          "tasks": {
+            "description": "Tasks to put in it straight away (keys or IDs, of the project).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "project",
+          "name"
+        ],
+        "title": "SprintCreateInput",
+        "type": "object"
+      },
+      "name": "create_sprint",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "A sprint after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether it was deleted.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "sprint": {
+            "additionalProperties": false,
+            "description": "The sprint after the change (before it, for a deletion); left out\nwhen tasks were only taken out of their sprints.",
+            "properties": {
+              "completed_at": {
+                "description": "When it was completed (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "goal": {
+                "description": "What the sprint is meant to achieve: plain text.",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name, unique in its project (ignoring case).",
+                "type": "string"
+              },
+              "progress": {
+                "additionalProperties": false,
+                "description": "Its progress.",
+                "properties": {
+                  "closed": {
+                    "description": "How many of them are closed.",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "closed_estimate_minutes": {
+                    "description": "The estimates of the closed ones, in minutes.",
+                    "type": "integer"
+                  },
+                  "estimate_minutes": {
+                    "description": "Their estimates added up, in minutes.",
+                    "type": "integer"
+                  },
+                  "total": {
+                    "description": "The tasks in it (not in the trash).",
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "total",
+                  "closed",
+                  "estimate_minutes",
+                  "closed_estimate_minutes"
+                ],
+                "type": "object"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place among the project's sprints.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "started_at": {
+                "description": "When it was started (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "state": {
+                "description": "Where it stands.",
+                "oneOf": [
+                  {
+                    "const": "planned",
+                    "description": "Being planned; not started yet (the default).",
+                    "type": "string"
+                  },
+                  {
+                    "const": "active",
+                    "description": "Running: started and not completed. One per project at most.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "closed",
+                    "description": "Completed.",
+                    "type": "string"
+                  }
+                ]
+              },
+              "tasks": {
+                "description": "Its tasks, when asked for: by board order.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "A task of a sprint or of the backlog, as the sprints page lists it.",
+                  "properties": {
+                    "closed": {
+                      "description": "Whether it is closed (done or cancelled).",
+                      "type": "boolean"
+                    },
+                    "estimate_minutes": {
+                      "description": "Its estimate in minutes.",
+                      "type": "integer"
+                    },
+                    "id": {
+                      "description": "Its ID.",
+                      "type": "string"
+                    },
+                    "key": {
+                      "description": "Its key.",
+                      "type": "string"
+                    },
+                    "parent": {
+                      "description": "The parent task's key, for a subtask.",
+                      "type": "string"
+                    },
+                    "priority": {
+                      "description": "Its priority.",
+                      "oneOf": [
+                        {
+                          "const": "none",
+                          "description": "No priority (the default).",
+                          "type": "string"
+                        },
+                        {
+                          "const": "low",
+                          "description": "Low.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "normal",
+                          "description": "Normal.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "high",
+                          "description": "High.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "urgent",
+                          "description": "Urgent.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "status": {
+                      "additionalProperties": false,
+                      "description": "Its status.",
+                      "properties": {
+                        "category": {
+                          "description": "Its category.",
+                          "oneOf": [
+                            {
+                              "const": "todo",
+                              "description": "Not started.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "in_progress",
+                              "description": "Being worked on.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "done",
+                              "description": "Finished; closes the task.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "cancelled",
+                              "description": "Dropped; closes the task.",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "id": {
+                          "description": "The status's ID.",
+                          "type": "string"
+                        },
+                        "name": {
+                          "description": "Its name.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "category"
+                      ],
+                      "type": "object"
+                    },
+                    "title": {
+                      "description": "Its title.",
+                      "type": "string"
+                    },
+                    "type": {
+                      "description": "Its type's name.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "title",
+                    "status",
+                    "closed",
+                    "type",
+                    "priority",
+                    "id"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "description": "When it last changed.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "state",
+              "progress",
+              "rank",
+              "created_at",
+              "updated_at",
+              "id"
+            ],
+            "type": "object"
+          },
+          "tasks_changed": {
+            "description": "The keys of the tasks whose sprint changed: added, taken out, moved\non when it was completed, or cleared by a deletion.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "views_rewritten": {
+            "description": "The saved views whose query was rewritten because they named the\nsprint (renamed or deleted), by name.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "SprintChange",
+        "type": "object"
+      },
+      "title": "Plan a sprint",
+      "toolset": "projects"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Change a sprint"
+      },
+      "covers": [
+        "sprint.update"
+      ],
+      "description": "Renames a sprint (saved views follow) or changes its `goal`, `start_date` or `end_date`; `clear` empties them. Name it by ID, or by name (or `active`) with its `project`. Starting and completing are start_sprint and complete_sprint. Example: update_sprint {\"sprint\": \"Sprint 4\", \"project\": \"TM\", \"end_date\": \"2026-12-18\"}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Changes to a sprint; fields left out keep their value. Start and\ncomplete it with `sprint.start` and `sprint.complete`.",
+        "properties": {
+          "clear": {
+            "description": "Fields to clear.",
+            "items": {
+              "description": "A sprint field that can be cleared.",
+              "oneOf": [
+                {
+                  "const": "goal",
+                  "description": "The goal.",
+                  "type": "string"
+                },
+                {
+                  "const": "start_date",
+                  "description": "The start date.",
+                  "type": "string"
+                },
+                {
+                  "const": "end_date",
+                  "description": "The end date.",
+                  "type": "string"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "end_date": {
+            "description": "A new end date.",
+            "type": "string"
+          },
+          "goal": {
+            "description": "A new goal.",
+            "type": "string"
+          },
+          "name": {
+            "description": "A new name; saved views that name the old one are rewritten.",
+            "type": "string"
+          },
+          "project": {
+            "description": "With a name or `active`: the sprint's project (key or ID).",
+            "type": "string"
+          },
+          "sprint": {
+            "description": "The sprint: its ID, its name, or `active`.",
+            "type": "string"
+          },
+          "start_date": {
+            "description": "A new start date.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sprint"
+        ],
+        "title": "SprintUpdateInput",
+        "type": "object"
+      },
+      "name": "update_sprint",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "A sprint after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether it was deleted.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "sprint": {
+            "additionalProperties": false,
+            "description": "The sprint after the change (before it, for a deletion); left out\nwhen tasks were only taken out of their sprints.",
+            "properties": {
+              "completed_at": {
+                "description": "When it was completed (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "goal": {
+                "description": "What the sprint is meant to achieve: plain text.",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name, unique in its project (ignoring case).",
+                "type": "string"
+              },
+              "progress": {
+                "additionalProperties": false,
+                "description": "Its progress.",
+                "properties": {
+                  "closed": {
+                    "description": "How many of them are closed.",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "closed_estimate_minutes": {
+                    "description": "The estimates of the closed ones, in minutes.",
+                    "type": "integer"
+                  },
+                  "estimate_minutes": {
+                    "description": "Their estimates added up, in minutes.",
+                    "type": "integer"
+                  },
+                  "total": {
+                    "description": "The tasks in it (not in the trash).",
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "total",
+                  "closed",
+                  "estimate_minutes",
+                  "closed_estimate_minutes"
+                ],
+                "type": "object"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place among the project's sprints.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "started_at": {
+                "description": "When it was started (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "state": {
+                "description": "Where it stands.",
+                "oneOf": [
+                  {
+                    "const": "planned",
+                    "description": "Being planned; not started yet (the default).",
+                    "type": "string"
+                  },
+                  {
+                    "const": "active",
+                    "description": "Running: started and not completed. One per project at most.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "closed",
+                    "description": "Completed.",
+                    "type": "string"
+                  }
+                ]
+              },
+              "tasks": {
+                "description": "Its tasks, when asked for: by board order.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "A task of a sprint or of the backlog, as the sprints page lists it.",
+                  "properties": {
+                    "closed": {
+                      "description": "Whether it is closed (done or cancelled).",
+                      "type": "boolean"
+                    },
+                    "estimate_minutes": {
+                      "description": "Its estimate in minutes.",
+                      "type": "integer"
+                    },
+                    "id": {
+                      "description": "Its ID.",
+                      "type": "string"
+                    },
+                    "key": {
+                      "description": "Its key.",
+                      "type": "string"
+                    },
+                    "parent": {
+                      "description": "The parent task's key, for a subtask.",
+                      "type": "string"
+                    },
+                    "priority": {
+                      "description": "Its priority.",
+                      "oneOf": [
+                        {
+                          "const": "none",
+                          "description": "No priority (the default).",
+                          "type": "string"
+                        },
+                        {
+                          "const": "low",
+                          "description": "Low.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "normal",
+                          "description": "Normal.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "high",
+                          "description": "High.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "urgent",
+                          "description": "Urgent.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "status": {
+                      "additionalProperties": false,
+                      "description": "Its status.",
+                      "properties": {
+                        "category": {
+                          "description": "Its category.",
+                          "oneOf": [
+                            {
+                              "const": "todo",
+                              "description": "Not started.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "in_progress",
+                              "description": "Being worked on.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "done",
+                              "description": "Finished; closes the task.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "cancelled",
+                              "description": "Dropped; closes the task.",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "id": {
+                          "description": "The status's ID.",
+                          "type": "string"
+                        },
+                        "name": {
+                          "description": "Its name.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "category"
+                      ],
+                      "type": "object"
+                    },
+                    "title": {
+                      "description": "Its title.",
+                      "type": "string"
+                    },
+                    "type": {
+                      "description": "Its type's name.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "title",
+                    "status",
+                    "closed",
+                    "type",
+                    "priority",
+                    "id"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "description": "When it last changed.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "state",
+              "progress",
+              "rank",
+              "created_at",
+              "updated_at",
+              "id"
+            ],
+            "type": "object"
+          },
+          "tasks_changed": {
+            "description": "The keys of the tasks whose sprint changed: added, taken out, moved\non when it was completed, or cleared by a deletion.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "views_rewritten": {
+            "description": "The saved views whose query was rewritten because they named the\nsprint (renamed or deleted), by name.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "SprintChange",
+        "type": "object"
+      },
+      "title": "Change a sprint",
+      "toolset": "projects"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Delete a sprint"
+      },
+      "covers": [
+        "sprint.delete"
+      ],
+      "description": "Deletes a planned or closed sprint; its tasks go back to the backlog and saved views stop naming it. An active sprint is completed instead. revert_changes brings both back. Example: delete_sprint {\"sprint\": \"Sprint 4\", \"project\": \"TM\"}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Which sprint to delete.",
+        "properties": {
+          "project": {
+            "description": "With a name: the sprint's project (key or ID).",
+            "type": "string"
+          },
+          "sprint": {
+            "description": "The sprint: its ID or its name. An active sprint is completed\nfirst, not deleted.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sprint"
+        ],
+        "title": "SprintDeleteInput",
+        "type": "object"
+      },
+      "name": "delete_sprint",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "A sprint after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether it was deleted.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "sprint": {
+            "additionalProperties": false,
+            "description": "The sprint after the change (before it, for a deletion); left out\nwhen tasks were only taken out of their sprints.",
+            "properties": {
+              "completed_at": {
+                "description": "When it was completed (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "goal": {
+                "description": "What the sprint is meant to achieve: plain text.",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name, unique in its project (ignoring case).",
+                "type": "string"
+              },
+              "progress": {
+                "additionalProperties": false,
+                "description": "Its progress.",
+                "properties": {
+                  "closed": {
+                    "description": "How many of them are closed.",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "closed_estimate_minutes": {
+                    "description": "The estimates of the closed ones, in minutes.",
+                    "type": "integer"
+                  },
+                  "estimate_minutes": {
+                    "description": "Their estimates added up, in minutes.",
+                    "type": "integer"
+                  },
+                  "total": {
+                    "description": "The tasks in it (not in the trash).",
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "total",
+                  "closed",
+                  "estimate_minutes",
+                  "closed_estimate_minutes"
+                ],
+                "type": "object"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place among the project's sprints.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "started_at": {
+                "description": "When it was started (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "state": {
+                "description": "Where it stands.",
+                "oneOf": [
+                  {
+                    "const": "planned",
+                    "description": "Being planned; not started yet (the default).",
+                    "type": "string"
+                  },
+                  {
+                    "const": "active",
+                    "description": "Running: started and not completed. One per project at most.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "closed",
+                    "description": "Completed.",
+                    "type": "string"
+                  }
+                ]
+              },
+              "tasks": {
+                "description": "Its tasks, when asked for: by board order.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "A task of a sprint or of the backlog, as the sprints page lists it.",
+                  "properties": {
+                    "closed": {
+                      "description": "Whether it is closed (done or cancelled).",
+                      "type": "boolean"
+                    },
+                    "estimate_minutes": {
+                      "description": "Its estimate in minutes.",
+                      "type": "integer"
+                    },
+                    "id": {
+                      "description": "Its ID.",
+                      "type": "string"
+                    },
+                    "key": {
+                      "description": "Its key.",
+                      "type": "string"
+                    },
+                    "parent": {
+                      "description": "The parent task's key, for a subtask.",
+                      "type": "string"
+                    },
+                    "priority": {
+                      "description": "Its priority.",
+                      "oneOf": [
+                        {
+                          "const": "none",
+                          "description": "No priority (the default).",
+                          "type": "string"
+                        },
+                        {
+                          "const": "low",
+                          "description": "Low.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "normal",
+                          "description": "Normal.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "high",
+                          "description": "High.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "urgent",
+                          "description": "Urgent.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "status": {
+                      "additionalProperties": false,
+                      "description": "Its status.",
+                      "properties": {
+                        "category": {
+                          "description": "Its category.",
+                          "oneOf": [
+                            {
+                              "const": "todo",
+                              "description": "Not started.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "in_progress",
+                              "description": "Being worked on.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "done",
+                              "description": "Finished; closes the task.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "cancelled",
+                              "description": "Dropped; closes the task.",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "id": {
+                          "description": "The status's ID.",
+                          "type": "string"
+                        },
+                        "name": {
+                          "description": "Its name.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "category"
+                      ],
+                      "type": "object"
+                    },
+                    "title": {
+                      "description": "Its title.",
+                      "type": "string"
+                    },
+                    "type": {
+                      "description": "Its type's name.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "title",
+                    "status",
+                    "closed",
+                    "type",
+                    "priority",
+                    "id"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "description": "When it last changed.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "state",
+              "progress",
+              "rank",
+              "created_at",
+              "updated_at",
+              "id"
+            ],
+            "type": "object"
+          },
+          "tasks_changed": {
+            "description": "The keys of the tasks whose sprint changed: added, taken out, moved\non when it was completed, or cleared by a deletion.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "views_rewritten": {
+            "description": "The saved views whose query was rewritten because they named the\nsprint (renamed or deleted), by name.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "SprintChange",
+        "type": "object"
+      },
+      "title": "Delete a sprint",
+      "toolset": "projects"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Start a sprint"
+      },
+      "covers": [
+        "sprint.start"
+      ],
+      "description": "Starts a planned sprint; a project has one active sprint at a time. `start_date` defaults to the sprint's own or today, `end_date` to its own or two weeks later; `goal` sets a new goal. Example: start_sprint {\"sprint\": \"Sprint 4\", \"project\": \"TM\", \"end_date\": \"+2w\"}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Which sprint to start, and its dates.",
+        "properties": {
+          "end_date": {
+            "description": "Its last day; default: its end date, or two weeks after the start.",
+            "type": "string"
+          },
+          "goal": {
+            "description": "A new goal.",
+            "type": "string"
+          },
+          "project": {
+            "description": "With a name: the sprint's project (key or ID).",
+            "type": "string"
+          },
+          "sprint": {
+            "description": "The sprint (planned): its ID or its name.",
+            "type": "string"
+          },
+          "start_date": {
+            "description": "Its first day; default: its start date, or today.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sprint"
+        ],
+        "title": "SprintStartInput",
+        "type": "object"
+      },
+      "name": "start_sprint",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "A sprint after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether it was deleted.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "sprint": {
+            "additionalProperties": false,
+            "description": "The sprint after the change (before it, for a deletion); left out\nwhen tasks were only taken out of their sprints.",
+            "properties": {
+              "completed_at": {
+                "description": "When it was completed (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "goal": {
+                "description": "What the sprint is meant to achieve: plain text.",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name, unique in its project (ignoring case).",
+                "type": "string"
+              },
+              "progress": {
+                "additionalProperties": false,
+                "description": "Its progress.",
+                "properties": {
+                  "closed": {
+                    "description": "How many of them are closed.",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "closed_estimate_minutes": {
+                    "description": "The estimates of the closed ones, in minutes.",
+                    "type": "integer"
+                  },
+                  "estimate_minutes": {
+                    "description": "Their estimates added up, in minutes.",
+                    "type": "integer"
+                  },
+                  "total": {
+                    "description": "The tasks in it (not in the trash).",
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "total",
+                  "closed",
+                  "estimate_minutes",
+                  "closed_estimate_minutes"
+                ],
+                "type": "object"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place among the project's sprints.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "started_at": {
+                "description": "When it was started (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "state": {
+                "description": "Where it stands.",
+                "oneOf": [
+                  {
+                    "const": "planned",
+                    "description": "Being planned; not started yet (the default).",
+                    "type": "string"
+                  },
+                  {
+                    "const": "active",
+                    "description": "Running: started and not completed. One per project at most.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "closed",
+                    "description": "Completed.",
+                    "type": "string"
+                  }
+                ]
+              },
+              "tasks": {
+                "description": "Its tasks, when asked for: by board order.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "A task of a sprint or of the backlog, as the sprints page lists it.",
+                  "properties": {
+                    "closed": {
+                      "description": "Whether it is closed (done or cancelled).",
+                      "type": "boolean"
+                    },
+                    "estimate_minutes": {
+                      "description": "Its estimate in minutes.",
+                      "type": "integer"
+                    },
+                    "id": {
+                      "description": "Its ID.",
+                      "type": "string"
+                    },
+                    "key": {
+                      "description": "Its key.",
+                      "type": "string"
+                    },
+                    "parent": {
+                      "description": "The parent task's key, for a subtask.",
+                      "type": "string"
+                    },
+                    "priority": {
+                      "description": "Its priority.",
+                      "oneOf": [
+                        {
+                          "const": "none",
+                          "description": "No priority (the default).",
+                          "type": "string"
+                        },
+                        {
+                          "const": "low",
+                          "description": "Low.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "normal",
+                          "description": "Normal.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "high",
+                          "description": "High.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "urgent",
+                          "description": "Urgent.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "status": {
+                      "additionalProperties": false,
+                      "description": "Its status.",
+                      "properties": {
+                        "category": {
+                          "description": "Its category.",
+                          "oneOf": [
+                            {
+                              "const": "todo",
+                              "description": "Not started.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "in_progress",
+                              "description": "Being worked on.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "done",
+                              "description": "Finished; closes the task.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "cancelled",
+                              "description": "Dropped; closes the task.",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "id": {
+                          "description": "The status's ID.",
+                          "type": "string"
+                        },
+                        "name": {
+                          "description": "Its name.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "category"
+                      ],
+                      "type": "object"
+                    },
+                    "title": {
+                      "description": "Its title.",
+                      "type": "string"
+                    },
+                    "type": {
+                      "description": "Its type's name.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "title",
+                    "status",
+                    "closed",
+                    "type",
+                    "priority",
+                    "id"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "description": "When it last changed.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "state",
+              "progress",
+              "rank",
+              "created_at",
+              "updated_at",
+              "id"
+            ],
+            "type": "object"
+          },
+          "tasks_changed": {
+            "description": "The keys of the tasks whose sprint changed: added, taken out, moved\non when it was completed, or cleared by a deletion.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "views_rewritten": {
+            "description": "The saved views whose query was rewritten because they named the\nsprint (renamed or deleted), by name.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "SprintChange",
+        "type": "object"
+      },
+      "title": "Start a sprint",
+      "toolset": "projects"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Complete a sprint"
+      },
+      "covers": [
+        "sprint.complete"
+      ],
+      "description": "Completes the active sprint. Its open tasks go to `move_open_tasks_to`: a planned sprint of the project (name or ID), or `backlog` (the default); closed tasks stay in the completed sprint. `tasks_changed` lists the tasks moved. Ask the person where unfinished work goes when it isn't clear. Example: complete_sprint {\"sprint\": \"active\", \"project\": \"TM\", \"move_open_tasks_to\": \"Sprint 5\"}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Which sprint to complete, and where its unfinished tasks go.",
+        "properties": {
+          "move_open_tasks_to": {
+            "description": "Where its open tasks go: a planned sprint of the project (name or\nID), or `backlog` (the default) for no sprint. Closed tasks stay in\nthe completed sprint.",
+            "type": "string"
+          },
+          "project": {
+            "description": "With a name or `active`: the sprint's project (key or ID).",
+            "type": "string"
+          },
+          "sprint": {
+            "description": "The sprint (active): its ID, its name, or `active`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sprint"
+        ],
+        "title": "SprintCompleteInput",
+        "type": "object"
+      },
+      "name": "complete_sprint",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "A sprint after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether it was deleted.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "sprint": {
+            "additionalProperties": false,
+            "description": "The sprint after the change (before it, for a deletion); left out\nwhen tasks were only taken out of their sprints.",
+            "properties": {
+              "completed_at": {
+                "description": "When it was completed (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "goal": {
+                "description": "What the sprint is meant to achieve: plain text.",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name, unique in its project (ignoring case).",
+                "type": "string"
+              },
+              "progress": {
+                "additionalProperties": false,
+                "description": "Its progress.",
+                "properties": {
+                  "closed": {
+                    "description": "How many of them are closed.",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "closed_estimate_minutes": {
+                    "description": "The estimates of the closed ones, in minutes.",
+                    "type": "integer"
+                  },
+                  "estimate_minutes": {
+                    "description": "Their estimates added up, in minutes.",
+                    "type": "integer"
+                  },
+                  "total": {
+                    "description": "The tasks in it (not in the trash).",
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "total",
+                  "closed",
+                  "estimate_minutes",
+                  "closed_estimate_minutes"
+                ],
+                "type": "object"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place among the project's sprints.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "started_at": {
+                "description": "When it was started (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "state": {
+                "description": "Where it stands.",
+                "oneOf": [
+                  {
+                    "const": "planned",
+                    "description": "Being planned; not started yet (the default).",
+                    "type": "string"
+                  },
+                  {
+                    "const": "active",
+                    "description": "Running: started and not completed. One per project at most.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "closed",
+                    "description": "Completed.",
+                    "type": "string"
+                  }
+                ]
+              },
+              "tasks": {
+                "description": "Its tasks, when asked for: by board order.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "A task of a sprint or of the backlog, as the sprints page lists it.",
+                  "properties": {
+                    "closed": {
+                      "description": "Whether it is closed (done or cancelled).",
+                      "type": "boolean"
+                    },
+                    "estimate_minutes": {
+                      "description": "Its estimate in minutes.",
+                      "type": "integer"
+                    },
+                    "id": {
+                      "description": "Its ID.",
+                      "type": "string"
+                    },
+                    "key": {
+                      "description": "Its key.",
+                      "type": "string"
+                    },
+                    "parent": {
+                      "description": "The parent task's key, for a subtask.",
+                      "type": "string"
+                    },
+                    "priority": {
+                      "description": "Its priority.",
+                      "oneOf": [
+                        {
+                          "const": "none",
+                          "description": "No priority (the default).",
+                          "type": "string"
+                        },
+                        {
+                          "const": "low",
+                          "description": "Low.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "normal",
+                          "description": "Normal.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "high",
+                          "description": "High.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "urgent",
+                          "description": "Urgent.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "status": {
+                      "additionalProperties": false,
+                      "description": "Its status.",
+                      "properties": {
+                        "category": {
+                          "description": "Its category.",
+                          "oneOf": [
+                            {
+                              "const": "todo",
+                              "description": "Not started.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "in_progress",
+                              "description": "Being worked on.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "done",
+                              "description": "Finished; closes the task.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "cancelled",
+                              "description": "Dropped; closes the task.",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "id": {
+                          "description": "The status's ID.",
+                          "type": "string"
+                        },
+                        "name": {
+                          "description": "Its name.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "category"
+                      ],
+                      "type": "object"
+                    },
+                    "title": {
+                      "description": "Its title.",
+                      "type": "string"
+                    },
+                    "type": {
+                      "description": "Its type's name.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "title",
+                    "status",
+                    "closed",
+                    "type",
+                    "priority",
+                    "id"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "description": "When it last changed.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "state",
+              "progress",
+              "rank",
+              "created_at",
+              "updated_at",
+              "id"
+            ],
+            "type": "object"
+          },
+          "tasks_changed": {
+            "description": "The keys of the tasks whose sprint changed: added, taken out, moved\non when it was completed, or cleared by a deletion.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "views_rewritten": {
+            "description": "The saved views whose query was rewritten because they named the\nsprint (renamed or deleted), by name.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "SprintChange",
+        "type": "object"
+      },
+      "title": "Complete a sprint",
+      "toolset": "projects"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Put tasks in a sprint"
+      },
+      "covers": [
+        "sprint.add_tasks"
+      ],
+      "description": "Puts `tasks` (keys, up to 500, of the sprint's project) in a planned or active sprint, taking them out of any other sprint, in one change. `tasks_changed` lists the ones that moved. Example: add_tasks_to_sprint {\"sprint\": \"active\", \"project\": \"TM\", \"tasks\": [\"TM-41\", \"TM-43\"]}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Tasks to put in a sprint.",
+        "properties": {
+          "project": {
+            "description": "With a name or `active`: the sprint's project (key or ID).",
+            "type": "string"
+          },
+          "sprint": {
+            "description": "The sprint (planned or active): its ID, its name, or `active`.",
+            "type": "string"
+          },
+          "tasks": {
+            "description": "The tasks (keys or IDs), of the sprint's project; up to 500. A task\nin another sprint moves to this one.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "sprint",
+          "tasks"
+        ],
+        "title": "SprintAddTasksInput",
+        "type": "object"
+      },
+      "name": "add_tasks_to_sprint",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "A sprint after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether it was deleted.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "sprint": {
+            "additionalProperties": false,
+            "description": "The sprint after the change (before it, for a deletion); left out\nwhen tasks were only taken out of their sprints.",
+            "properties": {
+              "completed_at": {
+                "description": "When it was completed (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "goal": {
+                "description": "What the sprint is meant to achieve: plain text.",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name, unique in its project (ignoring case).",
+                "type": "string"
+              },
+              "progress": {
+                "additionalProperties": false,
+                "description": "Its progress.",
+                "properties": {
+                  "closed": {
+                    "description": "How many of them are closed.",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "closed_estimate_minutes": {
+                    "description": "The estimates of the closed ones, in minutes.",
+                    "type": "integer"
+                  },
+                  "estimate_minutes": {
+                    "description": "Their estimates added up, in minutes.",
+                    "type": "integer"
+                  },
+                  "total": {
+                    "description": "The tasks in it (not in the trash).",
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "total",
+                  "closed",
+                  "estimate_minutes",
+                  "closed_estimate_minutes"
+                ],
+                "type": "object"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place among the project's sprints.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "started_at": {
+                "description": "When it was started (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "state": {
+                "description": "Where it stands.",
+                "oneOf": [
+                  {
+                    "const": "planned",
+                    "description": "Being planned; not started yet (the default).",
+                    "type": "string"
+                  },
+                  {
+                    "const": "active",
+                    "description": "Running: started and not completed. One per project at most.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "closed",
+                    "description": "Completed.",
+                    "type": "string"
+                  }
+                ]
+              },
+              "tasks": {
+                "description": "Its tasks, when asked for: by board order.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "A task of a sprint or of the backlog, as the sprints page lists it.",
+                  "properties": {
+                    "closed": {
+                      "description": "Whether it is closed (done or cancelled).",
+                      "type": "boolean"
+                    },
+                    "estimate_minutes": {
+                      "description": "Its estimate in minutes.",
+                      "type": "integer"
+                    },
+                    "id": {
+                      "description": "Its ID.",
+                      "type": "string"
+                    },
+                    "key": {
+                      "description": "Its key.",
+                      "type": "string"
+                    },
+                    "parent": {
+                      "description": "The parent task's key, for a subtask.",
+                      "type": "string"
+                    },
+                    "priority": {
+                      "description": "Its priority.",
+                      "oneOf": [
+                        {
+                          "const": "none",
+                          "description": "No priority (the default).",
+                          "type": "string"
+                        },
+                        {
+                          "const": "low",
+                          "description": "Low.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "normal",
+                          "description": "Normal.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "high",
+                          "description": "High.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "urgent",
+                          "description": "Urgent.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "status": {
+                      "additionalProperties": false,
+                      "description": "Its status.",
+                      "properties": {
+                        "category": {
+                          "description": "Its category.",
+                          "oneOf": [
+                            {
+                              "const": "todo",
+                              "description": "Not started.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "in_progress",
+                              "description": "Being worked on.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "done",
+                              "description": "Finished; closes the task.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "cancelled",
+                              "description": "Dropped; closes the task.",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "id": {
+                          "description": "The status's ID.",
+                          "type": "string"
+                        },
+                        "name": {
+                          "description": "Its name.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "category"
+                      ],
+                      "type": "object"
+                    },
+                    "title": {
+                      "description": "Its title.",
+                      "type": "string"
+                    },
+                    "type": {
+                      "description": "Its type's name.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "title",
+                    "status",
+                    "closed",
+                    "type",
+                    "priority",
+                    "id"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "description": "When it last changed.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "state",
+              "progress",
+              "rank",
+              "created_at",
+              "updated_at",
+              "id"
+            ],
+            "type": "object"
+          },
+          "tasks_changed": {
+            "description": "The keys of the tasks whose sprint changed: added, taken out, moved\non when it was completed, or cleared by a deletion.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "views_rewritten": {
+            "description": "The saved views whose query was rewritten because they named the\nsprint (renamed or deleted), by name.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "SprintChange",
+        "type": "object"
+      },
+      "title": "Put tasks in a sprint",
+      "toolset": "projects"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Take tasks out of their sprint"
+      },
+      "covers": [
+        "sprint.remove_tasks"
+      ],
+      "description": "Takes `tasks` (keys, up to 500) out of whatever sprint they are in, back to the backlog, in one change. Example: remove_tasks_from_sprint {\"tasks\": [\"TM-41\"]}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Tasks to take out of their sprint, back to the backlog.",
+        "properties": {
+          "tasks": {
+            "description": "The tasks (keys or IDs); up to 500. Tasks in no sprint are left\nas they are.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "tasks"
+        ],
+        "title": "SprintRemoveTasksInput",
+        "type": "object"
+      },
+      "name": "remove_tasks_from_sprint",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "A sprint after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether it was deleted.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "sprint": {
+            "additionalProperties": false,
+            "description": "The sprint after the change (before it, for a deletion); left out\nwhen tasks were only taken out of their sprints.",
+            "properties": {
+              "completed_at": {
+                "description": "When it was completed (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "goal": {
+                "description": "What the sprint is meant to achieve: plain text.",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name, unique in its project (ignoring case).",
+                "type": "string"
+              },
+              "progress": {
+                "additionalProperties": false,
+                "description": "Its progress.",
+                "properties": {
+                  "closed": {
+                    "description": "How many of them are closed.",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "closed_estimate_minutes": {
+                    "description": "The estimates of the closed ones, in minutes.",
+                    "type": "integer"
+                  },
+                  "estimate_minutes": {
+                    "description": "Their estimates added up, in minutes.",
+                    "type": "integer"
+                  },
+                  "total": {
+                    "description": "The tasks in it (not in the trash).",
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "total",
+                  "closed",
+                  "estimate_minutes",
+                  "closed_estimate_minutes"
+                ],
+                "type": "object"
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place among the project's sprints.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "started_at": {
+                "description": "When it was started (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "state": {
+                "description": "Where it stands.",
+                "oneOf": [
+                  {
+                    "const": "planned",
+                    "description": "Being planned; not started yet (the default).",
+                    "type": "string"
+                  },
+                  {
+                    "const": "active",
+                    "description": "Running: started and not completed. One per project at most.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "closed",
+                    "description": "Completed.",
+                    "type": "string"
+                  }
+                ]
+              },
+              "tasks": {
+                "description": "Its tasks, when asked for: by board order.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "A task of a sprint or of the backlog, as the sprints page lists it.",
+                  "properties": {
+                    "closed": {
+                      "description": "Whether it is closed (done or cancelled).",
+                      "type": "boolean"
+                    },
+                    "estimate_minutes": {
+                      "description": "Its estimate in minutes.",
+                      "type": "integer"
+                    },
+                    "id": {
+                      "description": "Its ID.",
+                      "type": "string"
+                    },
+                    "key": {
+                      "description": "Its key.",
+                      "type": "string"
+                    },
+                    "parent": {
+                      "description": "The parent task's key, for a subtask.",
+                      "type": "string"
+                    },
+                    "priority": {
+                      "description": "Its priority.",
+                      "oneOf": [
+                        {
+                          "const": "none",
+                          "description": "No priority (the default).",
+                          "type": "string"
+                        },
+                        {
+                          "const": "low",
+                          "description": "Low.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "normal",
+                          "description": "Normal.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "high",
+                          "description": "High.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "urgent",
+                          "description": "Urgent.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "status": {
+                      "additionalProperties": false,
+                      "description": "Its status.",
+                      "properties": {
+                        "category": {
+                          "description": "Its category.",
+                          "oneOf": [
+                            {
+                              "const": "todo",
+                              "description": "Not started.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "in_progress",
+                              "description": "Being worked on.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "done",
+                              "description": "Finished; closes the task.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "cancelled",
+                              "description": "Dropped; closes the task.",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "id": {
+                          "description": "The status's ID.",
+                          "type": "string"
+                        },
+                        "name": {
+                          "description": "Its name.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "category"
+                      ],
+                      "type": "object"
+                    },
+                    "title": {
+                      "description": "Its title.",
+                      "type": "string"
+                    },
+                    "type": {
+                      "description": "Its type's name.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "title",
+                    "status",
+                    "closed",
+                    "type",
+                    "priority",
+                    "id"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "description": "When it last changed.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "state",
+              "progress",
+              "rank",
+              "created_at",
+              "updated_at",
+              "id"
+            ],
+            "type": "object"
+          },
+          "tasks_changed": {
+            "description": "The keys of the tasks whose sprint changed: added, taken out, moved\non when it was completed, or cleared by a deletion.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "views_rewritten": {
+            "description": "The saved views whose query was rewritten because they named the\nsprint (renamed or deleted), by name.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "SprintChange",
+        "type": "object"
+      },
+      "title": "Take tasks out of their sprint",
+      "toolset": "projects"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Get a sprint burndown"
+      },
+      "covers": [
+        "sprint.burndown"
+      ],
+      "description": "Returns the burndown of an active or closed sprint: for each day from its start, the open and total tasks and their estimates at the end of the day (scope changes show in the totals). Example: get_sprint_burndown {\"sprint\": \"active\", \"project\": \"TM\"}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Which sprint's burndown to read.",
+        "properties": {
+          "project": {
+            "description": "With a name or `active`: the sprint's project (key or ID).",
+            "type": "string"
+          },
+          "sprint": {
+            "description": "The sprint (active or closed): its ID, its name, or `active`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sprint"
+        ],
+        "title": "SprintBurndownInput",
+        "type": "object"
+      },
+      "name": "get_sprint_burndown",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "How a sprint's open work went down, day by day.",
+        "properties": {
+          "days": {
+            "description": "Its days from the first to the last (or to today, for an active\nsprint that runs over); days still to come are left out.",
+            "items": {
+              "additionalProperties": false,
+              "description": "One day of a burndown, as it stood at the end of the day (or at the\nmoment the sprint was completed, on that day).",
+              "properties": {
+                "date": {
+                  "description": "The day (`YYYY-MM-DD`).",
+                  "type": "string"
+                },
+                "open_estimate_minutes": {
+                  "description": "The open tasks' estimates added up, in minutes.",
+                  "type": "integer"
+                },
+                "open_tasks": {
+                  "description": "The tasks in the sprint that were still open.",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "total_estimate_minutes": {
+                  "description": "All the tasks' estimates added up, in minutes.",
+                  "type": "integer"
+                },
+                "total_tasks": {
+                  "description": "All the tasks in the sprint, open or closed (its scope).",
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "date",
+                "open_tasks",
+                "total_tasks",
+                "open_estimate_minutes",
+                "total_estimate_minutes"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "sprint": {
+            "additionalProperties": false,
+            "description": "The sprint.",
+            "properties": {
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "state": {
+                "description": "Where it stands.",
+                "oneOf": [
+                  {
+                    "const": "planned",
+                    "description": "Being planned; not started yet (the default).",
+                    "type": "string"
+                  },
+                  {
+                    "const": "active",
+                    "description": "Running: started and not completed. One per project at most.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "closed",
+                    "description": "Completed.",
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "name",
+              "state",
+              "id"
+            ],
+            "type": "object"
+          },
+          "start_estimate_minutes": {
+            "description": "The estimates at the start, in minutes.",
+            "type": "integer"
+          },
+          "start_tasks": {
+            "description": "The work at the start: the first day's totals.",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sprint",
+          "days",
+          "start_tasks",
+          "start_estimate_minutes"
+        ],
+        "title": "SprintBurndown",
+        "type": "object"
+      },
+      "title": "Get a sprint burndown",
+      "toolset": "projects"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
         "title": "Search tasks"
       },
       "covers": [
         "task.search"
       ],
-      "description": "Lists the tasks matching a query, a page at a time, with totals of estimates and logged time. The query language: `is:open`, `status:\"In progress\"`, `label:bug,crash` (any of), `-label:wontfix` (not; includes tasks without labels), `priority>=high`, `due<+7d`, `updated>-3d`, `created:this-month`, `during:2026-12-01..2026-12-31` (start to due overlaps), the history with `was:status:Review` (had that value at any time), `changed:due>-7d` (changed in the last week) and `changed-by:agent`, custom fields as `cf.story-points>3` (also in `was:cf.area:Backend` and `changed:cf.area`), `estimate:1h..4h`, `has:due`, `parent:TM-12`, `project:TM/*` (with sub-projects), `(a OR b)`, words and \"phrases\" for full text, a bare key `TM-41`, and `sort:due,-priority`. Dates: 2026-12-31, today, +7d, -1m, this-week, next-month. A mistake comes back as `invalid` with the place and a suggestion. Use the `query` it echoes when you need the normal form; page with `cursor`. Example: search_tasks {\"query\": \"is:open label:bug due<+7d sort:due\", \"limit\": 20}",
+      "description": "Lists the tasks matching a query, a page at a time, with totals of estimates and logged time. The query language: `is:open`, `status:\"In progress\"`, `label:bug,crash` (any of), `-label:wontfix` (not; includes tasks without labels), `priority>=high`, `due<+7d`, `updated>-3d`, `created:this-month`, `during:2026-12-01..2026-12-31` (start to due overlaps), the history with `was:status:Review` (had that value at any time), `changed:due>-7d` (changed in the last week) and `changed-by:agent`, custom fields as `cf.story-points>3` (also in `was:cf.area:Backend` and `changed:cf.area`), `estimate:1h..4h`, `has:due`, `parent:TM-12`, `sprint:active` (or a sprint's name, or `none` for the backlog), `project:TM/*` (with sub-projects), `(a OR b)`, words and \"phrases\" for full text, a bare key `TM-41`, and `sort:due,-priority`. Dates: 2026-12-31, today, +7d, -1m, this-week, next-month. A mistake comes back as `invalid` with the place and a suggestion. Use the `query` it echoes when you need the normal form; page with `cursor`. Example: search_tasks {\"query\": \"is:open label:bug due<+7d sort:due\", \"limit\": 20}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "Which tasks to list.",
@@ -13259,6 +16368,54 @@
                 "spent_minutes": {
                   "description": "Logged time in minutes.",
                   "type": "integer"
+                },
+                "sprint": {
+                  "additionalProperties": false,
+                  "description": "The sprint it is in.",
+                  "properties": {
+                    "end_date": {
+                      "description": "Its last day (`YYYY-MM-DD`).",
+                      "type": "string"
+                    },
+                    "id": {
+                      "description": "Its ID.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    },
+                    "start_date": {
+                      "description": "Its first day (`YYYY-MM-DD`).",
+                      "type": "string"
+                    },
+                    "state": {
+                      "description": "Where it stands.",
+                      "oneOf": [
+                        {
+                          "const": "planned",
+                          "description": "Being planned; not started yet (the default).",
+                          "type": "string"
+                        },
+                        {
+                          "const": "active",
+                          "description": "Running: started and not completed. One per project at most.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "closed",
+                          "description": "Completed.",
+                          "type": "string"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "state",
+                    "id"
+                  ],
+                  "type": "object"
                 },
                 "start_date": {
                   "description": "The start date.",
@@ -15159,6 +18316,54 @@
                   "description": "Logged time in minutes.",
                   "type": "integer"
                 },
+                "sprint": {
+                  "additionalProperties": false,
+                  "description": "The sprint it is in.",
+                  "properties": {
+                    "end_date": {
+                      "description": "Its last day (`YYYY-MM-DD`).",
+                      "type": "string"
+                    },
+                    "id": {
+                      "description": "Its ID.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    },
+                    "start_date": {
+                      "description": "Its first day (`YYYY-MM-DD`).",
+                      "type": "string"
+                    },
+                    "state": {
+                      "description": "Where it stands.",
+                      "oneOf": [
+                        {
+                          "const": "planned",
+                          "description": "Being planned; not started yet (the default).",
+                          "type": "string"
+                        },
+                        {
+                          "const": "active",
+                          "description": "Running: started and not completed. One per project at most.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "closed",
+                          "description": "Completed.",
+                          "type": "string"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "state",
+                    "id"
+                  ],
+                  "type": "object"
+                },
                 "start_date": {
                   "description": "The start date.",
                   "type": "string"
@@ -15567,7 +18772,7 @@
       "covers": [
         "task.create"
       ],
-      "description": "Creates a task in a project from a title alone, or with `description`, `status`, `type`, `priority` (none, low, normal, high, urgent), `labels`, `fix_version`, `parent`, `start_date`, `due_date` (YYYY-MM-DD), `estimate` (`1d 4h`, `90m`) and custom `fields` by name (see list_custom_fields; a required field needs a value). It lands in the first to-do status at the bottom unless told otherwise, and gets the project's next key. Pass `client_request_id` so a retry doesn't create a second task. Example: create_task {\"project\": \"TM\", \"title\": \"Write the release notes\", \"due_date\": \"2026-12-01\"}",
+      "description": "Creates a task in a project from a title alone, or with `description`, `status`, `type`, `priority` (none, low, normal, high, urgent), `labels`, `fix_version`, `sprint`, `parent`, `start_date`, `due_date` (YYYY-MM-DD), `estimate` (`1d 4h`, `90m`) and custom `fields` by name (see list_custom_fields; a required field needs a value). It lands in the first to-do status at the bottom unless told otherwise, and gets the project's next key. Pass `client_request_id` so a retry doesn't create a second task. Example: create_task {\"project\": \"TM\", \"title\": \"Write the release notes\", \"due_date\": \"2026-12-01\"}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "A new task. Only the project and the title are needed.",
@@ -15663,6 +18868,10 @@
           },
           "project": {
             "description": "The project: its key (current or old) or ID.",
+            "type": "string"
+          },
+          "sprint": {
+            "description": "The sprint it goes in (name or ID, or `active`): a planned or active\nsprint of the project.",
             "type": "string"
           },
           "start_date": {
@@ -17353,6 +20562,54 @@
                 "description": "Logged time in minutes.",
                 "type": "integer"
               },
+              "sprint": {
+                "additionalProperties": false,
+                "description": "The sprint it is in.",
+                "properties": {
+                  "end_date": {
+                    "description": "Its last day (`YYYY-MM-DD`).",
+                    "type": "string"
+                  },
+                  "id": {
+                    "description": "Its ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  },
+                  "start_date": {
+                    "description": "Its first day (`YYYY-MM-DD`).",
+                    "type": "string"
+                  },
+                  "state": {
+                    "description": "Where it stands.",
+                    "oneOf": [
+                      {
+                        "const": "planned",
+                        "description": "Being planned; not started yet (the default).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "active",
+                        "description": "Running: started and not completed. One per project at most.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "closed",
+                        "description": "Completed.",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "state",
+                  "id"
+                ],
+                "type": "object"
+              },
               "start_date": {
                 "description": "The start date.",
                 "type": "string"
@@ -17761,7 +21018,7 @@
         "task.update",
         "task.resolve_conflict"
       ],
-      "description": "Changes the given fields of a task only: `title`, `type`, `priority`, `labels` (replace) or `add_labels`/`remove_labels`, `fix_version` (an open version, see list_versions), `parent`, `start_date`, `due_date`, `estimate`, `progress`, custom `fields` ({\"Story points\": 3}; null clears one), and the description. With new dates, `move_dependents: true` also moves the tasks that depend on this one (blocks links, and theirs in turn) later, as far as each must to begin after its blocker ends, in the same change; `moved` lists them. Prefer `description_edits` ([{old_text, new_text}], each old_text found exactly once) for changes to part of the description; a whole new `description` needs `base_revision` (the `description_revision` from get_task): if someone saved in between, edits to different lines are merged, and edits to the same lines are kept as a conflict copy for the person while the description stays as it was (`description_save` says which). `resolve_conflict` resolves a conflict copy. To clear a field, list it in `clear`. Status and position change with move_task; checklist ticks with update_checklist. Example: update_task {\"key\": \"TM-41\", \"description_edits\": [{\"old_text\": \"Draft\", \"new_text\": \"Final\"}]}",
+      "description": "Changes the given fields of a task only: `title`, `type`, `priority`, `labels` (replace) or `add_labels`/`remove_labels`, `fix_version` (an open version, see list_versions), `sprint` (a planned or active sprint, or `active`), `parent`, `start_date`, `due_date`, `estimate`, `progress`, custom `fields` ({\"Story points\": 3}; null clears one), and the description. With new dates, `move_dependents: true` also moves the tasks that depend on this one (blocks links, and theirs in turn) later, as far as each must to begin after its blocker ends, in the same change; `moved` lists them. Prefer `description_edits` ([{old_text, new_text}], each old_text found exactly once) for changes to part of the description; a whole new `description` needs `base_revision` (the `description_revision` from get_task): if someone saved in between, edits to different lines are merged, and edits to the same lines are kept as a conflict copy for the person while the description stays as it was (`description_save` says which). `resolve_conflict` resolves a conflict copy. To clear a field, list it in `clear`. Status and position change with move_task; checklist ticks with update_checklist. Example: update_task {\"key\": \"TM-41\", \"description_edits\": [{\"old_text\": \"Draft\", \"new_text\": \"Final\"}]}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "Changes to a task; fields left out keep their value. Status and\nposition change with `task.move`.",
@@ -17820,6 +21077,11 @@
                 {
                   "const": "fix_version",
                   "description": "The version it is planned for.",
+                  "type": "string"
+                },
+                {
+                  "const": "sprint",
+                  "description": "The sprint it is in (back to the backlog).",
                   "type": "string"
                 }
               ]
@@ -17980,6 +21242,10 @@
               "action"
             ],
             "type": "object"
+          },
+          "sprint": {
+            "description": "Put it in this sprint (name or ID, or `active`): a planned or active\nsprint of the project.",
+            "type": "string"
           },
           "start_date": {
             "description": "A new start date: `YYYY-MM-DD`, or a natural date such as `fri` or\n`in 3d`.",
@@ -19663,6 +22929,54 @@
               "spent_minutes": {
                 "description": "Logged time in minutes.",
                 "type": "integer"
+              },
+              "sprint": {
+                "additionalProperties": false,
+                "description": "The sprint it is in.",
+                "properties": {
+                  "end_date": {
+                    "description": "Its last day (`YYYY-MM-DD`).",
+                    "type": "string"
+                  },
+                  "id": {
+                    "description": "Its ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  },
+                  "start_date": {
+                    "description": "Its first day (`YYYY-MM-DD`).",
+                    "type": "string"
+                  },
+                  "state": {
+                    "description": "Where it stands.",
+                    "oneOf": [
+                      {
+                        "const": "planned",
+                        "description": "Being planned; not started yet (the default).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "active",
+                        "description": "Running: started and not completed. One per project at most.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "closed",
+                        "description": "Completed.",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "state",
+                  "id"
+                ],
+                "type": "object"
               },
               "start_date": {
                 "description": "The start date.",
@@ -21828,6 +25142,54 @@
                 "description": "Logged time in minutes.",
                 "type": "integer"
               },
+              "sprint": {
+                "additionalProperties": false,
+                "description": "The sprint it is in.",
+                "properties": {
+                  "end_date": {
+                    "description": "Its last day (`YYYY-MM-DD`).",
+                    "type": "string"
+                  },
+                  "id": {
+                    "description": "Its ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  },
+                  "start_date": {
+                    "description": "Its first day (`YYYY-MM-DD`).",
+                    "type": "string"
+                  },
+                  "state": {
+                    "description": "Where it stands.",
+                    "oneOf": [
+                      {
+                        "const": "planned",
+                        "description": "Being planned; not started yet (the default).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "active",
+                        "description": "Running: started and not completed. One per project at most.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "closed",
+                        "description": "Completed.",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "state",
+                  "id"
+                ],
+                "type": "object"
+              },
               "start_date": {
                 "description": "The start date.",
                 "type": "string"
@@ -22748,6 +26110,11 @@
                       "const": "fix_version",
                       "description": "The version it is planned for.",
                       "type": "string"
+                    },
+                    {
+                      "const": "sprint",
+                      "description": "The sprint it is in (back to the backlog).",
+                      "type": "string"
                     }
                   ]
                 },
@@ -22860,6 +26227,10 @@
               },
               "shift_start": {
                 "description": "Move start dates by calendar days, weeks, months or years (`+2d`,\n`-1w`); tasks without one keep none.",
+                "type": "string"
+              },
+              "sprint": {
+                "description": "Put them in the sprint of this name (in each task's project), or\n`active` for each project's active sprint.",
                 "type": "string"
               },
               "start_date": {
@@ -24719,6 +28090,54 @@
               "spent_minutes": {
                 "description": "Logged time in minutes.",
                 "type": "integer"
+              },
+              "sprint": {
+                "additionalProperties": false,
+                "description": "The sprint it is in.",
+                "properties": {
+                  "end_date": {
+                    "description": "Its last day (`YYYY-MM-DD`).",
+                    "type": "string"
+                  },
+                  "id": {
+                    "description": "Its ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  },
+                  "start_date": {
+                    "description": "Its first day (`YYYY-MM-DD`).",
+                    "type": "string"
+                  },
+                  "state": {
+                    "description": "Where it stands.",
+                    "oneOf": [
+                      {
+                        "const": "planned",
+                        "description": "Being planned; not started yet (the default).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "active",
+                        "description": "Running: started and not completed. One per project at most.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "closed",
+                        "description": "Completed.",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "state",
+                  "id"
+                ],
+                "type": "object"
               },
               "start_date": {
                 "description": "The start date.",
@@ -27245,6 +30664,54 @@
                 "description": "Logged time in minutes.",
                 "type": "integer"
               },
+              "sprint": {
+                "additionalProperties": false,
+                "description": "The sprint it is in.",
+                "properties": {
+                  "end_date": {
+                    "description": "Its last day (`YYYY-MM-DD`).",
+                    "type": "string"
+                  },
+                  "id": {
+                    "description": "Its ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  },
+                  "start_date": {
+                    "description": "Its first day (`YYYY-MM-DD`).",
+                    "type": "string"
+                  },
+                  "state": {
+                    "description": "Where it stands.",
+                    "oneOf": [
+                      {
+                        "const": "planned",
+                        "description": "Being planned; not started yet (the default).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "active",
+                        "description": "Running: started and not completed. One per project at most.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "closed",
+                        "description": "Completed.",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "state",
+                  "id"
+                ],
+                "type": "object"
+              },
               "start_date": {
                 "description": "The start date.",
                 "type": "string"
@@ -29392,6 +32859,54 @@
                 "description": "Logged time in minutes.",
                 "type": "integer"
               },
+              "sprint": {
+                "additionalProperties": false,
+                "description": "The sprint it is in.",
+                "properties": {
+                  "end_date": {
+                    "description": "Its last day (`YYYY-MM-DD`).",
+                    "type": "string"
+                  },
+                  "id": {
+                    "description": "Its ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  },
+                  "start_date": {
+                    "description": "Its first day (`YYYY-MM-DD`).",
+                    "type": "string"
+                  },
+                  "state": {
+                    "description": "Where it stands.",
+                    "oneOf": [
+                      {
+                        "const": "planned",
+                        "description": "Being planned; not started yet (the default).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "active",
+                        "description": "Running: started and not completed. One per project at most.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "closed",
+                        "description": "Completed.",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "state",
+                  "id"
+                ],
+                "type": "object"
+              },
               "start_date": {
                 "description": "The start date.",
                 "type": "string"
@@ -31495,6 +35010,54 @@
               "spent_minutes": {
                 "description": "Logged time in minutes.",
                 "type": "integer"
+              },
+              "sprint": {
+                "additionalProperties": false,
+                "description": "The sprint it is in.",
+                "properties": {
+                  "end_date": {
+                    "description": "Its last day (`YYYY-MM-DD`).",
+                    "type": "string"
+                  },
+                  "id": {
+                    "description": "Its ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  },
+                  "start_date": {
+                    "description": "Its first day (`YYYY-MM-DD`).",
+                    "type": "string"
+                  },
+                  "state": {
+                    "description": "Where it stands.",
+                    "oneOf": [
+                      {
+                        "const": "planned",
+                        "description": "Being planned; not started yet (the default).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "active",
+                        "description": "Running: started and not completed. One per project at most.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "closed",
+                        "description": "Completed.",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "state",
+                  "id"
+                ],
+                "type": "object"
               },
               "start_date": {
                 "description": "The start date.",
@@ -33602,6 +37165,54 @@
                 "description": "Logged time in minutes.",
                 "type": "integer"
               },
+              "sprint": {
+                "additionalProperties": false,
+                "description": "The sprint it is in.",
+                "properties": {
+                  "end_date": {
+                    "description": "Its last day (`YYYY-MM-DD`).",
+                    "type": "string"
+                  },
+                  "id": {
+                    "description": "Its ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  },
+                  "start_date": {
+                    "description": "Its first day (`YYYY-MM-DD`).",
+                    "type": "string"
+                  },
+                  "state": {
+                    "description": "Where it stands.",
+                    "oneOf": [
+                      {
+                        "const": "planned",
+                        "description": "Being planned; not started yet (the default).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "active",
+                        "description": "Running: started and not completed. One per project at most.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "closed",
+                        "description": "Completed.",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "state",
+                  "id"
+                ],
+                "type": "object"
+              },
               "start_date": {
                 "description": "The start date.",
                 "type": "string"
@@ -35701,6 +39312,54 @@
               "spent_minutes": {
                 "description": "Logged time in minutes.",
                 "type": "integer"
+              },
+              "sprint": {
+                "additionalProperties": false,
+                "description": "The sprint it is in.",
+                "properties": {
+                  "end_date": {
+                    "description": "Its last day (`YYYY-MM-DD`).",
+                    "type": "string"
+                  },
+                  "id": {
+                    "description": "Its ID.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Its name.",
+                    "type": "string"
+                  },
+                  "start_date": {
+                    "description": "Its first day (`YYYY-MM-DD`).",
+                    "type": "string"
+                  },
+                  "state": {
+                    "description": "Where it stands.",
+                    "oneOf": [
+                      {
+                        "const": "planned",
+                        "description": "Being planned; not started yet (the default).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "active",
+                        "description": "Running: started and not completed. One per project at most.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "closed",
+                        "description": "Completed.",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "state",
+                  "id"
+                ],
+                "type": "object"
               },
               "start_date": {
                 "description": "The start date.",
@@ -42577,6 +46236,54 @@
                   "description": "Logged time in minutes.",
                   "type": "integer"
                 },
+                "sprint": {
+                  "additionalProperties": false,
+                  "description": "The sprint it is in.",
+                  "properties": {
+                    "end_date": {
+                      "description": "Its last day (`YYYY-MM-DD`).",
+                      "type": "string"
+                    },
+                    "id": {
+                      "description": "Its ID.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    },
+                    "start_date": {
+                      "description": "Its first day (`YYYY-MM-DD`).",
+                      "type": "string"
+                    },
+                    "state": {
+                      "description": "Where it stands.",
+                      "oneOf": [
+                        {
+                          "const": "planned",
+                          "description": "Being planned; not started yet (the default).",
+                          "type": "string"
+                        },
+                        {
+                          "const": "active",
+                          "description": "Running: started and not completed. One per project at most.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "closed",
+                          "description": "Completed.",
+                          "type": "string"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "state",
+                    "id"
+                  ],
+                  "type": "object"
+                },
                 "start_date": {
                   "description": "The start date.",
                   "type": "string"
@@ -43109,6 +46816,54 @@
                   "description": "Logged time in minutes.",
                   "type": "integer"
                 },
+                "sprint": {
+                  "additionalProperties": false,
+                  "description": "The sprint it is in.",
+                  "properties": {
+                    "end_date": {
+                      "description": "Its last day (`YYYY-MM-DD`).",
+                      "type": "string"
+                    },
+                    "id": {
+                      "description": "Its ID.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    },
+                    "start_date": {
+                      "description": "Its first day (`YYYY-MM-DD`).",
+                      "type": "string"
+                    },
+                    "state": {
+                      "description": "Where it stands.",
+                      "oneOf": [
+                        {
+                          "const": "planned",
+                          "description": "Being planned; not started yet (the default).",
+                          "type": "string"
+                        },
+                        {
+                          "const": "active",
+                          "description": "Running: started and not completed. One per project at most.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "closed",
+                          "description": "Completed.",
+                          "type": "string"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "state",
+                    "id"
+                  ],
+                  "type": "object"
+                },
                 "start_date": {
                   "description": "The start date.",
                   "type": "string"
@@ -43580,6 +47335,54 @@
                   "description": "Logged time in minutes.",
                   "type": "integer"
                 },
+                "sprint": {
+                  "additionalProperties": false,
+                  "description": "The sprint it is in.",
+                  "properties": {
+                    "end_date": {
+                      "description": "Its last day (`YYYY-MM-DD`).",
+                      "type": "string"
+                    },
+                    "id": {
+                      "description": "Its ID.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    },
+                    "start_date": {
+                      "description": "Its first day (`YYYY-MM-DD`).",
+                      "type": "string"
+                    },
+                    "state": {
+                      "description": "Where it stands.",
+                      "oneOf": [
+                        {
+                          "const": "planned",
+                          "description": "Being planned; not started yet (the default).",
+                          "type": "string"
+                        },
+                        {
+                          "const": "active",
+                          "description": "Running: started and not completed. One per project at most.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "closed",
+                          "description": "Completed.",
+                          "type": "string"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "state",
+                    "id"
+                  ],
+                  "type": "object"
+                },
                 "start_date": {
                   "description": "The start date.",
                   "type": "string"
@@ -44050,6 +47853,54 @@
                 "spent_minutes": {
                   "description": "Logged time in minutes.",
                   "type": "integer"
+                },
+                "sprint": {
+                  "additionalProperties": false,
+                  "description": "The sprint it is in.",
+                  "properties": {
+                    "end_date": {
+                      "description": "Its last day (`YYYY-MM-DD`).",
+                      "type": "string"
+                    },
+                    "id": {
+                      "description": "Its ID.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "Its name.",
+                      "type": "string"
+                    },
+                    "start_date": {
+                      "description": "Its first day (`YYYY-MM-DD`).",
+                      "type": "string"
+                    },
+                    "state": {
+                      "description": "Where it stands.",
+                      "oneOf": [
+                        {
+                          "const": "planned",
+                          "description": "Being planned; not started yet (the default).",
+                          "type": "string"
+                        },
+                        {
+                          "const": "active",
+                          "description": "Running: started and not completed. One per project at most.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "closed",
+                          "description": "Completed.",
+                          "type": "string"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "state",
+                    "id"
+                  ],
+                  "type": "object"
                 },
                 "start_date": {
                   "description": "The start date.",
@@ -44559,6 +48410,54 @@
                     "spent_minutes": {
                       "description": "Logged time in minutes.",
                       "type": "integer"
+                    },
+                    "sprint": {
+                      "additionalProperties": false,
+                      "description": "The sprint it is in.",
+                      "properties": {
+                        "end_date": {
+                          "description": "Its last day (`YYYY-MM-DD`).",
+                          "type": "string"
+                        },
+                        "id": {
+                          "description": "Its ID.",
+                          "type": "string"
+                        },
+                        "name": {
+                          "description": "Its name.",
+                          "type": "string"
+                        },
+                        "start_date": {
+                          "description": "Its first day (`YYYY-MM-DD`).",
+                          "type": "string"
+                        },
+                        "state": {
+                          "description": "Where it stands.",
+                          "oneOf": [
+                            {
+                              "const": "planned",
+                              "description": "Being planned; not started yet (the default).",
+                              "type": "string"
+                            },
+                            {
+                              "const": "active",
+                              "description": "Running: started and not completed. One per project at most.",
+                              "type": "string"
+                            },
+                            {
+                              "const": "closed",
+                              "description": "Completed.",
+                              "type": "string"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "state",
+                        "id"
+                      ],
+                      "type": "object"
                     },
                     "start_date": {
                       "description": "The start date.",
@@ -45457,6 +49356,54 @@
                       "spent_minutes": {
                         "description": "Logged time in minutes.",
                         "type": "integer"
+                      },
+                      "sprint": {
+                        "additionalProperties": false,
+                        "description": "The sprint it is in.",
+                        "properties": {
+                          "end_date": {
+                            "description": "Its last day (`YYYY-MM-DD`).",
+                            "type": "string"
+                          },
+                          "id": {
+                            "description": "Its ID.",
+                            "type": "string"
+                          },
+                          "name": {
+                            "description": "Its name.",
+                            "type": "string"
+                          },
+                          "start_date": {
+                            "description": "Its first day (`YYYY-MM-DD`).",
+                            "type": "string"
+                          },
+                          "state": {
+                            "description": "Where it stands.",
+                            "oneOf": [
+                              {
+                                "const": "planned",
+                                "description": "Being planned; not started yet (the default).",
+                                "type": "string"
+                              },
+                              {
+                                "const": "active",
+                                "description": "Running: started and not completed. One per project at most.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "closed",
+                                "description": "Completed.",
+                                "type": "string"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "state",
+                          "id"
+                        ],
+                        "type": "object"
                       },
                       "start_date": {
                         "description": "The start date.",

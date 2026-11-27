@@ -35,7 +35,7 @@ A condition is a field, an operator and a value: `status:Review`,
 - **Several values** separated by commas mean *any of them*:
   `label:bug,crash`.
 - **Quotes** hold values with spaces: `status:"In progress"`.
-- Names of statuses, types, labels and versions are matched without regard to
+- Names of statuses, types, labels, versions and sprints are matched without regard to
   case. A name that doesn't exist is an error, which lists the names that do.
 
 ## Combining conditions
@@ -115,8 +115,9 @@ is:blocked         is:claimed          is:subtask         is:parent
 is:unscheduled     is:milestone        is:over-estimate
 
 has:due            has:estimate        has:description    has:labels
-has:version        has:files           has:comments       has:subtasks
-has:parent         has:links           has:time           has:reminder
+has:version        has:sprint          has:files          has:comments
+has:subtasks       has:parent          has:links          has:time
+has:reminder
 ```
 
 Combine them with `-`: `is:open -has:labels` finds open tasks without labels.
@@ -133,6 +134,10 @@ under:TM-12                everything below TM-12, at any depth
 parent:none                top-level tasks
 blocked-by:any             tasks with a blocker
 version:"1.2" is:open
+sprint:active              tasks in the project's running sprint
+sprint:"Sprint 4"          tasks in a sprint, by name
+sprint:none is:open        the backlog: open tasks in no sprint
+was:sprint:"Sprint 3"      tasks that were in a sprint at some time
 ```
 
 ## Custom fields
@@ -173,6 +178,7 @@ changed-by:agent changed:cf.story-points
 | `is:open -has:due project:TM/*` | Open tasks without a due date in TM and below |
 | `author:agent created:today` | What agents created today |
 | `is:open version:none` | Open tasks not planned for a version |
+| `sprint:active -is:closed sort:priority` | What is left in the running sprint |
 
 ## Mistakes
 

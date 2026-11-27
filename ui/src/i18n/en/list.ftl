@@ -126,6 +126,7 @@ list-column-status = Status
 list-column-priority = Priority
 list-column-labels = Labels
 list-column-version = Version
+list-column-sprint = Sprint
 list-column-start = Start
 list-column-due = Due
 list-column-estimate = Estimate

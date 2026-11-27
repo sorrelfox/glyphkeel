@@ -181,6 +181,9 @@ pub struct Card {
     /// The parent task's key, for a subtask.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,
+    /// The sprint it is in.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sprint: Option<crate::ops::sprint::SprintRef>,
     /// The start date.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub start_date: Option<String>,

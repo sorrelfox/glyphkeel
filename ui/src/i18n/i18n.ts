@@ -24,6 +24,7 @@ import enRules from "./en/rules.ftl?raw";
 import enRoadmap from "./en/roadmap.ftl?raw";
 import enSafety from "./en/safety.ftl?raw";
 import enSearch from "./en/search.ftl?raw";
+import enSprints from "./en/sprints.ftl?raw";
 import enToday from "./en/today.ftl?raw";
 import enWiki from "./en/wiki.ftl?raw";
 // The engine's messages about queries, kept with the query language in Rust.
@@ -36,7 +37,7 @@ import enDesktop from "../../../crates/gk-app/i18n/en/app.ftl?raw";
 
 /** The languages the app has text for, with their message files. */
 export const MESSAGES: Readonly<Record<string, readonly string[]>> = {
-  en: [enAgents, enApp, enCalendar, enCsv, enDesktop, enDev, enEditor, enEngine, enFields, enFirstRun, enGantt, enList, enPalette, enPrefs, enQuery, enReader, enRepeat, enReports, enRoadmap, enRules, enSafety, enSearch, enToday, enWiki],
+  en: [enAgents, enApp, enCalendar, enCsv, enDesktop, enDev, enEditor, enEngine, enFields, enFirstRun, enGantt, enList, enPalette, enPrefs, enQuery, enReader, enRepeat, enReports, enRoadmap, enRules, enSafety, enSearch, enSprints, enToday, enWiki],
 };
 
 /** The language the app falls back to. */

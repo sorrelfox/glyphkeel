@@ -122,6 +122,7 @@ const SCREENS: Screen[] = [
     },
   },
   { name: "roadmap", open: async (page) => { await view(page, "Roadmap"); await expect(page.getByRole("article").first()).toBeVisible(); } },
+  { name: "sprints", open: async (page) => { await view(page, "Sprints"); await expect(page.locator("[data-chart]").first()).toBeVisible(); } },
   { name: "reports", open: async (page) => { await sidebar(page, "Reports"); await expect(page.locator("[data-chart]").first()).toBeVisible(); } },
   { name: "time report", open: async (page) => { await sidebar(page, "Time report"); await page.waitForTimeout(300); } },
   { name: "all tasks", open: async (page) => { await sidebar(page, "All tasks"); await expect(page.getByRole("grid").first()).toBeVisible(); } },

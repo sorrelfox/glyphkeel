@@ -21,6 +21,7 @@ const NAMED_FIELDS = new Set([
   "type",
   "priority",
   "label",
+  "sprint",
   "parent",
   "start",
   "due",

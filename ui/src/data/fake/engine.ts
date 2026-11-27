@@ -98,6 +98,7 @@ import { templateHandlers } from "./templates";
 /** The Gantt chart's layout until the person changes it. */
 const DEFAULT_GANTT_LAYOUT: GanttLayout = { zoom: "day", widths: {}, group_by: "parent", move_dependents: false };
 import { linksIn, placePage, subtree, type TextLink } from "./wiki";
+import { addSprintTasks, completeSprint, createSprint, deleteSprint, getSprint, listSprints, removeSprintTasks, sprintBurndown, sprintForTask, sprintRef, startSprint, updateSprint, type SprintHost } from "./sprints";
 import { createVersion, deleteVersion, getVersion, listVersions, updateVersion, versionForTask, versionRef, visibleVersions, type VersionHost } from "./versions";
 import { createView, deleteView, listViews, matchingKeys, parseQuery, queryError, searchTasks, updateView, type GroupInfo, type QueryNames, type TaskHistory } from "./query";
 import { createdClosed, cumulativeFlow, cycleTime, defaultFrom, flowPeriods, type FlowEvent, type FlowInput, type FlowStatus, type FlowTask } from "./reports";
@@ -646,6 +647,7 @@ export class FakeWorkspace {
       priority: task.priority,
       labels: this.labelRefs(task),
       ...some("parent", parent && this.keyOf(parent)),
+      ...some("sprint", sprintRef(this.sprintHost, task)),
       ...some("start_date", task.startDate),
       ...some("due_date", task.dueDate),
       ...some("estimate_minutes", task.estimateMin),
@@ -740,6 +742,7 @@ export class FakeWorkspace {
       ...(taskValues(this.state, task).length > 0 ? { fields: taskValues(this.state, task) } : {}),
       ...some("parent", parent && this.keyOf(parent)),
       ...some("fix_version", versionRef(this.versionHost, task)),
+      ...some("sprint", sprintRef(this.sprintHost, task)),
       ...some("start_date", task.startDate),
       ...some("due_date", task.dueDate),
       ...some("estimate_minutes", task.estimateMin),
@@ -1172,6 +1175,11 @@ export class FakeWorkspace {
         one.fixVersionId = null;
         warn(`Version "${planned.name}" isn't available in ${to.key} and was taken off.`);
       }
+      const sprint = sprintRef(this.sprintHost, one);
+      if (sprint !== undefined && one.projectId !== to.id) {
+        one.sprintId = null;
+        warn(`The task left sprint "${sprint.name}", because sprints belong to one project and it moved to ${to.key}.`);
+      }
       one.projectId = to.id;
       one.number = to.nextNumber;
       to.nextNumber += 1;
@@ -1577,6 +1585,7 @@ export class FakeWorkspace {
       labels: card.labels,
       ...some("fields", listedValues(this.state, task)),
       ...some("fix_version", versionRef(this.versionHost, task)),
+      ...some("sprint", card.sprint),
       ...some("parent", card.parent),
       priority: card.priority,
       progress_percent: card.progress_percent,
@@ -1992,6 +2001,7 @@ export class FakeWorkspace {
         labels: this.labelRefs(task),
         ...some("fields", listedValues(this.state, task)),
         ...some("parent", parent && this.keyOf(parent)),
+        ...some("sprint", sprintRef(this.sprintHost, task)),
         priority: task.priority,
         progress_percent: progress(task),
         project: project.key,
@@ -2036,12 +2046,13 @@ export class FakeWorkspace {
     const types = new Map(this.state.projects.flatMap((project) => project.types.map((type) => [type.id, type.name] as const)));
     const labels = new Map(this.state.projects.flatMap((project) => project.labels.map((label) => [label.id, label.name] as const)));
     const versions = new Map((this.state.versions ?? []).map((version) => [version.id, version.name] as const));
+    const sprints = new Map((this.state.sprints ?? []).map((sprint) => [sprint.id, sprint.name] as const));
     const nameOf = (field: string, value: unknown): unknown => {
       const one = (id: unknown) => {
         if (typeof id !== "string") {
           return id;
         }
-        return field === "status" ? (statuses.get(id)?.name ?? id) : field === "type" ? (types.get(id) ?? id) : field === "labels" ? (labels.get(id) ?? id) : field === "fix_version" ? (versions.get(id) ?? id) : id;
+        return field === "status" ? (statuses.get(id)?.name ?? id) : field === "type" ? (types.get(id) ?? id) : field === "labels" ? (labels.get(id) ?? id) : field === "fix_version" ? (versions.get(id) ?? id) : field === "sprint" ? (sprints.get(id) ?? id) : id;
       };
       return Array.isArray(value) ? (value as unknown[]).map(one) : one(value);
     };
@@ -2223,6 +2234,8 @@ export class FakeWorkspace {
           ...some("estimate", change.estimate),
           ...some("type", change.type),
           ...some("parent", change.parent),
+          ...some("sprint", change.sprint),
+          ...some("fix_version", change.fix_version),
           ...(change.add_labels && change.add_labels.length > 0 ? { add_labels: change.add_labels } : {}),
           ...(change.remove_labels && change.remove_labels.length > 0 ? { remove_labels: change.remove_labels } : {}),
           ...(change.clear && change.clear.length > 0 ? { clear: change.clear } : {}),
@@ -2250,6 +2263,34 @@ export class FakeWorkspace {
   }
 
   /** The change event of a saved view. */
+  /** What the sprints need of this workspace. */
+  private readonly sprintHost: SprintHost = {
+    sprints: () => (this.state.sprints ??= []),
+    tasks: () => this.state.tasks,
+    projects: () => this.state.projects,
+    project: (ref) => this.project(ref),
+    writable: (ref) => this.writable(ref),
+    task: (ref) => this.task(ref),
+    keyOf: (task) => this.keyOf(task),
+    statusOf: (task) => {
+      const status = this.statusIn(this.projectOf(task), task.statusId);
+      return { id: status.id, name: status.name, category: status.category };
+    },
+    typeName: (task) => this.typeRef(task).name,
+    formerly: (sprint) => {
+      const ids = new Set(this.state.activity.filter((entry) => entry.entity === "task" && (entry.fields.sprint?.before === sprint || entry.fields.sprint?.after === sprint)).map((entry) => entry.id));
+      return this.state.tasks.filter((task) => ids.has(task.id));
+    },
+    touch: (task) => {
+      this.touch(task);
+    },
+    now: () => this.today().toISOString(),
+    today: () => localDay(this.today()),
+    dayOf: (moment) => localDay(new Date(moment)),
+    newId: () => nextUuid(),
+    fail: (code, message, path) => fail(code, message, path === undefined ? {} : { details: { path } }),
+  };
+
   /** What the versions need of this workspace. */
   private readonly versionHost: VersionHost = {
     versions: () => (this.state.versions ??= []),
@@ -3929,6 +3970,16 @@ export class FakeWorkspace {
     "version.create": (input) => createVersion(this.versionHost, input),
     "version.update": (input) => updateVersion(this.versionHost, input),
     "version.delete": (input) => deleteVersion(this.versionHost, input),
+    "sprint.list": (input) => listSprints(this.sprintHost, input),
+    "sprint.get": (input) => getSprint(this.sprintHost, input),
+    "sprint.burndown": (input) => sprintBurndown(this.sprintHost, input),
+    "sprint.create": (input) => createSprint(this.sprintHost, input),
+    "sprint.update": (input) => updateSprint(this.sprintHost, input),
+    "sprint.delete": (input) => deleteSprint(this.sprintHost, input),
+    "sprint.start": (input) => startSprint(this.sprintHost, input),
+    "sprint.complete": (input) => completeSprint(this.sprintHost, input),
+    "sprint.add_tasks": (input) => addSprintTasks(this.sprintHost, input),
+    "sprint.remove_tasks": (input) => removeSprintTasks(this.sprintHost, input),
     "view.create": (input) => {
       if (input.query.trim() !== "") {
         this.runQuery(() => searchTasks([], { query: input.query }, this.queryNames(), { archived: new Set(), scoped: false, statusOrder: () => 0 }));
@@ -3975,9 +4026,10 @@ export class FakeWorkspace {
       }
       return { output: { reverted, skipped }, changes: [{ entity: "workspace", id: "w-1", fields: ["*"] }] };
     },
-    "task.create": ({ project: ref, title, status, description, priority, before, after, at, parent: parentKey, start_date, due_date, type: typeName, labels, estimate, fix_version, fields }) => {
+    "task.create": ({ project: ref, title, status, description, priority, before, after, at, parent: parentKey, start_date, due_date, type: typeName, labels, estimate, fix_version, sprint, fields }) => {
       const project = this.writable(ref);
       const fixVersion = fix_version === null || fix_version === undefined ? null : versionForTask(this.versionHost, project, fix_version).id;
+      const sprintId = sprint === null || sprint === undefined ? null : sprintForTask(this.sprintHost, project, sprint).id;
       const startDate = start_date === null || start_date === undefined ? null : this.dayInput(start_date, "start_date");
       let dueDate = due_date === null || due_date === undefined ? null : this.dayInput(due_date, "due_date");
       if (startDate !== null && dueDate !== null && startDate > dueDate) {
@@ -4013,6 +4065,9 @@ export class FakeWorkspace {
       }, { before, after, at }, (made) => {
         if (fixVersion !== null) {
           made.fixVersionId = fixVersion;
+        }
+        if (sprintId !== null) {
+          made.sprintId = sprintId;
         }
         applyValues(this.state, made, type.name, fields, true, fail);
       });
@@ -4085,6 +4140,17 @@ export class FakeWorkspace {
       if (clear.includes("fix_version") && (task.fixVersionId ?? null) !== null) {
         task.fixVersionId = null;
         fields.push("fix_version");
+      }
+      if (input.sprint !== null && input.sprint !== undefined) {
+        const sprint = sprintForTask(this.sprintHost, project, input.sprint).id;
+        if (sprint !== task.sprintId) {
+          task.sprintId = sprint;
+          fields.push("sprint");
+        }
+      }
+      if (clear.includes("sprint") && (task.sprintId ?? null) !== null) {
+        task.sprintId = null;
+        fields.push("sprint");
       }
       const typed = (text: string | null | undefined, path: string) => (text === null || text === undefined ? null : this.dayInput(text, path));
       const start = clear.includes("start_date") ? null : (typed(input.start_date, "start_date") ?? task.startDate);

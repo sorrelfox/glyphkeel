@@ -19,7 +19,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 use crate::error::{Result, StoreError};
 
 /// The schema version this program is built for.
-pub const SCHEMA_VERSION: i64 = 17;
+pub const SCHEMA_VERSION: i64 = 18;
 
 /// One migration: the SQL that takes the schema from `version - 1` to
 /// `version`.
@@ -98,6 +98,10 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 17,
         sql: include_str!("../migrations/0017_card_covers.sql"),
+    },
+    Migration {
+        version: 18,
+        sql: include_str!("../migrations/0018_sprints.sql"),
     },
 ];
 
@@ -957,5 +961,51 @@ mod tests {
         ] {
             assert!(conn.execute(bad, []).is_err(), "{bad} must be refused");
         }
+    }
+
+    #[test]
+    fn version_17_adds_sprints_with_one_active_per_project() {
+        let mut conn = memory();
+        let before = MIGRATIONS.iter().position(|m| m.version == 17).unwrap();
+        migrate(&mut conn, &MIGRATIONS[..before], |_| Ok(())).unwrap();
+        conn.execute_batch(
+            "INSERT INTO projects (id, rank, key, name, name_fold, hue, modules, created_at,
+                                   updated_at)
+             VALUES (x'01010101010101010101010101010101', 'i', 'SP', 'SP', 'sp', 'blue', '{}',
+                     0, 0);",
+        )
+        .unwrap();
+        migrate(&mut conn, MIGRATIONS, |_| Ok(())).unwrap();
+        assert!(user_version(&conn).unwrap() >= 17);
+        let add = |id: u8, name: &str, state: &str| {
+            conn.execute(
+                "INSERT INTO sprints (id, project_id, name, name_fold, state, rank, created_at,
+                                      updated_at)
+                 VALUES (?1, x'01010101010101010101010101010101', ?2, lower(?2), ?3, 'i', 0, 0)",
+                rusqlite::params![vec![id; 16], name, state],
+            )
+        };
+        add(2, "Sprint 1", "active").unwrap();
+        assert!(
+            add(3, "sprint 1", "planned").is_err(),
+            "names are unique per project"
+        );
+        assert!(
+            add(4, "Sprint 2", "active").is_err(),
+            "one active sprint per project"
+        );
+        assert!(
+            add(5, "Sprint 3", "done").is_err(),
+            "planned, active or closed"
+        );
+        add(6, "Sprint 4", "planned").unwrap();
+        let columns: i64 = conn
+            .query_row(
+                "SELECT count(*) FROM pragma_table_info('tasks') WHERE name = 'sprint_id'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(columns, 1);
     }
 }

@@ -71,7 +71,7 @@ export interface CustomQueryField {
   options: readonly string[];
 }
 
-type FieldType = "custom" | "key" | "project" | "text" | "status" | "category" | "type" | "priority" | "label" | "version" | "parent" | "date" | "span" | "duration" | "number" | "is" | "was" | "changed" | "changed-by";
+type FieldType = "custom" | "key" | "project" | "text" | "status" | "category" | "type" | "priority" | "label" | "version" | "sprint" | "parent" | "date" | "span" | "duration" | "number" | "is" | "was" | "changed" | "changed-by";
 
 interface FieldSpec {
   name: string;
@@ -94,14 +94,15 @@ const HISTORY_KEYS: ReadonlyMap<string, string> = new Map([
   ["priority", "priority"],
   ["label", "labels"],
   ["version", "fix_version"],
+  ["sprint", "sprint"],
   ["title", "title"],
   ["start", "start_date"],
   ["due", "due_date"],
   ["estimate", "estimate"],
   ["parent", "parent"],
 ]);
-const WAS_FIELDS = ["status", "category", "type", "priority", "label", "version"];
-const CHANGED_FIELDS = ["status", "type", "priority", "title", "start", "due", "estimate", "parent", "label", "version"];
+const WAS_FIELDS = ["status", "category", "type", "priority", "label", "version", "sprint"];
+const CHANGED_FIELDS = ["status", "type", "priority", "title", "start", "due", "estimate", "parent", "label", "version", "sprint"];
 
 const NAME_OPS = [":", "!="];
 const ORDERED_OPS = [":", "!=", "<", "<=", ">", ">="];
@@ -120,6 +121,7 @@ export const FAKE_FIELDS: readonly FieldSpec[] = [
   { name: "priority", aliases: ["prio"], type: "priority", operators: ORDERED_OPS, sortable: true, values: "none < low < normal < high < urgent", choices: PRIORITIES },
   { name: "label", aliases: ["labels"], type: "label", operators: NAME_OPS, sortable: false, values: "label names, or none" },
   { name: "version", aliases: ["fix-version"], type: "version", operators: NAME_OPS, sortable: true, values: "version names, or none" },
+  { name: "sprint", aliases: ["sprints"], type: "sprint", operators: NAME_OPS, sortable: true, values: "sprint names, active, or none" },
   { name: "parent", aliases: [], type: "parent", operators: NAME_OPS, sortable: true, values: "a task key, or none" },
   { name: "start", aliases: [], type: "date", operators: ORDERED_OPS, sortable: true, values: "a date, today, +7d, or none" },
   { name: "due", aliases: [], type: "date", operators: ORDERED_OPS, sortable: true, values: "a date, today, +7d, or none" },
@@ -834,6 +836,8 @@ function matchesValue(task: ListedTask, field: FieldSpec, op: string, value: str
       return lower === "none" ? task.labels.length === 0 : task.labels.some((label) => label.name.toLowerCase() === lower);
     case "version":
       return lower === "none" ? task.fix_version === undefined : task.fix_version?.name.toLowerCase() === lower;
+    case "sprint":
+      return lower === "none" ? task.sprint === undefined : lower === "active" ? task.sprint?.state === "active" : task.sprint?.name.toLowerCase() === lower;
     case "category":
       return lower === "open" ? !isClosed(task) : lower === "closed" ? isClosed(task) : task.status.category === lower;
     case "text": {
@@ -948,6 +952,9 @@ function sortValue(task: ListedTask, key: string, statusOrder: (task: ListedTask
   }
   if (key === "version") {
     return task.fix_version?.name.toLowerCase() ?? null;
+  }
+  if (key === "sprint") {
+    return task.sprint === undefined ? null : `${task.sprint.start_date ?? "9999"} ${task.sprint.name.toLowerCase()}`;
   }
   if (key === "key") {
     return `${task.project}-${task.key.slice(task.key.indexOf("-") + 1).padStart(8, "0")}`;
