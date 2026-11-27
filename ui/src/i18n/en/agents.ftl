@@ -84,6 +84,18 @@ agents-limit-trash-hour = Items to the trash an hour
 agents-limit-trash-hour-about = With the Standard profile, in any hour. Default: { $default }.
 agents-limit-trash-hour-unit = an hour
 agents-limit-trash-hour-none = No limit on items to the trash an hour
+agents-limit-read-burst = Reads at once
+agents-limit-read-burst-about = Reads a session may make in a row before the rate below applies. Default: { $default }. No limit: a minute's worth.
+agents-limit-read-burst-unit = at once
+agents-limit-read-burst-none = No separate limit on reads at once
+agents-limit-reads = Reads a minute
+agents-limit-reads-about = Tools that read, resources and prompts, sustained; updates to subscriptions count a tenth each. A read-only agent may read twice as much. Default: { $default }.
+agents-limit-reads-unit = a minute
+agents-limit-reads-none = No limit on reads a minute
+agents-limit-read-mb = Data read a minute
+agents-limit-read-mb-about = Slows down copying out the workspace in bulk. A read-only agent may read twice as much. Default: { $default } MB.
+agents-limit-read-mb-unit = MB a minute
+agents-limit-read-mb-none = No limit on data read a minute
 
 agents-sessions = Agent sessions
 agents-sessions-none = No agent has connected yet.
@@ -102,6 +114,10 @@ agents-session-counts = { $reads ->
 }, { $writes ->
     [one] one change
    *[other] { $writes } changes
+}
+agents-session-limited = { $count ->
+    [one] One read refused by the read limits
+   *[other] { $count } reads refused by the read limits
 }
 agents-revert = Revert session…
 agents-revert-nothing = Nothing of this session can be reverted.

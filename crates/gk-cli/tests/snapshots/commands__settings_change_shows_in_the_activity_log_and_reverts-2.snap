@@ -7,6 +7,9 @@ group: [id]
 settings:
   agent_confirmations: yes
   agent_limits:
+    read_burst: 60
+    read_mb_per_minute: 8
+    reads_per_minute: 600
     trash_items_per_call: 20
     trash_items_per_hour: 50
     writes_per_minute: 120

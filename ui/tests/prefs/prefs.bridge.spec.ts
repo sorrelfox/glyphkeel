@@ -109,6 +109,10 @@ test("Agents & CLI: the person sets each limit on agent sessions to a number or 
       perHour: limits.getByRole("spinbutton", { name: "Items to the trash an hour" }),
       noWriteLimit: limits.getByRole("switch", { name: "No limit on changes a minute" }),
       noTaskLimit: limits.getByRole("switch", { name: "No limit on new tasks a day" }),
+      burst: limits.getByRole("spinbutton", { name: "Reads at once" }),
+      reads: limits.getByRole("spinbutton", { name: "Reads a minute" }),
+      readMb: limits.getByRole("spinbutton", { name: "Data read a minute" }),
+      noReadLimit: limits.getByRole("switch", { name: "No limit on reads a minute" }),
     };
   };
   // A switch is turned from the keyboard: its input is drawn by the switch beside it.
@@ -125,6 +129,10 @@ test("Agents & CLI: the person sets each limit on agent sessions to a number or 
   await expect(row.noTaskLimit).toBeChecked();
   await expect(row.tasks).toBeDisabled();
   await expect(row.limits).toContainText("Only you, here in the app.");
+  // Reads: 60 at once, then 600 a minute, and 8 MB a minute.
+  await expect(row.burst).toHaveValue("60");
+  await expect(row.reads).toHaveValue("600");
+  await expect(row.readMb).toHaveValue("8");
 
   // A number is saved on Enter.
   await row.writes.fill("60");
@@ -145,6 +153,10 @@ test("Agents & CLI: the person sets each limit on agent sessions to a number or 
   await expect(row.noWriteLimit).toBeChecked();
   await expect(row.writes).toBeDisabled();
   await expect(row.writes).toHaveValue("");
+  await row.burst.fill("30");
+  await row.burst.press("Enter");
+  await toggle(row.noReadLimit);
+  await expect(row.reads).toBeDisabled();
   await shot(page, "prefs-agent-limits.png");
 
   // The engine kept them.
@@ -153,16 +165,24 @@ test("Agents & CLI: the person sets each limit on agent sessions to a number or 
   await expect(row.noWriteLimit).toBeChecked();
   await expect(row.tasks).toHaveValue("250");
   await expect(row.perCall).toHaveValue("20");
+  await expect(row.burst).toHaveValue("30");
+  await expect(row.noReadLimit).toBeChecked();
 
   // Back to the defaults for the flows after this one.
   await toggle(row.noWriteLimit);
   await expect(row.writes).toHaveValue("120");
   await toggle(row.noTaskLimit);
   await expect(row.noTaskLimit).toBeChecked();
+  await toggle(row.noReadLimit);
+  await expect(row.reads).toHaveValue("600");
+  await row.burst.fill("60");
+  await row.burst.press("Enter");
   await page.reload();
   row = await open();
   await expect(row.writes).toHaveValue("120");
   await expect(row.noTaskLimit).toBeChecked();
+  await expect(row.burst).toHaveValue("60");
+  await expect(row.reads).toHaveValue("600");
 });
 
 test("Preferences: shortcuts can be searched, and the language applies at once", async ({ page }) => {

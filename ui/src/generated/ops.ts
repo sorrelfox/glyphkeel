@@ -111,12 +111,18 @@ export type AgentBrief = {
 };
 
 /** One of the limits on agent sessions. */
-export type AgentLimit = "writes_per_minute" | "new_tasks_per_day" | "trash_items_per_call" | "trash_items_per_hour";
+export type AgentLimit = "writes_per_minute" | "new_tasks_per_day" | "trash_items_per_call" | "trash_items_per_hour" | "read_burst" | "reads_per_minute" | "read_mb_per_minute";
 
 /** The limits on every agent session, so a runaway loop can't flood the workspace. A limit that is left out is lifted: there is no limit. Only the person changes them, in the app. */
 export type AgentLimits = {
   /** Tasks a session may create in any 24 hours; left out: no limit. */
   new_tasks_per_day?: number;
+  /** Reads a session may make at once before `reads_per_minute` applies; left out: one minute's worth. */
+  read_burst?: number;
+  /** Megabytes of results a session may read in a minute; left out: no limit. */
+  read_mb_per_minute?: number;
+  /** Reads (tool calls that read, resources read, prompts) a session may make in a minute, sustained; left out: no limit on reads. */
+  reads_per_minute?: number;
   /** Items a standard agent may move to the trash in one call; left out: no limit. */
   trash_items_per_call?: number;
   /** Items a standard agent session may move to the trash in an hour; left out: no limit. */
@@ -131,6 +137,12 @@ export type AgentLimitsPatch = {
   new_tasks_per_day?: number | null;
   /** Limits to lift: agents then have no limit there. */
   no_limit?: AgentLimit[];
+  /** Reads a session may make at once, 1 to 1000000. */
+  read_burst?: number | null;
+  /** Megabytes a session may read in a minute, 1 to 1000000. */
+  read_mb_per_minute?: number | null;
+  /** Reads a session may make in a minute, sustained, 1 to 1000000. */
+  reads_per_minute?: number | null;
   /** Limits to set back to their default. */
   reset?: AgentLimit[];
   /** Items a standard agent may move to the trash in one call, 1 to 1000000. */
@@ -171,6 +183,8 @@ export type AgentSession = {
   name: string;
   /** The profile the session ran with. */
   profile: Profile;
+  /** Reads refused because the session read faster than its limits. */
+  rate_limited: number;
   /** Operations that read. */
   reads: number;
   /** When it started (RFC 3339, UTC). */
@@ -1965,7 +1979,7 @@ export type EntityChange = {
 };
 
 /** What kind of failure an operation error is. Adapters decide on the code, never on the message. */
-export type ErrorCode = "invalid" | "not_found" | "conflict" | "forbidden" | "limit" | "busy" | "workspace_upgraded" | "workspace_too_new" | "storage";
+export type ErrorCode = "invalid" | "not_found" | "conflict" | "forbidden" | "limit" | "rate_limited" | "busy" | "workspace_upgraded" | "workspace_too_new" | "storage";
 
 /** What to export. */
 export type ExportInput = {
@@ -6570,11 +6584,11 @@ export type Call = <K extends OpId>(op: K, input: OpMap[K]["input"]) => Promise<
 export function makeOps(call: Call) {
   return {
     agent: {
-      /** List agent sessions, newest first, with their client, profile, times and counts of reads and writes. (read) */
+      /** List agent sessions, newest first, with their client, profile, times and counts of reads, writes and reads refused by the read limits. (read) */
       sessions: (input: OpMap["agent.sessions"]["input"] = {}) => call("agent.sessions", input),
       /** Set the most an agent may do, whatever profile it asks for, and whether agents may ask the person to allow one change beyond it. (app) */
       policyUpdate: (input: OpMap["agent.policy.update"]["input"]) => call("agent.policy.update", input),
-      /** Change the limits on agent sessions: changes a minute, new tasks a day, and items moved to the trash per call and per hour. Each is a number or no limit. (app) */
+      /** Change the limits on agent sessions: changes a minute, new tasks a day, items moved to the trash per call and per hour, and reads (at once, a minute, megabytes a minute). Each is a number or no limit. (app) */
       limitsUpdate: (input: OpMap["agent.limits.update"]["input"] = {}) => call("agent.limits.update", input),
     },
     automation: {
