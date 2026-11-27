@@ -4,7 +4,7 @@
 import { columnOrderingFeature, columnVisibilityFeature, createColumnHelper, tableFeatures, useTable } from "@tanstack/react-table";
 import { type VirtualItem } from "@tanstack/react-virtual";
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Plus } from "lucide-react";
-import { useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent, type RefObject } from "react";
 
 import { classes } from "../../classes";
 import { isMenuKey } from "../../components/ContextMenu";
@@ -133,8 +133,38 @@ export function ListTable({ rows, columns, fields = [], widths, onResize, onRese
   const template: CSSProperties = { gridTemplateColumns: gridTemplate(columns, shownWidths) };
   // Wider columns than the screen scroll sideways.
   const needed = CHECK_WIDTH + ROW_PADDING + columns.reduce((sum, column) => sum + columnWidth(column, shownWidths) + COLUMN_GAP, 0);
+  const minWidth = Math.max(1080, needed);
   const total = rows.total ?? 0;
   const totals = rows.totals;
+  // The totals row sits under the scrolling rows, not in them, so no scroll
+  // bar ever lies over it: it is as wide as the rows and follows them sideways.
+  const sizerRef = useRef<HTMLDivElement>(null);
+  const footRef = useRef<HTMLDivElement>(null);
+  const [contentWidth, setContentWidth] = useState<number | undefined>(undefined);
+  const followScroll = () => {
+    const scroller = scrollRef.current;
+    if (footRef.current && scroller) {
+      footRef.current.scrollLeft = scroller.scrollLeft;
+    }
+  };
+  const hasTotals = totals !== undefined;
+  useEffect(() => {
+    const sizer = sizerRef.current;
+    if (!sizer || typeof ResizeObserver === "undefined") {
+      return undefined;
+    }
+    const observer = new ResizeObserver(() => {
+      setContentWidth(sizer.getBoundingClientRect().width);
+      const scroller = scrollRef.current;
+      if (footRef.current && scroller) {
+        footRef.current.scrollLeft = scroller.scrollLeft;
+      }
+    });
+    observer.observe(sizer);
+    return () => {
+      observer.disconnect();
+    };
+  }, [scrollRef, hasTotals]);
   const groups = rows.groups ?? [];
   const multiSort = sort.length > 1;
 
@@ -237,224 +267,226 @@ export function ListTable({ rows, columns, fields = [], widths, onResize, onRese
 
   return (
     <>
-      <div
-        ref={scrollRef}
-        className={styles.scroll}
-        role="grid"
-        aria-label={t("list-table-label")}
-        aria-rowcount={lines.count + 2}
-        aria-multiselectable="true"
-        aria-busy={rows.pending}
-        data-list-scroll
-      >
-        <div className={styles.sizer} style={{ minInlineSize: Math.max(1080, needed) }}>
-          <div ref={headRef} className={classes("tr head", styles.head)} role="row" aria-rowindex={1} style={template}>
-            <span role="columnheader" className={styles.checkCell}>
-              <input type="checkbox" className={styles.check} aria-label={t("list-select-all")} checked={allSelected} onChange={onToggleAll} disabled={total === 0} />
-            </span>
-            {columns.map((column) => {
-              const state = sortState(sort, column);
-              const label = columnLabel(column);
-              const width = columnWidth(column, shownWidths);
-              return (
-                <span
-                  key={column}
-                  role="columnheader"
-                  aria-sort={state?.position === 1 ? state.direction : "none"}
-                  className={classes("th", styles.th, numeric(column) && styles.end, state !== null && "accent", reorder.dragging === column && styles.dragging, reorder.target === column && styles.dropBefore, reorder.target === "end" && column === columns.at(-1) && styles.dropAfter)}
-                  data-column={column}
-                  onPointerDown={(event) => {
-                    reorder.start(event, column);
-                  }}
-                  onClickCapture={reorder.swallowClick}
-                >
-                  {sortKeyOf(column) === undefined ? (
-                    <span
-                      className={classes("truncate", styles.headLabel)}
-                      tabIndex={0}
-                      aria-keyshortcuts="Control+Shift+ArrowLeft Control+Shift+ArrowRight"
-                      onKeyDown={(event) => {
-                        moveKey(event, column);
-                      }}
-                    >
-                      {label}
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      className={styles.sortButton}
-                      onClick={(event) => {
-                        onSort(column, event.shiftKey);
-                      }}
-                      onKeyDown={(event) => {
-                        moveKey(event, column);
-                      }}
-                      aria-keyshortcuts="Control+Shift+ArrowLeft Control+Shift+ArrowRight"
-                      aria-label={t("list-sort-by", { column: label })}
-                      aria-description={state === null ? undefined : t(`list-sorted-${state.direction}`, { position: state.position })}
-                    >
-                      <span className="truncate">{label}</span>
-                      {state?.direction === "ascending" && <ArrowUp className="ic s" aria-hidden="true" />}
-                      {state?.direction === "descending" && <ArrowDown className="ic s" aria-hidden="true" />}
-                      {state !== null && multiSort && (
-                        <span className={styles.sortPosition} aria-hidden="true">
-                          {t("list-sort-position", { position: state.position })}
-                        </span>
-                      )}
-                    </button>
-                  )}
-                  <span
-                    role="separator"
-                    aria-orientation="vertical"
-                    aria-label={t("list-resize-column", { column: label })}
-                    aria-valuenow={Math.round(width)}
-                    aria-valuemin={MIN_WIDTH}
-                    aria-valuemax={MAX_WIDTH}
-                    title={t("resize-hint")}
-                    tabIndex={0}
-                    className={styles.resizer}
-                    data-resize={column}
-                    onPointerDown={(event) => {
-                      startResize(event, column);
-                    }}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                    }}
-                    onContextMenu={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      const measured = event.currentTarget.parentElement?.getBoundingClientRect().width ?? 0;
-                      openWidthMenu(event.currentTarget, column, measured > 0 ? measured : width);
-                    }}
-                    onKeyDown={(event) => {
-                      const measured = event.currentTarget.parentElement?.getBoundingClientRect().width ?? 0;
-                      resizeKey(event, column, measured > 0 ? measured : width);
-                    }}
-                  />
-                </span>
-              );
-            })}
-          </div>
-          <div className={styles.body} style={{ height: totalSize }}>
-            {items.map((item) => {
-              const line = lineAt(item.index);
-              const position: CSSProperties = { height: item.size, transform: `translateY(${String(item.start)}px)` };
-              const style: CSSProperties = { ...template, ...position };
-              if (line?.kind === "group" && grouping !== undefined) {
-                const group = groups[line.group];
-                if (!group) {
-                  return null;
-                }
-                const collapsed = isCollapsed(group);
+      <div className={styles.grid} role="grid" aria-label={t("list-table-label")} aria-rowcount={lines.count + 2} aria-multiselectable="true" aria-busy={rows.pending}>
+        <div
+          ref={scrollRef}
+          className={styles.scroll}
+          data-list-scroll
+          onScroll={followScroll}
+        >
+          <div ref={sizerRef} className={styles.sizer} style={{ minInlineSize: minWidth }}>
+            <div ref={headRef} className={classes("tr head", styles.head)} role="row" aria-rowindex={1} style={template}>
+              <span role="columnheader" className={styles.checkCell}>
+                <input type="checkbox" className={styles.check} aria-label={t("list-select-all")} checked={allSelected} onChange={onToggleAll} disabled={total === 0} />
+              </span>
+              {columns.map((column) => {
+                const state = sortState(sort, column);
+                const label = columnLabel(column);
+                const width = columnWidth(column, shownWidths);
                 return (
-                  <div key={`group-${String(line.group)}`} className={classes("tr group", styles.row, styles.groupRow)} role="row" aria-rowindex={item.index + 2} style={position} data-group={group.value ?? ""}>
-                    <span role="gridcell" className={styles.groupCell}>
-                      <button
-                        type="button"
-                        className={styles.groupButton}
-                        aria-expanded={!collapsed}
-                        onClick={() => {
-                          onToggleGroup(group);
+                  <span
+                    key={column}
+                    role="columnheader"
+                    aria-sort={state?.position === 1 ? state.direction : "none"}
+                    className={classes("th", styles.th, numeric(column) && styles.end, state !== null && "accent", reorder.dragging === column && styles.dragging, reorder.target === column && styles.dropBefore, reorder.target === "end" && column === columns.at(-1) && styles.dropAfter)}
+                    data-column={column}
+                    onPointerDown={(event) => {
+                      reorder.start(event, column);
+                    }}
+                    onClickCapture={reorder.swallowClick}
+                  >
+                    {sortKeyOf(column) === undefined ? (
+                      <span
+                        className={classes("truncate", styles.headLabel)}
+                        tabIndex={0}
+                        aria-keyshortcuts="Control+Shift+ArrowLeft Control+Shift+ArrowRight"
+                        onKeyDown={(event) => {
+                          moveKey(event, column);
                         }}
                       >
-                        {collapsed ? <ChevronRight className="ic s muted" aria-hidden="true" /> : <ChevronDown className="ic s muted" aria-hidden="true" />}
-                        {group.hue !== undefined && <span className={classes("dot", `hue-${group.hue}`)} aria-hidden="true" />}
-                        <GroupName grouping={grouping} group={group} fields={fields} />
-                        <span className="count">{t("list-group-count", { count: group.count })}</span>
+                        {label}
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        className={styles.sortButton}
+                        onClick={(event) => {
+                          onSort(column, event.shiftKey);
+                        }}
+                        onKeyDown={(event) => {
+                          moveKey(event, column);
+                        }}
+                        aria-keyshortcuts="Control+Shift+ArrowLeft Control+Shift+ArrowRight"
+                        aria-label={t("list-sort-by", { column: label })}
+                        aria-description={state === null ? undefined : t(`list-sorted-${state.direction}`, { position: state.position })}
+                      >
+                        <span className="truncate">{label}</span>
+                        {state?.direction === "ascending" && <ArrowUp className="ic s" aria-hidden="true" />}
+                        {state?.direction === "descending" && <ArrowDown className="ic s" aria-hidden="true" />}
+                        {state !== null && multiSort && (
+                          <span className={styles.sortPosition} aria-hidden="true">
+                            {t("list-sort-position", { position: state.position })}
+                          </span>
+                        )}
                       </button>
-                    </span>
-                  </div>
-                );
-              }
-              if (line?.kind === "add") {
-                const group = groups[line.group];
-                if (!group || !onAddToGroup) {
-                  return null;
-                }
-                return (
-                  <div key={`add-${String(line.group)}`} className={classes("tr", styles.row, styles.groupRow, styles.addRow)} role="row" aria-rowindex={item.index + 2} style={position}>
-                    <span role="gridcell" className={styles.groupCell}>
-                      <AddToGroup group={group} grouping={grouping} fields={fields} onAdd={onAddToGroup} />
-                    </span>
-                  </div>
-                );
-              }
-              const index = line?.kind === "row" ? line.row : -1;
-              const task = rows.rowAt(index);
-              if (!task) {
-                return (
-                  <div key={item.key} className={classes("tr", styles.row, styles.placeholder)} role="row" aria-rowindex={item.index + 2} style={style}>
-                    <span />
-                    <span className={styles.skeleton} />
-                  </div>
-                );
-              }
-              const row = rowById.get(task.key);
-              const selected = selection.keys.has(task.key);
-              const click = (event: MouseEvent) => {
-                onRowClick(index, task, { toggle: event.ctrlKey || event.metaKey, range: event.shiftKey });
-              };
-              return (
-                <div
-                  key={task.key}
-                  className={classes("tr", styles.row, selected && "on")}
-                  role="row"
-                  aria-rowindex={item.index + 2}
-                  aria-selected={selected}
-                  tabIndex={focused === index ? 0 : -1}
-                  data-row={task.key}
-                  data-index={index}
-                  style={style}
-                  onClick={click}
-                  onDoubleClick={() => {
-                    onOpen(task.key);
-                  }}
-                  onFocus={(event) => {
-                    if (event.target === event.currentTarget) {
-                      onFocusRow(index);
-                    }
-                  }}
-                  onKeyDown={(event) => {
-                    onKey(event, index);
-                  }}
-                >
-                  <span role="gridcell" className={styles.checkCell}>
-                    <input
-                      type="checkbox"
-                      className={styles.check}
-                      tabIndex={-1}
-                      aria-label={t("list-select-task", { key: task.key })}
-                      checked={selected}
+                    )}
+                    <span
+                      role="separator"
+                      aria-orientation="vertical"
+                      aria-label={t("list-resize-column", { column: label })}
+                      aria-valuenow={Math.round(width)}
+                      aria-valuemin={MIN_WIDTH}
+                      aria-valuemax={MAX_WIDTH}
+                      title={t("resize-hint")}
+                      tabIndex={0}
+                      className={styles.resizer}
+                      data-resize={column}
+                      onPointerDown={(event) => {
+                        startResize(event, column);
+                      }}
                       onClick={(event) => {
                         event.stopPropagation();
-                        onRowClick(index, task, { toggle: true, range: event.shiftKey });
                       }}
-                      onChange={() => undefined}
+                      onContextMenu={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        const measured = event.currentTarget.parentElement?.getBoundingClientRect().width ?? 0;
+                        openWidthMenu(event.currentTarget, column, measured > 0 ? measured : width);
+                      }}
+                      onKeyDown={(event) => {
+                        const measured = event.currentTarget.parentElement?.getBoundingClientRect().width ?? 0;
+                        resizeKey(event, column, measured > 0 ? measured : width);
+                      }}
                     />
                   </span>
-                  {row?.getVisibleCells().map((cell) => (
-                    <span key={cell.id} role="gridcell" className={classes(styles.cell, numeric(cell.column.id as ColumnId) && styles.end)}>
-                      <table.FlexRender cell={cell} />
-                    </span>
-                  ))}
-                </div>
-              );
-            })}
-          </div>
-          {totals && (
-            <div className={classes("tr", styles.totals)} role="row" aria-rowindex={lines.count + 2} style={template} data-testid="list-totals">
-              <span />
-              {columns.map((column) => (
-                <span key={column} role="gridcell" className={classes(styles.cell, styles.totalCell, numeric(column) && styles.end)}>
-                  {column === "title" && <span className="muted">{t("list-totals", { count: totals.count, open: totals.open })}</span>}
-                  {column === "estimate" && <span className="num">{format(totals.estimate_minutes)}</span>}
-                  {column === "spent" && <span className="num">{format(totals.spent_minutes)}</span>}
-                  {column === "remaining" && <span className="num">{format(totals.remaining_minutes)}</span>}
-                </span>
-              ))}
+                );
+              })}
             </div>
-          )}
+            <div className={styles.body} style={{ height: totalSize }}>
+              {items.map((item) => {
+                const line = lineAt(item.index);
+                const position: CSSProperties = { height: item.size, transform: `translateY(${String(item.start)}px)` };
+                const style: CSSProperties = { ...template, ...position };
+                if (line?.kind === "group" && grouping !== undefined) {
+                  const group = groups[line.group];
+                  if (!group) {
+                    return null;
+                  }
+                  const collapsed = isCollapsed(group);
+                  return (
+                    <div key={`group-${String(line.group)}`} className={classes("tr group", styles.row, styles.groupRow)} role="row" aria-rowindex={item.index + 2} style={position} data-group={group.value ?? ""}>
+                      <span role="gridcell" className={styles.groupCell}>
+                        <button
+                          type="button"
+                          className={styles.groupButton}
+                          aria-expanded={!collapsed}
+                          onClick={() => {
+                            onToggleGroup(group);
+                          }}
+                        >
+                          {collapsed ? <ChevronRight className="ic s muted" aria-hidden="true" /> : <ChevronDown className="ic s muted" aria-hidden="true" />}
+                          {group.hue !== undefined && <span className={classes("dot", `hue-${group.hue}`)} aria-hidden="true" />}
+                          <GroupName grouping={grouping} group={group} fields={fields} />
+                          <span className="count">{t("list-group-count", { count: group.count })}</span>
+                        </button>
+                      </span>
+                    </div>
+                  );
+                }
+                if (line?.kind === "add") {
+                  const group = groups[line.group];
+                  if (!group || !onAddToGroup) {
+                    return null;
+                  }
+                  return (
+                    <div key={`add-${String(line.group)}`} className={classes("tr", styles.row, styles.groupRow, styles.addRow)} role="row" aria-rowindex={item.index + 2} style={position}>
+                      <span role="gridcell" className={styles.groupCell}>
+                        <AddToGroup group={group} grouping={grouping} fields={fields} onAdd={onAddToGroup} />
+                      </span>
+                    </div>
+                  );
+                }
+                const index = line?.kind === "row" ? line.row : -1;
+                const task = rows.rowAt(index);
+                if (!task) {
+                  return (
+                    <div key={item.key} className={classes("tr", styles.row, styles.placeholder)} role="row" aria-rowindex={item.index + 2} style={style}>
+                      <span />
+                      <span className={styles.skeleton} />
+                    </div>
+                  );
+                }
+                const row = rowById.get(task.key);
+                const selected = selection.keys.has(task.key);
+                const click = (event: MouseEvent) => {
+                  onRowClick(index, task, { toggle: event.ctrlKey || event.metaKey, range: event.shiftKey });
+                };
+                return (
+                  <div
+                    key={task.key}
+                    className={classes("tr", styles.row, selected && "on")}
+                    role="row"
+                    aria-rowindex={item.index + 2}
+                    aria-selected={selected}
+                    tabIndex={focused === index ? 0 : -1}
+                    data-row={task.key}
+                    data-index={index}
+                    style={style}
+                    onClick={click}
+                    onDoubleClick={() => {
+                      onOpen(task.key);
+                    }}
+                    onFocus={(event) => {
+                      if (event.target === event.currentTarget) {
+                        onFocusRow(index);
+                      }
+                    }}
+                    onKeyDown={(event) => {
+                      onKey(event, index);
+                    }}
+                  >
+                    <span role="gridcell" className={styles.checkCell}>
+                      <input
+                        type="checkbox"
+                        className={styles.check}
+                        tabIndex={-1}
+                        aria-label={t("list-select-task", { key: task.key })}
+                        checked={selected}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onRowClick(index, task, { toggle: true, range: event.shiftKey });
+                        }}
+                        onChange={() => undefined}
+                      />
+                    </span>
+                    {row?.getVisibleCells().map((cell) => (
+                      <span key={cell.id} role="gridcell" className={classes(styles.cell, numeric(cell.column.id as ColumnId) && styles.end)}>
+                        <table.FlexRender cell={cell} />
+                      </span>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
+        {totals && (
+          <div ref={footRef} className={styles.foot}>
+            <div className={styles.sizer} style={{ minInlineSize: minWidth, inlineSize: contentWidth }}>
+              <div className={classes("tr", styles.totals)} role="row" aria-rowindex={lines.count + 2} style={template} data-testid="list-totals">
+                <span />
+                {columns.map((column) => (
+                  <span key={column} role="gridcell" className={classes(styles.cell, styles.totalCell, numeric(column) && styles.end)}>
+                    {column === "title" && <span className="muted">{t("list-totals", { count: totals.count, open: totals.open })}</span>}
+                    {column === "estimate" && <span className="num">{format(totals.estimate_minutes)}</span>}
+                    {column === "spent" && <span className="num">{format(totals.spent_minutes)}</span>}
+                    {column === "remaining" && <span className="num">{format(totals.remaining_minutes)}</span>}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
       {widthMenu.menu}
     </>
