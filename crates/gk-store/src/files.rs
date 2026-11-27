@@ -13,6 +13,10 @@
 //! Thumbnails live in the rebuildable cache, named by the hash of the file
 //! they show. They are written the same way but not flushed: losing one only
 //! means making it again.
+//!
+//! In an encrypted workspace both are sealed (see the `sealed` module): the
+//! name is still the SHA-256 of the content, and every read here goes
+//! through [`open_file`], which opens plain and sealed files alike.
 
 use std::fs::{self, File};
 use std::io::{self, Write as _};
@@ -22,6 +26,45 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use sha2::{Digest, Sha256};
 
 use crate::layout::WorkspaceLayout;
+use crate::sealed::{Content, FileKey, SealWriter};
+
+/// The key that seals new stored files and thumbnails of the workspace at
+/// `layout`: `None` for a plain workspace, or one this process hasn't
+/// opened a store for.
+#[must_use]
+pub fn workspace_seals(layout: &WorkspaceLayout) -> Option<FileKey> {
+    crate::sealed::workspace_keys(layout.root()).and_then(|(current, _)| current)
+}
+
+/// Whether the file at `path` holds `size` bytes of content, sealed or not.
+fn holds(path: &Path, size: u64) -> bool {
+    crate::sealed::content_len(path).is_ok_and(|n| n == Some(size))
+}
+
+/// Writes `bytes` to the new file `path`, sealed with `key` when given,
+/// and flushes it to disk when `sync`.
+fn write_new(path: &Path, bytes: &[u8], key: Option<&FileKey>, sync: bool) -> io::Result<()> {
+    let file = File::create(path)?;
+    let file = match key {
+        Some(key) => {
+            let mut sealed = SealWriter::new(io::BufWriter::new(file), key)?;
+            sealed.write_all(bytes)?;
+            sealed
+                .finish()?
+                .into_inner()
+                .map_err(io::IntoInnerError::into_error)?
+        }
+        None => {
+            let mut file = file;
+            file.write_all(bytes)?;
+            file
+        }
+    };
+    if sync {
+        file.sync_all()?;
+    }
+    Ok(())
+}
 
 /// A file in the store.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -83,7 +126,7 @@ pub fn store_file(layout: &WorkspaceLayout, bytes: &[u8]) -> io::Result<StoredFi
     let target = layout
         .blob_path(&sha256)
         .ok_or_else(|| io::Error::other("a computed hash is not a hash"))?;
-    if fs::metadata(&target).is_ok_and(|m| m.len() == size) {
+    if holds(&target, size) {
         return Ok(StoredFile { sha256, size });
     }
     let folder = target
@@ -94,11 +137,9 @@ pub fn store_file(layout: &WorkspaceLayout, bytes: &[u8]) -> io::Result<StoredFi
     let tmp_dir = layout.files_dir().join("tmp");
     fs::create_dir_all(&tmp_dir)?;
     let tmp = tmp_dir.join(temp_name());
+    let key = workspace_seals(layout);
     let written = (|| {
-        let mut file = File::create(&tmp)?;
-        file.write_all(bytes)?;
-        file.sync_all()?;
-        drop(file);
+        write_new(&tmp, bytes, key.as_ref(), true)?;
         fs::rename(&tmp, &target)?;
         sync_dir(&folder)
     })();
@@ -112,6 +153,13 @@ pub fn store_file(layout: &WorkspaceLayout, bytes: &[u8]) -> io::Result<StoredFi
 /// The SHA-256 and size of the file at `path`, read in pieces.
 pub fn sha256_file(path: &Path) -> io::Result<StoredFile> {
     sha256_reader(&mut File::open(path)?)
+}
+
+/// The SHA-256 and size of the content of the stored file at `path`
+/// (in the workspace or a backup), sealed or not: checks that it opens and
+/// is what its name says.
+pub fn sha256_stored(path: &Path) -> io::Result<StoredFile> {
+    sha256_reader(&mut crate::sealed::open_stored(path)?)
 }
 
 /// The SHA-256 and size of everything `reader` gives, read in pieces.
@@ -198,8 +246,13 @@ fn store_from(
     let tmp_dir = layout.files_dir().join("tmp");
     fs::create_dir_all(&tmp_dir)?;
     let tmp = tmp_dir.join(temp_name());
+    let key = workspace_seals(layout);
     let written = (|| {
-        let mut file = File::create(&tmp)?;
+        let file = File::create(&tmp)?;
+        let mut file: Box<dyn Sink> = match &key {
+            Some(key) => Box::new(SealWriter::new(io::BufWriter::new(file), key)?),
+            None => Box::new(file),
+        };
         let mut hasher = Sha256::new();
         let mut buf = vec![0u8; 64 * 1024];
         let mut size = 0u64;
@@ -219,6 +272,7 @@ fn store_from(
             hasher.update(&buf[..n]);
             file.write_all(&buf[..n])?;
         }
+        let file = file.done()?;
         if sync {
             file.sync_all()?;
         }
@@ -232,7 +286,7 @@ fn store_from(
             .ok_or_else(|| io::Error::other("a stored file has no folder"))?
             .to_path_buf();
         fs::create_dir_all(&folder)?;
-        if fs::metadata(&target).is_ok_and(|m| m.len() == size) {
+        if holds(&target, size) {
             let _ = fs::remove_file(&tmp);
         } else {
             fs::rename(&tmp, &target)?;
@@ -248,13 +302,52 @@ fn store_from(
     written
 }
 
-/// Whether the stored file `sha256` is there with `size` bytes.
+/// A file being written by [`store_from`]: plain, or sealed.
+trait Sink: io::Write {
+    /// Finishes writing and hands back the file.
+    fn done(self: Box<Self>) -> io::Result<File>;
+}
+
+impl Sink for File {
+    fn done(self: Box<Self>) -> io::Result<File> {
+        Ok(*self)
+    }
+}
+
+impl Sink for SealWriter<io::BufWriter<File>> {
+    fn done(self: Box<Self>) -> io::Result<File> {
+        self.finish()?
+            .into_inner()
+            .map_err(io::IntoInnerError::into_error)
+    }
+}
+
+/// Whether the stored file `sha256` is there with `size` bytes of content.
 #[must_use]
 pub fn has_file(layout: &WorkspaceLayout, sha256: &str, size: u64) -> bool {
-    layout
+    layout.blob_path(sha256).is_some_and(|p| holds(&p, size))
+}
+
+/// Opens the stored file `sha256` for reading its content, sealed or not.
+pub fn open_file(layout: &WorkspaceLayout, sha256: &str) -> io::Result<Content> {
+    let path = layout
         .blob_path(sha256)
-        .and_then(|p| fs::metadata(p).ok())
-        .is_some_and(|m| m.len() == size)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "not a file hash"))?;
+    crate::sealed::open_stored(&path)
+}
+
+/// Writes the content of the stored file `sha256` to the new file
+/// `target`, plain, and returns its size: for opening it in another
+/// program, saving a copy or a folder export.
+pub fn copy_out(layout: &WorkspaceLayout, sha256: &str, target: &Path) -> io::Result<u64> {
+    let mut source = open_file(layout, sha256)?;
+    let mut out = File::create(target)?;
+    let copied = io::copy(&mut source, &mut out);
+    if copied.is_err() {
+        drop(out);
+        let _ = fs::remove_file(target);
+    }
+    copied
 }
 
 /// The path of the stored file `sha256`, if it is there.
@@ -270,7 +363,9 @@ pub fn read_file(layout: &WorkspaceLayout, sha256: &str, limit: u64) -> io::Resu
         .blob_path(sha256)
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "not a file hash"))?;
     let mut out = Vec::new();
-    File::open(path)?.take(limit).read_to_end(&mut out)?;
+    crate::sealed::open_stored(&path)?
+        .take(limit)
+        .read_to_end(&mut out)?;
     Ok(out)
 }
 
@@ -308,12 +403,41 @@ pub fn store_thumb(layout: &WorkspaceLayout, sha256: &str, png: &[u8]) -> io::Re
         .ok_or_else(|| io::Error::other("a thumbnail has no folder"))?;
     fs::create_dir_all(folder)?;
     let tmp = folder.join(temp_name());
-    let written = fs::write(&tmp, png).and_then(|()| fs::rename(&tmp, &target));
+    let key = workspace_seals(layout);
+    let written =
+        write_new(&tmp, png, key.as_ref(), false).and_then(|()| fs::rename(&tmp, &target));
     if let Err(e) = written {
         let _ = fs::remove_file(&tmp);
         return Err(e);
     }
     Ok(target)
+}
+
+/// Reads at most `limit` bytes of the cached thumbnail of the stored file
+/// `sha256`, sealed or not; `None` when there is none.
+pub fn read_thumb(
+    layout: &WorkspaceLayout,
+    sha256: &str,
+    limit: u64,
+) -> io::Result<Option<Vec<u8>>> {
+    use std::io::Read as _;
+    let Some(path) = thumb_path(layout, sha256) else {
+        return Ok(None);
+    };
+    let mut out = Vec::new();
+    crate::sealed::open_stored(&path)?
+        .take(limit)
+        .read_to_end(&mut out)?;
+    Ok(Some(out))
+}
+
+/// Removes every cached thumbnail, to be made again as needed: after the
+/// workspace's encryption changed.
+pub fn clear_thumbs(layout: &WorkspaceLayout) -> io::Result<()> {
+    match fs::remove_dir_all(layout.thumbs_dir()) {
+        Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e),
+        _ => Ok(()),
+    }
 }
 
 #[cfg(test)]
@@ -388,6 +512,64 @@ mod tests {
         fs::write(&path, b"cont").unwrap();
         store_file(&layout, b"content").unwrap();
         assert_eq!(fs::read(&path).unwrap(), b"content");
+    }
+
+    #[test]
+    fn an_encrypted_workspace_seals_what_it_stores_and_reads_it_back() {
+        use std::io::{Read as _, Seek as _, SeekFrom};
+        let dir = tempfile::tempdir().unwrap();
+        let layout = WorkspaceLayout::new(dir.path().join("W"));
+        fs::create_dir_all(layout.root()).unwrap();
+        let key = FileKey::generate().unwrap();
+        crate::sealed::set_workspace_keys(layout.root(), Some(key), vec![]);
+        assert!(workspace_seals(&layout).is_some());
+
+        let a = store_file(&layout, b"hello").unwrap();
+        let path = layout.blob_path(&a.sha256).unwrap();
+        assert!(crate::sealed::looks_sealed(&path).unwrap());
+        assert_ne!(fs::metadata(&path).unwrap().len(), 5);
+        assert!(has_file(&layout, &a.sha256, 5));
+        assert!(!has_file(&layout, &a.sha256, 6));
+        assert_eq!(read_file(&layout, &a.sha256, 3).unwrap(), b"hel");
+        assert_eq!(store_file(&layout, b"hello").unwrap(), a);
+        assert_eq!(sha256_stored(&path).unwrap(), a);
+
+        // A large file, streamed in and read from anywhere.
+        let big: Vec<u8> = (0..5_000_000u32).map(|i| (i % 253) as u8).collect();
+        let stored = store_reader(&layout, &mut big.as_slice(), u64::MAX).unwrap();
+        assert_eq!(stored.sha256, sha256_hex(&big));
+        let mut content = open_file(&layout, &stored.sha256).unwrap();
+        assert!(content.is_sealed());
+        assert_eq!(content.len().unwrap(), big.len() as u64);
+        content.seek(SeekFrom::Start(4_000_000)).unwrap();
+        let mut part = [0u8; 16];
+        content.read_exact(&mut part).unwrap();
+        assert_eq!(&part, &big[4_000_000..4_000_016]);
+        let out = dir.path().join("copy.bin");
+        assert_eq!(
+            copy_out(&layout, &stored.sha256, &out).unwrap(),
+            big.len() as u64
+        );
+        assert!(fs::read(&out).unwrap() == big);
+
+        // Thumbnails too.
+        let thumb = store_thumb(&layout, &a.sha256, b"small png").unwrap();
+        assert!(crate::sealed::looks_sealed(&thumb).unwrap());
+        assert_eq!(
+            read_thumb(&layout, &a.sha256, 1024).unwrap().unwrap(),
+            b"small png"
+        );
+        clear_thumbs(&layout).unwrap();
+        assert!(read_thumb(&layout, &a.sha256, 1024).unwrap().is_none());
+        clear_thumbs(&layout).unwrap();
+
+        // Without the key nothing opens.
+        crate::sealed::set_workspace_keys(layout.root(), None, vec![]);
+        let e = read_file(&layout, &a.sha256, 10).unwrap_err();
+        assert_eq!(
+            crate::sealed::problem_of(&e),
+            Some(crate::sealed::SealProblem::NoKey)
+        );
     }
 
     #[test]

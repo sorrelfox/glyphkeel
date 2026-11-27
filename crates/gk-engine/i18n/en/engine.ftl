@@ -141,7 +141,13 @@ gantt-layout-width = A column is { $min } to { $max } pixels wide.
 transfer-rejected-hint = Nothing was imported. Export the data again, or check where the archive came from.
 transfer-not-an-archive = This is not a readable archive: { $detail }
 transfer-unreadable = The archive could not be read: { $detail }
-transfer-encrypted = The archive's entry { $path } is encrypted; archives are never encrypted.
+transfer-encrypted = The archive's entry { $path } is encrypted with zip encryption, which Glyphkeel does not read.
+transfer-passphrase-needed = { $path } is an encrypted export. Give the passphrase it was made with.
+transfer-passphrase-needed-hint = The passphrase is the one of the workspace it was exported from, at the time of the export.
+transfer-encrypted-damaged = The encrypted export { $path } is damaged or was changed.
+transfer-encrypt-plain-workspace = Only an encrypted workspace can encrypt an export.
+transfer-encrypt-folder = An encrypted export is one .zip file, not a folder.
+transfer-encrypt-folder-hint = Choose a .zip file, or turn encryption off for this export.
 transfer-bad-path = The archive's entry "{ $path }" has an unsafe path.
 transfer-link = The archive's entry "{ $path }" is a link or a special file.
 transfer-duplicate = The archive holds "{ $path }" twice.
@@ -571,6 +577,11 @@ encryption-not-encrypted = The workspace is not encrypted.
 encryption-backups-left-plain = { $count ->
         [one] One backup could not be encrypted and stays readable without the passphrase.
        *[other] { $count } backups could not be encrypted and stay readable without the passphrase.
+    }
+encryption-files-failed = The attached files could not be converted: { $error }
+encryption-files-left = { $count ->
+        [one] One attached file could not be converted and was left as it was. It is damaged, or no known key opens it.
+       *[other] { $count } attached files could not be converted and were left as they were. They are damaged, or no known key opens them.
     }
 
 ## The engine

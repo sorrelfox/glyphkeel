@@ -10,6 +10,11 @@
 //! entry may expand far beyond its compressed size. Every read is capped at
 //! the size the entry declares and at the limit for its kind, so an entry
 //! that lies about its size can't exhaust memory.
+//!
+//! An encrypted export (a sealed `.zip`) is opened on the fly with a
+//! passphrase this program knows (the workspace's, one given for the
+//! import, or the one in the environment) or with a file key of an open
+//! workspace; it is never written out plain.
 
 use std::collections::BTreeMap;
 use std::fs::{self, File};
@@ -33,7 +38,7 @@ pub(crate) enum Source {
         entries: BTreeMap<String, EntryInfo>,
     },
     Zip {
-        zip: Box<zip::ZipArchive<File>>,
+        zip: Box<zip::ZipArchive<gk_store::Content>>,
         entries: BTreeMap<String, EntryInfo>,
     },
 }
@@ -129,7 +134,7 @@ impl Source {
     }
 
     fn open_zip(path: &Path, limits: &Limits) -> Result<Self, Rejected> {
-        let file = File::open(path).map_err(|e| Rejected::Unreadable(e.to_string()))?;
+        let file = open_sealed(path)?;
         let mut zip =
             zip::ZipArchive::new(file).map_err(|e| Rejected::NotAnArchive(e.to_string()))?;
         if zip.len() > limits.max_entries {
@@ -243,6 +248,27 @@ impl Source {
         reader.finish()?;
         Ok(out)
     }
+}
+
+/// The file at `path` for reading: a sealed one opened with a key this
+/// program knows, anything else as it is.
+fn open_sealed(path: &Path) -> Result<gk_store::Content, Rejected> {
+    let passphrases = gk_store::known_passphrases();
+    let opened = match gk_store::open_with_passphrases(path, &passphrases) {
+        Err(e) if gk_store::seal_problem(&e) == Some(gk_store::SealProblem::NoKey) => {
+            gk_store::open_stored(path)
+        }
+        other => other,
+    };
+    opened.map_err(|e| match gk_store::seal_problem(&e) {
+        Some(gk_store::SealProblem::NoKey) => {
+            Rejected::Passphrase(path.to_string_lossy().into_owned())
+        }
+        Some(gk_store::SealProblem::Damaged) => {
+            Rejected::SealDamaged(path.to_string_lossy().into_owned())
+        }
+        _ => Rejected::Unreadable(e.to_string()),
+    })
 }
 
 /// A reader that stops at the declared size of its entry and reports an

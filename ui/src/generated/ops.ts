@@ -1961,6 +1961,8 @@ export type ErrorCode = "invalid" | "not_found" | "conflict" | "forbidden" | "li
 
 /** What to export. */
 export type ExportInput = {
+  /** Encrypt the archive (a `.zip` file) with the workspace's passphrase, so that it opens only in Glyphkeel with that passphrase. Left out: on when the workspace is encrypted and the archive is a `.zip` file or goes into the `exports` folder. Only an encrypted workspace can encrypt an export. */
+  encrypt?: boolean | null;
   /** A `.zip` file (the default) or a folder. */
   format?: ArchiveFormat | null;
   /** Where to write it: a new file or folder. For agents, a plain name goes into the workspace's `exports` folder; other paths must be inside a folder agents may use. Left out: a name with the date in the `exports` folder. */
@@ -1973,6 +1975,8 @@ export type ExportInput = {
 export type ExportResult = {
   /** What it holds. */
   counts: ArchiveCounts;
+  /** Whether it is encrypted. */
+  encrypted?: boolean;
   /** How it is stored. */
   format: ArchiveFormat;
   /** The archive written. */
@@ -5784,6 +5788,8 @@ export type WikiDeleteInput = {
 
 /** A page, or a whole wiki, to export as Markdown files or web pages. */
 export type WikiExportInput = {
+  /** Encrypt the archive (a `.zip` file) with the workspace's passphrase, so that it opens only in Glyphkeel with that passphrase. Left out: on when the workspace is encrypted and the archive is a `.zip` file or goes into the `exports` folder. Only an encrypted workspace can encrypt an export. */
+  encrypt?: boolean | null;
   /** A `.zip` file (the default) or a folder. */
   format?: ArchiveFormat | null;
   /** The page: its title (any case), slug or ID. Left out: the project's whole wiki, every page in it. */
@@ -5802,6 +5808,8 @@ export type WikiExportInput = {
 export type WikiExportResult = {
   /** The attached files copied. */
   attachments: number;
+  /** Whether it is encrypted. */
+  encrypted?: boolean;
   /** How it is stored. */
   format: ArchiveFormat;
   /** The pages written: one Markdown file or web page each. */

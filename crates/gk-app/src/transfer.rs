@@ -108,7 +108,9 @@ pub(crate) fn page_may_run(op: &str, input: &Value) -> Result<(), OpError> {
 
 /// Exports `projects` (all when empty) to a `.zip` file, or to a new
 /// folder when `folder`, where the person chooses, starting with `name`.
-/// Returns the export's result, or `null` when the person cancelled.
+/// `encrypt` asks for an encrypted `.zip` (left out: the engine's default,
+/// on for an encrypted workspace). Returns the export's result, or `null`
+/// when the person cancelled.
 #[tauri::command]
 pub(crate) async fn export_archive(
     window: WebviewWindow,
@@ -116,8 +118,11 @@ pub(crate) async fn export_archive(
     projects: Vec<String>,
     folder: bool,
     name: String,
+    encrypt: Option<bool>,
 ) -> Result<Option<Value>, OpError> {
     let workspace = Arc::clone(&workspace);
+    // An encrypted export is one file.
+    let folder = folder && encrypt != Some(true);
     let mode = dialog::Mode::Export {
         name: safe_name(&name),
         folder,
@@ -130,6 +135,7 @@ pub(crate) async fn export_archive(
             "path": path.to_string_lossy(),
             "format": if folder { "folder" } else { "zip" },
             "projects": projects,
+            "encrypt": encrypt,
         });
         workspace.call("transfer.export", input, None).map(Some)
     })
@@ -323,7 +329,9 @@ pub(crate) async fn import_csv(
 }
 
 /// Checks (`dry_run`) or imports the archive chosen under `token`, with new
-/// keys for projects whose key is taken.
+/// keys for projects whose key is taken. `passphrase` opens an encrypted
+/// export (the error `details.passphrase = "export"` asks for it); the app
+/// keeps it in memory until it quits.
 #[tauri::command]
 pub(crate) async fn import_archive(
     workspace: State<'_, Arc<Workspace>>,
@@ -331,8 +339,12 @@ pub(crate) async fn import_archive(
     token: String,
     dry_run: bool,
     keys: Option<Value>,
+    passphrase: Option<String>,
 ) -> Result<Value, OpError> {
     let path = choices.path(&token)?;
+    if let Some(passphrase) = passphrase.and_then(gk_store::Passphrase::new) {
+        gk_store::remember_passphrase(&passphrase);
+    }
     let workspace = Arc::clone(&workspace);
     blocking(move || {
         let input = json!({

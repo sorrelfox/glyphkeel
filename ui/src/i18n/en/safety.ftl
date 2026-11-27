@@ -191,6 +191,13 @@ transfer-format-folder = A folder
 transfer-export-choose = Choose where…
 transfer-export-start = Export
 transfer-export-browser = The archive goes to the workspace's exports folder.
+transfer-encrypt = Encrypt this export
+transfer-encrypt-about = An encrypted export is one .zip file. It opens only in Glyphkeel, with this workspace's passphrase.
+transfer-exported-encrypted = The export is encrypted with this workspace's passphrase.
+transfer-import-encrypted = { $name } is an encrypted export. Enter the passphrase of the workspace it came from.
+transfer-import-passphrase = Passphrase
+transfer-import-passphrase-wrong = That passphrase does not open the export.
+transfer-import-open = Open
 # The archive's file name: a .zip file, or a folder without an extension.
 transfer-export-name = { $format ->
     [zip] glyphkeel-export-{ $date }.zip

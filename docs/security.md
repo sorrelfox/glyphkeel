@@ -196,11 +196,36 @@ encryption, which covers everything.
   the passphrase. The write-ahead log is encrypted the same way. On Linux the
   cryptography is the system's OpenSSL.
 - **What is encrypted:** the database (tasks, wiki pages, comments, history,
-  settings) and the backups of an encrypted workspace.
-- **What isn't:** attached files and their thumbnails, exports, the settings
-  files, and copies other programs keep. Encrypting a workspace writes a new
-  file and removes the old one, but the old blocks may stay on the disk,
-  above all on SSDs; disk encryption covers them.
+  settings), the attached files and their thumbnails, exports into the
+  workspace's `exports` folder (and, unless you turn it off, exports you
+  save elsewhere as a `.zip` file), and the backups with their files.
+- **Attached files.** Each file is encrypted with ChaCha20-Poly1305 in
+  chunks of 64 KiB, behind a versioned header. Each file has a key of its
+  own, derived with HKDF-SHA256 from the workspace's file key and a random
+  salt of 32 bytes; each chunk has its own nonce (its number and a flag for
+  the last chunk) and is authenticated together with the whole header, so a
+  changed, moved, missing or added chunk, a cut-off file and a changed
+  header are all noticed. The workspace's file key is random and kept only
+  inside the encrypted database, so the files open with the passphrase and
+  nothing else; a new passphrase brings a new file key. Files are read in
+  memory: images and thumbnails reach the app's window without a plain copy
+  on the disk.
+- **Exports.** An encrypted export is one `.zip` file encrypted the same
+  way, with a key derived from the workspace's passphrase (PBKDF2-HMAC-SHA512,
+  256 000 rounds, random salt): it opens in Glyphkeel on any computer with
+  that passphrase, and nowhere else. An export to a folder is never
+  encrypted. Exports the window saves itself (a list as CSV or JSON, the
+  Gantt chart as a picture) are not encrypted.
+- **Opening a file in another program** needs a plain copy. For an encrypted
+  workspace it goes to a private folder (only your account may enter it; on
+  Linux in the per-user runtime folder, which lives in memory). The folder
+  is removed when the app locks or quits, and a folder a crashed app left
+  behind is removed at its next start. The other program may keep its own
+  copies.
+- **What isn't:** the settings files, copies other programs keep, and
+  exports to a folder. Encrypting a workspace writes new files and removes
+  the old ones, but the old blocks may stay on the disk, above all on SSDs;
+  disk encryption covers them.
 - **The passphrase is never stored.** Each program keeps it in memory while
   it has the workspace open, wiped when it ends. Glyphkeel doesn't use the
   system's keyring.
@@ -214,7 +239,9 @@ encryption, which covers everything.
 - **Changes need the workspace to themselves.** Encrypting, changing the
   passphrase and decrypting refuse while another program has the workspace
   open, make a backup first, and check the new file before it replaces the
-  old one in one step.
+  old one in one step. Each attached file is written anew, checked against
+  its SHA-256 and then renamed over the old one, so an interruption leaves
+  every file either as it was or converted; both kinds open.
 - **No recovery.** Without the passphrase the data can't be read, by anyone.
 - **Windows.** The Windows build can't encrypt yet; it opens plain
   workspaces only.
@@ -235,8 +262,8 @@ against programs running as you.
 
 - **Your own account.** Anything that runs as you can read and change your
   workspace folder directly, and while a program has an encrypted workspace
-  open, its key is in that program's memory. Attached files are never
-  encrypted. Use your system's disk encryption.
+  open, its keys are in that program's memory. Use your system's disk
+  encryption.
 - **Programs you open files with.** A document opened from an attachment is
   shown by your desktop's program, with that program's protections.
 - **Files you put where agents may look.** Anything in the `exports` folder

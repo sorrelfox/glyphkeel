@@ -14,6 +14,7 @@ import { useBytes, useFailureToast } from "../../data/safety";
 import { useToday } from "../../data/zone";
 import { type ArchiveCounts, type ExportResult } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
+import { useLock } from "../../ipc/lock";
 import { choosesFiles, exportArchive } from "../../ipc/transfer";
 import styles from "./Safety.module.css";
 
@@ -53,6 +54,11 @@ export function ExportDialog({ isOpen, onOpenChange, projects: initial = [] }: {
   const [scope, setScope] = useState<Scope>(initial.length > 0 ? "some" : "all");
   const [chosen, setChosen] = useState<ReadonlySet<string>>(new Set(initial));
   const [format, setFormat] = useState<Format>("zip");
+  // An encrypted workspace encrypts its exports unless the person turns it off.
+  const encrypted = useLock().data?.encryption?.encrypted === true;
+  const [plain, setPlain] = useState(false);
+  const encrypt = encrypted && !plain;
+  const folder = format === "folder" && !encrypt;
   const [running, setRunning] = useState(false);
   const [done, setDone] = useState<ExportResult | null>(null);
   const projects = scope === "all" ? [] : [...chosen];
@@ -61,8 +67,8 @@ export function ExportDialog({ isOpen, onOpenChange, projects: initial = [] }: {
   };
   const start = () => {
     setRunning(true);
-    const name = t("transfer-export-name", { date: today, format });
-    exportArchive(call, { projects, folder: format === "folder", name }).then(
+    const name = t("transfer-export-name", { date: today, format: folder ? "folder" : "zip" });
+    exportArchive(call, { projects, folder, name, ...(encrypted ? { encrypt } : {}) }).then(
       (result) => {
         setRunning(false);
         if (result !== null) {
@@ -106,6 +112,7 @@ export function ExportDialog({ isOpen, onOpenChange, projects: initial = [] }: {
               {done.path}
             </p>
             <p className="muted num">{bytes(done.size)}</p>
+            {done.encrypted === true && <p className="muted">{t("transfer-exported-encrypted")}</p>}
             <Counts counts={done.counts} />
           </>
         ) : (
@@ -144,15 +151,32 @@ export function ExportDialog({ isOpen, onOpenChange, projects: initial = [] }: {
                 <p className={classes("faint", styles.small)}>{t("transfer-export-subprojects")}</p>
               </div>
             )}
-            <Segmented<Format>
-              label={t("transfer-format-label")}
-              value={format}
-              onChange={setFormat}
-              segments={[
-                { id: "zip", label: t("transfer-format-zip") },
-                { id: "folder", label: t("transfer-format-folder") },
-              ]}
-            />
+            {encrypted && (
+              <label className={styles.check}>
+                <input
+                  type="checkbox"
+                  className="check"
+                  checked={encrypt}
+                  onChange={(event) => {
+                    setPlain(!event.target.checked);
+                  }}
+                />
+                <span>{t("transfer-encrypt")}</span>
+              </label>
+            )}
+            {encrypt ? (
+              <p className={classes("faint", styles.small)}>{t("transfer-encrypt-about")}</p>
+            ) : (
+              <Segmented<Format>
+                label={t("transfer-format-label")}
+                value={format}
+                onChange={setFormat}
+                segments={[
+                  { id: "zip", label: t("transfer-format-zip") },
+                  { id: "folder", label: t("transfer-format-folder") },
+                ]}
+              />
+            )}
             {!choosesFiles() && <p className={classes("faint", styles.small)}>{t("transfer-export-browser")}</p>}
             {running && (
               <div role="status" className={styles.choice}>

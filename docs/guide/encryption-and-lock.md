@@ -2,8 +2,9 @@
 
 # Encryption and the app lock
 
-Glyphkeel can encrypt a workspace's database with a passphrase, and it can
-lock its window after you have been away for a while. Both are optional and
+Glyphkeel can encrypt a workspace (its database, attached files, thumbnails
+and exports) with a passphrase, and it can lock its window after you have
+been away for a while. Both are optional and
 off by default.
 
 If you need your data protected at rest today, the strongest choice is still
@@ -28,8 +29,11 @@ What happens:
 1. A backup is made first.
 2. The whole database is written into a new, encrypted file, which is
    checked and then put in place of the old one in one step.
-3. The backups in the workspace's backup folder are encrypted too, with the
-   same passphrase.
+3. Every attached file is encrypted: each is written anew, checked and then
+   put in place of the old one. Thumbnails are made again, encrypted, as
+   they are needed.
+4. The backups in the workspace's backup folder are encrypted too, with the
+   same passphrase, and so are their attached files.
 
 Nobody else may have the workspace open meanwhile: close other Glyphkeel
 windows on it, `glyphkeel` commands and agent servers (`glyphkeel mcp`)
@@ -62,9 +66,12 @@ trade-offs of the environment variable.
 passphrase) and `glyphkeel workspace decrypt`. Both need the current
 passphrase and make a backup first.
 
+- A new passphrase also gives the attached files a new key; they are
+  encrypted again with it.
 - After a change of passphrase, older backups keep the passphrase they were
   made with.
-- After decrypting, the backups stay encrypted.
+- Decrypting makes the attached files plain again. The backups stay
+  encrypted.
 
 ## Backups and restoring
 
@@ -74,10 +81,41 @@ passphrase. A restored workspace keeps the workspace's current state:
 restoring an encrypted backup into a plain workspace gives a plain
 workspace, and the other way round.
 
+## Attached files
+
+In an encrypted workspace, attached files and their thumbnails are stored
+encrypted. Glyphkeel reads them in memory: images show in the window
+without a plain copy on the disk.
+
+**Opening a file in another program** (a PDF in your PDF viewer, for
+example) needs a plain copy for that program. Glyphkeel writes it to a
+private folder only your account can enter (on Linux, in the runtime folder
+that lives in memory) and removes the folder when the app locks or quits.
+If the app crashed, it removes what was left at its next start. **Save a
+copy…** writes a plain copy where you choose.
+
+## Exports and imports
+
+- **Exports into the workspace's `exports` folder** are always encrypted
+  while the workspace is (agents and `glyphkeel export` without a path
+  write there).
+- **Exports you save elsewhere**: the export dialog has **Encrypt this
+  export**, on by default. An encrypted export is one `.zip` file; to
+  export to a folder, turn it off. Wiki pages exported as a `.zip` file are
+  encrypted the same way. On the command line use `--encrypt false` to
+  write a plain archive.
+- An encrypted export opens only in Glyphkeel, with the passphrase the
+  workspace had when it was exported, on any computer.
+- **Importing** one asks for that passphrase: the app shows a field for
+  it; the command line asks on the terminal, or uses
+  `GLYPHKEEL_PASSPHRASE`; an agent server uses `GLYPHKEEL_PASSPHRASE`, or
+  the passphrase of the workspace it has open.
+- Exports the window makes itself (a list as CSV or JSON, the Gantt chart as
+  a picture) are not encrypted.
+
 ## What isn't encrypted
 
-- **Attached files** (the `files` folder) and their thumbnails.
-- **Exports** you make (archives, CSV, Markdown, pictures).
+- **Exports to a folder**, and the exports the window makes itself.
 - **The settings files** of the app and the command line.
 - **Copies another program keeps**, such as an editor that opened an
   attachment.

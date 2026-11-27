@@ -165,10 +165,16 @@ fn change_encryption(encrypt: bool, chosen: Option<&str>) -> Result<(String, Val
         ));
         lines.push('\n');
     }
+    if changed.files_failed > 0 {
+        lines.push_str(&encryption::files_left_text(changed.files_failed));
+        lines.push('\n');
+    }
     let mut value = entry(&name, &layout);
     value["encrypted"] = Value::from(encrypt);
     value["backup"] = Value::from(changed.backup.name);
     value["backups_left_plain"] = Value::from(changed.backups_left_plain);
+    value["files_converted"] = Value::from(changed.files_converted);
+    value["files_failed"] = Value::from(changed.files_failed);
     Ok((lines, value))
 }
 

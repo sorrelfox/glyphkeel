@@ -68580,6 +68580,10 @@
         "additionalProperties": false,
         "description": "A page, or a whole wiki, to export as Markdown files or web pages.",
         "properties": {
+          "encrypt": {
+            "description": "Encrypt the archive (a `.zip` file) with the workspace's passphrase,\nso that it opens only in Glyphkeel with that passphrase. Left out:\non when the workspace is encrypted and the archive is a `.zip` file\nor goes into the `exports` folder. Only an encrypted workspace can\nencrypt an export.",
+            "type": "boolean"
+          },
           "format": {
             "description": "A `.zip` file (the default) or a folder.",
             "oneOf": [
@@ -68639,6 +68643,10 @@
             "description": "The attached files copied.",
             "minimum": 0,
             "type": "integer"
+          },
+          "encrypted": {
+            "description": "Whether it is encrypted.",
+            "type": "boolean"
           },
           "format": {
             "description": "How it is stored.",
@@ -71358,6 +71366,10 @@
         "additionalProperties": false,
         "description": "What to export.",
         "properties": {
+          "encrypt": {
+            "description": "Encrypt the archive (a `.zip` file) with the workspace's passphrase,\nso that it opens only in Glyphkeel with that passphrase. Left out:\non when the workspace is encrypted and the archive is a `.zip` file\nor goes into the `exports` folder. Only an encrypted workspace can\nencrypt an export.",
+            "type": "boolean"
+          },
           "format": {
             "description": "A `.zip` file (the default) or a folder.",
             "oneOf": [
@@ -71461,6 +71473,10 @@
               "agent_sessions"
             ],
             "type": "object"
+          },
+          "encrypted": {
+            "description": "Whether it is encrypted.",
+            "type": "boolean"
           },
           "format": {
             "description": "How it is stored.",

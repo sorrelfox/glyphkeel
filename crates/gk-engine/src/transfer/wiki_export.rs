@@ -33,7 +33,7 @@ use gk_core::Id;
 use gk_store::rusqlite::{OptionalExtension, Transaction, params};
 
 use super::resolve;
-use super::sink::Sink;
+use super::sink::{Seal, Sink};
 use crate::context::Context;
 use crate::engine::Engine;
 use crate::failure::Failure;
@@ -96,7 +96,8 @@ impl Engine {
                 self.store().layout().exports_dir().join(name)
             }
         };
-        write(self, &target, format, &pages, &files)
+        let seal = super::export_seal(self, input.encrypt, format, input.path.is_none())?;
+        write(self, &target, format, seal.as_ref(), &pages, &files)
     }
 }
 
@@ -104,6 +105,7 @@ fn write(
     engine: &Engine,
     target: &Path,
     format: ArchiveFormat,
+    seal: Option<&Seal>,
     pages: &[Page],
     files: &[File],
 ) -> Result<WikiExportResult, OpError> {
@@ -117,7 +119,7 @@ fn write(
             ],
         )
     };
-    let mut sink = Sink::create(target, format).map_err(cant_write)?;
+    let mut sink = Sink::create(target, format, seal).map_err(cant_write)?;
     let put = |sink: &mut Sink| -> Result<(), OpError> {
         for page in pages {
             sink.put(&page.path, page.body.as_bytes())
@@ -125,14 +127,14 @@ fn write(
         }
         let layout = engine.store().layout();
         for file in files {
-            let source = gk_store::file_path(layout, &file.sha256).ok_or_else(|| {
+            gk_store::file_path(layout, &file.sha256).ok_or_else(|| {
                 messages::error(
                     ErrorCode::Storage,
                     "transfer-stored-file-missing",
                     &[("sha256", file.sha256.clone())],
                 )
             })?;
-            sink.put_file(&file.path, &file.sha256, &source)
+            sink.put_file(&file.path, &file.sha256, layout)
                 .map_err(cant_write)?;
         }
         Ok(())
@@ -152,6 +154,7 @@ fn write(
         pages: (pages.len() - index) as u64,
         attachments: files.len() as u64,
         size,
+        encrypted: seal.is_some(),
     })
 }
 
