@@ -36,7 +36,13 @@ function open() {
 describe("bridgeAddress", () => {
   it("reads the port and token from the page's URL, within the bridge's ports", () => {
     expect(bridgeAddress("?bridge=5321&token=abc")).toEqual({ port: 5321, token: "abc" });
+    expect(bridgeAddress("?bridge=5300&token=abc")).toEqual({ port: 5300, token: "abc" });
+    expect(bridgeAddress("?bridge=5399&token=abc")).toEqual({ port: 5399, token: "abc" });
+    expect(bridgeAddress("?bridge=5299&token=abc")).toBeNull();
+    expect(bridgeAddress("?bridge=5400&token=abc")).toBeNull();
     expect(bridgeAddress("?bridge=8080&token=abc")).toBeNull();
+    expect(bridgeAddress("?bridge=9001&token=abc", [9000, 9010])).toEqual({ port: 9001, token: "abc" });
+    expect(bridgeAddress("?bridge=5321&token=abc", [9000, 9010])).toBeNull();
     expect(bridgeAddress("?bridge=5321")).toBeNull();
     expect(bridgeAddress("")).toBeNull();
   });

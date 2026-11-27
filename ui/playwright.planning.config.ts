@@ -8,18 +8,19 @@ import { join, resolve } from "node:path";
 
 import { defineConfig, devices } from "@playwright/test";
 
+import { flowPort } from "./tests/ports";
+
 // The wiki, the Gantt chart and the calendar against the real engine: the
 // development bridge serves a fresh workspace, and a `--mode bridge` build
 // of the UI talks to it. The flows make their data with the `glyphkeel`
 // command line on the same workspace, as another process would, so the
-// screens must also follow changes made elsewhere. Ports of their own (the
-// bridge takes 5320–5329 and pages 5310–5319).
-const UI_PORT = Number(process.env.GK_PLANNING_UI_PORT ?? 5319);
-const BRIDGE_PORT = Number(process.env.GK_PLANNING_BRIDGE_PORT ?? 5329);
+// screens must also follow changes made elsewhere. Ports of their own
+// (GK_UI_PORT and GK_BRIDGE_PORT move them).
+const UI_PORT = flowPort("planning", "ui");
+const BRIDGE_PORT = flowPort("planning", "bridge");
 
 process.env.GK_BRIDGE_TOKEN ??= randomBytes(16).toString("hex");
 process.env.GK_BRIDGE_WORKSPACE ??= join(mkdtempSync(join(tmpdir(), "glyphkeel-planning-")), "Personal");
-process.env.GK_PLANNING_BRIDGE_PORT = String(BRIDGE_PORT);
 process.env.GK_PLANNING_UI_URL = `http://127.0.0.1:${String(UI_PORT)}`;
 // The command line the flows run; the bridge's server command builds it.
 process.env.GK_PLANNING_CLI ??= resolve(process.env.CARGO_TARGET_DIR ?? "../target", "debug", "glyphkeel");

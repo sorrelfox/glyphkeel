@@ -3,11 +3,13 @@
 
 import { defineConfig, devices } from "@playwright/test";
 
+import { flowPort } from "./tests/ports";
+
 // Layout at small window sizes on sample data: every main screen at the
 // window's smallest size and at a medium one, with the sidebar open and
 // closed. Nothing may scroll the page sideways or clip a toolbar. A
-// `--mode fake` build, on a port of its own (GK_LAYOUT_PORT moves it).
-const PORT = Number(process.env.GK_LAYOUT_PORT ?? 5325);
+// `--mode fake` build, on a port of its own (GK_UI_PORT moves it).
+const PORT = flowPort("layout", "ui");
 const DIST = "node_modules/.cache/layout-fake-dist";
 
 export default defineConfig({

@@ -8,18 +8,20 @@ import { join } from "node:path";
 
 import { defineConfig, devices } from "@playwright/test";
 
+import { flowPort } from "./tests/ports";
+
 // The list's flows. Against the real engine: the development bridge serves a
 // fresh workspace, and a `--mode bridge` build of the UI talks to it. On
 // sample data: a `--mode fake` build, for the long-list scroll check and the
-// screenshot. Ports of their own (the bridge takes 5320–5329 and pages from
-// 5310–5319), so these run beside the other flows.
-const BRIDGE_UI_PORT = Number(process.env.GK_LIST_UI_PORT ?? 5316);
-const BRIDGE_PORT = Number(process.env.GK_LIST_BRIDGE_PORT ?? 5327);
-const FAKE_UI_PORT = Number(process.env.GK_LIST_FAKE_PORT ?? 5317);
+// screenshot. Ports of their own, so these run beside the other flows:
+// GK_UI_PORT for the bridge's page, GK_UI_PORT_2 for the sample data's and
+// GK_BRIDGE_PORT for the bridge.
+const BRIDGE_UI_PORT = flowPort("list", "ui");
+const BRIDGE_PORT = flowPort("list", "bridge");
+const FAKE_UI_PORT = flowPort("list", "ui2");
 
 process.env.GK_BRIDGE_TOKEN ??= randomBytes(16).toString("hex");
 process.env.GK_BRIDGE_WORKSPACE ??= join(mkdtempSync(join(tmpdir(), "glyphkeel-list-")), "Personal");
-process.env.GK_LIST_BRIDGE_PORT = String(BRIDGE_PORT);
 process.env.GK_LIST_UI_URL = `http://127.0.0.1:${String(BRIDGE_UI_PORT)}`;
 process.env.GK_LIST_FAKE_URL = `http://127.0.0.1:${String(FAKE_UI_PORT)}`;
 const token = process.env.GK_BRIDGE_TOKEN;

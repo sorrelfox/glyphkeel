@@ -15,7 +15,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 // check that the pages work beside a real workspace, not the app's side.
 
 const token = process.env.GK_BRIDGE_TOKEN ?? "";
-const PAGE = `/?bridge=${process.env.GK_BRIDGE_PORT ?? "5321"}&token=${token}`;
+const PAGE = `/?bridge=${process.env.GK_BRIDGE_PORT ?? ""}&token=${token}`;
 
 /** A 1×1 PNG. */
 const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";

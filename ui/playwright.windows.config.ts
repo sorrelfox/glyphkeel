@@ -3,12 +3,14 @@
 
 import { defineConfig, devices } from "@playwright/test";
 
+import { flowPort } from "./tests/ports";
+
 // The page as it starts on Windows, on sample data: the flows hand it the
 // start data the Windows app gives (system title bar, `platform: windows`)
 // and check what differs there, next to Linux. A `--mode fake` build keeps
-// the workspace in memory, so no engine runs. `GK_WINDOWS_PORT` moves the
+// the workspace in memory, so no engine runs. `GK_UI_PORT` moves the
 // server, so these can run beside the other flows.
-const PORT = Number(process.env.GK_WINDOWS_PORT ?? 5320);
+const PORT = flowPort("windows", "ui");
 const DIST = "node_modules/.cache/windows-dist";
 
 export default defineConfig({

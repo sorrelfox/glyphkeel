@@ -11,7 +11,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 // bridge. With GK_SCREENSHOT_DIR set, each flow saves a screenshot there.
 
 const token = process.env.GK_BRIDGE_TOKEN ?? "";
-const port = process.env.GK_BRIDGE_PORT ?? "5321";
+const port = process.env.GK_BRIDGE_PORT ?? "";
 const PAGE = `/?bridge=${port}&token=${token}`;
 
 test.use({ viewport: { width: 1280, height: 800 } });

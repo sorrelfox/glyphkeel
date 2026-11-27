@@ -24,6 +24,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::LazyLock;
 use std::time::Instant;
 
 use anyhow::{Context, Result, bail};
@@ -403,27 +404,38 @@ fn write_data_set(root: &Path, set: &str) -> Result<bool> {
     )
 }
 
-/// The Playwright configuration of the pseudo-locale screenshots, relative
-/// to ui/. It belongs to the `pseudo` suite, not to the `ui` suite's flows.
-const PSEUDO_CONFIG: &str = "playwright.pseudo.config.ts";
-
 /// The default pseudo-locale.
 const PSEUDO_LOCALE: &str = "en-XA";
 
-/// Takes the pseudo-locale screenshots into target/screenshots/pseudo.
-fn run_pseudo(root: &Path, locale: &str) -> Result<bool> {
-    let shots = root.join("target/screenshots/pseudo").join(locale);
+/// Where the pseudo-locale screenshots land.
+fn pseudo_shots(root: &Path, locale: &str) -> PathBuf {
+    root.join("target/screenshots/pseudo").join(locale)
+}
+
+/// The command that takes the pseudo-locale screenshots, on the port the
+/// flows' table gives it.
+fn pseudo_command(root: &Path, locale: &str) -> Command {
+    let flow = Flow::pseudo();
     let mut cmd = Command::new("pnpm");
     cmd.args(["--filter", "ui", "exec", "playwright", "test", "--config"])
-        .arg(PSEUDO_CONFIG)
+        .arg(flow.config)
         .arg("--project=chromium")
         .arg("--output")
         .arg(root.join("target/playwright/pseudo"))
         .env("GK_PSEUDO_LOCALE", locale)
-        .env("GK_SCREENSHOT_DIR", &shots)
+        .env("GK_SCREENSHOT_DIR", pseudo_shots(root, locale))
         .current_dir(root);
-    let ok = status(&mut cmd)?;
-    eprintln!("==> [pseudo] screenshots: {}", shots.display());
+    flow.set_ports(&mut cmd);
+    cmd
+}
+
+/// Takes the pseudo-locale screenshots into target/screenshots/pseudo.
+fn run_pseudo(root: &Path, locale: &str) -> Result<bool> {
+    let ok = status(&mut pseudo_command(root, locale))?;
+    eprintln!(
+        "==> [pseudo] screenshots: {}",
+        pseudo_shots(root, locale).display()
+    );
     Ok(ok)
 }
 
@@ -504,6 +516,19 @@ fn write_cli_files(root: &Path) -> Result<bool> {
     )
 }
 
+/// The table of the UI's Playwright configurations, which the
+/// configurations themselves and `pnpm test:flow` read too: each one's
+/// name, file and default ports.
+const FLOWS_JSON: &str = include_str!("../../ui/tests/flows.json");
+
+/// The kinds of port in the table, and the variable that sets each.
+const PORT_VARIABLES: [(&str, &str); 4] = [
+    ("ui", "GK_UI_PORT"),
+    ("ui2", "GK_UI_PORT_2"),
+    ("bridge", "GK_BRIDGE_PORT"),
+    ("bridge2", "GK_BRIDGE_PORT_2"),
+];
+
 /// One Playwright configuration of the UI: its flows, its servers and its
 /// ports.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -514,144 +539,118 @@ pub(crate) struct Flow {
     /// The configuration file, relative to ui/.
     config: &'static str,
     about: &'static str,
+    /// Its ports, by kind in the order of [`PORT_VARIABLES`].
+    ports: [Option<u16>; 4],
+}
+
+/// The table, read once.
+struct FlowTable {
+    /// The `ui` suite's configurations, in the order it runs them.
+    ui: Vec<Flow>,
+    /// The pseudo-locale screenshots, which have a suite of their own.
+    pseudo: Flow,
+}
+
+static FLOWS: LazyLock<FlowTable> = LazyLock::new(|| {
+    FlowTable::parse(FLOWS_JSON).expect("ui/tests/flows.json is a valid table of flows")
+});
+
+impl FlowTable {
+    fn parse(json: &str) -> Result<Self> {
+        let table: serde_json::Value = serde_json::from_str(json).context("not JSON")?;
+        let mut ui = Vec::new();
+        let mut pseudo = None;
+        for entry in table["flows"].as_array().context("no `flows` list")? {
+            // The table lives as long as the program.
+            let text = |key: &str| -> Result<&'static str> {
+                let value = entry[key]
+                    .as_str()
+                    .with_context(|| format!("a flow without `{key}`"))?;
+                Ok(value.to_owned().leak())
+            };
+            let name = text("name")?;
+            let given = entry["ports"]
+                .as_object()
+                .with_context(|| format!("`{name}` has no ports"))?;
+            if let Some(kind) = given
+                .keys()
+                .find(|kind| !PORT_VARIABLES.iter().any(|(known, _)| known == kind))
+            {
+                bail!("`{name}` has a port of an unknown kind `{kind}`");
+            }
+            let mut ports = [None; 4];
+            for (slot, (kind, _)) in ports.iter_mut().zip(PORT_VARIABLES) {
+                if let Some(port) = given.get(kind) {
+                    let port = port
+                        .as_u64()
+                        .and_then(|port| u16::try_from(port).ok())
+                        .with_context(|| format!("`{name}`'s {kind} port is not a port"))?;
+                    *slot = Some(port);
+                }
+            }
+            if ports[0].is_none() {
+                bail!("`{name}` has no ui port");
+            }
+            let flow = Flow {
+                name,
+                config: text("config")?,
+                about: text("about")?,
+                ports,
+            };
+            match entry.get("suite").and_then(serde_json::Value::as_str) {
+                None => ui.push(flow),
+                Some("pseudo") => pseudo = Some(flow),
+                Some(other) => bail!("`{name}` belongs to an unknown suite `{other}`"),
+            }
+        }
+        Ok(Self {
+            ui,
+            pseudo: pseudo.context("no pseudo-locale configuration")?,
+        })
+    }
 }
 
 impl Flow {
-    /// Every configuration, in the order the `ui` suite runs them. Several
-    /// share ports (5310–5319 for pages, 5320–5329 for the bridge), so they
-    /// run one after another, never side by side. Those against the engine
-    /// each make a fresh workspace of their own.
-    const ALL: [Self; 25] = [
-        Self {
-            name: "flow",
-            config: "playwright.config.ts",
-            about: "the release build: smoke test and themes",
-        },
-        Self {
-            name: "board",
-            config: "playwright.fake.config.ts",
-            about: "project screens and preferences on sample data",
-        },
-        Self {
-            name: "editor",
-            config: "playwright.editor.config.ts",
-            about: "the Markdown editor",
-        },
-        Self {
-            name: "bridge",
-            config: "playwright.bridge.config.ts",
-            about: "workspace, zones, labels and toolbar against the engine",
-        },
-        Self {
-            name: "list",
-            config: "playwright.list.config.ts",
-            about: "the list, against the engine and on sample data",
-        },
-        Self {
-            name: "palette",
-            config: "playwright.palette.config.ts",
-            about: "command palette and quick add against the engine",
-        },
-        Self {
-            name: "today",
-            config: "playwright.today.config.ts",
-            about: "Today, search and editor links against the engine",
-        },
-        Self {
-            name: "safety",
-            config: "playwright.safety.config.ts",
-            about: "trash, activity, backups, export and import against the engine",
-        },
-        Self {
-            name: "prefs",
-            config: "playwright.prefs.config.ts",
-            about: "preferences, first run and agent set-up against the engine",
-        },
-        Self {
-            name: "wiki",
-            config: "playwright.wiki.config.ts",
-            about: "the wiki on sample data",
-        },
-        Self {
-            name: "gantt",
-            config: "playwright.gantt.config.ts",
-            about: "the Gantt chart on sample data",
-        },
-        Self {
-            name: "calendar",
-            config: "playwright.calendar.config.ts",
-            about: "the calendar and the time report on sample data",
-        },
-        Self {
-            name: "planning",
-            config: "playwright.planning.config.ts",
-            about: "wiki, Gantt chart and calendar against the engine",
-        },
-        Self {
-            name: "windows",
-            config: "playwright.windows.config.ts",
-            about: "the page as it starts on Windows, on sample data",
-        },
-        Self {
-            name: "fields",
-            config: "playwright.fields.config.ts",
-            about: "custom fields on sample data",
-        },
-        Self {
-            name: "roadmap",
-            config: "playwright.roadmap.config.ts",
-            about: "versions and the roadmap on sample data",
-        },
-        Self {
-            name: "reports",
-            config: "playwright.reports.config.ts",
-            about: "the flow reports on sample data",
-        },
-        Self {
-            name: "sprints",
-            config: "playwright.sprints.config.ts",
-            about: "sprints, the backlog and the burndown on sample data",
-        },
-        Self {
-            name: "dashboards",
-            config: "playwright.dashboards.config.ts",
-            about: "dashboards and their widgets on sample data",
-        },
-        Self {
-            name: "folders",
-            config: "playwright.folders.config.ts",
-            about: "project folders in the sidebar on sample data",
-        },
-        Self {
-            name: "layout",
-            config: "playwright.layout.config.ts",
-            about: "every screen at small window sizes, with no sideways scroll, on sample data",
-        },
-        Self {
-            name: "csv",
-            config: "playwright.csv.config.ts",
-            about: "importing tasks from a CSV file on sample data",
-        },
-        Self {
-            name: "depth",
-            config: "playwright.depth.config.ts",
-            about: "versions, fields, rules, repeats, CSV import and reports against the engine",
-        },
-        Self {
-            name: "a11y",
-            config: "playwright.a11y.config.ts",
-            about: "accessibility checks on sample data: axe, keyboard, motion, contrast, direction",
-        },
-        Self {
-            name: "lock",
-            config: "playwright.lock.config.ts",
-            about: "the app lock and the encryption settings on sample data",
-        },
-    ];
+    /// Every configuration of the `ui` suite, in the order it runs them,
+    /// from ui/tests/flows.json. They run one after another, each on its
+    /// default ports from the table, set explicitly (`GK_UI_PORT`,
+    /// `GK_BRIDGE_PORT`…); several share ports, so they never run side by
+    /// side here. Those against the engine each make a fresh workspace of
+    /// their own.
+    fn all() -> &'static [Self] {
+        &FLOWS.ui
+    }
+
+    /// The pseudo-locale screenshots' configuration.
+    fn pseudo() -> Self {
+        FLOWS.pseudo
+    }
+
+    /// Sets the variables of this configuration's ports, and removes those
+    /// of the kinds it doesn't have.
+    fn set_ports(self, cmd: &mut Command) {
+        for ((_, variable), port) in PORT_VARIABLES.iter().zip(self.ports) {
+            match port {
+                Some(port) => cmd.env(variable, port.to_string()),
+                None => cmd.env_remove(variable),
+            };
+        }
+    }
+
+    /// Its ports, as `GK_UI_PORT=5310 GK_BRIDGE_PORT=5321`.
+    fn ports_shown(self) -> String {
+        PORT_VARIABLES
+            .iter()
+            .zip(self.ports)
+            .filter_map(|((_, variable), port)| port.map(|port| format!("{variable}={port}")))
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
 
     fn parse(name: &str) -> Result<Self> {
-        Self::ALL
-            .into_iter()
+        Self::all()
+            .iter()
+            .copied()
             .find(|flow| flow.name == name)
             .with_context(|| format!("unknown UI flow `{name}` (see `cargo xtask ci --list`)"))
     }
@@ -661,8 +660,8 @@ impl Flow {
         root.join("target/playwright").join(self.name)
     }
 
-    /// Runs this configuration's flows in Chromium.
-    fn run(self, root: &Path) -> Result<bool> {
+    /// The command that runs this configuration's flows in Chromium.
+    fn command(self, root: &Path) -> Command {
         let mut cmd = Command::new("pnpm");
         cmd.args(["--filter", "ui", "exec", "playwright", "test", "--config"])
             .arg(self.config)
@@ -677,7 +676,13 @@ impl Flow {
         for name in FLOW_ENV_CLEARED {
             cmd.env_remove(name);
         }
-        status(&mut cmd)
+        self.set_ports(&mut cmd);
+        cmd
+    }
+
+    /// Runs this configuration's flows in Chromium.
+    fn run(self, root: &Path) -> Result<bool> {
+        status(&mut self.command(root))
     }
 }
 
@@ -694,7 +699,12 @@ const FLOW_ENV_CLEARED: [&str; 3] = [
 fn run_flows(root: &Path, flows: &[Flow]) -> Result<bool> {
     let mut results = Vec::new();
     for &flow in flows {
-        eprintln!("==> [ui] flows `{}` ({})", flow.name, flow.config);
+        eprintln!(
+            "==> [ui] flows `{}` ({}, {})",
+            flow.name,
+            flow.config,
+            flow.ports_shown()
+        );
         let started = Instant::now();
         let ok = flow.run(root)?;
         let seconds = started.elapsed().as_secs();
@@ -869,7 +879,7 @@ impl fmt::Display for Step {
             Self::CliFiles => write!(f, "glyphkeel completions and man into {CLI_FILES_DIR}"),
             Self::Bundle => f.write_str("cargo xtask check-bundle"),
             Self::Seed(set) => write!(f, "gk-seed --set {set} into {DATA_DIR}/{set}"),
-            Self::Pseudo(locale) => write!(f, "playwright {PSEUDO_CONFIG} in {locale}"),
+            Self::Pseudo(locale) => write!(f, "playwright {} in {locale}", Flow::pseudo().config),
         }
     }
 }
@@ -1057,7 +1067,7 @@ impl Options {
             bail!("`--ui-flows` applies to the `ui` suite only");
         }
         if options.ui_flows.is_empty() {
-            options.ui_flows = Flow::ALL.to_vec();
+            options.ui_flows = Flow::all().to_vec();
         }
         if options.pseudo_locale != PSEUDO_LOCALE && !options.suites.contains(&Suite::Pseudo) {
             bail!("`--pseudo-locale` applies to the `pseudo` suite only");
@@ -1241,8 +1251,14 @@ fn list() {
         crate::arch::SUITE
     );
     eprintln!("UI flows of the ui suite (default: all, in this order):");
-    for flow in Flow::ALL {
-        eprintln!("  {:<8} {} ({})", flow.name, flow.about, flow.config);
+    for flow in Flow::all() {
+        eprintln!(
+            "  {:<8} {} ({}; {})",
+            flow.name,
+            flow.about,
+            flow.config,
+            flow.ports_shown()
+        );
     }
 }
 
@@ -1472,7 +1488,7 @@ pub(crate) fn run_in_container(
     } = *run;
     let names: Vec<&str> = suites.iter().map(|suite| suite.name()).collect();
     // Only a choice of flows is passed on; the default is every flow.
-    let flows: Vec<&str> = if suites.contains(&Suite::Ui) && flows != Flow::ALL {
+    let flows: Vec<&str> = if suites.contains(&Suite::Ui) && flows != Flow::all() {
         flows.iter().map(|flow| flow.name).collect()
     } else {
         Vec::new()
@@ -1610,7 +1626,7 @@ mod tests {
         assert_eq!(options.suites, Suite::DEFAULT);
         assert_eq!(options.distros, Distro::ALL);
         assert_eq!(options.engine, None);
-        assert_eq!(options.ui_flows, Flow::ALL);
+        assert_eq!(options.ui_flows, Flow::all());
         assert!(!options.here);
     }
 
@@ -1646,10 +1662,10 @@ mod tests {
             .collect();
         configs.sort();
         // The pseudo-locale screenshots have a suite of their own.
-        let mut known: Vec<String> = Flow::ALL
+        let mut known: Vec<String> = Flow::all()
             .iter()
+            .chain([&Flow::pseudo()])
             .map(|flow| flow.config.to_owned())
-            .chain([super::PSEUDO_CONFIG.to_owned()])
             .collect();
         known.sort();
         assert_eq!(
@@ -1659,12 +1675,14 @@ mod tests {
         let package: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(ui.join("package.json")).unwrap())
                 .unwrap();
-        for flow in Flow::ALL {
+        for flow in Flow::all() {
             let script = package["scripts"][format!("test:{}", flow.name)]
                 .as_str()
                 .unwrap_or_else(|| panic!("ui/package.json has no `test:{}`", flow.name));
+            // `test:flow` is the script that runs any of them on free ports,
+            // and `flow` when no other is named.
             assert!(
-                script == "playwright test" && flow.config == "playwright.config.ts"
+                script == "node scripts/test-flow.ts" && flow.config == "playwright.config.ts"
                     || script.ends_with(&format!("--config {}", flow.config)),
                 "`test:{}` runs {}",
                 flow.name,
@@ -1677,6 +1695,70 @@ mod tests {
             today.output(std::path::Path::new("/work")),
             std::path::Path::new("/work/target/playwright/today")
         );
+    }
+
+    /// The value a command sets for `name`: `Some(None)` when it removes it.
+    fn env_of(cmd: &std::process::Command, name: &str) -> Option<Option<String>> {
+        cmd.get_envs()
+            .find(|(key, _)| *key == name)
+            .map(|(_, value)| value.map(|value| value.to_string_lossy().into_owned()))
+    }
+
+    #[test]
+    fn every_flow_runs_on_the_ports_of_the_table() {
+        let root = std::path::Path::new("/work");
+        let port = |flow: &str, kind: usize| Flow::parse(flow).unwrap().ports[kind];
+        assert_eq!(port("palette", 0), Some(5318));
+        assert_eq!(port("palette", 2), Some(5328));
+        assert_eq!(port("bridge", 3), Some(5322));
+        assert_eq!(port("list", 1), Some(5317));
+        assert_eq!(Flow::pseudo().ports[0], Some(5411));
+        for &flow in Flow::all().iter().chain([&Flow::pseudo()]) {
+            let ports: Vec<u16> = flow.ports.iter().flatten().copied().collect();
+            let mut distinct = ports.clone();
+            distinct.sort_unstable();
+            distinct.dedup();
+            assert_eq!(
+                distinct.len(),
+                ports.len(),
+                "`{}` uses a port twice",
+                flow.name
+            );
+            let cmd = if flow == Flow::pseudo() {
+                super::pseudo_command(root, "en-XA")
+            } else {
+                flow.command(root)
+            };
+            for ((_, variable), port) in super::PORT_VARIABLES.iter().zip(flow.ports) {
+                assert_eq!(
+                    env_of(&cmd, variable),
+                    Some(port.map(|port| port.to_string())),
+                    "`{}` sets {variable}",
+                    flow.name
+                );
+            }
+        }
+        assert!(Flow::parse("pseudo").is_err(), "not one of the ui suite's");
+    }
+
+    #[test]
+    fn the_flows_table_is_checked() {
+        use super::FlowTable;
+        let one = |extra: &str| {
+            format!(
+                r#"{{ "flows": [
+                    {{ "name": "a", "config": "a.ts", "about": "", "ports": {{ "ui": 1 {extra} }} }},
+                    {{ "name": "p", "config": "p.ts", "about": "", "suite": "pseudo", "ports": {{ "ui": 2 }} }}
+                ] }}"#
+            )
+        };
+        let table = FlowTable::parse(&one(r#", "bridge": 3"#)).unwrap();
+        assert_eq!(table.ui[0].ports, [Some(1), None, Some(3), None]);
+        assert_eq!(table.pseudo.name, "p");
+        assert!(FlowTable::parse(&one(r#", "other": 3"#)).is_err());
+        assert!(FlowTable::parse(&one(r#", "bridge": 70000"#)).is_err());
+        assert!(FlowTable::parse("{}").is_err());
+        assert!(FlowTable::parse(r#"{ "flows": [] }"#).is_err(), "no pseudo");
     }
 
     #[test]
@@ -1897,14 +1979,14 @@ mod tests {
         assert_eq!(config["bundle"]["linux"]["rpm"]["release"], "3");
 
         let steps: Vec<String> = Suite::Package
-            .steps(Some(3), &Flow::ALL, "en-XA")
+            .steps(Some(3), Flow::all(), "en-XA")
             .iter()
             .map(ToString::to_string)
             .collect();
         assert!(steps[0].starts_with("cargo build --package gk-cli"));
         assert!(steps[0].ends_with("--profile dist"));
         assert_eq!(
-            Suite::Package.steps(None, &Flow::ALL, "en-XA")[1],
+            Suite::Package.steps(None, Flow::all(), "en-XA")[1],
             Step::CliFiles
         );
         assert!(steps[2].starts_with("pnpm tauri build"));
@@ -1941,7 +2023,7 @@ mod tests {
 
     #[test]
     fn the_suites_check_generated_files_the_bundle_and_every_flow() {
-        let static_steps = Suite::Static.steps(None, &Flow::ALL, "en-XA");
+        let static_steps = Suite::Static.steps(None, Flow::all(), "en-XA");
         assert!(static_steps.contains(&Step::GenCheck));
         assert!(static_steps.contains(&Step::Text));
         let notices = static_steps
@@ -1958,7 +2040,7 @@ mod tests {
         );
         assert_eq!(Step::Notices.to_string(), "cargo xtask notices --check");
         let ui: Vec<String> = Suite::Ui
-            .steps(None, &Flow::ALL, "en-XA")
+            .steps(None, Flow::all(), "en-XA")
             .iter()
             .map(ToString::to_string)
             .collect();

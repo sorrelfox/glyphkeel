@@ -10,7 +10,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 // each saves a screenshot there.
 
 const token = process.env.GK_BRIDGE_TOKEN ?? "";
-const PAGE = `/?bridge=${process.env.GK_BRIDGE_PORT ?? "5321"}&token=${token}`;
+const PAGE = `/?bridge=${process.env.GK_BRIDGE_PORT ?? ""}&token=${token}`;
 
 // A fixed zone for the browser, so that switching to another always moves the clock.
 test.use({ timezoneId: "Europe/Berlin", viewport: { width: 1280, height: 800 } });

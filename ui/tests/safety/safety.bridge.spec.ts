@@ -4,7 +4,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 const BASE = process.env.GK_SAFETY_UI_URL ?? "";
-const PAGE = `${BASE}/?bridge=${process.env.GK_SAFETY_BRIDGE_PORT ?? ""}&token=${process.env.GK_BRIDGE_TOKEN ?? ""}`;
+const PAGE = `${BASE}/?bridge=${process.env.GK_BRIDGE_PORT ?? ""}&token=${process.env.GK_BRIDGE_TOKEN ?? ""}`;
 
 /** Fluent wraps placeables in invisible isolation marks. */
 const plain = (text: string) => text.replace(/[⁨⁩]/g, "");
