@@ -29,6 +29,12 @@ The safety class decides who may run an operation:
 | `project.unarchive` | write | app, command line, MCP | `update_project` | `glyphkeel project unarchive <project>` |
 | `project.delete` | trash | app, command line, MCP | `delete_project` | `glyphkeel project delete <project>` |
 | `project.brief` | read | app, command line, MCP | `get_agent_brief` | `glyphkeel project brief <project>` |
+| `folder.list` | read | app, command line, MCP | `list_folders` | `glyphkeel folder list` |
+| `folder.create` | write | app, command line, MCP | `create_folder` | `glyphkeel folder create` |
+| `folder.update` | write | app, command line, MCP | `update_folder` | `glyphkeel folder edit <folder>` |
+| `folder.rename` | write | app, command line, MCP | `update_folder` | `glyphkeel folder rename <folder> <name>` |
+| `folder.delete` | write | app, command line, MCP | `delete_folder` | `glyphkeel folder delete <folder>` |
+| `folder.move` | write | app, command line, MCP | `move_project_to_folder` | `glyphkeel folder move <project>` |
 | `status.create` | write | app, command line, MCP | `update_project` | `glyphkeel status add` |
 | `status.update` | write | app, command line, MCP | `update_project` | `glyphkeel status edit` |
 | `status.reorder` | write | app, command line, MCP | `update_project` | `glyphkeel status move` |
@@ -275,6 +281,42 @@ Input: `ProjectDeleteInput`. Output: `ProjectDeleted`. Schemas: [catalog.schema.
 The project's instructions for agents: the wiki page marked as the brief, else the project's description.
 
 Input: `ProjectRef`. Output: `AgentBrief`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `folder.list`
+
+The project folders in sidebar order, each with its projects and their open tasks.
+
+Input: `FolderListInput`. Output: `FolderList`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `folder.create`
+
+Make a folder to group top-level projects in the sidebar.
+
+Input: `FolderCreateInput`. Output: `FolderChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `folder.update`
+
+Rename a folder, change its colour or move it among the folders.
+
+Input: `FolderUpdateInput`. Output: `FolderChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `folder.rename`
+
+Rename a folder.
+
+Input: `FolderRenameInput`. Output: `FolderChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `folder.delete`
+
+Delete a folder; its projects stay and go back to the top level. Revert brings it back.
+
+Input: `FolderRef`. Output: `FolderChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `folder.move`
+
+Put a top-level project into a folder or take it out, or move it within its folder.
+
+Input: `FolderMoveInput`. Output: `FolderChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `status.create`
 

@@ -521,7 +521,7 @@ impl Flow {
     /// share ports (5310–5319 for pages, 5320–5329 for the bridge), so they
     /// run one after another, never side by side. Those against the engine
     /// each make a fresh workspace of their own.
-    const ALL: [Self; 23] = [
+    const ALL: [Self; 24] = [
         Self {
             name: "flow",
             config: "playwright.config.ts",
@@ -616,6 +616,11 @@ impl Flow {
             name: "dashboards",
             config: "playwright.dashboards.config.ts",
             about: "dashboards and their widgets on sample data",
+        },
+        Self {
+            name: "folders",
+            config: "playwright.folders.config.ts",
+            about: "project folders in the sidebar on sample data",
         },
         Self {
             name: "csv",
@@ -1967,7 +1972,7 @@ mod tests {
             "the flows rebuild dist/ after the bundle check"
         );
         assert!(ui[flows].ends_with(
-            "wiki, gantt, calendar, planning, windows, fields, roadmap, reports, sprints, dashboards, csv, depth, a11y, lock"
+            "wiki, gantt, calendar, planning, windows, fields, roadmap, reports, sprints, dashboards, folders, csv, depth, a11y, lock"
         ));
         assert_eq!(Step::GenCheck.to_string(), "cargo xtask gen --check");
     }

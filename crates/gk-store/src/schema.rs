@@ -19,7 +19,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 use crate::error::{Result, StoreError};
 
 /// The schema version this program is built for.
-pub const SCHEMA_VERSION: i64 = 21;
+pub const SCHEMA_VERSION: i64 = 22;
 
 /// One migration: the SQL that takes the schema from `version - 1` to
 /// `version`.
@@ -114,6 +114,10 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 21,
         sql: include_str!("../migrations/0021_agent_read_limits.sql"),
+    },
+    Migration {
+        version: 22,
+        sql: include_str!("../migrations/0022_project_folders.sql"),
     },
 ];
 
@@ -1168,5 +1172,36 @@ mod tests {
         );
         assert!(board(6, None, "Other", "{}").is_err(), "widgets are a list");
         assert!(board(7, None, "Bad", "not json").is_err());
+    }
+
+    #[test]
+    fn version_22_adds_project_folders_with_unique_names() {
+        let mut conn = memory();
+        migrate(&mut conn, &MIGRATIONS[..22], |_| Ok(())).unwrap();
+        assert_eq!(user_version(&conn).unwrap(), 22);
+        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        let folder = |id: u8, name: &str| {
+            conn.execute(
+                "INSERT INTO project_folders (id, name, name_fold, rank, created_at,
+                                              created_by_kind, created_by_name, updated_at)
+                 VALUES (?1, ?2, lower(?2), 'i', 0, 'user', 'You', 0)",
+                rusqlite::params![vec![id; 16], name],
+            )
+        };
+        folder(2, "Clients").unwrap();
+        assert!(folder(3, "CLIENTS").is_err(), "names are unique");
+        assert!(folder(4, "").is_err(), "a folder has a name");
+        conn.execute_batch(
+            "INSERT INTO projects (id, rank, key, name, name_fold, hue, modules, created_at,
+                                   updated_at, folder_id)
+             VALUES (x'01010101010101010101010101010101', 'i', 'PF', 'PF', 'pf', 'blue', '{}',
+                     0, 0, x'02020202020202020202020202020202');",
+        )
+        .unwrap();
+        let bad = conn.execute(
+            "UPDATE projects SET folder_id = ?1",
+            rusqlite::params![vec![9u8; 16]],
+        );
+        assert!(bad.is_err(), "a project names a folder that exists");
     }
 }

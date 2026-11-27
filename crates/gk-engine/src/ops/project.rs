@@ -349,7 +349,7 @@ fn shown_path(tx: &Transaction<'_>, id: Id) -> Result<String, Failure> {
 pub(crate) fn load(tx: &Transaction<'_>, id: Id) -> Result<Project, Failure> {
     let row = tx.query_row(
         "SELECT key, name, description, hue, icon, state, parent_id, modules, created_at,
-                updated_at
+                updated_at, folder_id
            FROM projects WHERE id = ?1",
         [b(id)],
         |r| {
@@ -364,12 +364,14 @@ pub(crate) fn load(tx: &Transaction<'_>, id: Id) -> Result<Project, Failure> {
                 r.get::<_, String>(7)?,
                 r.get::<_, i64>(8)?,
                 r.get::<_, i64>(9)?,
+                opt_id_at(r, 10)?,
             ))
         },
     )?;
-    let (key, name, description, hue, icon, state, parent, modules, created, updated) = row;
+    let (key, name, description, hue, icon, state, parent, modules, created, updated, folder) = row;
     // The limit's project shows as a top-level project.
     let parent = parent.filter(|_| crate::scope::root() != Some(id));
+    let folder = folder.filter(|_| parent.is_none());
     let parent_key = match parent {
         Some(p) => Some(
             tx.query_row("SELECT key FROM projects WHERE id = ?1", [b(p)], |r| {
@@ -481,6 +483,7 @@ pub(crate) fn load(tx: &Transaction<'_>, id: Id) -> Result<Project, Failure> {
         },
         parent: parent_key,
         children,
+        folder: folder.map(|f| f.to_string()),
         modules: modules_of(&modules),
         statuses,
         types,
@@ -497,6 +500,7 @@ pub(crate) fn load(tx: &Transaction<'_>, id: Id) -> Result<Project, Failure> {
 struct TreeRow {
     id: Id,
     parent: Option<Id>,
+    folder: Option<Id>,
     key: String,
     name: String,
     hue: String,
@@ -510,7 +514,8 @@ fn tree(tx: &Transaction<'_>) -> Result<Vec<TreeRow>, Failure> {
         "SELECT p.id, p.parent_id, p.key, p.name, p.hue, p.icon, p.state,
                 (SELECT count(*) FROM tasks t JOIN statuses s ON s.id = t.status_id
                   WHERE t.project_id = p.id AND t.deleted_at IS NULL
-                    AND s.category IN ('todo', 'in_progress'))
+                    AND s.category IN ('todo', 'in_progress')),
+                p.folder_id
            FROM projects p WHERE p.deleted_at IS NULL ORDER BY p.rank, p.id",
     )?;
     let rows = stmt
@@ -518,6 +523,7 @@ fn tree(tx: &Transaction<'_>) -> Result<Vec<TreeRow>, Failure> {
             Ok(TreeRow {
                 id: id_at(r, 0)?,
                 parent: opt_id_at(r, 1)?,
+                folder: opt_id_at(r, 8)?,
                 key: r.get(2)?,
                 name: r.get(3)?,
                 hue: r.get(4)?,
@@ -583,6 +589,7 @@ fn list(q: &QueryCtx<'_>, input: ProjectListInput) -> Result<ProjectList, Failur
                 },
                 open_tasks: r.open,
                 open_tasks_with_subprojects: subtree_open(rows, r.id),
+                folder: r.folder.filter(|_| parent.is_none()).map(|f| f.to_string()),
                 id: r.id.to_string(),
             });
             walk(
@@ -1261,6 +1268,11 @@ fn move_project(
             "parent",
             new_parent.and_then(id_value),
         )?;
+        // Only top-level projects are in folders; a sub-project follows
+        // its parent.
+        if new_parent.is_some() {
+            super::folder::set_project_folder(w, p.id, None)?;
+        }
         super::version::project_moved(w, p.id)?;
     }
     let target = match (target, parent_changes) {

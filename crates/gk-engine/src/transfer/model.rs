@@ -288,6 +288,25 @@ pub(crate) struct Project {
     /// The rules for agents; left out when there are none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) agent_rules: Option<serde_json::Value>,
+    /// The sidebar folder a top-level project is in; left out when none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) folder: Option<FolderLine>,
+}
+
+/// A project folder, carried with each top-level project in it. An import
+/// puts the project in the folder of the same name, made when missing.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct FolderLine {
+    pub(crate) id: String,
+    pub(crate) name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) hue: Option<String>,
+    pub(crate) rank: String,
+    pub(crate) created_at: i64,
+    pub(crate) created_by_kind: String,
+    pub(crate) created_by_name: String,
+    pub(crate) updated_at: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

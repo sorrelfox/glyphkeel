@@ -1144,6 +1144,13 @@ automation-test-rule-or-draft = Name a saved rule with `rule`, or give one that 
 
 ## Dashboards
 
+folder-not-found = There is no folder "{ $folder }".
+folder-not-found-hint = Name a folder by its name or its ID from folder.list.
+folder-name-taken = There is already a folder named "{ $folder }".
+folder-name-taken-hint = Choose another name, or use that folder.
+folder-not-itself = A folder can't be placed next to itself.
+folder-subproject = { $project } is a sub-project; only top-level projects go into folders, and sub-projects follow their parent.
+folder-not-a-neighbour = { $neighbour } is not another project of the folder { $project } goes to, so { $project } can't be placed next to it.
 dashboard-not-found = There is no dashboard "{ $dashboard }".
 dashboard-not-found-hint = Name a dashboard of the project given with `project` (or of the whole workspace without one), or use its ID from dashboard.list.
 dashboard-name-taken = There is already a dashboard named "{ $dashboard }" here.

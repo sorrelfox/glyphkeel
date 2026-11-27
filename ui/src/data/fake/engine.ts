@@ -105,6 +105,7 @@ import { createRule, DEPTH_MAX, fill, findRule, fits, listRules, listRuns, logRu
 /** The Gantt chart's layout until the person changes it. */
 const DEFAULT_GANTT_LAYOUT: GanttLayout = { zoom: "day", widths: {}, group_by: "parent", move_dependents: false };
 import { linksIn, placePage, subtree, type TextLink } from "./wiki";
+import { createFolder, deleteFolder, listFolders, moveToFolder, renameFolder, updateFolder, type FolderHost } from "./folders";
 import { addWidget as addDashboardWidget, createDashboard, dashboardWidget, deleteDashboard, listDashboards, removeWidget as removeDashboardWidget, showDashboard, updateDashboard, updateWidget as updateDashboardWidget, type DashboardHost } from "./dashboards";
 import { addSprintTasks, completeSprint, createSprint, deleteSprint, getSprint, listSprints, removeSprintTasks, sprintBurndown, sprintForTask, sprintRef, startSprint, updateSprint, type SprintHost } from "./sprints";
 import { createVersion, deleteVersion, getVersion, listVersions, updateVersion, versionForTask, versionRef, visibleVersions, type VersionHost } from "./versions";
@@ -862,6 +863,7 @@ export class FakeWorkspace {
       state: project.state,
       open_tasks: this.open(project),
       open_tasks_with_subprojects: [project, ...this.descendants(project)].reduce((sum, item) => sum + this.open(item), 0),
+      ...some("folder", project.parent === null ? project.folder : undefined),
     };
   }
 
@@ -875,6 +877,7 @@ export class FakeWorkspace {
       hue: project.hue,
       ...some("icon", project.icon),
       ...some("parent", summary.parent),
+      ...some("folder", summary.folder),
       path: summary.path,
       state: project.state,
       open_tasks: summary.open_tasks,
@@ -2606,6 +2609,19 @@ export class FakeWorkspace {
     fail: (code, message, path) => fail(code, message, path === undefined ? {} : { details: { path } }),
   };
 
+  /** What the project folders need of this workspace. */
+  private readonly folderHost: FolderHost = {
+    folders: () => (this.state.folders ??= []),
+    projects: () => this.state.projects,
+    project: (ref) => this.project(ref),
+    openBelow: (project) =>
+      [project, ...this.descendants(project)].filter((item) => item.state === "active").reduce((sum, item) => sum + this.open(item), 0),
+    actor: () => (this.byAgent ? { kind: "agent", name: SAMPLE_AGENT } : { kind: "user", name: "You" }),
+    now: () => this.today().toISOString(),
+    newId: () => nextUuid(),
+    fail: (code, message, path) => fail(code, message, path === undefined ? {} : { details: { path } }),
+  };
+
   /** What the dashboards need of this workspace. */
   private readonly dashboardHost: DashboardHost = {
     dashboards: () => (this.state.dashboards ??= []),
@@ -3009,6 +3025,10 @@ export class FakeWorkspace {
         fail("limit", "Sub-projects go at most three levels deep.");
       }
       project.parent = target?.id ?? null;
+      // Only top-level projects are in folders; a sub-project follows its parent.
+      if (target) {
+        project.folder = undefined;
+      }
       return this.projectChange(project, "project", ["parent"]);
     },
     "project.archive": ({ project: ref }) => {
@@ -4465,6 +4485,12 @@ export class FakeWorkspace {
     "sprint.complete": (input) => completeSprint(this.sprintHost, input),
     "sprint.add_tasks": (input) => addSprintTasks(this.sprintHost, input),
     "sprint.remove_tasks": (input) => removeSprintTasks(this.sprintHost, input),
+    "folder.list": () => listFolders(this.folderHost),
+    "folder.create": (input) => createFolder(this.folderHost, input),
+    "folder.update": (input) => updateFolder(this.folderHost, input),
+    "folder.rename": (input) => renameFolder(this.folderHost, input),
+    "folder.delete": (input) => deleteFolder(this.folderHost, input),
+    "folder.move": (input) => moveToFolder(this.folderHost, input),
     "dashboard.list": (input) => listDashboards(this.dashboardHost, input),
     "dashboard.show": (input) => showDashboard(this.dashboardHost, input),
     "dashboard.widget": (input) => dashboardWidget(this.dashboardHost, input),

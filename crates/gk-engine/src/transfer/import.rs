@@ -19,8 +19,8 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 use super::model::{
-    Activity, AgentSession, Attachment, AutomationLine, Comment, DashboardLine, Manifest,
-    ProjectFile, Revision, Task, TemplateLine, TimeEntry, WikiPage,
+    Activity, AgentSession, Attachment, AutomationLine, Comment, DashboardLine, FolderLine,
+    Manifest, ProjectFile, Revision, Task, TemplateLine, TimeEntry, WikiPage,
 };
 use super::source::{Source, safe_path};
 use super::{
@@ -1536,6 +1536,15 @@ fn write(
             plan.group(p.deleted_group.as_ref()),
             rules_text(p.agent_rules.as_ref(), plan),
         ])?;
+        if parent.is_none()
+            && let Some(line) = &p.folder
+            && let Some(folder) = import_folder(tx, line)?
+        {
+            tx.execute(
+                "UPDATE projects SET folder_id = ?2 WHERE id = ?1",
+                params![b(id), b(folder)],
+            )?;
+        }
         for alias in &proj.file.key_aliases {
             if alias != key && !key_taken(tx, alias)? && ProjectKey::new(alias).is_ok() {
                 tx.execute(
@@ -2288,6 +2297,51 @@ fn write(
 /// workspace has already is left out.
 /// Stores an automation rule of the archive, with its run state reset. The
 /// custom fields it names by ID take the IDs the fields get here.
+/// The folder an imported top-level project goes into: the folder of the
+/// same name here, else a new one after the others. A folder whose name
+/// this program wouldn't take is left out.
+fn import_folder(tx: &Transaction<'_>, line: &FolderLine) -> Result<Option<Id>, Failure> {
+    use crate::ops::folder;
+    let Ok(name) = gk_core::check_line("name", &line.name, 100) else {
+        return Ok(None);
+    };
+    if let Some(id) = folder::by_name(tx, &name)? {
+        return Ok(Some(id));
+    }
+    let id = match line.id.parse::<Id>() {
+        Ok(id) if !exists(tx, "project_folders", &line.id)? => id,
+        _ => Id::generate(),
+    };
+    let last = folder::rows(tx)?
+        .into_iter()
+        .filter_map(|(_, r)| Rank::parse(&r.rank).ok())
+        .max_by(|a, b| a.as_str().cmp(b.as_str()));
+    let rank = last.map_or_else(Rank::first, |r| r.after());
+    let hue = line
+        .hue
+        .as_deref()
+        .filter(|h| crate::ops::project::parse_enum::<gk_api::ops::common::Hue>(h).is_some())
+        .map(str::to_owned);
+    let kind = match line.created_by_kind.as_str() {
+        k @ ("user" | "agent" | "automation") => k.to_owned(),
+        _ => "user".to_owned(),
+    };
+    folder::insert_imported(
+        tx,
+        id,
+        &folder::Record {
+            name,
+            hue,
+            rank: rank.as_str().to_owned(),
+            created_at: line.created_at,
+            created_by_kind: kind,
+            created_by_name: line.created_by_name.clone(),
+            updated_at: line.updated_at,
+        },
+    )?;
+    Ok(Some(id))
+}
+
 fn insert_automation(
     tx: &Transaction<'_>,
     plan: &Plan,
