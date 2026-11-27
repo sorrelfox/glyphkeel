@@ -119,13 +119,29 @@
 
 /* ---------- table ---------- */
 
+/* The rows scroll; the totals row under them only follows them sideways, so
+   no scroll bar, drawn over the content or beside it, ever covers it. */
+.grid {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
 .scroll {
   flex: 1 1 0;
   min-height: 0;
   overflow: auto;
-  border-top: 1px solid var(--border);
-  background: var(--surface);
   overscroll-behavior: contain;
+}
+
+.foot {
+  flex: none;
+  overflow: hidden;
+  background: var(--sunken);
 }
 
 .sizer {
@@ -168,9 +184,6 @@
 }
 
 .totals {
-  position: sticky;
-  inset-block-end: 0;
-  z-index: 2;
   min-height: var(--h-control);
   background: var(--sunken);
   border-top: 1px solid var(--border);
@@ -287,6 +300,12 @@
 
 .th:hover .resizer:not(:focus-visible)::after {
   background: var(--border-strong);
+}
+
+/* The last column's edge stays inside the row's end padding, so it never
+   makes the rows wider than the list. */
+.th:last-child .resizer {
+  inset-inline-end: -12px;
 }
 
 /* The place of a sort key when there are several. */
