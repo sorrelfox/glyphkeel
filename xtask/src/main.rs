@@ -12,7 +12,9 @@ mod flathub;
 mod headers;
 mod installed;
 mod notices;
+mod release;
 mod repos;
+mod samples;
 mod source;
 mod windows;
 
@@ -56,6 +58,19 @@ Commands:
                       generated source lists.
   repos [options]     Build the signed APT and DNF repositories from a deb
                       and an rpm. See `cargo xtask repos --help`.
+  migration-samples --check | --binary FILE | --commit REV
+                      Check that every schema version a release shipped has
+                      a sample workspace for the upgrade tests, or make the
+                      sample of a release with its `glyphkeel` program. See
+                      `cargo xtask migration-samples --help`.
+  check-versions      Check that the version agrees in Cargo.toml, the lock
+                      files, ui/package.json, CHANGELOG.md, the AppStream
+                      file and the PKGBUILD.
+  release-check [options]
+                      Run the checks before a release in order, from the
+                      static checks to every container run, and write a
+                      record of the results. `--dry-run` prints the steps.
+                      See `cargo xtask release-check --help`.
 ";
 
 fn main() -> ExitCode {
@@ -97,6 +112,12 @@ fn run() -> Result<bool> {
         "source-tarball" => source::run(&root, rest),
         "repos" => repos::run(rest),
         "flathub" => flathub::run(&root, rest),
+        "migration-samples" => samples::run(&root, rest),
+        "check-versions" => {
+            no_args(cmd, rest)?;
+            release::check_versions(&root)
+        }
+        "release-check" => release::run(&root, rest),
         other => {
             eprint!("unknown command `{other}`\n\n{HELP}");
             Ok(false)
