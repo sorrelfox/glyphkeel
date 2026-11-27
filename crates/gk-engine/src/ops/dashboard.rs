@@ -79,13 +79,9 @@ pub(super) fn register(r: &mut Registry) {
     r.query::<DashboardWidgetOp, _>(
         desc::<DashboardWidgetOp>(),
         |q, input: DashboardWidgetInput| {
-            let (id, record) = find(q.tx, &input.dashboard, input.project.as_ref())?;
-            let at = widget_at(&record, &input.widget)?;
-            let board = output(q.tx, id, &record)?;
-            let widget =
-                board.widgets.get(at).cloned().ok_or_else(|| {
-                    Failure::Op(OpError::storage("the widget is missing".to_owned()))
-                })?;
+            let (_, record) = find(q.tx, &input.dashboard, input.project.as_ref())?;
+            let (at, stored) = widget_ref(&record, &input.widget)?;
+            let widget = widget_out(q.tx, stored)?;
             value(q, &record, at, widget)
         },
     );
@@ -362,14 +358,23 @@ fn find(
 /// The place of the widget `text` names: its ID, or its place (`1` is the
 /// first).
 fn widget_at(r: &Record, text: &str) -> Result<usize, Failure> {
+    widget_ref(r, text).map(|(at, _)| at)
+}
+
+/// The widget `text` names, with its place: by its ID, or by its place
+/// (`1` is the first).
+fn widget_ref<'a>(r: &'a Record, text: &str) -> Result<(usize, &'a Stored), Failure> {
     let text = text.trim();
-    if let Some(at) = r.widgets.iter().position(|w| w.id == text) {
-        return Ok(at);
+    if let Some(found) = r.widgets.iter().enumerate().find(|(_, w)| w.id == text) {
+        return Ok(found);
     }
-    if let Ok(n) = text.parse::<usize>()
-        && (1..=r.widgets.len()).contains(&n)
+    if let Some(found) = text
+        .parse::<usize>()
+        .ok()
+        .and_then(|n| n.checked_sub(1))
+        .and_then(|at| r.widgets.get(at).map(|w| (at, w)))
     {
-        return Ok(n - 1);
+        return Ok(found);
     }
     let error = messages::not_found(
         "dashboard-widget-not-found",

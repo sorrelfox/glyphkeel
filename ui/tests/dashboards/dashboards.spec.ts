@@ -22,7 +22,7 @@ async function openDashboards(page: Page) {
 }
 
 /** A whole name, whatever isolation marks Fluent put around its placeables. */
-const loose = (text: string) => new RegExp(`^[\u2068\u2069]*${[...text].map((c) => c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[\u2068\u2069]*")}[\u2068\u2069]*$`);
+const loose = (text: string) => new RegExp(`^[\u2068\u2069]*${Array.from(text).map((c) => c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[\u2068\u2069]*")}[\u2068\u2069]*$`);
 
 const widgets = (page: Page) => page.getByRole("list", { name: "Widgets" }).locator(":scope > [data-widget]");
 const kinds = (page: Page) => widgets(page).evaluateAll((items) => items.map((item) => item.getAttribute("data-widget")));
