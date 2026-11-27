@@ -35,6 +35,39 @@ move with it. Projects that would go deeper than three levels aren't offered.
 On the command line: `glyphkeel project move <project> --parent <other>`, or
 `glyphkeel project move <project> --top-level`.
 
+## Folders
+
+When you have many projects, group them in folders in the sidebar. A folder
+only groups: it changes nothing about its projects, their keys, sub-projects,
+queries or tasks. Folders hold projects, never other folders.
+
+- **Make a folder**: choose **New folder** (the folder button next to **New
+  project**) in the sidebar, and give it a **Name** and, if you like, a
+  **Colour**.
+- **Put a project in a folder**: drag it onto the folder, or open its menu and
+  choose **Move to folder** and the folder. **No folder** takes it out again.
+  Only top-level projects go into folders; a project's sub-projects come along
+  with it. A project that you move under another project leaves its folder.
+- **Order**: drag a project before or after another one, or a folder before or
+  after another folder. With the keyboard, focus a project or a folder in the
+  sidebar and press **Alt+↑** or **Alt+↓**; the menus have **Move up** and
+  **Move down** too.
+- **Open and close a folder** with its arrow, or with **←** and **→** on the
+  keyboard. Glyphkeel remembers which folders you closed.
+- **Rename** a folder or change its colour from its menu (right-click it, or
+  press **Shift+F10**). **Delete folder** keeps its projects: they go back to
+  the top level. Undo brings the folder back with its projects.
+
+The folder's number is the open tasks of all its projects. Folders come first
+in the sidebar, then the projects in no folder.
+
+On the command line: `glyphkeel folder list`, `glyphkeel folder create --name
+Clients`, `glyphkeel folder move <project> --folder Clients` (or `--none true`
+to take it out), `glyphkeel folder rename <folder> <name>` and `glyphkeel folder
+delete <folder>`. Agents have the matching tools, such as `list_folders` and
+`move_project_to_folder`. An export takes each project's folder along, and an
+import puts the project in the folder of the same name, making it if needed.
+
 ## The project key
 
 A key has 2 to 10 capital letters and digits, and starts with a letter. To

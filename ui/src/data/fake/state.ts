@@ -34,6 +34,7 @@ import {
   type Via,
 } from "../../generated/ops";
 import { type FakeDashboard } from "./dashboards";
+import { type FakeFolder } from "./folders";
 import { type FakeSprint } from "./sprints";
 import { type FakeVersion } from "./versions";
 import { type FakeField, type FieldValue } from "./fields";
@@ -89,6 +90,8 @@ export interface FakeProject {
   oldKeys?: string[];
   /** The rules for agents; none when left out. */
   agentRules?: AgentRules | undefined;
+  /** The folder a top-level project is in, by ID; none when left out. */
+  folder?: string | undefined;
 }
 
 export interface FakeTask {
@@ -356,6 +359,8 @@ export interface FakeState {
   automationRuns?: AutomationRun[];
   /** Dashboards, the workspace's and the projects'; none until one is made. */
   dashboards?: FakeDashboard[];
+  /** Project folders; none until one is made. */
+  folders?: FakeFolder[];
   /** The workspace's own CSV import presets; none until one is saved. */
   csvPresets?: CsvPreset[];
   workspaceName: string;

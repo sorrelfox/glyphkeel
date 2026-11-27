@@ -103,6 +103,14 @@ has the focus.
 | Enter | Open the task |
 | + / - | Zoom in or out |
 
+## The project tree
+
+| Keys | Action |
+|---|---|
+| → / ← | Open or close a folder or a project with sub-projects |
+| Alt+↑ / Alt+↓ | Move a folder, or a top-level project within its folder, up or down |
+| Shift+F10 | Open the menu of the project or folder |
+
 ## The wiki
 
 | Keys | Action |

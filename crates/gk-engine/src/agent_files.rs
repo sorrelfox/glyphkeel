@@ -873,8 +873,14 @@ mod tests {
     /// Words in an input field's name that say it may be a place on disk.
     const PATH_WORDS: &[&str] = &["path", "folder", "dir", "file_name", "location"];
 
-    /// Fields with such a name that are not a place on disk.
-    const NOT_ON_DISK: &[(&str, &str)] = &[];
+    /// Fields with such a name that are not a place on disk: a project
+    /// folder in the sidebar is named by its name or ID.
+    const NOT_ON_DISK: &[(&str, &str)] = &[
+        ("folder.update", "folder"),
+        ("folder.rename", "folder"),
+        ("folder.delete", "folder"),
+        ("folder.move", "folder"),
+    ];
 
     /// The top-level fields of an input schema, also those of each variant.
     fn fields(schema: &Value, out: &mut Vec<String>) {

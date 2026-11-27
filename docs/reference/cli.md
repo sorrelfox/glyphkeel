@@ -56,6 +56,12 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel file cover <task>` | `file.cover` | Choose the PNG, JPEG, GIF or WebP image attached to a task that its board card shows as its cover, or choose none; boards show covers when their layout's covers setting is on. |
 | `glyphkeel file delete <attachment>` | `file.delete` | Move an attached file to the trash. |
 | `glyphkeel file show <attachment>` | `file.get` | An attached file's name, type, size and owner. |
+| `glyphkeel folder create` | `folder.create` | Make a folder to group top-level projects in the sidebar. |
+| `glyphkeel folder delete <folder>` | `folder.delete` | Delete a folder; its projects stay and go back to the top level. Revert brings it back. |
+| `glyphkeel folder edit <folder>` | `folder.update` | Rename a folder, change its colour or move it among the folders. |
+| `glyphkeel folder list` | `folder.list` | The project folders in sidebar order, each with its projects and their open tasks. |
+| `glyphkeel folder move <project>` | `folder.move` | Put a top-level project into a folder or take it out, or move it within its folder. |
+| `glyphkeel folder rename <folder> <name>` | `folder.rename` | Rename a folder. |
 | `glyphkeel import <path>` | `transfer.import` | Import an archive as new projects; checks it completely first and never changes existing data. |
 | `glyphkeel import csv <path>` | `transfer.import_csv` | Import tasks from a CSV file into a project, with a column mapping or a preset (Jira and Redmine exports are built in); a dry run reports every row's outcome, and the import is one change that Undo takes back. Status rules hold for each task as for task.create; repeating tasks are not imported. |
 | `glyphkeel label add` | `label.create` | Add a label to a project; without a colour it gets the first palette colour the project's labels don't use yet. |

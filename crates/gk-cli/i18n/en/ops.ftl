@@ -130,6 +130,55 @@ op-project-delete--project = The project: its key (current or old) or ID.
 op-project-brief = The project's instructions for agents: the wiki page marked as the brief, else the project's description.
 op-project-brief--project = The project: its key (current or old) or ID.
 
+## glyphkeel folder list
+
+op-folder-list = The project folders in sidebar order, each with its projects and their open tasks.
+
+## glyphkeel folder create
+
+op-folder-create = Make a folder to group top-level projects in the sidebar.
+op-folder-create--after = Place it after this folder (ID or name).
+op-folder-create--at = Place it first or last; default: last.
+op-folder-create--before = Place it before this folder (ID or name).
+op-folder-create--hue = Its colour; left out: none.
+op-folder-create--name = Its name, unique among the folders.
+
+## glyphkeel folder edit <folder>
+
+op-folder-update = Rename a folder, change its colour or move it among the folders.
+op-folder-update--after = Move it after this folder (ID or name).
+op-folder-update--at = Move it first or last among the folders.
+op-folder-update--before = Move it before this folder (ID or name).
+op-folder-update--clear = Fields to clear.
+op-folder-update--folder = The folder: its ID or its name.
+op-folder-update--hue = A new colour.
+op-folder-update--name = A new name.
+
+## glyphkeel folder rename <folder> <name>
+
+op-folder-rename = Rename a folder.
+op-folder-rename--folder = The folder: its ID or its name.
+op-folder-rename--name = Its new name.
+
+## glyphkeel folder delete <folder>
+
+op-folder-delete = Delete a folder; its projects stay and go back to the top level. Revert brings it back.
+op-folder-delete--folder = The folder: its ID or its name.
+
+## glyphkeel folder move <project>
+
+op-folder-move = Put a top-level project into a folder or take it out, or move it within its folder.
+op-folder-move--after = Place it after this project of the same folder.
+op-folder-move--at = Place it first or last in the folder (or among the projects in no
+    folder); default when it changes folder: last.
+op-folder-move--before = Place it before this project of the same folder.
+op-folder-move--folder = The folder to put it in (ID or name); left out with `none`: out of
+    any folder, back at the top level; left out without `none`: it
+    stays in its folder and only moves within it.
+op-folder-move--none = Take it out of its folder.
+op-folder-move--project = The project: its key (current or old) or ID. Only top-level
+    projects go into folders; their sub-projects come along.
+
 ## glyphkeel status add
 
 op-status-create = Add a status (a board column) to a project.

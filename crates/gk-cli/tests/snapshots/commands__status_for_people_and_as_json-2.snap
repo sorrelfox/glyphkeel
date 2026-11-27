@@ -22,7 +22,7 @@ expression: "ws.ok(&[\"workspace\", \"--json\"])"
   "id": "[id]",
   "name": "Personal",
   "program_version": [version],
-  "schema_version": 21,
+  "schema_version": 22,
   "settings": {
     "agent_confirmations": true,
     "agent_limits": {

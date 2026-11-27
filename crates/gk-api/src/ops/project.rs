@@ -102,6 +102,10 @@ pub struct ProjectSummary {
     pub open_tasks: u64,
     /// Open tasks in this project and all its sub-projects.
     pub open_tasks_with_subprojects: u64,
+    /// The ID of the folder a top-level project is in; left out for
+    /// projects in no folder and for sub-projects.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub folder: Option<String>,
     /// The project's ID.
     pub id: String,
 }
@@ -221,6 +225,10 @@ pub struct Project {
     pub parent: Option<String>,
     /// The sub-projects' keys, in order.
     pub children: Vec<String>,
+    /// The ID of the folder a top-level project is in (see folder.list);
+    /// left out for projects in no folder and for sub-projects.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub folder: Option<String>,
     /// Which parts are switched on.
     pub modules: Modules,
     /// The statuses, in board order.

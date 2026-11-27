@@ -100,6 +100,16 @@ export function saveCollapsedProjects(keys: readonly string[]): void {
   writePref("sidebar.collapsed", keys);
 }
 
+/** Project folders (by ID) the sidebar shows closed. */
+export function loadCollapsedFolders(): string[] {
+  const stored = readPref("sidebar.collapsedFolders");
+  return Array.isArray(stored) ? stored.filter((id): id is string => typeof id === "string") : [];
+}
+
+export function saveCollapsedFolders(ids: readonly string[]): void {
+  writePref("sidebar.collapsedFolders", ids);
+}
+
 /** How big the board's cards are. */
 export type CardSize = "regular" | "compact";
 
