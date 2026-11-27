@@ -111,6 +111,7 @@ export function ActivityScreen() {
   const byId = new Map((projects.data?.items ?? []).map((each) => [each.id, each]));
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  // eslint-disable-next-line react-hooks/incompatible-library -- the virtualizer returns new functions each render, so React Compiler rightly leaves this component unmemoized
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,

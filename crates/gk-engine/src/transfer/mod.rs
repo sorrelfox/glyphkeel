@@ -6,7 +6,9 @@
 //! ```text
 //! manifest.json                      format, version, projects, counts, SHA-256 of every other file
 //! agent_sessions.jsonl               agent sessions the history, comments and claims refer to
-//! projects/<KEY>/project.json        project, statuses, types, labels, views, layouts
+//! templates.jsonl                    project templates (whole-workspace exports)
+//! automations.jsonl                  the workspace's automation rules (whole-workspace exports)
+//! projects/<KEY>/project.json        project, statuses, types, labels, views, layouts, rules
 //! projects/<KEY>/tasks.jsonl         one task per line, with labels, relations, claim
 //! projects/<KEY>/tasks/<KEY>-<n>.md  the description (no file when it is empty)
 //! projects/<KEY>/comments.jsonl      comments, each with its earlier texts
@@ -63,6 +65,9 @@ pub const FORMAT_VERSION: u32 = 1;
 /// The archive's project templates, which belong to the workspace rather
 /// than to one project; left out when there are none.
 pub(crate) const TEMPLATES: &str = "templates.jsonl";
+/// The workspace's own automation rules (a project's are in its
+/// `project.json`); left out when there are none.
+pub(crate) const AUTOMATIONS: &str = "automations.jsonl";
 
 /// A function that hears how far an export or import is.
 pub type Progress = Arc<dyn Fn(TransferProgress) + Send + Sync>;

@@ -1153,6 +1153,30 @@ function sameName(a: string, b: string) {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
 }
 
+/** A query value, quoted when it has to be. */
+function queryValue(value: string): string {
+  return /^[^\s,"()]+$/.test(value) ? value : `"${value.replace(/"/g, '\\"')}"`;
+}
+
+/**
+ * `query` with the value `from` of the fields `fields` (names or aliases) written as `to`, as the engine
+ * rewrites saved queries when a status, type or label is renamed; `undefined` when nothing changed.
+ */
+export function renameInQuery(query: string, fields: readonly string[], from: string, to: string): string | undefined {
+  const names = new Set(fields.map((field) => field.toLowerCase()));
+  const out = query.replace(/(^|[\s(])(-?)([A-Za-z_][\w.-]*)(:|!=|=)((?:"[^"]*"|[^\s,()"]+)(?:,(?:"[^"]*"|[^\s,()"]+))*)/g, (whole: string, lead: string, not: string, field: string, op: string, values: string) => {
+    if (!names.has(field.toLowerCase())) {
+      return whole;
+    }
+    const parts = (values.match(/"[^"]*"|[^,]+/g) ?? []).map((part) => {
+      const bare = part.startsWith('"') ? part.slice(1, -1) : part;
+      return sameName(bare, from) ? queryValue(to) : part;
+    });
+    return `${lead}${not}${field}${op}${parts.join(",")}`;
+  });
+  return out === query ? undefined : out;
+}
+
 /** `view.list`: the views of a project, or of the whole workspace, in rank order. */
 export function listViews(views: readonly SavedView[], input: ViewListInput): SavedView[] {
   return views

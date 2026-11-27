@@ -489,6 +489,8 @@ pub(crate) fn rewrite_views(
             changed += 1;
         }
     }
+    // Automation rules' conditions are queries too.
+    super::automation::rewrite_conditions(w, project, query)?;
     super::board::rewrite_colour_rules(w, project, query)?;
     Ok(changed)
 }

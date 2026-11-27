@@ -5,7 +5,8 @@
 //!
 //! The copy gets the original's title (or a new one), description with its
 //! checklist as it stands, type, priority, labels, dates, estimate and
-//! progress, and its files (sharing the stored files). Its subtasks are
+//! progress, its version, its sprint unless that sprint is closed, and its
+//! files (sharing the stored files). Its subtasks are
 //! copied too, in order, unless left out. The copy sits next to the
 //! original (same parent), starts in the project's first to-do status (or
 //! the one given) at the bottom of the column, and is linked to the
@@ -122,6 +123,7 @@ fn duplicate(w: &mut WriteCtx<'_>, input: TaskDuplicateInput) -> Result<TaskChan
             },
         )?;
         super::version::copy_to(w, old, new, project.id)?;
+        super::sprint::copy_to(w, old, new, project.id)?;
         super::file::copy_to(w, old, new, project.id)?;
         super::custom_field::copy_values(w, old, new)?;
         copies.insert(old, new);

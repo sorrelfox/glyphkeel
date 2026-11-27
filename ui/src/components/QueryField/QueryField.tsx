@@ -39,6 +39,8 @@ interface QueryFieldProps {
   onEscape?: () => void;
   /** A shortcut shown at the end of the field. */
   shortcut?: React.ReactNode;
+  /** The ID of a hint that describes the field, read with it. */
+  describedBy?: string;
   ref?: Ref<QueryFieldHandle>;
 }
 
@@ -47,7 +49,7 @@ interface QueryFieldProps {
  * mistake underlined in red with its message below, and completion of
  * fields and their values.
  */
-export function QueryField({ value, onChange, reading, problem, fields, names, label, placeholder, onSubmit, onEscape, shortcut, ref }: QueryFieldProps) {
+export function QueryField({ value, onChange, reading, problem, fields, names, label, placeholder, onSubmit, onEscape, shortcut, describedBy, ref }: QueryFieldProps) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const messageId = useId();
@@ -120,14 +122,18 @@ export function QueryField({ value, onChange, reading, problem, fields, names, l
     if (!content) {
       return;
     }
+    const described = [describedBy, problem ? messageId : undefined].filter((id) => id !== undefined).join(" ");
     if (problem) {
       content.setAttribute("aria-invalid", "true");
-      content.setAttribute("aria-describedby", messageId);
     } else {
       content.removeAttribute("aria-invalid");
-      content.removeAttribute("aria-describedby");
     }
-  }, [problem, messageId]);
+    if (described === "") {
+      content.removeAttribute("aria-describedby");
+    } else {
+      content.setAttribute("aria-describedby", described);
+    }
+  }, [problem, messageId, describedBy]);
 
   return (
     <div className={styles.wrap}>

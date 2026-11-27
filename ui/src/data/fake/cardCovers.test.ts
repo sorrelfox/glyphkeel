@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { type Board, type Card, type FileChange, type FileCoverChange, type LayoutChange, type TaskChange } from "../../generated/ops";
+import { type Board, type Card, type FileChange, type FileCoverChange, type LayoutChange, type Project, type TaskChange } from "../../generated/ops";
 import { FakeError, FakeWorkspace } from "./engine";
 import { seed } from "./seed";
 
@@ -87,5 +87,25 @@ describe("card colours and covers in the sample workspace", () => {
 
     call(ws, "history.undo");
     expect(card(ws, key)?.cover).toBeUndefined();
+  });
+
+  it("rewrites the rules' queries when a name they use changes, as the engine does", () => {
+    const ws = workspace();
+    const project = call<Project>(ws, "project.get", { project: "TM" });
+    const status = project.statuses[0]?.name ?? "";
+    const label = project.labels[0]?.name ?? "";
+    call(ws, "layout.update", {
+      project: "TM",
+      colour_by: "query",
+      colour_rules: [
+        { query: `status:"${status}"`, hue: "grey" },
+        { query: `label:${label},docs -priority:low`, hue: "pink" },
+      ],
+    });
+    call(ws, "status.update", { project: "TM", status, name: "Ice box" });
+    call(ws, "label.update", { project: "TM", label, name: "front" });
+    call(ws, "project.change_key", { project: "TM", key: "TK" });
+    const layout = call<LayoutChange>(ws, "layout.get", { project: "TK" }).layout;
+    expect(layout.colour_rules.map((rule) => rule.query)).toEqual(['status:"Ice box"', "label:front,docs -priority:low"]);
   });
 });

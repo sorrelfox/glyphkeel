@@ -120,6 +120,29 @@ pub(crate) struct ProjectFile {
     /// The project's recurring task series.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) series: Vec<SeriesLine>,
+    /// The project's automation rules.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) automations: Vec<AutomationLine>,
+}
+
+/// An automation rule: a project's in `project.json`, the workspace's in
+/// `automations.jsonl`. Its run log and run state are not carried.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct AutomationLine {
+    pub(crate) id: String,
+    pub(crate) name: String,
+    pub(crate) enabled: bool,
+    pub(crate) trigger: gk_api::ops::automation::AutomationTrigger,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub(crate) condition: String,
+    pub(crate) actions: Vec<gk_api::ops::automation::AutomationAction>,
+    pub(crate) rank: String,
+    pub(crate) created_at: i64,
+    pub(crate) created_by_kind: String,
+    pub(crate) created_by_name: String,
+    pub(crate) updated_at: i64,
+    pub(crate) updated_by_kind: String,
 }
 
 /// A custom field, in `project.json`.

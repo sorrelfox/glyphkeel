@@ -29,13 +29,24 @@ at a scheduled time, the rule runs once when it starts again.
 
 ## If: the condition
 
-The condition is a query, written as in the list's query field, for example
-`type:Bug priority:high` or `label:urgent is:open`. Leave it empty to act on
-every task. A scheduled rule needs a condition: it acts on every task the
+The condition is a query, written in the same field as the list's query, with
+the same colours, completion of fields and values, and the conditions shown as
+chips you can remove: for example `type:Bug priority:high` or
+`label:urgent is:open`. Leave it empty to act on every task. A scheduled rule needs a condition: it acts on every task the
 condition matches, at most 200 at a time.
 
-When you rename a status, a label or a project, the conditions that name it are
-rewritten, as saved views are.
+When you rename a status, a label, a task type, a custom field (or one of its
+options) or a project key, the rules that name it follow, as saved views do:
+the condition, the trigger's status, and the statuses, labels, types, fields
+and options the actions use. The change is part of the rename, so Undo takes
+both back.
+
+When you delete a status, a label, a task type, a custom field or an option
+that a rule's trigger or actions use, the rule is turned off, and its run log
+says which name went away. Change the rule and turn it on again. Conditions
+change as saved views do: a deleted label or custom field is taken out of them;
+a deleted status or type stays, and the run log shows the mistake when the rule
+runs.
 
 ## Then: actions
 
@@ -108,4 +119,11 @@ glyphkeel automation create --project TM --name "Triage bugs" \
 glyphkeel automation test TM-41 --rule "Triage bugs" --project TM
 ```
 
-Automation rules are not part of an export yet.
+## Export and import
+
+An [archive](export-import.md) carries each project's automation rules, and an
+export of the whole workspace also carries the workspace's own rules. Imported
+rules start afresh: with an empty run log, a scheduled rule waits for its next
+time, and a due date rule acts only on what comes due after the import. A
+workspace rule whose name is already taken in the workspace you import into is
+left out.
