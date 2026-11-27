@@ -37,6 +37,8 @@ export interface QueryNames {
 export interface CompletionEnvironment {
   fields: () => readonly QueryField[] | undefined;
   names: () => QueryNames;
+  /** What a field is for, with an example, in the person's language; shown beside the field in the list. */
+  help?: (field: string) => string | undefined;
 }
 
 /** Hands the field a new reading; it applies only if the text still is what was read. */
@@ -153,6 +155,12 @@ function findField(fields: readonly QueryField[], name: string): QueryField | un
   return fields.find((field) => field.name === lower || (field.aliases ?? []).includes(lower));
 }
 
+/** A field's help as a completion's tooltip, when there is any. */
+function helpFor(environment: CompletionEnvironment, name: string): Pick<Completion, "info"> {
+  const text = environment.help?.(name);
+  return text === undefined ? {} : { info: text };
+}
+
 /** The field registry's `sort:`, which isn't a field but completes like one. */
 const SORT_FIELD: QueryField = { name: "sort", operators: [":"], ranges: false, sortable: false, values: "" };
 
@@ -194,6 +202,7 @@ export function queryCompletions(environment: CompletionEnvironment) {
       const options: Completion[] = [...fields, SORT_FIELD].map((field) => ({
         label: `${field.name}:`,
         detail: field.values,
+        ...helpFor(environment, field.name),
         type: "property",
         boost: field.name === "sort" ? -1 : 0,
         // After a field, its values come next.
@@ -262,6 +271,7 @@ const theme = EditorView.theme({
   ".cm-tooltip": { backgroundColor: "var(--popover)", border: "1px solid var(--border)", borderRadius: "var(--r-m)", color: "var(--fg)", fontFamily: "var(--font-ui)" },
   ".cm-tooltip-autocomplete > ul > li": { padding: "2px 8px" },
   ".cm-tooltip-autocomplete > ul > li[aria-selected]": { backgroundColor: "var(--selected)", color: "var(--fg)" },
+  ".cm-completionInfo": { maxInlineSize: "22rem", padding: "6px 10px", fontSize: "var(--fs-small)", lineHeight: "1.4" },
   ".cm-completionDetail": { color: "var(--fg-muted)", marginInlineStart: "12px", fontStyle: "normal" },
 });
 
@@ -271,8 +281,8 @@ export interface QueryFieldOptions {
   environment: CompletionEnvironment;
   /** Enter, when no completion is open. */
   onSubmit: () => void;
-  /** Escape, when no completion is open. */
-  onEscape: () => void;
+  /** Escape, when no completion is open; false leaves the key to what is around the field, such as a dialog. */
+  onEscape: () => boolean;
   /** Every change of the text. */
   onText: (text: string) => void;
 }
@@ -297,10 +307,7 @@ export function queryFieldExtensions(options: QueryFieldOptions): Extension[] {
       },
       {
         key: "Escape",
-        run: () => {
-          options.onEscape();
-          return true;
-        },
+        run: () => options.onEscape(),
       },
       ...historyKeymap,
       ...defaultKeymap.filter((binding) => binding.key !== "Enter" && binding.key !== "Mod-Enter"),

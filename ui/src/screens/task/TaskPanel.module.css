@@ -408,6 +408,20 @@
   border-inline-start: 0;
 }
 
+/* Beside a screen, the panel takes its own width; when the window leaves
+   too little for both, it lies over the screen's end instead of squeezing
+   it, and the screen keeps its width. */
+@container shell-main (width < 1000px) {
+  .panel:not(.window) {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-end: 0;
+    z-index: 20;
+    inline-size: min(var(--w-inspector), 100%);
+    box-shadow: var(--shadow-pop);
+  }
+}
+
 .dropping {
   box-shadow: inset 0 0 0 2px var(--accent);
 }

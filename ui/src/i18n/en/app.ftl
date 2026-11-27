@@ -316,6 +316,7 @@ view-gantt = Gantt
 view-calendar = Calendar
 view-wiki = Wiki
 header-views = Project views
+header-more-views = More views
 # The project button in the header bar; it opens the project menu.
 header-project-menu = { $name }: project menu
 

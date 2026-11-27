@@ -228,6 +228,7 @@ export function PageView(props: PageViewProps) {
           <>
             <Button
               className={classes("btn flat", mode === "history" && "on")}
+              aria-label={t("wiki-history")}
               aria-pressed={mode === "history"}
               onPress={() => {
                 setMode(mode === "history" ? "read" : "history");

@@ -92,9 +92,9 @@ export function HeaderBar({ titleBar, title, subtitle, project, onProjectSetting
         </>
       )}
       <Tooltip text={t(newTask.label)} chord={newTask.keys[0]}>
-        <Button className="btn primary" isDisabled={newTask.disabled ?? false} onPress={newTask.run}>
+        <Button className="btn primary" aria-label={t("header-new-task")} isDisabled={newTask.disabled ?? false} onPress={newTask.run}>
           <Plus className="ic" />
-          <span className="hide-narrow">{t("header-new-task")}</span>
+          <span className={styles.newTaskName}>{t("header-new-task")}</span>
         </Button>
       </Tooltip>
       <ActionMenu label={t("header-main-menu")} icon={<MenuIcon className="ic" />} items={menuItems} />
@@ -195,53 +195,71 @@ function ProjectButton({ project, onSettings, onNewSubproject }: ProjectButtonPr
   );
 }
 
-/** Board, List, Calendar, Gantt, Roadmap, Sprints and Wiki. */
+const VIEWS = [
+  { id: "board", icon: Columns3, to: "/projects/$key" },
+  { id: "list", icon: List, to: "/projects/$key/list" },
+  { id: "calendar", icon: CalendarDays, to: "/projects/$key/calendar" },
+  { id: "gantt", icon: ChartGantt, to: "/projects/$key/gantt" },
+  { id: "roadmap", icon: Milestone, to: "/projects/$key/roadmap" },
+  { id: "sprints", icon: IterationCw, to: "/projects/$key/sprints" },
+  { id: "wiki", icon: BookOpen, to: "/projects/$key/wiki" },
+] as const;
+
+type ViewId = (typeof VIEWS)[number]["id"];
+
+/**
+ * Board, List, Calendar, Gantt, Roadmap, Sprints and Wiki. When the header
+ * bar is narrow they lose their names (each keeps a tooltip); narrower still,
+ * only the open view stays, and the others are in a menu beside it.
+ */
 function ViewSwitcher({ project }: { project: string }) {
   const t = useT();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
-  const current = pathname.endsWith("/list") ? "list" : pathname.endsWith("/calendar") ? "calendar" : pathname.endsWith("/gantt") ? "gantt" : pathname.endsWith("/roadmap") ? "roadmap" : pathname.endsWith("/sprints") ? "sprints" : pathname.endsWith("/wiki") ? "wiki" : "board";
-  const views = [
-    { id: "board", icon: <Columns3 className="ic" />, ready: true },
-    { id: "list", icon: <List className="ic" />, ready: true },
-    { id: "calendar", icon: <CalendarDays className="ic" />, ready: true },
-    { id: "gantt", icon: <ChartGantt className="ic" />, ready: true },
-    { id: "roadmap", icon: <Milestone className="ic" />, ready: true },
-    { id: "sprints", icon: <IterationCw className="ic" />, ready: true },
-    { id: "wiki", icon: <BookOpen className="ic" />, ready: true },
-  ];
+  const current: ViewId = VIEWS.find((view) => view.id !== "board" && pathname.endsWith(`/${view.id}`))?.id ?? "board";
+  const open = (id: ViewId) => {
+    const to = VIEWS.find((view) => view.id === id)?.to ?? "/projects/$key";
+    void navigate({ to, params: { key: project } });
+  };
   return (
-    <div className="seg" role="group" aria-label={t("header-views")}>
-      {views.map((view) => (
-        <button
-          key={view.id}
-          type="button"
-          className={view.id === current ? "on" : ""}
-          aria-current={view.id === current ? "page" : undefined}
-          disabled={!view.ready}
-          aria-label={t(`view-${view.id}`)}
-          onClick={() => {
-            if (view.id === "list") {
-              void navigate({ to: "/projects/$key/list", params: { key: project } });
-            } else if (view.id === "calendar") {
-              void navigate({ to: "/projects/$key/calendar", params: { key: project } });
-            } else if (view.id === "gantt") {
-              void navigate({ to: "/projects/$key/gantt", params: { key: project } });
-            } else if (view.id === "roadmap") {
-              void navigate({ to: "/projects/$key/roadmap", params: { key: project } });
-            } else if (view.id === "sprints") {
-              void navigate({ to: "/projects/$key/sprints", params: { key: project } });
-            } else if (view.id === "wiki") {
-              void navigate({ to: "/projects/$key/wiki", params: { key: project } });
-            } else if (view.id === "board") {
-              void navigate({ to: "/projects/$key", params: { key: project } });
-            }
-          }}
-        >
-          {view.icon}
-          <span className="hide-narrow">{t(`view-${view.id}`)}</span>
-        </button>
+    <div className={classes("seg", styles.views)} role="group" aria-label={t("header-views")}>
+      {VIEWS.map((view) => (
+        <Tooltip key={view.id} text={t(`view-${view.id}`)}>
+          <Button
+            className={classes(view.id === current ? "on" : "", styles.view, view.id !== current && styles.otherView)}
+            {...(view.id === current ? { "aria-current": "page" as const } : {})}
+            aria-label={t(`view-${view.id}`)}
+            onPress={() => {
+              open(view.id);
+            }}
+          >
+            <view.icon className="ic" />
+            <span className={styles.viewName}>{t(`view-${view.id}`)}</span>
+          </Button>
+        </Tooltip>
       ))}
+      <MenuTrigger>
+        <Tooltip text={t("header-more-views")}>
+          <Button className={classes(styles.moreViews)} aria-label={t("header-more-views")}>
+            <ChevronDown className="ic s" />
+          </Button>
+        </Tooltip>
+        <Popover className="pop menuPopover" placement="bottom end" offset={4}>
+          <Menu className="menu" aria-label={t("header-views")}>
+            <MenuEntries
+              entries={VIEWS.map((view) => ({
+                id: view.id,
+                label: t(`view-${view.id}`),
+                icon: <view.icon className="ic" />,
+                checked: view.id === current,
+                run: () => {
+                  open(view.id);
+                },
+              }))}
+            />
+          </Menu>
+        </Popover>
+      </MenuTrigger>
     </div>
   );
 }

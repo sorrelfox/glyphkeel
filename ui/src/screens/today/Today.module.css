@@ -1,7 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
    Copyright (C) 2026 Glyphkeel contributors
 
-   Today: boxed lists of tasks in a column clamped to a readable width. */
+   Today: boxed lists of tasks across the whole width, as on every other
+   screen. */
 
 .layout {
   display: flex;
@@ -20,8 +21,6 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
-  max-width: 860px;
-  margin: 0 auto;
 }
 
 .section {

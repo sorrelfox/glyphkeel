@@ -501,7 +501,7 @@ function LoadedList({ project, views, layout, openTask, onOpen, initialQuery }: 
           <GroupMenu value={groupBy} withProject={workspaceWide || includeSubprojects} fields={customFields} onChange={group} />
           <ColumnMenu columns={columns} fields={customFields} onChange={changeColumns} />
           <MenuTrigger>
-            <Button className="btn flat">
+            <Button className="btn flat" aria-label={t("list-export")}>
               <Download className="ic" aria-hidden="true" />
               <span className="hide-narrow">{t("list-export")}</span>
             </Button>
@@ -698,7 +698,7 @@ function ColumnMenu({ columns, fields, onChange }: { columns: readonly ColumnId[
   const label = (column: ColumnId) => (isCustomColumn(column) ? (custom.find((field) => field.query_name === column)?.name ?? column) : t(`list-column-${column}`));
   return (
     <MenuTrigger>
-      <Button className="btn flat">
+      <Button className="btn flat" aria-label={t("list-columns")}>
         <Columns3 className="ic" aria-hidden="true" />
         <span className="hide-narrow">{t("list-columns")}</span>
       </Button>

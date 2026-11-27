@@ -143,6 +143,7 @@
   flex: 1 1 0;
   flex-direction: column;
   min-width: 0;
+  container: shell-main / inline-size;
 }
 
 .headerbar {
@@ -165,6 +166,7 @@
   align-items: baseline;
   gap: 8px;
   min-width: 0;
+  overflow: hidden;
 }
 
 .title {
@@ -175,12 +177,67 @@
 }
 
 .subtitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .projectButton {
+  flex: 0 1 auto;
   min-width: 0;
+  overflow: hidden;
   font-weight: 600;
+}
+
+/* The project's views. Narrow, they show only their icons; narrower still,
+   the open one and a menu of all of them. */
+.views {
+  min-width: 0;
+}
+
+.view {
+  outline: none;
+}
+
+.view[data-focus-visible],
+.moreViews[data-focus-visible] {
+  outline: var(--focus-w) solid var(--focus);
+  outline-offset: -2px;
+}
+
+.view:not([aria-current])[data-hovered],
+.moreViews[data-hovered] {
+  color: var(--fg);
+}
+
+.views > .moreViews {
+  display: none;
+  padding-inline: 6px;
+}
+
+@container shell-main (width < 1100px) {
+  .viewName {
+    display: none;
+  }
+
+  .views > .view {
+    padding-inline: 8px;
+  }
+}
+
+@container shell-main (width < 720px) {
+  .views > .otherView {
+    display: none;
+  }
+
+  .views > .moreViews {
+    display: inline-flex;
+  }
+
+  .newTaskName {
+    display: none;
+  }
 }
 
 .projectName {
@@ -203,6 +260,7 @@
 }
 
 .content {
+  position: relative;
   display: flex;
   flex: 1 1 0;
   flex-direction: column;
