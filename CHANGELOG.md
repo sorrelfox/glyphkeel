@@ -5,6 +5,21 @@ Conventional Commits, and versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.1.11] - 2026-11-27
+
+### Features
+
+- **Project folders:** clicking a folder selects it, and the "+" next to
+  Projects creates the new project in the selected folder (also "New
+  project in this folder" in its menu, `--folder` on the command line).
+
+### Fixes
+
+- Ticking a checklist item no longer scrolls the task panel, task
+  window or wiki page back to the top, and keeps the keyboard focus.
+- The task list shows a horizontal scroll bar only when its columns
+  don't fit, and the totals row is never covered.
+
 ## [0.1.10] - 2026-11-27
 
 ### Features

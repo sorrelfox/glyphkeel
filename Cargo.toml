@@ -11,7 +11,7 @@ default-members = ["crates/*"]
 exclude = ["fuzz"]
 
 [workspace.package]
-version = "0.1.10"
+version = "0.1.11"
 edition = "2024"
 # Keep equal to the channel in rust-toolchain.toml and `msrv` in clippy.toml.
 rust-version = "1.100"

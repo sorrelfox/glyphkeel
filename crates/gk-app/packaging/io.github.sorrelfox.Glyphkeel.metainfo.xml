@@ -88,6 +88,11 @@
   </supports>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.1.11" date="2026-11-27">
+      <description>
+        <p>New projects go into the selected sidebar folder, ticking a checklist item keeps your place, the task list no longer shows a needless horizontal scroll bar over its totals, and browser test flows can run side by side.</p>
+      </description>
+    </release>
     <release version="0.1.10" date="2026-11-27">
       <description>
         <p>Project folders in the sidebar, encrypted attachments and exports, encryption on Windows, a language choice for the command line and native dialogs, read limits for agents, query completion in dashboards and dialogs, layouts that fit small windows, and a lighter app without a GPU.</p>
