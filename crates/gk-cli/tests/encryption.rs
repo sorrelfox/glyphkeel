@@ -75,7 +75,7 @@ fn an_encrypted_workspace_from_the_command_line_and_the_agent_server() {
         &format!("{PASSPHRASE}\n"),
     );
     if !gk_store::encryption_available() {
-        // The Windows build has no SQLCipher: it says so and the workspace
+        // A build without SQLCipher says so, and the workspace
         // stays plain and usable.
         assert_eq!(code(&out), 4, "{}", stderr(&out));
         let error: Value = serde_json::from_slice(&out.stderr).unwrap();

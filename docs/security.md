@@ -206,7 +206,9 @@ encryption, which covers everything.
   rounds, and a random salt kept at the start of the file. These are
   SQLCipher's own defaults, so the file also opens in SQLCipher's tools with
   the passphrase. The write-ahead log is encrypted the same way. On Linux the
-  cryptography is the system's OpenSSL.
+  cryptography is the system's OpenSSL; on Windows it is LibTomCrypt,
+  compiled into the programs. The file format is the same on both, and a
+  test opens files encrypted by each on the other.
 - **What is encrypted:** the database (tasks, wiki pages, comments, history,
   settings) and the backups of an encrypted workspace.
 - **What isn't:** attached files and their thumbnails, exports, the settings
@@ -228,8 +230,6 @@ encryption, which covers everything.
   open, make a backup first, and check the new file before it replaces the
   old one in one step.
 - **No recovery.** Without the passphrase the data can't be read, by anyone.
-- **Windows.** The Windows build can't encrypt yet; it opens plain
-  workspaces only.
 
 ## The app lock
 

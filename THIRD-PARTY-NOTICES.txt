@@ -20,8 +20,8 @@ Contents
 
   1. Rust crates (517), in both programs
   2. JavaScript packages (253), in the app's interface
-  3. Other components (8)
-  4. Licence texts (365)
+  3. Other components (9)
+  4. Licence texts (366)
 
 
 1. Rust crates (517), in both programs
@@ -4675,7 +4675,7 @@ rolldown 1.2.19
   Texts: [362]
 
 
-3. Other components (8)
+3. Other components (9)
 =======================
 
 The Rust standard library
@@ -4700,12 +4700,22 @@ SQLite
 
 SQLCipher
   SQLite with encryption, for encrypted workspaces: compiled into both
-  programs on Linux by the libsqlite3-sys crate (from sqlcipher-src), linked
-  with the system's OpenSSL.
+  programs by the libsqlite3-sys crate (from sqlcipher-src), linked with the
+  system's OpenSSL on Linux and with LibTomCrypt on Windows.
   Licence: BSD-3-Clause
   Source: https://www.zetetic.net/sqlcipher/
   Copyright: ZETETIC LLC
   Texts: [8]
+
+LibTomCrypt
+  The cryptography of encrypted workspaces in the Windows build (AES, SHA-1,
+  SHA-256, SHA-512, HMAC, PBKDF2 and a random generator for SQLCipher),
+  compiled into both programs from the source in sqlcipher-src. It is public
+  domain or WTFPL, at the user's choice.
+  Licence: WTFPL
+  Source: https://github.com/libtom/libtomcrypt
+  Copyright: Tom St Denis and the LibTomCrypt contributors
+  Texts: [363]
 
 KaTeX fonts
   The math fonts in the app's interface, which come with the katex package
@@ -4717,7 +4727,7 @@ KaTeX fonts
   Licence: OFL-1.1
   Source: https://github.com/KaTeX/katex-fonts
   Copyright: 2009-2010 Design Science, Inc. (www.mathjax.org); 2014-2018 Khan Academy (www.khanacademy.org)
-  Texts: [363]
+  Texts: [364]
 
 TextMate grammars
   The grammars of code highlighting, which come with the @shikijs/langs
@@ -4728,7 +4738,7 @@ TextMate grammars
   Licence: MIT AND Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND BSD-3-Clause AND ISC AND MPL-2.0 AND GPL-3.0-only AND LGPL-3.0-only
   Source: https://github.com/shikijs/textmate-grammars-themes
   Copyright: 2021 Pine Wu, 2023 Anthony Fu (tm-grammars); each grammar's authors, as its notice says
-  Texts: [279], [364]
+  Texts: [279], [365]
 
 NSIS
   The Windows installer and uninstaller are made with it and contain its code:
@@ -4738,7 +4748,7 @@ NSIS
   Licence: Zlib AND CPL-1.0
   Source: https://nsis.sourceforge.io/
   Copyright: 1999-2026 NSIS contributors
-  Texts: [365]
+  Texts: [366]
 
 nsis_tauri_utils
   An NSIS plug-in that the Windows installer and uninstaller carry, from the
@@ -25779,7 +25789,41 @@ end of terms and conditions
 The licenses of externally maintained libraries from which parts of the Software is derived are listed [here](https://github.com/rolldown/rolldown/blob/main/THIRD-PARTY-LICENSE).
 
 
-[363] standard text: OFL-1.1
+[363] LICENSE of LibTomCrypt
+----------------------------
+
+LibTomCrypt is licensed under DUAL licensing terms.
+
+Choose and use the license of your needs.
+
+[LICENSE #1]
+
+LibTomCrypt is public domain.  As should all quality software be.
+
+Tom St Denis
+
+[/LICENSE #1]
+
+[LICENSE #2]
+
+            DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
+                    Version 2, December 2004
+
+ Copyright (C) 2004 Sam Hocevar <sam@hocevar.net>
+
+ Everyone is permitted to copy and distribute verbatim or modified
+ copies of this license document, and changing it is allowed as long
+ as the name is changed.
+
+            DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
+   TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
+
+  0. You just DO WHAT THE FUCK YOU WANT TO.
+
+[/LICENSE #2]
+
+
+[364] standard text: OFL-1.1
 ----------------------------
 
 SIL OPEN FONT LICENSE
@@ -25872,7 +25916,7 @@ CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF THE USE OR INABILITY TO
 USE THE FONT SOFTWARE OR FROM OTHER DEALINGS IN THE FONT SOFTWARE.
 
 
-[364] NOTICE of TextMate grammars
+[365] NOTICE of TextMate grammars
 ---------------------------------
 
 THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
@@ -38710,7 +38754,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 
-[365] COPYING of NSIS
+[366] COPYING of NSIS
 ---------------------
 
 COPYRIGHT

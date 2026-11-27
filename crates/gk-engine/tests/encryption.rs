@@ -215,7 +215,7 @@ fn encrypting_refuses_while_the_workspace_is_open() {
     );
 }
 
-/// The Windows build has no SQLCipher: it says so, refuses to encrypt and
+/// A build without SQLCipher says so, refuses to encrypt and
 /// keeps working on plain workspaces.
 #[test]
 fn a_build_that_cannot_encrypt_says_so() {

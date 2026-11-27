@@ -78,9 +78,13 @@ jiff = { version = "1.0.2", features = ["tzdb-bundle-always"] }
 # busy handler; the online backup API restores a snapshot into the open
 # database. The bundled SQLite is SQLCipher's, for encrypted workspaces; it
 # opens plain ones as SQLite does. Its cryptography is the system's OpenSSL
-# (libcrypto) on Linux. Windows builds keep plain SQLite (see
-# crates/gk-store/Cargo.toml).
+# (libcrypto) on Linux and LibTomCrypt on Windows (see
+# crates/gk-store/build.rs).
 rusqlite = { version = "0.43.0", features = ["collation", "backup"] }
+# The SQLCipher source with its LibTomCrypt, and the C compiler driver:
+# gk-store builds LibTomCrypt for Windows (both were in the lock already).
+cc = "1.11.3"
+sqlcipher-src = "420.0.0"
 # The key of an encrypted workspace from its passphrase: PBKDF2-HMAC-SHA512,
 # as SQLCipher derives it (hmac and sha2 0.10 were in the lock already).
 pbkdf2 = { version = "0.12.2", default-features = false, features = ["hmac"] }
