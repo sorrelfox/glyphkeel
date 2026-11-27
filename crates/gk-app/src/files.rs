@@ -707,12 +707,14 @@ pub(crate) mod private_copies {
     /// Makes `path`, which must not exist yet, as a folder only this user
     /// may enter.
     fn make_private(path: &Path) -> io::Result<()> {
-        let mut builder = fs::DirBuilder::new();
+        let builder = fs::DirBuilder::new();
         #[cfg(unix)]
-        {
+        let builder = {
             use std::os::unix::fs::DirBuilderExt as _;
+            let mut builder = builder;
             builder.mode(0o700);
-        }
+            builder
+        };
         builder.create(path)
     }
 
@@ -1324,6 +1326,9 @@ mod tests {
         if !gk_store::encryption_available() {
             return;
         }
+        let _turn = crate::PASSPHRASE_TESTS
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
         let dir = TempDir::new().unwrap();
         let layout = WorkspaceLayout::new(dir.path().join("Personal"));
         let ws = workspace(&dir);

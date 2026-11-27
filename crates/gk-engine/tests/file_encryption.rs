@@ -162,9 +162,13 @@ fn attached_files_and_exports_of_an_encrypted_workspace() {
     // Through the engine everything reads as before.
     let engine = Engine::open(&layout, config(&clock)).unwrap();
     assert_eq!(text_of(&engine, &note), "secret note");
-    let mut content = gk_store::open_file(&layout, &big_sha).unwrap();
     let mut read = Vec::new();
-    std::io::Read::read_to_end(&mut content, &mut read).unwrap();
+    {
+        // Closed again before the conversions below: Windows renames over
+        // a file only when nothing has it open.
+        let mut content = gk_store::open_file(&layout, &big_sha).unwrap();
+        std::io::Read::read_to_end(&mut content, &mut read).unwrap();
+    }
     assert!(read == large(), "the large file reads back");
     let thumb = call(&engine, "file.thumbnail", json!({ "attachment": image }));
     let thumb_path = PathBuf::from(thumb["path"].as_str().unwrap());

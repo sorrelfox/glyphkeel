@@ -939,6 +939,8 @@ fn convert_one(path: &Path, sha: &str, target: Option<&FileKey>) -> io::Result<(
         }
         out.sync_all()?;
         drop(out);
+        // Windows renames over a file only when nothing has it open.
+        drop(source);
         fs::rename(&temp, path)
     })();
     if written.is_err() {

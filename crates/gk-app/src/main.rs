@@ -8,6 +8,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod agent_http;
+
+/// The passphrases a process knows are shared by its threads: the tests
+/// that encrypt a workspace or forget the passphrases take turns.
+#[cfg(test)]
+pub(crate) static PASSPHRASE_TESTS: std::sync::Mutex<()> = std::sync::Mutex::new(());
 mod app_settings;
 mod autostart;
 mod background;

@@ -536,6 +536,9 @@ fn the_first_start_on_a_workspace_is_known_as_such() {
 
 #[test]
 fn an_encrypted_workspace_waits_for_its_passphrase_and_a_locked_app_refuses_calls() {
+    let _turn = crate::PASSPHRASE_TESTS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let dir = TempDir::new().unwrap();
     let passphrase = gk_store::Passphrase::new("the app's own test passphrase").unwrap();
     {
