@@ -19,7 +19,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 use crate::error::{Result, StoreError};
 
 /// The schema version this program is built for.
-pub const SCHEMA_VERSION: i64 = 19;
+pub const SCHEMA_VERSION: i64 = 20;
 
 /// One migration: the SQL that takes the schema from `version - 1` to
 /// `version`.
@@ -106,6 +106,10 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 19,
         sql: include_str!("../migrations/0019_automation_rules.sql"),
+    },
+    Migration {
+        version: 20,
+        sql: include_str!("../migrations/0020_dashboards.sql"),
     },
 ];
 
@@ -1038,7 +1042,7 @@ mod tests {
         )
         .unwrap();
         migrate(&mut conn, MIGRATIONS, |_| Ok(())).unwrap();
-        assert_eq!(user_version(&conn).unwrap(), 19);
+        assert!(user_version(&conn).unwrap() >= 19);
         let kind: String = conn
             .query_row("SELECT created_by_kind FROM tasks", [], |r| r.get(0))
             .unwrap();
@@ -1088,5 +1092,41 @@ mod tests {
             [],
         );
         assert!(bad.is_err(), "triggers are from the list");
+    }
+
+    #[test]
+    fn version_20_adds_dashboards_with_names_unique_per_project() {
+        let mut conn = memory();
+        migrate(&mut conn, MIGRATIONS, |_| Ok(())).unwrap();
+        assert_eq!(user_version(&conn).unwrap(), 20);
+        conn.execute_batch(
+            "INSERT INTO projects (id, rank, key, name, name_fold, hue, modules, created_at,
+                                   updated_at)
+             VALUES (x'01010101010101010101010101010101', 'i', 'DB', 'DB', 'db', 'blue', '{}',
+                     0, 0);",
+        )
+        .unwrap();
+        let board = |id: u8, project: Option<Vec<u8>>, name: &str, widgets: &str| {
+            conn.execute(
+                "INSERT INTO dashboards (id, project_id, name, name_fold, widgets, rank,
+                                         created_at, created_by_kind, created_by_name,
+                                         updated_at)
+                 VALUES (?1, ?2, ?3, lower(?3), ?4, 'i', 0, 'user', 'You', 0)",
+                rusqlite::params![vec![id; 16], project, name, widgets],
+            )
+        };
+        let project = Some(vec![1u8; 16]);
+        board(2, None, "Team", "[]").unwrap();
+        assert!(
+            board(3, None, "TEAM", "[]").is_err(),
+            "unique in the workspace"
+        );
+        board(4, project.clone(), "Team", "[]").unwrap();
+        assert!(
+            board(5, project, "team", "[]").is_err(),
+            "unique per project"
+        );
+        assert!(board(6, None, "Other", "{}").is_err(), "widgets are a list");
+        assert!(board(7, None, "Bad", "not json").is_err());
     }
 }

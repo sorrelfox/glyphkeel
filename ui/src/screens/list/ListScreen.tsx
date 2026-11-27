@@ -46,14 +46,14 @@ export function ProjectListScreen() {
 
 /** Every task of the workspace, as a list. */
 export function AllTasksListScreen() {
-  const { task } = allRoute.useSearch();
+  const { task, query } = allRoute.useSearch();
   const navigate = useNavigate();
   const open = (other: string | undefined) => {
-    void navigate({ to: "/all", search: other === undefined ? {} : { task: other } });
+    void navigate({ to: "/all", search: { ...(query === undefined ? {} : { query }), ...(other === undefined ? {} : { task: other }) } });
   };
   return (
     <div className={styles.layout}>
-      <ListView project={undefined} openTask={task} onOpen={open} />
+      <ListView key={query ?? ""} project={undefined} openTask={task} onOpen={open} initialQuery={query} />
       {task !== undefined && (
         <TaskPanel
           key={task}

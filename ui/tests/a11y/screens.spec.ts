@@ -125,6 +125,23 @@ const SCREENS: Screen[] = [
   { name: "sprints", open: async (page) => { await view(page, "Sprints"); await expect(page.locator("[data-chart]").first()).toBeVisible(); } },
   { name: "reports", open: async (page) => { await sidebar(page, "Reports"); await expect(page.locator("[data-chart]").first()).toBeVisible(); } },
   { name: "time report", open: async (page) => { await sidebar(page, "Time report"); await page.waitForTimeout(300); } },
+  {
+    name: "dashboards",
+    open: async (page) => {
+      await sidebar(page, "Dashboards");
+      await page.getByRole("button", { name: "Create a starter dashboard" }).click();
+      await expect(page.locator("[data-chart]").first()).toBeVisible();
+    },
+  },
+  {
+    name: "dashboard widget dialog",
+    open: async (page) => {
+      await sidebar(page, "Dashboards");
+      await page.getByRole("button", { name: "Create a starter dashboard" }).click();
+      await page.getByRole("button", { name: "Add widget" }).first().click();
+      await expect(page.getByRole("dialog", { name: "Add a widget" })).toBeVisible();
+    },
+  },
   { name: "all tasks", open: async (page) => { await sidebar(page, "All tasks"); await expect(page.getByRole("grid").first()).toBeVisible(); } },
   { name: "activity", open: async (page) => { await sidebar(page, "Activity"); await page.waitForTimeout(300); } },
   { name: "trash", open: async (page) => { await sidebar(page, "Trash"); await page.waitForTimeout(300); } },

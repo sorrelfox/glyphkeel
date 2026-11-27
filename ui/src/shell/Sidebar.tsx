@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { ChartArea, Clock, History, List, Plus, SlidersHorizontal, Sun, Trash2 } from "lucide-react";
+import { ChartArea, Clock, History, LayoutDashboard, List, Plus, SlidersHorizontal, Sun, Trash2 } from "lucide-react";
 
 import { useAction } from "../actions/ActionsProvider";
 import { Kbd } from "../components/Kbd";
@@ -36,7 +36,7 @@ interface SidebarProps {
  * The sidebar, top to bottom: the search field (typing suggests tasks,
  * projects and actions; Enter opens the search page with its text; the
  * command palette keeps its own key), Today and All
- * tasks with their counts, the time report, the activity, the project tree, the
+ * tasks with their counts, the dashboards, the time report, the reports, the activity, the project tree, the
  * timer chip while a timer runs, then Trash and Preferences.
  */
 export function Sidebar({ view, project, width, titleBar = "app", onNewProject, onProjectSettings, onExportProject, onDeleteProject, onImportCsv }: SidebarProps) {
@@ -45,6 +45,7 @@ export function Sidebar({ view, project, width, titleBar = "app", onNewProject, 
   const allTasks = useAction("nav.allTasks");
   const timeReport = useAction("nav.timeReport");
   const reports = useAction("nav.reports");
+  const dashboards = useAction("nav.dashboards");
   const activity = useAction("nav.activity");
   const trash = useAction("nav.trash");
   const preferences = useAction("app.preferences");
@@ -77,6 +78,10 @@ export function Sidebar({ view, project, width, titleBar = "app", onNewProject, 
               {allCount}
             </span>
           )}
+        </button>
+        <button type="button" className={classes("nav", view === "dashboards" && "on")} aria-current={view === "dashboards" ? "page" : undefined} onClick={dashboards.run}>
+          <LayoutDashboard className="ic" />
+          <span>{t("view-dashboards")}</span>
         </button>
         <button type="button" className={classes("nav", view === "time" && "on")} aria-current={view === "time" ? "page" : undefined} onClick={timeReport.run}>
           <Clock className="ic" />

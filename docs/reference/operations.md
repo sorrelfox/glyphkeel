@@ -123,6 +123,15 @@ The safety class decides who may run an operation:
 | `view.create` | write | app, command line, MCP | `create_view` | `glyphkeel view create` |
 | `view.update` | write | app, command line, MCP | `update_view` | `glyphkeel view edit <view>` |
 | `view.delete` | write | app, command line, MCP | `delete_view` | `glyphkeel view delete <view>` |
+| `dashboard.list` | read | app, command line, MCP | `list_dashboards` | `glyphkeel dashboard list` |
+| `dashboard.show` | read | app, command line, MCP | `get_dashboard` | `glyphkeel dashboard show <dashboard>` |
+| `dashboard.widget` | read | app, command line, MCP | `get_dashboard_widget` | `glyphkeel dashboard widget <dashboard> <widget>` |
+| `dashboard.create` | write | app, command line, MCP | `create_dashboard` | `glyphkeel dashboard create` |
+| `dashboard.update` | write | app, command line, MCP | `update_dashboard` | `glyphkeel dashboard edit <dashboard>` |
+| `dashboard.delete` | write | app, command line, MCP | `delete_dashboard` | `glyphkeel dashboard delete <dashboard>` |
+| `dashboard.add_widget` | write | app, command line, MCP | `add_dashboard_widget` | `glyphkeel dashboard add-widget <dashboard>` |
+| `dashboard.update_widget` | write | app, command line, MCP | `update_dashboard_widget` | `glyphkeel dashboard edit-widget <dashboard> <widget>` |
+| `dashboard.remove_widget` | write | app, command line, MCP | `remove_dashboard_widget` | `glyphkeel dashboard remove-widget <dashboard> <widget>` |
 | `list.layout.get` | read | app | — | — |
 | `list.layout.update` | write | app | — | — |
 | `query.parse` | read | app | — | — |
@@ -841,6 +850,60 @@ Input: `ViewUpdateInput`. Output: `ViewChange`. Schemas: [catalog.schema.json](c
 Delete a saved view; it can be brought back with revert.
 
 Input: `ViewDeleteInput`. Output: `ViewChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `dashboard.list`
+
+The dashboards of the whole workspace or of a project, with their widgets and settings.
+
+Input: `DashboardListInput`. Output: `DashboardList`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `dashboard.show`
+
+One dashboard with what each of its widgets shows now: counts, tasks, report figures, burndown, versions, changes, failed automation runs and notes.
+
+Input: `DashboardRef`. Output: `DashboardShow`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `dashboard.widget`
+
+What one widget of a dashboard shows now.
+
+Input: `DashboardWidgetInput`. Output: `WidgetValue`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `dashboard.create`
+
+Make a dashboard for the whole workspace or pinned to a project, empty, with the starter widgets or with the widgets given.
+
+Input: `DashboardCreateInput`. Output: `DashboardChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `dashboard.update`
+
+Rename a dashboard or change its description.
+
+Input: `DashboardUpdateInput`. Output: `DashboardChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `dashboard.delete`
+
+Delete a dashboard; it can be brought back with revert.
+
+Input: `DashboardRef`. Output: `DashboardChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `dashboard.add_widget`
+
+Add a widget to a dashboard, at the end or at a given place.
+
+Input: `DashboardAddWidgetInput`. Output: `DashboardChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `dashboard.update_widget`
+
+Change a widget's title or settings, make it wider or narrower, or move it to another place in the grid.
+
+Input: `DashboardUpdateWidgetInput`. Output: `DashboardChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `dashboard.remove_widget`
+
+Remove a widget from a dashboard.
+
+Input: `DashboardRemoveWidgetInput`. Output: `DashboardChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `list.layout.get`
 

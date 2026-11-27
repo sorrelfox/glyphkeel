@@ -8,9 +8,9 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::ops::{
-    agent, backup, board, bulk, comment, csv_import, description, draft, field, file, history,
-    link, project, query, report, rules, schedule, search, settings, sprint, task, time, today,
-    transfer, trash, version, view, wiki, workspace,
+    agent, backup, board, bulk, comment, csv_import, dashboard, description, draft, field, file,
+    history, link, project, query, report, rules, schedule, search, settings, sprint, task, time,
+    today, transfer, trash, version, view, wiki, workspace,
 };
 use crate::ops::{automation, recurrence, template};
 use crate::schema;
@@ -263,6 +263,15 @@ pub static CATALOG: &[OpDescriptor] = &[
     view::VIEW_CREATE,
     view::VIEW_UPDATE,
     view::VIEW_DELETE,
+    dashboard::DASHBOARD_LIST,
+    dashboard::DASHBOARD_SHOW,
+    dashboard::DASHBOARD_WIDGET,
+    dashboard::DASHBOARD_CREATE,
+    dashboard::DASHBOARD_UPDATE,
+    dashboard::DASHBOARD_DELETE,
+    dashboard::DASHBOARD_ADD_WIDGET,
+    dashboard::DASHBOARD_UPDATE_WIDGET,
+    dashboard::DASHBOARD_REMOVE_WIDGET,
     view::LIST_LAYOUT_GET,
     view::LIST_LAYOUT_UPDATE,
     query::QUERY_PARSE,

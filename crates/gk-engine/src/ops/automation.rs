@@ -959,7 +959,10 @@ fn run_rows(
     Ok((items, u64::try_from(total).unwrap_or(0)))
 }
 
-fn runs(tx: &Transaction<'_>, input: &AutomationRunsInput) -> Result<AutomationRunList, Failure> {
+pub(crate) fn runs(
+    tx: &Transaction<'_>,
+    input: &AutomationRunsInput,
+) -> Result<AutomationRunList, Failure> {
     let limit = input.limit.unwrap_or(50);
     if !(1..=200).contains(&limit) {
         return Err(messages::invalid(

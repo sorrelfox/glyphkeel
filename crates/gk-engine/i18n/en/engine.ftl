@@ -1121,3 +1121,32 @@ automation-depth-limit = The rule didn't run: { $max } rules had already set eac
 automation-rate-limit = The rule didn't run: it already ran { $max } times in the last hour. It runs again after that.
 automation-draft-name = Test rule
 automation-test-rule-or-draft = Name a saved rule with `rule`, or give one that isn't saved with `draft`; not both.
+
+## Dashboards
+
+dashboard-not-found = There is no dashboard "{ $dashboard }".
+dashboard-not-found-hint = Name a dashboard of the project given with `project` (or of the whole workspace without one), or use its ID from dashboard.list.
+dashboard-name-taken = There is already a dashboard named "{ $dashboard }" here.
+dashboard-name-taken-hint = Choose another name, or change that dashboard.
+dashboard-widget-not-found = { $count ->
+        [0] The dashboard "{ $dashboard }" has no widgets, so it has no widget "{ $widget }".
+        [one] The dashboard "{ $dashboard }" has one widget; "{ $widget }" isn't it.
+       *[other] The dashboard "{ $dashboard }" has { $count } widgets; none of them is "{ $widget }".
+    }
+dashboard-widget-not-found-hint = Name a widget by its ID, or by its place in the grid: 1 is the first.
+dashboard-setting-unused = A { $kind } widget takes no "{ $setting }" setting.
+dashboard-query-too-long = A widget's query is at most { $max } characters long.
+dashboard-needs-project = A { $kind } widget needs a project: give one, or pin the dashboard to a project.
+dashboard-needs-field = Name the field to count tasks by: status, priority, type, label or a custom field (cf.<name>).
+dashboard-field-unknown = Tasks can't be counted by "{ $field }".
+dashboard-field-unknown-hint = Use status, priority, type, label, or a custom select or yes/no field as cf.<name>.
+dashboard-limit = A widget lists 1 to { $max } rows.
+dashboard-days = A widget looks at 1 to { $max } days.
+dashboard-text-too-long = A note is at most { $max } characters long.
+dashboard-width = A widget is 1, 2 or 3 columns wide.
+dashboard-too-many-widgets = A dashboard holds at most { $max } widgets.
+dashboard-position = Give a place from 1 to { $max }.
+dashboard-project-gone = The widget's project ({ $project }) no longer exists.
+dashboard-project-gone-hint = Choose another project for the widget, or remove it.
+# The title of the starter dashboard's first widget, which counts the open tasks.
+dashboard-starter-open = Open tasks

@@ -35,6 +35,15 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel csv-preset delete <name>` | `csv_preset.delete` | Delete a CSV import preset of the workspace. |
 | `glyphkeel csv-preset list` | `csv_preset.list` | List the CSV import presets: the built-in ones for Jira and Redmine, and the workspace's own. |
 | `glyphkeel csv-preset save <name>` | `csv_preset.save` | Save a CSV import mapping as a preset of the workspace, replacing one with the same name. |
+| `glyphkeel dashboard add-widget <dashboard>` | `dashboard.add_widget` | Add a widget to a dashboard, at the end or at a given place. |
+| `glyphkeel dashboard create` | `dashboard.create` | Make a dashboard for the whole workspace or pinned to a project, empty, with the starter widgets or with the widgets given. |
+| `glyphkeel dashboard delete <dashboard>` | `dashboard.delete` | Delete a dashboard; it can be brought back with revert. |
+| `glyphkeel dashboard edit <dashboard>` | `dashboard.update` | Rename a dashboard or change its description. |
+| `glyphkeel dashboard edit-widget <dashboard> <widget>` | `dashboard.update_widget` | Change a widget's title or settings, make it wider or narrower, or move it to another place in the grid. |
+| `glyphkeel dashboard list` | `dashboard.list` | The dashboards of the whole workspace or of a project, with their widgets and settings. |
+| `glyphkeel dashboard remove-widget <dashboard> <widget>` | `dashboard.remove_widget` | Remove a widget from a dashboard. |
+| `glyphkeel dashboard show <dashboard>` | `dashboard.show` | One dashboard with what each of its widgets shows now: counts, tasks, report figures, burndown, versions, changes, failed automation runs and notes. |
+| `glyphkeel dashboard widget <dashboard> <widget>` | `dashboard.widget` | What one widget of a dashboard shows now. |
 | `glyphkeel description history` | `description.history` | List the revisions of a task's or project's description, newest first, conflict copies included. |
 | `glyphkeel description show <revision>` | `description.revision` | One description revision with its text, and the differences from another revision on request. |
 | `glyphkeel export` | `transfer.export` | Export projects, or the whole workspace, to an archive of JSON and Markdown files with the attachments. |

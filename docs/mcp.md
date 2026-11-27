@@ -24,7 +24,7 @@ An agent can do what you can do in the app, through MCP tools in these groups:
 | tasks | Finding, creating, changing, moving, linking, duplicating and claiming tasks; checklists; recurrence |
 | comments | Adding, editing and deleting comments |
 | time | Logging time, the timer, reminders, kinds of work, the time and flow reports |
-| views | Today, the board and its layout, saved views |
+| views | Today, the board and its layout, saved views, dashboards |
 | wiki | Wiki pages: reading, searching, writing, history, export and import |
 | schedule | The Gantt chart's schedule and its problems |
 | files | Attaching and reading files |

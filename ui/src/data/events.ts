@@ -64,13 +64,19 @@ export const ENTITY_QUERIES: Readonly<Record<string, readonly OpId[]>> = {
   series: ["task.get", "task.search", "today.get", "schedule.get", "board.get"],
   // Templates: their lists, and the one shown.
   template: ["template.list", "template.get"],
+  // Dashboards: their list; each widget's value comes with every change (see ALWAYS).
+  dashboard: ["dashboard.list"],
   // Automation rules: their list, the one shown and the run log.
   automation_rule: ["automation.list", "automation.get", "automation.runs"],
   wiki_page: ["trash.list", "wiki.search", "wiki.get", "wiki.list", "wiki.history", "description.revision", "search.query", "markdown.render", ...LINKS],
 };
 
-/** Every committed change shows in the activity log, and may have set automation rules off. */
-const ALWAYS: readonly OpId[] = ["history.feed", "agent.sessions", "automation.list", "automation.get", "automation.runs"];
+/**
+ * Every committed change shows in the activity log, and may have set
+ * automation rules off. A dashboard's widgets read any of the workspace's
+ * data, so each re-reads its value: one call per widget on screen.
+ */
+const ALWAYS: readonly OpId[] = ["history.feed", "agent.sessions", "automation.list", "automation.get", "automation.runs", "dashboard.show", "dashboard.widget"];
 
 /**
  * The query prefixes to invalidate for one event. A kind of item without an

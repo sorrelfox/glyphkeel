@@ -1661,6 +1661,155 @@ export type CycleTimeTask = {
   title: string;
 };
 
+/** A dashboard. */
+export type Dashboard = {
+  /** When it was created (RFC 3339, UTC). */
+  created_at: string;
+  /** Who made it. */
+  created_by: Actor;
+  /** What it is for. */
+  description?: string;
+  /** Its ID. */
+  id: string;
+  /** Its name, unique among the dashboards of its project (or of the workspace). */
+  name: string;
+  /** The key of the project it is pinned to; left out for a dashboard of the whole workspace. */
+  project?: string;
+  /** Its place among the dashboards. */
+  rank: string;
+  /** When it last changed. */
+  updated_at: string;
+  /** Its widgets, in the order of the grid. */
+  widgets: Widget[];
+};
+
+/** A widget to add to a dashboard. */
+export type DashboardAddWidgetInput = {
+  /** The dashboard: its ID, or its name. */
+  dashboard: string;
+  /** Its place in the grid (`1` is the first); default: the end. */
+  position?: number | null;
+  /** With a name: the project it is pinned to (key or ID). */
+  project?: string | null;
+  /** The widget. */
+  widget: WidgetSpec;
+};
+
+/** A dashboard after a change. */
+export type DashboardChange = {
+  /** The dashboard after the change (before it, for a deletion). */
+  dashboard: Dashboard;
+  /** Whether the dashboard was deleted. */
+  deleted?: boolean;
+  /** The history group, for revert and Undo; left out when nothing changed. */
+  group?: string;
+  /** The widget added or changed, or the one removed. */
+  widget?: Widget;
+};
+
+/** A new dashboard. */
+export type DashboardCreateInput = {
+  /** What it is for. */
+  description?: string | null;
+  /** Its name, unique among the dashboards of its project (or of the workspace). */
+  name: string;
+  /** The project to pin it to (key or ID); left out: the whole workspace. */
+  project?: string | null;
+  /** Start with the starter widgets: open tasks, overdue and due soon, open tasks by status, created against closed and the latest changes. Widgets given as well come after them. */
+  starter?: boolean;
+  /** Its widgets, in order; at most 40. */
+  widgets?: WidgetSpec[];
+};
+
+/** A dashboard field that can be cleared. */
+export type DashboardField = "description";
+
+/** Dashboards, in order: the workspace's first, then by project. */
+export type DashboardList = {
+  /** The dashboards. */
+  items: Dashboard[];
+  /** How many. */
+  total: number;
+};
+
+/** Which dashboards to list. */
+export type DashboardListInput = {
+  /** Every dashboard, of the workspace and of every project. */
+  all?: boolean;
+  /** The dashboards pinned to this project (key or ID); left out: the dashboards of the whole workspace. */
+  project?: string | null;
+};
+
+/** Which dashboard. */
+export type DashboardRef = {
+  /** The dashboard: its ID, or its name. */
+  dashboard: string;
+  /** With a name: the project it is pinned to (key or ID); left out for the workspace's dashboards. */
+  project?: string | null;
+};
+
+/** Which widget to remove. */
+export type DashboardRemoveWidgetInput = {
+  /** The dashboard: its ID, or its name. */
+  dashboard: string;
+  /** With a name: the project it is pinned to (key or ID). */
+  project?: string | null;
+  /** The widget: its ID, or its place in the grid (`1` is the first). */
+  widget: string;
+};
+
+/** A dashboard with what each widget shows now. */
+export type DashboardShow = {
+  /** The dashboard. */
+  dashboard: Dashboard;
+  /** Its widgets with their values, in order. */
+  widgets: WidgetValue[];
+};
+
+/** Changes to a dashboard; fields left out keep their value. */
+export type DashboardUpdateInput = {
+  /** Fields to clear. */
+  clear?: DashboardField[];
+  /** The dashboard: its ID, or its name. */
+  dashboard: string;
+  /** A new description. */
+  description?: string | null;
+  /** A new name. */
+  name?: string | null;
+  /** With a name: the project it is pinned to (key or ID). */
+  project?: string | null;
+};
+
+/** Changes to one widget; fields left out keep their value. */
+export type DashboardUpdateWidgetInput = {
+  /** Settings to clear. */
+  clear?: WidgetSetting[];
+  /** The dashboard: its ID, or its name. */
+  dashboard: string;
+  /** Move it to this place in the grid (`1` is the first). */
+  position?: number | null;
+  /** With a name: the project it is pinned to (key or ID). */
+  project?: string | null;
+  /** Settings to change; those left out keep their value. */
+  settings?: WidgetSettings | null;
+  /** A new title; empty: the kind's own. */
+  title?: string | null;
+  /** The widget: its ID, or its place in the grid (`1` is the first). */
+  widget: string;
+  /** A new width in grid columns, 1 to 3. */
+  width?: number | null;
+};
+
+/** Which widget to compute. */
+export type DashboardWidgetInput = {
+  /** The dashboard: its ID, or its name. */
+  dashboard: string;
+  /** With a name: the project it is pinned to (key or ID). */
+  project?: string | null;
+  /** The widget: its ID, or its place in the grid (`1` is the first). */
+  widget: string;
+};
+
 /** A range of days, both included. */
 export type DayRange = {
   /** The last day (`YYYY-MM-DD`). */
@@ -2261,12 +2410,12 @@ export type ListGroup = {
   hue?: Hue;
   /** The parent's title or the project's name, for grouping by parent or by project. */
   title?: string;
-  /** What its tasks share: the status, label or project name, the priority (`urgent` … `none`), the parent's key, the first day of the due week (`YYYY-MM-DD`), or a custom field's option or `yes` or `no`; left out for the tasks without one. */
+  /** What its tasks share: the status, type, label or project name, the priority (`urgent` … `none`), the parent's key, the first day of the due week (`YYYY-MM-DD`), or a custom field's option or `yes` or `no`; left out for the tasks without one. */
   value?: string;
 };
 
 /** What a list's rows are grouped by. */
-export type ListGrouping = "status" | "priority" | "label" | "parent" | "due_week" | "project";
+export type ListGrouping = "status" | "priority" | "label" | "parent" | "due_week" | "project" | "type";
 
 /** The person's own layout of a list: the order of its columns, their widths and the groups folded away, kept per project (and once for the whole workspace's list). Unlike saved views it belongs to the person, not to the workspace. */
 export type ListLayout = {
@@ -5473,6 +5622,120 @@ export type WeekStart = "monday" | "saturday" | "sunday";
 /** A day of the week. */
 export type Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 
+/** One widget of a dashboard. */
+export type Widget = {
+  /** Its ID, unique in the workspace. */
+  id: string;
+  /** What it shows. */
+  kind: WidgetKind;
+  /** What it shows, beyond its kind. A project is named by its key. */
+  settings: WidgetSettings;
+  /** Its title; left out for the kind's own title. */
+  title?: string;
+  /** How many of the grid's three columns it spans: 1 to 3. */
+  width: number;
+};
+
+/** One bar of `tasks_by_field`. */
+export type WidgetBar = {
+  /** How many tasks. */
+  count: number;
+  /** Its colour, for statuses, types and labels. */
+  hue?: Hue;
+  /** The query that lists them; left out for the tasks without a value when no query can name them. */
+  query?: string;
+  /** What its tasks share: the status, type or label name, the priority (`urgent` … `none`), a custom field's option or `yes`/`no`; left out for the tasks without one. */
+  value?: string;
+};
+
+/** What a widget shows. */
+export type WidgetKind = "query_count" | "query_list" | "created_closed" | "cumulative_flow" | "cycle_time" | "time_report" | "burndown" | "version_progress" | "tasks_by_field" | "due_soon" | "overdue" | "activity" | "automation_failures" | "note";
+
+/** One setting of a widget. */
+export type WidgetSetting = "query" | "project" | "field" | "limit" | "days" | "bucket" | "group_by" | "actor_kind" | "text";
+
+/** What a widget shows, beyond its kind. Each kind takes only some of them (see `kind`); the others are refused. The same type is read and written, so its optional fields are left out rather than `null`. */
+export type WidgetSettings = {
+  /** `activity`: only changes by the person (`user`), by agents (`agent`) or by automation rules (`automation`). */
+  actor_kind?: ActorKind;
+  /** Flow reports: the length of a period: twelve of them are shown (30 days, 12 weeks or 12 months); default `week`. */
+  bucket?: FlowBucket;
+  /** `due_soon`: due within this many days (default 7); `time_report`: the last this many days, today included (default 7); `activity`: only the changes of the last this many days. 1 to 366. */
+  days?: number;
+  /** `tasks_by_field`: `status`, `priority`, `type`, `label`, or a custom select or yes/no field (`cf.<name>`). */
+  field?: string;
+  /** `time_report`: how to group the time; default `project`. */
+  group_by?: TimeGroupBy;
+  /** How many tasks, changes or runs to list, 1 to 50; default 10. */
+  limit?: number;
+  /** Only this project and its sub-projects (key or ID); on a project's dashboard, the dashboard's project when left out. `burndown` and `version_progress` need one. */
+  project?: string;
+  /** A task query (`is:open label:bug`): the tasks counted or listed, or only these tasks in a report, in `tasks_by_field`, `due_soon` and `overdue`. Relative dates in it are evaluated each time. */
+  query?: string;
+  /** `note`: the note, in Markdown, up to 10,000 characters. */
+  text?: string;
+};
+
+/** A widget to add. */
+export type WidgetSpec = {
+  /** What it shows. */
+  kind: WidgetKind;
+  /** Its settings. */
+  settings?: WidgetSettings;
+  /** Its title; default: the kind's own. */
+  title?: string | null;
+  /** Its width in grid columns, 1 to 3; default 1 (2 for charts). */
+  width?: number | null;
+};
+
+/** A task as a widget lists it. */
+export type WidgetTask = {
+  /** Its due date (`YYYY-MM-DD`). */
+  due_date?: string;
+  /** Its key. */
+  key: string;
+  /** Its priority. */
+  priority: Priority;
+  /** Its status. */
+  status: StatusRef;
+  /** Its title. */
+  title: string;
+};
+
+/** A widget with what it shows now. Only the fields of its kind are given; a widget that can't be computed (its project is gone, its query no longer valid) has `error` instead. */
+export type WidgetValue = {
+  /** `activity`: the latest changes, newest first. */
+  activity?: ActivityEntry[];
+  /** `tasks_by_field`: the bars, in the field's order. */
+  bars?: WidgetBar[];
+  /** `burndown`. */
+  burndown?: SprintBurndown;
+  /** How many tasks match (`query_count`, `query_list`, `due_soon`, `overdue`, `tasks_by_field`). */
+  count?: number;
+  /** `created_closed`. */
+  created_closed?: CreatedClosedReport;
+  /** `cumulative_flow`. */
+  cumulative_flow?: CumulativeFlowReport;
+  /** `cycle_time`, with the tasks closed in the period. */
+  cycle_time?: CycleTimeReport;
+  /** Why it can't be shown. */
+  error?: OpError;
+  /** The query the figure or list comes from, in its normal form, with the project it is limited to (`project:TM/*`): open it with `task list --query`. */
+  query?: string;
+  /** `automation_failures`: the latest runs that failed or were limited, newest first. */
+  runs?: AutomationRun[];
+  /** The first matching tasks. */
+  tasks?: WidgetTask[];
+  /** `note`: its Markdown text. */
+  text?: string;
+  /** `time_report`. */
+  time?: TimeReport;
+  /** `version_progress`: the project's open and locked versions. */
+  versions?: Version[];
+  /** The widget. */
+  widget: Widget;
+};
+
 /** A page changed, with the history group of the change. */
 export type WikiChange = {
   /** The history group, for revert and Undo; left out when nothing changed. */
@@ -6029,6 +6292,15 @@ export interface OpMap {
   "view.create": { input: ViewCreateInput; output: ViewChange; safety: "write"; kind: "command" };
   "view.update": { input: ViewUpdateInput; output: ViewChange; safety: "write"; kind: "command" };
   "view.delete": { input: ViewDeleteInput; output: ViewChange; safety: "write"; kind: "command" };
+  "dashboard.list": { input: DashboardListInput; output: DashboardList; safety: "read"; kind: "query" };
+  "dashboard.show": { input: DashboardRef; output: DashboardShow; safety: "read"; kind: "query" };
+  "dashboard.widget": { input: DashboardWidgetInput; output: WidgetValue; safety: "read"; kind: "query" };
+  "dashboard.create": { input: DashboardCreateInput; output: DashboardChange; safety: "write"; kind: "command" };
+  "dashboard.update": { input: DashboardUpdateInput; output: DashboardChange; safety: "write"; kind: "command" };
+  "dashboard.delete": { input: DashboardRef; output: DashboardChange; safety: "write"; kind: "command" };
+  "dashboard.add_widget": { input: DashboardAddWidgetInput; output: DashboardChange; safety: "write"; kind: "command" };
+  "dashboard.update_widget": { input: DashboardUpdateWidgetInput; output: DashboardChange; safety: "write"; kind: "command" };
+  "dashboard.remove_widget": { input: DashboardRemoveWidgetInput; output: DashboardChange; safety: "write"; kind: "command" };
   "list.layout.get": { input: ListLayoutGetInput; output: ListLayoutChange; safety: "read"; kind: "query" };
   "list.layout.update": { input: ListLayoutUpdateInput; output: ListLayoutChange; safety: "write"; kind: "command" };
   "query.parse": { input: QueryParseInput; output: ParsedQuery; safety: "read"; kind: "query" };
@@ -6202,6 +6474,15 @@ export const OP_SAFETY = {
   "view.create": "write",
   "view.update": "write",
   "view.delete": "write",
+  "dashboard.list": "read",
+  "dashboard.show": "read",
+  "dashboard.widget": "read",
+  "dashboard.create": "write",
+  "dashboard.update": "write",
+  "dashboard.delete": "write",
+  "dashboard.add_widget": "write",
+  "dashboard.update_widget": "write",
+  "dashboard.remove_widget": "write",
   "list.layout.get": "read",
   "list.layout.update": "write",
   "query.parse": "read",
@@ -6333,6 +6614,26 @@ export function makeOps(call: Call) {
       save: (input: OpMap["csv_preset.save"]["input"]) => call("csv_preset.save", input),
       /** Delete a CSV import preset of the workspace. (write) */
       delete: (input: OpMap["csv_preset.delete"]["input"]) => call("csv_preset.delete", input),
+    },
+    dashboard: {
+      /** The dashboards of the whole workspace or of a project, with their widgets and settings. (read) */
+      list: (input: OpMap["dashboard.list"]["input"] = {}) => call("dashboard.list", input),
+      /** One dashboard with what each of its widgets shows now: counts, tasks, report figures, burndown, versions, changes, failed automation runs and notes. (read) */
+      show: (input: OpMap["dashboard.show"]["input"]) => call("dashboard.show", input),
+      /** What one widget of a dashboard shows now. (read) */
+      widget: (input: OpMap["dashboard.widget"]["input"]) => call("dashboard.widget", input),
+      /** Make a dashboard for the whole workspace or pinned to a project, empty, with the starter widgets or with the widgets given. (write) */
+      create: (input: OpMap["dashboard.create"]["input"]) => call("dashboard.create", input),
+      /** Rename a dashboard or change its description. (write) */
+      update: (input: OpMap["dashboard.update"]["input"]) => call("dashboard.update", input),
+      /** Delete a dashboard; it can be brought back with revert. (write) */
+      delete: (input: OpMap["dashboard.delete"]["input"]) => call("dashboard.delete", input),
+      /** Add a widget to a dashboard, at the end or at a given place. (write) */
+      addWidget: (input: OpMap["dashboard.add_widget"]["input"]) => call("dashboard.add_widget", input),
+      /** Change a widget's title or settings, make it wider or narrower, or move it to another place in the grid. (write) */
+      updateWidget: (input: OpMap["dashboard.update_widget"]["input"]) => call("dashboard.update_widget", input),
+      /** Remove a widget from a dashboard. (write) */
+      removeWidget: (input: OpMap["dashboard.remove_widget"]["input"]) => call("dashboard.remove_widget", input),
     },
     description: {
       /** List the revisions of a task's or project's description, newest first, conflict copies included. (read) */
