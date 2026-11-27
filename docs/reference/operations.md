@@ -139,6 +139,7 @@ The safety class decides who may run an operation:
 | `file.thumbnail` | read | app | — | — |
 | `file.attach` | write | app, command line, MCP | `attach_file` | `glyphkeel file attach` |
 | `file.delete` | trash | app, command line, MCP | `delete_attachment` | `glyphkeel file delete <attachment>` |
+| `file.cover` | write | app, command line, MCP | `set_card_cover` | `glyphkeel file cover <task>` |
 | `agent.sessions` | read | app, command line, MCP | `get_activity` | `glyphkeel agents sessions` |
 | `agent.policy.update` | app | app, command line | — | `glyphkeel agents policy` |
 | `agent.limits.update` | app | app | — | — |
@@ -729,13 +730,13 @@ Input: `BoardGetInput`. Output: `Board`. Schemas: [catalog.schema.json](catalog.
 
 ## `layout.get`
 
-The person's layout of a project's board: column order, hidden and collapsed columns, sort modes, card fields.
+The person's layout of a project's board: column order, hidden and collapsed columns, sort modes, card fields, card colours and covers.
 
 Input: `LayoutGetInput`. Output: `LayoutChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `layout.update`
 
-Hide, show, collapse or reorder board columns, set sort modes, card fields and older closed cards, or reset to the project's layout.
+Hide, show, collapse or reorder board columns, set sort modes, card fields, card colours (by type, priority, label or ordered query rules), covers and older closed cards, or reset to the project's layout.
 
 Input: `LayoutUpdateInput`. Output: `LayoutChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
@@ -932,6 +933,12 @@ Input: `FileAttachInput`. Output: `FileChange`. Schemas: [catalog.schema.json](c
 Move an attached file to the trash.
 
 Input: `FileRef`. Output: `FileChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `file.cover`
+
+Choose the PNG, JPEG, GIF or WebP image attached to a task that its board card shows as its cover, or choose none; boards show covers when their layout's covers setting is on.
+
+Input: `FileCoverInput`. Output: `FileCoverChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 ## `agent.sessions`
 

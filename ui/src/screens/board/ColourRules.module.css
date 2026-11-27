@@ -1,0 +1,69 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+   Copyright (C) 2026 Glyphkeel contributors */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  inline-size: min(40rem, 80vw);
+}
+
+.intro {
+  margin: 0;
+  color: var(--fg-muted);
+}
+
+.rules {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rule {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--r-m);
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+.wrong {
+  box-shadow: 0 0 0 1px var(--danger);
+}
+
+.ruleFields {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 8px;
+  min-inline-size: 0;
+}
+
+.ruleButtons {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(5rem, max-content) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.label {
+  color: var(--fg-muted);
+}
+
+.error {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--fs-small);
+}

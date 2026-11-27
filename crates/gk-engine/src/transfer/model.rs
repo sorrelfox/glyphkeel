@@ -366,6 +366,9 @@ pub(crate) struct Task {
     /// ancestor shares.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) fix_version_id: Option<String>,
+    /// The image attached to it that its board card shows as its cover.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) cover_id: Option<String>,
     /// Its custom field values, one per stored value.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) custom_values: Vec<CustomValue>,

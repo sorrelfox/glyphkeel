@@ -2,15 +2,17 @@
 // Copyright (C) 2026 Glyphkeel contributors
 
 import { ArrowDownWideNarrow, CalendarDays, ChevronDown, EyeOff, Filter, Flag, History, Network, SlidersHorizontal, Tag } from "lucide-react";
-import { type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Button, Menu, MenuItem, MenuTrigger, Popover, type Selection } from "react-aria-components";
 
 import { classes } from "../../classes";
 import { MenuEntries, type MenuEntry } from "../../components/ContextMenu";
 import { cardsOf, type LayoutEdit } from "../../data/board";
 import { CARD_FIELDS, PRIORITIES, SORT_MODES, type Board, type BoardLayout, type CardSize, type Project } from "../../data/catalog";
+import { type CardColourBy, type CoverMode } from "../../generated/ops";
 import { useCustomFields } from "../../data/fields";
 import { useT } from "../../i18n/I18n";
+import { ColourRulesDialog } from "./ColourRules";
 import { DUE_FILTERS, type BoardView, type Filters } from "./model";
 import styles from "./Board.module.css";
 
@@ -29,6 +31,12 @@ interface ToolbarProps {
 
 /** Choices for "hide closed cards after": days, 0 = never. */
 const HIDE_DONE_DAYS = [7, 14, 30, 0] as const;
+
+/** What can colour a card's edge, in the menu's order. */
+const COLOUR_BY: readonly CardColourBy[] = ["none", "type", "priority", "label", "query"];
+
+/** Which image cards show as their cover. */
+const COVER_MODES: readonly CoverMode[] = ["off", "chosen", "first_image"];
 
 interface PickerProps<T extends string> {
   label: string;
@@ -105,6 +113,7 @@ export function Toolbar({ project, board, layout, view, filters, onFilters, onLa
   const allLabels = new Map(cards.flatMap((card) => card.labels.map((label) => [label.name, label] as const)));
   const hiddenTasks = view.hidden.reduce((sum, hidden) => sum + hidden.count, 0);
   const sorted = layout.sort_mode !== "manual";
+  const [editingRules, setEditingRules] = useState(false);
 
   return (
     <div className={classes("toolbar", styles.toolbar)} role="toolbar" aria-label={t("board-toolbar")}>
@@ -255,6 +264,44 @@ export function Toolbar({ project, board, layout, view, filters, onFilters, onLa
             })),
           },
           {
+            id: "colour",
+            section: t("board-card-colour"),
+            items: [
+              ...COLOUR_BY.map((by) => ({
+                id: `colour-${by}`,
+                label: t(`card-colour-${by}`),
+                checked: layout.colour_by === by,
+                run: () => {
+                  // Rules need writing first.
+                  if (by === "query" && layout.colour_rules.length === 0) {
+                    setEditingRules(true);
+                  } else {
+                    onLayout({ colour_by: by });
+                  }
+                },
+              })),
+              {
+                id: "colour-rules",
+                label: t("card-colour-edit-rules"),
+                run: () => {
+                  setEditingRules(true);
+                },
+              },
+            ],
+          },
+          {
+            id: "covers",
+            section: t("board-covers"),
+            items: COVER_MODES.map((mode) => ({
+              id: `covers-${mode}`,
+              label: t(`covers-${mode}`),
+              checked: layout.covers === mode,
+              run: () => {
+                onLayout({ covers: mode });
+              },
+            })),
+          },
+          {
             id: "done",
             section: t("board-hide-done"),
             items: HIDE_DONE_DAYS.map((days) => ({
@@ -272,6 +319,15 @@ export function Toolbar({ project, board, layout, view, filters, onFilters, onLa
       >
         <SlidersHorizontal className="ic" />
       </MenuButton>
+      {editingRules && (
+        <ColourRulesDialog
+          project={project.key}
+          rules={layout.colour_rules}
+          onClose={() => {
+            setEditingRules(false);
+          }}
+        />
+      )}
     </div>
   );
 }

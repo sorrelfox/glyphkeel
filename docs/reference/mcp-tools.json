@@ -86,7 +86,8 @@
       "get_schedule",
       "attach_file",
       "read_attachment",
-      "delete_attachment"
+      "delete_attachment",
+      "set_card_cover"
     ],
     "read-only": [
       "get_workspace",
@@ -206,7 +207,8 @@
       "get_schedule",
       "attach_file",
       "read_attachment",
-      "delete_attachment"
+      "delete_attachment",
+      "set_card_cover"
     ]
   },
   "tools": [
@@ -9477,6 +9479,10 @@
                             "description": "The comment's ID, for a file attached to a comment.",
                             "type": "string"
                           },
+                          "cover": {
+                            "description": "Whether it is chosen as its task's cover on the board.",
+                            "type": "boolean"
+                          },
                           "created_at": {
                             "description": "When it was attached (RFC 3339, UTC).",
                             "type": "string"
@@ -9865,6 +9871,10 @@
                     "comment": {
                       "description": "The comment's ID, for a file attached to a comment.",
                       "type": "string"
+                    },
+                    "cover": {
+                      "description": "Whether it is chosen as its task's cover on the board.",
+                      "type": "boolean"
                     },
                     "created_at": {
                       "description": "When it was attached (RFC 3339, UTC).",
@@ -13828,6 +13838,10 @@
                               "description": "The comment's ID, for a file attached to a comment.",
                               "type": "string"
                             },
+                            "cover": {
+                              "description": "Whether it is chosen as its task's cover on the board.",
+                              "type": "boolean"
+                            },
                             "created_at": {
                               "description": "When it was attached (RFC 3339, UTC).",
                               "type": "string"
@@ -14216,6 +14230,10 @@
                       "comment": {
                         "description": "The comment's ID, for a file attached to a comment.",
                         "type": "string"
+                      },
+                      "cover": {
+                        "description": "Whether it is chosen as its task's cover on the board.",
+                        "type": "boolean"
                       },
                       "created_at": {
                         "description": "When it was attached (RFC 3339, UTC).",
@@ -16014,6 +16032,10 @@
                             "description": "The comment's ID, for a file attached to a comment.",
                             "type": "string"
                           },
+                          "cover": {
+                            "description": "Whether it is chosen as its task's cover on the board.",
+                            "type": "boolean"
+                          },
                           "created_at": {
                             "description": "When it was attached (RFC 3339, UTC).",
                             "type": "string"
@@ -16402,6 +16424,10 @@
                     "comment": {
                       "description": "The comment's ID, for a file attached to a comment.",
                       "type": "string"
+                    },
+                    "cover": {
+                      "description": "Whether it is chosen as its task's cover on the board.",
+                      "type": "boolean"
                     },
                     "created_at": {
                       "description": "When it was attached (RFC 3339, UTC).",
@@ -18317,6 +18343,10 @@
                             "description": "The comment's ID, for a file attached to a comment.",
                             "type": "string"
                           },
+                          "cover": {
+                            "description": "Whether it is chosen as its task's cover on the board.",
+                            "type": "boolean"
+                          },
                           "created_at": {
                             "description": "When it was attached (RFC 3339, UTC).",
                             "type": "string"
@@ -18705,6 +18735,10 @@
                     "comment": {
                       "description": "The comment's ID, for a file attached to a comment.",
                       "type": "string"
+                    },
+                    "cover": {
+                      "description": "Whether it is chosen as its task's cover on the board.",
+                      "type": "boolean"
                     },
                     "created_at": {
                       "description": "When it was attached (RFC 3339, UTC).",
@@ -20473,6 +20507,10 @@
                             "description": "The comment's ID, for a file attached to a comment.",
                             "type": "string"
                           },
+                          "cover": {
+                            "description": "Whether it is chosen as its task's cover on the board.",
+                            "type": "boolean"
+                          },
                           "created_at": {
                             "description": "When it was attached (RFC 3339, UTC).",
                             "type": "string"
@@ -20861,6 +20899,10 @@
                     "comment": {
                       "description": "The comment's ID, for a file attached to a comment.",
                       "type": "string"
+                    },
+                    "cover": {
+                      "description": "Whether it is chosen as its task's cover on the board.",
+                      "type": "boolean"
                     },
                     "created_at": {
                       "description": "When it was attached (RFC 3339, UTC).",
@@ -23357,6 +23399,10 @@
                             "description": "The comment's ID, for a file attached to a comment.",
                             "type": "string"
                           },
+                          "cover": {
+                            "description": "Whether it is chosen as its task's cover on the board.",
+                            "type": "boolean"
+                          },
                           "created_at": {
                             "description": "When it was attached (RFC 3339, UTC).",
                             "type": "string"
@@ -23745,6 +23791,10 @@
                     "comment": {
                       "description": "The comment's ID, for a file attached to a comment.",
                       "type": "string"
+                    },
+                    "cover": {
+                      "description": "Whether it is chosen as its task's cover on the board.",
+                      "type": "boolean"
                     },
                     "created_at": {
                       "description": "When it was attached (RFC 3339, UTC).",
@@ -25874,6 +25924,10 @@
                             "description": "The comment's ID, for a file attached to a comment.",
                             "type": "string"
                           },
+                          "cover": {
+                            "description": "Whether it is chosen as its task's cover on the board.",
+                            "type": "boolean"
+                          },
                           "created_at": {
                             "description": "When it was attached (RFC 3339, UTC).",
                             "type": "string"
@@ -26262,6 +26316,10 @@
                     "comment": {
                       "description": "The comment's ID, for a file attached to a comment.",
                       "type": "string"
+                    },
+                    "cover": {
+                      "description": "Whether it is chosen as its task's cover on the board.",
+                      "type": "boolean"
                     },
                     "created_at": {
                       "description": "When it was attached (RFC 3339, UTC).",
@@ -28013,6 +28071,10 @@
                             "description": "The comment's ID, for a file attached to a comment.",
                             "type": "string"
                           },
+                          "cover": {
+                            "description": "Whether it is chosen as its task's cover on the board.",
+                            "type": "boolean"
+                          },
                           "created_at": {
                             "description": "When it was attached (RFC 3339, UTC).",
                             "type": "string"
@@ -28401,6 +28463,10 @@
                     "comment": {
                       "description": "The comment's ID, for a file attached to a comment.",
                       "type": "string"
+                    },
+                    "cover": {
+                      "description": "Whether it is chosen as its task's cover on the board.",
+                      "type": "boolean"
                     },
                     "created_at": {
                       "description": "When it was attached (RFC 3339, UTC).",
@@ -30109,6 +30175,10 @@
                             "description": "The comment's ID, for a file attached to a comment.",
                             "type": "string"
                           },
+                          "cover": {
+                            "description": "Whether it is chosen as its task's cover on the board.",
+                            "type": "boolean"
+                          },
                           "created_at": {
                             "description": "When it was attached (RFC 3339, UTC).",
                             "type": "string"
@@ -30497,6 +30567,10 @@
                     "comment": {
                       "description": "The comment's ID, for a file attached to a comment.",
                       "type": "string"
+                    },
+                    "cover": {
+                      "description": "Whether it is chosen as its task's cover on the board.",
+                      "type": "boolean"
                     },
                     "created_at": {
                       "description": "When it was attached (RFC 3339, UTC).",
@@ -32207,6 +32281,10 @@
                             "description": "The comment's ID, for a file attached to a comment.",
                             "type": "string"
                           },
+                          "cover": {
+                            "description": "Whether it is chosen as its task's cover on the board.",
+                            "type": "boolean"
+                          },
                           "created_at": {
                             "description": "When it was attached (RFC 3339, UTC).",
                             "type": "string"
@@ -32595,6 +32673,10 @@
                     "comment": {
                       "description": "The comment's ID, for a file attached to a comment.",
                       "type": "string"
+                    },
+                    "cover": {
+                      "description": "Whether it is chosen as its task's cover on the board.",
+                      "type": "boolean"
                     },
                     "created_at": {
                       "description": "When it was attached (RFC 3339, UTC).",
@@ -34299,6 +34381,10 @@
                             "description": "The comment's ID, for a file attached to a comment.",
                             "type": "string"
                           },
+                          "cover": {
+                            "description": "Whether it is chosen as its task's cover on the board.",
+                            "type": "boolean"
+                          },
                           "created_at": {
                             "description": "When it was attached (RFC 3339, UTC).",
                             "type": "string"
@@ -34687,6 +34773,10 @@
                     "comment": {
                       "description": "The comment's ID, for a file attached to a comment.",
                       "type": "string"
+                    },
+                    "cover": {
+                      "description": "Whether it is chosen as its task's cover on the board.",
+                      "type": "boolean"
                     },
                     "created_at": {
                       "description": "When it was attached (RFC 3339, UTC).",
@@ -37605,6 +37695,10 @@
                       "description": "The comment's ID, for a file attached to a comment.",
                       "type": "string"
                     },
+                    "cover": {
+                      "description": "Whether it is chosen as its task's cover on the board.",
+                      "type": "boolean"
+                    },
                     "created_at": {
                       "description": "When it was attached (RFC 3339, UTC).",
                       "type": "string"
@@ -37948,6 +38042,10 @@
                       "description": "The comment's ID, for a file attached to a comment.",
                       "type": "string"
                     },
+                    "cover": {
+                      "description": "Whether it is chosen as its task's cover on the board.",
+                      "type": "boolean"
+                    },
                     "created_at": {
                       "description": "When it was attached (RFC 3339, UTC).",
                       "type": "string"
@@ -38281,6 +38379,10 @@
                     "comment": {
                       "description": "The comment's ID, for a file attached to a comment.",
                       "type": "string"
+                    },
+                    "cover": {
+                      "description": "Whether it is chosen as its task's cover on the board.",
+                      "type": "boolean"
                     },
                     "created_at": {
                       "description": "When it was attached (RFC 3339, UTC).",
@@ -44970,7 +45072,7 @@
         "board.get",
         "layout.get"
       ],
-      "description": "Returns a project's board as the person sees it: columns in their order with hidden ones flagged (and their cards left out), WIP limits and whether a column is over it, and compact cards. `include_subprojects: true` adds the sub-projects' tasks, matching columns by status name. Closed cards older than the layout's limit are counted, not listed, unless `show_older: true`. Example: get_board {\"project\": \"TM\"}",
+      "description": "Returns a project's board as the person sees it: columns in their order with hidden ones flagged (and their cards left out), WIP limits and whether a column is over it, and compact cards. `include_subprojects: true` adds the sub-projects' tasks, matching columns by status name. Closed cards older than the layout's limit are counted, not listed, unless `show_older: true`. Cards carry their coloured `edge` (colour and the rule that gave it) and their `cover` image when the layout sets them. Example: get_board {\"project\": \"TM\"}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "Which board to read.",
@@ -45070,9 +45172,139 @@
                         "minimum": 0,
                         "type": "integer"
                       },
+                      "cover": {
+                        "additionalProperties": false,
+                        "description": "Its cover image, as the layout's `covers` chooses; left out when it\nhas none.",
+                        "properties": {
+                          "attachment": {
+                            "description": "The attachment's ID.",
+                            "type": "string"
+                          },
+                          "height": {
+                            "description": "Its height in pixels, when known.",
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "mime": {
+                            "description": "Its media type.",
+                            "type": "string"
+                          },
+                          "name": {
+                            "description": "Its file name, for the image's text.",
+                            "type": "string"
+                          },
+                          "width": {
+                            "description": "Its width in pixels, when known.",
+                            "minimum": 0,
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "attachment",
+                          "name",
+                          "mime"
+                        ],
+                        "type": "object"
+                      },
                       "due_date": {
                         "description": "The due date.",
                         "type": "string"
+                      },
+                      "edge": {
+                        "additionalProperties": false,
+                        "description": "Its coloured edge, as the layout's `colour_by` chooses; left out\nwhen it has none.",
+                        "properties": {
+                          "by": {
+                            "description": "What chose it.",
+                            "oneOf": [
+                              {
+                                "const": "none",
+                                "description": "No coloured edge (the default).",
+                                "type": "string"
+                              },
+                              {
+                                "const": "type",
+                                "description": "The colour of the task's type.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "priority",
+                                "description": "A colour for each priority: urgent red, high orange, normal blue,\nlow grey; none has no edge.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "label",
+                                "description": "The colour of the task's first label.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "query",
+                                "description": "The first of the layout's colour rules whose query the task matches.",
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "hue": {
+                            "description": "The colour.",
+                            "oneOf": [
+                              {
+                                "const": "red",
+                                "description": "Red.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "orange",
+                                "description": "Orange.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "yellow",
+                                "description": "Yellow.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "green",
+                                "description": "Green.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "teal",
+                                "description": "Teal.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "blue",
+                                "description": "Blue.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "purple",
+                                "description": "Purple.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "pink",
+                                "description": "Pink.",
+                                "type": "string"
+                              },
+                              {
+                                "const": "grey",
+                                "description": "Grey.",
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "name": {
+                            "description": "What it stands for: the type's or label's name, the priority, or the\nrule's name (its query when it has none).",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "hue",
+                          "by",
+                          "name"
+                        ],
+                        "type": "object"
                       },
                       "estimate_minutes": {
                         "description": "The estimate in minutes.",
@@ -45547,6 +45779,111 @@
                 },
                 "type": "array"
               },
+              "colour_by": {
+                "default": "none",
+                "description": "What colours the edge of the cards.",
+                "oneOf": [
+                  {
+                    "const": "none",
+                    "description": "No coloured edge (the default).",
+                    "type": "string"
+                  },
+                  {
+                    "const": "type",
+                    "description": "The colour of the task's type.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "priority",
+                    "description": "A colour for each priority: urgent red, high orange, normal blue,\nlow grey; none has no edge.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "label",
+                    "description": "The colour of the task's first label.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "query",
+                    "description": "The first of the layout's colour rules whose query the task matches.",
+                    "type": "string"
+                  }
+                ]
+              },
+              "colour_rules": {
+                "default": [],
+                "description": "The colour rules for `colour_by: query`, in order; the first whose\nquery a card matches colours it.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "One colour rule: the cards a query matches get its colour.",
+                  "properties": {
+                    "hue": {
+                      "description": "The colour of the cards it matches.",
+                      "oneOf": [
+                        {
+                          "const": "red",
+                          "description": "Red.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "orange",
+                          "description": "Orange.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "yellow",
+                          "description": "Yellow.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "green",
+                          "description": "Green.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "teal",
+                          "description": "Teal.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "blue",
+                          "description": "Blue.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "purple",
+                          "description": "Purple.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "pink",
+                          "description": "Pink.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "grey",
+                          "description": "Grey.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "name": {
+                      "description": "A name for the rule, shown with the edge; empty shows the query.",
+                      "type": "string"
+                    },
+                    "query": {
+                      "description": "A query in the query language, such as `label:urgent due<today`.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "query",
+                    "hue"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
               "column_sort": {
                 "additionalProperties": {
                   "description": "How a column's cards are ordered.",
@@ -45575,6 +45912,27 @@
                 },
                 "description": "Sort modes of single columns, by status ID.",
                 "type": "object"
+              },
+              "covers": {
+                "default": "off",
+                "description": "Which image the cards show as their cover.",
+                "oneOf": [
+                  {
+                    "const": "off",
+                    "description": "No covers (the default).",
+                    "type": "string"
+                  },
+                  {
+                    "const": "chosen",
+                    "description": "The image chosen as the task's cover (`file.cover`), if it has one.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "first_image",
+                    "description": "The chosen image, or else the task's first attached image.",
+                    "type": "string"
+                  }
+                ]
               },
               "hidden": {
                 "description": "Hidden columns, as status IDs.",
@@ -45633,7 +45991,10 @@
               "column_sort",
               "hide_done_after_days",
               "card_fields",
-              "include_subprojects"
+              "include_subprojects",
+              "colour_by",
+              "colour_rules",
+              "covers"
             ],
             "type": "object"
           },
@@ -45666,7 +46027,7 @@
       "covers": [
         "layout.update"
       ],
-      "description": "Changes the person's own layout of a project's board: `hide`, `show`, `collapse`, `expand` columns (by status name), set their `order`, the `sort_mode` (manual, priority, due, updated) or per-column `column_sort`, `card_fields`, `hide_done_after_days`, `include_subprojects`, or `reset` to the project's layout. It never changes the project's statuses. Only change the layout when the person asked. Example: set_board_layout {\"project\": \"TM\", \"hide\": [\"Backlog\"]}",
+      "description": "Changes the person's own layout of a project's board: `hide`, `show`, `collapse`, `expand` columns (by status name), set their `order`, the `sort_mode` (manual, priority, due, updated) or per-column `column_sort`, `card_fields`, `hide_done_after_days`, `include_subprojects`, the cards' coloured edge (`colour_by`: none, type, priority, label, or query with ordered `colour_rules` of `query`, `hue` and `name`, first match wins), `covers` (off, chosen, first_image), or `reset` to the project's layout. It never changes the project's statuses. Only change the layout when the person asked. Example: set_board_layout {\"project\": \"TM\", \"hide\": [\"Backlog\"]}",
       "inputSchema": {
         "additionalProperties": false,
         "description": "Changes to a board layout; fields left out keep their value.",
@@ -45682,6 +46043,109 @@
             "description": "Columns to collapse.",
             "items": {
               "type": "string"
+            },
+            "type": "array"
+          },
+          "colour_by": {
+            "description": "What colours the edge of the cards: `none`, `type`, `priority`,\n`label` or `query` (the colour rules).",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No coloured edge (the default).",
+                "type": "string"
+              },
+              {
+                "const": "type",
+                "description": "The colour of the task's type.",
+                "type": "string"
+              },
+              {
+                "const": "priority",
+                "description": "A colour for each priority: urgent red, high orange, normal blue,\nlow grey; none has no edge.",
+                "type": "string"
+              },
+              {
+                "const": "label",
+                "description": "The colour of the task's first label.",
+                "type": "string"
+              },
+              {
+                "const": "query",
+                "description": "The first of the layout's colour rules whose query the task matches.",
+                "type": "string"
+              }
+            ]
+          },
+          "colour_rules": {
+            "description": "The colour rules, in order, replacing the old ones: each a query and\na colour, and an optional name. At most 20.",
+            "items": {
+              "additionalProperties": false,
+              "description": "One colour rule: the cards a query matches get its colour.",
+              "properties": {
+                "hue": {
+                  "description": "The colour of the cards it matches.",
+                  "oneOf": [
+                    {
+                      "const": "red",
+                      "description": "Red.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "orange",
+                      "description": "Orange.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "yellow",
+                      "description": "Yellow.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "green",
+                      "description": "Green.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "teal",
+                      "description": "Teal.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "blue",
+                      "description": "Blue.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "purple",
+                      "description": "Purple.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "pink",
+                      "description": "Pink.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "grey",
+                      "description": "Grey.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "name": {
+                  "description": "A name for the rule, shown with the edge; empty shows the query.",
+                  "type": "string"
+                },
+                "query": {
+                  "description": "A query in the query language, such as `label:urgent due<today`.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "query",
+                "hue"
+              ],
+              "type": "object"
             },
             "type": "array"
           },
@@ -45713,6 +46177,26 @@
             },
             "description": "Sort modes of single columns, by status name or ID; `manual` columns\ncan be reordered by hand.",
             "type": "object"
+          },
+          "covers": {
+            "description": "Which image the cards show as their cover: `off`, `chosen` or\n`first_image`.",
+            "oneOf": [
+              {
+                "const": "off",
+                "description": "No covers (the default).",
+                "type": "string"
+              },
+              {
+                "const": "chosen",
+                "description": "The image chosen as the task's cover (`file.cover`), if it has one.",
+                "type": "string"
+              },
+              {
+                "const": "first_image",
+                "description": "The chosen image, or else the task's first attached image.",
+                "type": "string"
+              }
+            ]
           },
           "expand": {
             "description": "Columns to expand again.",
@@ -45819,6 +46303,111 @@
                 },
                 "type": "array"
               },
+              "colour_by": {
+                "default": "none",
+                "description": "What colours the edge of the cards.",
+                "oneOf": [
+                  {
+                    "const": "none",
+                    "description": "No coloured edge (the default).",
+                    "type": "string"
+                  },
+                  {
+                    "const": "type",
+                    "description": "The colour of the task's type.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "priority",
+                    "description": "A colour for each priority: urgent red, high orange, normal blue,\nlow grey; none has no edge.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "label",
+                    "description": "The colour of the task's first label.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "query",
+                    "description": "The first of the layout's colour rules whose query the task matches.",
+                    "type": "string"
+                  }
+                ]
+              },
+              "colour_rules": {
+                "default": [],
+                "description": "The colour rules for `colour_by: query`, in order; the first whose\nquery a card matches colours it.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "One colour rule: the cards a query matches get its colour.",
+                  "properties": {
+                    "hue": {
+                      "description": "The colour of the cards it matches.",
+                      "oneOf": [
+                        {
+                          "const": "red",
+                          "description": "Red.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "orange",
+                          "description": "Orange.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "yellow",
+                          "description": "Yellow.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "green",
+                          "description": "Green.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "teal",
+                          "description": "Teal.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "blue",
+                          "description": "Blue.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "purple",
+                          "description": "Purple.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "pink",
+                          "description": "Pink.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "grey",
+                          "description": "Grey.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "name": {
+                      "description": "A name for the rule, shown with the edge; empty shows the query.",
+                      "type": "string"
+                    },
+                    "query": {
+                      "description": "A query in the query language, such as `label:urgent due<today`.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "query",
+                    "hue"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
               "column_sort": {
                 "additionalProperties": {
                   "description": "How a column's cards are ordered.",
@@ -45847,6 +46436,27 @@
                 },
                 "description": "Sort modes of single columns, by status ID.",
                 "type": "object"
+              },
+              "covers": {
+                "default": "off",
+                "description": "Which image the cards show as their cover.",
+                "oneOf": [
+                  {
+                    "const": "off",
+                    "description": "No covers (the default).",
+                    "type": "string"
+                  },
+                  {
+                    "const": "chosen",
+                    "description": "The image chosen as the task's cover (`file.cover`), if it has one.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "first_image",
+                    "description": "The chosen image, or else the task's first attached image.",
+                    "type": "string"
+                  }
+                ]
               },
               "hidden": {
                 "description": "Hidden columns, as status IDs.",
@@ -45905,7 +46515,10 @@
               "column_sort",
               "hide_done_after_days",
               "card_fields",
-              "include_subprojects"
+              "include_subprojects",
+              "colour_by",
+              "colour_rules",
+              "covers"
             ],
             "type": "object"
           },
@@ -47329,6 +47942,10 @@
                   "description": "The comment's ID, for a file attached to a comment.",
                   "type": "string"
                 },
+                "cover": {
+                  "description": "Whether it is chosen as its task's cover on the board.",
+                  "type": "boolean"
+                },
                 "created_at": {
                   "description": "When it was attached (RFC 3339, UTC).",
                   "type": "string"
@@ -47903,6 +48520,10 @@
                     "comment": {
                       "description": "The comment's ID, for a file attached to a comment.",
                       "type": "string"
+                    },
+                    "cover": {
+                      "description": "Whether it is chosen as its task's cover on the board.",
+                      "type": "boolean"
                     },
                     "created_at": {
                       "description": "When it was attached (RFC 3339, UTC).",
@@ -48615,6 +49236,10 @@
                     "comment": {
                       "description": "The comment's ID, for a file attached to a comment.",
                       "type": "string"
+                    },
+                    "cover": {
+                      "description": "Whether it is chosen as its task's cover on the board.",
+                      "type": "boolean"
                     },
                     "created_at": {
                       "description": "When it was attached (RFC 3339, UTC).",
@@ -50382,6 +51007,10 @@
                 "description": "The comment's ID, for a file attached to a comment.",
                 "type": "string"
               },
+              "cover": {
+                "description": "Whether it is chosen as its task's cover on the board.",
+                "type": "boolean"
+              },
               "created_at": {
                 "description": "When it was attached (RFC 3339, UTC).",
                 "type": "string"
@@ -50557,6 +51186,10 @@
               "comment": {
                 "description": "The comment's ID, for a file attached to a comment.",
                 "type": "string"
+              },
+              "cover": {
+                "description": "Whether it is chosen as its task's cover on the board.",
+                "type": "boolean"
               },
               "created_at": {
                 "description": "When it was attached (RFC 3339, UTC).",
@@ -50743,6 +51376,10 @@
                 "description": "The comment's ID, for a file attached to a comment.",
                 "type": "string"
               },
+              "cover": {
+                "description": "Whether it is chosen as its task's cover on the board.",
+                "type": "boolean"
+              },
               "created_at": {
                 "description": "When it was attached (RFC 3339, UTC).",
                 "type": "string"
@@ -50842,6 +51479,188 @@
         "type": "object"
       },
       "title": "Delete an attached file",
+      "toolset": "files"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Choose a card's cover image"
+      },
+      "covers": [
+        "file.cover"
+      ],
+      "description": "Chooses the image attached to a `task` (key) that its board card shows as its cover, by the `attachment`'s ID (a PNG, JPEG, GIF or WebP file attached to the task itself), or leave `attachment` out to choose none. Boards show covers only when their layout's `covers` is `chosen` or `first_image`. Only change it when the person asked. Example: set_card_cover {\"task\": \"TM-41\", \"attachment\": \"0193b2a4-5c6d-7e8f-9a0b-1c2d3e4f5a6b\"}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Which image a task's board card shows as its cover.",
+        "properties": {
+          "attachment": {
+            "description": "The image attached to the task itself to show, by its ID; left out\nto choose none.",
+            "type": "string"
+          },
+          "task": {
+            "description": "The task: its key or ID.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task"
+        ],
+        "title": "FileCoverInput",
+        "type": "object"
+      },
+      "name": "set_card_cover",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "A task's cover after a change.",
+        "properties": {
+          "cover": {
+            "additionalProperties": false,
+            "description": "The chosen cover; left out when none is chosen.",
+            "properties": {
+              "added_by": {
+                "additionalProperties": false,
+                "description": "Who attached it.",
+                "properties": {
+                  "kind": {
+                    "description": "Person or agent.",
+                    "oneOf": [
+                      {
+                        "const": "user",
+                        "description": "The person who owns the workspace.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "agent",
+                        "description": "An agent working through MCP.",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "name": {
+                    "description": "The display name (\"You\", \"Claude Code\").",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "name"
+                ],
+                "type": "object"
+              },
+              "comment": {
+                "description": "The comment's ID, for a file attached to a comment.",
+                "type": "string"
+              },
+              "cover": {
+                "description": "Whether it is chosen as its task's cover on the board.",
+                "type": "boolean"
+              },
+              "created_at": {
+                "description": "When it was attached (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "height": {
+                "description": "An image's height in pixels.",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "The attachment's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "description": "What it holds.",
+                "oneOf": [
+                  {
+                    "const": "image",
+                    "description": "A picture shown inline.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "text",
+                    "description": "Text in UTF-8.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "executable",
+                    "description": "A program or script: only ever saved, never opened or shown.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "other",
+                    "description": "Anything else.",
+                    "type": "string"
+                  }
+                ]
+              },
+              "mime": {
+                "description": "The media type, read from the content.",
+                "type": "string"
+              },
+              "name": {
+                "description": "The file name.",
+                "type": "string"
+              },
+              "page": {
+                "description": "The wiki page's ID, for a file attached to a page.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The project's key, for a file attached to a wiki page.",
+                "type": "string"
+              },
+              "sha256": {
+                "description": "The content's SHA-256.",
+                "type": "string"
+              },
+              "size": {
+                "description": "The size in bytes.",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "task": {
+                "description": "The task's key; empty for a file on a wiki page.",
+                "type": "string"
+              },
+              "width": {
+                "description": "An image's width in pixels.",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "mime",
+              "kind",
+              "size",
+              "sha256",
+              "task",
+              "added_by",
+              "created_at"
+            ],
+            "type": "object"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "task": {
+            "description": "The task's key.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task"
+        ],
+        "title": "FileCoverChange",
+        "type": "object"
+      },
+      "title": "Choose a card's cover image",
       "toolset": "files"
     },
     {

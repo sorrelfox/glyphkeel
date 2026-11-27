@@ -1119,7 +1119,8 @@ Example: get_today {\"limit\": 20}",
 hidden ones flagged (and their cards left out), WIP limits and whether a column is over it, and \
 compact cards. `include_subprojects: true` adds the sub-projects' tasks, matching columns by \
 status name. Closed cards older than the layout's limit are counted, not listed, unless \
-`show_older: true`. \
+`show_older: true`. Cards carry their coloured `edge` (colour and the rule that gave it) and \
+their `cover` image when the layout sets them. \
 Example: get_board {\"project\": \"TM\"}",
         main: "board.get",
         covers: &["board.get", "layout.get"],
@@ -1132,8 +1133,10 @@ Example: get_board {\"project\": \"TM\"}",
         description: "Changes the person's own layout of a project's board: `hide`, `show`, \
 `collapse`, `expand` columns (by status name), set their `order`, the `sort_mode` (manual, \
 priority, due, updated) or per-column `column_sort`, `card_fields`, `hide_done_after_days`, \
-`include_subprojects`, or `reset` to the project's layout. It never changes the project's \
-statuses. Only change the layout when the person asked. \
+`include_subprojects`, the cards' coloured edge (`colour_by`: none, type, priority, label, \
+or query with ordered `colour_rules` of `query`, `hue` and `name`, first match wins), \
+`covers` (off, chosen, first_image), or `reset` to the project's layout. It never changes the \
+project's statuses. Only change the layout when the person asked. \
 Example: set_board_layout {\"project\": \"TM\", \"hide\": [\"Backlog\"]}",
         main: "layout.update",
         covers: &["layout.update"],
@@ -1375,6 +1378,19 @@ by the attachment's ID. \
 Example: delete_attachment {\"attachment\": \"0193b2a4-5c6d-7e8f-9a0b-1c2d3e4f5a6b\"}",
         main: "file.delete",
         covers: &["file.delete"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "set_card_cover",
+        toolset: Toolset::Files,
+        title: "Choose a card's cover image",
+        description: "Chooses the image attached to a `task` (key) that its board card shows as its \
+cover, by the `attachment`'s ID (a PNG, JPEG, GIF or WebP file attached to the task itself), or \
+leave `attachment` out to choose none. Boards show covers only when their layout's `covers` is \
+`chosen` or `first_image`. Only change it when the person asked. \
+Example: set_card_cover {\"task\": \"TM-41\", \"attachment\": \"0193b2a4-5c6d-7e8f-9a0b-1c2d3e4f5a6b\"}",
+        main: "file.cover",
+        covers: &["file.cover"],
         idempotent: true,
     },
     McpTool {
