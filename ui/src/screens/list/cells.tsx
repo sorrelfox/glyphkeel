@@ -14,7 +14,6 @@ import { PriorityGlyph, RecurringMark, TypeGlyph, usePriorityName } from "../../
 import { PRIORITIES, type Priority } from "../../data/catalog";
 import { useProject } from "../../data/board";
 import { fieldsOfCard } from "../../data/rules";
-import { useDurations } from "../../data/time";
 import { useFieldText } from "../../data/fields";
 import { useEntryReason } from "../../data/useRules";
 import { type CustomField, type ListedTask } from "../../generated/ops";
@@ -35,6 +34,8 @@ export interface CellActions {
   setStatus: (task: ListedTask, status: string, closing: boolean) => void;
   setPriority: (task: ListedTask, priority: Priority) => void;
   setDue: (task: ListedTask, day: string | null) => void;
+  /** Minutes as a duration in the workspace's units ("1d 2h"): read once for the table, not per cell. */
+  formatDuration: (minutes: number) => string;
 }
 
 export const CellContext = createContext<CellActions | null>(null);
@@ -369,11 +370,11 @@ export function Cell({ column, task, field }: { column: ColumnId; task: ListedTa
 }
 
 function BuiltinCell({ column, task }: { column: Exclude<ColumnId, `cf.${string}`>; task: ListedTask }) {
-  const { format } = useDurations();
+  const { formatDuration } = useCellActions();
   const { locale } = useLocale();
   const day = useDayFormat();
   const moment = useMomentFormat();
-  const duration = (minutes: number | undefined) => (minutes === undefined ? <Empty /> : <span className="num">{format(minutes)}</span>);
+  const duration = (minutes: number | undefined) => (minutes === undefined ? <Empty /> : <span className="num">{formatDuration(minutes)}</span>);
   switch (column) {
     case "key":
       return <span className="key">{task.key}</span>;

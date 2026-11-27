@@ -65,7 +65,7 @@
       "rpm": {
         "desktopTemplate": "packaging/glyphkeel.desktop",
         "depends": [
-          "openssl-libs"
+          "libcrypto.so.3()(64bit)"
         ],
         "recommends": [
           "libayatana-appindicator-gtk3",
