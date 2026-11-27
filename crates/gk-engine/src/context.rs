@@ -76,6 +76,26 @@ impl Context {
         }
     }
 
+    /// An automation rule named `name`, acting through `via` (the program
+    /// whose change set it off, or that ran the schedule). It never
+    /// confirms permanent operations.
+    #[must_use]
+    pub fn automation(name: impl Into<String>, via: Via) -> Self {
+        Self {
+            actor: Actor {
+                kind: ActorKind::Automation,
+                name: name.into(),
+            },
+            via,
+            session: None,
+            profile: None,
+            request_id: None,
+            confirm: Confirmation::Refuse,
+            project_scope: None,
+            person_confirmed: false,
+        }
+    }
+
     /// The same caller with another way to confirm permanent operations.
     #[must_use]
     pub fn with_confirmation(mut self, confirm: Confirmation) -> Self {

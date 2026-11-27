@@ -75,7 +75,7 @@ export function describeChange(t: Translate, entry: ActivityEntry, locale: strin
   return { what, item, fields };
 }
 
-const ENTITIES = new Set(["task", "project", "comment", "attachment", "time_entry", "relation", "status", "task_type", "label", "layout", "list_layout", "gantt_layout", "view", "version", "sprint", "wiki_page", "settings", "timer", "description", "series", "template", "work_kind"]);
+const ENTITIES = new Set(["task", "project", "comment", "attachment", "time_entry", "relation", "status", "task_type", "label", "layout", "list_layout", "gantt_layout", "view", "version", "sprint", "wiki_page", "settings", "timer", "description", "series", "template", "work_kind", "automation_rule"]);
 
 /** The entity's name in the messages; anything newer reads as an item. */
 function entityName(entity: string): string {
@@ -156,6 +156,7 @@ export function ActivityScreen() {
             { id: ALL, label: t("activity-actor-all") },
             { id: "user", label: t("activity-actor-user") },
             { id: "agent", label: t("activity-actor-agent") },
+            { id: "automation", label: t("activity-actor-automation") },
           ]}
         />
         <span className={classes("field", styles.dayField)}>
@@ -264,7 +265,7 @@ function FeedRow({
       <span role="cell" className={classes(styles.cell, styles.small, "num")}>{moment(entry.at)}</span>
       <span role="cell" className={styles.cell}>
         <span>{entry.actor.kind === "user" ? t("comment-me") : entry.actor.name}</span>
-        <span className={classes("chip", entry.actor.kind === "agent" && "hue-purple")}>{t(`via-${entry.via}`)}</span>
+        <span className={classes("chip", entry.actor.kind === "agent" && "hue-purple", entry.actor.kind === "automation" && "hue-teal")}>{entry.actor.kind === "automation" ? t("comment-automation") : t(`via-${entry.via}`)}</span>
       </span>
       <span role="cell" className={styles.cell}>
         <span>{what}</span>

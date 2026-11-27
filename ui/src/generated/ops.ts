@@ -6,6 +6,9 @@
 
 /* eslint-disable */
 
+/** What an action does. */
+export type ActionKind = "set_fields" | "add_label" | "remove_label" | "move_to_status" | "add_comment" | "create_subtask" | "create_linked_task" | "notify";
+
 /** One changed item in the activity log. */
 export type ActivityEntry = {
   /** Who. */
@@ -88,14 +91,14 @@ export type ActivityTask = {
 
 /** Who did something. */
 export type Actor = {
-  /** Person or agent. */
+  /** Person, agent or automation rule. */
   kind: ActorKind;
   /** The display name ("You", "Claude Code"). */
   name: string;
 };
 
-/** A person or an agent. */
-export type ActorKind = "user" | "agent";
+/** A person, an agent, or an automation rule acting on its own. */
+export type ActorKind = "user" | "agent" | "automation";
 
 /** A project's instructions for agents. */
 export type AgentBrief = {
@@ -253,6 +256,247 @@ export type Attachment = {
   task: string;
   /** An image's width in pixels. */
   width?: number;
+};
+
+/** One thing a rule does. Texts may hold placeholders: `{key}`, `{title}`, `{status}`, `{priority}`, `{due_date}`, `{project}`, `{rule}`, `{actor}` (who made the change that set the rule off) and `{today}`. */
+export type AutomationAction = {
+  /** `set_fields`: field to value. `title`, `description`, `type`, `priority`, `start_date` and `due_date` (`YYYY-MM-DD`, `today`, `+3d`, `next mon`), `estimate` (`2h`), `progress` (0 to 100), `fix_version`, or a custom field by name, query name or ID; `null` clears a field. */
+  fields?: Record<string, unknown>;
+  /** What the action does. */
+  kind: ActionKind;
+  /** `add_label`, `remove_label`: the label, by name. */
+  label?: string;
+  /** `create_linked_task`: how the link reads from the task the rule acts on; default `relates`. */
+  link?: RelationKind;
+  /** `move_to_status`: the status, by name. */
+  status?: string;
+  /** `create_subtask`, `create_linked_task`: a task template of the project, by name. */
+  template?: string;
+  /** `add_comment`, `notify`: the text; `create_subtask`, `create_linked_task`: the new task's title (default the template's). */
+  text?: string;
+};
+
+/** A rule after a change. */
+export type AutomationChange = {
+  /** Whether it was deleted. */
+  deleted?: boolean;
+  /** The history group, for revert and Undo; left out when nothing changed. */
+  group?: string;
+  /** The rule after the change (as it was, when deleted). */
+  rule: AutomationRule;
+};
+
+/** A new rule. */
+export type AutomationCreateInput = {
+  /** What it does, 1 to 20 actions, in order. */
+  actions: AutomationAction[];
+  /** A query (TQL) the task must match; empty: every task. A scheduled rule needs one: it acts on every task that matches. */
+  condition?: string | null;
+  /** Whether it runs; default true. */
+  enabled?: boolean | null;
+  /** The name, 1 to 100 characters, unique in the project. */
+  name: string;
+  /** The project (key or ID); left out: a rule of the whole workspace. */
+  project?: string | null;
+  /** What sets it off. */
+  trigger: AutomationTrigger;
+};
+
+/** A rule that isn't saved, for a dry run. */
+export type AutomationDraft = {
+  /** What it does. */
+  actions: AutomationAction[];
+  /** A query (TQL) the task must match. */
+  condition?: string | null;
+  /** Its name, for placeholders and history; default "Test". */
+  name?: string | null;
+  /** What sets it off; the dry run acts as if it had. */
+  trigger: AutomationTrigger;
+};
+
+/** Rules, in the order they run. */
+export type AutomationList = {
+  /** The rules: the workspace's first, then by project. */
+  items: AutomationRule[];
+  /** How many. */
+  total: number;
+};
+
+/** Which rules to list. */
+export type AutomationListInput = {
+  /** The project (key or ID): its rules and the workspace's; left out: every rule. */
+  project?: string | null;
+};
+
+/** Names one rule. */
+export type AutomationRef = {
+  /** With a name: the project it belongs to (key or ID); left out, a rule of the workspace, or the only rule with that name. */
+  project?: string | null;
+  /** The rule: its ID, or its name. */
+  rule: string;
+};
+
+/** A rule. */
+export type AutomationRule = {
+  /** What it does, in order. */
+  actions: AutomationAction[];
+  /** A query (TQL) the task must match; empty: every task. */
+  condition?: string;
+  /** When it was made (RFC 3339, UTC). */
+  created_at: string;
+  /** Who made it. */
+  created_by: Actor;
+  /** Whether it runs. */
+  enabled: boolean;
+  /** Whether an agent made or last changed it: its runs are then held to the rules for agents. */
+  held_as_agent?: boolean;
+  /** The rule's ID. */
+  id: string;
+  /** Its latest run. */
+  last_run?: AutomationRun;
+  /** Its name, unique in its project (or among the workspace's rules); it names the rule in history. */
+  name: string;
+  /** The project, by key; left out for a rule of the whole workspace. */
+  project?: string;
+  /** Its last runs, newest first; only `automation.get` fills it in. */
+  runs?: AutomationRun[];
+  /** What sets it off. */
+  trigger: AutomationTrigger;
+  /** When it last changed (RFC 3339, UTC). */
+  updated_at: string;
+};
+
+/** One run of a rule, from its log. */
+export type AutomationRun = {
+  /** When it ran (RFC 3339, UTC). */
+  at: string;
+  /** How many items it changed. */
+  changes: number;
+  /** How many rules came before it in the chain (0: set off by a change of a person, an agent or the schedule). */
+  depth: number;
+  /** Why it failed or was limited. */
+  error?: OpError;
+  /** The history group of its changes, when it made some. */
+  group?: string;
+  /** The run's ID. */
+  id: string;
+  /** How it ended. */
+  result: RunResult;
+  /** The rule's ID. */
+  rule: string;
+  /** The rule's name when it ran. */
+  rule_name: string;
+  /** The task it acted on, by key; left out when it no longer exists. */
+  task?: string;
+  /** What set it off. */
+  trigger: TriggerKind;
+};
+
+/** Nothing to give: the scheduled run takes no input. */
+export type AutomationRunInput = Record<string, never>;
+
+/** Runs, newest first. */
+export type AutomationRunList = {
+  /** The runs. */
+  items: AutomationRun[];
+  /** How many there are, also beyond `limit`. */
+  total: number;
+};
+
+/** Which runs to list. */
+export type AutomationRunsInput = {
+  /** At most this many, 1 to 200; default 50. */
+  limit?: number | null;
+  /** Only runs that failed or were limited. */
+  problems_only?: boolean;
+  /** The project: the runs of its rules and the workspace's (and, with `rule` as a name, where the rule is looked up). */
+  project?: string | null;
+  /** One rule's runs: its ID, or its name. */
+  rule?: string | null;
+};
+
+/** One change a dry run would make. */
+export type AutomationTestChange = {
+  /** Its value after. */
+  after?: unknown;
+  /** Its value before. */
+  before?: unknown;
+  /** What changes: `task`, `comment`, `relation`, … */
+  entity: string;
+  /** The field, as history names it. */
+  field: string;
+  /** The task it belongs to, by key. */
+  task?: string;
+};
+
+/** A dry run of a rule against one task. */
+export type AutomationTestInput = {
+  /** A rule that isn't saved, instead of `rule`. */
+  draft?: AutomationDraft | null;
+  /** With `rule` as a name: the project it belongs to. */
+  project?: string | null;
+  /** A saved rule: its ID, or its name. */
+  rule?: string | null;
+  /** The task: its key or ID. */
+  task: string;
+};
+
+/** What a rule would do to a task; nothing was changed. */
+export type AutomationTestResult = {
+  /** The changes it would make, in order. */
+  changes?: AutomationTestChange[];
+  /** Why it would fail. */
+  error?: OpError;
+  /** Which action would fail, counting from 0. */
+  failed_action?: number;
+  /** Whether the task matches the condition. When it doesn't, the rule wouldn't run and nothing else is filled in. */
+  matches: boolean;
+  /** The notifications it would leave. */
+  notices?: string[];
+  /** Whether every action would work. */
+  ok: boolean;
+  /** The task, by key. */
+  task: string;
+};
+
+/** What a scheduled run did. */
+export type AutomationTick = {
+  /** How many runs of rules it started. */
+  runs: number;
+};
+
+/** What sets a rule off, with what the kind needs. The same type is read and written, so its optional fields are left out rather than `null`. */
+export type AutomationTrigger = {
+  /** `schedule`: daily or weekly. */
+  every?: ScheduleEvery;
+  /** `field_changed`: the fields to watch (`status`, `priority`, `labels`, `due_date`, …, or a custom field as `cf:<id>`); none: any. */
+  fields?: string[];
+  /** The kind of event. */
+  on: TriggerKind;
+  /** `moved_to_status`: the status, by name; none: any status. */
+  status?: string;
+  /** `schedule`: the time of day, `HH:MM`, in the workspace's time zone. */
+  time?: string;
+  /** `schedule` with `every: weekly`: the day of the week. */
+  weekday?: Weekday;
+};
+
+/** Changes to a rule; what is left out stays. */
+export type AutomationUpdateInput = {
+  /** New actions, replacing the old ones. */
+  actions?: AutomationAction[] | null;
+  /** A new condition; empty: every task. */
+  condition?: string | null;
+  /** Switch it on or off. */
+  enabled?: boolean | null;
+  /** A new name. */
+  name?: string | null;
+  /** With a name: the project it belongs to. */
+  project?: string | null;
+  /** The rule: its ID, or its name. */
+  rule: string;
+  /** A new trigger. */
+  trigger?: AutomationTrigger | null;
 };
 
 /** A text that links somewhere: a wiki page, a task's description or a comment on a task. */
@@ -2872,7 +3116,7 @@ export type ReminderDueInput = {
 };
 
 /** What reminds. */
-export type ReminderKind = "reminder" | "deadline" | "timer";
+export type ReminderKind = "reminder" | "deadline" | "timer" | "automation";
 
 /** A personal reminder on a task; it replaces the one the task had. */
 export type ReminderSetInput = {
@@ -3054,6 +3298,9 @@ export type RulesUpdateInput = {
   statuses?: StatusRulesChange[];
 };
 
+/** How a run of a rule ended. */
+export type RunResult = "done" | "failed" | "limited";
+
 /** What became of a description that was saved. */
 export type SaveOutcome = "saved" | "merged" | "conflict" | "unchanged";
 
@@ -3120,6 +3367,9 @@ export type ScheduleDependency = {
   /** The blocked task begins before its blocker ends. */
   violated: boolean;
 };
+
+/** How often a scheduled rule runs. */
+export type ScheduleEvery = "daily" | "weekly";
 
 /** Which tasks to schedule. */
 export type ScheduleInput = {
@@ -4789,6 +5039,9 @@ export type TrashRestoreInput = {
   items: string[];
 };
 
+/** What sets a rule off. */
+export type TriggerKind = "task_created" | "field_changed" | "moved_to_status" | "comment_added" | "due_date_reached" | "overdue" | "schedule";
+
 /** A task type of a project template. */
 export type TypeBlueprint = {
   /** New tasks of this type are due this many days after they are made. */
@@ -5807,6 +6060,14 @@ export interface OpMap {
   "agent.policy.update": { input: AgentPolicyPatch; output: SettingsChange; safety: "app"; kind: "command" };
   "agent.limits.update": { input: AgentLimitsPatch; output: SettingsChange; safety: "app"; kind: "command" };
   "rules.update": { input: RulesUpdateInput; output: ProjectChange; safety: "app"; kind: "command" };
+  "automation.list": { input: AutomationListInput; output: AutomationList; safety: "read"; kind: "query" };
+  "automation.get": { input: AutomationRef; output: AutomationRule; safety: "read"; kind: "query" };
+  "automation.create": { input: AutomationCreateInput; output: AutomationChange; safety: "write"; kind: "command" };
+  "automation.update": { input: AutomationUpdateInput; output: AutomationChange; safety: "write"; kind: "command" };
+  "automation.delete": { input: AutomationRef; output: AutomationChange; safety: "write"; kind: "command" };
+  "automation.runs": { input: AutomationRunsInput; output: AutomationRunList; safety: "read"; kind: "query" };
+  "automation.test": { input: AutomationTestInput; output: AutomationTestResult; safety: "write"; kind: "command" };
+  "automation.run": { input: AutomationRunInput; output: AutomationTick; safety: "write"; kind: "command" };
   "history.feed": { input: ActivityQuery; output: ActivityPage; safety: "read"; kind: "query" };
   "history.revert": { input: RevertInput; output: RevertResult; safety: "write"; kind: "command" };
   "history.undo": { input: UndoInput; output: UndoResult; safety: "app"; kind: "command" };
@@ -5972,6 +6233,14 @@ export const OP_SAFETY = {
   "agent.policy.update": "app",
   "agent.limits.update": "app",
   "rules.update": "app",
+  "automation.list": "read",
+  "automation.get": "read",
+  "automation.create": "write",
+  "automation.update": "write",
+  "automation.delete": "write",
+  "automation.runs": "read",
+  "automation.test": "write",
+  "automation.run": "write",
   "history.feed": "read",
   "history.revert": "write",
   "history.undo": "app",
@@ -6006,6 +6275,24 @@ export function makeOps(call: Call) {
       policyUpdate: (input: OpMap["agent.policy.update"]["input"]) => call("agent.policy.update", input),
       /** Change the limits on agent sessions: changes a minute, new tasks a day, and items moved to the trash per call and per hour. Each is a number or no limit. (app) */
       limitsUpdate: (input: OpMap["agent.limits.update"]["input"] = {}) => call("agent.limits.update", input),
+    },
+    automation: {
+      /** The automation rules of a project and of the workspace, each with its trigger, condition, actions and latest run. (read) */
+      list: (input: OpMap["automation.list"]["input"] = {}) => call("automation.list", input),
+      /** One automation rule with its last runs. (read) */
+      get: (input: OpMap["automation.get"]["input"]) => call("automation.get", input),
+      /** Make an automation rule: when a trigger happens to a task that matches a query, set fields, change labels, move it, comment, create a subtask or linked task, or leave a notification. (write) */
+      create: (input: OpMap["automation.create"]["input"]) => call("automation.create", input),
+      /** Change an automation rule: its name, trigger, condition or actions, or switch it on or off. (write) */
+      update: (input: OpMap["automation.update"]["input"]) => call("automation.update", input),
+      /** Delete an automation rule; revert brings it back. (write) */
+      delete: (input: OpMap["automation.delete"]["input"]) => call("automation.delete", input),
+      /** The run log of automation rules, newest first: what set each run off, the task, the changes and any error. (read) */
+      runs: (input: OpMap["automation.runs"]["input"] = {}) => call("automation.runs", input),
+      /** A dry run of an automation rule, saved or not, against one task: whether it matches and the changes the actions would make. Nothing is changed. (write) */
+      test: (input: OpMap["automation.test"]["input"]) => call("automation.test", input),
+      /** Run the scheduled and due date automation rules whose time has come; the app does this by itself. (write) */
+      run: (input: OpMap["automation.run"]["input"] = {}) => call("automation.run", input),
     },
     backup: {
       /** Make a backup of the workspace now: a checked copy of the database and its stored files. (write) */

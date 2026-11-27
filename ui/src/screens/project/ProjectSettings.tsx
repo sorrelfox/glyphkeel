@@ -23,6 +23,7 @@ import { HuePicker } from "./HuePicker";
 import { DeleteQuestion } from "./DeleteProject";
 import { FieldsSettings } from "./FieldsSettings";
 import { IconPicker } from "./IconPicker";
+import { AutomationSettings } from "./AutomationSettings";
 import { RulesSettings } from "./RulesSettings";
 import { TemplateContents } from "./TemplateContents";
 import styles from "./Project.module.css";
@@ -34,7 +35,7 @@ interface ProjectSettingsProps {
 
 /**
  * Project settings: general, statuses (with WIP limits), task types,
- * labels and custom fields. Every change applies at once, as in Preferences.
+ * labels, custom fields, rules, automation and templates. Every change applies at once, as in Preferences.
  */
 export function ProjectSettings({ projectKey, onClose }: ProjectSettingsProps) {
   const t = useT();
@@ -71,6 +72,9 @@ export function ProjectSettings({ projectKey, onClose }: ProjectSettingsProps) {
               <Tab id="rules" className={({ isSelected }) => (isSelected ? "tab on" : "tab")}>
                 {t("project-settings-rules")}
               </Tab>
+              <Tab id="automation" className={({ isSelected }) => (isSelected ? "tab on" : "tab")}>
+                {t("project-settings-automation")}
+              </Tab>
               <Tab id="templates" className={({ isSelected }) => (isSelected ? "tab on" : "tab")}>
                 {t("project-settings-templates")}
               </Tab>
@@ -92,6 +96,9 @@ export function ProjectSettings({ projectKey, onClose }: ProjectSettingsProps) {
             </TabPanel>
             <TabPanel id="rules" className={classes(styles.panel)}>
               <RulesSettings project={project.data} />
+            </TabPanel>
+            <TabPanel id="automation" className={classes(styles.panel)}>
+              <AutomationSettings project={project.data} />
             </TabPanel>
             <TabPanel id="templates" className={classes(styles.panel)}>
               <Templates project={project.data} />

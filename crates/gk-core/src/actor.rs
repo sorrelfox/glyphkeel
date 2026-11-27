@@ -3,9 +3,9 @@
 
 //! Who made a change and through which program.
 //!
-//! There are no user accounts: a change is made either by the person at
-//! the computer ("Me") or by a named agent, through the app, the command line
-//! or the agent server.
+//! There are no user accounts: a change is made by the person at the
+//! computer ("Me"), by a named agent, or by one of the workspace's
+//! automation rules, through the app, the command line or the agent server.
 
 use std::fmt;
 use std::str::FromStr;
@@ -19,6 +19,8 @@ pub enum ActorKind {
     User,
     /// An agent, identified by its name and session.
     Agent,
+    /// An automation rule, identified by its name.
+    Automation,
 }
 
 /// The program a change came through.
@@ -39,6 +41,7 @@ impl ActorKind {
         match self {
             Self::User => "user",
             Self::Agent => "agent",
+            Self::Automation => "automation",
         }
     }
 }
@@ -62,7 +65,12 @@ impl FromStr for ActorKind {
         match s {
             "user" => Ok(Self::User),
             "agent" => Ok(Self::Agent),
-            _ => Err(KindError::new("kind of actor", s, &["user", "agent"])),
+            "automation" => Ok(Self::Automation),
+            _ => Err(KindError::new(
+                "kind of actor",
+                s,
+                &["user", "agent", "automation"],
+            )),
         }
     }
 }
@@ -98,7 +106,7 @@ mod tests {
 
     #[test]
     fn round_trip() {
-        for a in [ActorKind::User, ActorKind::Agent] {
+        for a in [ActorKind::User, ActorKind::Agent, ActorKind::Automation] {
             assert_eq!(a.as_str().parse::<ActorKind>(), Ok(a));
         }
         for v in [Via::App, Via::Cli, Via::Mcp] {

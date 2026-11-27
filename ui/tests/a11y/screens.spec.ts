@@ -71,7 +71,7 @@ async function openTask(page: Page): Promise<void> {
   await expect(page.getByRole("complementary", { name: /^Task / }).getByRole("button", { name: "Task menu" })).toBeVisible();
 }
 
-const SETTINGS_TABS = ["General", "Statuses", "Task types", "Labels", "Fields", "Rules", "Templates"];
+const SETTINGS_TABS = ["General", "Statuses", "Task types", "Labels", "Fields", "Rules", "Automation", "Templates"];
 const PREFERENCE_PAGES = ["Appearance", "Language", "Time", "Notifications", "Quick add", "Keyboard shortcuts", "Agents & CLI", "Workspace", "Data and backups"];
 
 const SCREENS: Screen[] = [

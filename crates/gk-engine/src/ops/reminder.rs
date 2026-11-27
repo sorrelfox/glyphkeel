@@ -14,7 +14,8 @@
 //!   created. `reminder_log` keeps the due dates already acknowledged, so a
 //!   new due date alerts again. Due dates more than a week past are no
 //!   longer alerted;
-//! - the timer, once it has run for the hours the workspace sets.
+//! - the timer, once it has run for the hours the workspace sets;
+//! - a notification an automation rule left.
 //!
 //! Tasks in the trash or in archived projects don't remind; closed tasks
 //! keep only reminders set for a moment. Nothing here fires anything: the
@@ -53,6 +54,8 @@ use crate::write::WriteCtx;
 const MISSED_AFTER_MS: i64 = 5 * 60_000;
 /// Due dates this many days past are no longer alerted.
 const DEADLINE_GRACE_DAYS: i64 = 7;
+/// How the ID of a rule's notification starts.
+const AUTOMATION_PREFIX: &str = "automation:";
 /// The default and largest number of due reminders listed.
 const DEFAULT_LIMIT: u32 = 100;
 const MAX_LIMIT: u32 = 500;
@@ -409,6 +412,22 @@ fn candidates(tx: &Transaction<'_>, zone: &Zone, until: i64) -> Result<Vec<Candi
         });
     }
 
+    // Notifications automation rules left.
+    for (id, task, at, text) in super::automation::open_notices(tx)? {
+        let due: Option<String> =
+            tx.query_row("SELECT due_date FROM tasks WHERE id = ?1", [b(task)], |r| {
+                r.get(0)
+            })?;
+        out.push(Candidate {
+            at,
+            id: format!("{AUTOMATION_PREFIX}{id}"),
+            kind: ReminderKind::Automation,
+            task,
+            due,
+            note: text,
+        });
+    }
+
     // The timer.
     if settings.timer_reminder_hours > 0
         && let Some(timer) = super::time::timer_row(tx)?
@@ -559,6 +578,14 @@ fn acknowledge(
             ReminderKind::Timer => {
                 w.tx()
                     .execute("UPDATE timer SET reminded_at = ?1 WHERE id = 1", [w.now()])?;
+            }
+            ReminderKind::Automation => {
+                if let Some(notice) =
+                    c.id.strip_prefix(AUTOMATION_PREFIX)
+                        .and_then(|n| n.parse::<Id>().ok())
+                {
+                    super::automation::acknowledge_notice(w.tx(), notice, w.now())?;
+                }
             }
         }
         acknowledged.push(c.id.clone());

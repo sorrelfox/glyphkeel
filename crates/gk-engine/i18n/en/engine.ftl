@@ -1098,3 +1098,26 @@ rule-required-and-cleared = { $field ->
        *[other] "{ $name }" can't be both required and cleared on entering a status.
     }
 rule-clear-required-field = "{ $name }" is a required field, so a status can't clear it.
+
+## Automation rules
+
+automation-not-found = There is no automation rule "{ $rule }".
+automation-not-found-hint = Name a rule by its ID, or by its name with its project; automation.list lists them.
+automation-name-ambiguous = Several projects have an automation rule named "{ $rule }".
+automation-name-ambiguous-hint = Give the rule's project with `project`, or use its ID.
+automation-name-taken = There is already an automation rule named "{ $rule }" here.
+automation-name-taken-hint = Choose another name, or change that rule.
+automation-field-unknown = "{ $field }" is no field a rule can use here. Use a field's name, or a custom field as `cf:` and its ID.
+automation-field-not-used = This kind of trigger or action doesn't use "{ $field }"; leave it out.
+automation-field-needed = This kind of trigger or action needs "{ $field }".
+automation-too-many-fields = A rule names at most { $max } fields.
+automation-time = "{ $time }" is no time of day; write it as HH:MM, for example 09:30.
+automation-text-too-long = The text is longer than { $max } characters.
+automation-link-kind = A linked task can't be a subtask or a parent; use the action that creates a subtask instead.
+automation-set-value = That value doesn't fit "{ $field }".
+automation-schedule-needs-condition = A scheduled rule acts on every task its condition matches, so it needs a condition, for example `is:open`.
+automation-action-count = A rule has 1 to { $max } actions.
+automation-depth-limit = The rule didn't run: { $max } rules had already set each other off after one change.
+automation-rate-limit = The rule didn't run: it already ran { $max } times in the last hour. It runs again after that.
+automation-draft-name = Test rule
+automation-test-rule-or-draft = Name a saved rule with `rule`, or give one that isn't saved with `draft`; not both.

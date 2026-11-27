@@ -30,6 +30,7 @@ How to use the desktop app.
 | [Sprints](guide/sprints.md) | Time-boxed cycles of work, the backlog and the burndown |
 | [Custom fields](guide/custom-fields.md) | Your own fields on tasks |
 | [Status rules](guide/rules.md) | What happens when a task enters a status, and rules for agents |
+| [Automation rules](guide/automation.md) | Rules that act on their own when a task changes, a due date comes, or on a schedule |
 | [Recurring tasks and templates](guide/recurring-and-templates.md) | Tasks that repeat, task templates and project templates |
 | [Time tracking and reports](guide/time.md) | Logged time, the timer, reminders, the time report and flow reports |
 | [Today, search and the palette](guide/search.md) | Finding things and moving around quickly, quick add |

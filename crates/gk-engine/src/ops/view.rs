@@ -415,6 +415,8 @@ pub(crate) fn rewrite_queries(
             changed += 1;
         }
     }
+    // Automation rules' conditions are queries too.
+    super::automation::rewrite_conditions(w, project, &rewrite)?;
     // Boards' colour rules are saved queries too.
     super::board::rewrite_colour_rules(w, project, &rewrite)?;
     Ok(changed)

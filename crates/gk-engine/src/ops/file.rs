@@ -250,11 +250,7 @@ fn row(r: &Row<'_>) -> gk_store::rusqlite::Result<(Attachment, String, Id)> {
             page: None,
             project: None,
             added_by: gk_api::ops::common::Actor {
-                kind: if actor_kind == "agent" {
-                    gk_api::ops::common::ActorKind::Agent
-                } else {
-                    gk_api::ops::common::ActorKind::User
-                },
+                kind: gk_api::ops::common::ActorKind::from_stored(&actor_kind),
                 name: r.get(10)?,
             },
             created_at: rfc3339(r.get(11)?),

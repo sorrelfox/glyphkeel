@@ -30,7 +30,7 @@ impl Via {
     }
 }
 
-/// A person or an agent.
+/// A person, an agent, or an automation rule acting on its own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ActorKind {
@@ -38,6 +38,8 @@ pub enum ActorKind {
     User,
     /// An agent working through MCP.
     Agent,
+    /// An automation rule of the workspace; the actor's name is the rule's.
+    Automation,
 }
 
 impl ActorKind {
@@ -47,6 +49,17 @@ impl ActorKind {
         match self {
             Self::User => "user",
             Self::Agent => "agent",
+            Self::Automation => "automation",
+        }
+    }
+
+    /// The kind stored as `text`; anything unknown reads as the person.
+    #[must_use]
+    pub fn from_stored(text: &str) -> Self {
+        match text {
+            "agent" => Self::Agent,
+            "automation" => Self::Automation,
+            _ => Self::User,
         }
     }
 }
@@ -55,7 +68,7 @@ impl ActorKind {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Actor {
-    /// Person or agent.
+    /// Person, agent or automation rule.
     pub kind: ActorKind,
     /// The display name ("You", "Claude Code").
     pub name: String,

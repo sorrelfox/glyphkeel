@@ -247,11 +247,7 @@ impl RevisionRow {
             },
             base: self.base.map(|b| b.to_string()),
             author: Actor {
-                kind: if self.actor_kind == "agent" {
-                    ActorKind::Agent
-                } else {
-                    ActorKind::User
-                },
+                kind: ActorKind::from_stored(&self.actor_kind),
                 name: self.actor_name.clone(),
             },
             created_at: rfc3339(self.created_at),

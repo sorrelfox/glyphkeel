@@ -19,7 +19,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 use crate::error::{Result, StoreError};
 
 /// The schema version this program is built for.
-pub const SCHEMA_VERSION: i64 = 18;
+pub const SCHEMA_VERSION: i64 = 19;
 
 /// One migration: the SQL that takes the schema from `version - 1` to
 /// `version`.
@@ -102,6 +102,10 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 18,
         sql: include_str!("../migrations/0018_sprints.sql"),
+    },
+    Migration {
+        version: 19,
+        sql: include_str!("../migrations/0019_automation_rules.sql"),
     },
 ];
 
@@ -964,9 +968,9 @@ mod tests {
     }
 
     #[test]
-    fn version_17_adds_sprints_with_one_active_per_project() {
+    fn version_18_adds_sprints_with_one_active_per_project() {
         let mut conn = memory();
-        let before = MIGRATIONS.iter().position(|m| m.version == 17).unwrap();
+        let before = MIGRATIONS.iter().position(|m| m.version == 18).unwrap();
         migrate(&mut conn, &MIGRATIONS[..before], |_| Ok(())).unwrap();
         conn.execute_batch(
             "INSERT INTO projects (id, rank, key, name, name_fold, hue, modules, created_at,
@@ -976,7 +980,7 @@ mod tests {
         )
         .unwrap();
         migrate(&mut conn, MIGRATIONS, |_| Ok(())).unwrap();
-        assert!(user_version(&conn).unwrap() >= 17);
+        assert!(user_version(&conn).unwrap() >= 18);
         let add = |id: u8, name: &str, state: &str| {
             conn.execute(
                 "INSERT INTO sprints (id, project_id, name, name_fold, state, rank, created_at,
@@ -1007,5 +1011,82 @@ mod tests {
             )
             .unwrap();
         assert_eq!(columns, 1);
+    }
+
+    #[test]
+    fn version_19_lets_automation_rules_act_and_keeps_old_rows() {
+        let mut conn = memory();
+        let before = MIGRATIONS.iter().position(|m| m.version == 19).unwrap();
+        migrate(&mut conn, &MIGRATIONS[..before], |_| Ok(())).unwrap();
+        conn.execute_batch(
+            "INSERT INTO projects (id, rank, key, name, name_fold, hue, modules, created_at,
+                                   updated_at)
+             VALUES (x'01010101010101010101010101010101', 'i', 'AU', 'AU', 'au', 'blue', '{}',
+                     0, 0);
+             INSERT INTO statuses (id, project_id, name, name_fold, category, hue, rank)
+             VALUES (x'02020202020202020202020202020202', x'01010101010101010101010101010101',
+                     'To do', 'to do', 'todo', 'grey', 'i');
+             INSERT INTO task_types (id, project_id, name, name_fold, glyph, hue, rank, is_default)
+             VALUES (x'03030303030303030303030303030303', x'01010101010101010101010101010101',
+                     'Task', 'task', 'task', 'grey', 'i', 1);
+             INSERT INTO tasks (id, project_id, number, title, title_fold, status_id,
+                                status_entered_at, type_id, rank, created_at, created_by_kind,
+                                created_by_name, edited_at, updated_at)
+             VALUES (x'04040404040404040404040404040404', x'01010101010101010101010101010101',
+                     1, 'A', 'a', x'02020202020202020202020202020202', 0,
+                     x'03030303030303030303030303030303', 'i', 0, 'agent', 'Helper', 0, 0);",
+        )
+        .unwrap();
+        migrate(&mut conn, MIGRATIONS, |_| Ok(())).unwrap();
+        assert_eq!(user_version(&conn).unwrap(), 19);
+        let kind: String = conn
+            .query_row("SELECT created_by_kind FROM tasks", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(kind, "agent");
+        conn.execute_batch(
+            "INSERT INTO tasks (id, project_id, number, title, title_fold, status_id,
+                                status_entered_at, type_id, rank, created_at, created_by_kind,
+                                created_by_name, edited_at, updated_at)
+             VALUES (x'05050505050505050505050505050505', x'01010101010101010101010101010101',
+                     2, 'B', 'b', x'02020202020202020202020202020202', 0,
+                     x'03030303030303030303030303030303', 'j', 0, 'automation', 'Triage', 0, 0);
+             INSERT INTO activity (group_id, at, op, actor_kind, actor_name, via, entity_kind,
+                                   entity_id, changes)
+             VALUES (randomblob(16), 0, 'automation.run', 'automation', 'Triage', 'app', 'task',
+                     x'05050505050505050505050505050505', '{}');",
+        )
+        .unwrap();
+        let robot = conn.execute(
+            "INSERT INTO activity (group_id, at, op, actor_kind, actor_name, via, entity_kind,
+                                   entity_id, changes)
+             VALUES (randomblob(16), 0, 'x', 'robot', 'R', 'app', 'task', randomblob(16), '{}')",
+            [],
+        );
+        assert!(robot.is_err(), "the list of actor kinds is still checked");
+        let problems: String = conn
+            .query_row("PRAGMA integrity_check", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(problems, "ok");
+        let rule = |id: u8, name: &str| {
+            conn.execute(
+                "INSERT INTO automation_rules (id, project_id, name, name_fold, trigger_kind,
+                                               definition, rank, created_at, created_by_kind,
+                                               created_by_name, updated_at, updated_by_kind)
+                 VALUES (?1, x'01010101010101010101010101010101', ?2, lower(?2), 'task_created',
+                         '{}', 'i', 0, 'user', 'You', 0, 'user')",
+                rusqlite::params![vec![id; 16], name],
+            )
+        };
+        rule(6, "Triage").unwrap();
+        assert!(rule(7, "TRIAGE").is_err(), "names are unique per project");
+        let bad = conn.execute(
+            "INSERT INTO automation_rules (id, name, name_fold, trigger_kind, definition, rank,
+                                           created_at, created_by_kind, created_by_name,
+                                           updated_at, updated_by_kind)
+             VALUES (randomblob(16), 'X', 'x', 'when_ever', '{}', 'i', 0, 'user', 'You', 0,
+                     'user')",
+            [],
+        );
+        assert!(bad.is_err(), "triggers are from the list");
     }
 }

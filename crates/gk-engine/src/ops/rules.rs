@@ -505,7 +505,10 @@ pub(crate) fn map_project_fields(
 /// Whether command `op` is held to the rules. Commands that change the
 /// configuration or bring back earlier states are not.
 pub(crate) fn applies_to(op: &str) -> bool {
-    const FREE: [&str; 14] = [
+    if op == "automation.run" {
+        return true;
+    }
+    const FREE: [&str; 15] = [
         "history.",
         "transfer.",
         "backup.",
@@ -520,6 +523,7 @@ pub(crate) fn applies_to(op: &str) -> bool {
         "workspace.",
         "settings.",
         "agent.",
+        "automation.",
     ];
     !FREE.iter().any(|prefix| op.starts_with(prefix))
 }
@@ -582,7 +586,7 @@ pub(crate) fn enforce(w: &mut WriteCtx<'_>) -> Result<(), Failure> {
     if !applies_to(w.op()) {
         return Ok(());
     }
-    let agent = w.caller().is_agent();
+    let agent = w.acts_as_agent();
     for (task, _, changed) in w.changes_of(TASK) {
         let Some(now) = facts(w.tx(), task)? else {
             continue;
@@ -641,7 +645,7 @@ pub(crate) fn enforce_created(w: &mut WriteCtx<'_>, task: Id) -> Result<(), Fail
     let Some(now) = facts(w.tx(), task)? else {
         return Ok(());
     };
-    let agent = w.caller().is_agent();
+    let agent = w.acts_as_agent();
     enter(w, task, &now, agent, false)
 }
 

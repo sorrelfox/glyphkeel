@@ -43,6 +43,8 @@ notification-reminder = Reminder: { $key }
 notification-due = { $key } is due { $day }
 notification-due-soon = { $key } is due soon
 notification-timer = The timer is still running on { $key }
+# A notification an automation rule left about a task; its text is the body.
+notification-automation = Automation: { $key }
 # A reminder that came due while the app wasn't running. $what is one of the
 # notification titles above.
 notification-missed = Missed: { $what }

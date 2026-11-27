@@ -226,7 +226,7 @@ fn save(w: &mut WriteCtx<'_>, id: Id, record: Option<&Record>) -> Result<(), Fai
 // ---------------------------------------------------------------------
 // Rules
 
-fn to_core_weekday(w: Weekday) -> gk_core::Weekday {
+pub(crate) fn to_core_weekday(w: Weekday) -> gk_core::Weekday {
     match w {
         Weekday::Mon => gk_core::Weekday::Monday,
         Weekday::Tue => gk_core::Weekday::Tuesday,

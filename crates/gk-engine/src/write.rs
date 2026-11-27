@@ -25,6 +25,10 @@ pub(crate) struct CommandMeta {
     pub(crate) workspace_id: Id,
     pub(crate) layout: gk_store::WorkspaceLayout,
     pub(crate) zone: crate::time::Zone,
+    /// Whether the command is held to the rules for agents although its
+    /// caller is no agent: an automation rule that an agent made, or that
+    /// an agent's change set off.
+    pub(crate) as_agent: bool,
 }
 
 /// A command's view of the workspace: the open write transaction and a
@@ -46,6 +50,9 @@ pub struct WriteCtx<'a> {
     /// Tasks the engine made on its own in this command (occurrences of
     /// recurring tasks), which status rules don't refuse.
     automatic: Vec<Id>,
+    /// Runs of automation rules the command asks for once it is done
+    /// (the scheduled and due date rules).
+    queued: Vec<crate::ops::automation::Queued>,
 }
 
 /// One step back in the record of changes.
@@ -71,6 +78,10 @@ struct PendingChange {
     fields: BTreeMap<String, FieldChange>,
 }
 
+/// One change recorded so far: entity, item, project and the changed
+/// fields.
+pub(crate) type Pending = (String, Id, Option<Id>, BTreeMap<String, FieldChange>);
+
 /// What a committed command changed.
 #[derive(Debug, Clone)]
 pub(crate) struct Finished {
@@ -87,7 +98,38 @@ impl<'a> WriteCtx<'a> {
             positions: HashMap::new(),
             journal: None,
             automatic: Vec::new(),
+            queued: Vec::new(),
         }
+    }
+
+    /// Asks for a run of an automation rule once the command is done.
+    pub(crate) fn queue_automation(&mut self, run: crate::ops::automation::Queued) {
+        self.queued.push(run);
+    }
+
+    /// The runs of automation rules asked for so far, taken out.
+    pub(crate) fn take_queued(&mut self) -> Vec<crate::ops::automation::Queued> {
+        std::mem::take(&mut self.queued)
+    }
+
+    /// Whether the rules for agents hold for this command: its caller is an
+    /// agent, or it is an automation rule held to them.
+    pub(crate) fn acts_as_agent(&self) -> bool {
+        self.meta.ctx.is_agent() || self.meta.as_agent
+    }
+
+    /// The command's shared facts, for commands run alongside it.
+    pub(crate) fn meta(&self) -> &CommandMeta {
+        self.meta
+    }
+
+    /// Every change recorded so far, in order: entity, item, project and
+    /// the changed fields.
+    pub(crate) fn pending(&self) -> Vec<Pending> {
+        self.changes
+            .iter()
+            .map(|c| (c.entity.clone(), c.id, c.project, c.fields.clone()))
+            .collect()
     }
 
     /// Notes that the engine made task `task` on its own, not the caller.
@@ -456,6 +498,15 @@ impl<'a> WriteCtx<'a> {
 }
 
 impl Finished {
+    /// Adds what a command run alongside this one (an automation rule's
+    /// run, in the same history group) changed.
+    pub(crate) fn absorb(&mut self, other: Self) {
+        if other.seq.is_some() {
+            self.seq = other.seq;
+        }
+        self.changes.extend(other.changes);
+    }
+
     /// How many distinct items the change touched.
     pub(crate) fn items(&self) -> usize {
         self.changes
