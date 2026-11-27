@@ -5,6 +5,38 @@ Conventional Commits, and versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-11-27
+
+### Features
+
+- **Project folders:** group projects in the sidebar in one level of
+  folders; drag, menus or Alt+arrows move projects in and out.
+- **Encryption:** attachments, thumbnails and exports of an encrypted
+  workspace are encrypted too; zip exports open elsewhere with the
+  passphrase. Encrypted workspaces also work on Windows.
+- **Languages:** the command line, native dialogs and notifications use
+  the chosen language (`--lang`, `GLYPHKEEL_LANG`, the app's setting or
+  the system's); command-line help is translatable.
+- **Agents:** read limits per session, adjustable in Preferences.
+- **Queries:** dashboard widgets, colour rules, reports and automation
+  use the query field with completion and field help.
+- **Dates:** the date picker reads typed dates with the engine's parser.
+
+### Fixes
+
+- Pages use the full width, and down to the 760x520 minimum window no
+  screen scrolls sideways; the view tabs fold into a menu and the task
+  panel lies over the screen when narrow.
+- Task panel values no longer break mid-phrase in a narrow panel.
+- The tasks-by-field widget counts open tasks unless its query chooses
+  by status.
+- The rpm requires libcrypto 3, which Fedora 45 ships separately.
+
+### Performance
+
+- Without a GPU, the web view uses about 140 MB less memory and scrolls
+  within the frame budget; lists and boards do less work per row.
+
 ## [0.1.9] - 2026-11-27
 
 ### Features
