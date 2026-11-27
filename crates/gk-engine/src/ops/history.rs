@@ -33,7 +33,7 @@ use super::{
     lookup, project, relation, reminder, settings, task, time, trash, version, view, wiki,
     work_kind,
 };
-use super::{recurrence, template};
+use super::{automation, recurrence, template};
 use crate::failure::Failure;
 use crate::messages;
 use crate::registry::{QueryCtx, Registry};
@@ -315,11 +315,7 @@ fn entry(r: &Row<'_>) -> gk_store::rusqlite::Result<ActivityEntry> {
         at: rfc3339(r.get(2)?),
         op: r.get(3)?,
         actor: Actor {
-            kind: if kind == "agent" {
-                ActorKind::Agent
-            } else {
-                ActorKind::User
-            },
+            kind: ActorKind::from_stored(&kind),
             name: r.get(5)?,
         },
         via: match via.as_str() {
@@ -412,6 +408,7 @@ fn current(
         (view::ENTITY, view::RECORD) => view::raw(tx, id)?,
         (template::ENTITY, template::RECORD) => template::raw(tx, id)?,
         (recurrence::ENTITY, recurrence::RECORD) => recurrence::raw(tx, id)?,
+        (automation::ENTITY, automation::RECORD) => automation::raw(tx, id)?,
         (version::ENTITY, version::RECORD) => version::raw(tx, id)?,
         (_, "deleted" | trash::PURGED) => return Ok(None),
         (fields::PROJECT | fields::TASK | fields::WIKI, trash::TRASHED) => {
@@ -529,6 +526,12 @@ fn apply(
         (recurrence::ENTITY, recurrence::RECORD) => {
             let before = recurrence::raw(w.tx(), id)?;
             recurrence::write_raw(w, id, value.as_ref())?;
+            w.record_field(entity, id, project, field, before, value);
+            Ok(())
+        }
+        (automation::ENTITY, automation::RECORD) => {
+            let before = automation::raw(w.tx(), id)?;
+            automation::write_raw(w, id, value.as_ref())?;
             w.record_field(entity, id, project, field, before, value);
             Ok(())
         }
@@ -764,6 +767,10 @@ fn blocker(
     if rows.iter().any(|r| r.imported) {
         return Ok(Some(("revert-imported", vec![])));
     }
+    // Rows come newest first. A field that a later row of the same group
+    // changed again (an automation rule following the change) is checked
+    // against that row only: reverting the group takes back both.
+    let mut seen: std::collections::HashSet<(&str, Id, &str)> = std::collections::HashSet::new();
     for row in rows {
         let entity = || ("entity", row.entity.clone());
         if row.fields.is_empty() {
@@ -779,6 +786,9 @@ fn blocker(
             return Ok(Some(("revert-app-only-setting", vec![])));
         }
         for field in revertible_fields(row) {
+            if !seen.insert((row.entity.as_str(), row.id, field.as_str())) {
+                continue;
+            }
             let after = row.fields.get(field).and_then(|c| c.get("after")).cloned();
             let Some(now) = current(tx, &row.entity, row.id, field)? else {
                 return Ok(Some(if field == "deleted" {

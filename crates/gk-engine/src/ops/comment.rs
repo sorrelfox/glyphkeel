@@ -59,11 +59,7 @@ pub(super) fn register(r: &mut Registry) {
 
 pub(crate) fn actor(kind: &str, name: String) -> Actor {
     Actor {
-        kind: if kind == "agent" {
-            ActorKind::Agent
-        } else {
-            ActorKind::User
-        },
+        kind: ActorKind::from_stored(kind),
         name,
     }
 }

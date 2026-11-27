@@ -76,11 +76,7 @@ fn last_change(tx: &Transaction<'_>, id: Id) -> Result<Option<(Actor, i64)>, Fai
     let actor = |r: &Row<'_>| -> gk_store::rusqlite::Result<(Actor, i64)> {
         Ok((
             Actor {
-                kind: if r.get::<_, String>(0)? == "agent" {
-                    ActorKind::Agent
-                } else {
-                    ActorKind::User
-                },
+                kind: ActorKind::from_stored(&r.get::<_, String>(0)?),
                 name: r.get(1)?,
             },
             r.get(2)?,

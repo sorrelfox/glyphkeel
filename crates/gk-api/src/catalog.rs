@@ -12,7 +12,7 @@ use crate::ops::{
     link, project, query, report, rules, schedule, search, settings, task, time, today, transfer,
     trash, version, view, wiki, workspace,
 };
-use crate::ops::{recurrence, template};
+use crate::ops::{automation, recurrence, template};
 use crate::schema;
 
 /// One operation of the catalog, as a type: its name and its input and
@@ -283,6 +283,14 @@ pub static CATALOG: &[OpDescriptor] = &[
     agent::AGENT_POLICY_UPDATE,
     agent::AGENT_LIMITS_UPDATE,
     rules::RULES_UPDATE,
+    automation::AUTOMATION_LIST,
+    automation::AUTOMATION_GET,
+    automation::AUTOMATION_CREATE,
+    automation::AUTOMATION_UPDATE,
+    automation::AUTOMATION_DELETE,
+    automation::AUTOMATION_RUNS,
+    automation::AUTOMATION_TEST,
+    automation::AUTOMATION_RUN,
     history::HISTORY_FEED,
     history::HISTORY_REVERT,
     history::HISTORY_UNDO,

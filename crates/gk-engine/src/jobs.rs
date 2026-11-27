@@ -28,6 +28,9 @@ use crate::registry::CommandFn;
 
 /// How often a long-running process looks whether a daily job is due.
 const CHECK_EVERY_MS: i64 = 10 * 60_000;
+/// How often it runs the automation rules set off by due dates and the
+/// schedule.
+const AUTOMATION_EVERY_MS: i64 = 60_000;
 /// The age of the newest daily backup after which the next one is made.
 const BACKUP_AFTER_MS: i64 = 24 * 3_600_000;
 /// The same for a one-shot command, which backs up only when long-running
@@ -128,6 +131,45 @@ impl Engine {
         report.unused_files += self.sweep_unused_files()?;
         report.occurrences = self.make_occurrences(&ctx)?;
         Ok(report)
+    }
+
+    /// Whether the automation rules of due dates and the schedule should be
+    /// looked at again.
+    pub(crate) fn automation_due(&self) -> bool {
+        let last = *self
+            .last_automation
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        last.is_none_or(|t| self.now() - t >= AUTOMATION_EVERY_MS || self.now() < t)
+    }
+
+    /// Runs `automation.run`: the due date rules for tasks whose due date
+    /// came or passed, and the scheduled rules whose time has come. Returns
+    /// how many runs of rules it started. Long-running programs call it
+    /// every minute through [`Engine::jobs_tick`].
+    pub fn run_automation(&self) -> Result<u32, OpError> {
+        *self
+            .last_automation
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = Some(self.now());
+        let ctx = self.housekeeping();
+        let f: CommandFn = Arc::new(|w, _| {
+            let run = crate::ops::automation::tick_command(w)?;
+            serde_json::to_value(run).map_err(|e| {
+                Failure::Op(messages::storage(
+                    "storage-json",
+                    &[("error", e.to_string())],
+                ))
+            })
+        });
+        let desc =
+            descriptor("automation.run").ok_or_else(|| OpError::storage("no automation.run"))?;
+        let output = self.execute_command(&ctx, desc, f, Value::Null)?;
+        Ok(output
+            .get("runs")
+            .and_then(Value::as_u64)
+            .and_then(|n| u32::try_from(n).ok())
+            .unwrap_or(0))
     }
 
     /// Runs `recurrence.run`: makes the occurrences of recurring tasks made

@@ -811,11 +811,7 @@ pub(crate) fn listed(tx: &Transaction<'_>, id: Id, now: i64) -> Result<ListedTas
                 recurring: r.get(32)?,
                 rank: r.get(25)?,
                 created_by: Actor {
-                    kind: if r.get::<_, String>(26)? == "agent" {
-                        ActorKind::Agent
-                    } else {
-                        ActorKind::User
-                    },
+                    kind: ActorKind::from_stored(&r.get::<_, String>(26)?),
                     name: r.get(27)?,
                 },
                 created_at: rfc3339(r.get(28)?),

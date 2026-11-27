@@ -415,6 +415,8 @@ pub(crate) fn rewrite_queries(
             changed += 1;
         }
     }
+    // Automation rules' conditions are queries too.
+    super::automation::rewrite_conditions(w, project, &rewrite)?;
     Ok(changed)
 }
 

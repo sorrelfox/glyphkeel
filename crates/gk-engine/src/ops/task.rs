@@ -304,11 +304,7 @@ pub(crate) fn load(
                 rank: r.get(19)?,
                 old_keys: Vec::new(),
                 created_by: Actor {
-                    kind: if r.get::<_, String>(20)? == "agent" {
-                        ActorKind::Agent
-                    } else {
-                        ActorKind::User
-                    },
+                    kind: ActorKind::from_stored(&r.get::<_, String>(20)?),
                     name: r.get(21)?,
                 },
                 created_at: rfc3339(r.get(22)?),

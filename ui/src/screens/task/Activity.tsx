@@ -37,11 +37,19 @@ export function useMomentFormat(): (at: string) => string {
   return (at) => format.format(new Date(at));
 }
 
-/** Who did something: "Me", or the agent's name with where it came through. */
+/** Who did something: "Me", an automation rule's name, or the agent's name with where it came through. */
 function Author({ actor, via }: { actor: Actor; via: Via }) {
   const t = useT();
   if (actor.kind === "user") {
     return <span className={styles.author}>{t("comment-me")}</span>;
+  }
+  if (actor.kind === "automation") {
+    return (
+      <>
+        <span className={styles.author}>{actor.name}</span>
+        <span className="chip hue-teal">{t("comment-automation")}</span>
+      </>
+    );
   }
   return (
     <>
@@ -529,6 +537,7 @@ function HistoryList({
           { id: "all", label: t("activity-actor-all") },
           { id: "user", label: t("activity-actor-user") },
           { id: "agent", label: t("activity-actor-agent") },
+          { id: "automation", label: t("activity-actor-automation") },
         ]}
       />
     </div>

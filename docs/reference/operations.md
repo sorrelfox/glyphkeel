@@ -143,6 +143,14 @@ The safety class decides who may run an operation:
 | `agent.policy.update` | app | app, command line | — | `glyphkeel agents policy` |
 | `agent.limits.update` | app | app | — | — |
 | `rules.update` | app | app, command line | — | `glyphkeel project rules <project>` |
+| `automation.list` | read | app, command line, MCP | `list_automations` | `glyphkeel automation list` |
+| `automation.get` | read | app, command line, MCP | `get_automation` | `glyphkeel automation show <rule>` |
+| `automation.create` | write | app, command line, MCP | `create_automation` | `glyphkeel automation create` |
+| `automation.update` | write | app, command line, MCP | `update_automation` | `glyphkeel automation edit <rule>` |
+| `automation.delete` | write | app, command line, MCP | `delete_automation` | `glyphkeel automation delete <rule>` |
+| `automation.runs` | read | app, command line, MCP | `get_automation_runs` | `glyphkeel automation runs` |
+| `automation.test` | write | app, command line, MCP | `test_automation` | `glyphkeel automation test <task>` |
+| `automation.run` | write | app, command line | — | `glyphkeel automation run` |
 | `history.feed` | read | app, command line, MCP | `get_activity` | `glyphkeel activity` |
 | `history.revert` | write | app, command line, MCP | `revert_changes` | `glyphkeel revert` |
 | `history.undo` | app | app | — | — |
@@ -962,6 +970,56 @@ Change a project's status rules (fields set, cleared or required when a task ent
 Input: `RulesUpdateInput`. Output: `ProjectChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 Not available to agents: It sets what agents may do; an agent that could call it would lift the rules the person set for agents.
+
+## `automation.list`
+
+The automation rules of a project and of the workspace, each with its trigger, condition, actions and latest run.
+
+Input: `AutomationListInput`. Output: `AutomationList`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `automation.get`
+
+One automation rule with its last runs.
+
+Input: `AutomationRef`. Output: `AutomationRule`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `automation.create`
+
+Make an automation rule: when a trigger happens to a task that matches a query, set fields, change labels, move it, comment, create a subtask or linked task, or leave a notification.
+
+Input: `AutomationCreateInput`. Output: `AutomationChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `automation.update`
+
+Change an automation rule: its name, trigger, condition or actions, or switch it on or off.
+
+Input: `AutomationUpdateInput`. Output: `AutomationChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `automation.delete`
+
+Delete an automation rule; revert brings it back.
+
+Input: `AutomationRef`. Output: `AutomationChange`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `automation.runs`
+
+The run log of automation rules, newest first: what set each run off, the task, the changes and any error.
+
+Input: `AutomationRunsInput`. Output: `AutomationRunList`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `automation.test`
+
+A dry run of an automation rule, saved or not, against one task: whether it matches and the changes the actions would make. Nothing is changed.
+
+Input: `AutomationTestInput`. Output: `AutomationTestResult`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+## `automation.run`
+
+Run the scheduled and due date automation rules whose time has come; the app does this by itself.
+
+Input: `AutomationRunInput`. Output: `AutomationTick`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+Not available to agents: Housekeeping that the app runs on its own schedule; agents' changes already set rules off as they happen.
 
 ## `history.feed`
 

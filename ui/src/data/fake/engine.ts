@@ -9,6 +9,11 @@
 import {
   type WorkKind,
   type WorkKindRef,
+  type AutomationAction,
+  type AutomationRule,
+  type AutomationRun,
+  type AutomationTestChange,
+  type AutomationTestResult,
   type ActivityEntry,
   type ActivityTask,
   type Actor,
@@ -91,6 +96,7 @@ import { moveDependents, scheduleOf } from "./schedule";
 import { type FakeHost, type NewTask } from "./host";
 import { afterClosing, recurrenceHandlers, taskRecurrence } from "./recurrence";
 import { templateHandlers } from "./templates";
+import { createRule, DEPTH_MAX, fill, findRule, fits, listRules, listRuns, logRun, run as ruleRun, updateRule, type RuleEvent } from "./automation";
 
 /** The Gantt chart's layout until the person changes it. */
 const DEFAULT_GANTT_LAYOUT: GanttLayout = { zoom: "day", widths: {}, group_by: "parent", move_dependents: false };
@@ -271,12 +277,23 @@ export class FakeWorkspace {
       answer.changes.push(...afterClosing(this.host, closed));
       answer.output = this.afterOccurrence(answer.output, closed);
     }
-    if (answer.changes.length === 0) {
+    // Automation rules follow the change, in the same step, as the rule.
+    const followed = FREE_OF_RULES.some((prefix) => op.startsWith(prefix)) ? { runs: [], logged: [] } : this.followRules(answer.changes, before, by?.actor.name ?? "You");
+    if (answer.changes.length === 0 && followed.runs.length === 0) {
       return { output: answer.output };
     }
     this.state.seq += 1;
     const group = `g-${String(this.state.seq)}`;
+    for (const logged of followed.logged) {
+      if (logged.result === "done" && logged.changes > 0) {
+        logged.group = group;
+      }
+    }
     this.record(before, op, group, answer.changes, by);
+    for (const one of followed.runs) {
+      this.record(before, "automation.run", group, one.changes, { actor: { kind: "automation", name: one.name }, via: by?.via ?? "app" });
+      answer.changes.push(...one.changes);
+    }
     this.undoStack.push({ state: before, op, group });
     this.redoStack = [];
     return { output: withGroup(answer.output, group), changes: { group, seq: this.state.seq, changes: answer.changes } };
@@ -329,6 +346,271 @@ export class FakeWorkspace {
       };
       this.state.activity.push(entry);
     }
+  }
+
+  /** What happened to each task in `changes`, for automation rules. */
+  private ruleEvents(changes: readonly EntityChange[], before: FakeState): RuleEvent[] {
+    const existed = new Set(before.tasks.map((task) => task.id));
+    const events = new Map<string, RuleEvent>();
+    const of = (taskId: string): RuleEvent => {
+      const known = events.get(taskId);
+      if (known) {
+        return known;
+      }
+      const made: RuleEvent = { taskId, created: false, entered: false, fields: [], commented: false };
+      events.set(taskId, made);
+      return made;
+    };
+    for (const change of changes) {
+      if (change.entity === "task") {
+        // The sample workspace reports a new task as changed in every field.
+        const created = change.fields.includes("created") || (change.fields.includes("*") && !existed.has(change.id));
+        const watched = change.fields.filter((field) => (WATCHED_FIELDS as readonly string[]).includes(field) || field.startsWith("cf:"));
+        if (!created && watched.length === 0) {
+          continue;
+        }
+        const event = of(change.id);
+        event.created ||= created;
+        event.entered ||= created || change.fields.includes("status");
+        event.fields.push(...watched.filter((field) => !event.fields.includes(field)));
+      } else if (change.entity === "comment" && change.fields.includes("created")) {
+        const taskId = this.state.comments.find((comment) => comment.id === change.id)?.taskId;
+        if (taskId !== undefined) {
+          of(taskId).commented = true;
+        }
+      }
+    }
+    return [...events.values()];
+  }
+
+  /** Whether the task with `key` matches the rule's condition. */
+  private ruleMatches(rule: AutomationRule, key: string): boolean {
+    const condition = rule.condition ?? "";
+    return condition.trim() === "" || this.runQuery(() => matchingKeys(this.listedTasks(), condition, this.queryNames(), this.archivedKeys())).includes(key);
+  }
+
+  /** Makes a rule's actions on `task`; returns their changes. A failed action names its place. */
+  private actRule(rule: AutomationRule, task: FakeTask, actor: string): EntityChange[] {
+    const made: EntityChange[] = [];
+    const handlers = this.handlers as Record<string, ((input: unknown) => unknown) | undefined>;
+    const run = (op: string, input: unknown): unknown => {
+      const answer = handlers[op]?.(input);
+      if (isResult(answer)) {
+        made.push(...answer.changes);
+        return answer.output;
+      }
+      return answer;
+    };
+    rule.actions.forEach((action: AutomationAction, index) => {
+      try {
+        const project = this.projectOf(task);
+        const key = this.keyOf(task);
+        const values = {
+          key,
+          title: task.title,
+          status: this.statusIn(project, task.statusId).name,
+          priority: task.priority,
+          due_date: task.dueDate ?? "",
+          project: project.key,
+          rule: rule.name,
+          actor,
+          today: localDay(this.today()),
+        };
+        const text = action.text === undefined ? undefined : fill(action.text, values);
+        switch (action.kind) {
+          case "set_fields": {
+            const input: Record<string, unknown> = { key };
+            const clear: string[] = [];
+            const custom: Record<string, unknown> = {};
+            for (const [field, value] of Object.entries(action.fields ?? {})) {
+              const filled = typeof value === "string" ? fill(value, values) : value;
+              if ((SETTABLE_FIELDS as readonly string[]).includes(field)) {
+                if (filled === null) {
+                  if (field === "priority") {
+                    input.priority = "none";
+                  } else {
+                    clear.push(field);
+                  }
+                } else {
+                  input[field] = filled;
+                }
+              } else {
+                custom[field] = filled;
+              }
+            }
+            run("task.update", { ...input, ...(clear.length > 0 ? { clear } : {}), ...(Object.keys(custom).length > 0 ? { fields: custom } : {}) });
+            break;
+          }
+          case "add_label":
+          case "remove_label":
+            run("task.update", { key, [action.kind === "add_label" ? "add_labels" : "remove_labels"]: [action.label ?? ""] });
+            break;
+          case "move_to_status":
+            run("task.move", { key, status: action.status });
+            break;
+          case "add_comment":
+            run("comment.add", { key, body: text ?? "" });
+            break;
+          case "create_subtask":
+          case "create_linked_task": {
+            const subtask = action.kind === "create_subtask";
+            const output = (
+              action.template === undefined
+                ? run("task.create", { project: project.key, title: text ?? "", ...(subtask ? { parent: key } : {}) })
+                : run("template.apply", { template: action.template, project: project.key, ...(text === undefined ? {} : { title: text }), ...(subtask ? { parent: key } : {}) })
+            ) as { task?: { key?: string } } | undefined;
+            const other = output?.task?.key;
+            if (!subtask && other !== undefined) {
+              run("relation.add", { key, kind: action.link ?? "relates", other });
+            }
+            break;
+          }
+          case "notify":
+            // The sample workspace shows no notifications.
+            break;
+        }
+      } catch (error: unknown) {
+        if (error instanceof FakeError) {
+          // Which action failed, as the engine says.
+          error.error.details = { ...error.error.details, action: index };
+        }
+        throw error;
+      }
+    });
+    return made;
+  }
+
+  /**
+   * Runs the enabled rules that follow `changes`, and those that follow
+   * theirs, never a rule twice in a chain and at most five deep. A failed
+   * run keeps nothing of its own. Returns each run's changes and what the
+   * log got.
+   */
+  private followRules(changes: readonly EntityChange[], before: FakeState, actor: string): { runs: { name: string; changes: EntityChange[] }[]; logged: AutomationRun[] } {
+    const rules = (this.state.automations ?? []).filter((rule) => rule.enabled);
+    const runs: { name: string; changes: EntityChange[] }[] = [];
+    const logged: AutomationRun[] = [];
+    if (rules.length === 0) {
+      return { runs, logged };
+    }
+    const log = (entry: AutomationRun) => {
+      logRun((this.state.automationRuns ??= []), entry);
+      logged.push(entry);
+    };
+    const waiting = [{ events: this.ruleEvents(changes, before), chain: [] as string[], actor }];
+    for (let batch = waiting.shift(); batch !== undefined; batch = waiting.shift()) {
+      const depth = batch.chain.length;
+      for (const event of batch.events) {
+        const task = this.state.tasks.find((candidate) => candidate.id === event.taskId);
+        if (!task) {
+          continue;
+        }
+        const project = this.projectOf(task);
+        const status = this.statusIn(project, task.statusId).name;
+        for (const rule of rules) {
+          if (batch.chain.includes(rule.id) || (rule.project !== undefined && rule.project !== project.key) || !fits(rule, event, status)) {
+            continue;
+          }
+          const key = this.keyOf(task);
+          const at = this.today().toISOString();
+          let matched: boolean;
+          try {
+            matched = this.ruleMatches(rule, key);
+          } catch (error: unknown) {
+            if (!(error instanceof FakeError)) {
+              throw error;
+            }
+            log(ruleRun(rule, at, nextId("ar"), "failed", rule.trigger.on, key, { depth, error: error.error }));
+            continue;
+          }
+          if (!matched) {
+            continue;
+          }
+          if (depth >= DEPTH_MAX) {
+            log(ruleRun(rule, at, nextId("ar"), "limited", rule.trigger.on, key, { depth, error: { code: "limit", message: `The rule didn't run: ${String(DEPTH_MAX)} rules had already set each other off after one change.`, details: { message_id: "automation-depth-limit", args: { max: String(DEPTH_MAX) } } } }));
+            continue;
+          }
+          const saved = structuredClone(this.state);
+          try {
+            const made = this.actRule(rule, task, batch.actor);
+            log(ruleRun(rule, at, nextId("ar"), "done", rule.trigger.on, key, { depth, changes: new Set(made.map((change) => `${change.entity}:${change.id}`)).size }));
+            runs.push({ name: rule.name, changes: made });
+            const next = this.ruleEvents(made, saved);
+            if (next.length > 0) {
+              waiting.push({ events: next, chain: [...batch.chain, rule.id], actor: rule.name });
+            }
+          } catch (error: unknown) {
+            if (!(error instanceof FakeError)) {
+              throw error;
+            }
+            const kept = this.state.automationRuns ?? [];
+            this.state = saved;
+            this.state.automationRuns = kept;
+            log(ruleRun(rule, at, nextId("ar"), "failed", rule.trigger.on, key, { depth, error: error.error }));
+          }
+        }
+      }
+    }
+    return { runs, logged };
+  }
+
+  /** A rule as the operations show it, with its latest run (and its runs, when asked). */
+  private ruleOut(rule: AutomationRule, withRuns = false): AutomationRule {
+    const runs = (this.state.automationRuns ?? []).filter((each) => each.rule === rule.id);
+    const latest = runs[0];
+    return structuredClone({ ...rule, ...(latest === undefined ? {} : { last_run: latest }), ...(withRuns ? { runs } : {}) });
+  }
+
+  /** What a dry run's changes did, as `automation.test` lists them. */
+  private describeRun(before: FakeState, made: readonly EntityChange[]): AutomationTestChange[] {
+    const out: AutomationTestChange[] = [];
+    const valueOf = (state: FakeState, task: FakeTask | undefined, field: string): unknown => {
+      if (!task) {
+        return undefined;
+      }
+      const project = state.projects.find((candidate) => candidate.id === task.projectId);
+      switch (field) {
+        case "status":
+          return project?.statuses.find((status) => status.id === task.statusId)?.name;
+        case "labels":
+          return task.labelIds.map((id) => project?.labels.find((label) => label.id === id)?.name ?? id);
+        case "priority":
+          return task.priority;
+        case "title":
+          return task.title;
+        case "due_date":
+          return task.dueDate ?? undefined;
+        case "start_date":
+          return task.startDate ?? undefined;
+        case "estimate":
+          return task.estimateMin ?? undefined;
+        default:
+          return undefined;
+      }
+    };
+    for (const change of made) {
+      if (change.entity === "task") {
+        const now = this.state.tasks.find((task) => task.id === change.id);
+        const key = now ? this.keyOf(now) : undefined;
+        const was = before.tasks.find((task) => task.id === change.id);
+        if (change.fields.includes("created") || !was) {
+          out.push({ entity: "task", ...(key === undefined ? {} : { task: key }), field: "created", after: true });
+          continue;
+        }
+        for (const field of change.fields) {
+          const after = valueOf(this.state, now, field);
+          const previous = valueOf(before, was, field);
+          out.push({ entity: "task", ...(key === undefined ? {} : { task: key }), field, ...(previous === undefined ? {} : { before: previous }), ...(after === undefined ? {} : { after }) });
+        }
+      } else if (change.fields.includes("created")) {
+        const comment = this.state.comments.find((each) => each.id === change.id);
+        const task = comment && this.state.tasks.find((each) => each.id === comment.taskId);
+        out.push({ entity: change.entity, ...(task ? { task: this.keyOf(task) } : {}), field: "created", after: true });
+      } else {
+        out.push({ entity: change.entity, field: change.fields[0] ?? "" });
+      }
+    }
+    return out;
   }
 
   /** Takes back the latest command, keeping the activity log, which marks it reverted. */
@@ -3798,6 +4080,63 @@ export class FakeWorkspace {
       };
     },
     "task.bulk_update": (input) => this.bulk(input),
+    "automation.list": ({ project }) => {
+      const key = project === null || project === undefined ? undefined : this.project(project).key;
+      const items = listRules(this.state.automations ?? [], key).map((rule) => this.ruleOut(rule));
+      return { items, total: items.length };
+    },
+    "automation.get": ({ rule, project }) => this.ruleOut(findRule(this.state.automations ?? [], rule, project && this.project(project).key, fail), true),
+    "automation.runs": (input) => {
+      const rules = this.state.automations ?? [];
+      const project = input.project === null || input.project === undefined ? undefined : this.project(input.project).key;
+      const rule = input.rule === null || input.rule === undefined ? undefined : findRule(rules, input.rule, project, fail).id;
+      const listed = listRuns(this.state.automationRuns ?? [], rules, input, rule, project);
+      return structuredClone(listed);
+    },
+    "automation.create": (input) => {
+      const project = input.project === null || input.project === undefined ? undefined : this.writable(input.project).key;
+      const rule = createRule((this.state.automations ??= []), input, project, this.today().toISOString(), nextUuid(), fail);
+      return { output: { rule: this.ruleOut(rule) }, changes: [{ entity: "automation_rule", id: rule.id, fields: ["record"], ...some("project", project) }] };
+    },
+    "automation.update": (input) => {
+      const rules = (this.state.automations ??= []);
+      const rule = updateRule(rules, { ...input, ...some("project", input.project && this.project(input.project).key) }, this.today().toISOString(), fail);
+      return { output: { rule: this.ruleOut(rule) }, changes: [{ entity: "automation_rule", id: rule.id, fields: ["record"], ...some("project", rule.project) }] };
+    },
+    "automation.delete": ({ rule: ref, project }) => {
+      const rules = (this.state.automations ??= []);
+      const rule = findRule(rules, ref, project && this.project(project).key, fail);
+      rules.splice(rules.indexOf(rule), 1);
+      return { output: { rule: this.ruleOut(rule), deleted: true }, changes: [{ entity: "automation_rule", id: rule.id, fields: ["record"], ...some("project", rule.project) }] };
+    },
+    "automation.test": (input): AutomationTestResult => {
+      const task = this.task(input.task);
+      const key = this.keyOf(task);
+      const rule: AutomationRule =
+        input.rule !== null && input.rule !== undefined
+          ? findRule(this.state.automations ?? [], input.rule, input.project && this.project(input.project).key, fail)
+          : input.draft
+            ? { id: "draft", name: input.draft.name ?? "Test rule", enabled: true, trigger: input.draft.trigger, ...some("condition", input.draft.condition), actions: input.draft.actions, created_by: { kind: "user", name: "You" }, created_at: "", updated_at: "" }
+            : fail("invalid", "Name a saved rule with `rule`, or give one that isn't saved with `draft`; not both.", { details: { message_id: "automation-test-rule-or-draft", path: "rule" } });
+      if (!this.ruleMatches(rule, key)) {
+        return { task: key, matches: false, ok: false };
+      }
+      const before = structuredClone(this.state);
+      try {
+        const made = this.actRule(rule, task, "You");
+        const changes = this.describeRun(before, made);
+        return { task: key, matches: true, ok: true, ...(changes.length > 0 ? { changes } : {}) };
+      } catch (error: unknown) {
+        if (!(error instanceof FakeError)) {
+          throw error;
+        }
+        const action = error.error.details?.action;
+        return { task: key, matches: true, ok: false, error: error.error, ...(typeof action === "number" ? { failed_action: action } : {}) };
+      } finally {
+        this.state = before;
+      }
+    },
+    "automation.run": () => ({ runs: 0 }),
     "view.list": (input) => {
       const items = listViews(this.state.views ?? [], { ...input, ...some("project", input.project && this.project(input.project).key) });
       return { items: structuredClone(items), total: items.length };
@@ -4778,6 +5117,13 @@ export class FakeWorkspace {
     },
   };
 }
+
+/** Commands that change the configuration or put back earlier states set no automation rule off. */
+const FREE_OF_RULES = ["history.", "transfer.", "backup.", "trash.", "project.", "status.", "type.", "label.", "rules.", "field.", "version.", "workspace.", "settings.", "agent.", "automation."];
+/** The task fields a `field_changed` rule watches, as the engine names them. */
+const WATCHED_FIELDS = ["title", "description", "status", "type", "priority", "labels", "start_date", "due_date", "estimate", "progress", "fix_version", "parent"] as const;
+/** The task fields a `set_fields` action sets directly; anything else is a custom field. */
+const SETTABLE_FIELDS = ["title", "description", "type", "priority", "start_date", "due_date", "estimate", "progress", "fix_version"] as const;
 
 function isResult(value: unknown): value is Result<unknown> {
   return typeof value === "object" && value !== null && "changes" in value && "output" in value && Array.isArray(value.changes);

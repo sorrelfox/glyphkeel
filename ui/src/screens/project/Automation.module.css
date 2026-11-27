@@ -1,0 +1,187 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+   Copyright (C) 2026 Glyphkeel contributors */
+
+/* ---------- project settings › automation ---------- */
+.automation,
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.automation > p {
+  margin: 0;
+}
+
+.list,
+.actions,
+.runs,
+.changes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rule,
+.action {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--r-m);
+  background: var(--sunken);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.name {
+  flex: 1;
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin: 0;
+}
+
+.condition,
+.mono {
+  font-family: var(--font-mono, monospace);
+}
+
+.condition {
+  padding-inline: 4px;
+  border-radius: var(--r-s);
+  background: var(--bg);
+}
+
+.last {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.turned {
+  transform: rotate(-90deg);
+}
+
+.turned:dir(rtl) {
+  transform: rotate(90deg);
+}
+
+.run {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.key {
+  font-family: var(--font-mono, monospace);
+}
+
+.error {
+  color: var(--danger, var(--fg));
+}
+
+.error > p {
+  margin: 0;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.legend {
+  margin: 0 0 4px;
+  padding: 0;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  color: var(--fg-muted);
+}
+
+.group > p {
+  margin: 0;
+}
+
+.fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.choice > * {
+  min-inline-size: 12em;
+}
+
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.result p {
+  margin: 0;
+}
+
+.buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

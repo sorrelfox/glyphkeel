@@ -12,6 +12,14 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel activity` | `history.feed` | The activity log, newest first: who changed what, when and through which program; optionally the agent sessions. |
 | `glyphkeel agents policy` | `agent.policy.update` | Set the most an agent may do, whatever profile it asks for. |
 | `glyphkeel agents sessions` | `agent.sessions` | List agent sessions, newest first, with their client, profile, times and counts of reads and writes. |
+| `glyphkeel automation create` | `automation.create` | Make an automation rule: when a trigger happens to a task that matches a query, set fields, change labels, move it, comment, create a subtask or linked task, or leave a notification. |
+| `glyphkeel automation delete <rule>` | `automation.delete` | Delete an automation rule; revert brings it back. |
+| `glyphkeel automation edit <rule>` | `automation.update` | Change an automation rule: its name, trigger, condition or actions, or switch it on or off. |
+| `glyphkeel automation list` | `automation.list` | The automation rules of a project and of the workspace, each with its trigger, condition, actions and latest run. |
+| `glyphkeel automation run` | `automation.run` | Run the scheduled and due date automation rules whose time has come; the app does this by itself. |
+| `glyphkeel automation runs` | `automation.runs` | The run log of automation rules, newest first: what set each run off, the task, the changes and any error. |
+| `glyphkeel automation show <rule>` | `automation.get` | One automation rule with its last runs. |
+| `glyphkeel automation test <task>` | `automation.test` | A dry run of an automation rule, saved or not, against one task: whether it matches and the changes the actions would make. Nothing is changed. |
 | `glyphkeel backup create` | `backup.create` | Make a backup of the workspace now: a checked copy of the database and its stored files. |
 | `glyphkeel backup delete <name>` | `backup.delete` | Delete a backup and the stored files only it used. |
 | `glyphkeel backup list` | `backup.list` | The workspace's backups, newest first, with their kind and size. |

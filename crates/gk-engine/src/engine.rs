@@ -159,6 +159,9 @@ pub struct Engine {
     pub(crate) backups_fixed: bool,
     /// When this process last ran the daily jobs (engine clock, ms).
     pub(crate) last_daily: Mutex<Option<i64>>,
+    /// When this process last ran the scheduled automation rules (engine
+    /// clock, ms).
+    pub(crate) last_automation: Mutex<Option<i64>>,
     _app_lock: Option<LockFile>,
     /// Shared: the workspace is in use; see `WorkspaceLayout::open_lock`.
     _open_lock: LockFile,
@@ -300,6 +303,7 @@ impl Engine {
             backups,
             backups_fixed,
             last_daily: Mutex::new(None),
+            last_automation: Mutex::new(None),
             _app_lock: app_lock,
             _open_lock: open_lock,
         })
@@ -610,6 +614,7 @@ impl Engine {
             workspace_id: self.env.workspace_id,
             layout: self.env.layout.clone(),
             zone: self.env.zone.clone(),
+            as_agent: false,
         };
         let reads = ctx
             .session
@@ -670,7 +675,11 @@ impl Engine {
         };
         self.bus.publish(&event);
         drop(order);
-        if ctx.via == Via::App && !ctx.is_agent() && !op.starts_with("history.") {
+        if ctx.via == Via::App
+            && !ctx.is_agent()
+            && !op.starts_with("history.")
+            && op != "automation.run"
+        {
             let mut stacks = self.lock_undo();
             stacks.undo.push(group);
             if stacks.undo.len() > UNDO_DEPTH {
@@ -723,7 +732,9 @@ impl Engine {
             let followed = crate::ops::recurrence::after_command(&mut w)?;
             crate::ops::recurrence::update_output(w.tx(), &mut output, &followed)?;
             crate::ops::rules::enforce(&mut w)?;
-            let finished = w.finish()?;
+            let events = crate::ops::automation::events_of(&mut w)?;
+            let mut finished = w.finish()?;
+            crate::ops::automation::follow(tx, &in_tx, events, &mut finished)?;
             if !safety_backup {
                 let items = finished.items();
                 if items > SAFETY_BACKUP_ABOVE {
@@ -898,8 +909,9 @@ impl Engine {
     /// One round of background work, called every few seconds by
     /// long-running programs: takes the jobs lock when it is free (another
     /// holder may have ended) and, while holding it, checkpoints the
-    /// write-ahead log when it is due and runs the daily jobs (backup,
-    /// trash purge, unused files) when they are due.
+    /// write-ahead log when it is due, runs the daily jobs (backup,
+    /// trash purge, unused files) when they are due, and every minute the
+    /// automation rules set off by due dates and the schedule.
     pub fn jobs_tick(&self) -> Result<Option<CheckpointOutcome>, OpError> {
         if self.role == Role::Cli {
             return Ok(None);
@@ -932,6 +944,11 @@ impl Engine {
             && let Err(e) = self.run_daily_jobs()
         {
             tracing::warn!(error = %e, "the daily jobs failed");
+        }
+        if self.automation_due()
+            && let Err(e) = self.run_automation()
+        {
+            tracing::warn!(error = %e, "the scheduled automation rules failed");
         }
         outcome
     }

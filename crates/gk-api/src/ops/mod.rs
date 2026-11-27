@@ -22,6 +22,7 @@ macro_rules! op {
 }
 
 pub mod agent;
+pub mod automation;
 pub mod backup;
 pub mod board;
 pub mod bulk;

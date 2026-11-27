@@ -54,11 +54,7 @@ pub(crate) fn from_records(records: &[ActivityRecord]) -> Vec<Changed> {
                 origin: Origin {
                     via: parse_via(&r.via),
                     actor: Actor {
-                        kind: if r.actor_kind == "agent" {
-                            ActorKind::Agent
-                        } else {
-                            ActorKind::User
-                        },
+                        kind: ActorKind::from_stored(&r.actor_kind),
                         name: r.actor_name.clone(),
                     },
                     session: r.session_id.map(|s| s.to_string()),

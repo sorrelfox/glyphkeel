@@ -6,6 +6,8 @@
 import {
   type ActivityEntry,
   type AgentRules,
+  type AutomationRule,
+  type AutomationRun,
   type Actor,
   type ProjectIcon,
   type BoardLayout,
@@ -116,7 +118,7 @@ export interface FakeTask {
   statusEnteredAt: string;
   updatedAt: string;
   /** Who changed it last; the engine doesn't report it on cards yet. */
-  updatedBy: { kind: "user" | "agent"; name: string };
+  updatedBy: { kind: "user" | "agent" | "automation"; name: string };
   closedAt: string | null;
   version: number;
   /** The version (release) it is planned for. */
@@ -340,6 +342,10 @@ export interface FakeState {
   versions?: FakeVersion[];
   /** Custom fields, in order; none until one is made. */
   customFields?: FakeField[];
+  /** Automation rules, in the order they run; none until one is made. */
+  automations?: AutomationRule[];
+  /** The automation rules' runs, newest first; none until a rule runs. */
+  automationRuns?: AutomationRun[];
   /** The workspace's own CSV import presets; none until one is saved. */
   csvPresets?: CsvPreset[];
   workspaceName: string;

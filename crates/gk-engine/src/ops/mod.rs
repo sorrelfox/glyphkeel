@@ -8,6 +8,7 @@ use gk_api::{OpDescriptor, Operation, descriptor};
 use crate::registry::Registry;
 
 pub(crate) mod agent;
+pub(crate) mod automation;
 pub(crate) mod backup;
 pub(crate) mod board;
 pub(crate) mod builtin_templates;
@@ -64,6 +65,7 @@ pub(crate) fn register(r: &mut Registry) {
     custom_field::register(r);
     project_delete::register(r);
     rules::register(r);
+    automation::register(r);
     task::register(r);
     duplicate::register(r);
     claim::register(r);

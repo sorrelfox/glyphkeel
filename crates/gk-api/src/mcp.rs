@@ -527,6 +527,97 @@ Example: delete_version {\"version\": \"1.1\", \"project\": \"TM\"}",
         idempotent: true,
     },
     McpTool {
+        name: "list_automations",
+        toolset: Toolset::Projects,
+        title: "List automation rules",
+        description: "Lists the automation rules of a `project` and of the workspace (all rules \
+when no project is named): each rule's trigger, condition (a TQL query), actions, whether it is \
+enabled and its latest run. Rules act on their own when their trigger happens; history names the \
+rule as the actor. \
+Example: list_automations {\"project\": \"TM\"}",
+        main: "automation.list",
+        covers: &["automation.list"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "get_automation",
+        toolset: Toolset::Projects,
+        title: "Get an automation rule",
+        description: "One automation rule, named by ID or by name with its `project`, with its \
+last runs (result, task, changes, error). Use it to see why a rule did or didn't act. \
+Example: get_automation {\"rule\": \"Triage bugs\", \"project\": \"TM\"}",
+        main: "automation.get",
+        covers: &["automation.get"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "create_automation",
+        toolset: Toolset::Projects,
+        title: "Create an automation rule",
+        description: "Makes an automation rule, only when the person asked for one. `trigger`: \
+{on: task_created | field_changed (with `fields`) | moved_to_status (with `status`) | \
+comment_added | due_date_reached | overdue | schedule (with `every`: daily or weekly, `time` \
+HH:MM, `weekday`)}. `condition`: a TQL query the task must match (a scheduled rule needs one). \
+`actions` (1 to 20, in order): {kind: set_fields (with `fields`), add_label / remove_label (with \
+`label`), move_to_status (with `status`), add_comment (with `text`), create_subtask / \
+create_linked_task (with `text` as the title, `template`, `link`), notify (with `text`)}. Texts \
+may use {key}, {title}, {status}, {priority}, {due_date}, {project}, {rule}, {actor}, {today}. \
+A rule you make is held to the rules for agents. Try it first with test_automation. \
+Example: create_automation {\"project\": \"TM\", \"name\": \"Urgent bugs\", \"trigger\": \
+{\"on\": \"task_created\"}, \"condition\": \"type:Bug\", \"actions\": [{\"kind\": \
+\"set_fields\", \"fields\": {\"priority\": \"high\"}}]}",
+        main: "automation.create",
+        covers: &["automation.create"],
+        idempotent: false,
+    },
+    McpTool {
+        name: "update_automation",
+        toolset: Toolset::Projects,
+        title: "Update an automation rule",
+        description: "Changes an automation rule, named by ID or by name with its `project`: \
+`name`, `enabled`, `trigger`, `condition` or `actions` (replacing all of them). Only when the \
+person asked for it. revert_changes takes it back. \
+Example: update_automation {\"rule\": \"Urgent bugs\", \"project\": \"TM\", \"enabled\": false}",
+        main: "automation.update",
+        covers: &["automation.update"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "delete_automation",
+        toolset: Toolset::Projects,
+        title: "Delete an automation rule",
+        description: "Deletes an automation rule, named by ID or by name with its `project`. \
+What it did stays. Only when the person asked for it; revert_changes brings it back. \
+Example: delete_automation {\"rule\": \"Urgent bugs\", \"project\": \"TM\"}",
+        main: "automation.delete",
+        covers: &["automation.delete"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "get_automation_runs",
+        toolset: Toolset::Projects,
+        title: "Automation run log",
+        description: "The run log of automation rules, newest first: one `rule`, the rules of a \
+`project`, or all; `problems_only` for runs that failed or were limited. \
+Example: get_automation_runs {\"project\": \"TM\", \"problems_only\": true}",
+        main: "automation.runs",
+        covers: &["automation.runs"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "test_automation",
+        toolset: Toolset::Projects,
+        title: "Try an automation rule",
+        description: "A dry run of an automation rule against one `task`: a saved `rule`, or a \
+`draft` ({trigger, condition, actions}) before you make it. Returns whether the task matches the \
+condition and the changes the actions would make, or the error. Nothing is changed. \
+Example: test_automation {\"task\": \"TM-41\", \"draft\": {\"trigger\": {\"on\": \
+\"task_created\"}, \"actions\": [{\"kind\": \"add_label\", \"label\": \"triage\"}]}}",
+        main: "automation.test",
+        covers: &["automation.test"],
+        idempotent: true,
+    },
+    McpTool {
         name: "search_tasks",
         toolset: Toolset::Tasks,
         title: "Search tasks",
@@ -1675,6 +1766,9 @@ mod tests {
                 "get_template",
                 "list_versions",
                 "get_version",
+                "list_automations",
+                "get_automation",
+                "get_automation_runs",
                 "search_tasks",
                 "get_task",
                 "check_move",

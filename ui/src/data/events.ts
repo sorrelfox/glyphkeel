@@ -61,11 +61,13 @@ export const ENTITY_QUERIES: Readonly<Record<string, readonly OpId[]>> = {
   series: ["task.get", "task.search", "today.get", "schedule.get", "board.get"],
   // Templates: their lists, and the one shown.
   template: ["template.list", "template.get"],
+  // Automation rules: their list, the one shown and the run log.
+  automation_rule: ["automation.list", "automation.get", "automation.runs"],
   wiki_page: ["trash.list", "wiki.search", "wiki.get", "wiki.list", "wiki.history", "description.revision", "search.query", "markdown.render", ...LINKS],
 };
 
-/** Every committed change shows in the activity log. */
-const ALWAYS: readonly OpId[] = ["history.feed", "agent.sessions"];
+/** Every committed change shows in the activity log, and may have set automation rules off. */
+const ALWAYS: readonly OpId[] = ["history.feed", "agent.sessions", "automation.list", "automation.get", "automation.runs"];
 
 /**
  * The query prefixes to invalidate for one event. A kind of item without an

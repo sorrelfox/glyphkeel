@@ -563,6 +563,8 @@ pub enum ReminderKind {
     Deadline,
     /// The timer has run for longer than the workspace's setting.
     Timer,
+    /// A notification an automation rule left; `note` is its text.
+    Automation,
 }
 
 /// Which reminders are due.

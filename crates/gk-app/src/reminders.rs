@@ -65,6 +65,7 @@ fn notice_for(item: &DueReminder) -> Notice {
             None => text("notification-due-soon", &[("key", key.clone())]),
         },
         ReminderKind::Timer => text("notification-timer", &[("key", key.clone())]),
+        ReminderKind::Automation => text("notification-automation", &[("key", key.clone())]),
     };
     let title = if item.missed {
         text("notification-missed", &[("what", what)])
