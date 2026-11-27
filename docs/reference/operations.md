@@ -135,6 +135,7 @@ The safety class decides who may run an operation:
 | `list.layout.get` | read | app | — | — |
 | `list.layout.update` | write | app | — | — |
 | `query.parse` | read | app | — | — |
+| `date.parse` | read | app | — | — |
 | `schedule.get` | read | app, command line, MCP | `get_schedule` | `glyphkeel schedule` |
 | `schedule.preview_move` | read | app | — | — |
 | `gantt.layout.get` | read | app | — | — |
@@ -928,6 +929,14 @@ Read a task query for the query field: highlighted pieces, the chips of the cond
 Input: `QueryParseInput`. Output: `ParsedQuery`. Schemas: [catalog.schema.json](catalog.schema.json).
 
 Not available to agents: It serves the app's query field as the person types; agents and scripts run queries with task.search, which reports the same mistakes.
+
+## `date.parse`
+
+Read a date typed in words (fri, next mon, in 3d, +3d, dec 1, end of month, 2026-12-31) as the day it means, the way every date field reads it. Words that are no date fail with message date-invalid.
+
+Input: `DateParseInput`. Output: `ParsedDate`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+Not available to agents: It shows the app's date fields which day the words mean while they are typed; agents and scripts pass the same words to the date fields themselves, which read them the same way.
 
 ## `schedule.get`
 

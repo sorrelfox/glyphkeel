@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-// The engine's friendly dates, read the same way in the page so that a date
-// field can show which day the words mean while they are typed: `today`,
-// `fri`, `next fri`, `in 3d`, `+2w`, `dec 1`, `end of month`, `2026-12-01`.
+// The in-memory engine's friendly dates (`today`, `fri`, `next fri`, `in 3d`,
+// `+2w`, `dec 1`, `end of month`, `2026-12-01`), for tests only. The page
+// itself never reads dates: it asks the engine (`date.parse`). This copy is
+// checked against the engine's own worked examples, which `cargo xtask gen`
+// writes to `generated/naturalDates.ts`, so it cannot drift from the engine.
 // Days are `YYYY-MM-DD`; arithmetic is done at midnight UTC.
 
-import { type WeekStart } from "../generated/ops";
-import { addDays, addMonths, weekday } from "../screens/calendar/model";
+import { type WeekStart } from "../../generated/ops";
+import { addDays, addMonths, weekday } from "../../screens/calendar/model";
 
 const WEEKDAY_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];

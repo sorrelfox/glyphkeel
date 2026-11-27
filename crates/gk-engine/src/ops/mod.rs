@@ -17,6 +17,7 @@ pub(crate) mod claim;
 pub(crate) mod comment;
 pub(crate) mod custom_field;
 pub(crate) mod dashboard;
+pub(crate) mod date;
 pub(crate) mod description;
 pub(crate) mod draft;
 pub(crate) mod duplicate;
@@ -83,6 +84,7 @@ pub(crate) fn register(r: &mut Registry) {
     recurrence::register(r);
     template::register(r);
     query::register(r);
+    date::register(r);
     report::register(r);
     bulk::register(r);
     view::register(r);

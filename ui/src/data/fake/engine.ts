@@ -94,7 +94,8 @@ import { checklistOf, escapeHtml, merge3, publicChecklist, renderFake, setChecke
 import { newProject, nextFileId, nextId, nextUuid, SAMPLE_AGENT } from "./seed";
 import { type FakeComment, type FakeFile, type FakeProject, type FakeRelation, type FakeReminder, type FakeRevision, type FakeState, type FakeStatus, type FakeTask, type FakeTimeEntry, type FakeWikiPage, type FakeWorkKind } from "./state";
 import { checkReadOnly, enter as enterRules } from "./rules";
-import { naturalDay, nextDay, searchAll, searchWiki, slugOf, headingsOf } from "./overview";
+import { parseNaturalDay } from "./naturalDate";
+import { nextDay, searchAll, searchWiki, slugOf, headingsOf } from "./overview";
 import { moveDependents, scheduleOf } from "./schedule";
 import { type FakeHost, type NewTask } from "./host";
 import { afterClosing, recurrenceHandlers, taskRecurrence } from "./recurrence";
@@ -110,6 +111,11 @@ import { createVersion, deleteVersion, getVersion, listVersions, updateVersion, 
 import { createView, deleteView, listViews, matchingKeys, parseQuery, queryError, renameInQuery, searchTasks, updateView, type GroupInfo, type QueryNames, type TaskHistory } from "./query";
 import { createdClosed, cumulativeFlow, cycleTime, defaultFrom, flowPeriods, type FlowEvent, type FlowInput, type FlowStatus, type FlowTask } from "./reports";
 import { addDays, csvOf, localDay, MAX_ENTRY_MINUTES, momentOf, reminderAt, reminderOut, sortDue, timeEntryOut, timerElapsedMs, timerOut, unitsOf, weekStart, workDay } from "./time";
+
+/** The engine's answer to words that are no date. */
+function notADate(text: string, path: string): never {
+  return fail("invalid", `"${text}" is not a date. Write 2026-12-31, or today, fri, next mon, in 3d, +3d.`, { details: { path, message_id: "date-invalid", args: { text } } });
+}
 
 /** An operation failed: the engine's error, as the transports deliver it. */
 export class FakeError extends Error {
@@ -1912,8 +1918,7 @@ export class FakeWorkspace {
   /** A date of `task.create` or `task.update`, as `YYYY-MM-DD` or in words. */
   private dayInput(text: string, path: string): string {
     return (
-      naturalDay(text, localDay(this.today())) ??
-      fail("invalid", `"${text}" is not a date. Write 2026-12-31, or today, fri, next mon, in 3d, +3d.`, { details: { path, message_id: "date-invalid", args: { text } } })
+      parseNaturalDay(text, localDay(this.today()), this.state.settings.week_start) ?? notADate(text, path)
     );
   }
 
@@ -4215,6 +4220,14 @@ export class FakeWorkspace {
         page.updatedAt = now;
       }
       return { output: { page: this.wikiOut(page) }, changes: [{ entity: "wiki_page", id: page.id, fields: ["created"], project: project.key }] };
+    },
+    "date.parse": ({ text, today }) => {
+      if (today !== undefined && today !== null && !/^\d{4}-\d{2}-\d{2}$/.test(today.trim())) {
+        fail("invalid", `"${today}" is not a date.`, { details: { path: "today", message_id: "date-invalid", args: { text: today } } });
+      }
+      const from = today?.trim() ?? localDay(this.today());
+      const day = parseNaturalDay(text, from, this.state.settings.week_start);
+      return { date: day ?? notADate(text.trim(), "text") };
     },
     "query.parse": ({ query, fields }) => parseQuery(query, this.queryNames(), fields === true),
     "task.search": (input) => {

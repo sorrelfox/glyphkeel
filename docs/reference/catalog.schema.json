@@ -67786,6 +67786,55 @@
       "summary": "Read a task query for the query field: highlighted pieces, the chips of the condition builder, the normal form and the first mistake with its place."
     },
     {
+      "app_reason": "It shows the app's date fields which day the words mean while they are typed; agents and scripts pass the same words to the date fields themselves, which read them the same way.",
+      "exposure": "app",
+      "id": "date.parse",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A date typed in a field.",
+        "properties": {
+          "text": {
+            "description": "What was typed: `2026-12-31`, `today`, `fri`, `next mon`, `in 3d`,\n`+3d`, `dec 1`, `end of month`.",
+            "type": "string"
+          },
+          "today": {
+            "description": "The day the words count from (`YYYY-MM-DD`), for example today in\nthe person's own time zone; default: today in the workspace's time\nzone. Weeks start on the workspace's first day of the week.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "DateParseInput",
+        "type": "object"
+      },
+      "input_name": "DateParseInput",
+      "kind": "query",
+      "output": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The day the words mean.",
+        "properties": {
+          "date": {
+            "description": "The day, `YYYY-MM-DD`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date"
+        ],
+        "title": "ParsedDate",
+        "type": "object"
+      },
+      "output_name": "ParsedDate",
+      "safety": "read",
+      "summary": "Read a date typed in words (fri, next mon, in 3d, +3d, dec 1, end of month, 2026-12-31) as the day it means, the way every date field reads it. Words that are no date fail with message date-invalid."
+    },
+    {
       "cli": "schedule",
       "exposure": "data",
       "id": "schedule.get",

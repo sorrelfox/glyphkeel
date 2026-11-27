@@ -29,6 +29,8 @@
 }
 
 .body {
+  /* The property grid lays itself out by the width it has. */
+  container: task-body / inline-size;
   display: flex;
   flex: 1 1 0;
   flex-direction: column;
@@ -77,30 +79,106 @@
   gap: 6px;
 }
 
+/*
+ * The property grid. Wide: two columns, each label beside its value. Narrower
+ * (most panels): two columns with each label above its value. Narrowest: one
+ * column, the labels beside the values in a column as wide as the longest
+ * label needs. A value's phrases never break inside; each sits on its own
+ * line when they don't fit side by side, and ends in an ellipsis (with the
+ * whole text in its tooltip and accessible name) only when even that line is
+ * too narrow.
+ */
 .props {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   column-gap: 16px;
 }
 
-.prop {
-  grid-template-columns: 76px minmax(0, 1fr);
+.props > .prop > dt {
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+.props > .prop > dd {
+  min-inline-size: 0;
 }
 
 /* A row of its own, across both columns: the reminder. */
-.full {
+.props > .full {
   grid-column: 1 / -1;
 }
 
-/* Labels wrap inside their cell. */
-.wide > dd {
+/* Labels wrap inside their cell, a whole label at a time. */
+.props > .wide > dd {
   flex-wrap: wrap;
   padding: 3px 0;
 }
 
+.props > .prop > dd > [class~="val"] {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  white-space: nowrap;
+}
+
+.props [class~="val"] > [class~="ic"],
+.props [class~="val"] > [class~="chip"],
+.props [class~="val"] > svg {
+  flex: none;
+}
+
+.labelChip {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+
+/* Spent and what is left: side by side, or the second under the first. */
 .static {
-  display: inline-flex;
-  gap: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 6px;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  padding-block: 3px;
+  white-space: nowrap;
+}
+
+@container task-body (inline-size < 40rem) {
+  .props {
+    row-gap: 4px;
+  }
+
+  .props > .prop {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    min-block-size: 0;
+  }
+
+  .props > .prop > dt {
+    font-size: var(--fs-small);
+    line-height: 16px;
+  }
+
+  .props > .prop > dd {
+    min-block-size: var(--h-row);
+  }
+}
+
+@container task-body (inline-size < 28rem) {
+  .props {
+    grid-template-columns: fit-content(40%) minmax(0, 1fr);
+    row-gap: 0;
+  }
+
+  .props > .prop {
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+    align-content: normal;
+  }
+
+  .props > .prop > dt {
+    font-size: inherit;
+    line-height: inherit;
+  }
 }
 
 .over {
