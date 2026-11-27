@@ -405,7 +405,10 @@ fn an_agent_imports_only_from_the_exports_folder() {
         })
         .unwrap();
     let agent = Context::agent("Agent", session, gk_api::Profile::Full);
-    let outside = fixture("jira.csv").to_string_lossy().into_owned();
+    // A file outside the folders agents may use.
+    let outside = dir.path().join("jira.csv");
+    std::fs::copy(fixture("jira.csv"), &outside).unwrap();
+    let outside = outside.to_string_lossy().into_owned();
     let err = e
         .call(
             &agent,

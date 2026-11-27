@@ -1078,12 +1078,17 @@ fn a_page_exports_with_its_subpages_and_files_as_plain_markdown() {
 
     // An agent names a file in the folders agents may use only.
     let agent = agent_of(&ws.engine, "Helper");
+    let elsewhere = if cfg!(windows) {
+        r"C:\Windows\Temp\x.zip"
+    } else {
+        "/tmp/x.zip"
+    };
     let err = ws
         .engine
         .call(
             &agent,
             "wiki.export",
-            json!({ "project": "TM", "page": "Home", "path": "/tmp/x.zip" }),
+            json!({ "project": "TM", "page": "Home", "path": elsewhere }),
         )
         .unwrap_err();
     assert_eq!(err.code, ErrorCode::Forbidden, "{err:?}");

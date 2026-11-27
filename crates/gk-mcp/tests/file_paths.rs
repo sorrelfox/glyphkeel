@@ -61,6 +61,14 @@ fn fill(folder: &Path, archive: &Path) {
     fs::copy(archive, folder.join("tm.zip")).unwrap();
 }
 
+/// An absolute path outside every folder agents may use, written as this
+/// system writes paths.
+const ELSEWHERE: &str = if cfg!(windows) {
+    r"C:\Windows\win.ini"
+} else {
+    "/etc/passwd"
+};
+
 fn s(p: &Path) -> String {
     p.to_str().unwrap().to_owned()
 }
@@ -75,7 +83,7 @@ struct Setup {
 
 fn setup() -> Setup {
     let (dir, mut options) = workspace();
-    let root = fs::canonicalize(dir.path()).unwrap();
+    let root = gk_store::canonical_path(dir.path()).unwrap();
     let shared = root.join("shared");
     let secret = root.join("secret");
     let exports;
@@ -96,7 +104,7 @@ fn setup() -> Setup {
         let archive = root.join("tm.zip");
         call("transfer.export", json!({ "path": s(&archive) }));
         fs::create_dir_all(engine.store().layout().exports_dir()).unwrap();
-        exports = fs::canonicalize(engine.store().layout().exports_dir()).unwrap();
+        exports = gk_store::canonical_path(&engine.store().layout().exports_dir()).unwrap();
         for folder in [&exports, &shared, &secret] {
             fill(folder, &archive);
         }
@@ -187,7 +195,7 @@ async fn every_path_taking_tool_is_limited_to_the_folders_agents_may_use() {
             );
             assert!(t.contains("outside the folders agents may use"), "{t}");
             refused(
-                &c.call(tool, input(tool, "/etc/passwd")).await,
+                &c.call(tool, input(tool, ELSEWHERE)).await,
                 "forbidden",
                 &folders,
             );

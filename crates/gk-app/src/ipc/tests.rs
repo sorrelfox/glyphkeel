@@ -549,14 +549,29 @@ fn an_encrypted_workspace_waits_for_its_passphrase_and_a_locked_app_refuses_call
             .unwrap();
         workspace.close();
     }
-    gk_engine::encryption::change(
+    let changed = gk_engine::encryption::change(
         &layout(&dir),
         None,
         &gk_engine::encryption::Change::Encrypt(passphrase.clone()),
         1,
         "test",
-    )
-    .unwrap();
+    );
+    if !gk_store::encryption_available() {
+        // The Windows build has no SQLCipher: encrypting is refused, and
+        // the lock still keeps a plain workspace's calls out.
+        let err = changed.unwrap_err();
+        assert_eq!(err.details["message_id"], "storage-encryption-unavailable");
+        let workspace = open(&dir, Confirmation::Refuse);
+        assert_eq!(workspace.waiting_for_passphrase(), None);
+        workspace.call("project.list", json!({}), None).unwrap();
+        workspace.app_lock().configure(None, true);
+        assert!(workspace.app_lock().lock());
+        let refused = workspace.call("project.list", json!({}), None).unwrap_err();
+        assert_eq!(refused.details["locked"], true);
+        workspace.close();
+        return;
+    }
+    changed.unwrap();
     // Encrypting left the passphrase known to this process; forgetting it
     // stands in for a fresh start of the app.
     gk_store::forget_passphrases();

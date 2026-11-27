@@ -112,7 +112,7 @@ pub(crate) fn folders(layout: &WorkspaceLayout, source: &AgentFolders) -> Vec<Pa
 pub(crate) fn listed(layout: &WorkspaceLayout, source: &AgentFolders) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for (i, folder) in folders(layout, source).into_iter().enumerate() {
-        let shown = match fs::canonicalize(&folder) {
+        let shown = match gk_store::canonical_path(&folder) {
             Ok(canonical) => canonical,
             Err(_) if i == 0 => folder,
             Err(_) => continue,
@@ -189,7 +189,11 @@ pub(crate) fn check(
 /// and its backups, which hold all of its data), unless it is inside
 /// `exports`, even when the person added a folder around them.
 fn keep_off(path: PathBuf, exports: &Path, off_limits: &[PathBuf]) -> Result<PathBuf, Refusal> {
-    let canonical = |p: &Path| fs::canonicalize(p).ok().and_then(|c| split_host(&c).ok());
+    let canonical = |p: &Path| {
+        gk_store::canonical_path(p)
+            .ok()
+            .and_then(|c| split_host(&c).ok())
+    };
     let Ok(at) = split_host(&path) else {
         return Err(Refusal::Name);
     };
@@ -491,7 +495,7 @@ pub(crate) fn resolve(
     let _ = fs::create_dir_all(exports);
     let canonical: Vec<(PathBuf, Split)> = folders
         .iter()
-        .filter_map(|f| fs::canonicalize(f).ok())
+        .filter_map(|f| gk_store::canonical_path(f).ok())
         .filter_map(|c| split_host(&c).ok().map(|s| (c, s)))
         .collect();
     let canonical_splits: Vec<Split> = canonical.iter().map(|(_, s)| s.clone()).collect();
@@ -543,7 +547,7 @@ pub(crate) fn resolve(
             (existing, rest)
         }
     };
-    let real = fs::canonicalize(&existing).map_err(|e| Refusal::Missing(e.to_string()))?;
+    let real = gk_store::canonical_path(&existing).map_err(|e| Refusal::Missing(e.to_string()))?;
     let real_split = split_host(&real)?;
     let Some(below) = inside_any(&real_split, &canonical_splits, style) else {
         return Err(Refusal::Link);
@@ -714,7 +718,7 @@ mod tests {
     impl Folders {
         fn new() -> Self {
             let dir = tempfile::tempdir().unwrap();
-            let root = fs::canonicalize(dir.path()).unwrap();
+            let root = gk_store::canonical_path(dir.path()).unwrap();
             let exports = root.join("ws").join("exports");
             let shared = root.join("shared");
             let secret = root.join("secret");
@@ -741,6 +745,14 @@ mod tests {
             resolve(&self.allowed(), given, access)
         }
     }
+
+    /// An absolute path outside every test folder, written as this
+    /// system writes paths.
+    const ELSEWHERE: &str = if cfg!(windows) {
+        r"C:\Windows\win.ini"
+    } else {
+        "/etc/passwd"
+    };
 
     fn s(p: &Path) -> String {
         p.to_str().unwrap().to_owned()
@@ -778,10 +790,7 @@ mod tests {
             f.resolve(&s(&f.secret.join("none")), Access::Read),
             Err(Refusal::Outside)
         );
-        assert_eq!(
-            f.resolve("/etc/passwd", Access::Read),
-            Err(Refusal::Outside)
-        );
+        assert_eq!(f.resolve(ELSEWHERE, Access::Read), Err(Refusal::Outside));
         assert_eq!(
             f.resolve(&s(&f.root.join("sharedx").join("a")), Access::Read),
             Err(Refusal::Outside)
@@ -923,7 +932,7 @@ mod tests {
     #[test]
     fn the_workspace_and_its_backups_stay_off_limits_inside_an_added_folder() {
         let dir = tempfile::tempdir().unwrap();
-        let data = fs::canonicalize(dir.path()).unwrap();
+        let data = gk_store::canonical_path(dir.path()).unwrap();
         let layout = WorkspaceLayout::new(data.join("workspaces").join("Personal"));
         let backups = data.join("backups").join("Personal");
         fs::create_dir_all(layout.root()).unwrap();
@@ -979,7 +988,7 @@ mod tests {
         let f = Folders::new();
         let layout = WorkspaceLayout::new(f.exports.parent().unwrap());
         let source = AgentFolders::Fixed(vec![f.shared.clone()]);
-        let e = check(&layout, &source, "path", "/etc/passwd", Access::Read).unwrap_err();
+        let e = check(&layout, &source, "path", ELSEWHERE, Access::Read).unwrap_err();
         let hint = e.hint.clone().unwrap();
         assert!(
             hint.contains(&s(&f.exports)) && hint.contains(&s(&f.shared)),
@@ -1002,6 +1011,9 @@ mod tests {
         let exports = dir.path().join("ws").join("exports");
         let made = resolve(std::slice::from_ref(&exports), "a.zip", Access::Write).unwrap();
         assert!(exports.is_dir());
-        assert_eq!(made, fs::canonicalize(&exports).unwrap().join("a.zip"));
+        assert_eq!(
+            made,
+            gk_store::canonical_path(&exports).unwrap().join("a.zip")
+        );
     }
 }

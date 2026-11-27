@@ -762,8 +762,8 @@ mod tests {
     }
 
     #[test]
-    fn this_build_can_encrypt() {
-        assert!(encryption_available());
+    fn every_build_but_the_windows_one_can_encrypt() {
+        assert_eq!(encryption_available(), !cfg!(windows));
     }
 
     #[test]

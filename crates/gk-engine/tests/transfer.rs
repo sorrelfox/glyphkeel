@@ -318,7 +318,7 @@ fn an_agent_imports_and_exports_only_in_the_folders_agents_may_use() {
     let dir = TempDir::new().unwrap();
     let shared = dir.path().join("shared");
     std::fs::create_dir_all(&shared).unwrap();
-    let shared = std::fs::canonicalize(&shared).unwrap();
+    let shared = gk_store::canonical_path(&shared).unwrap();
     let layout = WorkspaceLayout::new(dir.path().join("W"));
     let mut config = EngineConfig::new(Role::Cli);
     config.agent_folders = gk_engine::AgentFolders::Fixed(vec![shared.clone()]);
@@ -335,7 +335,15 @@ fn an_agent_imports_and_exports_only_in_the_folders_agents_may_use() {
     let outside = dir.path().join("elsewhere.zip");
     for (path, code) in [
         (outside.to_string_lossy().into_owned(), ErrorCode::Forbidden),
-        ("/tmp/x.zip".to_owned(), ErrorCode::Forbidden),
+        (
+            if cfg!(windows) {
+                r"C:\Windows\Temp\x.zip"
+            } else {
+                "/tmp/x.zip"
+            }
+            .to_owned(),
+            ErrorCode::Forbidden,
+        ),
         ("../x.zip".to_owned(), ErrorCode::Invalid),
         ("sub/../../x.zip".to_owned(), ErrorCode::Invalid),
         (".hidden".to_owned(), ErrorCode::Invalid),
@@ -358,7 +366,7 @@ fn an_agent_imports_and_exports_only_in_the_folders_agents_may_use() {
     let out = e
         .call(&agent, "transfer.export", json!({ "path": "tm.zip" }))
         .unwrap();
-    let exports = std::fs::canonicalize(e.store().layout().exports_dir()).unwrap();
+    let exports = gk_store::canonical_path(&e.store().layout().exports_dir()).unwrap();
     assert_eq!(
         Path::new(out["path"].as_str().unwrap()),
         exports.join("tm.zip")

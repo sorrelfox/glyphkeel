@@ -295,7 +295,7 @@ impl AppSettings {
 
     /// Adds `folder`, which the person chose, unless it is there already.
     fn add_agent_folder(&self, folder: &Path) -> Result<(), OpError> {
-        let folder = std::fs::canonicalize(folder).unwrap_or_else(|_| folder.to_path_buf());
+        let folder = gk_store::canonical_path(folder).unwrap_or_else(|_| folder.to_path_buf());
         let folder = folder.to_string_lossy().into_owned();
         self.change_agent_folders(|folders| {
             if !folders.contains(&folder) {
@@ -722,7 +722,7 @@ mod tests {
         assert!(settings.agent_folders().is_empty());
         settings.add_agent_folder(&chosen).unwrap();
         settings.add_agent_folder(&chosen).unwrap();
-        let canonical = std::fs::canonicalize(&chosen).unwrap();
+        let canonical = gk_store::canonical_path(&chosen).unwrap();
         let stored = canonical.to_string_lossy().into_owned();
         assert_eq!(settings.agent_folders(), std::slice::from_ref(&stored));
         // The agent server reads the same file; the other fields stay.

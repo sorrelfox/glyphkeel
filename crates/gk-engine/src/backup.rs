@@ -77,7 +77,8 @@ pub(crate) fn check_folder(
         ));
     }
     let inside = |folder: &Path| {
-        let workspace = fs::canonicalize(layout.root()).unwrap_or_else(|_| layout.root().into());
+        let workspace =
+            gk_store::canonical_path(layout.root()).unwrap_or_else(|_| layout.root().into());
         folder.starts_with(&workspace) || folder.starts_with(layout.root())
     };
     if inside(&path) {
@@ -98,7 +99,7 @@ pub(crate) fn check_folder(
         )
     };
     fs::create_dir_all(&path).map_err(unwritable)?;
-    let real = fs::canonicalize(&path).map_err(unwritable)?;
+    let real = gk_store::canonical_path(&path).map_err(unwritable)?;
     if inside(&real) {
         return Err(messages::invalid(
             field,
