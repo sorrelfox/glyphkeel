@@ -714,6 +714,8 @@ prop-none = None
 prop-left = { $time } left
 prop-over-by = over by { $time }
 prop-date-value = { $name }: { $value }
+# A date with how far off it is: "Due: Nov 19, 8 days ago".
+prop-date-value-away = { $name }: { $value }, { $away }
 prop-duration-placeholder = e.g. 1h 30m
 
 ## The task panel's bar, sections and tabs

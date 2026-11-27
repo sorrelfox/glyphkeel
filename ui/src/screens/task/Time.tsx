@@ -6,9 +6,10 @@
 
 import { Bell, BellOff, ChevronDown, MoreHorizontal, Pause, Pencil, Play, Plus, Square, Trash2 } from "lucide-react";
 import { useState, type KeyboardEvent } from "react";
-import { Button, Dialog, DialogTrigger, Menu, MenuTrigger, Popover, useLocale } from "react-aria-components";
+import { Button, Dialog, DialogTrigger, Menu, MenuTrigger, useLocale } from "react-aria-components";
 
 import { classes } from "../../classes";
+import { FitPopover } from "../../components/FitPopover";
 import { MenuEntries } from "../../components/ContextMenu";
 import { Select } from "../../components/Select";
 import { useToasts } from "../../components/Toasts";
@@ -211,7 +212,7 @@ function EntryRow({ entry, readOnly }: { entry: TimeEntry; readOnly: boolean }) 
         <Button className="btn flat icon sm" isDisabled={readOnly} aria-label={t("time-entry-menu")}>
           <MoreHorizontal className="ic s" />
         </Button>
-        <Popover className="pop menuPopover" placement="bottom end" offset={4}>
+        <FitPopover className="menuPopover" placement="bottom end" offset={4}>
           <Menu className="menu" aria-label={t("time-entry-menu")}>
             <MenuEntries
               entries={[
@@ -220,7 +221,7 @@ function EntryRow({ entry, readOnly }: { entry: TimeEntry; readOnly: boolean }) 
               ]}
             />
           </Menu>
-        </Popover>
+        </FitPopover>
       </MenuTrigger>
     </li>
   );
@@ -321,11 +322,11 @@ export function TimerButton({ task, readOnly }: { task: Task; readOnly: boolean 
             <Button className="btn flat icon" isDisabled={readOnly || start.isPending} aria-label={t("timer-start-as")}>
               <ChevronDown className="ic s" />
             </Button>
-            <Popover className="pop menuPopover" placement="bottom end" offset={4}>
+            <FitPopover className="menuPopover" placement="bottom end" offset={4}>
               <Menu className="menu" aria-label={t("timer-start-as")}>
                 <MenuEntries entries={kinds.map((kind) => ({ id: kind.id, label: kind.name, run: () => { start.mutate({ key: task.key, work_kind: kind.id }); } }))} />
               </Menu>
-            </Popover>
+            </FitPopover>
           </MenuTrigger>
         )}
       </>
@@ -435,11 +436,11 @@ export function ReminderValue({ task, readOnly }: { task: Task; readOnly: boolea
           </>
         )}
       </Button>
-      <Popover className="pop" placement="bottom start" offset={4}>
+      <FitPopover placement="bottom start" offset={4}>
         <Dialog className={classes(styles.reminderDialog)} aria-label={t("reminder-title")}>
           {({ close }) => <ReminderForm task={task} close={close} />}
         </Dialog>
-      </Popover>
+      </FitPopover>
     </DialogTrigger>
   );
 }

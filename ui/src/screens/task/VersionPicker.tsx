@@ -3,8 +3,9 @@
 
 import { Milestone } from "lucide-react";
 import { useState } from "react";
-import { Button, Menu, MenuTrigger, Popover } from "react-aria-components";
+import { Button, Menu, MenuTrigger } from "react-aria-components";
 
+import { FitPopover } from "../../components/FitPopover";
 import { MenuEntries, type MenuEntry } from "../../components/ContextMenu";
 import { type Task } from "../../data/catalog";
 import { plannable, useVersions } from "../../data/versions";
@@ -68,11 +69,11 @@ export function VersionPicker({ task, readOnly, onChange }: VersionPickerProps) 
         {current !== undefined && " "}
         {current !== undefined && current.status !== "open" && <span className="chip sm">{t(`version-status-${current.status}`)}</span>}
       </Button>
-      <Popover className="pop menuPopover" placement="bottom start" offset={4}>
+      <FitPopover className="menuPopover" placement="bottom start" offset={4}>
         <Menu className="menu" aria-label={t("prop-version")}>
           <MenuEntries entries={entries} />
         </Menu>
-      </Popover>
+      </FitPopover>
     </MenuTrigger>
   );
 }

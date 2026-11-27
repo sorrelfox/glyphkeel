@@ -115,6 +115,29 @@
   font-size: var(--fs);
 }
 
+/* A date and how far off it is: side by side when they fit, else the second
+   on its own line under the first; neither breaks inside. */
+.props .dateValue {
+  flex-wrap: wrap;
+  gap: 0 6px;
+  block-size: auto;
+  min-block-size: 26px;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  padding-block: 2px;
+  text-align: start;
+}
+
+.relative {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  overflow: hidden;
+  font-size: var(--fs-small);
+  line-height: 16px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .inlineField {
   flex: 1;
   min-width: 0;

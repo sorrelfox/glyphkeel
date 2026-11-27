@@ -3,9 +3,10 @@
 
 import { Download, ExternalLink, File, FileCode, FileImage, FileText, Image as ImageIcon, MoreHorizontal, Paperclip, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
-import { Button, Menu, MenuTrigger, Popover, useLocale } from "react-aria-components";
+import { Button, Menu, MenuTrigger, useLocale } from "react-aria-components";
 
 import { classes } from "../../classes";
+import { FitPopover } from "../../components/FitPopover";
 import { MenuEntries } from "../../components/ContextMenu";
 import { useToasts } from "../../components/Toasts";
 import { type Attachment, type FileKind } from "../../generated/ops";
@@ -297,7 +298,7 @@ export function FileRow({ file, readOnly }: { file: Attachment; readOnly: boolea
           <Button className="btn flat icon sm" aria-label={t("files-menu", { name: file.name })}>
             <MoreHorizontal className="ic s" />
           </Button>
-          <Popover className="pop menuPopover" placement="bottom end" offset={4}>
+          <FitPopover className="menuPopover" placement="bottom end" offset={4}>
             <Menu className="menu" aria-label={t("files-menu", { name: file.name })}>
               <MenuEntries
                 entries={[
@@ -345,7 +346,7 @@ export function FileRow({ file, readOnly }: { file: Attachment; readOnly: boolea
                 ]}
               />
             </Menu>
-          </Popover>
+          </FitPopover>
         </MenuTrigger>
       </div>
       {image && preview && <AttachedImage file={file} className={styles.preview} />}

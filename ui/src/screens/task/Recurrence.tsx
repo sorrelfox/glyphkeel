@@ -3,9 +3,10 @@
 
 import { Repeat, RepeatOff, SkipForward, Copy } from "lucide-react";
 import { useState } from "react";
-import { Button, Dialog, DialogTrigger, Popover, useLocale } from "react-aria-components";
+import { Button, Dialog, DialogTrigger, useLocale } from "react-aria-components";
 
 import { classes } from "../../classes";
+import { FitPopover } from "../../components/FitPopover";
 import { Select } from "../../components/Select";
 import { useToasts } from "../../components/Toasts";
 import { errorToast, useCommand, useOp } from "../../data/hooks";
@@ -119,11 +120,11 @@ export function RepeatValue({ task, readOnly }: { task: Task; readOnly: boolean 
           </>
         )}
       </Button>
-      <Popover className="pop" placement="bottom start" offset={4}>
+      <FitPopover placement="bottom start" offset={4}>
         <Dialog className={classes(styles.dialog)} aria-label={t("repeat-title")}>
           {({ close }) => <RepeatForm task={task} close={close} />}
         </Dialog>
-      </Popover>
+      </FitPopover>
     </DialogTrigger>
   );
 }
@@ -149,12 +150,13 @@ function RepeatForm({ task, close }: { task: Task; close: () => void }) {
   ];
   return (
     <form
-      className={styles.form}
+      className={classes("popForm", styles.form)}
       onSubmit={(event) => {
         event.preventDefault();
         set.mutate({ key: task.key, ...input }, { onSuccess: close });
       }}
     >
+      <div className={classes("popBody", styles.body)} data-testid="repeat-body">
       <fieldset className={styles.group} disabled={typed}>
         <div className={styles.row}>
           <span className={styles.label}>{t("repeat-every")}</span>
@@ -173,7 +175,6 @@ function RepeatForm({ task, close }: { task: Task; close: () => void }) {
                   type="button"
                   className={classes("btn sm", styles.day, on && styles.dayOn)}
                   aria-pressed={on}
-                  aria-label={weekdayName(locale, day)}
                   onClick={() => {
                     const next = on ? draft.weekdays.filter((each) => each !== day) : WEEKDAYS.filter((each) => each === day || draft.weekdays.includes(each));
                     if (next.length > 0) {
@@ -181,7 +182,9 @@ function RepeatForm({ task, close }: { task: Task; close: () => void }) {
                     }
                   }}
                 >
-                  {weekdayName(locale, day, "short")}
+                  {/* Its short name on screen, its whole name for screen readers. */}
+                  <span aria-hidden="true">{weekdayName(locale, day, "short")}</span>
+                  <span className={styles.spoken}>{weekdayName(locale, day)}</span>
                 </button>
               );
             })}
@@ -306,7 +309,8 @@ function RepeatForm({ task, close }: { task: Task; close: () => void }) {
           </>
         ) : null}
       </div>
-      <div className={styles.buttons}>
+      </div>
+      <div className={classes("popFoot", styles.buttons)} data-testid="repeat-footer">
         <div className="grow" />
         <Button className="btn flat sm" onPress={close}>
           {t("dialog-cancel")}

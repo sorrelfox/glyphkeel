@@ -79,6 +79,23 @@ const SCREENS: Screen[] = [
   { name: "board", open: openProject },
   { name: "task panel", open: openTask },
   {
+    name: "task panel day picker",
+    open: async (page) => {
+      await openTask(page);
+      await page.getByRole("complementary", { name: /^Task / }).getByRole("button", { name: /^\W*Due\W*:/ }).click();
+      await page.getByRole("textbox", { name: /Due\W* in words/ }).fill("next fri");
+      await expect(page.getByTestId("day-picker-grid")).toBeVisible();
+    },
+  },
+  {
+    name: "task panel repeats editor",
+    open: async (page) => {
+      await openTask(page);
+      await page.getByRole("complementary", { name: /^Task / }).getByRole("button", { name: /^\W*Repeats\W*:/ }).click();
+      await expect(page.getByTestId("repeat-footer")).toBeVisible();
+    },
+  },
+  {
     // The three kinds of "Linked from" row: a wiki page, a description, a comment.
     name: "task panel with links to it",
     path: "/?wiki",

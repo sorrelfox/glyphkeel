@@ -6,9 +6,10 @@ import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } 
 import { CSS as DndCss } from "@dnd-kit/utilities";
 import { ArrowDown, ArrowUp, GripVertical, MoreHorizontal, Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Button, Dialog, DialogTrigger, Group, Input, Label, Menu, MenuTrigger, NumberField, Popover } from "react-aria-components";
+import { Button, Dialog, DialogTrigger, Group, Input, Label, Menu, MenuTrigger, NumberField } from "react-aria-components";
 
 import { classes } from "../../classes";
+import { FitPopover } from "../../components/FitPopover";
 import { MenuEntries } from "../../components/ContextMenu";
 import { useAskCloseDuplicates } from "../../components/DuplicatePrompt";
 import { Select } from "../../components/Select";
@@ -150,7 +151,7 @@ function SubtaskRow({
         <Button className="btn flat icon sm" isDisabled={readOnly} aria-label={t("subtasks-menu", { key: sub.key })}>
           <MoreHorizontal className="ic s" />
         </Button>
-        <Popover className="pop menuPopover" placement="bottom end" offset={4}>
+        <FitPopover className="menuPopover" placement="bottom end" offset={4}>
           <Menu className="menu" aria-label={t("subtasks-menu", { key: sub.key })}>
             <MenuEntries
               entries={[
@@ -159,7 +160,7 @@ function SubtaskRow({
               ]}
             />
           </Menu>
-        </Popover>
+        </FitPopover>
       </MenuTrigger>
     </div>
   );
@@ -336,7 +337,7 @@ function LagButton({ task, link, readOnly }: { task: Task; link: Link; readOnly:
       <Button className={classes("btn flat sm", lag === 0 && "faint")} isDisabled={readOnly} aria-label={t("links-lag-edit", { key: link.task.key, days: lag })} data-lag-button={link.task.key}>
         {lag === 0 ? t("links-lag-none") : t("links-lag", { days: lag })}
       </Button>
-      <Popover className="pop" placement="bottom end" offset={4}>
+      <FitPopover placement="bottom end" offset={4}>
         <Dialog className={classes(styles.lagDialog)} aria-label={t("links-lag-edit", { key: link.task.key, days: lag })}>
           {({ close }) => (
             <form
@@ -370,7 +371,7 @@ function LagButton({ task, link, readOnly }: { task: Task; link: Link; readOnly:
             </form>
           )}
         </Dialog>
-      </Popover>
+      </FitPopover>
     </DialogTrigger>
   );
 }

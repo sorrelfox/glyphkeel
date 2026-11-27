@@ -9,6 +9,7 @@ import { createContext, use, useRef, useState, type ReactNode } from "react";
 import { Menu, MenuItem, Popover, Text, useLocale } from "react-aria-components";
 
 import { classes } from "../../classes";
+import { DayPopover } from "../../components/DayPicker";
 import { PriorityGlyph, RecurringMark, TypeGlyph, usePriorityName } from "../../components/Glyphs";
 import { PRIORITIES, type Priority } from "../../data/catalog";
 import { useProject } from "../../data/board";
@@ -309,50 +310,35 @@ function DueCell({ task }: { task: ListedTask }) {
   const actions = useCellActions();
   const editing = actions.editing?.key === task.key && actions.editing.column === "due";
   const due = task.due_date ?? null;
-  if (editing) {
-    return (
-      <span className={classes("field", styles.inlineField)}>
-        <input
-          type="date"
-          aria-label={t("list-edit-due", { key: task.key })}
-          autoFocus
-          defaultValue={due ?? ""}
-          onClick={(event) => {
-            event.stopPropagation();
-          }}
-          onBlur={(event) => {
-            const next = event.target.value === "" ? null : event.target.value;
-            actions.setEditing(null);
-            if (next !== due) {
-              actions.setDue(task, next);
-            }
-          }}
-          onKeyDown={(event) => {
-            event.stopPropagation();
-            if (event.key === "Enter") {
-              event.currentTarget.blur();
-            } else if (event.key === "Escape") {
-              event.preventDefault();
-              actions.setEditing(null);
-            }
-          }}
-        />
-      </span>
-    );
-  }
+  const trigger = useRef<HTMLButtonElement>(null);
   const state = dueState(due, task.closed_at !== undefined, actions.today);
   return (
-    <button
-      type="button"
-      className={classes(styles.cellButton)}
-      aria-label={t("list-edit-due-value", { key: task.key, value: due === null ? t("list-none") : day(due) })}
-      onClick={(event) => {
-        event.stopPropagation();
-        actions.setEditing({ key: task.key, column: "due" });
-      }}
-    >
-      {due === null ? <Empty /> : <span className={classes("meta", styles.date, state === "overdue" && "overdue", (state === "soon" || state === "today") && "soon")}>{day(due)}</span>}
-    </button>
+    <>
+      <button
+        ref={trigger}
+        type="button"
+        className={classes(styles.cellButton)}
+        aria-label={t("list-edit-due-value", { key: task.key, value: due === null ? t("list-none") : day(due) })}
+        onClick={(event) => {
+          event.stopPropagation();
+          actions.setEditing({ key: task.key, column: "due" });
+        }}
+      >
+        {due === null ? <Empty /> : <span className={classes("meta", styles.date, state === "overdue" && "overdue", (state === "soon" || state === "today") && "soon")}>{day(due)}</span>}
+      </button>
+      <DayPopover
+        triggerRef={trigger}
+        isOpen={editing}
+        label={t("list-edit-due", { key: task.key })}
+        value={due}
+        onDone={(next) => {
+          actions.setEditing(null);
+          if (next !== undefined && next !== due) {
+            actions.setDue(task, next);
+          }
+        }}
+      />
+    </>
   );
 }
 
