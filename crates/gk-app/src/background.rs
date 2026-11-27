@@ -126,10 +126,9 @@ fn click_opens(menu_on_left_click: bool, event: &TrayIconEvent) -> bool {
         )
 }
 
-/// Puts the app's icon in the tray, with Open, Quick add and Quit.
-fn build_tray(app: &AppHandle) -> tauri::Result<TrayIcon> {
+/// The tray's menu, Open, Quick add and Quit, in the app's language.
+fn tray_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let label = |id: &str| messages::text(id, &[]);
-    let tooltip = label("tray-tooltip");
     let open = MenuItem::with_id(app, OPEN_ID, label("tray-open"), true, None::<&str>)?;
     let quick_add = MenuItem::with_id(
         app,
@@ -140,7 +139,31 @@ fn build_tray(app: &AppHandle) -> tauri::Result<TrayIcon> {
     )?;
     let separator = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, QUIT_ID, label("tray-quit"), true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&open, &quick_add, &separator, &quit])?;
+    Menu::with_items(app, &[&open, &quick_add, &separator, &quit])
+}
+
+/// Shows the tray's menu and tooltip in the app's language again, after
+/// the language changed in Preferences. Without a tray icon there is
+/// nothing to do.
+pub(crate) fn relabel_tray(app: &AppHandle) {
+    let Some(tray) = app.tray_by_id(TRAY_ID) else {
+        return;
+    };
+    let tooltip = messages::text("tray-tooltip", &[]);
+    let result = tray_menu(app).and_then(|menu| {
+        tray.set_menu(Some(menu))?;
+        tray.set_tooltip(Some(&tooltip))?;
+        tray.set_title(Some(&tooltip))
+    });
+    if let Err(err) = result {
+        eprintln!("glyphkeel-app: cannot relabel the tray icon: {err}");
+    }
+}
+
+/// Puts the app's icon in the tray, with Open, Quick add and Quit.
+fn build_tray(app: &AppHandle) -> tauri::Result<TrayIcon> {
+    let tooltip = messages::text("tray-tooltip", &[]);
+    let menu = tray_menu(app)?;
     let mut builder = TrayIconBuilder::with_id(TRAY_ID)
         .menu(&menu)
         .tooltip(&tooltip)

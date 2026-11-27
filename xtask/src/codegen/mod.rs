@@ -12,6 +12,8 @@
 //! - `docs/reference/operations.md`, `docs/reference/cli.md` and
 //!   `docs/reference/mcp-prompts.md`: the reference pages;
 //! - `ui/src/generated/ops.ts`: the TypeScript client;
+//! - `crates/gk-cli/i18n/en/ops.ftl`: the help of the command line's
+//!   commands and options as messages, for translation.
 //! - `ui/src/generated/naturalDates.ts`: the worked examples of friendly
 //!   dates with the day the engine's parser gives each, which the page's
 //!   test engine is checked against.
@@ -20,6 +22,7 @@
 //! catalog generates now.
 
 mod docs;
+mod ftl;
 mod ts;
 
 use std::fs;
@@ -65,6 +68,10 @@ pub(crate) fn outputs() -> Result<Vec<Output>> {
         Output {
             path: "ui/src/generated/ops.ts",
             content: ts::generate(&catalog)?,
+        },
+        Output {
+            path: "crates/gk-cli/i18n/en/ops.ftl",
+            content: ftl::cli_ops()?,
         },
         Output {
             path: "ui/src/generated/naturalDates.ts",

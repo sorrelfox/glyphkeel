@@ -27,6 +27,8 @@ clap_mangen = { workspace = true }
 gk-api = { workspace = true }
 gk-engine = { workspace = true }
 gk-mcp = { workspace = true }
+# The query language's messages, which the engine's errors name too.
+gk-query = { workspace = true }
 # Only for the workspace folder layout the engine opens.
 gk-store = { workspace = true }
 # Asking for a workspace's passphrase on the terminal without echo.

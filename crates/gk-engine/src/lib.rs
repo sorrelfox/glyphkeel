@@ -18,6 +18,7 @@ mod events;
 mod failure;
 mod flow;
 mod jobs;
+pub mod language;
 mod messages;
 mod ops;
 mod registry;
@@ -33,7 +34,7 @@ pub use context::{ConfirmRequest, Confirmation, Context};
 pub use engine::{Engine, EngineConfig, Role, SessionStart};
 pub use failure::{Failure, store_error};
 pub use jobs::JobsReport;
-pub use messages::{ENGINE as ENGINE_MESSAGES, MESSAGES_FTL, Messages};
+pub use messages::{Arg as MessageArg, ENGINE as ENGINE_MESSAGES, MESSAGES_FTL, Messages};
 pub use registry::{Env, QueryCtx, Registry};
 pub use time::{
     Clock, ZoneChoice, check_time_zone, personal_time_zone, rfc3339, system_clock, time_zones,

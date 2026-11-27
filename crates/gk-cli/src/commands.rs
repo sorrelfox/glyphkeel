@@ -12,7 +12,7 @@ use clap::{Arg, ArgAction, Command};
 use gk_api::{CATALOG, OpDescriptor};
 
 use crate::input::{self, Field};
-use crate::messages::text;
+use crate::messages::{self, text};
 
 /// Global options.
 pub(crate) const WORKSPACE: &str = "workspace";
@@ -20,6 +20,7 @@ pub(crate) const JSON: &str = "json";
 pub(crate) const QUIET: &str = "quiet";
 pub(crate) const NO_COLOR: &str = "no-color";
 pub(crate) const TZ: &str = "tz";
+pub(crate) const LANG: &str = messages::LANG_FLAG;
 /// Without a command: start the app with its quick-add window.
 pub(crate) const QUICK_ADD: &str = "quick-add";
 
@@ -28,8 +29,13 @@ pub(crate) const OPEN: &str = "open";
 pub(crate) const MCP: &str = "mcp";
 pub(crate) const COMPLETIONS: &str = "completions";
 pub(crate) const MAN: &str = "man";
+pub(crate) const HELP: &str = "help";
 #[cfg(test)]
-pub(crate) const BUILT_IN: &[&str] = &[OPEN, MCP, COMPLETIONS, MAN];
+pub(crate) const BUILT_IN: &[&str] = &[OPEN, MCP, COMPLETIONS, MAN, HELP];
+
+/// The options every command has, which are not operation fields.
+const HELP_ARG: &str = "help";
+const VERSION_ARG: &str = "version";
 
 /// Commands renamed in this version: the old words still run the
 /// operation for one more version, without showing in help or completions.
@@ -122,6 +128,13 @@ pub(crate) fn build(ops: &[OpCommand]) -> Command {
                 .global(true)
                 .value_name("ZONE")
                 .help(text("cli-tz-help", &[])),
+        )
+        .arg(
+            Arg::new(LANG)
+                .long(LANG)
+                .global(true)
+                .value_name("LANG")
+                .help(text("cli-lang-help", &[])),
         );
 
     let mut tree = Node::default();
@@ -154,41 +167,135 @@ pub(crate) fn build(ops: &[OpCommand]) -> Command {
         root = root.subcommand(cmd);
     }
 
-    root.subcommand(
-        Command::new(OPEN).about(text("cli-open-about", &[])).arg(
-            Arg::new("links")
-                .value_name("LINK")
-                .num_args(0..)
-                .help(text("cli-open-links-help", &[])),
-        ),
-    )
-    .subcommand(
-        Command::new(MCP)
-            .about(text("cli-mcp-about", &[]))
-            .long_about(text("cli-mcp-long-about", &[]))
-            .disable_help_flag(true)
-            .arg(
-                Arg::new("args")
+    let shells: Vec<String> = <clap_complete::Shell as clap::ValueEnum>::value_variants()
+        .iter()
+        .filter_map(clap::ValueEnum::to_possible_value)
+        .map(|v| v.get_name().to_owned())
+        .collect();
+    let root = root
+        .subcommand(
+            Command::new(OPEN).about(text("cli-open-about", &[])).arg(
+                Arg::new("links")
+                    .value_name("LINK")
                     .num_args(0..)
-                    .trailing_var_arg(true)
-                    .allow_hyphen_values(true)
-                    .value_parser(clap::value_parser!(std::ffi::OsString)),
+                    .help(text("cli-open-links-help", &[])),
             ),
-    )
-    .subcommand(
-        Command::new(COMPLETIONS)
-            .about(text("cli-completions-about", &[]))
-            .arg(
-                Arg::new("shell")
-                    .required(true)
-                    .value_parser(clap::value_parser!(clap_complete::Shell)),
+        )
+        .subcommand(
+            Command::new(MCP)
+                .about(text("cli-mcp-about", &[]))
+                .long_about(text("cli-mcp-long-about", &[]))
+                .disable_help_flag(true)
+                .arg(
+                    Arg::new("args")
+                        .num_args(0..)
+                        .trailing_var_arg(true)
+                        .allow_hyphen_values(true)
+                        .value_parser(clap::value_parser!(std::ffi::OsString)),
+                ),
+        )
+        .subcommand(
+            Command::new(COMPLETIONS)
+                .about(text("cli-completions-about", &[]))
+                .arg(
+                    Arg::new("shell")
+                        .required(true)
+                        .value_parser(clap::value_parser!(clap_complete::Shell))
+                        .hide_possible_values(true)
+                        .help(with_values(
+                            &text("cli-completions-shell-help", &[]),
+                            &shells,
+                        )),
+                ),
+        )
+        .subcommand(
+            Command::new(MAN)
+                .hide(true)
+                .about(text("cli-man-about", &[])),
+        )
+        .subcommand(
+            Command::new(HELP).about(text("cli-help-about", &[])).arg(
+                Arg::new("commands")
+                    .value_name("COMMAND")
+                    .num_args(0..)
+                    .help(text("cli-help-commands-help", &[])),
             ),
+        );
+    localize(root, true)
+}
+
+/// An option's help followed by the values it takes.
+pub(crate) fn with_values(help: &str, values: &[String]) -> String {
+    text(
+        "cli-help-with-values",
+        &[("help", help.to_owned()), ("values", values.join(", "))],
     )
-    .subcommand(
-        Command::new(MAN)
-            .hide(true)
-            .about(text("cli-man-about", &[])),
-    )
+}
+
+/// The words clap writes itself, in the chosen language: the headings of
+/// the help, and the help and version options. Clap's own help command is
+/// replaced by [`HELP`], which the program answers itself.
+fn localize(mut cmd: Command, root: bool) -> Command {
+    let names: Vec<String> = cmd
+        .get_subcommands()
+        .map(|c| c.get_name().to_owned())
+        .collect();
+    for name in names {
+        cmd = cmd.mut_subcommand(name, |c| localize(c, false));
+    }
+    let options = text("cli-help-options", &[]);
+    let arguments = text("cli-help-arguments", &[]);
+    cmd = cmd.mut_args(|a| {
+        let heading = if a.is_positional() {
+            arguments.clone()
+        } else {
+            options.clone()
+        };
+        a.help_heading(heading)
+    });
+    let header = clap::builder::styling::Style::new().bold().underline();
+    let usage = text("cli-help-usage", &[]);
+    cmd = cmd
+        .help_template(format!(
+            "{{before-help}}{{about-with-newline}}\n{header}{usage}{header:#} {{usage}}\n\n{{all-args}}{{after-help}}"
+        ))
+        .subcommand_help_heading(text("cli-help-commands", &[]))
+        .disable_help_subcommand(true);
+    // The MCP server reads its own `--help`.
+    if !cmd.is_disable_help_flag_set() {
+        cmd = cmd.disable_help_flag(true).arg(
+            Arg::new(HELP_ARG)
+                .short('h')
+                .long(HELP_ARG)
+                .action(ArgAction::Help)
+                .help_heading(options.clone())
+                .help(text("cli-help-help", &[])),
+        );
+    }
+    if root {
+        cmd = cmd.disable_version_flag(true).arg(
+            Arg::new(VERSION_ARG)
+                .short('V')
+                .long(VERSION_ARG)
+                .action(ArgAction::Version)
+                .help_heading(options)
+                .help(text("cli-version-help", &[])),
+        );
+    }
+    cmd
+}
+
+/// The long help of the command `words` name, for `glyphkeel help …`; the
+/// program's own help without words. `None` when no command has those
+/// words.
+pub(crate) fn help_of(ops: &[OpCommand], words: &[String]) -> Option<String> {
+    let mut root = build(ops);
+    root.build();
+    let mut cmd = &mut root;
+    for word in words {
+        cmd = cmd.find_subcommand_mut(word)?;
+    }
+    Some(cmd.render_long_help().to_string())
 }
 
 /// A node of the command tree: a word, maybe an operation, maybe more words.
@@ -227,7 +334,7 @@ impl Node {
             let c = &ops[i];
             cmd = cmd.args(input::args(c.op, &c.fields));
             if !self.renamed {
-                cmd = cmd.about(c.op.summary);
+                cmd = cmd.about(messages::op_summary(c.op));
             } else if has_children {
                 cmd = cmd.about(group_about(&self.children));
             } else {
@@ -324,10 +431,114 @@ mod tests {
                     QUIET,
                     NO_COLOR,
                     TZ,
+                    LANG,
+                    HELP_ARG,
                 ] {
                     assert_ne!(f.long(), taken, "{} has a field `{}`", c.op.id, f.name);
                 }
             }
         }
+    }
+
+    /// The words of every command's help that are not messages: command
+    /// and option names, the values options take, and the product's name.
+    fn machine_words(cmd: &Command, out: &mut std::collections::BTreeSet<String>) {
+        let mut add = |text: &str| {
+            for word in text.split(|c: char| !c.is_ascii_alphabetic()) {
+                out.insert(word.to_owned());
+            }
+        };
+        add(cmd.get_name());
+        for arg in cmd.get_arguments() {
+            add(arg.get_id().as_str());
+            if let Some(long) = arg.get_long() {
+                add(long);
+            }
+            if let Some(short) = arg.get_short() {
+                add(&short.to_string());
+            }
+            for value in arg.get_possible_values() {
+                add(value.get_name());
+            }
+        }
+        for sub in cmd.get_subcommands() {
+            machine_words(sub, out);
+        }
+    }
+
+    /// Words in plain English left in `text`: runs of ASCII letters that
+    /// are neither machine words nor placeholders in capitals.
+    fn plain_words(text: &str, machine: &std::collections::BTreeSet<String>) -> Vec<String> {
+        text.split(|c: char| !c.is_ascii_alphabetic())
+            .filter(|w| !w.is_empty())
+            .filter(|w| !w.chars().all(|c| c.is_ascii_uppercase()))
+            .filter(|w| !machine.contains(*w))
+            .map(str::to_owned)
+            .collect()
+    }
+
+    #[test]
+    fn help_in_the_pseudo_locale_has_no_plain_english() {
+        gk_engine::language::with_language("en-XA", || {
+            let mut root = build(&op_commands());
+            root.build();
+            let mut machine = std::collections::BTreeSet::new();
+            machine_words(&root, &mut machine);
+            machine.insert("glyphkeel".to_owned());
+            let mut found = Vec::new();
+            let mut stack: Vec<&mut Command> = vec![&mut root];
+            let mut checked = 0;
+            while let Some(cmd) = stack.pop() {
+                if cmd.get_name() == MCP {
+                    continue;
+                }
+                let help = cmd.render_long_help().to_string();
+                let short = cmd.render_help().to_string();
+                for text in [help, short] {
+                    // The usage line is clap's syntax: names and placeholders.
+                    for line in text.lines().filter(|l| !l.contains("glyphkeel ")) {
+                        let plain = plain_words(line, &machine);
+                        if !plain.is_empty() {
+                            found.push(format!("{}: {plain:?} in {line:?}", cmd.get_name()));
+                        }
+                    }
+                }
+                checked += 1;
+                stack.extend(cmd.get_subcommands_mut());
+            }
+            assert!(checked > 150, "{checked}");
+            assert!(
+                found.is_empty(),
+                "plain English in the help:\n{}",
+                found.join("\n")
+            );
+        });
+    }
+
+    #[test]
+    fn the_operations_messages_are_the_catalogs_text() {
+        let normal = |s: &str| s.lines().map(str::trim).collect::<Vec<_>>().join("\n");
+        let mut ids = std::collections::BTreeSet::new();
+        for c in op_commands() {
+            let id = messages::op_message_id(c.op.id);
+            assert_eq!(
+                messages::OPS.english(&id, &[]),
+                normal(c.op.summary),
+                "{id}"
+            );
+            ids.insert(id);
+            let schema = gk_api::schema::portable(&(c.op.input_schema)().to_value());
+            for f in &c.fields {
+                let Some(text) = schema["properties"][&f.name]["description"].as_str() else {
+                    continue;
+                };
+                let id = messages::field_message_id(c.op.id, &f.name);
+                assert_eq!(messages::OPS.english(&id, &[]), normal(text), "{id}");
+                ids.insert(id);
+            }
+        }
+        let in_file: std::collections::BTreeSet<String> =
+            messages::OPS.ids().into_iter().map(str::to_owned).collect();
+        assert_eq!(in_file, ids, "ops.ftl differs: run `cargo xtask gen`");
     }
 }
