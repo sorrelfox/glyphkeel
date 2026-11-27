@@ -155,7 +155,7 @@ pub(crate) fn resolve(arg: Option<&str>) -> Result<WorkspaceLayout, OpError> {
                 "cli-workspace-name-hint",
                 &[],
             ),
-            e => OpError::invalid_at("workspace", format!("{e}.")),
+            e => gk_engine::store_error(&e),
         })?;
     if !may_create && !layout.database().is_file() {
         return Err(messages::hint(

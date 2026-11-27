@@ -9,7 +9,7 @@ import { Button, Menu, MenuTrigger, Popover, useLocale } from "react-aria-compon
 import { classes } from "../../classes";
 import { MenuEntries } from "../../components/ContextMenu";
 import { Switch } from "../../components/Switch";
-import { useCommand } from "../../data/hooks";
+import { failureText, useCommand } from "../../data/hooks";
 import { isLate, shownVersions, useRoadmap } from "../../data/versions";
 import { useToday } from "../../data/zone";
 import { type Version } from "../../generated/ops";
@@ -95,7 +95,7 @@ export function Roadmap({ project, openTask, onOpen }: RoadmapProps) {
       </div>
       {roadmap.error && (
         <p className={styles.note} role="alert">
-          {t("roadmap-error", { message: roadmap.error.error.message })}
+          {t("roadmap-error", { message: failureText(t, roadmap.error) })}
         </p>
       )}
       {roadmap.isPending && <p className={styles.note} aria-busy="true" />}

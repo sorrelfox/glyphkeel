@@ -21,8 +21,6 @@ use std::path::{Path, PathBuf};
 use gk_api::OpError;
 use serde::Serialize;
 
-use crate::messages::text;
-
 /// The tool's file name.
 #[cfg(not(windows))]
 const TOOL: &str = "glyphkeel";
@@ -231,23 +229,29 @@ pub(crate) fn status(env: &Env) -> CliStatus {
 pub(crate) fn install(env: &Env) -> Result<CliStatus, OpError> {
     let before = status(env);
     let (Some(bundled), Some(link)) = (&before.bundled, &before.link) else {
-        return Err(OpError::invalid(text("cli-install-nothing", &[])));
+        return Err(crate::messages::error(
+            "cli-install-nothing",
+            &[],
+            OpError::invalid,
+        ));
     };
     let (bundled, link) = (PathBuf::from(bundled), PathBuf::from(link));
     if std::fs::read_link(&link).is_ok_and(|target| target == bundled) {
         return Ok(status(env));
     }
     if std::fs::symlink_metadata(&link).is_ok() {
-        return Err(OpError::invalid(text(
+        return Err(crate::messages::error(
             "cli-install-exists",
             &[("path", shown(&link))],
-        )));
+            OpError::invalid,
+        ));
     }
     let failed = |err: std::io::Error| {
-        OpError::storage(text(
+        crate::messages::error(
             "cli-install-failed",
             &[("path", shown(&link)), ("reason", err.to_string())],
-        ))
+            OpError::storage,
+        )
     };
     if let Some(dir) = link.parent() {
         std::fs::create_dir_all(dir).map_err(failed)?;

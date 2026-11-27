@@ -123,7 +123,13 @@ pub(crate) async fn choose(window: &WebviewWindow, mode: Mode) -> Result<Vec<Pat
                 let _ = answer.send(tauri::async_runtime::block_on(chosen));
             });
         })
-        .map_err(|e| OpError::storage(format!("The file chooser can't be shown: {e}.")))?;
+        .map_err(|e| {
+            crate::messages::error(
+                "chooser-failed",
+                &[("error", e.to_string())],
+                OpError::storage,
+            )
+        })?;
     crate::files::blocking(move || Ok(answered.recv().unwrap_or_default())).await
 }
 

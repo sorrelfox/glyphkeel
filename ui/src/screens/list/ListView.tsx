@@ -18,7 +18,7 @@ import { QueryField, type QueryFieldHandle, type Reading } from "../../component
 import { useToasts } from "../../components/Toasts";
 import { Switch } from "../../components/Switch";
 import { keysOf } from "../../actions/actions";
-import { errorToast, useCall, useCommand } from "../../data/hooks";
+import { errorToast, failureText, useCall, useCommand } from "../../data/hooks";
 import { allRows, defaultView, LIST_PAGE, toCsv, toJson, useListLayout, useListNames, useListRows, useParsedQuery, useQueryFields, useSavedViews, useUnfilteredCount, type ListScope } from "../../data/list";
 import { useDurationUnits } from "../../data/time";
 import { type CustomField, type ListedTask, type ListGroup, type ListLayout, type QueryProblem, type SavedView } from "../../generated/ops";
@@ -533,7 +533,7 @@ function LoadedList({ project, views, layout, openTask, onOpen }: LoadedListProp
         )}
         {rows.error && (
           <div className="banner" role="alert">
-            {rows.error.error.message}
+            {failureText(t, rows.error)}
           </div>
         )}
         {selection.keys.size > 0 && (

@@ -44,7 +44,13 @@ pub(crate) async fn op(
     // runs on a blocking thread, never on the main thread.
     tauri::async_runtime::spawn_blocking(move || workspace.call(&op, input, request_id))
         .await
-        .map_err(|e| OpError::storage(format!("The operation stopped unexpectedly: {e}.")))?
+        .map_err(|e| {
+            crate::messages::error(
+                "operation-stopped",
+                &[("error", e.to_string())],
+                OpError::storage,
+            )
+        })?
 }
 
 /// Hands over the channel for this window's change events. A reload of the

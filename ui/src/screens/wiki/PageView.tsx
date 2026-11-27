@@ -11,7 +11,7 @@ import { Kbd } from "../../components/Kbd";
 import { Tooltip } from "../../components/Tooltip";
 import { useToasts } from "../../components/Toasts";
 import { useDraft, type Draft } from "../../data/drafts";
-import { errorToast, useCall, useCommand, useOp } from "../../data/hooks";
+import { errorToast, failureText, useCall, useCommand, useOp } from "../../data/hooks";
 import { toggleChecklist } from "../../data/markdown";
 import { splitBacklinks } from "../../data/wiki";
 import { type Backlink, type Reference, type RevisionInfo, type WikiHeading, type WikiPage } from "../../generated/ops";
@@ -119,7 +119,7 @@ export function PageView(props: PageViewProps) {
     return (
       <section className={styles.page}>
         <p className={classes("faint", styles.notice)} role="alert">
-          {found.error.error.message}
+          {failureText(t, found.error)}
         </p>
       </section>
     );
@@ -733,7 +733,7 @@ function PageHistory({ page, writable, onClose }: { page: WikiPage; writable: bo
           </Button>
         </div>
         <span className={classes("faint", styles.small)}>{t("description-history-help")}</span>
-        {history.isError && <p className="faint">{history.error.error.message}</p>}
+        {history.isError && <p className="faint">{failureText(t, history.error)}</p>}
         <ol className={styles.revisionList} aria-label={t("wiki-revisions")}>
           {items.map((revision) => (
             <li key={revision.id} className={classes(styles.revisionRow, chosen.includes(revision.id) && styles.chosen)}>

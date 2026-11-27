@@ -64,14 +64,13 @@ pub(crate) fn wording(op: &str, summary: &str, input: &Value) -> Wording {
             "confirm-delete",
         ),
         "agent.policy.update" => {
-            let profile = input
-                .get("max_profile")
-                .and_then(Value::as_str)
-                .unwrap_or_default();
-            (
-                text(&format!("confirm-agent-raise-{profile}"), &[]),
-                "confirm-agent-raise",
-            )
+            // Only a raise asks; to anything but the full profile it is to
+            // the standard one.
+            let question = match input.get("max_profile").and_then(Value::as_str) {
+                Some("full") => "confirm-agent-raise-full",
+                _ => "confirm-agent-raise-standard",
+            };
+            (text(question, &[]), "confirm-agent-raise")
         }
         "agent.limits.update" => (
             text("confirm-agent-limits-raise", &[]),

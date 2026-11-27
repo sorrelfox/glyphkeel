@@ -8,18 +8,18 @@ import stylelint from "stylelint";
 import tseslint from "typescript-eslint";
 import { describe, expect, it } from "vitest";
 
-import { joinedText, physicalStyles } from "../eslint.config.js";
+import { builtText, joinedText, localeFormats, physicalStyles } from "../eslint.config.js";
 
 const root = new URL("..", import.meta.url).pathname;
 
-/** The messages the app's rules for joined text and physical layout give for a piece of component code. */
+/** The messages the app's rules for joined and built text, locale formats and physical layout give for a piece of component code. */
 function eslintMessages(code: string): string[] {
   const messages = new Linter().verify(
     code,
     {
       files: ["**/*.tsx"],
       languageOptions: { parser: tseslint.parser, parserOptions: { ecmaFeatures: { jsx: true } } },
-      rules: { "no-restricted-syntax": ["error", ...joinedText, ...physicalStyles] },
+      rules: { "no-restricted-syntax": ["error", ...joinedText, ...physicalStyles, ...builtText, ...localeFormats] },
     },
     "Sample.tsx",
   );
@@ -110,5 +110,78 @@ describe("the lint for physical layout", () => {
   return <p style={{ marginLeft: 4, left: n, textAlign: "right" }}>{t("x")}</p>;`),
     );
     expect(messages).toHaveLength(3);
+  });
+});
+
+describe("the lint for text built in code", () => {
+  it("refuses text chosen by a condition, in templates, toasts and titles", () => {
+    const messages = eslintMessages(
+      component(`
+  const toasts = { show: (_: { text: string }) => undefined };
+  const win = { setTitle: (_: string) => undefined };
+  toasts.show({ text: "Saved the task" });
+  win.setTitle(\`Task \${String(n)}\`);
+  document.title = "Glyphkeel";
+  const count = n === 1 ? "one task" : \`\${String(n)} tasks\`;
+  return (
+    <p aria-label={n > 0 ? "Open" : "Closed"} title={\`Task \${String(n)}\`}>
+      {n > 0 ? "Open" : t("x")}
+      {n > 0 && "Late"}
+      {\`\${String(n)} tasks\`}
+      {count}
+    </p>
+  );`),
+    );
+    expect(messages).toHaveLength(11);
+  });
+
+  it("refuses an engine error's English shown as it is", () => {
+    const messages = eslintMessages(
+      component(`
+  const failure = { error: { message: "x" } };
+  const problem = { message: "x" };
+  return <p title={failure.error.message}>{problem.message}</p>;`),
+    );
+    expect(messages).toHaveLength(2);
+  });
+
+  it("accepts messages chosen by a condition, and codes", () => {
+    const messages = eslintMessages(
+      component(`
+  const kind = n === 1 ? "one" : "other";
+  return (
+    <p aria-label={t(n > 0 ? "x" : "y")} data-kind={kind} className={\`chip hue-\${kind}\`}>
+      {t(n === 1 ? "x" : "y", { count: n })}
+    </p>
+  );`),
+    );
+    expect(messages).toEqual([]);
+  });
+});
+
+describe("the lint for locale formats", () => {
+  it("refuses formatting with the browser's default locale", () => {
+    const messages = eslintMessages(
+      component(`
+  const a = new Date().toLocaleDateString();
+  const b = n.toLocaleString(undefined, { style: "percent" });
+  const c = new Intl.NumberFormat().format(n);
+  const d = ["b", "a"].sort((x, y) => x.localeCompare(y));
+  return <p>{a}{b}{c}{d}</p>;`),
+    );
+    expect(messages).toHaveLength(4);
+  });
+
+  it("accepts the active locale, and reading the system's time zone", () => {
+    const messages = eslintMessages(
+      component(`
+  const locale = "de-CH";
+  const a = new Date().toLocaleDateString(locale);
+  const b = new Intl.NumberFormat(locale).format(n);
+  const c = ["b", "a"].sort((x, y) => x.localeCompare(y, locale));
+  const zone = new Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return <p>{a}{b}{c}{zone}</p>;`),
+    );
+    expect(messages).toEqual([]);
   });
 });

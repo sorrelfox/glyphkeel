@@ -27,6 +27,8 @@ use gk_api::ops::time::{
 };
 use gk_engine::{Clock, Context, Engine, rfc3339};
 
+use crate::messages::text;
+
 /// One desktop notification.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Notice {
@@ -49,27 +51,36 @@ const MISSED_ONE_BY_ONE: usize = 3;
 /// How many due reminders one round reads.
 const ROUND_LIMIT: u32 = 100;
 
-// The texts are English until the Rust side reads the message files the
-// page uses.
+// The texts come from the app's message file, in English until the Rust
+// side reads the language the page uses.
 fn notice_for(item: &DueReminder) -> Notice {
     let key = &item.task.key;
     let what = match item.kind {
-        ReminderKind::Reminder => format!("Reminder: {key}"),
+        ReminderKind::Reminder => text("notification-reminder", &[("key", key.clone())]),
         ReminderKind::Deadline => match &item.due_date {
-            Some(day) => format!("{key} is due {day}"),
-            None => format!("{key} is due soon"),
+            Some(day) => text(
+                "notification-due",
+                &[("key", key.clone()), ("day", day.to_string())],
+            ),
+            None => text("notification-due-soon", &[("key", key.clone())]),
         },
-        ReminderKind::Timer => format!("The timer is still running on {key}"),
+        ReminderKind::Timer => text("notification-timer", &[("key", key.clone())]),
     };
     let title = if item.missed {
-        format!("Missed: {what}")
+        text("notification-missed", &[("what", what)])
     } else {
         what
     };
     let body = if item.note.is_empty() {
         item.task.title.clone()
     } else {
-        format!("{}\n{}", item.task.title, item.note)
+        text(
+            "notification-body-with-note",
+            &[
+                ("title", item.task.title.clone()),
+                ("note", item.note.clone()),
+            ],
+        )
     };
     Notice {
         title,
@@ -84,16 +95,15 @@ fn missed_summary(items: &[&DueReminder]) -> Notice {
         .take(6)
         .map(|item| item.task.key.as_str())
         .collect();
-    let more = if items.len() > keys.len() {
-        ", …"
-    } else {
-        ""
-    };
+    let more = items.len() - keys.len();
     Notice {
-        title: format!("{} missed reminders", items.len()),
-        body: format!(
-            "They came due while Glyphkeel was closed: {}{more}",
-            keys.join(", ")
+        title: text(
+            "notification-missed-many",
+            &[("count", items.len().to_string())],
+        ),
+        body: text(
+            "notification-missed-many-body",
+            &[("keys", keys.join(", ")), ("more", more.to_string())],
         ),
         task: items.first().map(|item| item.task.key.clone()),
     }

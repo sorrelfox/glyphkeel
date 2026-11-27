@@ -137,7 +137,12 @@ export function updateAppSettings(patch: AppSettingsPatch): Promise<AppSettings>
     return command("update_app_settings", { patch });
   }
   if (patch.time_zone !== undefined && !knownZone(patch.time_zone)) {
-    return Promise.reject(new OpFailure("update_app_settings", { code: "invalid", message: `Unknown time zone "${patch.time_zone}".` }));
+    return Promise.reject(new OpFailure("update_app_settings", {
+        code: "invalid",
+        message: `Unknown time zone "${patch.time_zone}".`,
+        // The engine's own message, so that it shows in the person's language.
+        details: { message_id: "time-zone-unknown", args: { name: patch.time_zone } },
+      }));
   }
   const { background, notifications, autostart, safe_rendering, time_zone } = { ...stored(), ...patch };
   writePref(PREF, { background, notifications, autostart, safe_rendering, time_zone });
@@ -199,7 +204,7 @@ export async function loadTimeZones(): Promise<ZoneChoice[]> {
   }
   const now = Date.now();
   const names = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
-  return [...new Set(["UTC", ...names])].map((name) => ({ name, offset_seconds: zoneOffsetSeconds(name, now) })).sort((a, b) => a.name.localeCompare(b.name));
+  return [...new Set(["UTC", ...names])].map((name) => ({ name, offset_seconds: zoneOffsetSeconds(name, now) })).sort((a, b) => a.name.localeCompare(b.name, "en"));
 }
 
 /** The time zones for the picker, read when first asked for. */

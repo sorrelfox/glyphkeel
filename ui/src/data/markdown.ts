@@ -128,7 +128,7 @@ export function useTaskCompletion(): CompletionProviders {
           }
         }
       }
-      return found.sort((a, b) => a.key.length - b.key.length || a.key.localeCompare(b.key)).slice(0, MAX_SUGGESTIONS);
+      return found.sort((a, b) => a.key.length - b.key.length || a.key.localeCompare(b.key, "en", { numeric: true })).slice(0, MAX_SUGGESTIONS);
     },
   }), [call, queryClient]);
 }

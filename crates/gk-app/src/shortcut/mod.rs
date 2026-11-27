@@ -556,9 +556,10 @@ pub(crate) fn set_quick_add_shortcut(
     keys: String,
 ) -> Result<View, OpError> {
     if !CHOICES.contains(&keys.as_str()) {
-        return Err(OpError::invalid_at(
-            "keys",
-            format!("\"{keys}\" is not one of the shortcuts to choose from."),
+        return Err(crate::messages::error(
+            "shortcut-not-a-choice",
+            &[("keys", keys.clone())],
+            |m| OpError::invalid_at("keys", m),
         ));
     }
     let setting = ShortcutSetting { enabled, keys };

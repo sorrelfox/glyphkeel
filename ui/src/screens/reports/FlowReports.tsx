@@ -12,7 +12,7 @@ import { Segmented } from "../../components/Segmented";
 import { Select } from "../../components/Select";
 import { Switch } from "../../components/Switch";
 import { useToasts } from "../../components/Toasts";
-import { errorToast, useCall, useOp } from "../../data/hooks";
+import { errorToast, failureText, useCall, useOp } from "../../data/hooks";
 import { useToday } from "../../data/zone";
 import {
   type Category,
@@ -365,7 +365,7 @@ export function FlowReportsScreen() {
         </div>
         {current.isError && (
           <p className="faint" role="alert" data-flow-error>
-            {current.error.error.message}
+            {failureText(t, current.error)}
           </p>
         )}
         <TabPanel id="created-closed" className={classes(styles.panel)}>

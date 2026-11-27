@@ -9,7 +9,7 @@ import { classes } from "../../classes";
 import { useToasts } from "../../components/Toasts";
 import { useUpdateTask } from "../../data/board";
 import { useDraft, useTaskDrafts, type Draft } from "../../data/drafts";
-import { useCall, useCommand, useOp } from "../../data/hooks";
+import { failureText, useCall, useCommand, useOp } from "../../data/hooks";
 import { toggleChecklist, useRenderedDescription } from "../../data/markdown";
 import { type ConflictAction, type RevisionInfo, type Task } from "../../generated/ops";
 import { useT, type Translate } from "../../i18n/I18n";
@@ -135,7 +135,7 @@ function DescriptionReader({ task, readOnly, onOpenTask }: { task: Task; readOnl
     return <p className="faint">{t("panel-no-description")}</p>;
   }
   if (!item) {
-    return rendered.isError ? <p className="faint">{rendered.error.error.message}</p> : null;
+    return rendered.isError ? <p className="faint">{failureText(t, rendered.error)}</p> : null;
   }
   return (
     <MarkdownReader
@@ -314,7 +314,7 @@ function ConflictResolver({ task, onEdit, onClose }: { task: Task; onEdit: (copy
     );
   };
   if (!copy) {
-    return history.isError ? <p className="faint">{history.error.error.message}</p> : null;
+    return history.isError ? <p className="faint">{failureText(t, history.error)}</p> : null;
   }
   return (
     <div className={styles.resolver} role="group" aria-label={t("description-resolve-title")}>
@@ -377,7 +377,7 @@ function DescriptionHistory({ task, readOnly, compare, onClose }: { task: Task; 
           <X className="ic s" />
         </Button>
       </div>
-      {history.isError && <p className="faint">{history.error.error.message}</p>}
+      {history.isError && <p className="faint">{failureText(t, history.error)}</p>}
       {history.data && items.length === 0 && <p className={classes("faint", styles.small)}>{t("description-history-none")}</p>}
       <ol className={styles.revisionList} aria-label={t("description-history")}>
         {items.map((revision) => (

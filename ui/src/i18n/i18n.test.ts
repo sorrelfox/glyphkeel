@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
+import { FluentResource } from "@fluent/bundle";
 import { describe, expect, it } from "vitest";
 
 import { ACCENTS, DENSITIES, THEMES } from "../appearance/appearance";
@@ -27,6 +28,18 @@ describe("messages", () => {
       .filter(([, text]) => !loaded.includes(text))
       .map(([path]) => path);
     expect(missing).toEqual([]);
+  });
+
+  it("are the same in every language as in English, without duplicates", () => {
+    const ids = (sources: readonly string[]) => sources.flatMap((source) => [...new FluentResource(source).body].map((entry) => entry.id));
+    const english = ids(MESSAGES.en ?? []);
+    expect(english.length).toBeGreaterThan(500);
+    expect(english.filter((id, index) => english.indexOf(id) !== index)).toEqual([]);
+    for (const [language, sources] of Object.entries(MESSAGES)) {
+      const theirs = new Set(ids(sources));
+      expect(english.filter((id) => !theirs.has(id)), `missing in ${language}`).toEqual([]);
+      expect([...theirs].filter((id) => !english.includes(id)), `only in ${language}`).toEqual([]);
+    }
   });
 
   it("exist for every message ID the code names", () => {

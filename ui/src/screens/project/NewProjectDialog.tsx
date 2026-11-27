@@ -8,9 +8,8 @@ import { Dialog } from "../../components/Dialog";
 import { Select } from "../../components/Select";
 import { useToasts } from "../../components/Toasts";
 import { suggestHue, type Hue } from "../../data/catalog";
-import { useCall, useOp } from "../../data/hooks";
+import { failureHint, failureText, useCall, useOp } from "../../data/hooks";
 import { useTemplates, useTemplateText } from "../../data/recurrence";
-import { OpFailure } from "../../data/transport";
 import { useT } from "../../i18n/I18n";
 import { HuePicker } from "./HuePicker";
 import styles from "./Project.module.css";
@@ -62,7 +61,9 @@ export function NewProjectDialog({ request, onClose }: NewProjectDialogProps) {
   const { locale } = useLocale();
 
   const failed = (failure: unknown) => {
-    setError(failure instanceof OpFailure ? [failure.error.message, "hint" in failure.error ? failure.error.hint : undefined].filter(Boolean).join(" ") : String(failure));
+    const message = failureText(t, failure);
+    const hint = failureHint(t, failure);
+    setError(hint === undefined ? message : t("error-with-hint", { message, hint }));
   };
   const create = () => {
     if (template !== NO_TEMPLATE) {

@@ -14,6 +14,7 @@ mod installed;
 mod notices;
 mod repos;
 mod source;
+mod text;
 mod windows;
 
 use std::path::{Path, PathBuf};
@@ -32,6 +33,9 @@ Commands:
                       (`--distro windows-cross`). See `cargo xtask ci --help`.
   check-headers       Check that every source file starts with the licence
                       header.
+  check-text          Check that the Rust code writes no English for people:
+                      errors, hints and the command line's output come from
+                      the Fluent message files.
   check-bundle [DIR]  Check that the release UI (default: ui/dist) names no
                       remote address it could load.
   check-deps          Check the dependency rules: the command line and the
@@ -86,6 +90,10 @@ fn run() -> Result<bool> {
         "check-headers" => {
             no_args(cmd, rest)?;
             headers::run(&root)
+        }
+        "check-text" => {
+            no_args(cmd, rest)?;
+            text::run(&root)
         }
         "check-bundle" => bundle::run(&root, rest),
         "check-deps" => {

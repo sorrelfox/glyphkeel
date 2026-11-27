@@ -8,7 +8,7 @@ import { Button } from "react-aria-components";
 
 import { Dialog } from "../../components/Dialog";
 import { useToasts } from "../../components/Toasts";
-import { errorToast, useOp } from "../../data/hooks";
+import { errorToast, failureText, useOp } from "../../data/hooks";
 import { useWikiPage, type WikiPageName } from "../../data/wiki";
 import { useT } from "../../i18n/I18n";
 import { openWikiWindow } from "../../ipc/wikiWindow";
@@ -65,7 +65,7 @@ export default function WikiPageDialog({ page, heading, onClose, onOpenTask }: W
     >
       <div ref={body} className={styles.wikiPage} data-wiki-page={wiki?.id}>
         {found.isPending && <p className="faint">{t("wiki-loading")}</p>}
-        {found.error && <p role="alert">{found.error.error.message}</p>}
+        {found.error && <p role="alert">{failureText(t, found.error)}</p>}
         {found.data === null && <p role="alert">{t("wiki-not-found", { page: name })}</p>}
         {wiki && (
           <>

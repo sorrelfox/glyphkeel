@@ -12,7 +12,7 @@ import { Select, type SelectOption } from "../../components/Select";
 import { Switch } from "../../components/Switch";
 import { useToasts } from "../../components/Toasts";
 import { useProjects } from "../../data/board";
-import { useCall, useOp } from "../../data/hooks";
+import { engineText, useCall, useOp } from "../../data/hooks";
 import { opKey } from "../../data/queries";
 import { skippedReason, useFailureToast } from "../../data/safety";
 import { type CsvColumn, type CsvColumnMapping, type CsvDateOrder, type CsvEncoding, type CsvImportResult, type CsvUnit } from "../../generated/ops";
@@ -471,7 +471,7 @@ export function CsvImportDialog({ project: initialProject, onClose }: { project?
                           <td className="selectable">{row.source_key ?? row.title}</td>
                           <td className="selectable">{problem.column ?? ""}</td>
                           <td>
-                            <span className={styles.severity}>{t(problem.severity === "error" ? "csv-problem-error" : "csv-problem-warning")}</span> {problem.message}
+                            <span className={styles.severity}>{t(problem.severity === "error" ? "csv-problem-error" : "csv-problem-warning")}</span> {engineText(t, problem.message_id, problem.args, problem.message)}
                           </td>
                         </tr>
                       )),

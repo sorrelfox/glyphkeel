@@ -1081,12 +1081,16 @@ export type CsvPresetValues = {
 
 /** A problem with one row. */
 export type CsvProblem = {
+  /** The message's arguments, by name. */
+  args?: Record<string, string>;
   /** A stable code, such as `bad_date`. */
   code: string;
   /** The column, when one is to blame. */
   column?: string;
-  /** What is wrong, for people. */
+  /** What is wrong, for people, in English. */
   message: string;
+  /** The message's ID in the message files, for translation. */
+  message_id?: string;
   /** How bad it is. */
   severity: CsvSeverity;
 };

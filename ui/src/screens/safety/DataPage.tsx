@@ -8,7 +8,7 @@ import { Button } from "react-aria-components";
 import { useActions } from "../../actions/ActionsProvider";
 import { classes } from "../../classes";
 import { useToasts } from "../../components/Toasts";
-import { useCall, useOp } from "../../data/hooks";
+import { failureText, useCall, useOp } from "../../data/hooks";
 import { useBytes, useFailureToast, useRefreshBackups } from "../../data/safety";
 import { type Backup, type BackupCheck } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
@@ -63,7 +63,7 @@ export function DataPage() {
   return (
     <>
       <Group title={t("backups-title")} lead={<p className={classes("faint", styles.small)}>{t("backups-about")}</p>}>
-        {backups.isError && <p className="faint">{backups.error.error.message}</p>}
+        {backups.isError && <p className="faint">{failureText(t, backups.error)}</p>}
         <Row label={t("backups-folder")} about={t("backups-folder-about")}>
           {backups.data ? (
             <span className={classes("selectable", styles.path)} data-testid="backup-folder">

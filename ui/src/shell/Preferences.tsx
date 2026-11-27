@@ -11,7 +11,7 @@ import { classes } from "../classes";
 import { Dialog } from "../components/Dialog";
 import { Segmented } from "../components/Segmented";
 import { Switch } from "../components/Switch";
-import { useCommand, useOp } from "../data/hooks";
+import { failureText, useCommand, useOp } from "../data/hooks";
 import { type SettingsPatch, type WeekStart } from "../generated/ops";
 import { useT } from "../i18n/I18n";
 import { canRestart, restartApp, SYSTEM_ZONE, useAppSettings, useSetAutostart, useTimeZones, useUpdateAppSettings } from "../ipc/appSettings";
@@ -383,7 +383,7 @@ function TimePage() {
     sunday: t("weekday-sunday"),
   };
   if (settings.isError) {
-    return <Failure message={settings.error.error.message} />;
+    return <Failure message={failureText(t, settings.error)} />;
   }
   if (!settings.data) {
     return null;
@@ -506,7 +506,7 @@ function NotificationsPage() {
         </Row>
       </Group>
       <Group title={t("preferences-reminders")}>
-        {settings.isError && <Failure message={settings.error.error.message} />}
+        {settings.isError && <Failure message={failureText(t, settings.error)} />}
         {settings.data && (
           <Row label={t("preferences-reminder-time")} about={t("preferences-reminder-time-about")}>
             <TimeSetting
@@ -616,7 +616,7 @@ function QuickAddPage() {
   const data = shortcut.data ?? null;
   return (
     <Group title={t("preferences-quick-add")}>
-      {shortcut.isError && <Failure message={shortcut.error.error.message} />}
+      {shortcut.isError && <Failure message={failureText(t, shortcut.error)} />}
       <Row label={t("preferences-shortcut")} about={t(data === null ? "preferences-shortcut-unavailable" : "preferences-shortcut-about")}>
         <Switch
           aria-label={t("preferences-shortcut")}
@@ -661,7 +661,7 @@ function WorkspacePage() {
   return (
     <>
       <Group title={t("preferences-workspace")}>
-        {workspace.isError && <Failure message={workspace.error.error.message} />}
+        {workspace.isError && <Failure message={failureText(t, workspace.error)} />}
         {workspace.data && (
           <>
             <Row label={t("preferences-workspace-name")} about={t("preferences-workspace-name-about")}>

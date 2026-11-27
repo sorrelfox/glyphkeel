@@ -7,7 +7,7 @@ import { Button } from "react-aria-components";
 
 import { classes } from "../../classes";
 import { useToasts } from "../../components/Toasts";
-import { errorToast, useOp } from "../../data/hooks";
+import { errorToast, failureText, useOp } from "../../data/hooks";
 import { type Backlink } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { openWikiWindow } from "../../ipc/wikiWindow";
@@ -48,7 +48,7 @@ export function BacklinksSection({ taskKey, onOpenTask }: { taskKey: string; onO
         <span className="caption grow">{t("backlinks-title")}</span>
         {backlinks.data && <span className="count">{backlinks.data.total}</span>}
       </div>
-      {backlinks.isError && <p className={classes("faint", styles.small, styles.emptyNote)}>{backlinks.error.error.message}</p>}
+      {backlinks.isError && <p className={classes("faint", styles.small, styles.emptyNote)}>{failureText(t, backlinks.error)}</p>}
       {backlinks.data && items.length === 0 && <p className={classes("faint", styles.small, styles.emptyNote)}>{t("backlinks-none")}</p>}
       {items.map((link) => {
         const kind = link.page ? "page" : link.comment !== undefined ? "comment" : "task";

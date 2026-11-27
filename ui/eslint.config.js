@@ -43,6 +43,80 @@ const uiText = [
   },
 ];
 
+// Text built in code where the lint above can't see it: chosen by a
+// condition, written in a template, handed to a toast or a window title.
+const words = "/\\p{L}{2,}/u";
+const textInTemplate = `TemplateLiteral:has(> TemplateElement[value.raw=${words}])`;
+const textValue = `:matches(Literal[value=/\\p{L}/u], ${textInTemplate})`;
+const shownAttribute =
+  "JSXAttribute[name.name=/^(aria-label|aria-description|aria-placeholder|aria-roledescription|aria-valuetext|title|placeholder|alt|label)$/]";
+export const builtText = [
+  {
+    selector: `:matches(JSXElement, JSXFragment) > JSXExpressionContainer > :matches(ConditionalExpression, LogicalExpression) > ${textValue}`,
+    message: "UI text comes from the Fluent message files (src/i18n); use t() in each branch.",
+  },
+  {
+    selector: `:matches(JSXElement, JSXFragment) > JSXExpressionContainer > ${textInTemplate}`,
+    message: "UI text comes from the Fluent message files (src/i18n); write one message with placeables.",
+  },
+  {
+    selector: `${shownAttribute} > JSXExpressionContainer > ${textInTemplate}`,
+    message: "UI text comes from the Fluent message files (src/i18n); use t().",
+  },
+  {
+    selector: `${shownAttribute} > JSXExpressionContainer > :matches(ConditionalExpression, LogicalExpression) > ${textValue}`,
+    message: "UI text comes from the Fluent message files (src/i18n); use t() in each branch.",
+  },
+  {
+    selector: `CallExpression[callee.property.name='show'] > ObjectExpression > Property[key.name=/^(text|detail)$/] > ${textValue}.value`,
+    message: "A toast's text comes from the Fluent message files (src/i18n); use t().",
+  },
+  {
+    selector: "CallExpression[callee.property.name='setTitle'] > :matches(Literal[value=/\\p{L}/u], TemplateLiteral).arguments",
+    message: "A window title comes from the Fluent message files (src/i18n); use t().",
+  },
+  {
+    selector: "AssignmentExpression[left.property.name='title'] > :matches(Literal[value=/\\p{L}/u], TemplateLiteral).right",
+    message: "A title comes from the Fluent message files (src/i18n); use t().",
+  },
+  {
+    // English plurals by hand: `n === 1 ? "1 task" : `${n} tasks``.
+    selector: `ConditionalExpression[test.operator=/^[!=]==?$/][test.right.value=1] > :matches(Literal[value=/\\p{L}\\s+\\p{L}/u], ${textInTemplate})`,
+    message: "Plurals belong in the message: use a Fluent selector on the number ({ $count -> [one] … *[other] … }).",
+  },
+  {
+    // The engine's and the app's errors name their message: show it in the
+    // person's language, with the English text only as a fallback.
+    selector: "MemberExpression[property.name='message'][object.type='MemberExpression'][object.property.name='error']",
+    message: "Show an engine error with failureText(), failureHint() or errorToast() (src/data/hooks.ts), which use its message ID.",
+  },
+  {
+    selector: ":matches(JSXElement, JSXFragment) > JSXExpressionContainer > MemberExpression[property.name='message'][object.name=/^(problem|error|failure)$/]",
+    message: "Show the engine's message with engineText() (src/data/hooks.ts), which uses its message ID.",
+  },
+];
+
+// Dates, numbers and sorting follow the active locale (useLocale()), never
+// the browser's default, which WebKit takes from LANG only.
+export const localeFormats = [
+  {
+    selector:
+      "CallExpression[callee.property.name=/^toLocale(Date|Time)?String$/]:matches([arguments.length=0], [arguments.0.type='Identifier'][arguments.0.name='undefined'])",
+    message: "Pass the active locale (useLocale()) to toLocaleString, or use Intl with it.",
+  },
+  {
+    // `new Intl.DateTimeFormat().resolvedOptions()` reads the system's own
+    // settings (its time zone), which is what it is for.
+    selector:
+      "NewExpression[callee.object.name='Intl']:matches([arguments.length=0], [arguments.0.type='Identifier'][arguments.0.name='undefined']):not(MemberExpression[property.name='resolvedOptions'] > NewExpression)",
+    message: "Pass the active locale (useLocale()) to Intl formatters.",
+  },
+  {
+    selector: "CallExpression[callee.property.name='localeCompare'][arguments.length<2]",
+    message: 'Pass a locale to localeCompare: the active one (useLocale()) for names people read, "en" for codes and dates.',
+  },
+];
+
 // A sentence is one message with placeables, never pieces put together in
 // code: word order and punctuation differ between languages. Lists of names
 // are joined with Intl.ListFormat.
@@ -129,6 +203,8 @@ export default defineConfig([
         "error",
         ...htmlInsertion,
         ...uiText,
+        ...builtText,
+        ...localeFormats,
         ...joinedText,
         ...physicalStyles,
         ...nativeControls,
@@ -138,8 +214,17 @@ export default defineConfig([
   },
   {
     // Tests may write the text they look for.
-    files: ["src/**/*.test.{ts,tsx}"],
+    files: ["src/**/*.test.{ts,tsx}", "tests/**/*.ts"],
     rules: { "no-restricted-syntax": ["error", ...htmlInsertion, ...nativeControls] },
+  },
+  {
+    // The sample data stands in for the engine: it writes the engine's
+    // English (its errors name their message as the engine's do) and sorts
+    // the way the engine does, by code.
+    files: ["src/data/fake/**/*.ts"],
+    rules: {
+      "no-restricted-syntax": ["error", ...htmlInsertion, ...uiText, ...builtText.filter((rule) => !rule.message.startsWith("Plurals")), ...joinedText, ...physicalStyles, ...nativeControls],
+    },
   },
   {
     // Build and test configuration runs in Node, not in the app.

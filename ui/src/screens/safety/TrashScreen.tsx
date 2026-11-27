@@ -9,7 +9,7 @@ import { classes } from "../../classes";
 import { ProjectMark } from "../../components/ProjectMark";
 import { Select } from "../../components/Select";
 import { useToasts } from "../../components/Toasts";
-import { useCall, useOp, useUndo } from "../../data/hooks";
+import { failureText, useCall, useOp, useUndo } from "../../data/hooks";
 import { daysLeft, useBytes, useFailureToast, useTrashList } from "../../data/safety";
 import { useDurations } from "../../data/time";
 import { type TrashEntry, type TrashKind } from "../../generated/ops";
@@ -129,7 +129,7 @@ export function TrashScreen() {
         </Button>
       </div>
       {trashDays !== undefined && <p className={classes("faint", styles.note, styles.small)}>{t("trash-about", { days: trashDays })}</p>}
-      {trash.isError && <p className={classes("faint", styles.note)}>{trash.error.error.message}</p>}
+      {trash.isError && <p className={classes("faint", styles.note)}>{failureText(t, trash.error)}</p>}
       {trash.data && entries.length === 0 && <p className={classes("muted", styles.note)}>{t("trash-none")}</p>}
       {entries.length > 0 && (
         <div className={styles.scroll}>

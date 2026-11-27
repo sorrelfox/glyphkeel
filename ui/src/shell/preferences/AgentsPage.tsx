@@ -10,7 +10,7 @@ import { classes } from "../../classes";
 import { Segmented } from "../../components/Segmented";
 import { Select } from "../../components/Select";
 import { useToasts } from "../../components/Toasts";
-import { useCall, useCommand, useOp } from "../../data/hooks";
+import { failureText, useCall, useCommand, useOp } from "../../data/hooks";
 import { opPrefix } from "../../data/queries";
 import { skippedReason, useFailureToast } from "../../data/safety";
 import { Switch } from "../../components/Switch";
@@ -228,7 +228,7 @@ function PolicyGroup() {
   const settings = useOp("settings.get", {});
   const update = useCommand("agent.policy.update");
   if (settings.isError) {
-    return <p className={styles.error}>{settings.error.error.message}</p>;
+    return <p className={styles.error}>{failureText(t, settings.error)}</p>;
   }
   if (!settings.data) {
     return null;
@@ -379,7 +379,7 @@ function SessionsGroup() {
   const sessions = useOp("agent.sessions", { limit: 50 });
   return (
     <Group title={t("agents-sessions")}>
-      {sessions.isError && <p className={styles.error}>{sessions.error.error.message}</p>}
+      {sessions.isError && <p className={styles.error}>{failureText(t, sessions.error)}</p>}
       {sessions.data?.items.length === 0 && (
         <Row label={t("agents-sessions-none")} about={t("agents-sessions-none-about")} />
       )}

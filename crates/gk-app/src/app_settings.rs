@@ -100,15 +100,19 @@ fn check_ui_pref(name: &str, value: &Value) -> Result<(), OpError> {
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'));
     if !name_ok {
-        return Err(OpError::invalid(format!(
-            "\"{name}\" is not a preference name."
-        )));
+        return Err(crate::messages::error(
+            "preference-bad-name",
+            &[("name", name.to_owned())],
+            OpError::invalid,
+        ));
     }
     let size = serde_json::to_vec(value).map_or(usize::MAX, |bytes| bytes.len());
     if size > MAX_UI_VALUE_BYTES {
-        return Err(OpError::invalid(format!(
-            "The preference \"{name}\" is too large."
-        )));
+        return Err(crate::messages::error(
+            "preference-too-large",
+            &[("name", name.to_owned())],
+            OpError::invalid,
+        ));
     }
     Ok(())
 }
@@ -233,10 +237,14 @@ impl AppSettings {
         let mut user = UserSettings::load(path);
         user.time_zone = Some(zone.unwrap_or(gk_store::SYSTEM_TIME_ZONE).to_owned());
         user.save(path).map_err(|err| {
-            OpError::storage(format!(
-                "Can't store the time zone in {}: {err}.",
-                path.display()
-            ))
+            crate::messages::error(
+                "time-zone-not-stored",
+                &[
+                    ("file", path.display().to_string()),
+                    ("error", err.to_string()),
+                ],
+                OpError::storage,
+            )
         })
     }
 
@@ -258,13 +266,14 @@ impl AppSettings {
         let mut user = UserSettings::load(path);
         change(&mut user.agent_folders);
         user.save(path).map_err(|err| {
-            OpError::storage(crate::messages::text(
+            crate::messages::error(
                 "agent-folders-not-stored",
                 &[
                     ("file", path.display().to_string()),
                     ("error", err.to_string()),
                 ],
-            ))
+                OpError::storage,
+            )
         })
     }
 
@@ -333,7 +342,11 @@ impl AppSettings {
             }
         });
         if full {
-            return Err(OpError::invalid("There are too many preferences."));
+            return Err(crate::messages::error(
+                "preferences-too-many",
+                &[],
+                OpError::invalid,
+            ));
         }
         Ok(())
     }

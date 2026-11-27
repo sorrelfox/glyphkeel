@@ -12,7 +12,7 @@ import { ProjectMark } from "../../components/ProjectMark";
 import { Segmented } from "../../components/Segmented";
 import { Select } from "../../components/Select";
 import { useToasts } from "../../components/Toasts";
-import { useCall, useOp } from "../../data/hooks";
+import { failureText, useCall, useOp } from "../../data/hooks";
 import { useActivityFeed, useFailureToast, type FeedRequest, skippedReason } from "../../data/safety";
 import { revertible } from "../../data/task";
 import { type ActivityEntry, type ActorKind, type ProjectSummary } from "../../generated/ops";
@@ -181,7 +181,7 @@ export function ActivityScreen() {
         <div className="grow" />
         {feed.data && <span className={classes("muted num", styles.small)}>{t("activity-count", { shown: rows.length, total: feed.data.pages[0]?.total ?? 0 })}</span>}
       </div>
-      {feed.isError && <p className={classes("faint", styles.note)}>{feed.error.error.message}</p>}
+      {feed.isError && <p className={classes("faint", styles.note)}>{failureText(t, feed.error)}</p>}
       {feed.data && rows.length === 0 && !canLoad && <p className={classes("muted", styles.note)}>{t(filtered ? "activity-none-matching" : "activity-none")}</p>}
       <div ref={scrollRef} className={styles.scroll}>
         {rows.length > 0 && (

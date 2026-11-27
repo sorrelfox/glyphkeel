@@ -86,7 +86,11 @@ pub(crate) fn watch_open_links<R: Runtime>(
     channel: Channel<String>,
 ) -> Result<(), OpError> {
     if window.label() != crate::main_window::LABEL {
-        return Err(OpError::forbidden("Only the main window opens links."));
+        return Err(crate::messages::error(
+            "links-main-window-only",
+            &[],
+            OpError::forbidden,
+        ));
     }
     links.listen(channel);
     Ok(())

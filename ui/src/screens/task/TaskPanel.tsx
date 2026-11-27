@@ -28,7 +28,7 @@ import { Select } from "../../components/Select";
 import { useToasts } from "../../components/Toasts";
 import { useProject, useUpdateTask } from "../../data/board";
 import { HUES, PRIORITIES, type Hue, type Project, type Task, type TaskField, type TaskUpdateInput } from "../../data/catalog";
-import { errorToast, useCall, useCommand } from "../../data/hooks";
+import { errorToast, failureText, useCall, useCommand } from "../../data/hooks";
 import { useTrashTasks } from "../../data/safety";
 import { useTaskDetails } from "../../data/task";
 import { useT } from "../../i18n/I18n";
@@ -94,7 +94,7 @@ export function TaskPanel({ taskKey, onClose, onOpenTask, mode = "docked", onOpe
     >
       {task.isError && (
         <div className={styles.bar}>
-          <span className="grow">{task.error.error.message}</span>
+          <span className="grow">{failureText(t, task.error)}</span>
           <Button className="btn flat icon" aria-label={t("panel-close")} onPress={onClose}>
             <X className="ic" />
           </Button>

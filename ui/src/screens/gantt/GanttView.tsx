@@ -13,7 +13,7 @@ import { QueryField, type QueryFieldHandle, type Reading } from "../../component
 import { Segmented } from "../../components/Segmented";
 import { Switch } from "../../components/Switch";
 import { useToasts } from "../../components/Toasts";
-import { errorToast, useCommand, useOp, useUndo } from "../../data/hooks";
+import { errorToast, failureText, useCommand, useOp, useUndo } from "../../data/hooks";
 import { defaultView, useListNames, useParsedQuery, useQueryFields, useSavedViews } from "../../data/list";
 import { useGanttLayout, useSchedule } from "../../data/schedule";
 import { markersOf, useVersions } from "../../data/versions";
@@ -431,7 +431,7 @@ function LoadedGantt({ project, openTask, onOpen, saved, views }: GanttViewProps
       </div>
       {data.error !== null && (
         <p className={styles.note} role="alert">
-          {t("gantt-error", { message: data.error.error.message })}
+          {t("gantt-error", { message: failureText(t, data.error) })}
         </p>
       )}
       {schedule && span && (

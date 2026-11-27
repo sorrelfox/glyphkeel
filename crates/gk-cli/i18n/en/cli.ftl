@@ -38,6 +38,10 @@ cli-expected-json = expected JSON: { $error }
 
 cli-error = glyphkeel: { $message }
 cli-hint = hint: { $hint }
+# One field's change in a table cell: its name, the value before and the value after.
+cli-field-change = { $field }: { $before } → { $after }
+# A value that wasn't set, in a field's change.
+cli-no-value = –
 cli-choices = choices: { $choices }
 cli-field = field: { $field }
 cli-shown-of-total = { $shown } of { $total }

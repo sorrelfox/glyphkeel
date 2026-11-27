@@ -290,6 +290,7 @@ impl Suite {
             Self::Static => vec![
                 Step::cargo(&["fmt", "--all", "--check"]),
                 Step::Headers,
+                Step::Text,
                 Step::Deps,
                 Step::GenCheck,
                 Step::cargo(&[
@@ -783,6 +784,8 @@ enum Step {
     /// The UI's browser flows, one configuration after another.
     Flows(Vec<Flow>),
     Headers,
+    /// No English for people in the Rust code.
+    Text,
     Deps,
     GenCheck,
     /// THIRD-PARTY-NOTICES.txt is current and every licence is allowed.
@@ -812,6 +815,7 @@ impl Step {
             Self::Pnpm(args) => status(Command::new("pnpm").args(args).current_dir(root)),
             Self::Flows(flows) => run_flows(root, flows),
             Self::Headers => crate::headers::run(root),
+            Self::Text => crate::text::run(root),
             Self::Deps => crate::deps::run(root),
             Self::GenCheck => crate::codegen::run(root, &["--check".to_owned()]),
             Self::Notices => crate::notices::run(root, &["--check".to_owned()]),
@@ -833,6 +837,7 @@ impl fmt::Display for Step {
                 write!(f, "playwright flows: {}", names.join(", "))
             }
             Self::Headers => f.write_str("cargo xtask check-headers"),
+            Self::Text => f.write_str("cargo xtask check-text"),
             Self::Deps => f.write_str("cargo xtask check-deps"),
             Self::GenCheck => f.write_str("cargo xtask gen --check"),
             Self::Notices => f.write_str("cargo xtask notices --check"),
@@ -1913,6 +1918,7 @@ mod tests {
     fn the_suites_check_generated_files_the_bundle_and_every_flow() {
         let static_steps = Suite::Static.steps(None, &Flow::ALL, "en-XA");
         assert!(static_steps.contains(&Step::GenCheck));
+        assert!(static_steps.contains(&Step::Text));
         let notices = static_steps
             .iter()
             .position(|step| *step == Step::Notices)

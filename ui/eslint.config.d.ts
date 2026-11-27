@@ -9,6 +9,8 @@ type Restriction = { selector: string; message: string };
 
 export const joinedText: Restriction[];
 export const physicalStyles: Restriction[];
+export const builtText: Restriction[];
+export const localeFormats: Restriction[];
 
 declare const config: Linter.Config[];
 export default config;

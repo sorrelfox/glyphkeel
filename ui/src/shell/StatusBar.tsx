@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Glyphkeel contributors
 
 import { classes } from "../classes";
-import { useOp } from "../data/hooks";
+import { failureText, useOp } from "../data/hooks";
 import { useT } from "../i18n/I18n";
 import { type StatusInfo } from "./context";
 import styles from "./Shell.module.css";
@@ -31,7 +31,7 @@ export function StatusBar({ info }: StatusBarProps) {
       </span>
       <div className="grow" />
       <WorkspaceSwitcher
-        title={workspace.error ? workspace.error.error.message : undefined}
+        title={workspace.error ? failureText(t, workspace.error) : undefined}
         name={workspace.data ? t("status-workspace-name", { name: workspace.data.name }) : t(workspace.isError ? "status-workspace-unavailable" : "status-workspace")}
       />
     </footer>

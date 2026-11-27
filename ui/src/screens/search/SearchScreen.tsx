@@ -17,6 +17,7 @@ import { useT } from "../../i18n/I18n";
 import { useMomentFormat } from "../task/Activity";
 import { TaskPanel } from "../task/TaskPanel";
 import styles from "./Search.module.css";
+import { failureText } from "../../data/hooks";
 
 const WikiPageDialog = lazy(() => import("./WikiPageDialog"));
 
@@ -202,7 +203,7 @@ function SearchResults({ params, onChange, onOpenTask }: { params: SearchParams;
         <p className={classes("muted", styles.nothing)}>{t("search-hint")}</p>
       ) : results.error ? (
         <p className={styles.nothing} role="alert">
-          {results.error.error.message}
+          {failureText(t, results.error)}
         </p>
       ) : results.data === undefined ? (
         <div aria-busy="true" />

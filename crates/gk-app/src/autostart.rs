@@ -66,10 +66,11 @@ pub(crate) async fn set(on: bool) -> Result<bool, OpError> {
     {
         let keys = run_key::CurrentUser::RUN_KEYS;
         run_key::write(&keys, on, program().as_deref()).map_err(|err| {
-            OpError::storage(messages::text(
+            messages::error(
                 "autostart-run-key-failed",
                 &[("reason", err.to_string())],
-            ))
+                OpError::storage,
+            )
         })?;
         Ok(run_key::starts(&keys))
     }
@@ -80,23 +81,25 @@ pub(crate) async fn set(on: bool) -> Result<bool, OpError> {
             return crate::shortcut::portal::request_autostart(on, BACKGROUND_ARG)
                 .await
                 .map_err(|reason| {
-                    OpError::storage(messages::text(
+                    messages::error(
                         "autostart-portal-failed",
                         &[("reason", reason)],
-                    ))
+                        OpError::storage,
+                    )
                 });
         }
         let file = desktop_entry::file()
-            .ok_or_else(|| OpError::storage(messages::text("autostart-no-home", &[])))?;
+            .ok_or_else(|| messages::error("autostart-no-home", &[], OpError::storage))?;
         let program = program();
         desktop_entry::write(&file, on, program.as_deref()).map_err(|err| {
-            OpError::storage(messages::text(
+            messages::error(
                 "autostart-failed",
                 &[
                     ("path", file.display().to_string()),
                     ("reason", err.to_string()),
                 ],
-            ))
+                OpError::storage,
+            )
         })?;
         Ok(desktop_entry::starts(&file))
     }

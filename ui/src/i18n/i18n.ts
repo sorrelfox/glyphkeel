@@ -30,10 +30,13 @@ import enWiki from "./en/wiki.ftl?raw";
 import enQuery from "../../../crates/gk-query/i18n/en/query.ftl?raw";
 // The engine's messages about search, Today, the wiki and dates.
 import enEngine from "../../../crates/gk-engine/i18n/en/engine.ftl?raw";
+// The desktop app's own messages: its dialogs, notifications and the errors
+// of its own commands, which the page shows.
+import enDesktop from "../../../crates/gk-app/i18n/en/app.ftl?raw";
 
 /** The languages the app has text for, with their message files. */
 export const MESSAGES: Readonly<Record<string, readonly string[]>> = {
-  en: [enAgents, enApp, enCalendar, enCsv, enDev, enEditor, enEngine, enFields, enFirstRun, enGantt, enList, enPalette, enPrefs, enQuery, enReader, enRepeat, enReports, enRoadmap, enRules, enSafety, enSearch, enToday, enWiki],
+  en: [enAgents, enApp, enCalendar, enCsv, enDesktop, enDev, enEditor, enEngine, enFields, enFirstRun, enGantt, enList, enPalette, enPrefs, enQuery, enReader, enRepeat, enReports, enRoadmap, enRules, enSafety, enSearch, enToday, enWiki],
 };
 
 /** The language the app falls back to. */
