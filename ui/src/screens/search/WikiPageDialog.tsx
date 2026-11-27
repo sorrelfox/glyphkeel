@@ -8,7 +8,8 @@ import { Button } from "react-aria-components";
 
 import { Dialog } from "../../components/Dialog";
 import { useToasts } from "../../components/Toasts";
-import { errorToast, failureText, useOp } from "../../data/hooks";
+import { errorToast, failureText } from "../../data/hooks";
+import { useRenderedPage } from "../../data/markdown";
 import { useWikiPage, type WikiPageName } from "../../data/wiki";
 import { useT } from "../../i18n/I18n";
 import { openWikiWindow } from "../../ipc/wikiWindow";
@@ -35,7 +36,7 @@ export default function WikiPageDialog({ page, heading, onClose, onOpenTask }: W
   const found = useWikiPage(page);
   const wiki = found.data ?? null;
   const name = "id" in page ? (wiki?.title ?? "") : page.title;
-  const rendered = useOp("markdown.render", { documents: [{ source: wiki?.body ?? "", page: wiki?.id ?? "", document_id: `wiki-${wiki?.id ?? ""}` }] }, { enabled: wiki !== null });
+  const rendered = useRenderedPage(wiki);
   const html = rendered.data?.items[0]?.html;
   const moment = useMomentFormat();
   const body = useRef<HTMLDivElement>(null);
@@ -43,15 +44,20 @@ export default function WikiPageDialog({ page, heading, onClose, onOpenTask }: W
   const navigate = useNavigate();
   const toasts = useToasts();
 
-  // Scroll to the heading the link names, once the text is in.
+  // Scroll to the heading the link names, once the text is in; not again
+  // when the text changes meanwhile.
+  const scrolled = useRef<string | null>(null);
+  const shownId = wiki?.id;
   useEffect(() => {
-    if (html === undefined || heading === undefined) {
+    const shown = `${shownId ?? ""}\n${heading ?? ""}`;
+    if (html === undefined || heading === undefined || scrolled.current === shown) {
       return;
     }
+    scrolled.current = shown;
     const wanted = heading.toLocaleLowerCase();
     const target = [...(body.current?.querySelectorAll<HTMLElement>("h1, h2, h3, h4, h5, h6") ?? [])].find((element) => element.textContent.trim().toLocaleLowerCase() === wanted);
     target?.scrollIntoView({ block: "start" });
-  }, [html, heading]);
+  }, [html, heading, shownId]);
 
   return (
     <Dialog

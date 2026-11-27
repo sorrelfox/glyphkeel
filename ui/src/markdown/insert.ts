@@ -54,3 +54,14 @@ export function insertSanitized(target: Element, html: string, profile: HtmlProf
   const fragment = DOMPurify.sanitize(html, { ...PROFILES[profile], RETURN_DOM_FRAGMENT: true });
   target.replaceChildren(fragment);
 }
+
+/** The text without the ticks of its checkboxes: two texts that differ only in what is ticked read the same. */
+export function withoutTicks(html: string): string {
+  return html.replace(/<input\b[^>]*>/g, (tag) => tag.replace(/\s+checked(?:=(?:""|"checked"|checked))?(?=[\s/>])/, ""));
+}
+
+/** Whether each checkbox of the reader's `html` is ticked, by its item number, in reading order. */
+export function tickedItems(html: string): { item: string; checked: boolean }[] {
+  const fragment = DOMPurify.sanitize(html, { ...PROFILES.reader, RETURN_DOM_FRAGMENT: true });
+  return Array.from(fragment.querySelectorAll<HTMLInputElement>("input[data-item]"), (box) => ({ item: box.dataset.item ?? "", checked: box.hasAttribute("checked") }));
+}

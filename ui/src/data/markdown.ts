@@ -5,7 +5,7 @@
 // editor's preview, checkbox clicks, attached images and task-key
 // completion.
 
-import { useQueries, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 
 import type { BlockRenderer, CompletionProviders, TaskSuggestion } from "../editor/types";
@@ -21,6 +21,30 @@ const RENDER_BATCH = 200;
 /** A task's description as the reader shows it. */
 export function useRenderedDescription(key: string) {
   return useOp("markdown.render", { documents: [{ task: key }] });
+}
+
+/**
+ * A wiki page's text as the reader shows it, rendered as that page's so its
+ * macros expand. The text is part of the question, so every change to it,
+ * a tick included, asks again: meanwhile the page's previous answer stays,
+ * and the reader keeps its place instead of emptying.
+ */
+export function useRenderedPage(page: { id: string; body: string } | null) {
+  const call = useCall();
+  const id = page?.id ?? "";
+  const input = { documents: [{ source: page?.body ?? "", page: id, document_id: `wiki-${id}` }] };
+  return useQuery({
+    queryKey: opKey("markdown.render", input),
+    queryFn: () => call("markdown.render", input),
+    enabled: page !== null,
+    placeholderData: (previous, previousQuery) => (previousQuery?.queryKey[2] === undefined || renderedPageOf(previousQuery.queryKey[2]) !== id ? undefined : previous),
+  });
+}
+
+/** The page a wiki page's render question names. */
+function renderedPageOf(input: unknown): string | undefined {
+  const documents = (input as { documents?: readonly { page?: string }[] } | null)?.documents;
+  return documents?.[0]?.page;
 }
 
 /** Several texts, rendered in as few calls as the engine allows; answers in the same order. */

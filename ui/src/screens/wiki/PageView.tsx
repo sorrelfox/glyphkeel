@@ -12,7 +12,7 @@ import { Tooltip } from "../../components/Tooltip";
 import { useToasts } from "../../components/Toasts";
 import { useDraft, type Draft } from "../../data/drafts";
 import { errorToast, failureText, useCall, useCommand, useOp } from "../../data/hooks";
-import { toggleChecklist } from "../../data/markdown";
+import { toggleChecklist, useRenderedPage } from "../../data/markdown";
 import { splitBacklinks } from "../../data/wiki";
 import { type Backlink, type Reference, type RevisionInfo, type WikiHeading, type WikiPage } from "../../generated/ops";
 import { useT, type Translate } from "../../i18n/I18n";
@@ -321,19 +321,23 @@ function PageReader({ page, writable, heading, references, onOpenLink, onNavigat
   const t = useT();
   const call = useCall();
   // Rendered as this page's text, so that its macros ({{children}}, {{tasks …}}) are expanded.
-  const rendered = useOp("markdown.render", { documents: [{ source: page.body, page: page.id, document_id: `wiki-${page.id}` }] });
+  const rendered = useRenderedPage(page);
   const html = rendered.data?.items[0]?.html;
   const checklist = rendered.data?.items[0]?.checklist ?? [];
   const scroller = useRef<HTMLDivElement>(null);
   const [currentHeading, setCurrentHeading] = useState<number | null>(null);
   const headings = page.headings ?? [];
 
-  // A link's heading comes into view once the text is in.
+  // A link's heading comes into view once the text is in; only then, so a
+  // tick, which brings the text again, leaves the page where it is.
+  const shownHeading = useRef<string | null>(null);
   useEffect(() => {
-    if (html !== undefined && heading !== undefined) {
+    const target = `${page.id}\n${heading ?? ""}`;
+    if (html !== undefined && heading !== undefined && shownHeading.current !== target) {
+      shownHeading.current = target;
       headingElement(scroller.current, heading)?.scrollIntoView({ block: "start" });
     }
-  }, [html, heading]);
+  }, [html, heading, page.id]);
 
   const markCurrent = () => {
     const box = scroller.current;
