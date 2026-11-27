@@ -14,11 +14,11 @@ export interface BridgeAddress {
   token: string;
 }
 
-export function bridgeAddress(search: string): BridgeAddress | null {
+export function bridgeAddress(search: string, ports: readonly [number, number] = __BRIDGE_PORTS__): BridgeAddress | null {
   const params = new URLSearchParams(search);
   const port = Number(params.get("bridge"));
   const token = params.get("token");
-  if (!Number.isInteger(port) || port < 5320 || port > 5329 || !token) {
+  if (!Number.isInteger(port) || port < ports[0] || port > ports[1] || !token) {
     return null;
   }
   return { port, token };

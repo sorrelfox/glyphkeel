@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 const token = process.env.GK_BRIDGE_TOKEN ?? "";
-const PAGE = `/?bridge=${process.env.GK_PREFS_BRIDGE_PORT ?? "5328"}&token=${token}`;
+const PAGE = `/?bridge=${process.env.GK_BRIDGE_PORT ?? ""}&token=${token}`;
 /** Where screenshots of the new screens go, when asked for. */
 const SHOTS = process.env.GK_SHOTS;
 

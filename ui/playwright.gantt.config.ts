@@ -3,9 +3,11 @@
 
 import { defineConfig, devices } from "@playwright/test";
 
+import { flowPort } from "./tests/ports";
+
 // The Gantt chart on the sample data: a production build in the fake mode,
-// served on a port of its own.
-const PORT = Number(process.env.GK_GANTT_PORT ?? 5324);
+// served on a port of its own (GK_UI_PORT moves it).
+const PORT = flowPort("gantt", "ui");
 const DIST = "node_modules/.cache/gantt-fake-dist";
 
 export default defineConfig({

@@ -4,7 +4,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 const token = process.env.GK_BRIDGE_TOKEN ?? "";
-const PAGE = `/?bridge=${process.env.GK_BRIDGE_PORT ?? "5321"}&token=${token}`;
+const PAGE = `/?bridge=${process.env.GK_BRIDGE_PORT ?? ""}&token=${token}`;
 
 function lane(page: Page, name: string): Locator {
   return page.locator("section[data-lane]").filter({ has: page.getByRole("heading", { name, exact: true }) });

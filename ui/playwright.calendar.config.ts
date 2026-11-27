@@ -3,9 +3,11 @@
 
 import { defineConfig, devices } from "@playwright/test";
 
+import { flowPort } from "./tests/ports";
+
 // The calendar and the time report on the sample data: a production build in the fake mode,
-// served on a port of its own.
-const PORT = Number(process.env.GK_CALENDAR_PORT ?? 5321);
+// served on a port of its own (GK_UI_PORT moves it).
+const PORT = flowPort("calendar", "ui");
 const DIST = "node_modules/.cache/calendar-fake-dist";
 
 export default defineConfig({

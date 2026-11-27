@@ -3,12 +3,14 @@
 
 import { defineConfig, devices } from "@playwright/test";
 
+import { flowPort } from "./tests/ports";
+
 // The wiki's flows on sample data: a `--mode fake` build of the UI keeps a
 // workspace in memory (`?wiki` adds sample pages), so these run without the
-// engine. A port of their own (pages take 5310–5319, the bridge 5320–5329),
-// so they run beside the other flows. `GK_SCREENSHOT_DIR` names a folder for
+// engine. A port of their own (GK_UI_PORT moves
+// it), so they run beside the other flows. `GK_SCREENSHOT_DIR` names a folder for
 // the screenshots.
-const PORT = Number(process.env.GK_WIKI_PORT ?? 5323);
+const PORT = flowPort("wiki", "ui");
 const DIST = "node_modules/.cache/wiki-fake-dist";
 
 export default defineConfig({

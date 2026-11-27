@@ -3,9 +3,11 @@
 
 import { defineConfig, devices } from "@playwright/test";
 
+import { flowPort } from "./tests/ports";
+
 // The roadmap on the sample data: a production build in the fake mode,
-// served on a port of its own.
-const PORT = Number(process.env.GK_ROADMAP_PORT ?? 5312);
+// served on a port of its own (GK_UI_PORT moves it).
+const PORT = flowPort("roadmap", "ui");
 const DIST = "node_modules/.cache/roadmap-fake-dist";
 
 export default defineConfig({

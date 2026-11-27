@@ -8,17 +8,18 @@ import { join } from "node:path";
 
 import { defineConfig, devices } from "@playwright/test";
 
+import { flowPort } from "./tests/ports";
+
 // The command palette's and the quick-add page's flows, against the real
 // engine: the development bridge serves a fresh workspace, and a
-// `--mode bridge` build of the UI talks to it. Ports of their own (the
-// bridge takes 5320–5329 and pages 5310–5319), so these run beside the
-// other flows. `GK_SCREENSHOT_DIR` names a folder for the two screenshots.
-const UI_PORT = Number(process.env.GK_PALETTE_UI_PORT ?? 5318);
-const BRIDGE_PORT = Number(process.env.GK_PALETTE_BRIDGE_PORT ?? 5328);
+// `--mode bridge` build of the UI talks to it. Ports of their own
+// (GK_UI_PORT and GK_BRIDGE_PORT move them), so these run beside the other
+// flows. `GK_SCREENSHOT_DIR` names a folder for the two screenshots.
+const UI_PORT = flowPort("palette", "ui");
+const BRIDGE_PORT = flowPort("palette", "bridge");
 
 process.env.GK_BRIDGE_TOKEN ??= randomBytes(16).toString("hex");
 process.env.GK_BRIDGE_WORKSPACE ??= join(mkdtempSync(join(tmpdir(), "glyphkeel-palette-")), "Personal");
-process.env.GK_PALETTE_BRIDGE_PORT = String(BRIDGE_PORT);
 process.env.GK_PALETTE_UI_URL = `http://127.0.0.1:${String(UI_PORT)}`;
 const token = process.env.GK_BRIDGE_TOKEN;
 const workspace = process.env.GK_BRIDGE_WORKSPACE;

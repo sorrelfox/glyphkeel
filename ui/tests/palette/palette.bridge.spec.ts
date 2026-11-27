@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 
 const BASE = process.env.GK_PALETTE_UI_URL ?? "";
-const QUERY = `?bridge=${process.env.GK_PALETTE_BRIDGE_PORT ?? ""}&token=${process.env.GK_BRIDGE_TOKEN ?? ""}`;
+const QUERY = `?bridge=${process.env.GK_BRIDGE_PORT ?? ""}&token=${process.env.GK_BRIDGE_TOKEN ?? ""}`;
 const PAGE = `${BASE}/${QUERY}`;
 const QUICK_ADD = `${BASE}/quick-add${QUERY}`;
 const SHOTS = process.env.GK_SCREENSHOT_DIR;
