@@ -557,7 +557,7 @@ fn an_encrypted_workspace_waits_for_its_passphrase_and_a_locked_app_refuses_call
         "test",
     );
     if !gk_store::encryption_available() {
-        // The Windows build has no SQLCipher: encrypting is refused, and
+        // A build without SQLCipher refuses to encrypt, and
         // the lock still keeps a plain workspace's calls out.
         let err = changed.unwrap_err();
         assert_eq!(err.details["message_id"], "storage-encryption-unavailable");

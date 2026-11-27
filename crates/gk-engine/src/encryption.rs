@@ -119,12 +119,13 @@ pub fn change(
     })
 }
 
-/// The message for backups that stayed plain, for the program to show.
+/// The message for backups that stayed plain, for the program to show, in
+/// its language.
 #[must_use]
 pub fn backups_left_plain_text(count: u64) -> String {
-    messages::text(
+    messages::ENGINE.format(
         "encryption-backups-left-plain",
-        &[("count", count.to_string())],
+        &[("count", messages::Arg::number(count))],
     )
 }
 

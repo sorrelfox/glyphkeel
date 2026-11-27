@@ -567,44 +567,89 @@ fn convert(layout: &WorkspaceLayout, target: &Target<'_>) -> Result<()> {
             ));
         }
         drop(check);
-        fs::File::open(&copy)
-            .and_then(|f| f.sync_all())
-            .map_err(|e| StoreError::io("flushing", &copy, e))?;
+        crate::files::sync_file(&copy).map_err(|e| StoreError::io("flushing", &copy, e))?;
         Ok(())
     })();
     if let Err(e) = checked {
         remove_with_journal(&copy);
         return Err(e);
     }
-    fs::rename(&copy, &database).map_err(|e| {
-        remove_with_journal(&copy);
-        StoreError::io("replacing", &database, e)
-    })?;
+    replace(conn, &copy, &database)?;
     sync_dir(layout.root());
-    // The old file is gone from the folder but still open here: whoever
-    // opened it while it was locked must not write to it. Its rollback
-    // journal stays in memory: on disk it would carry the new file's name.
-    if let Err(e) = conn
-        .execute_batch("PRAGMA journal_mode = MEMORY;")
-        .map_err(StoreError::from)
-        .and_then(|()| {
-            conn.execute(
-                "INSERT INTO meta (key, value) VALUES (?1, '1')
-                 ON CONFLICT (key) DO UPDATE SET value = excluded.value",
-                [RETIRED_KEY],
-            )
-            .map_err(StoreError::from)
-        })
-    {
-        tracing::debug!(error = %e, "marking the replaced database failed");
-    }
-    drop(conn);
     for leftover in ["-wal", "-shm", "-journal"] {
         let mut name = database.as_os_str().to_owned();
         name.push(leftover);
         let _ = fs::remove_file(PathBuf::from(name));
     }
     Ok(())
+}
+
+/// Marks the database on `conn` as replaced, or no longer replaced.
+fn set_retired(conn: &Connection, retired: bool) -> Result<()> {
+    if retired {
+        conn.execute(
+            "INSERT INTO meta (key, value) VALUES (?1, '1')
+             ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+            [RETIRED_KEY],
+        )?;
+    } else {
+        conn.execute("DELETE FROM meta WHERE key = ?1", [RETIRED_KEY])?;
+    }
+    Ok(())
+}
+
+/// Renames the checked `copy` over `database`, which `conn` holds open
+/// with an exclusive lock, and closes `conn`.
+#[cfg(not(windows))]
+fn replace(conn: Connection, copy: &Path, database: &Path) -> Result<()> {
+    fs::rename(copy, database).map_err(|e| {
+        remove_with_journal(copy);
+        StoreError::io("replacing", database, e)
+    })?;
+    // The old file is gone from the folder but still open here: whoever
+    // opened it while it was locked must not write to it. Its rollback
+    // journal stays in memory: on disk it would carry the new file's name.
+    if let Err(e) = conn
+        .execute_batch("PRAGMA journal_mode = MEMORY;")
+        .map_err(StoreError::from)
+        .and_then(|()| set_retired(&conn, true))
+    {
+        tracing::debug!(error = %e, "marking the replaced database failed");
+    }
+    Ok(())
+}
+
+/// Renames the checked `copy` over `database`, which `conn` holds open
+/// with an exclusive lock, and closes `conn`.
+///
+/// Windows doesn't replace a file that is open, so the old file is marked
+/// as replaced first and closed. A program that opens it before the rename
+/// finds the mark, and its open file makes the rename fail: then the mark
+/// is taken off again and nothing has changed.
+#[cfg(windows)]
+fn replace(conn: Connection, copy: &Path, database: &Path) -> Result<()> {
+    if let Err(e) = set_retired(&conn, true) {
+        remove_with_journal(copy);
+        return Err(e);
+    }
+    drop(conn);
+    let Err(e) = fs::rename(copy, database) else {
+        return Ok(());
+    };
+    remove_with_journal(copy);
+    let restored = open_file(database, OpenFlags::SQLITE_OPEN_READ_WRITE)
+        .and_then(|conn| set_retired(&conn, false));
+    if let Err(restore) = restored {
+        tracing::warn!(error = %restore, "taking off the replaced mark failed");
+    }
+    Err(
+        if e.kind() == std::io::ErrorKind::PermissionDenied || e.raw_os_error() == Some(32) {
+            // Access denied, or a sharing violation: someone has it open.
+            StoreError::InUse(database.to_path_buf())
+        } else {
+            StoreError::io("replacing", database, e)
+        },
+    )
 }
 
 /// Where the passphrase that opens a workspace came from.
@@ -661,7 +706,7 @@ pub fn encrypt_file(path: &Path, passphrase: &Passphrase) -> Result<()> {
         )?;
         export(&conn, &converted, &Target::Passphrase(passphrase))?;
     }
-    let flushed = fs::File::open(&converted).and_then(|f| f.sync_all());
+    let flushed = crate::files::sync_file(&converted);
     if let Err(e) = flushed.and_then(|()| fs::rename(&converted, path)) {
         remove_with_journal(&converted);
         return Err(StoreError::io("replacing", path, e));
@@ -762,8 +807,8 @@ mod tests {
     }
 
     #[test]
-    fn every_build_but_the_windows_one_can_encrypt() {
-        assert_eq!(encryption_available(), !cfg!(windows));
+    fn the_linux_and_windows_builds_can_encrypt() {
+        assert!(encryption_available());
     }
 
     #[test]

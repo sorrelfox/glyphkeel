@@ -3,7 +3,7 @@
 
 # Command line
 
-`glyphkeel <area> <verb> [arguments] [--options]`. Every command runs one operation of the catalog ([operations.md](operations.md)). Global options: `--workspace`, `--json`, `--quiet`, `--no-color`.
+`glyphkeel <area> <verb> [arguments] [--options]`. Every command runs one operation of the catalog ([operations.md](operations.md)). Global options: `--workspace`, `--json`, `--quiet`, `--no-color`, `--tz`, `--lang`.
 
 With `--json` a command prints exactly the operation's output, as described in [catalog.schema.json](catalog.schema.json).
 
@@ -11,7 +11,7 @@ With `--json` a command prints exactly the operation's output, as described in [
 |---|---|---|
 | `glyphkeel activity` | `history.feed` | The activity log, newest first: who changed what, when and through which program; optionally the agent sessions. |
 | `glyphkeel agents policy` | `agent.policy.update` | Set the most an agent may do, whatever profile it asks for, and whether agents may ask the person to allow one change beyond it. |
-| `glyphkeel agents sessions` | `agent.sessions` | List agent sessions, newest first, with their client, profile, times and counts of reads and writes. |
+| `glyphkeel agents sessions` | `agent.sessions` | List agent sessions, newest first, with their client, profile, times and counts of reads, writes and reads refused by the read limits. |
 | `glyphkeel automation create` | `automation.create` | Make an automation rule: when a trigger happens to a task that matches a query, set fields, change labels, move it, comment, create a subtask or linked task, or leave a notification. |
 | `glyphkeel automation delete <rule>` | `automation.delete` | Delete an automation rule; revert brings it back. |
 | `glyphkeel automation edit <rule>` | `automation.update` | Change an automation rule: its name, trigger, condition or actions, or switch it on or off. |
@@ -181,6 +181,10 @@ A command works in the workspace `--workspace` names (a name in the data folder,
 | `glyphkeel workspace encrypt` | Encrypt the workspace with a passphrase, or give it a new one; nobody may have it open |
 | `glyphkeel workspace decrypt` | Store the workspace unencrypted again; nobody may have it open |
 | `glyphkeel workspace open <name or path>` | Work in this workspace from now on: commands, agents and the app's next start use it |
+
+## Language
+
+Help, output for people and error messages are in the language `--lang` names (a language tag such as `de` or `pt-BR`), else the one `GLYPHKEEL_LANG` names, else the language chosen in the app's Preferences, else the system's (`LANGUAGE`, `LC_ALL`, `LC_MESSAGES`, `LANG`; on Windows the display language), else English. A message not yet translated shows in English. Numbers and dates in the output for people follow the language. `en-XA` is a pseudo-language for testing translations. Machine text stays English: `--json` output (an error's `message`, with its `message_id` and `args` for translating it), command and option names, and everything `glyphkeel mcp` serves to agents.
 
 ## Exit codes
 

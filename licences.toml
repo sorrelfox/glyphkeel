@@ -58,8 +58,17 @@ reason = """
 The SQLCipher source the encrypted workspaces are built from. Its SQLite \
 part is in the public domain (the blessing is not a licence condition), and \
 its LibTomCrypt part is public domain or WTFPL, at the user's choice; both \
-are compatible with the GPL. Glyphkeel's builds use the system's OpenSSL, \
-not LibTomCrypt.\
+are compatible with the GPL. The Linux builds use the system's OpenSSL; \
+the Windows build compiles its LibTomCrypt (listed as a component).\
+"""
+
+[[exception]]
+kind = "component"
+name = "LibTomCrypt"
+allow = ["WTFPL"]
+reason = """
+SQLCipher's cryptography in the Windows build. It is public domain or WTFPL, \
+at the user's choice; both are compatible with the GPL.\
 """
 
 [[exception]]
@@ -138,9 +147,17 @@ notice, here is a blessing:
 name = "SQLCipher"
 licence = "BSD-3-Clause"
 source = "https://www.zetetic.net/sqlcipher/"
-used = "SQLite with encryption, for encrypted workspaces: compiled into both programs on Linux by the libsqlite3-sys crate (from sqlcipher-src), linked with the system's OpenSSL."
+used = "SQLite with encryption, for encrypted workspaces: compiled into both programs by the libsqlite3-sys crate (from sqlcipher-src), linked with the system's OpenSSL on Linux and with LibTomCrypt on Windows."
 copyright = "ZETETIC LLC"
 texts = ["xtask/licences/BSD-3-Clause.txt"]
+
+[[component]]
+name = "LibTomCrypt"
+licence = "WTFPL"
+source = "https://github.com/libtom/libtomcrypt"
+used = "The cryptography of encrypted workspaces in the Windows build (AES, SHA-1, SHA-256, SHA-512, HMAC, PBKDF2 and a random generator for SQLCipher), compiled into both programs from the source in sqlcipher-src. It is public domain or WTFPL, at the user's choice."
+copyright = "Tom St Denis and the LibTomCrypt contributors"
+texts = ["third_party/libtomcrypt/LICENSE"]
 
 [[component]]
 name = "KaTeX fonts"

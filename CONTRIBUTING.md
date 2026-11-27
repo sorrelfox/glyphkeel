@@ -193,6 +193,14 @@ cargo xtask ci --distro windows-cross --suite smoke,nsis,install
 cargo xtask ci --distro windows-cross --release-dir DIR    # also copy the installer to DIR/<version>/windows/
 ```
 
+Encrypted workspaces need SQLCipher's cryptography, which Windows doesn't
+have: there gk-store's build script compiles LibTomCrypt (from the
+`sqlcipher-src` crate), and `cargo xtask ci` tells the SQLCipher build to use
+it with `LIBSQLITE3_FLAGS=-DSQLCIPHER_CRYPTO_LIBTOMCRYPT` and LibTomCrypt's
+header folder as `X86_64_PC_WINDOWS_MSVC_OPENSSL_INCLUDE_DIR` (and
+`…_OPENSSL_LIB_DIR`). A Windows build by hand needs the same three
+variables; without them it fails to compile SQLCipher.
+
 Its suites are `build`, `clippy` (with `-D warnings` for the Windows
 target), `test` (every crate's tests under Wine), `smoke` (a command-line and
 MCP session), `nsis` (the installer, from the `dist` profile, unsigned) and

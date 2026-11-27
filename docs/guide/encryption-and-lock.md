@@ -110,6 +110,8 @@ app is locked.
 
 ## Which builds can encrypt
 
-The Linux builds (packages, Flatpak, AUR) can. The Windows build can't yet:
-it opens plain workspaces only, and its app lock works with a lock
-passphrase.
+Every release build can: the Linux builds (packages, Flatpak, AUR) and the
+Windows build. They write the same file format, so an encrypted workspace
+made on Linux opens on Windows with its passphrase, and the other way round.
+A build made without SQLCipher says so: it opens plain workspaces only, and
+its app lock works with a lock passphrase.
