@@ -25,6 +25,14 @@ function listed(key: string, extra: Partial<ListedTask> = {}): ListedTask {
 }
 
 describe("the sample schedule", () => {
+  it("lists the first 200 tasks without dates and counts them all", () => {
+    const tasks = [listed("TM-1", { due_date: "2026-11-20" }), ...Array.from({ length: 250 }, (_, at) => listed(`TM-${String(at + 2)}`))];
+    const schedule = scheduleOf(tasks, [], () => false, "2026-11-11");
+    expect(schedule.tasks.map((task) => task.key)).toEqual(["TM-1"]);
+    expect(schedule.unscheduled).toHaveLength(200);
+    expect(schedule.unscheduled_total).toBe(250);
+  });
+
   it("draws parents as summaries over their subtasks and keeps tasks without dates apart", () => {
     const tasks = [
       listed("TM-1"),

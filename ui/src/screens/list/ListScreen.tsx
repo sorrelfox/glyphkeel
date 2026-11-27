@@ -20,14 +20,14 @@ function refocus(task: string) {
 /** A project's list, with the open task's panel docked on the right. */
 export function ProjectListScreen() {
   const { key } = projectRoute.useParams();
-  const { task } = projectRoute.useSearch();
+  const { task, query } = projectRoute.useSearch();
   const navigate = useNavigate();
   const open = (other: string | undefined) => {
-    void navigate({ to: "/projects/$key/list", params: { key }, search: other === undefined ? {} : { task: other } });
+    void navigate({ to: "/projects/$key/list", params: { key }, search: { ...(query === undefined ? {} : { query }), ...(other === undefined ? {} : { task: other }) } });
   };
   return (
     <div className={styles.layout}>
-      <ListView key={key} project={key} openTask={task} onOpen={open} />
+      <ListView key={`${key} ${query ?? ""}`} project={key} openTask={task} onOpen={open} initialQuery={query} />
       {task !== undefined && (
         <TaskPanel
           key={task}

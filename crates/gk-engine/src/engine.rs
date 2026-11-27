@@ -71,7 +71,9 @@ pub struct EngineConfig {
     /// ([`crate::backup::default_folder`]).
     pub backups: Option<std::path::PathBuf>,
     /// The folders agents may name files in, besides the workspace's
-    /// `exports` folder; by default the person's own setting.
+    /// `exports` folder; by default none. The programs pass
+    /// [`crate::AgentFolders::Personal`], so that tests and other embedders
+    /// never read the person's own settings file.
     pub agent_folders: crate::AgentFolders,
 }
 
@@ -88,7 +90,7 @@ impl EngineConfig {
             checkpoints: CheckpointPolicy::default(),
             time_zone: None,
             backups: None,
-            agent_folders: crate::AgentFolders::Personal,
+            agent_folders: crate::AgentFolders::Fixed(Vec::new()),
         }
     }
 }

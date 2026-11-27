@@ -47,6 +47,8 @@ interface ListViewProps {
   /** The task open in the panel beside the list. */
   openTask: string | undefined;
   onOpen: (key: string) => void;
+  /** A query to open with instead of the default view's (from a link elsewhere, such as the Gantt's tasks without dates). */
+  initialQuery?: string | undefined;
 }
 
 /**
@@ -56,13 +58,13 @@ interface ListViewProps {
  * the person's layout of it are read, so the default view, in the person's
  * columns, is the first thing drawn.
  */
-export function ListView({ project, openTask, onOpen }: ListViewProps) {
+export function ListView({ project, openTask, onOpen, initialQuery }: ListViewProps) {
   const saved = useSavedViews(project);
   const own = useListLayout(project);
   if (!saved.views || (!own.layout && !own.error)) {
     return <div className={styles.screen} aria-busy="true" />;
   }
-  return <LoadedList key={project ?? ""} project={project} views={saved.views} layout={own.layout?.layout ?? { columns: [], widths: {} }} openTask={openTask} onOpen={onOpen} />;
+  return <LoadedList key={project ?? ""} project={project} views={saved.views} layout={own.layout?.layout ?? { columns: [], widths: {} }} openTask={openTask} onOpen={onOpen} initialQuery={initialQuery} />;
 }
 
 /** A group's key among the folded ones, as the engine keeps it: its value, or an empty text for the tasks without one. */
@@ -81,9 +83,10 @@ interface LoadedListProps {
   layout: ListLayout;
   openTask: string | undefined;
   onOpen: (key: string) => void;
+  initialQuery?: string | undefined;
 }
 
-function LoadedList({ project, views, layout, openTask, onOpen }: LoadedListProps) {
+function LoadedList({ project, views, layout, openTask, onOpen, initialQuery }: LoadedListProps) {
   const t = useT();
   const call = useCall();
   const toasts = useToasts();
@@ -94,9 +97,9 @@ function LoadedList({ project, views, layout, openTask, onOpen }: LoadedListProp
   const customFields = useCustomFields(project);
 
   // What the list shows.
-  const [activeId, setActiveId] = useState<string | undefined>(initial?.id);
+  const [activeId, setActiveId] = useState<string | undefined>(initialQuery === undefined ? initial?.id : undefined);
   const active = views.find((view) => view.id === activeId);
-  const [text, setText] = useState(initial?.query ?? "");
+  const [text, setText] = useState(initialQuery ?? initial?.query ?? "");
   const [sort, setSort] = useState(initial?.sort ?? "");
   // The person's own columns and widths for this list, kept by the engine.
   const [ownColumns, setOwnColumns] = useState<readonly string[]>(layout.columns);
@@ -114,7 +117,7 @@ function LoadedList({ project, views, layout, openTask, onOpen }: LoadedListProp
   // The query that runs: the text once the engine reads it without a mistake.
   const parsed = useParsedQuery(text);
   const reading = parsed.data && !parsed.isPlaceholderData ? parsed.data : undefined;
-  const [running, setRunning] = useState(initial?.query ?? "");
+  const [running, setRunning] = useState(initialQuery ?? initial?.query ?? "");
   // Typing pauses briefly before the query runs, so half-typed words don't empty the list.
   const valid = reading?.valid === true;
   useEffect(() => {
@@ -233,6 +236,10 @@ function LoadedList({ project, views, layout, openTask, onOpen }: LoadedListProp
   const resize = (column: ColumnId, width: number) => {
     setWidths({ ...widths, [column]: width });
     keepLayout.mutate({ ...(project === undefined ? {} : { project }), widths: { [column]: width } });
+  };
+  const resetWidth = (column: ColumnId) => {
+    setWidths(Object.fromEntries(Object.entries(widths).filter(([name]) => name !== column)));
+    keepLayout.mutate({ ...(project === undefined ? {} : { project }), clear_widths: [column] });
   };
 
   const group = (next: Grouping | undefined) => {
@@ -557,6 +564,7 @@ function LoadedList({ project, views, layout, openTask, onOpen }: LoadedListProp
             fields={customFields}
             widths={widths}
             onResize={resize}
+            onResetWidth={resetWidth}
             onMove={(column, to) => {
               changeColumns(moveColumn(columns, column, to));
             }}

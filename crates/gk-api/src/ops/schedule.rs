@@ -250,8 +250,14 @@ pub struct Schedule {
     /// as the chart's rows: a tree in order, each task followed by its
     /// subtasks.
     pub tasks: Vec<ScheduledTask>,
-    /// The tasks without dates, for the Unscheduled lane.
+    /// The tasks without dates, for the Unscheduled lane: the first 200 in
+    /// the query's order. They don't count against the most tasks a
+    /// schedule shows.
     pub unscheduled: Vec<UnscheduledTask>,
+    /// How many tasks without dates there are, also those beyond the
+    /// first 200 listed in `unscheduled`.
+    #[serde(default)]
+    pub unscheduled_total: u32,
     /// The `blocks` links between the tasks shown.
     pub dependencies: Vec<ScheduleDependency>,
     /// What is wrong with the schedule of the tasks shown, task by task.
@@ -380,10 +386,18 @@ pub struct GanttLayoutUpdateInput {
     /// The table's width in pixels (200 to 1200).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub table: Option<u32>,
+    /// Drop the kept table width, so that the table goes back to its
+    /// default width; `table` given as well wins.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub clear_table: bool,
     /// Widths to set, in pixels (24 to 600), by column; the others keep
     /// theirs.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub widths: BTreeMap<String, u32>,
+    /// Columns whose kept width is dropped, so that they go back to their
+    /// default width; applied before `widths`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub clear_widths: Vec<String>,
     /// How the rows are grouped.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group_by: Option<GanttGrouping>,

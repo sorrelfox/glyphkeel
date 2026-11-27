@@ -129,7 +129,7 @@ export const FAKE_FIELDS: readonly FieldSpec[] = [
   { name: "estimate", aliases: ["est"], type: "duration", operators: ORDERED_OPS, sortable: true, values: "a duration such as 2h, or none" },
   { name: "spent", aliases: [], type: "duration", operators: ORDERED_OPS, sortable: true, values: "a duration such as 2h" },
   { name: "progress", aliases: [], type: "number", operators: ORDERED_OPS, sortable: true, values: "a percentage, 0 to 100" },
-  { name: "is", aliases: [], type: "is", operators: [":"], sortable: false, values: "open, closed, blocked", choices: ["open", "closed", "blocked"] },
+  { name: "is", aliases: [], type: "is", operators: [":"], sortable: false, values: "open, closed, blocked, unscheduled", choices: ["open", "closed", "blocked", "unscheduled"] },
   { name: "was", aliases: [], type: "was", operators: [":"], sortable: false, values: "a field and a value the task had at any time: was:status:Review", choices: WAS_FIELDS },
   { name: "changed", aliases: [], type: "changed", operators: [":"], sortable: false, values: "a field that changed; with dates, when: changed:due>-7d", choices: CHANGED_FIELDS },
   { name: "changed-by", aliases: [], type: "changed-by", operators: NAME_OPS, sortable: false, values: "me, agent, or an agent's name: who changed the task's fields" },
@@ -826,6 +826,9 @@ function matchesValue(task: ListedTask, field: FieldSpec, op: string, value: str
     case "changed-by":
       return matchesHistory(task, field, op, value, today, history);
     case "is":
+      if (lower === "unscheduled") {
+        return task.start_date === undefined && task.due_date === undefined;
+      }
       return lower === "open" ? !isClosed(task) : lower === "closed" ? isClosed(task) : task.blocked;
     case "label":
       return lower === "none" ? task.labels.length === 0 : task.labels.some((label) => label.name.toLowerCase() === lower);

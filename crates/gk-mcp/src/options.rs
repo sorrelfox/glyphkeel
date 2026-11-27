@@ -65,6 +65,11 @@ pub struct Options {
     /// their personal settings.
     #[arg(skip)]
     pub agent_folders: Option<Vec<std::path::PathBuf>>,
+
+    /// The personal settings file the time zone and the agent folders come
+    /// from (for tests and embedders); `None`: the person's own file.
+    #[arg(skip)]
+    pub settings_file: Option<std::path::PathBuf>,
 }
 
 impl Options {
@@ -89,6 +94,7 @@ impl Options {
             tz: None,
             log_level: tracing::level_filters::LevelFilter::WARN,
             agent_folders: None,
+            settings_file: None,
         }
     }
 

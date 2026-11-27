@@ -99,7 +99,8 @@ export const PLAIN_ORDER: GroupOrder = { statuses: new Map(), hues: new Map(), c
  * The chart's rows: the schedule's tree in its order, without the subtasks
  * of folded tasks (grouped by parent, the default); or one flat list; or
  * groups by label, status or the agent session that claimed the task.
- * Then a group row and the tasks without dates.
+ * Then a group row and the tasks without dates; the group counts all of
+ * them (`unscheduledTotal`), also those the engine didn't list.
  */
 export function buildRows(
   tasks: readonly ScheduledTask[],
@@ -107,6 +108,7 @@ export function buildRows(
   folded: ReadonlySet<string>,
   grouping: GanttGrouping = "parent",
   order: GroupOrder = PLAIN_ORDER,
+  unscheduledTotal = unscheduled.length,
 ): Rows {
   let rows: Row[] = [];
   if (grouping === "none") {
@@ -131,7 +133,7 @@ export function buildRows(
     });
   }
   if (unscheduled.length > 0) {
-    rows.push({ kind: "group", id: "unscheduled", head: { by: "unscheduled" }, count: unscheduled.length });
+    rows.push({ kind: "group", id: "unscheduled", head: { by: "unscheduled" }, count: Math.max(unscheduledTotal, unscheduled.length) });
     for (const task of unscheduled) {
       rows.push({ kind: "unscheduled", task });
     }
@@ -382,4 +384,13 @@ export function columnWindow(scroll: number, width: number, chunk = 512): [numbe
   const x0 = Math.max(0, Math.floor((scroll - chunk) / chunk) * chunk);
   const x1 = Math.ceil((scroll + width + chunk) / chunk) * chunk;
   return [x0, x1];
+}
+
+/**
+ * The list query for the chart's tasks without dates: its own query, without
+ * a sort clause, and only the tasks with neither date.
+ */
+export function undatedQuery(query: string): string {
+  const rest = query.replace(/(^|\s)sort:\S*/g, " ").trim();
+  return rest === "" ? "is:unscheduled" : `is:unscheduled (${rest})`;
 }

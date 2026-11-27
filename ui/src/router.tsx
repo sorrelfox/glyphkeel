@@ -106,11 +106,17 @@ export const boardRoute = createRoute({
   component: BoardScreen,
 });
 
+/** A project's list; `query`, when given, is the query it opens with instead of the default view's. */
+const listSearch = (search: Record<string, unknown>): { task?: string; query?: string } => ({
+  ...taskSearch(search),
+  ...(typeof search.query === "string" && search.query.trim() !== "" ? { query: search.query } : {}),
+});
+
 /** A project's list. */
 export const projectListRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: "/projects/$key/list",
-  validateSearch: taskSearch,
+  validateSearch: listSearch,
   component: ProjectListScreen,
 });
 

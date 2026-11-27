@@ -255,10 +255,10 @@ mod tests {
             .unwrap();
         // The open one is renamed by closing it first; a refused rename
         // opens it again as it was.
-        ws.closed_for(|_| workspaces::rename(data, "Second", "First"))
+        ws.closed_for(|_| workspaces::rename_with(data, "Second", "First", None))
             .unwrap_err();
         assert_eq!(ws.layout().as_ref(), Some(&second));
-        ws.closed_for(|_| workspaces::rename(data, "Second", "Renamed"))
+        ws.closed_for(|_| workspaces::rename_with(data, "Second", "Renamed", None))
             .unwrap();
         assert!(ws.layout().unwrap().root().ends_with("Renamed"));
         ws.call("project.list", serde_json::json!({}), None)

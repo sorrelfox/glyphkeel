@@ -104,8 +104,12 @@ pub fn rename(data_dir: &Path, old: &str, new: &str) -> Result<WorkspaceLayout, 
     )
 }
 
-/// As [`rename`], with the personal settings in `settings`.
-fn rename_with(
+/// As [`rename`], with the personal settings in `settings` (`None`: none
+/// to update), for tests and programs that keep them elsewhere.
+///
+/// # Errors
+/// As [`rename`].
+pub fn rename_with(
     data_dir: &Path,
     old: &str,
     new: &str,

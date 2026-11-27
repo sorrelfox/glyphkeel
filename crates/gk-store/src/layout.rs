@@ -95,6 +95,11 @@ impl Location {
     #[must_use]
     pub fn find(arg: Option<&str>) -> Self {
         let env = std::env::var(WORKSPACE_ENV).ok();
+        let given = |v: Option<&str>| v.is_some_and(|v| !v.trim().is_empty());
+        if given(arg) || given(env.as_deref()) {
+            // The personal settings are only read when they decide.
+            return Self::choose(arg, env.as_deref());
+        }
         let chosen = Self::chosen();
         Self::choose_from(arg, env.as_deref(), chosen.as_deref())
     }

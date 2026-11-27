@@ -185,6 +185,13 @@ gantt-zoomed =
     }
 gantt-error = The schedule couldn't be read: { $message }
 gantt-empty = No tasks with dates or without them match.
+# Shown above the chart when there are more tasks without dates than the Unscheduled group lists.
+gantt-undated-more =
+    { $count ->
+        [one] One task has no dates; the Unscheduled group lists { $listed }.
+       *[other] { $count } tasks have no dates; the Unscheduled group lists the first { $listed }.
+    }
+gantt-undated-show = Show them in the list
 gantt-status =
     { $scheduled ->
         [one] One scheduled

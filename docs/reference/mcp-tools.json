@@ -50051,7 +50051,7 @@
             "type": "string"
           },
           "unscheduled": {
-            "description": "The tasks without dates, for the Unscheduled lane.",
+            "description": "The tasks without dates, for the Unscheduled lane: the first 200 in\nthe query's order. They don't count against the most tasks a\nschedule shows.",
             "items": {
               "additionalProperties": false,
               "description": "A task without dates, for the Unscheduled lane.",
@@ -50260,12 +50260,19 @@
               "type": "object"
             },
             "type": "array"
+          },
+          "unscheduled_total": {
+            "default": 0,
+            "description": "How many tasks without dates there are, also those beyond the\nfirst 200 listed in `unscheduled`.",
+            "minimum": 0,
+            "type": "integer"
           }
         },
         "required": [
           "today",
           "tasks",
           "unscheduled",
+          "unscheduled_total",
           "dependencies",
           "problems"
         ],

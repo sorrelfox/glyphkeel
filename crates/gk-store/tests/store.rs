@@ -752,3 +752,48 @@ fn wiki_conflict_copies_record_when_they_were_resolved() {
     });
     result.unwrap();
 }
+
+/// The planner's row count for `tasks`, from its statistics.
+fn tasks_in_statistics(store: &Store) -> i64 {
+    store
+        .read(|tx| {
+            tx.query_row(
+                "SELECT max(CAST(substr(stat, 1, instr(stat || ' ', ' ') - 1) AS INTEGER))
+                   FROM sqlite_stat1 WHERE tbl = 'tasks'",
+                [],
+                |r| r.get::<_, Option<i64>>(0),
+            )
+            .map_err(StoreError::from)
+        })
+        .unwrap()
+        .unwrap_or(0)
+}
+
+#[test]
+fn statistics_taken_on_a_nearly_empty_table_are_renewed_after_it_grew() {
+    let (_dir, layout) = workspace();
+    let store = open(&layout);
+    store
+        .write::<_, StoreError, _>("seed", |tx| {
+            let project = insert_project(tx, "ZZ")?;
+            insert_task(tx, project, 1, "first")?;
+            tx.execute_batch("ANALYZE")?;
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(tasks_in_statistics(&store), 1);
+    // An import adds thousands of tasks at once; nothing here reads them.
+    store
+        .write::<_, StoreError, _>("import", |tx| {
+            let project = insert_project(tx, "ACM")?;
+            for n in 1..=3_000 {
+                insert_task(tx, project, n, "imported")?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    store.close();
+    let store = open(&layout);
+    assert!(tasks_in_statistics(&store) > 1_000);
+    store.close();
+}

@@ -117,7 +117,7 @@ backup-folder-unwritable = Backups can't be written to { $path }: { $error }
 
 schedule-scope-needed = Give a `project`, a `query`, or both.
 schedule-window-reversed = `to` comes before `from`.
-schedule-too-many = The schedule would show { $count } tasks; it shows at most { $max }.
+schedule-too-many = The schedule would show { $count } tasks with dates; it shows at most { $max }. Narrow it down with a query.
 schedule-starts-before-blocker = { $task } starts on { $start }, before { $blocker } ends on { $end }.
 schedule-dependency-loop = { $task } is in a loop of { $count } tasks that block each other.
 schedule-starts-before-parent = { $task } starts on { $start }, before its parent { $parent } starts on { $parent_start }.

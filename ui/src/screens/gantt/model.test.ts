@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { type ScheduleProblem, type ScheduledTask, type UnscheduledTask } from "../../generated/ops";
 import { layoutFrom, layoutUpdate } from "./layout";
-import { behindSchedule, buildRows, milestonesOf, columnWindow, firstLabel, datesUpdate, draggedDates, elbow, endsLater, geometry, isWarning, problemsByTask, ROW, rowWindow, visibleDependencies } from "./model";
+import { behindSchedule, buildRows, milestonesOf, columnWindow, firstLabel, datesUpdate, draggedDates, elbow, endsLater, geometry, isWarning, problemsByTask, ROW, rowWindow, undatedQuery, visibleDependencies } from "./model";
 
 const status = { id: "s1", name: "To do", category: "todo" as const, hue: "grey" as const };
 
@@ -44,6 +44,11 @@ describe("rows", () => {
     expect(rows[1]).toMatchObject({ level: 2, hasKids: false });
     expect(rows[5]).toEqual({ kind: "group", id: "unscheduled", head: { by: "unscheduled" }, count: 1 });
     expect(index.get("TM-9")).toBe(6);
+  });
+
+  it("count every task without dates in the Unscheduled group, also those not listed", () => {
+    const { rows } = buildRows(tasks, [loose], new Set(), "parent", undefined, 19_441);
+    expect(rows.find((row) => row.kind === "group")).toMatchObject({ id: "unscheduled", count: 19_441 });
   });
 
   it("leave out the subtasks of a folded task, at every level below it", () => {
@@ -272,5 +277,13 @@ describe("milestones", () => {
       ["TM-12", undefined, "open", 0],
     ]);
     expect(list[0]?.status).toBe("Done");
+  });
+});
+
+describe("the list query for the tasks without dates", () => {
+  it("keeps the chart's query without its sort clause", () => {
+    expect(undatedQuery("")).toBe("is:unscheduled");
+    expect(undatedQuery("  sort:due ")).toBe("is:unscheduled");
+    expect(undatedQuery("label:bug OR label:crash sort:-due")).toBe("is:unscheduled (label:bug OR label:crash)");
   });
 });

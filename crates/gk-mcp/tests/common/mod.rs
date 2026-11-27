@@ -24,7 +24,9 @@ use tokio::task::JoinHandle;
 pub fn workspace() -> (TempDir, Options) {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("Test");
-    let options = Options::with_workspace(path.to_str().unwrap());
+    let mut options = Options::with_workspace(path.to_str().unwrap());
+    // Never the developer's own personal settings.
+    options.settings_file = Some(dir.path().join("settings.json"));
     (dir, options)
 }
 

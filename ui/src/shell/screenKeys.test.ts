@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_KEYMAP } from "../actions/actions";
 import { parseChord } from "../actions/keymap";
 import { createBundle } from "../i18n/i18n";
-import { SCREEN_KEYS, screenOf } from "./screenKeys";
+import { SCREEN_KEYS, screenOf, TASK_KEYS } from "./screenKeys";
 
 describe("the keys screens handle themselves", () => {
   it("are found for the board, the list, the wiki, the Gantt chart and the calendar", () => {
@@ -43,6 +43,20 @@ describe("the keys screens handle themselves", () => {
       }
     }
     expect(bundle.hasMessage("shortcut-group-screen")).toBe(true);
+  });
+
+  it("include an open task's own keys, none of them a window action's", () => {
+    const bundle = createBundle("en");
+    const windowKeys = new Set(Object.values(DEFAULT_KEYMAP).flat());
+    expect(TASK_KEYS.flatMap((entry) => entry.keys)).toEqual(expect.arrayContaining(["E", "S", "P", "L", "D", "Ctrl+Enter"]));
+    for (const entry of TASK_KEYS) {
+      expect(bundle.hasMessage(entry.label), entry.label).toBe(true);
+      for (const keys of entry.keys) {
+        expect(() => parseChord(keys)).not.toThrow();
+        expect(windowKeys.has(keys), keys).toBe(false);
+      }
+    }
+    expect(bundle.hasMessage("shortcut-group-task")).toBe(true);
   });
 
   it("list the wiki's E, the tree's Alt and arrow keys and the period keys apart from the window's", () => {

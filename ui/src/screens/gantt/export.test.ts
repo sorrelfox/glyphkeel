@@ -32,6 +32,7 @@ const schedule: Schedule = {
   range: { start: "2026-11-01", end: "2026-11-20" },
   tasks: [bar("TM-1", "2026-11-01", "2026-11-10", { progress_percent: 10 }), bar("TM-2", "2026-11-12", "2026-11-20")],
   unscheduled: [],
+  unscheduled_total: 0,
   dependencies: [{ id: "d1", from: "TM-1", to: "TM-2", violated: false }],
   problems: [],
 };

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Glyphkeel contributors
 
 import { AppWindow, Bot, ChevronDown, ChevronRight, Link2, MoreHorizontal, Plus, Search, X } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type RefObject } from "react";
 import {
   Autocomplete,
   Button,
@@ -19,7 +19,9 @@ import {
   type Selection,
 } from "react-aria-components";
 
+import { contextOf, matches, parseChord } from "../../actions/keymap";
 import { classes } from "../../classes";
+import { TASK_KEYS, type TaskKeyId } from "../../shell/screenKeys";
 import { MenuEntries } from "../../components/ContextMenu";
 import { useAskCloseDuplicates } from "../../components/DuplicatePrompt";
 import { MoveTasksDialog } from "./MoveTasksDialog";
@@ -76,6 +78,8 @@ export function TaskPanel({ taskKey, onClose, onOpenTask, mode = "docked", onOpe
   const project = useProject(loaded?.project);
   const readOnly = project.data?.state === "archived";
   const drop = useFileDrop(taskKey, loaded !== undefined && !readOnly);
+  // The open task's own keys (E, S, P, L, D, Ctrl+Enter), set by its loaded view.
+  const taskKeys = useRef<((event: ReactKeyboardEvent<HTMLElement>) => void) | null>(null);
   return (
     <aside
       className={classes(styles.panel, mode === "window" && styles.window, drop.over && styles.dropping)}
@@ -84,6 +88,10 @@ export function TaskPanel({ taskKey, onClose, onOpenTask, mode = "docked", onOpe
       data-drop-task={taskKey}
       tabIndex={-1}
       {...drop.handlers}
+      onKeyDownCapture={(event) => {
+        // Before the focused control: Ctrl+Enter on a button must not also press it.
+        taskKeys.current?.(event);
+      }}
       onKeyDown={(event) => {
         const target = event.target as HTMLElement;
         if (event.key === "Escape" && !event.defaultPrevented && !target.closest("input, textarea, select")) {
@@ -101,7 +109,7 @@ export function TaskPanel({ taskKey, onClose, onOpenTask, mode = "docked", onOpe
         </div>
       )}
       {loaded && project.data && (
-        <Loaded key={loaded.id} task={loaded} project={project.data} mode={mode} onClose={onClose} onOpenTask={onOpenTask} onOpenWindow={onOpenWindow} />
+        <Loaded key={loaded.id} task={loaded} project={project.data} mode={mode} onClose={onClose} onOpenTask={onOpenTask} onOpenWindow={onOpenWindow} keysRef={taskKeys} />
       )}
       {drop.over && (
         <div className={styles.dropNote} role="status">
@@ -119,6 +127,7 @@ function Loaded({
   onClose,
   onOpenTask,
   onOpenWindow,
+  keysRef,
 }: {
   task: Task;
   project: Project;
@@ -126,6 +135,8 @@ function Loaded({
   onClose: () => void;
   onOpenTask: (key: string) => void;
   onOpenWindow: ((key: string) => void) | undefined;
+  /** Where the panel finds the handler of the task's own keys. */
+  keysRef: RefObject<((event: ReactKeyboardEvent<HTMLElement>) => void) | null>;
 }) {
   const t = useT();
   const toasts = useToasts();
@@ -176,6 +187,60 @@ function Loaded({
   // Fields the task's status keeps from changing: shown disabled, with the reason below.
   const locked = readOnlyFields(project, task.status.id);
   const lockedOr = (field: string) => readOnly || locked.has(field);
+  const openOwnWindow = () => {
+    openTaskWindow(task.key, () => onOpenWindow?.(task.key)).catch((error: unknown) => {
+      toasts.show(errorToast(t, error));
+    });
+  };
+
+  // The task's own keys, from the table the shortcut sheet shows, taken
+  // before the focused control sees them. They act when the focus is in
+  // the panel itself, not in a text field or in a menu or dialog it opened.
+  const onTaskKey = (event: ReactKeyboardEvent<HTMLElement>) => {
+    if (event.defaultPrevented || event.nativeEvent.isComposing) {
+      return;
+    }
+    const panel = event.currentTarget;
+    const target = event.target as HTMLElement;
+    if (!panel.contains(target) || target.closest("[role=menu], [role=listbox], [role=dialog], [role=grid], [role=treegrid]")) {
+      return;
+    }
+    const inText = contextOf(target) === "text";
+    const pressed = (id: TaskKeyId) => TASK_KEYS.some((entry) => entry.id === id && entry.keys.some((chord) => matches(parseChord(chord), event.nativeEvent)));
+    if (pressed("window")) {
+      // In the editors, Ctrl+Enter saves or sends; they take it first.
+      if (!inText && mode === "docked") {
+        event.preventDefault();
+        event.stopPropagation();
+        openOwnWindow();
+      }
+      return;
+    }
+    if (inText) {
+      return;
+    }
+    if (pressed("edit")) {
+      if (!lockedOr("description") && descriptionView.kind !== "edit") {
+        event.preventDefault();
+        event.stopPropagation();
+        setDescriptionView({ kind: "edit" });
+      }
+      return;
+    }
+    const field = (["status", "priority", "labels", "due"] as const).find(pressed);
+    const trigger = field && panel.querySelector<HTMLElement>(`[data-task-key="${field}"]`);
+    if (trigger) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!trigger.hasAttribute("disabled") && trigger.getAttribute("aria-disabled") !== "true") {
+        trigger.focus();
+        trigger.click();
+      }
+    }
+  };
+  useEffect(() => {
+    keysRef.current = onTaskKey;
+  });
 
   return (
     <>
@@ -204,15 +269,7 @@ function Loaded({
           <Link2 className="ic" />
         </Button>
         {mode === "docked" && (
-          <Button
-            className="btn flat icon"
-            aria-label={t("panel-own-window")}
-            onPress={() => {
-              openTaskWindow(task.key, () => onOpenWindow?.(task.key)).catch((error: unknown) => {
-                toasts.show(errorToast(t, error));
-              });
-            }}
-          >
+          <Button className="btn flat icon" aria-label={t("panel-own-window")} onPress={openOwnWindow}>
             <AppWindow className="ic" />
           </Button>
         )}
@@ -265,22 +322,12 @@ function Loaded({
         />
       )}
 
-      <div
-        className={styles.body}
-        onKeyDown={(event) => {
-          const target = event.target as HTMLElement;
-          // E edits the description, as in the design, unless the key was typed into something.
-          if (event.key === "e" && !event.ctrlKey && !event.altKey && !event.metaKey && !lockedOr("description") && descriptionView.kind !== "edit" && !target.closest("input, textarea, select, [contenteditable], [role=textbox]")) {
-            event.preventDefault();
-            setDescriptionView({ kind: "edit" });
-          }
-        }}
-      >
+      <div className={styles.body}>
         <Title task={task} readOnly={lockedOr("title")} onSave={(title) => { patch({ title }); }} />
 
         <div className={styles.actions}>
           <MenuTrigger>
-            <Button className="btn" isDisabled={readOnly} aria-label={t("panel-status", { name: task.status.name })}>
+            <Button className="btn" isDisabled={readOnly} aria-label={t("panel-status", { name: task.status.name })} data-task-key="status">
               <span className={`dot hue-${statusHue}`} />
               <span>{task.status.name}</span>
               <ChevronDown className="ic s muted" />
@@ -321,7 +368,7 @@ function Loaded({
         <div className={styles.props}>
           <Prop label={t("prop-priority")}>
             <MenuTrigger>
-              <Button className="val" isDisabled={lockedOr("priority")} aria-label={t("prop-priority-value", { value: t(`priority-${task.priority}`) })}>
+              <Button className="val" isDisabled={lockedOr("priority")} aria-label={t("prop-priority-value", { value: t(`priority-${task.priority}`) })} data-task-key="priority">
                 <PriorityGlyph priority={task.priority} />
                 {t(`priority-${task.priority}`)}
               </Button>
@@ -365,7 +412,7 @@ function Loaded({
             <DateValue label={t("prop-start")} value={task.start_date ?? null} readOnly={lockedOr("start_date")} onChange={(day) => { setOrClear("start_date", day); }} />
           </Prop>
           <Prop label={t("prop-due")}>
-            <DateValue label={t("prop-due")} value={task.due_date ?? null} readOnly={lockedOr("due_date")} closed={task.closed_at !== undefined} relative onChange={(day) => { setOrClear("due_date", day); }} />
+            <DateValue label={t("prop-due")} value={task.due_date ?? null} readOnly={lockedOr("due_date")} closed={task.closed_at !== undefined} relative keyTarget="due" onChange={(day) => { setOrClear("due_date", day); }} />
           </Prop>
           <Prop label={t("prop-estimate")}>
             <DurationValue
@@ -593,6 +640,7 @@ function DateValue({
   readOnly,
   closed = false,
   relative = false,
+  keyTarget,
   onChange,
 }: {
   label: string;
@@ -600,6 +648,8 @@ function DateValue({
   readOnly: boolean;
   closed?: boolean;
   relative?: boolean;
+  /** The task key (D) that opens it, if one does. */
+  keyTarget?: TaskKeyId;
   onChange: (value: string | null) => void;
 }) {
   const t = useT();
@@ -624,7 +674,7 @@ function DateValue({
   const state = relative ? dueState(value, closed, today) : null;
   const days = value === null ? 0 : Math.round((Date.parse(`${value}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
   return (
-    <Button className="val num" isDisabled={readOnly} aria-label={t("prop-date-value", { name: label, value: value === null ? t("prop-none") : day(value) })} onPress={() => { setEditing(true); }}>
+    <Button className="val num" isDisabled={readOnly} aria-label={t("prop-date-value", { name: label, value: value === null ? t("prop-none") : day(value) })} data-task-key={keyTarget} onPress={() => { setEditing(true); }}>
       {value === null ? (
         <span className="faint">{t("prop-none")}</span>
       ) : (
@@ -731,7 +781,7 @@ function Labels({ task, project, readOnly, onChange }: { task: Task; project: Pr
       ))}
       {project.labels.length === 0 ? (
         <DialogTrigger>
-          <Button className="btn flat icon sm" isDisabled={readOnly} aria-label={t("prop-labels-edit")}>
+          <Button className="btn flat icon sm" isDisabled={readOnly} aria-label={t("prop-labels-edit")} data-task-key="labels">
             <Plus className="ic s" />
           </Button>
           <Popover className="pop" placement="bottom start" offset={4}>
@@ -758,7 +808,7 @@ function Labels({ task, project, readOnly, onChange }: { task: Task; project: Pr
             }
           }}
         >
-          <Button className="btn flat icon sm" isDisabled={readOnly} aria-label={t("prop-labels-edit")}>
+          <Button className="btn flat icon sm" isDisabled={readOnly} aria-label={t("prop-labels-edit")} data-task-key="labels">
             <Plus className="ic s" />
           </Button>
           <Popover className={classes("pop menuPopover", styles.labelPicker)} placement="bottom start" offset={4}>

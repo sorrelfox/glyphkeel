@@ -231,7 +231,15 @@ export function Shell({ titleBar, openGallery, firstRun = false }: ShellProps) {
                   setImportingCsv({ project: key });
                 }}
               />
-              <Splitter label={t("sidebar-resize")} value={sidebarWidth} min={SIDEBAR_WIDTH.min} max={SIDEBAR_WIDTH.max} onChange={setChosenWidth} />
+              <Splitter label={t("sidebar-resize")} value={sidebarWidth} min={SIDEBAR_WIDTH.min} max={SIDEBAR_WIDTH.max} onChange={setChosenWidth}
+                onReset={
+                  chosenWidth === null
+                    ? undefined
+                    : () => {
+                        setChosenWidth(null);
+                      }
+                }
+              />
             </>
           )}
           <div className={styles.main}>

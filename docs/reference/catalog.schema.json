@@ -55035,6 +55035,13 @@
         "additionalProperties": false,
         "description": "Changes to a list layout; fields left out keep their value.",
         "properties": {
+          "clear_widths": {
+            "description": "Columns whose kept width is dropped, so that they go back to their\ndefault width; applied before `widths`.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "collapsed": {
             "additionalProperties": {
               "items": {
@@ -56063,17 +56070,25 @@
             "type": "string"
           },
           "unscheduled": {
-            "description": "The tasks without dates, for the Unscheduled lane.",
+            "description": "The tasks without dates, for the Unscheduled lane: the first 200 in\nthe query's order. They don't count against the most tasks a\nschedule shows.",
             "items": {
               "$ref": "#/$defs/UnscheduledTask"
             },
             "type": "array"
+          },
+          "unscheduled_total": {
+            "default": 0,
+            "description": "How many tasks without dates there are, also those beyond the\nfirst 200 listed in `unscheduled`.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
           }
         },
         "required": [
           "today",
           "tasks",
           "unscheduled",
+          "unscheduled_total",
           "dependencies",
           "problems"
         ],
@@ -56396,6 +56411,17 @@
         "additionalProperties": false,
         "description": "Changes to a Gantt layout; fields left out keep their value.",
         "properties": {
+          "clear_table": {
+            "description": "Drop the kept table width, so that the table goes back to its\ndefault width; `table` given as well wins.",
+            "type": "boolean"
+          },
+          "clear_widths": {
+            "description": "Columns whose kept width is dropped, so that they go back to their\ndefault width; applied before `widths`.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "group_by": {
             "anyOf": [
               {

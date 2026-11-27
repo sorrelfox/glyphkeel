@@ -272,6 +272,10 @@ pub struct ListLayoutUpdateInput {
     /// theirs.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub widths: BTreeMap<String, u32>,
+    /// Columns whose kept width is dropped, so that they go back to their
+    /// default width; applied before `widths`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub clear_widths: Vec<String>,
     /// The folded groups to keep, by grouping; each grouping given replaces
     /// its list, and an empty list unfolds them all. The others keep theirs.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]

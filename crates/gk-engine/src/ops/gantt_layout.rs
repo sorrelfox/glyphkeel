@@ -109,6 +109,19 @@ fn update(
     if let Some(zoom) = input.zoom {
         layout.zoom = zoom;
     }
+    if input.clear_table {
+        layout.table = None;
+    }
+    for (i, column) in input.clear_widths.iter().enumerate() {
+        if !COLUMNS.contains(&column.as_str()) {
+            return Err(messages::invalid(
+                &format!("clear_widths[{i}]"),
+                "gantt-layout-column",
+                &[("columns", COLUMNS.join(", "))],
+            ));
+        }
+        layout.widths.remove(column);
+    }
     if let Some(table) = input.table {
         if !(TABLE_MIN..=TABLE_MAX).contains(&table) {
             return Err(messages::invalid(

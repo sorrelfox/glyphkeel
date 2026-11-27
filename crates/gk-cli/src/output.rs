@@ -221,7 +221,11 @@ fn table(out: &mut String, rows: &[Value], indent: usize) {
             if i + 1 == values.len() {
                 s.push_str(v);
             } else {
-                let _ = write!(s, "{v:<w$}  ", w = widths[i]);
+                // Padded by hand: a format width is limited to `u16`, and a
+                // cell can be longer (a column of a big board, say).
+                s.push_str(v);
+                let fill = widths[i].saturating_sub(v.chars().count()) + 2;
+                s.extend(std::iter::repeat_n(' ', fill));
             }
         }
         s.trim_end().to_owned()
@@ -306,6 +310,23 @@ mod tests {
         2 of 3
         next page: --cursor abc
         ");
+    }
+
+    #[test]
+    fn cells_longer_than_a_format_width_are_padded() {
+        // A format width is limited to `u16`; a big board's column of cards
+        // is longer than that in one cell.
+        let long = "x".repeat(70_000);
+        let out = human(&json!({"items": [
+            {"name": long, "wip": 1},
+            {"name": "Done", "wip": 2},
+        ]}));
+        let lines: Vec<&str> = out.lines().collect();
+        assert_eq!(lines.len(), 3);
+        assert!(lines[1].starts_with(&long));
+        assert!(lines[2].starts_with("Done "));
+        assert_eq!(lines[1].rfind('1'), lines[2].rfind('2'));
+        assert_eq!(lines[2].rfind('2'), Some(long.len() + 2));
     }
 
     #[test]

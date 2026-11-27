@@ -1697,6 +1697,10 @@ export type GanttLayoutGetInput = {
 
 /** Changes to a Gantt layout; fields left out keep their value. */
 export type GanttLayoutUpdateInput = {
+  /** Drop the kept table width, so that the table goes back to its default width; `table` given as well wins. */
+  clear_table?: boolean;
+  /** Columns whose kept width is dropped, so that they go back to their default width; applied before `widths`. */
+  clear_widths?: string[];
   /** How the rows are grouped. */
   group_by?: GanttGrouping | null;
   /** Whether a change of dates also moves the dependent tasks. */
@@ -1946,6 +1950,8 @@ export type ListLayoutGetInput = {
 
 /** Changes to a list layout; fields left out keep their value. */
 export type ListLayoutUpdateInput = {
+  /** Columns whose kept width is dropped, so that they go back to their default width; applied before `widths`. */
+  clear_widths?: string[];
   /** The folded groups to keep, by grouping; each grouping given replaces its list, and an empty list unfolds them all. The others keep theirs. */
   collapsed?: Record<string, string[]>;
   /** The columns shown, in order (machine names such as `due`); empty: the list's own choice. */
@@ -2991,8 +2997,10 @@ export type Schedule = {
   tasks: ScheduledTask[];
   /** Today in the workspace's time zone (`YYYY-MM-DD`), for the today line. */
   today: string;
-  /** The tasks without dates, for the Unscheduled lane. */
+  /** The tasks without dates, for the Unscheduled lane: the first 200 in the query's order. They don't count against the most tasks a schedule shows. */
   unscheduled: UnscheduledTask[];
+  /** How many tasks without dates there are, also those beyond the first 200 listed in `unscheduled`. */
+  unscheduled_total: number;
 };
 
 /** A finish-to-start dependency: a `blocks` link between two shown tasks. */

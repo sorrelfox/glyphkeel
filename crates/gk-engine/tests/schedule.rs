@@ -713,6 +713,27 @@ fn the_gantt_layout_is_kept_per_project_and_can_be_undone() {
     );
     assert_eq!(claimed["layout"]["group_by"], "claim");
     assert_eq!(claimed["layout"]["widths"]["claim"], 120);
+    // A column's width and the table's can go back to their defaults.
+    call(
+        &e,
+        "gantt.layout.update",
+        json!({ "project": "TM", "table": 520, "widths": { "key": 90 } }),
+    );
+    let cleared = call(
+        &e,
+        "gantt.layout.update",
+        json!({ "project": "TM", "clear_widths": ["claim"], "clear_table": true }),
+    );
+    assert_eq!(cleared["layout"]["widths"], json!({ "key": 90 }));
+    assert!(cleared["layout"].get("table").is_none());
+    let err = e
+        .call(
+            &me(),
+            "gantt.layout.update",
+            json!({ "project": "TM", "clear_widths": ["colour"] }),
+        )
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::Invalid);
     // Widths, columns and the table are checked.
     for bad in [
         json!({ "project": "TM", "widths": { "key": 5 } }),
@@ -723,4 +744,20 @@ fn the_gantt_layout_is_kept_per_project_and_can_be_undone() {
         let err = e.call(&me(), "gantt.layout.update", bad).unwrap_err();
         assert_eq!(err.code, ErrorCode::Invalid);
     }
+}
+
+#[test]
+fn tasks_without_dates_are_counted_not_all_listed() {
+    let dir = tempfile::tempdir().unwrap();
+    let e = open(&dir);
+    call(&e, "project.create", json!({ "name": "Many", "key": "TM" }));
+    let dated = task(&e, "TM", "Dated", Some("2026-12-01"), Some("2026-12-04"));
+    let undated: Vec<String> = (0..205)
+        .map(|i| task(&e, "TM", &format!("Someday {i}"), None, None))
+        .collect();
+    let s = call(&e, "schedule.get", json!({ "project": "TM" }));
+    assert_eq!(keys(&s["tasks"]), [dated.as_str()]);
+    // The lane lists the first 200 in the query's order; all are counted.
+    assert_eq!(keys(&s["unscheduled"]), undated[..200]);
+    assert_eq!(s["unscheduled_total"], 205);
 }

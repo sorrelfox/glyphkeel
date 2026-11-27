@@ -28,9 +28,10 @@ sidebar-resize = Sidebar width
 
 ## Resize handles: the sidebar's edge, column edges in the list and the Gantt chart
 
-resize-hint = Drag to change the width, or click for a menu
+resize-hint = Drag to change the width, click for a menu, or double-click to reset it
 resize-wider = Wider
 resize-narrower = Narrower
+resize-reset = Reset width
 
 ## Header bar
 
@@ -216,6 +217,14 @@ shortcut-group-navigation = Navigation
 shortcut-group-tasks = Tasks
 shortcut-group-window = Window
 shortcut-group-screen = This view
+shortcut-group-task = In an open task
+task-key-edit = Edit the description
+task-key-status = Change the status
+task-key-priority = Change the priority
+task-key-labels = Change the labels
+task-key-due = Change the due date
+task-key-submit = In the description or a comment: save or send
+task-key-window = Elsewhere in the panel: open the task in its own window
 screen-key-wiki-edit = Edit the page
 screen-key-wiki-move-sibling = Move the page up or down in the tree
 screen-key-wiki-move-in = Move the page into the page above it

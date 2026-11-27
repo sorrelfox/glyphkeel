@@ -39,13 +39,16 @@ use crate::messages;
 
 /// Where the folders agents may use, besides the workspace's `exports`
 /// folder, come from.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AgentFolders {
     /// The person's own setting, `agent_folders` in their personal
     /// settings file, read again at every check: the person can change it
-    /// while an agent runs.
-    #[default]
+    /// while an agent runs. The programs choose it; the engine's default is
+    /// none, so that nothing reads the person's file unasked.
     Personal,
+    /// `agent_folders` in this personal settings file, read again at every
+    /// check (for tests and programs that keep the file elsewhere).
+    File(PathBuf),
     /// These folders, whatever the personal settings say (for tests, and
     /// for programs that keep the choice themselves).
     Fixed(Vec<PathBuf>),
@@ -55,15 +58,16 @@ impl AgentFolders {
     /// The folders the person added, as given: absolute paths only.
     fn added(&self) -> Vec<PathBuf> {
         let folders = match self {
-            Self::Personal => UserSettings::load_default()
-                .agent_folders
-                .iter()
-                .map(PathBuf::from)
-                .collect(),
+            Self::Personal => folders_in(&UserSettings::load_default()),
+            Self::File(file) => folders_in(&UserSettings::load(file)),
             Self::Fixed(folders) => folders.clone(),
         };
         folders.into_iter().filter(|f| f.is_absolute()).collect()
     }
+}
+
+fn folders_in(settings: &UserSettings) -> Vec<PathBuf> {
+    settings.agent_folders.iter().map(PathBuf::from).collect()
 }
 
 /// Whether an input names something to read or a place to write.
@@ -952,6 +956,22 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(e.code, gk_api::ErrorCode::Forbidden);
+    }
+
+    #[test]
+    fn the_engine_reads_no_personal_settings_unless_told() {
+        assert_eq!(
+            crate::EngineConfig::new(crate::Role::Cli).agent_folders,
+            AgentFolders::Fixed(Vec::new())
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("settings.json");
+        let source = AgentFolders::File(file.clone());
+        assert!(source.added().is_empty(), "a missing file adds nothing");
+        let shared = dir.path().join("shared");
+        let stored = serde_json::json!({"agent_folders": [s(&shared), "relative"]});
+        fs::write(&file, stored.to_string()).unwrap();
+        assert_eq!(source.added(), vec![shared]);
     }
 
     #[test]
