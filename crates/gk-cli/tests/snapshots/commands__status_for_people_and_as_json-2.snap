@@ -4,6 +4,9 @@ expression: "ws.ok(&[\"workspace\", \"--json\"])"
 ---
 {
   "agent_limits": {
+    "read_burst": 60,
+    "read_mb_per_minute": 8,
+    "reads_per_minute": 600,
     "trash_items_per_call": 20,
     "trash_items_per_hour": 50,
     "writes_per_minute": 120
@@ -19,10 +22,13 @@ expression: "ws.ok(&[\"workspace\", \"--json\"])"
   "id": "[id]",
   "name": "Personal",
   "program_version": [version],
-  "schema_version": 20,
+  "schema_version": 21,
   "settings": {
     "agent_confirmations": true,
     "agent_limits": {
+      "read_burst": 60,
+      "read_mb_per_minute": 8,
+      "reads_per_minute": 600,
       "trash_items_per_call": 20,
       "trash_items_per_hour": 50,
       "writes_per_minute": 120

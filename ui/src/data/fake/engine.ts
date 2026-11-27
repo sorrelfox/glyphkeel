@@ -129,8 +129,8 @@ const fold = (text: string) => text.normalize("NFKC").toLowerCase().trim();
 const isClosed = (category: string) => category === "done" || category === "cancelled";
 const MAX_TITLE = 500;
 /** The limits on agent sessions, and the engine's defaults: no limit on new tasks. */
-const AGENT_LIMITS: readonly AgentLimit[] = ["writes_per_minute", "new_tasks_per_day", "trash_items_per_call", "trash_items_per_hour"];
-const DEFAULT_AGENT_LIMITS: Readonly<AgentLimits> = { writes_per_minute: 120, trash_items_per_call: 20, trash_items_per_hour: 50 };
+const AGENT_LIMITS: readonly AgentLimit[] = ["writes_per_minute", "new_tasks_per_day", "trash_items_per_call", "trash_items_per_hour", "read_burst", "reads_per_minute", "read_mb_per_minute"];
+const DEFAULT_AGENT_LIMITS: Readonly<AgentLimits> = { writes_per_minute: 120, trash_items_per_call: 20, trash_items_per_hour: 50, read_burst: 60, reads_per_minute: 600, read_mb_per_minute: 8 };
 const MAX_DEPTH = 3;
 const PROJECT_ICON_NAMES: ReadonlySet<string> = new Set(PROJECT_ICONS);
 const KEY_PATTERN = /^[A-Z][A-Z0-9]{1,9}$/;

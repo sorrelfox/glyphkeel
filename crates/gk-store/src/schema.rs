@@ -19,7 +19,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 use crate::error::{Result, StoreError};
 
 /// The schema version this program is built for.
-pub const SCHEMA_VERSION: i64 = 20;
+pub const SCHEMA_VERSION: i64 = 21;
 
 /// One migration: the SQL that takes the schema from `version - 1` to
 /// `version`.
@@ -110,6 +110,10 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 20,
         sql: include_str!("../migrations/0020_dashboards.sql"),
+    },
+    Migration {
+        version: 21,
+        sql: include_str!("../migrations/0021_agent_read_limits.sql"),
     },
 ];
 
@@ -328,6 +332,42 @@ mod tests {
                 .windows(2)
                 .all(|w| w[1].version == w[0].version + 1)
         );
+    }
+
+    #[test]
+    fn version_21_adds_the_read_limits_to_limits_the_person_changed() {
+        let mut conn = memory();
+        conn.execute_batch("PRAGMA foreign_keys = ON").unwrap();
+        migrate(&mut conn, &MIGRATIONS[..20], |_| Ok(())).unwrap();
+        conn.execute_batch(
+            "INSERT INTO settings (key, value, updated_at)
+             VALUES ('agent_limits', '{\"writes_per_minute\":30}', 0);
+             INSERT INTO agent_sessions (id, display_name, profile, started_at, last_seen_at)
+             VALUES (x'01000000000000000000000000000000', 'Agent', 'standard', 0, 0);",
+        )
+        .unwrap();
+        migrate(&mut conn, MIGRATIONS, |_| Ok(())).unwrap();
+        let value: String = conn
+            .query_row(
+                "SELECT value FROM settings WHERE key = 'agent_limits'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        let value: serde_json::Value = serde_json::from_str(&value).unwrap();
+        assert_eq!(
+            value,
+            serde_json::json!({
+                "writes_per_minute": 30,
+                "read_burst": 60,
+                "reads_per_minute": 600,
+                "read_mb_per_minute": 8,
+            })
+        );
+        let limited: i64 = conn
+            .query_row("SELECT rate_limited FROM agent_sessions", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(limited, 0);
     }
 
     #[test]
@@ -1097,7 +1137,7 @@ mod tests {
     #[test]
     fn version_20_adds_dashboards_with_names_unique_per_project() {
         let mut conn = memory();
-        migrate(&mut conn, MIGRATIONS, |_| Ok(())).unwrap();
+        migrate(&mut conn, &MIGRATIONS[..20], |_| Ok(())).unwrap();
         assert_eq!(user_version(&conn).unwrap(), 20);
         conn.execute_batch(
             "INSERT INTO projects (id, rank, key, name, name_fold, hue, modules, created_at,

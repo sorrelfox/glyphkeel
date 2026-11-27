@@ -1083,7 +1083,7 @@ Input: `FileCoverInput`. Output: `FileCoverChange`. Schemas: [catalog.schema.jso
 
 ## `agent.sessions`
 
-List agent sessions, newest first, with their client, profile, times and counts of reads and writes.
+List agent sessions, newest first, with their client, profile, times and counts of reads, writes and reads refused by the read limits.
 
 Input: `AgentSessionsInput`. Output: `AgentSessionList`. Schemas: [catalog.schema.json](catalog.schema.json).
 
@@ -1097,7 +1097,7 @@ Not available to agents: It sets the rights of agents; an agent that could call 
 
 ## `agent.limits.update`
 
-Change the limits on agent sessions: changes a minute, new tasks a day, and items moved to the trash per call and per hour. Each is a number or no limit.
+Change the limits on agent sessions: changes a minute, new tasks a day, items moved to the trash per call and per hour, and reads (at once, a minute, megabytes a minute). Each is a number or no limit.
 
 Input: `AgentLimitsPatch`. Output: `SettingsChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 

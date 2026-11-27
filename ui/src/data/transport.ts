@@ -28,6 +28,7 @@ const ENGINE_CODES: Readonly<Record<ErrorCode, true>> = {
   conflict: true,
   forbidden: true,
   limit: true,
+  rate_limited: true,
   busy: true,
   workspace_upgraded: true,
   workspace_too_new: true,
