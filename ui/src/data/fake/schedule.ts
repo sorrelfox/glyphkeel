@@ -16,6 +16,9 @@ import {
   type UnscheduledTask,
 } from "../../generated/ops";
 
+/** The most tasks without dates listed, as the engine lists them; the rest are only counted. */
+export const MAX_UNSCHEDULED = 200;
+
 /** A `blocks` link, by task ID. */
 export interface BlocksLink {
   id: string;
@@ -194,8 +197,9 @@ export function scheduleOf(tasks: readonly ListedTask[], links: readonly BlocksL
     }
   }
 
-  const unscheduled: UnscheduledTask[] = tasks
-    .filter((task) => !dated(task))
+  const undated = tasks.filter((task) => !dated(task));
+  const unscheduled: UnscheduledTask[] = undated
+    .slice(0, MAX_UNSCHEDULED)
     .map((task) => ({
       closed: task.closed_at !== undefined,
       id: task.id,
@@ -225,7 +229,7 @@ export function scheduleOf(tasks: readonly ListedTask[], links: readonly BlocksL
       hi = e;
     }
   }
-  return { today, ...(lo !== undefined && hi !== undefined ? { range: { start: lo, end: hi } } : {}), tasks: rows, unscheduled, dependencies, problems };
+  return { today, ...(lo !== undefined && hi !== undefined ? { range: { start: lo, end: hi } } : {}), tasks: rows, unscheduled, unscheduled_total: undated.length, dependencies, problems };
 }
 
 /** A task's dates, as "also move dependents" reads and writes them. */

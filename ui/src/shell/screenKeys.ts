@@ -56,6 +56,25 @@ export const SCREEN_KEYS: Readonly<Record<KeyedScreen, readonly ScreenKey[]>> = 
   ],
 };
 
+/** What a key does in an open task, in its panel or its own window. */
+export type TaskKeyId = "edit" | "status" | "priority" | "labels" | "due" | "submit" | "window";
+
+/**
+ * The keys of an open task, while the focus is in its panel or window. The
+ * single letters work outside text fields; `Ctrl+Enter` saves or sends in
+ * the description and comment editors, and elsewhere in a docked panel
+ * opens the task in its own window. The panel reads its keys from here.
+ */
+export const TASK_KEYS: readonly (ScreenKey & { id: TaskKeyId })[] = [
+  { id: "edit", label: "task-key-edit", keys: ["E"] },
+  { id: "status", label: "task-key-status", keys: ["S"] },
+  { id: "priority", label: "task-key-priority", keys: ["P"] },
+  { id: "labels", label: "task-key-labels", keys: ["L"] },
+  { id: "due", label: "task-key-due", keys: ["D"] },
+  { id: "submit", label: "task-key-submit", keys: ["Ctrl+Enter"] },
+  { id: "window", label: "task-key-window", keys: ["Ctrl+Enter"] },
+];
+
 /** The screen with keys of its own at a route's path, if any. */
 export function screenOf(pathname: string): KeyedScreen | null {
   if (/^\/projects\/[^/]+\/?$/.test(pathname)) {

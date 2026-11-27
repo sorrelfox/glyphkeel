@@ -39,8 +39,12 @@ use crate::messages;
 use crate::registry::{QueryCtx, Registry};
 use crate::write::WriteCtx;
 
-/// The most tasks one schedule shows.
+/// The most tasks with dates one schedule shows; the tasks without dates
+/// don't count.
 const MAX_TASKS: usize = 5_000;
+/// The most tasks without dates listed in the Unscheduled lane; the rest
+/// are only counted.
+const MAX_UNSCHEDULED: usize = 200;
 /// Values per `IN (…)` list.
 const CHUNK: usize = 500;
 /// Levels of subtasks followed for progress; subtasks go 5 levels deep,
@@ -211,12 +215,15 @@ struct Link {
 /// Every `blocks` link of the workspace between live tasks, leaving out
 /// links to tasks a caller limited to a project can't see.
 fn links(tx: &Transaction<'_>) -> Result<Vec<Link>, Failure> {
+    // `CROSS JOIN` keeps SQLite to this order: the few links first, then
+    // their tasks by key. Left to choose, it can scan the tasks once per
+    // task, which takes most of a minute on a project of 20,000 tasks.
     let mut stmt = tx.prepare_cached(
         "SELECT r.id, r.from_task, r.to_task, r.lag_days, f.closed_at IS NULL,
                 f.project_id, t.project_id
            FROM task_relations r
-           JOIN tasks f ON f.id = r.from_task JOIN projects fp ON fp.id = f.project_id
-           JOIN tasks t ON t.id = r.to_task JOIN projects tp ON tp.id = t.project_id
+           CROSS JOIN tasks f ON f.id = r.from_task CROSS JOIN projects fp ON fp.id = f.project_id
+           CROSS JOIN tasks t ON t.id = r.to_task CROSS JOIN projects tp ON tp.id = t.project_id
           WHERE r.kind = 'blocks' AND f.deleted_at IS NULL AND t.deleted_at IS NULL
             AND fp.deleted_at IS NULL AND tp.deleted_at IS NULL
           ORDER BY r.created_at, r.id",
@@ -396,16 +403,6 @@ fn get(q: &QueryCtx<'_>, input: ScheduleInput) -> Result<Schedule, Failure> {
     };
     let (_, compiled) = super::query::compile_search(tx, &q.env.zone, q.now, &search)?;
     let shown = super::query::matching_ids(tx, &compiled)?;
-    if shown.len() > MAX_TASKS {
-        return Err(messages::invalid(
-            "query",
-            "schedule-too-many",
-            &[
-                ("count", shown.len().to_string()),
-                ("max", MAX_TASKS.to_string()),
-            ],
-        ));
-    }
     let position: HashMap<Id, usize> = shown.iter().enumerate().map(|(i, id)| (*id, i)).collect();
 
     // Every task of the projects involved: subtasks, parents, progress.
@@ -483,6 +480,20 @@ fn get(q: &QueryCtx<'_>, input: ScheduleInput) -> Result<Schedule, Failure> {
             None => undated.push(*id),
         }
     }
+    if dated.len() > MAX_TASKS {
+        return Err(messages::invalid(
+            "query",
+            "schedule-too-many",
+            &[
+                ("count", dated.len().to_string()),
+                ("max", MAX_TASKS.to_string()),
+            ],
+        ));
+    }
+    // The first of the tasks without dates, in the query's order; the
+    // others are only counted.
+    let unscheduled_total = u32::try_from(undated.len()).unwrap_or(u32::MAX);
+    undated.truncate(MAX_UNSCHEDULED);
 
     // The tree of rows: a task under its parent when the parent is shown.
     let kept: HashSet<Id> = dated.iter().map(|(id, _)| *id).collect();
@@ -717,6 +728,7 @@ fn get(q: &QueryCtx<'_>, input: ScheduleInput) -> Result<Schedule, Failure> {
         range: span.map(range),
         tasks,
         unscheduled,
+        unscheduled_total,
         dependencies,
         problems,
     })

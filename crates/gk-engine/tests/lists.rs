@@ -282,6 +282,24 @@ fn the_list_layout_is_kept_per_project_apart_from_views_and_can_be_undone() {
         .unwrap_err();
     assert_eq!(err.code, ErrorCode::Invalid);
     assert_eq!(err.details["message_id"], "list-layout-width");
+    // One column's width can go back to its default, as one change.
+    call(
+        &e,
+        "list.layout.update",
+        json!({ "project": "TM", "widths": { "due": 140 } }),
+    );
+    let cleared = call(
+        &e,
+        "list.layout.update",
+        json!({ "project": "TM", "clear_widths": ["due", "never-set"] }),
+    );
+    assert_eq!(cleared["layout"]["widths"], json!({ "title": 320 }));
+    assert!(cleared["group"].is_string());
+    call(&e, "history.undo", json!({}));
+    assert_eq!(
+        call(&e, "list.layout.get", json!({ "project": "TM" }))["layout"]["widths"],
+        json!({ "due": 140, "title": 320 })
+    );
     // A reset goes back to the default.
     let reset = call(
         &e,

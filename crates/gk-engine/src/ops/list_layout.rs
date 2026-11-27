@@ -157,6 +157,10 @@ fn update(w: &mut WriteCtx<'_>, input: ListLayoutUpdateInput) -> Result<ListLayo
         }
         layout.columns = chosen;
     }
+    for (i, column) in input.clear_widths.iter().enumerate() {
+        let column = column_name(&format!("clear_widths[{i}]"), column)?;
+        layout.widths.remove(&column);
+    }
     for (column, width) in &input.widths {
         let column = column_name("widths", column)?;
         if !(WIDTH_MIN..=WIDTH_MAX).contains(width) {

@@ -57,6 +57,8 @@ interface ListTableProps {
   widths: Readonly<Record<string, number>>;
   /** A column edge was dragged (or moved with the keyboard) to a new width. */
   onResize: (column: ColumnId, width: number) => void;
+  /** Drops a column's kept width, back to its default. */
+  onResetWidth?: (column: ColumnId) => void;
   /** A column was dragged (or moved with the keyboard) to another place. */
   onMove: (column: ColumnId, to: number) => void;
   /** The lines shown: rows and, when grouped, the groups' headers. */
@@ -95,7 +97,7 @@ interface ListTableProps {
  * totals row over every matching task. Rows not loaded yet show as empty
  * placeholders.
  */
-export function ListTable({ rows, columns, fields = [], widths, onResize, onMove, lines, grouping, isCollapsed, onToggleGroup, onAddToGroup, sort, onSort, selection, onRowClick, onToggleAll, allSelected, onOpen, focused, onFocusRow, onKey, items, totalSize, scrollRef }: ListTableProps) {
+export function ListTable({ rows, columns, fields = [], widths, onResize, onResetWidth, onMove, lines, grouping, isCollapsed, onToggleGroup, onAddToGroup, sort, onSort, selection, onRowClick, onToggleAll, allSelected, onOpen, focused, onFocusRow, onKey, items, totalSize, scrollRef }: ListTableProps) {
   const t = useT();
   const { format } = useDurations();
   // A column edge being dragged shows its width before it is kept.
@@ -171,7 +173,7 @@ export function ListTable({ rows, columns, fields = [], widths, onResize, onMove
         onResize(column, widthAt(next.clientX));
       } else {
         // A click without dragging: the menu with "Wider" and "Narrower".
-        openWidthMenu(target, column, startWidth);
+        openWidthMenu(target, column, startWidth, true);
       }
     };
     target.addEventListener("pointermove", move);
@@ -179,17 +181,27 @@ export function ListTable({ rows, columns, fields = [], widths, onResize, onMove
     target.addEventListener("pointercancel", up);
   };
 
-  const openWidthMenu = (handle: HTMLElement, column: ColumnId, width: number) => {
-    widthMenu.openAt(handle, {
-      label: t("list-resize-column", { column: columnLabel(column) }),
-      value: Math.round(width),
-      min: MIN_WIDTH,
-      max: MAX_WIDTH,
-      step: MENU_STEP,
-      onChange: (next) => {
-        onResize(column, next);
+  const openWidthMenu = (handle: HTMLElement, column: ColumnId, width: number, click = false) => {
+    widthMenu.openAt(
+      handle,
+      {
+        label: t("list-resize-column", { column: columnLabel(column) }),
+        value: Math.round(width),
+        min: MIN_WIDTH,
+        max: MAX_WIDTH,
+        step: MENU_STEP,
+        onChange: (next) => {
+          onResize(column, next);
+        },
+        onReset:
+          onResetWidth && widths[column] !== undefined
+            ? () => {
+                onResetWidth(column);
+              }
+            : undefined,
       },
-    });
+      click,
+    );
   };
 
   const resizeKey = (event: KeyboardEvent, column: ColumnId, width: number) => {

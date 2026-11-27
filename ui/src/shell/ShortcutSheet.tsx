@@ -7,7 +7,7 @@ import { parseChord } from "../actions/keymap";
 import { Dialog } from "../components/Dialog";
 import { Kbd } from "../components/Kbd";
 import { useT } from "../i18n/I18n";
-import { SCREEN_KEYS, type KeyedScreen } from "./screenKeys";
+import { SCREEN_KEYS, TASK_KEYS, type KeyedScreen, type ScreenKey } from "./screenKeys";
 import styles from "./Shell.module.css";
 
 const GROUPS: readonly { group: ActionGroup; label: string }[] = [
@@ -58,24 +58,31 @@ export function ShortcutSheet({ isOpen, onOpenChange, screen = null }: ShortcutS
             </section>
           );
         })}
-        {screenKeys.length > 0 && (
-          <section className={styles.shortcutGroup}>
-            <h2 className="caption">{t("shortcut-group-screen")}</h2>
-            <dl className={styles.shortcutList}>
-              {screenKeys.map((entry) => (
-                <div key={entry.label} className={styles.shortcutRow}>
-                  <dt>{t(entry.label)}</dt>
-                  <dd>
-                    {entry.keys.map((keys) => (
-                      <Kbd key={keys} chord={parseChord(keys)} />
-                    ))}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </section>
-        )}
+        {screenKeys.length > 0 && <KeyGroup title={t("shortcut-group-screen")} entries={screenKeys} />}
+        <KeyGroup title={t("shortcut-group-task")} entries={TASK_KEYS} />
       </div>
     </Dialog>
+  );
+}
+
+/** A group of keys from a table, each with what it does. */
+function KeyGroup({ title, entries }: { title: string; entries: readonly ScreenKey[] }) {
+  const t = useT();
+  return (
+    <section className={styles.shortcutGroup}>
+      <h2 className="caption">{title}</h2>
+      <dl className={styles.shortcutList}>
+        {entries.map((entry) => (
+          <div key={entry.label} className={styles.shortcutRow}>
+            <dt>{t(entry.label)}</dt>
+            <dd>
+              {entry.keys.map((keys) => (
+                <Kbd key={keys} chord={parseChord(keys)} />
+              ))}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </section>
   );
 }

@@ -122,13 +122,16 @@ where
 pub fn open(options: &Options) -> Result<Server, OpError> {
     let layout = options.layout()?;
     let mut config = EngineConfig::new(Role::Mcp);
-    config.time_zone = gk_engine::personal_time_zone(
-        options.tz.as_deref(),
-        &gk_store::UserSettings::load_default(),
-    )?;
-    if let Some(folders) = &options.agent_folders {
-        config.agent_folders = gk_engine::AgentFolders::Fixed(folders.clone());
-    }
+    let settings = match &options.settings_file {
+        Some(file) => gk_store::UserSettings::load(file),
+        None => gk_store::UserSettings::load_default(),
+    };
+    config.time_zone = gk_engine::personal_time_zone(options.tz.as_deref(), &settings)?;
+    config.agent_folders = match (&options.agent_folders, &options.settings_file) {
+        (Some(folders), _) => gk_engine::AgentFolders::Fixed(folders.clone()),
+        (None, Some(file)) => gk_engine::AgentFolders::File(file.clone()),
+        (None, None) => gk_engine::AgentFolders::Personal,
+    };
     let engine = Engine::open(&layout, config)?;
     tracing::info!(
         workspace = %layout.root().display(),

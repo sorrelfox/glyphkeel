@@ -15,6 +15,8 @@ interface SplitterProps {
   min: number;
   max: number;
   onChange: (value: number) => void;
+  /** Goes back to the default width; left out while the width is the default. */
+  onReset?: (() => void) | undefined;
 }
 
 const STEP = 8;
@@ -24,15 +26,15 @@ const MENU_STEP = 24;
 /**
  * A vertical divider that resizes the pane on its left: drag it, focus it
  * and use the arrow keys, `Home` and `End`, or click it for a menu that
- * makes the pane wider or narrower.
+ * makes the pane wider or narrower or resets it; a double-click resets it.
  */
-export function Splitter({ label, value, min, max, onChange }: SplitterProps) {
+export function Splitter({ label, value, min, max, onChange, onReset }: SplitterProps) {
   const t = useT();
   const drag = useRef<{ startX: number; startValue: number; moved: boolean } | null>(null);
   const clamp = (next: number) => Math.min(max, Math.max(min, Math.round(next)));
   const widthMenu = useWidthMenu();
-  const openMenu = (handle: HTMLElement) => {
-    widthMenu.openAt(handle, { label, value, min, max, step: MENU_STEP, onChange });
+  const openMenu = (handle: HTMLElement, click = false) => {
+    widthMenu.openAt(handle, { label, value, min, max, step: MENU_STEP, onChange, onReset }, click);
   };
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
@@ -52,7 +54,7 @@ export function Splitter({ label, value, min, max, onChange }: SplitterProps) {
     const clicked = event.type === "pointerup" && drag.current?.moved === false;
     drag.current = null;
     if (clicked) {
-      openMenu(event.currentTarget);
+      openMenu(event.currentTarget, true);
     }
   };
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {

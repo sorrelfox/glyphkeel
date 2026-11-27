@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Glyphkeel contributors
 
 import { useLocalization } from "@fluent/react";
+import { useNavigate } from "@tanstack/react-router";
 import { ChevronDown, ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Button, Menu, MenuItem, MenuTrigger, Popover, useLocale } from "react-aria-components";
@@ -28,7 +29,7 @@ import { chartSvg, exportSpan, lightPalette, printSvg, svgToPng } from "./export
 import { DEFAULT_TABLE, Gantt, groupText, headerText, noteOf, useFormats, type GanttHandle, type Movable } from "./Gantt";
 import { MilestonesButton } from "./Milestones";
 import { GROUPINGS, layoutFrom, layoutUpdate, type Column, type GanttLayout } from "./layout";
-import { datesUpdate, endsLater, type Dates, type GroupOrder } from "./model";
+import { datesUpdate, endsLater, undatedQuery, type Dates, type GroupOrder } from "./model";
 import { ZOOMS, chartSpan, weekendDays, type Zoom } from "./scale";
 import styles from "./Gantt.module.css";
 
@@ -92,6 +93,7 @@ function LoadedGantt({ project, openTask, onOpen, saved, views }: GanttViewProps
   const { locale, direction } = useLocale();
   const problemText = useProblemText();
   const projectInfo = useOp("project.get", { project });
+  const navigate = useNavigate();
   const touchOnly = useTouchOnly();
 
   // The person's layout, kept by the engine; the chart follows it at once.
@@ -100,6 +102,17 @@ function LoadedGantt({ project, openTask, onOpen, saved, views }: GanttViewProps
   const changeLayout = (change: Partial<GanttLayout>) => {
     setLayout((now) => ({ ...now, ...change, widths: { ...now.widths, ...change.widths } }));
     keepLayout.mutate(layoutUpdate(project, change));
+  };
+
+  // A width back to its default: dropped from the layout, not set to a number.
+  const resetWidth = (column: Column | "table") => {
+    if (column === "table") {
+      setLayout((now) => ({ ...now, table: undefined }));
+      keepLayout.mutate({ project, clear_table: true });
+    } else {
+      setLayout((now) => ({ ...now, widths: Object.fromEntries(Object.entries(now.widths).filter(([name]) => name !== column)) }));
+      keepLayout.mutate({ project, clear_widths: [column] });
+    }
   };
 
   const [includeSubprojects, setIncludeSubprojects] = useState(false);
@@ -153,7 +166,7 @@ function LoadedGantt({ project, openTask, onOpen, saved, views }: GanttViewProps
   }, [locale, statuses]);
 
   const scheduledCount = schedule?.tasks.length ?? 0;
-  const unscheduledCount = schedule?.unscheduled.length ?? 0;
+  const unscheduledCount = schedule ? Math.max(schedule.unscheduled_total, schedule.unscheduled.length) : 0;
   const overdueCount = schedule?.tasks.filter((task) => task.overdue && task.shape !== "summary").length ?? 0;
   useStatus({
     summary: t("gantt-status", { scheduled: scheduledCount, unscheduled: unscheduledCount }),
@@ -434,6 +447,19 @@ function LoadedGantt({ project, openTask, onOpen, saved, views }: GanttViewProps
           {t("gantt-error", { message: failureText(t, data.error) })}
         </p>
       )}
+      {schedule && unscheduledCount > schedule.unscheduled.length && (
+        <p className={styles.note} role="status" data-testid="gantt-undated-note">
+          {t("gantt-undated-more", { count: unscheduledCount, listed: schedule.unscheduled.length })}{" "}
+          <Button
+            className="linkbtn"
+            onPress={() => {
+              void navigate({ to: "/projects/$key/list", params: { key: project }, search: { query: undatedQuery(running) } });
+            }}
+          >
+            {t("gantt-undated-show")}
+          </Button>
+        </p>
+      )}
       {schedule && span && (
         <>
           {schedule.tasks.length === 0 && schedule.unscheduled.length === 0 && (
@@ -468,6 +494,8 @@ function LoadedGantt({ project, openTask, onOpen, saved, views }: GanttViewProps
             onWidth={(column: Column, width: number) => {
               changeLayout({ widths: { [column]: width } });
             }}
+            tableKept={layout.table !== undefined}
+            onResetWidth={resetWidth}
             onRange={setRange}
             onRefused={onRefused}
             versions={versionMarkers}

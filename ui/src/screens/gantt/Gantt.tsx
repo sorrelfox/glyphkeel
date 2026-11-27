@@ -117,6 +117,10 @@ export interface GanttProps {
   onZoom: (zoom: Zoom) => void;
   onTable: (width: number) => void;
   onWidth: (column: Column, width: number) => void;
+  /** Drops the kept width of a column or of the table, back to its default. */
+  onResetWidth?: (column: Column | "table") => void;
+  /** Whether the table's width is the person's own, not the default. */
+  tableKept?: boolean;
   onRange: (range: { from: Day; to: Day }) => void;
   /** A change of a task that can't be changed was asked for. */
   onRefused: (key: string, reason: ReadOnlyReason) => void;
@@ -221,6 +225,8 @@ export const Gantt = memo(function Gantt({
   onZoom,
   onTable,
   onWidth,
+  onResetWidth,
+  tableKept = false,
   onRange,
   onRefused,
   versions = NO_VERSIONS,
@@ -252,7 +258,7 @@ export const Gantt = memo(function Gantt({
   // ---------- rows ----------
 
   const [folded, setFolded] = useState<ReadonlySet<string>>(() => new Set());
-  const { rows, index } = useMemo(() => buildRows(schedule.tasks, schedule.unscheduled, folded, groupBy, groupOrder), [schedule.tasks, schedule.unscheduled, folded, groupBy, groupOrder]);
+  const { rows, index } = useMemo(() => buildRows(schedule.tasks, schedule.unscheduled, folded, groupBy, groupOrder, schedule.unscheduled_total), [schedule.tasks, schedule.unscheduled, schedule.unscheduled_total, folded, groupBy, groupOrder]);
   const problems = useMemo(() => problemsByTask(schedule.problems), [schedule.problems]);
   const byKey = useMemo(() => new Map(schedule.tasks.map((task) => [task.key, task])), [schedule.tasks]);
   // Custom field values show on the title's tooltip; a chart may cover several projects.
@@ -884,7 +890,7 @@ export const Gantt = memo(function Gantt({
       if (!moved) {
         // A click without dragging: the menu with "Wider" and "Narrower".
         if (ev.type === "pointerup") {
-          openWidthMenu(handle, column, w0);
+          openWidthMenu(handle, column, w0, true);
         }
         return;
       }
@@ -903,22 +909,33 @@ export const Gantt = memo(function Gantt({
 
   const widthMenu = useWidthMenu();
   /** The menu of a handle: its name is the handle's. */
-  const openWidthMenu = (handle: HTMLElement, column: Column | "table", width: number) => {
+  const openWidthMenu = (handle: HTMLElement, column: Column | "table", width: number, click = false) => {
     const table = column === "table";
-    widthMenu.openAt(handle, {
-      label: handle.getAttribute("aria-label") ?? "",
-      value: Math.round(width),
-      min: table ? TABLE_MIN : COLUMN_MIN,
-      max: table ? TABLE_MAX : COLUMN_MAX,
-      step: WIDTH_MENU_STEP,
-      onChange: (next) => {
-        if (column === "table") {
-          onTable(next);
-        } else {
-          onWidth(column, next);
-        }
+    const kept = table ? tableKept : widths[column] !== undefined;
+    widthMenu.openAt(
+      handle,
+      {
+        label: handle.getAttribute("aria-label") ?? "",
+        value: Math.round(width),
+        min: table ? TABLE_MIN : COLUMN_MIN,
+        max: table ? TABLE_MAX : COLUMN_MAX,
+        step: WIDTH_MENU_STEP,
+        onChange: (next) => {
+          if (column === "table") {
+            onTable(next);
+          } else {
+            onWidth(column, next);
+          }
+        },
+        onReset:
+          onResetWidth && kept
+            ? () => {
+                onResetWidth(column);
+              }
+            : undefined,
       },
-    });
+      click,
+    );
   };
   const widthMenuByKey = (event: KeyboardEvent<HTMLElement> | ReactMouseEvent<HTMLElement>, column: Column | "table") => {
     event.preventDefault();

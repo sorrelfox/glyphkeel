@@ -129,6 +129,7 @@ impl Store {
         }
         let workspace_id = read_workspace_id(&conn)?;
         let generation = crate::snapshot::generation(&conn)?;
+        optimize(&conn, "open");
 
         let readers = (0..config.readers.max(1))
             .map(|_| connection::open(&database, Purpose::Read, config.busy_budget))
@@ -139,11 +140,7 @@ impl Store {
             busy_retries: config.busy_retries,
             slow_write: config.slow_write,
         };
-        let writer = Writer::start(conn, settings, |conn| {
-            if let Err(e) = conn.execute_batch("PRAGMA optimize") {
-                tracing::debug!(error = %e, "optimize on close failed");
-            }
-        })?;
+        let writer = Writer::start(conn, settings, |conn| optimize(conn, "close"))?;
         Ok(Self {
             layout: layout.clone(),
             config,
@@ -238,6 +235,18 @@ impl Store {
     /// connections. Dropping the store does the same.
     pub fn close(mut self) {
         self.writer.stop();
+    }
+}
+
+/// Brings the query planner's statistics up to date where a table has
+/// grown or shrunk a lot since they were taken, as after an import: with
+/// statistics from when a table was nearly empty, SQLite picks plans that
+/// scan it once per row. `0x10000` checks every table, not only the ones
+/// this connection read (the readers have their own connections); the limit
+/// keeps each analysis to a sample, so this stays quick on a big workspace.
+fn optimize(conn: &Connection, when: &str) {
+    if let Err(e) = conn.execute_batch("PRAGMA analysis_limit = 1000; PRAGMA optimize = 0x10002;") {
+        tracing::debug!(error = %e, when, "optimize failed");
     }
 }
 

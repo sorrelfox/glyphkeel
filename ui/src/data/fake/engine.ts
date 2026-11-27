@@ -3726,7 +3726,7 @@ export class FakeWorkspace {
       const project = this.project(ref);
       return { project: project.key, layout: structuredClone(this.state.ganttLayouts?.[project.id] ?? DEFAULT_GANTT_LAYOUT) };
     },
-    "gantt.layout.update": ({ project: ref, reset, zoom, table, widths, group_by, move_dependents }) => {
+    "gantt.layout.update": ({ project: ref, reset, zoom, table, clear_table, widths, clear_widths, group_by, move_dependents }) => {
       const project = this.project(ref);
       this.state.ganttLayouts ??= {};
       const before = reset === true ? DEFAULT_GANTT_LAYOUT : (this.state.ganttLayouts[project.id] ?? DEFAULT_GANTT_LAYOUT);
@@ -3741,10 +3741,16 @@ export class FakeWorkspace {
           fail("invalid", "A column is 24 to 600 pixels wide.", { details: { path: `widths.${column}`, message_id: "gantt-layout-width", args: { min: 24, max: 600 } } });
         }
       }
+      for (const column of clear_widths ?? []) {
+        if (!["key", "title", "claim", "start", "due", "progress"].includes(column)) {
+          fail("invalid", "The chart's table has only these columns: key, title, claim, start, due, progress.", { details: { path: "clear_widths", message_id: "gantt-layout-column", args: { columns: "key, title, claim, start, due, progress" } } });
+        }
+      }
+      const kept = clear_table === true ? undefined : before.table;
       const next: GanttLayout = {
         zoom: zoom ?? before.zoom,
-        ...(table === null || table === undefined ? (before.table === undefined ? {} : { table: before.table }) : { table }),
-        widths: { ...before.widths, ...widths },
+        ...(table === null || table === undefined ? (kept === undefined ? {} : { table: kept }) : { table }),
+        widths: { ...withoutKeys(before.widths, clear_widths), ...widths },
         group_by: group_by ?? before.group_by,
         move_dependents: move_dependents ?? before.move_dependents,
       };
@@ -3759,7 +3765,7 @@ export class FakeWorkspace {
       const project = ref === null || ref === undefined ? undefined : this.project(ref);
       return { ...some("project", project?.key), layout: structuredClone(this.state.listLayouts?.[project?.id ?? "all"] ?? { columns: [], widths: {} }) };
     },
-    "list.layout.update": ({ project: ref, reset, columns, widths, collapsed }) => {
+    "list.layout.update": ({ project: ref, reset, columns, widths, clear_widths, collapsed }) => {
       const project = ref === null || ref === undefined ? undefined : this.project(ref);
       const scope = project?.id ?? "all";
       this.state.listLayouts ??= {};
@@ -3782,7 +3788,7 @@ export class FakeWorkspace {
       }
       const next: ListLayout = {
         columns: columns ? [...new Set(columns)] : [...before.columns],
-        widths: { ...before.widths, ...widths },
+        widths: { ...withoutKeys(before.widths, clear_widths), ...widths },
         ...(folded.size > 0 ? { collapsed: Object.fromEntries(folded) } : {}),
       };
       this.state.listLayouts[scope] = next;
@@ -4807,4 +4813,10 @@ function fieldText(value: unknown): string {
     return value.map((each) => fieldText(each)).join(", ");
   }
   return typeof value === "string" ? value : JSON.stringify(value);
+}
+
+/** `record` without the keys given (a layout's widths after some are cleared). */
+function withoutKeys<T>(record: Readonly<Record<string, T>>, keys: readonly string[] | null | undefined): Record<string, T> {
+  const drop = new Set(keys ?? []);
+  return Object.fromEntries(Object.entries(record).filter(([key]) => !drop.has(key)));
 }

@@ -6,10 +6,12 @@ import { useState } from "react";
 
 import { type ActionGroup } from "../../actions/actions";
 import { useActions } from "../../actions/ActionsProvider";
+import { parseChord } from "../../actions/keymap";
 import { classes } from "../../classes";
 import { chordLabel, Kbd } from "../../components/Kbd";
 import { useT } from "../../i18n/I18n";
 import { Group, Row } from "../PreferenceRows";
+import { TASK_KEYS } from "../screenKeys";
 import styles from "../Preferences.module.css";
 
 const GROUPS: readonly { group: ActionGroup; label: string }[] = [
@@ -31,6 +33,7 @@ export function ShortcutsPage() {
   const actions = useActions()
     .filter((action) => action.keys.length > 0)
     .filter((action) => needle === "" || [t(action.label), ...action.keys.map((chord) => chordLabel(chord, t))].some((text) => text.toLocaleLowerCase().includes(needle)));
+  const taskKeys = TASK_KEYS.filter((entry) => needle === "" || [t(entry.label), ...entry.keys.map((keys) => chordLabel(parseChord(keys), t))].some((text) => text.toLocaleLowerCase().includes(needle)));
   return (
     <>
       <label className={classes("field", styles.shortcutSearch)}>
@@ -45,7 +48,7 @@ export function ShortcutsPage() {
           }}
         />
       </label>
-      {actions.length === 0 && <p className={styles.empty}>{t("preferences-shortcuts-none")}</p>}
+      {actions.length === 0 && taskKeys.length === 0 && <p className={styles.empty}>{t("preferences-shortcuts-none")}</p>}
       {GROUPS.map(({ group, label }) => {
         const inGroup = actions.filter((action) => action.group === group);
         if (inGroup.length === 0) {
@@ -65,6 +68,19 @@ export function ShortcutsPage() {
           </Group>
         );
       })}
+      {taskKeys.length > 0 && (
+        <Group title={t("shortcut-group-task")}>
+          {taskKeys.map((entry) => (
+            <Row key={entry.label} label={t(entry.label)}>
+              <span className={styles.shortcutKeys}>
+                {entry.keys.map((keys) => (
+                  <Kbd key={keys} chord={parseChord(keys)} />
+                ))}
+              </span>
+            </Row>
+          ))}
+        </Group>
+      )}
       <p className={classes("faint", styles.empty)}>{t("preferences-shortcuts-later")}</p>
     </>
   );

@@ -696,3 +696,19 @@ test("Today, and the keys for a page earlier, later and back to today", async ({
   await page.getByRole("button", { name: "Today", exact: true }).click();
   await expect(today).toBeInViewport();
 });
+
+test("many tasks without dates don't keep the chart from drawing: it counts them and links to them in the list", async ({ page }) => {
+  // Thousands of copies of the sample tasks, many of them without dates.
+  const grid = await openGantt(page, "?tasks=3000");
+  const note = page.getByTestId("gantt-undated-note");
+  await expect(note).toBeVisible();
+  const text = plain(await note.textContent());
+  const count = Number(/([\d,.\s]+) tasks have no dates/.exec(text)?.[1]?.replace(/\D/g, "") ?? 0);
+  expect(count).toBeGreaterThan(200);
+  expect(text).toContain("lists the first 200");
+  await expect(grid.locator("[data-bar]").first()).toBeAttached();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await note.getByRole("button", { name: "Show them in the list" }).click();
+  await expect(page.getByRole("group", { name: "Project views" }).getByRole("button", { name: "List" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("textbox", { name: "Filter query" })).toHaveText("is:unscheduled");
+});

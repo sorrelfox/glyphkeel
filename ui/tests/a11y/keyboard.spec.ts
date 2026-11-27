@@ -253,10 +253,34 @@ test.describe("what can be dragged can be done with one click", () => {
     await expect(handle).toBeFocused();
   }
 
+  /** A width of one's own goes back to the default with "Reset width" in the menu, and with a double-click on the handle. */
+  async function resets(page: Page, handle: Locator): Promise<void> {
+    const name = (await handle.getAttribute("aria-label")) ?? "";
+    const width = async () => Number(await handle.getAttribute("aria-valuenow"));
+    const initial = await width();
+    // Nothing of one's own yet: nothing to reset.
+    await handle.click();
+    const menu = page.getByRole("menu", { name });
+    await expect(menu.getByRole("menuitem", { name: "Reset width" })).toBeDisabled();
+    await page.keyboard.press("Escape");
+    await widensByMenu(page, handle);
+    await handle.click();
+    await menu.getByRole("menuitem", { name: "Reset width" }).click();
+    await expect.poll(width).toBe(initial);
+    await widensByMenu(page, handle);
+    await handle.dblclick();
+    await expect.poll(width).toBe(initial);
+    await expect(menu).toBeHidden();
+  }
+
   test("a list column's edge", async ({ page }) => {
     await start(page);
     await view(page, "List");
-    await widensByMenu(page, page.getByRole("grid").first().getByRole("separator").first());
+    const handle = page.getByRole("grid").first().getByRole("separator").first();
+    await widensByMenu(page, handle);
+    await handle.click();
+    await page.getByRole("menuitem", { name: "Reset width" }).click();
+    await resets(page, handle);
   });
 
   test("a Gantt column's edge and the Gantt table's edge", async ({ page }) => {
@@ -264,12 +288,12 @@ test.describe("what can be dragged can be done with one click", () => {
     await view(page, "Gantt");
     const column = page.getByRole("separator", { name: /Width of the column/ }).first();
     await expect(column).toHaveAttribute("aria-valuenow", /^\d+$/);
-    await widensByMenu(page, column);
-    await widensByMenu(page, page.getByRole("separator", { name: "Width of the table" }));
+    await resets(page, column);
+    await resets(page, page.getByRole("separator", { name: "Width of the table" }));
   });
 
   test("the sidebar's edge", async ({ page }) => {
     await start(page);
-    await widensByMenu(page, page.getByRole("separator", { name: "Sidebar width" }));
+    await resets(page, page.getByRole("separator", { name: "Sidebar width" }));
   });
 });

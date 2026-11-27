@@ -298,6 +298,7 @@ fn open_workspace(app: &AppHandle) -> Workspace {
     // server; an unknown one falls back to the system's.
     config.time_zone = gk_engine::personal_time_zone(None, &gk_store::UserSettings::load_default())
         .unwrap_or_default();
+    config.agent_folders = gk_engine::AgentFolders::Personal;
     let layout = match ipc::location_from_env().layout(workspaces::data_dir(app).as_deref()) {
         Ok(layout) => layout,
         Err(err) => {
