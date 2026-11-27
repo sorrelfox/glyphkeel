@@ -886,6 +886,8 @@ fn settings_can_be_set_back_to_their_default() {
 /// Takes a workspace back from schema version 4 to 3: the timer without
 /// pausing, reminders as version 3 had them.
 const BACK_TO_3: &str = "
+    DROP INDEX projects_folder; ALTER TABLE projects DROP COLUMN folder_id;
+    DROP TABLE project_folders;
     ALTER TABLE agent_sessions DROP COLUMN rate_limited;
     DROP TABLE dashboards;
     DROP TABLE automation_notices; DROP TABLE automation_fired; DROP TABLE automation_runs;

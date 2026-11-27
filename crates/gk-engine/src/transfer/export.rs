@@ -17,9 +17,9 @@ use serde_json::Value;
 
 use super::model::{
     Activity, AgentSession, Attachment, AutomationLine, Claim, Comment, CommentRevision, Counts,
-    DashboardLine, Label, Layout, Manifest, ManifestProject, Modules, Project, ProjectFile,
-    Relation, Revision, SavedView, SeriesLine, Sprint, Status, Task, TaskType, TemplateLine,
-    TimeEntry, Version, WikiPage,
+    DashboardLine, FolderLine, Label, Layout, Manifest, ManifestProject, Modules, Project,
+    ProjectFile, Relation, Revision, SavedView, SeriesLine, Sprint, Status, Task, TaskType,
+    TemplateLine, TimeEntry, Version, WikiPage,
 };
 use super::sink::{Seal, Sink};
 use super::{FORMAT_NAME, FORMAT_VERSION, Progress, project_dir, report};
@@ -108,10 +108,30 @@ fn chosen(tx: &Transaction<'_>, input: &ExportInput) -> Result<Vec<Id>, Failure>
     Ok(out)
 }
 
+/// The folder top-level project `id` is in, as the archive carries it.
+fn folder_line(tx: &Transaction<'_>, id: Id) -> Result<Option<FolderLine>, Failure> {
+    let Some(folder) = crate::ops::folder::of_project(tx, id)? else {
+        return Ok(None);
+    };
+    Ok(crate::ops::folder::rows(tx)?
+        .into_iter()
+        .find(|(f, _)| *f == folder)
+        .map(|(f, r)| FolderLine {
+            id: f.to_string(),
+            name: r.name,
+            hue: r.hue,
+            rank: r.rank,
+            created_at: r.created_at,
+            created_by_kind: r.created_by_kind,
+            created_by_name: r.created_by_name,
+            updated_at: r.updated_at,
+        }))
+}
+
 #[allow(clippy::too_many_lines)]
 fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Result<Out, Failure> {
     let pid = id.as_bytes().to_vec();
-    let project = tx.query_row(
+    let mut project = tx.query_row(
         "SELECT id, parent_id, rank, key, name, description, description_rev, hue, icon, state,
                 modules, next_number, created_at, updated_at, deleted_at, deleted_group, agent_rules
            FROM projects WHERE id = ?1",
@@ -136,9 +156,11 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
                 deleted_at: r.get(14)?,
                 deleted_group: opt_id(r, 15)?,
                 agent_rules: json_of(r.get::<_, Option<String>>(16)?),
+                folder: None,
             })
         },
     )?;
+    project.folder = folder_line(tx, id)?;
     let statuses = all(
         tx,
         "SELECT id, name, category, hue, rank, wip_limit, rules, wip_min FROM statuses

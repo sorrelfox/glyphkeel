@@ -33,6 +33,20 @@
   padding-inline-start: 40px;
 }
 
+/* Inside a folder, a project's sub-projects go one level deeper. */
+.treeItem[aria-level="4"] .treeRow {
+  padding-inline-start: 56px;
+}
+
+/* A folder row: its folder icon in its colour (muted without one). */
+.folderRow {
+  font-weight: 500;
+}
+
+.dropTarget {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
 .chevron {
   display: inline-flex;
   flex: none;
@@ -102,6 +116,14 @@
   border-radius: 50%;
   background: var(--h);
   outline: none;
+}
+
+/* No colour: an empty ring. */
+.noHue {
+  --h: var(--fg-muted);
+
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--border-strong);
 }
 
 .swatchFocus {

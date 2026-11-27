@@ -96,10 +96,22 @@ export function QueryField({ value, onChange, reading, problem, fields, names, l
     }
   }, [value]);
 
+  // Screens build the reading afresh on every render; the editor is told only
+  // when its content changed. Each update makes the editor read the page's
+  // selection, which lays out the page, so a list re-rendering as it scrolls
+  // would otherwise lay out the whole window on every frame.
+  const applied = useRef<{ editor: EditorView; reading: Reading } | null>(null);
   useEffect(() => {
-    if (reading && view.current) {
-      view.current.dispatch({ effects: setReading.of(reading) });
+    const editor = view.current;
+    if (!reading || !editor) {
+      return;
     }
+    const last = applied.current;
+    if (last?.editor === editor && sameReading(last.reading, reading)) {
+      return;
+    }
+    applied.current = { editor, reading };
+    editor.dispatch({ effects: setReading.of(reading) });
   }, [reading]);
 
   useImperativeHandle(ref, () => ({
@@ -149,4 +161,9 @@ export function QueryField({ value, onChange, reading, problem, fields, names, l
       )}
     </div>
   );
+}
+
+/** Whether two readings colour the text the same: the parts come from the engine's answer, which keeps them while they don't change. */
+function sameReading(a: Reading, b: Reading): boolean {
+  return a.text === b.text && a.tokens === b.tokens && a.error === b.error;
 }

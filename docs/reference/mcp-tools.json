@@ -7,6 +7,11 @@
       "revert_changes",
       "list_projects",
       "get_project",
+      "list_folders",
+      "create_folder",
+      "update_folder",
+      "delete_folder",
+      "move_project_to_folder",
       "create_project",
       "update_project",
       "list_custom_fields",
@@ -121,6 +126,7 @@
       "get_activity",
       "list_projects",
       "get_project",
+      "list_folders",
       "list_custom_fields",
       "get_agent_brief",
       "list_templates",
@@ -164,6 +170,11 @@
       "revert_changes",
       "list_projects",
       "get_project",
+      "list_folders",
+      "create_folder",
+      "update_folder",
+      "delete_folder",
+      "move_project_to_folder",
       "create_project",
       "update_project",
       "list_custom_fields",
@@ -1582,6 +1593,10 @@
                   "minimum": 0,
                   "type": "integer"
                 },
+                "folder": {
+                  "description": "The ID of the folder a top-level project is in; left out for\nprojects in no folder and for sub-projects.",
+                  "type": "string"
+                },
                 "hue": {
                   "description": "Its colour.",
                   "oneOf": [
@@ -1814,6 +1829,10 @@
           },
           "description": {
             "description": "Its description (Markdown).",
+            "type": "string"
+          },
+          "folder": {
+            "description": "The ID of the folder a top-level project is in (see folder.list);\nleft out for projects in no folder and for sub-projects.",
             "type": "string"
           },
           "hue": {
@@ -2470,6 +2489,1147 @@
     {
       "annotations": {
         "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "List project folders"
+      },
+      "covers": [
+        "folder.list"
+      ],
+      "description": "Lists the folders that group top-level projects in the sidebar, in order: each folder's `id`, `name`, colour, the keys of its `projects` and their open tasks. Folders only group; a project's key, sub-projects and tasks don't depend on them. Example: list_folders {}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Which folders to list: all of them.",
+        "title": "FolderListInput",
+        "type": "object"
+      },
+      "name": "list_folders",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "The folders, in sidebar order.",
+        "properties": {
+          "items": {
+            "description": "The folders.",
+            "items": {
+              "additionalProperties": false,
+              "description": "A folder of top-level projects.",
+              "properties": {
+                "created_at": {
+                  "description": "When it was made (RFC 3339).",
+                  "type": "string"
+                },
+                "created_by": {
+                  "additionalProperties": false,
+                  "description": "Who made it.",
+                  "properties": {
+                    "kind": {
+                      "description": "Person, agent or automation rule.",
+                      "oneOf": [
+                        {
+                          "const": "user",
+                          "description": "The person who owns the workspace.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "agent",
+                          "description": "An agent working through MCP.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "automation",
+                          "description": "An automation rule of the workspace; the actor's name is the rule's.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "name": {
+                      "description": "The display name (\"You\", \"Claude Code\").",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "hue": {
+                  "description": "Its colour, if one was chosen.",
+                  "oneOf": [
+                    {
+                      "const": "red",
+                      "description": "Red.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "orange",
+                      "description": "Orange.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "yellow",
+                      "description": "Yellow.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "green",
+                      "description": "Green.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "teal",
+                      "description": "Teal.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "blue",
+                      "description": "Blue.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "purple",
+                      "description": "Purple.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "pink",
+                      "description": "Pink.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "grey",
+                      "description": "Grey.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "id": {
+                  "description": "The folder's ID.",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "Its name, unique among the folders (ignoring case).",
+                  "type": "string"
+                },
+                "open_tasks": {
+                  "description": "Open tasks in its active projects and their sub-projects.",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "projects": {
+                  "description": "The keys of its projects, in sidebar order, archived ones included.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "rank": {
+                  "description": "Its place among the folders.",
+                  "type": "string"
+                },
+                "updated_at": {
+                  "description": "When it last changed (RFC 3339).",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "rank",
+                "projects",
+                "open_tasks",
+                "created_by",
+                "created_at",
+                "updated_at"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "total": {
+            "description": "How many there are.",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "FolderList",
+        "type": "object"
+      },
+      "title": "List project folders",
+      "toolset": "projects"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Make a project folder"
+      },
+      "covers": [
+        "folder.create"
+      ],
+      "description": "Makes a folder to group top-level projects in the sidebar, with an optional `hue`, placed last or by `before`/`after`/`at`. Folders hold projects, never other folders. Only make folders the person asked for. Example: create_folder {\"name\": \"Clients\"}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "A new folder.",
+        "properties": {
+          "after": {
+            "description": "Place it after this folder (ID or name).",
+            "type": "string"
+          },
+          "at": {
+            "description": "Place it first or last; default: last.",
+            "oneOf": [
+              {
+                "const": "top",
+                "description": "First.",
+                "type": "string"
+              },
+              {
+                "const": "bottom",
+                "description": "Last.",
+                "type": "string"
+              }
+            ]
+          },
+          "before": {
+            "description": "Place it before this folder (ID or name).",
+            "type": "string"
+          },
+          "hue": {
+            "description": "Its colour; left out: none.",
+            "oneOf": [
+              {
+                "const": "red",
+                "description": "Red.",
+                "type": "string"
+              },
+              {
+                "const": "orange",
+                "description": "Orange.",
+                "type": "string"
+              },
+              {
+                "const": "yellow",
+                "description": "Yellow.",
+                "type": "string"
+              },
+              {
+                "const": "green",
+                "description": "Green.",
+                "type": "string"
+              },
+              {
+                "const": "teal",
+                "description": "Teal.",
+                "type": "string"
+              },
+              {
+                "const": "blue",
+                "description": "Blue.",
+                "type": "string"
+              },
+              {
+                "const": "purple",
+                "description": "Purple.",
+                "type": "string"
+              },
+              {
+                "const": "pink",
+                "description": "Pink.",
+                "type": "string"
+              },
+              {
+                "const": "grey",
+                "description": "Grey.",
+                "type": "string"
+              }
+            ]
+          },
+          "name": {
+            "description": "Its name, unique among the folders.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "FolderCreateInput",
+        "type": "object"
+      },
+      "name": "create_folder",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "A folder after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether the folder was deleted.",
+            "type": "boolean"
+          },
+          "folder": {
+            "additionalProperties": false,
+            "description": "The folder after the change (before it, for a deletion); left out\nwhen a project was taken out of its folder.",
+            "properties": {
+              "created_at": {
+                "description": "When it was made (RFC 3339).",
+                "type": "string"
+              },
+              "created_by": {
+                "additionalProperties": false,
+                "description": "Who made it.",
+                "properties": {
+                  "kind": {
+                    "description": "Person, agent or automation rule.",
+                    "oneOf": [
+                      {
+                        "const": "user",
+                        "description": "The person who owns the workspace.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "agent",
+                        "description": "An agent working through MCP.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "automation",
+                        "description": "An automation rule of the workspace; the actor's name is the rule's.",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "name": {
+                    "description": "The display name (\"You\", \"Claude Code\").",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "name"
+                ],
+                "type": "object"
+              },
+              "hue": {
+                "description": "Its colour, if one was chosen.",
+                "oneOf": [
+                  {
+                    "const": "red",
+                    "description": "Red.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "orange",
+                    "description": "Orange.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "yellow",
+                    "description": "Yellow.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "green",
+                    "description": "Green.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "teal",
+                    "description": "Teal.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "blue",
+                    "description": "Blue.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "purple",
+                    "description": "Purple.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "pink",
+                    "description": "Pink.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "grey",
+                    "description": "Grey.",
+                    "type": "string"
+                  }
+                ]
+              },
+              "id": {
+                "description": "The folder's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name, unique among the folders (ignoring case).",
+                "type": "string"
+              },
+              "open_tasks": {
+                "description": "Open tasks in its active projects and their sub-projects.",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "projects": {
+                "description": "The keys of its projects, in sidebar order, archived ones included.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "rank": {
+                "description": "Its place among the folders.",
+                "type": "string"
+              },
+              "updated_at": {
+                "description": "When it last changed (RFC 3339).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "rank",
+              "projects",
+              "open_tasks",
+              "created_by",
+              "created_at",
+              "updated_at"
+            ],
+            "type": "object"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project moved, by key.",
+            "type": "string"
+          },
+          "released": {
+            "description": "The projects that were in a deleted folder, now at the top level.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "FolderChange",
+        "type": "object"
+      },
+      "title": "Make a project folder",
+      "toolset": "projects"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Change a project folder"
+      },
+      "covers": [
+        "folder.update",
+        "folder.rename"
+      ],
+      "description": "Renames a folder (by ID or name), changes its `hue` (`clear: [\"hue\"]` removes it) or moves it among the folders with `before`/`after`/`at`. Example: update_folder {\"folder\": \"Clients\", \"name\": \"Customers\"}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Changes to a folder; fields left out keep their value.",
+        "properties": {
+          "after": {
+            "description": "Move it after this folder (ID or name).",
+            "type": "string"
+          },
+          "at": {
+            "description": "Move it first or last among the folders.",
+            "oneOf": [
+              {
+                "const": "top",
+                "description": "First.",
+                "type": "string"
+              },
+              {
+                "const": "bottom",
+                "description": "Last.",
+                "type": "string"
+              }
+            ]
+          },
+          "before": {
+            "description": "Move it before this folder (ID or name).",
+            "type": "string"
+          },
+          "clear": {
+            "description": "Fields to clear.",
+            "items": {
+              "description": "A folder field that can be cleared.",
+              "oneOf": [
+                {
+                  "const": "hue",
+                  "description": "The colour.",
+                  "type": "string"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "folder": {
+            "description": "The folder: its ID or its name.",
+            "type": "string"
+          },
+          "hue": {
+            "description": "A new colour.",
+            "oneOf": [
+              {
+                "const": "red",
+                "description": "Red.",
+                "type": "string"
+              },
+              {
+                "const": "orange",
+                "description": "Orange.",
+                "type": "string"
+              },
+              {
+                "const": "yellow",
+                "description": "Yellow.",
+                "type": "string"
+              },
+              {
+                "const": "green",
+                "description": "Green.",
+                "type": "string"
+              },
+              {
+                "const": "teal",
+                "description": "Teal.",
+                "type": "string"
+              },
+              {
+                "const": "blue",
+                "description": "Blue.",
+                "type": "string"
+              },
+              {
+                "const": "purple",
+                "description": "Purple.",
+                "type": "string"
+              },
+              {
+                "const": "pink",
+                "description": "Pink.",
+                "type": "string"
+              },
+              {
+                "const": "grey",
+                "description": "Grey.",
+                "type": "string"
+              }
+            ]
+          },
+          "name": {
+            "description": "A new name.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "folder"
+        ],
+        "title": "FolderUpdateInput",
+        "type": "object"
+      },
+      "name": "update_folder",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "A folder after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether the folder was deleted.",
+            "type": "boolean"
+          },
+          "folder": {
+            "additionalProperties": false,
+            "description": "The folder after the change (before it, for a deletion); left out\nwhen a project was taken out of its folder.",
+            "properties": {
+              "created_at": {
+                "description": "When it was made (RFC 3339).",
+                "type": "string"
+              },
+              "created_by": {
+                "additionalProperties": false,
+                "description": "Who made it.",
+                "properties": {
+                  "kind": {
+                    "description": "Person, agent or automation rule.",
+                    "oneOf": [
+                      {
+                        "const": "user",
+                        "description": "The person who owns the workspace.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "agent",
+                        "description": "An agent working through MCP.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "automation",
+                        "description": "An automation rule of the workspace; the actor's name is the rule's.",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "name": {
+                    "description": "The display name (\"You\", \"Claude Code\").",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "name"
+                ],
+                "type": "object"
+              },
+              "hue": {
+                "description": "Its colour, if one was chosen.",
+                "oneOf": [
+                  {
+                    "const": "red",
+                    "description": "Red.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "orange",
+                    "description": "Orange.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "yellow",
+                    "description": "Yellow.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "green",
+                    "description": "Green.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "teal",
+                    "description": "Teal.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "blue",
+                    "description": "Blue.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "purple",
+                    "description": "Purple.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "pink",
+                    "description": "Pink.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "grey",
+                    "description": "Grey.",
+                    "type": "string"
+                  }
+                ]
+              },
+              "id": {
+                "description": "The folder's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name, unique among the folders (ignoring case).",
+                "type": "string"
+              },
+              "open_tasks": {
+                "description": "Open tasks in its active projects and their sub-projects.",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "projects": {
+                "description": "The keys of its projects, in sidebar order, archived ones included.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "rank": {
+                "description": "Its place among the folders.",
+                "type": "string"
+              },
+              "updated_at": {
+                "description": "When it last changed (RFC 3339).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "rank",
+              "projects",
+              "open_tasks",
+              "created_by",
+              "created_at",
+              "updated_at"
+            ],
+            "type": "object"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project moved, by key.",
+            "type": "string"
+          },
+          "released": {
+            "description": "The projects that were in a deleted folder, now at the top level.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "FolderChange",
+        "type": "object"
+      },
+      "title": "Change a project folder",
+      "toolset": "projects"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Delete a project folder"
+      },
+      "covers": [
+        "folder.delete"
+      ],
+      "description": "Deletes a folder. Its projects stay as they are and go back to the top level; revert_changes brings the folder back with its projects. Example: delete_folder {\"folder\": \"Clients\"}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "One folder.",
+        "properties": {
+          "folder": {
+            "description": "The folder: its ID or its name.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "folder"
+        ],
+        "title": "FolderRef",
+        "type": "object"
+      },
+      "name": "delete_folder",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "A folder after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether the folder was deleted.",
+            "type": "boolean"
+          },
+          "folder": {
+            "additionalProperties": false,
+            "description": "The folder after the change (before it, for a deletion); left out\nwhen a project was taken out of its folder.",
+            "properties": {
+              "created_at": {
+                "description": "When it was made (RFC 3339).",
+                "type": "string"
+              },
+              "created_by": {
+                "additionalProperties": false,
+                "description": "Who made it.",
+                "properties": {
+                  "kind": {
+                    "description": "Person, agent or automation rule.",
+                    "oneOf": [
+                      {
+                        "const": "user",
+                        "description": "The person who owns the workspace.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "agent",
+                        "description": "An agent working through MCP.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "automation",
+                        "description": "An automation rule of the workspace; the actor's name is the rule's.",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "name": {
+                    "description": "The display name (\"You\", \"Claude Code\").",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "name"
+                ],
+                "type": "object"
+              },
+              "hue": {
+                "description": "Its colour, if one was chosen.",
+                "oneOf": [
+                  {
+                    "const": "red",
+                    "description": "Red.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "orange",
+                    "description": "Orange.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "yellow",
+                    "description": "Yellow.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "green",
+                    "description": "Green.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "teal",
+                    "description": "Teal.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "blue",
+                    "description": "Blue.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "purple",
+                    "description": "Purple.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "pink",
+                    "description": "Pink.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "grey",
+                    "description": "Grey.",
+                    "type": "string"
+                  }
+                ]
+              },
+              "id": {
+                "description": "The folder's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name, unique among the folders (ignoring case).",
+                "type": "string"
+              },
+              "open_tasks": {
+                "description": "Open tasks in its active projects and their sub-projects.",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "projects": {
+                "description": "The keys of its projects, in sidebar order, archived ones included.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "rank": {
+                "description": "Its place among the folders.",
+                "type": "string"
+              },
+              "updated_at": {
+                "description": "When it last changed (RFC 3339).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "rank",
+              "projects",
+              "open_tasks",
+              "created_by",
+              "created_at",
+              "updated_at"
+            ],
+            "type": "object"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project moved, by key.",
+            "type": "string"
+          },
+          "released": {
+            "description": "The projects that were in a deleted folder, now at the top level.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "FolderChange",
+        "type": "object"
+      },
+      "title": "Delete a project folder",
+      "toolset": "projects"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Put a project in a folder"
+      },
+      "covers": [
+        "folder.move"
+      ],
+      "description": "Puts a top-level `project` into a `folder` (its sub-projects come along), takes it out with `none: true`, or moves it within its folder with `before`/`after` (another project there) or `at`. Sub-projects follow their parent and can't be put in folders. Example: move_project_to_folder {\"project\": \"TM\", \"folder\": \"Clients\"}",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "Where to put a top-level project: into a folder, or out of its folder,\nand where among the projects there.",
+        "properties": {
+          "after": {
+            "description": "Place it after this project of the same folder.",
+            "type": "string"
+          },
+          "at": {
+            "description": "Place it first or last in the folder (or among the projects in no\nfolder); default when it changes folder: last.",
+            "oneOf": [
+              {
+                "const": "top",
+                "description": "First.",
+                "type": "string"
+              },
+              {
+                "const": "bottom",
+                "description": "Last.",
+                "type": "string"
+              }
+            ]
+          },
+          "before": {
+            "description": "Place it before this project of the same folder.",
+            "type": "string"
+          },
+          "folder": {
+            "description": "The folder to put it in (ID or name); left out with `none`: out of\nany folder, back at the top level; left out without `none`: it\nstays in its folder and only moves within it.",
+            "type": "string"
+          },
+          "none": {
+            "description": "Take it out of its folder.",
+            "type": "boolean"
+          },
+          "project": {
+            "description": "The project: its key (current or old) or ID. Only top-level\nprojects go into folders; their sub-projects come along.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "title": "FolderMoveInput",
+        "type": "object"
+      },
+      "name": "move_project_to_folder",
+      "outputSchema": {
+        "additionalProperties": false,
+        "description": "A folder after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether the folder was deleted.",
+            "type": "boolean"
+          },
+          "folder": {
+            "additionalProperties": false,
+            "description": "The folder after the change (before it, for a deletion); left out\nwhen a project was taken out of its folder.",
+            "properties": {
+              "created_at": {
+                "description": "When it was made (RFC 3339).",
+                "type": "string"
+              },
+              "created_by": {
+                "additionalProperties": false,
+                "description": "Who made it.",
+                "properties": {
+                  "kind": {
+                    "description": "Person, agent or automation rule.",
+                    "oneOf": [
+                      {
+                        "const": "user",
+                        "description": "The person who owns the workspace.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "agent",
+                        "description": "An agent working through MCP.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "automation",
+                        "description": "An automation rule of the workspace; the actor's name is the rule's.",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "name": {
+                    "description": "The display name (\"You\", \"Claude Code\").",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "name"
+                ],
+                "type": "object"
+              },
+              "hue": {
+                "description": "Its colour, if one was chosen.",
+                "oneOf": [
+                  {
+                    "const": "red",
+                    "description": "Red.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "orange",
+                    "description": "Orange.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "yellow",
+                    "description": "Yellow.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "green",
+                    "description": "Green.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "teal",
+                    "description": "Teal.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "blue",
+                    "description": "Blue.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "purple",
+                    "description": "Purple.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "pink",
+                    "description": "Pink.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "grey",
+                    "description": "Grey.",
+                    "type": "string"
+                  }
+                ]
+              },
+              "id": {
+                "description": "The folder's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name, unique among the folders (ignoring case).",
+                "type": "string"
+              },
+              "open_tasks": {
+                "description": "Open tasks in its active projects and their sub-projects.",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "projects": {
+                "description": "The keys of its projects, in sidebar order, archived ones included.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "rank": {
+                "description": "Its place among the folders.",
+                "type": "string"
+              },
+              "updated_at": {
+                "description": "When it last changed (RFC 3339).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "rank",
+              "projects",
+              "open_tasks",
+              "created_by",
+              "created_at",
+              "updated_at"
+            ],
+            "type": "object"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project moved, by key.",
+            "type": "string"
+          },
+          "released": {
+            "description": "The projects that were in a deleted folder, now at the top level.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "FolderChange",
+        "type": "object"
+      },
+      "title": "Put a project in a folder",
+      "toolset": "projects"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
         "idempotentHint": false,
         "openWorldHint": false,
         "readOnlyHint": false,
@@ -2647,6 +3807,10 @@
               },
               "description": {
                 "description": "Its description (Markdown).",
+                "type": "string"
+              },
+              "folder": {
+                "description": "The ID of the folder a top-level project is in (see folder.list);\nleft out for projects in no folder and for sub-projects.",
                 "type": "string"
               },
               "hue": {
@@ -3963,6 +5127,10 @@
               },
               "description": {
                 "description": "Its description (Markdown).",
+                "type": "string"
+              },
+              "folder": {
+                "description": "The ID of the folder a top-level project is in (see folder.list);\nleft out for projects in no folder and for sub-projects.",
                 "type": "string"
               },
               "hue": {
@@ -8757,6 +9925,10 @@
               },
               "description": {
                 "description": "Its description (Markdown).",
+                "type": "string"
+              },
+              "folder": {
+                "description": "The ID of the folder a top-level project is in (see folder.list);\nleft out for projects in no folder and for sub-projects.",
                 "type": "string"
               },
               "hue": {

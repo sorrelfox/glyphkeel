@@ -264,6 +264,62 @@ Example: get_project {\"project\": \"TM\"}",
         idempotent: true,
     },
     McpTool {
+        name: "list_folders",
+        toolset: Toolset::Projects,
+        title: "List project folders",
+        description: "Lists the folders that group top-level projects in the sidebar, in order: each \
+folder's `id`, `name`, colour, the keys of its `projects` and their open tasks. Folders only group; \
+a project's key, sub-projects and tasks don't depend on them. Example: list_folders {}",
+        main: "folder.list",
+        covers: &["folder.list"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "create_folder",
+        toolset: Toolset::Projects,
+        title: "Make a project folder",
+        description: "Makes a folder to group top-level projects in the sidebar, with an optional \
+`hue`, placed last or by `before`/`after`/`at`. Folders hold projects, never other folders. Only \
+make folders the person asked for. Example: create_folder {\"name\": \"Clients\"}",
+        main: "folder.create",
+        covers: &["folder.create"],
+        idempotent: false,
+    },
+    McpTool {
+        name: "update_folder",
+        toolset: Toolset::Projects,
+        title: "Change a project folder",
+        description: "Renames a folder (by ID or name), changes its `hue` (`clear: [\"hue\"]` \
+removes it) or moves it among the folders with `before`/`after`/`at`. \
+Example: update_folder {\"folder\": \"Clients\", \"name\": \"Customers\"}",
+        main: "folder.update",
+        covers: &["folder.update", "folder.rename"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "delete_folder",
+        toolset: Toolset::Projects,
+        title: "Delete a project folder",
+        description: "Deletes a folder. Its projects stay as they are and go back to the top level; \
+revert_changes brings the folder back with its projects. \
+Example: delete_folder {\"folder\": \"Clients\"}",
+        main: "folder.delete",
+        covers: &["folder.delete"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "move_project_to_folder",
+        toolset: Toolset::Projects,
+        title: "Put a project in a folder",
+        description: "Puts a top-level `project` into a `folder` (its sub-projects come along), \
+takes it out with `none: true`, or moves it within its folder with `before`/`after` (another \
+project there) or `at`. Sub-projects follow their parent and can't be put in folders. \
+Example: move_project_to_folder {\"project\": \"TM\", \"folder\": \"Clients\"}",
+        main: "folder.move",
+        covers: &["folder.move"],
+        idempotent: true,
+    },
+    McpTool {
         name: "create_project",
         toolset: Toolset::Projects,
         title: "Create a project",
@@ -2008,6 +2064,7 @@ mod tests {
                 "get_activity",
                 "list_projects",
                 "get_project",
+                "list_folders",
                 "list_custom_fields",
                 "get_agent_brief",
                 "list_templates",

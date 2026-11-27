@@ -2174,6 +2174,96 @@ export type FlowStats = {
   p95?: number;
 };
 
+/** A folder after a change. */
+export type FolderChange = {
+  /** Whether the folder was deleted. */
+  deleted?: boolean;
+  /** The folder after the change (before it, for a deletion); left out when a project was taken out of its folder. */
+  folder?: ProjectFolder;
+  /** The history group, for revert and Undo; left out when nothing changed. */
+  group?: string;
+  /** The project moved, by key. */
+  project?: string;
+  /** The projects that were in a deleted folder, now at the top level. */
+  released?: string[];
+};
+
+/** A new folder. */
+export type FolderCreateInput = {
+  /** Place it after this folder (ID or name). */
+  after?: string | null;
+  /** Place it first or last; default: last. */
+  at?: Edge | null;
+  /** Place it before this folder (ID or name). */
+  before?: string | null;
+  /** Its colour; left out: none. */
+  hue?: Hue | null;
+  /** Its name, unique among the folders. */
+  name: string;
+};
+
+/** A folder field that can be cleared. */
+export type FolderField = "hue";
+
+/** The folders, in sidebar order. */
+export type FolderList = {
+  /** The folders. */
+  items: ProjectFolder[];
+  /** How many there are. */
+  total: number;
+};
+
+/** Which folders to list: all of them. */
+export type FolderListInput = Record<string, never>;
+
+/** Where to put a top-level project: into a folder, or out of its folder, and where among the projects there. */
+export type FolderMoveInput = {
+  /** Place it after this project of the same folder. */
+  after?: string | null;
+  /** Place it first or last in the folder (or among the projects in no folder); default when it changes folder: last. */
+  at?: Edge | null;
+  /** Place it before this project of the same folder. */
+  before?: string | null;
+  /** The folder to put it in (ID or name); left out with `none`: out of any folder, back at the top level; left out without `none`: it stays in its folder and only moves within it. */
+  folder?: string | null;
+  /** Take it out of its folder. */
+  none?: boolean;
+  /** The project: its key (current or old) or ID. Only top-level projects go into folders; their sub-projects come along. */
+  project: string;
+};
+
+/** One folder. */
+export type FolderRef = {
+  /** The folder: its ID or its name. */
+  folder: string;
+};
+
+/** A new name for a folder. */
+export type FolderRenameInput = {
+  /** The folder: its ID or its name. */
+  folder: string;
+  /** Its new name. */
+  name: string;
+};
+
+/** Changes to a folder; fields left out keep their value. */
+export type FolderUpdateInput = {
+  /** Move it after this folder (ID or name). */
+  after?: string | null;
+  /** Move it first or last among the folders. */
+  at?: Edge | null;
+  /** Move it before this folder (ID or name). */
+  before?: string | null;
+  /** Fields to clear. */
+  clear?: FolderField[];
+  /** The folder: its ID or its name. */
+  folder: string;
+  /** A new colour. */
+  hue?: Hue | null;
+  /** A new name. */
+  name?: string | null;
+};
+
 /** The unit a rule repeats in. */
 export type Frequency = "day" | "week" | "month" | "year";
 
@@ -2758,6 +2848,8 @@ export type Project = {
   created_at: string;
   /** Its description (Markdown). */
   description: string;
+  /** The ID of the folder a top-level project is in (see folder.list); left out for projects in no folder and for sub-projects. */
+  folder?: string;
   /** Its colour. */
   hue: Hue;
   /** Its icon, if one was chosen; without one it shows as a circle. */
@@ -2873,6 +2965,28 @@ export type ProjectDeleted = {
 /** A project field that can be cleared. */
 export type ProjectField = "icon" | "description" | "parent";
 
+/** A folder of top-level projects. */
+export type ProjectFolder = {
+  /** When it was made (RFC 3339). */
+  created_at: string;
+  /** Who made it. */
+  created_by: Actor;
+  /** Its colour, if one was chosen. */
+  hue?: Hue;
+  /** The folder's ID. */
+  id: string;
+  /** Its name, unique among the folders (ignoring case). */
+  name: string;
+  /** Open tasks in its active projects and their sub-projects. */
+  open_tasks: number;
+  /** The keys of its projects, in sidebar order, archived ones included. */
+  projects: string[];
+  /** Its place among the folders. */
+  rank: string;
+  /** When it last changed (RFC 3339). */
+  updated_at: string;
+};
+
 /** An icon that stands for a project instead of its coloured circle, drawn in the project's colour. The names are those of the app's icon family (Lucide), so each variant's name says what it shows. */
 export type ProjectIcon = "folder" | "star" | "bug" | "rocket" | "book" | "house" | "briefcase" | "code" | "terminal" | "globe" | "heart" | "flag" | "zap" | "target" | "lightbulb" | "wrench" | "hammer" | "palette" | "music" | "camera" | "graduation-cap" | "shopping-cart" | "wallet" | "chart-line" | "calendar" | "users" | "building" | "plane" | "leaf" | "coffee" | "gamepad" | "puzzle" | "shield" | "flask-conical" | "layers" | "package" | "compass" | "mountain" | "sparkles" | "database";
 
@@ -2927,6 +3041,8 @@ export type ProjectState = "active" | "archived";
 export type ProjectSummary = {
   /** 0 for a top-level project, 1 for its sub-projects, 2 below them. */
   depth: number;
+  /** The ID of the folder a top-level project is in; left out for projects in no folder and for sub-projects. */
+  folder?: string;
   /** Its colour. */
   hue: Hue;
   /** Its icon, if one was chosen; without one it shows as a circle. */
@@ -6238,6 +6354,12 @@ export interface OpMap {
   "project.unarchive": { input: ProjectRef; output: ProjectChange; safety: "write"; kind: "command" };
   "project.delete": { input: ProjectDeleteInput; output: ProjectDeleted; safety: "trash"; kind: "command" };
   "project.brief": { input: ProjectRef; output: AgentBrief; safety: "read"; kind: "query" };
+  "folder.list": { input: FolderListInput; output: FolderList; safety: "read"; kind: "query" };
+  "folder.create": { input: FolderCreateInput; output: FolderChange; safety: "write"; kind: "command" };
+  "folder.update": { input: FolderUpdateInput; output: FolderChange; safety: "write"; kind: "command" };
+  "folder.rename": { input: FolderRenameInput; output: FolderChange; safety: "write"; kind: "command" };
+  "folder.delete": { input: FolderRef; output: FolderChange; safety: "write"; kind: "command" };
+  "folder.move": { input: FolderMoveInput; output: FolderChange; safety: "write"; kind: "command" };
   "status.create": { input: StatusCreateInput; output: ProjectChange; safety: "write"; kind: "command" };
   "status.update": { input: StatusUpdateInput; output: ProjectChange; safety: "write"; kind: "command" };
   "status.reorder": { input: StatusReorderInput; output: ProjectChange; safety: "write"; kind: "command" };
@@ -6421,6 +6543,12 @@ export const OP_SAFETY = {
   "project.unarchive": "write",
   "project.delete": "trash",
   "project.brief": "read",
+  "folder.list": "read",
+  "folder.create": "write",
+  "folder.update": "write",
+  "folder.rename": "write",
+  "folder.delete": "write",
+  "folder.move": "write",
   "status.create": "write",
   "status.update": "write",
   "status.reorder": "write",
@@ -6720,6 +6848,20 @@ export function makeOps(call: Call) {
       delete: (input: OpMap["file.delete"]["input"]) => call("file.delete", input),
       /** Choose the PNG, JPEG, GIF or WebP image attached to a task that its board card shows as its cover, or choose none; boards show covers when their layout's covers setting is on. (write) */
       cover: (input: OpMap["file.cover"]["input"]) => call("file.cover", input),
+    },
+    folder: {
+      /** The project folders in sidebar order, each with its projects and their open tasks. (read) */
+      list: (input: OpMap["folder.list"]["input"] = {}) => call("folder.list", input),
+      /** Make a folder to group top-level projects in the sidebar. (write) */
+      create: (input: OpMap["folder.create"]["input"]) => call("folder.create", input),
+      /** Rename a folder, change its colour or move it among the folders. (write) */
+      update: (input: OpMap["folder.update"]["input"]) => call("folder.update", input),
+      /** Rename a folder. (write) */
+      rename: (input: OpMap["folder.rename"]["input"]) => call("folder.rename", input),
+      /** Delete a folder; its projects stay and go back to the top level. Revert brings it back. (write) */
+      delete: (input: OpMap["folder.delete"]["input"]) => call("folder.delete", input),
+      /** Put a top-level project into a folder or take it out, or move it within its folder. (write) */
+      move: (input: OpMap["folder.move"]["input"]) => call("folder.move", input),
     },
     gantt: {
       /** The person's layout of a project's Gantt chart: zoom level, table and column widths, grouping, and whether moving a task also moves its dependents. (read) */

@@ -558,7 +558,11 @@ function LoadedBoard({ project, layout, board, openTask, now, showOlder, onShowO
           // Scrolling on its own near a lane's edge would slide the cards
           // under a card the keyboard holds still, changing its target.
           autoScroll={!drag?.keyboard}
-          measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+          // Drop targets are measured from the start of a drag, and again
+          // whenever a virtual lane draws other cards during it; not while
+          // nothing is dragged, when every card a scrolling lane draws would
+          // make the page measure all of them.
+          measuring={{ droppable: { strategy: MeasuringStrategy.WhileDragging } }}
           accessibility={{ announcements, screenReaderInstructions: { draggable: t("drag-instructions") } }}
           onDragStart={onDragStart}
           onDragOver={onDragOver}

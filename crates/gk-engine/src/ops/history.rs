@@ -33,7 +33,7 @@ use super::{
     lookup, project, relation, reminder, settings, sprint, task, time, trash, version, view, wiki,
     work_kind,
 };
-use super::{automation, dashboard, recurrence, template};
+use super::{automation, dashboard, folder, recurrence, template};
 use crate::failure::Failure;
 use crate::messages;
 use crate::registry::{QueryCtx, Registry};
@@ -416,6 +416,7 @@ fn current(
         (recurrence::ENTITY, recurrence::RECORD) => recurrence::raw(tx, id)?,
         (automation::ENTITY, automation::RECORD) => automation::raw(tx, id)?,
         (dashboard::ENTITY, dashboard::RECORD) => dashboard::raw(tx, id)?,
+        (folder::ENTITY, folder::RECORD) => folder::raw(tx, id)?,
         (version::ENTITY, version::RECORD) => version::raw(tx, id)?,
         (sprint::ENTITY, sprint::RECORD) => sprint::raw(tx, id)?,
         (_, "deleted" | trash::PURGED) => return Ok(None),
@@ -549,6 +550,7 @@ fn apply(
             w.record_field(entity, id, project, field, before, value);
             Ok(())
         }
+        (folder::ENTITY, folder::RECORD) => folder::apply(w, id, value),
         (version::ENTITY, version::RECORD) => {
             let before = version::raw(w.tx(), id)?;
             version::write_raw(w, id, value.as_ref())?;
