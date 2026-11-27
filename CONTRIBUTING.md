@@ -13,12 +13,13 @@ features. Security problems must be reported privately, as described in
 - **Node** 24 (the exact version is in `.node-version`) with Corepack, which
   provides the pnpm version pinned in `package.json`: run `corepack enable`
   once.
-- **The desktop app's system libraries** on Linux: WebKitGTK 4.1, GTK 3 and
-  libsoup 3, with their development files.
+- **The system libraries** on Linux: WebKitGTK 4.1, GTK 3 and libsoup 3 for
+  the desktop app, and OpenSSL's libcrypto for encrypted workspaces, with
+  their development files.
   - Debian and Ubuntu: `sudo apt install build-essential pkg-config
-    libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev`
+    libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev libssl-dev`
   - Fedora: `sudo dnf install gcc gcc-c++ pkgconf-pkg-config
-    webkit2gtk4.1-devel gtk3-devel libsoup3-devel librsvg2-devel`
+    webkit2gtk4.1-devel gtk3-devel libsoup3-devel librsvg2-devel openssl-devel`
 - **Podman** (or Docker) for the full check suites.
 
 ## Building and running

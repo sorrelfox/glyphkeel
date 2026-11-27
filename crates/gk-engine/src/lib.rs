@@ -12,6 +12,7 @@
 mod agent_files;
 pub mod backup;
 mod context;
+pub mod encryption;
 mod engine;
 mod events;
 mod failure;

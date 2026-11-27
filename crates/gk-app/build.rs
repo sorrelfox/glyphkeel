@@ -53,6 +53,12 @@ fn main() {
         "rename_workspace",
         "quit_app",
         "legal_text",
+        "lock_state",
+        "app_activity",
+        "lock_app",
+        "unlock_app",
+        "update_lock",
+        "change_encryption",
     ]);
     // On Windows: UTF-8 code page, long paths and per-monitor DPI, besides the
     // common controls that Tauri's own manifest asks for.

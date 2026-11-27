@@ -533,3 +533,48 @@ fn the_first_start_on_a_workspace_is_known_as_such() {
     assert!(!again.created());
     again.close();
 }
+
+#[test]
+fn an_encrypted_workspace_waits_for_its_passphrase_and_a_locked_app_refuses_calls() {
+    let dir = TempDir::new().unwrap();
+    let passphrase = gk_store::Passphrase::new("the app's own test passphrase").unwrap();
+    {
+        let workspace = open(&dir, Confirmation::Refuse);
+        workspace
+            .call(
+                "project.create",
+                json!({ "name": "Tasks", "key": "TM" }),
+                None,
+            )
+            .unwrap();
+        workspace.close();
+    }
+    gk_engine::encryption::change(
+        &layout(&dir),
+        None,
+        &gk_engine::encryption::Change::Encrypt(passphrase.clone()),
+        1,
+        "test",
+    )
+    .unwrap();
+    // Encrypting left the passphrase known to this process; forgetting it
+    // stands in for a fresh start of the app.
+    gk_store::forget_passphrases();
+    let workspace = open(&dir, Confirmation::Refuse);
+    let err = workspace.call("project.list", json!({}), None).unwrap_err();
+    assert!(err.details.contains_key("passphrase"), "{err:?}");
+    assert_eq!(workspace.waiting_for_passphrase(), Some(layout(&dir)));
+
+    assert!(gk_store::passphrase_opens(&layout(&dir).database(), &passphrase).unwrap());
+    workspace.open_waiting().unwrap();
+    assert_eq!(workspace.waiting_for_passphrase(), None);
+    let projects = workspace.call("project.list", json!({}), None).unwrap();
+    assert_eq!(projects["items"][0]["key"], "TM", "{projects}");
+
+    // Locked, every call is refused; unlocked, they work again.
+    workspace.app_lock().configure(None, true);
+    assert!(workspace.app_lock().lock());
+    let refused = workspace.call("project.list", json!({}), None).unwrap_err();
+    assert_eq!(refused.details["locked"], true);
+    workspace.close();
+}

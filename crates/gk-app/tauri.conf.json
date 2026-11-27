@@ -48,6 +48,9 @@
       "deb": {
         "desktopTemplate": "packaging/glyphkeel.desktop",
         "section": "utils",
+        "depends": [
+          "libssl3t64 | libssl3"
+        ],
         "recommends": [
           "libayatana-appindicator3-1",
           "hunspell-en-us"
@@ -61,6 +64,9 @@
       },
       "rpm": {
         "desktopTemplate": "packaging/glyphkeel.desktop",
+        "depends": [
+          "openssl-libs"
+        ],
         "recommends": [
           "libayatana-appindicator-gtk3",
           "hunspell-en-US"

@@ -69,8 +69,18 @@ proptest = "1.12.0"
 jiff = { version = "1.0.2", features = ["tzdb-bundle-always"] }
 # The workspace database: SQLite bundled (with FTS5), custom collation and
 # busy handler; the online backup API restores a snapshot into the open
-# database.
-rusqlite = { version = "0.43.0", features = ["bundled", "collation", "backup"] }
+# database. The bundled SQLite is SQLCipher's, for encrypted workspaces; it
+# opens plain ones as SQLite does. Its cryptography is the system's OpenSSL
+# (libcrypto) on Linux. Windows builds keep plain SQLite (see
+# crates/gk-store/Cargo.toml).
+rusqlite = { version = "0.43.0", features = ["collation", "backup"] }
+# The key of an encrypted workspace from its passphrase: PBKDF2-HMAC-SHA512,
+# as SQLCipher derives it (hmac and sha2 0.10 were in the lock already).
+pbkdf2 = { version = "0.12.2", default-features = false, features = ["hmac"] }
+# Wiping passphrases and keys from memory (already in the lock).
+zeroize = "1.9.2"
+# Asking for a passphrase on the terminal without echo (the command line).
+rpassword = "7.4.0"
 # The operation catalog's JSON Schemas (inputs, outputs, the MCP tool list
 # and the generated TypeScript client).
 schemars = "1.2.3"

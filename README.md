@@ -188,9 +188,9 @@ You need:
   `rust-toolchain.toml`, and rustup installs it on first use.
 - **Node** 24 (the exact version is in `.node-version`) with Corepack, which
   provides the pinned pnpm.
-- **WebKitGTK 4.1, GTK 3 and libsoup 3** with their development files:
-  - Debian and Ubuntu: `sudo apt install build-essential pkg-config libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev`
-  - Fedora: `sudo dnf install gcc gcc-c++ pkgconf-pkg-config webkit2gtk4.1-devel gtk3-devel libsoup3-devel librsvg2-devel`
+- **WebKitGTK 4.1, GTK 3, libsoup 3 and OpenSSL** with their development files:
+  - Debian and Ubuntu: `sudo apt install build-essential pkg-config libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev libssl-dev`
+  - Fedora: `sudo dnf install gcc gcc-c++ pkgconf-pkg-config webkit2gtk4.1-devel gtk3-devel libsoup3-devel librsvg2-devel openssl-devel`
 
 Then:
 

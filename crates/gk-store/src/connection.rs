@@ -17,6 +17,8 @@
 //! - `foreign_keys=ON`, `temp_store=MEMORY`.
 //! - The `gk_unicode` collation (see [`COLLATION`]).
 //!
+//! - The key, for an encrypted workspace (see [`crate::cipher`]).
+//!
 //! The automatic checkpoint stays at SQLite's default.
 
 use std::cmp::Ordering;
@@ -81,6 +83,8 @@ pub(crate) fn open(path: &Path, purpose: Purpose, busy_budget: Duration) -> Resu
         flags |= OpenFlags::SQLITE_OPEN_CREATE;
     }
     let mut conn = Connection::open_with_flags(path, flags)?;
+    // An encrypted file needs its key before any other statement.
+    crate::cipher::prepare(&conn, path)?;
     // The busy handler first, so the settings below can wait for locks too.
     conn.busy_handler(Some(busy_handler(busy_budget)))?;
     conn.execute_batch(&format!(

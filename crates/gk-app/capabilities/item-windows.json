@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "item-windows",
-  "description": "The pages of the task windows and of the wiki windows show one task or one wiki page. They may run operations of the catalog through `op`, receive change events through `subscribe`, signal their first screen, check spelling in the editor, attach files the person chooses or drops to the task or the page (the page names the task or the page, never a path), open or save a copy of an attached file through the system, export the wiki page where the person chooses (the page names the page, never a path), open a web or mail address in the desktop's browser or mail program, open a task or a wiki page in its own window, read the app's own settings (for the time zone), keep the page's own preferences, set their title, and move, minimize, maximize and close their own window, for the header bar. Everything that concerns the whole app (workspaces, imports, backups, the command-line tool, starting with the system, the quick-add shortcut, restarting and quitting) is only reachable from the main window. Nothing else of Tauri's API is reachable from these pages.",
+  "description": "The pages of the task windows and of the wiki windows show one task or one wiki page. They may run operations of the catalog through `op`, receive change events through `subscribe`, signal their first screen, check spelling in the editor, attach files the person chooses or drops to the task or the page (the page names the task or the page, never a path), open or save a copy of an attached file through the system, export the wiki page where the person chooses (the page names the page, never a path), open a web or mail address in the desktop's browser or mail program, open a task or a wiki page in its own window, read the app's own settings (for the time zone), keep the page's own preferences, set their title, and move, minimize, maximize and close their own window, for the header bar. Everything that concerns the whole app (workspaces, imports, backups, the command-line tool, starting with the system, the quick-add shortcut, restarting and quitting) is only reachable from the main window. Nothing else of Tauri's API is reachable from these pages. It may also read the app lock, lock the app, unlock it with a passphrase and report the person's activity for the idle lock.",
   "windows": [
     "task-*",
     "wiki-*"
@@ -23,6 +23,10 @@
     "allow-open-wiki-window",
     "allow-app-settings",
     "allow-set-ui-pref",
+    "allow-lock-state",
+    "allow-app-activity",
+    "allow-lock-app",
+    "allow-unlock-app",
     "core:window:allow-set-title",
     "core:window:allow-start-dragging",
     "core:window:allow-internal-toggle-maximize",

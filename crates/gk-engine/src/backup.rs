@@ -507,11 +507,7 @@ impl BackupFolder {
 /// The stored files the database file at `path` refers to, with their
 /// sizes.
 fn snapshot_blobs(path: &Path) -> Result<BTreeMap<String, u64>, gk_store::StoreError> {
-    let conn = gk_store::rusqlite::Connection::open_with_flags(
-        path,
-        gk_store::rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY
-            | gk_store::rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
-    )?;
+    let conn = gk_store::open_read_only(path)?;
     let mut stmt = conn.prepare("SELECT sha256, size FROM blobs")?;
     let rows = stmt
         .query_map([], |r| {

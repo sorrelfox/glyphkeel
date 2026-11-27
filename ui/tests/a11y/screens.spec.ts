@@ -72,7 +72,7 @@ async function openTask(page: Page): Promise<void> {
 }
 
 const SETTINGS_TABS = ["General", "Statuses", "Task types", "Labels", "Fields", "Rules", "Automation", "Templates"];
-const PREFERENCE_PAGES = ["Appearance", "Language", "Time", "Notifications", "Quick add", "Keyboard shortcuts", "Agents & CLI", "Workspace", "Data and backups"];
+const PREFERENCE_PAGES = ["Appearance", "Language", "Time", "Notifications", "Quick add", "Keyboard shortcuts", "Agents & CLI", "Workspace", "Security", "Data and backups"];
 
 const SCREENS: Screen[] = [
   { name: "today", open: async (page) => { await expect(page.getByRole("main")).toBeVisible(); } },

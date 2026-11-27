@@ -19,6 +19,7 @@ mod input;
 mod launch;
 mod messages;
 mod output;
+mod passphrase;
 mod workspace;
 
 use std::ffi::OsString;
@@ -184,6 +185,7 @@ fn call(
     let mut config = EngineConfig::new(Role::Cli);
     config.time_zone = personal_time_zone(tz, &UserSettings::load_default())?;
     config.agent_folders = gk_engine::AgentFolders::Personal;
+    passphrase::unlock(&layout)?;
     let engine = Engine::open(&layout, config)?;
     let ctx = Context::user(Via::Cli).with_confirmation(confirm);
     let result = engine.call(&ctx, cmd.op.id, input);

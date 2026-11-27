@@ -31,6 +31,7 @@ pub fn glyphkeel(home: &Path) -> Command {
         .env("HOME", home)
         .env("NO_COLOR", "1")
         .env_remove("GLYPHKEEL_WORKSPACE")
+        .env_remove(gk_store::PASSPHRASE_ENV)
         .env_remove("RUST_LOG");
     cmd
 }
@@ -161,7 +162,13 @@ impl Agent {
     /// Starts the server on `workspace` and goes through the handshake as
     /// a client called `name`.
     pub fn start(home: &Path, workspace: &Path, name: &str) -> Self {
+        Self::start_with(home, workspace, name, &[])
+    }
+
+    /// As [`Agent::start`], with these environment variables set.
+    pub fn start_with(home: &Path, workspace: &Path, name: &str, env: &[(&str, &str)]) -> Self {
         let mut child = glyphkeel(home)
+            .envs(env.iter().copied())
             .arg("--workspace")
             .arg(workspace)
             .args(["--tz", ZONE, "mcp"])

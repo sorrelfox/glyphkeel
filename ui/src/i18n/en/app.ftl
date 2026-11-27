@@ -92,6 +92,7 @@ action-import = Import…
 action-export = Export…
 action-shortcuts = Keyboard shortcuts
 action-preferences = Preferences
+action-lock = Lock Glyphkeel
 action-about = About Glyphkeel
 action-close-window = Close the window
 action-quit = Quit

@@ -63,6 +63,10 @@ pub(crate) struct Workspace {
     created: bool,
     /// The local HTTP endpoint for agents, over the open engine.
     agents: crate::agent_http::AgentEndpoint,
+    /// The app lock: while it is locked, every call is refused.
+    lock: Arc<crate::lock::AppLock>,
+    /// An encrypted workspace that didn't open for want of its passphrase.
+    waiting: Mutex<Option<WorkspaceLayout>>,
 }
 
 /// How the workspace was opened, to open it the same way again.
@@ -102,7 +106,14 @@ impl Workspace {
         let created = !layout.database().exists();
         let (engine, background) = match start(layout, config.clone(), &windows) {
             Ok(started) => started,
-            Err(err) => return Self::failed_with(err, Some(config), confirm),
+            Err(err) => {
+                let needs_passphrase = err.details.contains_key("passphrase");
+                let failed = Self::failed_with(err, Some(config), confirm);
+                if needs_passphrase {
+                    *lock(&failed.waiting) = Some(layout.clone());
+                }
+                return failed;
+            }
         };
         Self {
             engine: Mutex::new(Some(engine)),
@@ -118,6 +129,8 @@ impl Workspace {
             lost: Mutex::new(None),
             created,
             agents: crate::agent_http::AgentEndpoint::default(),
+            lock: Arc::new(crate::lock::AppLock::default()),
+            waiting: Mutex::new(None),
         }
     }
 
@@ -142,6 +155,8 @@ impl Workspace {
             lost: Mutex::new(None),
             created: false,
             agents: crate::agent_http::AgentEndpoint::default(),
+            lock: Arc::new(crate::lock::AppLock::default()),
+            waiting: Mutex::new(None),
         }
     }
 
@@ -243,14 +258,37 @@ impl Workspace {
         lock(&self.layout).clone()
     }
 
+    /// The app lock.
+    pub(crate) fn app_lock(&self) -> &Arc<crate::lock::AppLock> {
+        &self.lock
+    }
+
+    /// The encrypted workspace that waits for its passphrase, if the app
+    /// started on one it couldn't open.
+    pub(crate) fn waiting_for_passphrase(&self) -> Option<WorkspaceLayout> {
+        lock(&self.waiting).clone()
+    }
+
+    /// Opens the workspace that waited for its passphrase, now that the
+    /// process knows it.
+    pub(crate) fn open_waiting(&self) -> Result<(), OpError> {
+        let Some(layout) = self.waiting_for_passphrase() else {
+            return Ok(());
+        };
+        self.switch(&layout)?;
+        *lock(&self.waiting) = None;
+        Ok(())
+    }
+
     /// Runs `op` for the person through the app. Blocks: call it from a
-    /// blocking thread.
+    /// blocking thread. Refused while the app is locked.
     pub(crate) fn call(
         &self,
         op: &str,
         input: Value,
         request_id: Option<String>,
     ) -> Result<Value, OpError> {
+        self.lock.check()?;
         let result = {
             let engine = self.engine()?;
             if op == POLICY_OP {

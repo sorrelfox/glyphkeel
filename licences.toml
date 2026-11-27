@@ -51,6 +51,18 @@ under the older Unicode licence, a permissive licence compatible with the GPL.\
 """
 
 [[exception]]
+kind = "crate"
+name = "sqlcipher-src"
+allow = ["blessing", "WTFPL"]
+reason = """
+The SQLCipher source the encrypted workspaces are built from. Its SQLite \
+part is in the public domain (the blessing is not a licence condition), and \
+its LibTomCrypt part is public domain or WTFPL, at the user's choice; both \
+are compatible with the GPL. Glyphkeel's builds use the system's OpenSSL, \
+not LibTomCrypt.\
+"""
+
+[[exception]]
 kind = "component"
 name = "SQLite"
 allow = ["blessing"]
@@ -121,6 +133,14 @@ notice, here is a blessing:
     May you find forgiveness for yourself and forgive others.
     May you share freely, never taking more than you give.\
 """
+
+[[component]]
+name = "SQLCipher"
+licence = "BSD-3-Clause"
+source = "https://www.zetetic.net/sqlcipher/"
+used = "SQLite with encryption, for encrypted workspaces: compiled into both programs on Linux by the libsqlite3-sys crate (from sqlcipher-src), linked with the system's OpenSSL."
+copyright = "ZETETIC LLC"
+texts = ["xtask/licences/BSD-3-Clause.txt"]
 
 [[component]]
 name = "KaTeX fonts"

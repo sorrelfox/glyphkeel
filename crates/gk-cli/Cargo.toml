@@ -29,7 +29,11 @@ gk-engine = { workspace = true }
 gk-mcp = { workspace = true }
 # Only for the workspace folder layout the engine opens.
 gk-store = { workspace = true }
+# Asking for a workspace's passphrase on the terminal without echo.
+rpassword = { workspace = true }
 serde_json = { workspace = true }
+# Wiping a passphrase read from standard input.
+zeroize = { workspace = true }
 
 [dev-dependencies]
 gk-seed = { workspace = true }

@@ -173,3 +173,13 @@ shortcut-not-a-choice = "{ $keys }" is not one of the shortcuts to choose from.
 agent-http-no-settings-file = The HTTP endpoint's settings can't be stored: there is no home folder for the personal settings.
 agent-http-not-stored = The HTTP endpoint's settings couldn't be stored in { $file }: { $error }
 agent-http-port-range = Port { $port } can't be used: choose one from 1024 to 65535, or let the app choose a free one.
+
+## The app lock and the workspace's encryption
+
+app-locked = Glyphkeel is locked.
+lock-notice-title = Glyphkeel reminder
+lock-notice-body = A reminder is due. Unlock Glyphkeel to see it.
+lock-passphrase-empty = Enter the passphrase.
+lock-passphrase-wrong = That passphrase is not right.
+lock-not-possible = There is no passphrase to unlock with.
+lock-not-possible-hint = Encrypt the workspace, or set a passphrase for the lock in Preferences, Security.

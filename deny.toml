@@ -72,6 +72,11 @@ exceptions = [
     # tables are under the Unicode licence, a permissive licence compatible
     # with the GPL; the newer Unicode-3.0 is allowed above.
     { crate = "finl_unicode", allow = ["Unicode-DFS-2016"] },
+    # The SQLCipher source of encrypted workspaces: its SQLite part is in the
+    # public domain (the blessing), its LibTomCrypt part public domain or
+    # WTFPL; both are compatible with the GPL, and the builds use OpenSSL,
+    # not LibTomCrypt.
+    { crate = "sqlcipher-src", allow = ["blessing", "WTFPL"] },
 ]
 # Not every allowed licence is in use yet.
 unused-allowed-license = "allow"

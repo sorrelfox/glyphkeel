@@ -25,6 +25,7 @@ import { Group, NumberSetting, Row } from "./PreferenceRows";
 import { AboutPage } from "./preferences/AboutPage";
 import { AgentsPage } from "./preferences/AgentsPage";
 import { LanguagePage } from "./preferences/LanguagePage";
+import { SecurityPage } from "./preferences/SecurityPage";
 import { ShortcutsPage } from "./preferences/ShortcutsPage";
 import { WorkKindsGroup } from "./preferences/WorkKinds";
 import styles from "./Preferences.module.css";
@@ -33,7 +34,7 @@ import { TimeZonePicker } from "./TimeZonePicker";
 const WEEK_STARTS: readonly WeekStart[] = ["monday", "saturday", "sunday"];
 
 /** The pages, in the order of the list on the left. */
-export const PREFERENCE_PAGES = ["appearance", "language", "time", "notifications", "quick-add", "shortcuts", "agents", "workspace", "data", "about"] as const;
+export const PREFERENCE_PAGES = ["appearance", "language", "time", "notifications", "quick-add", "shortcuts", "agents", "workspace", "security", "data", "about"] as const;
 export type PreferencePage = (typeof PREFERENCE_PAGES)[number];
 
 interface PreferencesProps {
@@ -86,6 +87,9 @@ export function Preferences({ isOpen, onOpenChange, page = "appearance" }: Prefe
         </TabPanel>
         <TabPanel id="workspace" className={classes(styles.page)}>
           <WorkspacePage />
+        </TabPanel>
+        <TabPanel id="security" className={classes(styles.page)}>
+          <SecurityPage />
         </TabPanel>
         <TabPanel id="data" className={classes(styles.page)}>
           <DataPage />

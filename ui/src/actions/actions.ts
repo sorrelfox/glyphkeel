@@ -46,6 +46,7 @@ export const DEFAULT_KEYMAP: Readonly<Record<string, readonly string[]>> = {
   "view.today": ["Alt+Home"],
   "sidebar.toggle": ["F9"],
   "app.preferences": ["Ctrl+,"],
+  "app.lock": ["Ctrl+Shift+L"],
   "app.undo": ["Ctrl+Z"],
   "app.redo": ["Ctrl+Shift+Z"],
   "card.moveLeft": ["Alt+ArrowLeft"],

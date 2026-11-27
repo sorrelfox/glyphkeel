@@ -3,7 +3,8 @@
 
 //! Which workspace a command works on, and `glyphkeel workspace list`,
 //! `create`, `rename` and `open`, which work on the workspaces in the data
-//! folder rather than inside one.
+//! folder rather than inside one, and `encrypt` and `decrypt`, which change
+//! how one is stored.
 
 use std::path::PathBuf;
 
@@ -20,6 +21,8 @@ pub(crate) const LIST: &str = "list";
 pub(crate) const CREATE: &str = "create";
 pub(crate) const RENAME: &str = "rename";
 pub(crate) const OPEN: &str = "open";
+pub(crate) const ENCRYPT: &str = "encrypt";
+pub(crate) const DECRYPT: &str = "decrypt";
 
 /// Adds `list`, `create`, `rename` and `open` to the `workspace` command,
 /// which on its own still shows the workspace's summary.
@@ -44,6 +47,12 @@ pub(crate) fn commands(workspace: Command) -> Command {
                 .arg(name("old", "cli-workspace-rename-old-help"))
                 .arg(name("new", "cli-workspace-rename-new-help")),
         )
+        .subcommand(
+            Command::new(ENCRYPT)
+                .about(text("cli-workspace-encrypt-about", &[]))
+                .long_about(text("cli-workspace-encrypt-long", &[])),
+        )
+        .subcommand(Command::new(DECRYPT).about(text("cli-workspace-decrypt-about", &[])))
         .subcommand(
             Command::new(OPEN)
                 .about(text("cli-workspace-open-about", &[]))
@@ -109,6 +118,7 @@ pub(crate) fn run(
             );
             Ok((line + "\n", entry(&name, &layout)))
         }
+        ENCRYPT | DECRYPT => change_encryption(word == ENCRYPT, chosen),
         _ => {
             let layout = workspaces::choose(Some(&data_dir), arg("workspace"))?;
             let name = workspaces::name_of(&layout);
@@ -116,6 +126,50 @@ pub(crate) fn run(
             Ok((line + "\n", entry(&name, &layout)))
         }
     }
+}
+
+/// `glyphkeel workspace encrypt` (or `decrypt`): the workspace must be
+/// closed everywhere else; a backup is made first.
+fn change_encryption(encrypt: bool, chosen: Option<&str>) -> Result<(String, Value), OpError> {
+    use gk_engine::encryption::{self, Change};
+    let layout = resolve(chosen)?;
+    if !layout.database().is_file() {
+        return Err(gk_engine::store_error(&StoreError::NotAWorkspace(
+            layout.database(),
+        )));
+    }
+    crate::passphrase::unlock(&layout)?;
+    let name = workspaces::name_of(&layout);
+    let change = if encrypt {
+        Change::Encrypt(crate::passphrase::new_passphrase()?)
+    } else {
+        Change::Decrypt
+    };
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX));
+    let changed = encryption::change(&layout, None, &change, now, env!("CARGO_PKG_VERSION"))?;
+    let args = [
+        ("name", name.clone()),
+        ("backup", changed.backup.name.clone()),
+    ];
+    let mut lines = if encrypt {
+        text("cli-workspace-encrypted", &args)
+    } else {
+        text("cli-workspace-decrypted", &args)
+    };
+    lines.push('\n');
+    if changed.backups_left_plain > 0 {
+        lines.push_str(&encryption::backups_left_plain_text(
+            changed.backups_left_plain,
+        ));
+        lines.push('\n');
+    }
+    let mut value = entry(&name, &layout);
+    value["encrypted"] = Value::from(encrypt);
+    value["backup"] = Value::from(changed.backup.name);
+    value["backups_left_plain"] = Value::from(changed.backups_left_plain);
+    Ok((lines, value))
 }
 
 fn entry(name: &str, layout: &WorkspaceLayout) -> Value {

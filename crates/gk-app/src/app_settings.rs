@@ -71,6 +71,14 @@ pub(crate) struct Stored {
     /// start the app with the system.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) autostart: Option<bool>,
+    /// Minutes of idle time before the app locks itself; unset, never.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) lock_after_minutes: Option<u32>,
+    /// The check of the app lock's own passphrase, for a plain workspace
+    /// (an encrypted one unlocks with its own passphrase). Never the
+    /// passphrase itself.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) lock_passphrase: Option<gk_store::PassphraseCheck>,
 }
 
 impl Default for Stored {
@@ -82,6 +90,8 @@ impl Default for Stored {
             quick_add_shortcut: None,
             safe_rendering: false,
             autostart: None,
+            lock_after_minutes: None,
+            lock_passphrase: None,
         }
     }
 }
@@ -327,6 +337,24 @@ impl AppSettings {
             .quick_add_shortcut
             .clone()
             .unwrap_or_default()
+    }
+
+    /// Changes the app lock's settings: the idle minutes (`Some(None)`:
+    /// never) and the check of its own passphrase (`Some(None)`: none);
+    /// `None` keeps either.
+    pub(crate) fn change_lock(
+        &self,
+        minutes: Option<Option<u32>>,
+        check: Option<Option<gk_store::PassphraseCheck>>,
+    ) -> Stored {
+        self.change(|stored| {
+            if let Some(minutes) = minutes {
+                stored.lock_after_minutes = minutes;
+            }
+            if let Some(check) = check {
+                stored.lock_passphrase = check;
+            }
+        })
     }
 
     /// Keeps the quick-add shortcut's setting.
@@ -593,6 +621,11 @@ mod tests {
             }),
             safe_rendering: true,
             autostart: Some(true),
+            lock_after_minutes: Some(15),
+            lock_passphrase: Some(
+                gk_store::PassphraseCheck::new(&gk_store::Passphrase::new("kept").unwrap())
+                    .unwrap(),
+            ),
         };
         save(&path, &stored).unwrap();
         assert_eq!(load(&path), stored);

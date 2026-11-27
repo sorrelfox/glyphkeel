@@ -49,12 +49,13 @@ fn read_only(path: &Path) -> Result<Connection> {
             io::Error::from(io::ErrorKind::NotFound),
         ));
     }
-    let conn = Connection::open_with_flags(
-        path,
-        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-    )?;
-    conn.busy_timeout(Duration::from_secs(5))?;
-    Ok(conn)
+    crate::cipher::open_file(path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+}
+
+/// Opens the database file at `path` (a snapshot or a copy) for reading,
+/// with its key when it is encrypted.
+pub fn open_read_only(path: &Path) -> Result<Connection> {
+    read_only(path)
 }
 
 /// The generation of the database file at `path`.
@@ -70,7 +71,8 @@ pub fn schema_version_of(path: &Path) -> Result<i64> {
 /// Writes a compact copy of the database `database` to `target`, which
 /// must not exist yet. Other processes may keep writing meanwhile; the copy
 /// holds one consistent state. The copy uses a rollback journal, so it can
-/// be read where no `-wal` file can be made.
+/// be read where no `-wal` file can be made. The copy of an encrypted
+/// database is encrypted with the same key.
 pub fn vacuum_into(database: &Path, target: &Path) -> Result<()> {
     if target.exists() {
         return Err(StoreError::io(
@@ -82,10 +84,7 @@ pub fn vacuum_into(database: &Path, target: &Path) -> Result<()> {
     let conn = connection::open(database, Purpose::Write, Duration::from_secs(5))?;
     conn.execute("VACUUM INTO ?1", [target.to_string_lossy().as_ref()])?;
     drop(conn);
-    let copy = Connection::open_with_flags(
-        target,
-        OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-    )?;
+    let copy = crate::cipher::open_file(target, OpenFlags::SQLITE_OPEN_READ_WRITE)?;
     let _: String = copy.pragma_update_and_check(None, "journal_mode", "DELETE", |r| r.get(0))?;
     Ok(())
 }
@@ -110,10 +109,7 @@ pub fn check_integrity(path: &Path, quick: bool) -> Result<Vec<String>> {
 /// Upgrades the database copy at `path` to this program's schema. Returns
 /// the version it had. A copy made by a newer program is refused.
 pub fn upgrade_copy(path: &Path) -> Result<i64> {
-    let mut conn = Connection::open_with_flags(
-        path,
-        OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-    )?;
+    let mut conn = crate::cipher::open_file(path, OpenFlags::SQLITE_OPEN_READ_WRITE)?;
     conn.execute_batch("PRAGMA foreign_keys = ON;")?;
     match schema::state(&conn, SCHEMA_VERSION)? {
         SchemaState::Current => Ok(SCHEMA_VERSION),
@@ -166,13 +162,14 @@ pub fn put_back_before_upgrade(
 }
 
 fn copy_into_live(layout: &WorkspaceLayout, source: &Path, busy_budget: Duration) -> Result<()> {
+    // The backup API copies only between files of the same kind: a copy
+    // made before the workspace was encrypted, or decrypted, is made like
+    // it first.
+    crate::cipher::match_encryption(source, &layout.database())?;
     let mut live = connection::open(&layout.database(), Purpose::Write, busy_budget)?;
     let next = generation(&live)?.max(generation_of(source)?) + 1;
     {
-        let src = Connection::open_with_flags(
-            source,
-            OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-        )?;
+        let src = crate::cipher::open_file(source, OpenFlags::SQLITE_OPEN_READ_WRITE)?;
         src.execute(
             "INSERT INTO meta (key, value) VALUES (?1, ?2)
              ON CONFLICT (key) DO UPDATE SET value = excluded.value",
