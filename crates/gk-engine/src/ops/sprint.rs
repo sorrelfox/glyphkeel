@@ -536,6 +536,38 @@ pub(crate) fn resolve_for_task(
     Ok(id)
 }
 
+/// The sprint running in `project` now, if any.
+pub(crate) fn active_in(tx: &Transaction<'_>, project: Id) -> Result<Option<Id>, Failure> {
+    Ok(tx
+        .query_row(
+            "SELECT id FROM sprints WHERE project_id = ?1 AND state = 'active'",
+            [b(project)],
+            |r| id_at(r, 0),
+        )
+        .optional()?)
+}
+
+/// Puts the copy `new` of task `old` in the sprint `old` is in, while that
+/// sprint is of `project` and not closed (a closed sprint takes no tasks).
+pub(crate) fn copy_to(w: &mut WriteCtx<'_>, old: Id, new: Id, project: Id) -> Result<(), Failure> {
+    let row: Option<(Id, Id, String)> = w
+        .tx()
+        .query_row(
+            "SELECT sp.id, sp.project_id, sp.state FROM tasks t JOIN sprints sp ON sp.id = t.sprint_id
+              WHERE t.id = ?1",
+            [b(old)],
+            |r| Ok((id_at(r, 0)?, id_at(r, 1)?, r.get(2)?)),
+        )
+        .optional()?;
+    if let Some((sprint, owner, state)) = row
+        && owner == project
+        && state != "closed"
+    {
+        set_task(w, new, project, Some(sprint))?;
+    }
+    Ok(())
+}
+
 /// Puts task `task` (in `project`) in `sprint`, or in none; recorded.
 pub(crate) fn set_task(
     w: &mut WriteCtx<'_>,
@@ -1147,7 +1179,10 @@ fn truthy(v: Option<&Value>) -> bool {
     }
 }
 
-fn burndown(q: &QueryCtx<'_>, input: &SprintBurndownInput) -> Result<SprintBurndown, Failure> {
+pub(crate) fn burndown(
+    q: &QueryCtx<'_>,
+    input: &SprintBurndownInput,
+) -> Result<SprintBurndown, Failure> {
     let tx = q.tx;
     let (id, r) = find(tx, &input.sprint, input.project.as_ref())?;
     if r.state == SprintState::Planned {

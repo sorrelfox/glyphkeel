@@ -475,7 +475,10 @@ pub(crate) fn compile_search(
     Ok((gk_query::print(&query), compiled))
 }
 
-fn search(q: &QueryCtx<'_>, input: TaskSearchInput) -> Result<TaskSearchResult, Failure> {
+pub(crate) fn search(
+    q: &QueryCtx<'_>,
+    input: TaskSearchInput,
+) -> Result<TaskSearchResult, Failure> {
     let limit = input.limit.unwrap_or(DEFAULT_LIMIT);
     if limit == 0 || limit > MAX_LIMIT {
         return Err(messages::invalid(
@@ -569,7 +572,7 @@ fn search(q: &QueryCtx<'_>, input: TaskSearchInput) -> Result<TaskSearchResult, 
 /// groups together, a group's value, title and colour, and the order of
 /// the groups. Tasks without a value (no label, parent or due date) come
 /// last, as one group.
-struct GroupSql {
+pub(crate) struct GroupSql {
     key: String,
     rows: String,
     value: String,
@@ -671,6 +674,18 @@ fn grouping(by: ListGrouping, week_start: WeekStart) -> GroupSql {
                 key: week,
             }
         }
+        ListGrouping::Type => {
+            // Types of the same name in several projects are one group.
+            let place = "(SELECT min(x.rank) FROM task_types x WHERE x.name_fold = y.name_fold)";
+            GroupSql {
+                key: text("y.name_fold"),
+                rows: format!("{place} ASC, y.name_fold ASC"),
+                value: text("min(y.name)"),
+                title: text("NULL"),
+                hue: text("min(y.hue)"),
+                order: format!("min({place}) ASC, g ASC"),
+            }
+        }
         ListGrouping::Project => GroupSql {
             key: text("p.key"),
             rows: text("p.key ASC"),
@@ -693,7 +708,7 @@ const GROUPING_KINDS: [FieldKind; 3] = [
 /// select field's groups in the order of its options (those of every
 /// project's field of that query name, first found first), a yes/no
 /// field's `yes` then `no`.
-fn field_grouping(tx: &Transaction<'_>, written: &str) -> Result<GroupSql, Failure> {
+pub(crate) fn field_grouping(tx: &Transaction<'_>, written: &str) -> Result<GroupSql, Failure> {
     let fields = super::custom_field::rows(tx, None)?;
     let bare = gk_query::fields::strip_custom_prefix(written.trim()).unwrap_or(written.trim());
     let wanted = gk_core::fold(bare);

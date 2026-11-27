@@ -84,6 +84,11 @@ pub struct TaskBlueprint {
     /// has no open version by that name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fix_version: Option<String>,
+    /// `active`: the task goes into the project's active sprint, when one
+    /// is running as it is made. Without it the task is in no sprint (the
+    /// backlog); a template never names a planned or closed sprint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sprint: Option<String>,
     /// Its subtasks at every level, each after the one it sits under, in
     /// order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

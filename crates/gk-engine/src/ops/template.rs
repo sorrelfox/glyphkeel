@@ -510,6 +510,9 @@ pub(crate) fn blueprint_of(
     let mut bp = TaskBlueprint {
         fields: super::custom_field::blueprint_values(tx, id)?,
         fix_version: open_version(tx, id)?,
+        sprint: super::sprint::of_task(tx, id)?
+            .filter(|s| s.state == gk_api::ops::sprint::SprintState::Active)
+            .map(|_| ACTIVE_SPRINT.to_owned()),
         title: root.title,
         description: untick(&root.description),
         task_type: Some(root.type_name),
@@ -546,6 +549,9 @@ pub(crate) fn blueprint_of(
 }
 
 /// The name of the version task `id` is planned for, while it is open.
+/// The one sprint a blueprint may name.
+const ACTIVE_SPRINT: &str = "active";
+
 fn open_version(tx: &Transaction<'_>, id: Id) -> Result<Option<String>, Failure> {
     Ok(super::version::of_task(tx, id)?
         .filter(|v| v.status == gk_api::ops::version::VersionStatus::Open)
@@ -710,6 +716,15 @@ pub(crate) fn check_blueprint(bp: &TaskBlueprint, path: &str) -> Result<(), Fail
     gk_core::check_title(&bp.title).map_err(|e| invalid(&at("title"), e))?;
     gk_core::check_markdown("description", &bp.description)
         .map_err(|e| invalid(&at("description"), e))?;
+    if let Some(s) = &bp.sprint
+        && !s.trim().eq_ignore_ascii_case(ACTIVE_SPRINT)
+    {
+        return Err(messages::invalid(
+            &at("sprint"),
+            "template-sprint-active-only",
+            &[("sprint", s.clone())],
+        ));
+    }
     if bp.subtasks.len() + 1 > MAX_TASKS {
         return Err(messages::invalid(
             &at("subtasks"),
@@ -1203,6 +1218,14 @@ pub(crate) fn make_task(
         making,
         left_out,
     )?;
+    if bp
+        .sprint
+        .as_deref()
+        .is_some_and(|s| s.trim().eq_ignore_ascii_case(ACTIVE_SPRINT))
+        && let Some(sprint) = super::sprint::active_in(w.tx(), project.id)?
+    {
+        super::sprint::set_task(w, root, project.id, Some(sprint))?;
+    }
     let mut made: Vec<Id> = Vec::with_capacity(bp.subtasks.len());
     for s in &bp.subtasks {
         let under = match s.under {

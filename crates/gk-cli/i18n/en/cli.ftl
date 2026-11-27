@@ -101,3 +101,50 @@ cli-link-invalid-hint = Give a key such as TM-41, or a link such as glyphkeel://
 cli-app-missing = The desktop app ({ $app }) is neither next to this program nor on PATH.
 cli-app-missing-hint = Install the desktop app, or use the commands listed by `glyphkeel --help`.
 cli-app-start-failed = Can't start { $app }: { $error }.
+
+## Dashboards, as `dashboard show` prints them
+
+cli-dashboard-heading = { $name }
+# A dashboard pinned to a project: its name and the project's key.
+cli-dashboard-heading-project = { $name } ({ $project })
+cli-dashboard-empty = This dashboard has no widgets yet.
+# A widget's heading: its place in the grid and its title.
+cli-dashboard-widget = { $place }. { $title }
+# A widget that can't be shown, with why.
+cli-dashboard-error = ! { $message }
+cli-dashboard-tasks = { $count ->
+        [one] 1 task
+       *[other] { $count } tasks
+    }
+# A listed task's status and due date.
+cli-dashboard-task-due = ({ $status }, due { $due })
+# One bar or line of figures: what it counts and how many.
+cli-dashboard-bar = { $name }: { $count }
+# The bar of the tasks without a value.
+cli-dashboard-no-value = (none)
+cli-dashboard-created-closed = { $from } to { $to }: { $created } created, { $closed } closed, { $open } open at the end
+cli-dashboard-cycle-time = { $count } closed; median cycle time { $cycle } days, median lead time { $lead } days
+cli-dashboard-time-total = { $from } to { $to }: { $total } in all
+cli-dashboard-burndown = { $sprint }: { $open } of { $total } tasks open
+cli-dashboard-version = { $name }: { $closed } of { $total } tasks closed ({ $percent }%)
+# One change of the activity: when, who, the operation and the item.
+cli-dashboard-change = { $at }  { $actor }  { $op }  { $item }
+# One failed automation run: when, the rule and why.
+cli-dashboard-run = { $at }  { $rule }: { $message }
+
+## The widgets' own titles
+
+cli-widget-query-count = Matching tasks
+cli-widget-query-list = Task list
+cli-widget-created-closed = Created and closed
+cli-widget-cumulative-flow = Cumulative flow
+cli-widget-cycle-time = Cycle time
+cli-widget-time-report = Time logged
+cli-widget-burndown = Sprint burndown
+cli-widget-version-progress = Version progress
+cli-widget-tasks-by-field = Tasks by field
+cli-widget-due-soon = Due soon
+cli-widget-overdue = Overdue
+cli-widget-activity = Recent activity
+cli-widget-automation-failures = Automation failures
+cli-widget-note = Note

@@ -63,12 +63,8 @@
   margin: 0;
 }
 
-.condition,
-.mono {
-  font-family: var(--font-mono, monospace);
-}
-
 .condition {
+  font-family: var(--font-mono, monospace);
   padding-inline: 4px;
   border-radius: var(--r-s);
   background: var(--bg);

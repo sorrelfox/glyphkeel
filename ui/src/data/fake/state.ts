@@ -33,6 +33,7 @@ import {
   type TrashEntry,
   type Via,
 } from "../../generated/ops";
+import { type FakeDashboard } from "./dashboards";
 import { type FakeSprint } from "./sprints";
 import { type FakeVersion } from "./versions";
 import { type FakeField, type FieldValue } from "./fields";
@@ -353,6 +354,8 @@ export interface FakeState {
   automations?: AutomationRule[];
   /** The automation rules' runs, newest first; none until a rule runs. */
   automationRuns?: AutomationRun[];
+  /** Dashboards, the workspace's and the projects'; none until one is made. */
+  dashboards?: FakeDashboard[];
   /** The workspace's own CSV import presets; none until one is saved. */
   csvPresets?: CsvPreset[];
   workspaceName: string;

@@ -286,6 +286,19 @@ fn time_is_logged_edited_and_reported() {
         csv,
         "week,title,minutes,duration,entry_count\r\n2026-11-23,2026-11-23..2026-11-29,75,1h 15m,1\r\n"
     );
+    // A note a spreadsheet would run as a formula is defused.
+    ws.ok(&["time", "edit", &id, "--note", "=1+2"]);
+    let entries = ws.ok(&[
+        "time",
+        "report",
+        "--from",
+        "2026-11-23",
+        "--to",
+        "2026-11-29",
+        "--csv",
+        "entries",
+    ]);
+    assert!(entries.contains(",'=1+2,"), "{entries}");
     let gone = ws.json(&["time", "delete", &id]);
     assert_eq!(gone["spent_minutes"], 0);
     let out = ws.run(&["time", "log", "GK-1", "--duration", "25h"]);

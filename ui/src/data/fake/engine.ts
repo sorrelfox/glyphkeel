@@ -104,9 +104,10 @@ import { createRule, DEPTH_MAX, fill, findRule, fits, listRules, listRuns, logRu
 /** The Gantt chart's layout until the person changes it. */
 const DEFAULT_GANTT_LAYOUT: GanttLayout = { zoom: "day", widths: {}, group_by: "parent", move_dependents: false };
 import { linksIn, placePage, subtree, type TextLink } from "./wiki";
+import { addWidget as addDashboardWidget, createDashboard, dashboardWidget, deleteDashboard, listDashboards, removeWidget as removeDashboardWidget, showDashboard, updateDashboard, updateWidget as updateDashboardWidget, type DashboardHost } from "./dashboards";
 import { addSprintTasks, completeSprint, createSprint, deleteSprint, getSprint, listSprints, removeSprintTasks, sprintBurndown, sprintForTask, sprintRef, startSprint, updateSprint, type SprintHost } from "./sprints";
 import { createVersion, deleteVersion, getVersion, listVersions, updateVersion, versionForTask, versionRef, visibleVersions, type VersionHost } from "./versions";
-import { createView, deleteView, listViews, matchingKeys, parseQuery, queryError, searchTasks, updateView, type GroupInfo, type QueryNames, type TaskHistory } from "./query";
+import { createView, deleteView, listViews, matchingKeys, parseQuery, queryError, renameInQuery, searchTasks, updateView, type GroupInfo, type QueryNames, type TaskHistory } from "./query";
 import { createdClosed, cumulativeFlow, cycleTime, defaultFrom, flowPeriods, type FlowEvent, type FlowInput, type FlowStatus, type FlowTask } from "./reports";
 import { addDays, csvOf, localDay, MAX_ENTRY_MINUTES, momentOf, reminderAt, reminderOut, sortDue, timeEntryOut, timerElapsedMs, timerOut, unitsOf, weekStart, workDay } from "./time";
 
@@ -1388,6 +1389,10 @@ export class FakeWorkspace {
       closedAt: isClosed(status.category) ? now : null,
       version: 1,
     };
+    // The copy stays in the sprint, unless that sprint is over.
+    if ((this.state.sprints ?? []).find((sprint) => sprint.id === task.sprintId)?.state === "closed") {
+      copy.sprintId = null;
+    }
     project.nextNumber += 1;
     this.state.tasks.push(copy);
     for (const file of this.state.files.filter((candidate) => candidate.taskId === task.id && candidate.commentId === null && candidate.deletedAt === null)) {
@@ -2573,6 +2578,34 @@ export class FakeWorkspace {
     fail: (code, message, path) => fail(code, message, path === undefined ? {} : { details: { path } }),
   };
 
+  /** What the dashboards need of this workspace. */
+  private readonly dashboardHost: DashboardHost = {
+    dashboards: () => (this.state.dashboards ??= []),
+    projects: () => this.state.projects,
+    project: (ref) => this.project(ref),
+    writable: (ref) => this.writable(ref),
+    read: (op, input) => {
+      const handler = (this.handlers as Record<string, ((input: unknown) => unknown) | undefined>)[op];
+      return handler ? handler(input) : fail("not_found", `There is no operation "${op}".`);
+    },
+    checkQuery: (query, path) => {
+      try {
+        this.runQuery(() => searchTasks([], { query }, this.queryNames(), { archived: new Set(), scoped: false, statusOrder: () => 0 }));
+      } catch (error) {
+        if (error instanceof FakeError) {
+          error.error.details = { ...error.error.details, path };
+        }
+        throw error;
+      }
+    },
+    countableField: (name) => queryFields(this.state).some((field) => field.queryName === name && (field.kind === "select" || field.kind === "multi_select" || field.kind === "boolean")),
+    actor: () => (this.byAgent ? { kind: "agent", name: SAMPLE_AGENT } : { kind: "user", name: "You" }),
+    now: () => this.today().toISOString(),
+    today: () => localDay(this.today()),
+    newId: () => nextUuid(),
+    fail: (code, message, path) => fail(code, message, path === undefined ? {} : { details: { path } }),
+  };
+
   /** What the versions need of this workspace. */
   private readonly versionHost: VersionHost = {
     versions: () => (this.state.versions ??= []),
@@ -2594,6 +2627,52 @@ export class FakeWorkspace {
     newId: () => nextUuid(),
     fail: (code, message, path) => fail(code, message, path === undefined ? {} : { details: { path } }),
   };
+
+  /**
+   * Rewrites the saved queries of `project` as the engine does when a name they use changes: its
+   * saved views, its board's colour rules and its automation rules' conditions. Returns the changes.
+   */
+  private rewriteQueries(project: FakeProject, rewrite: (query: string) => string | undefined): EntityChange[] {
+    const changes: EntityChange[] = [];
+    for (const view of this.state.views ?? []) {
+      const query = view.project === project.key ? rewrite(view.query) : undefined;
+      if (query !== undefined) {
+        view.query = query;
+        changes.push(...this.viewChange(view, ["query"]));
+      }
+    }
+    changes.push(...this.rewriteRuleQueries(project, rewrite));
+    return changes;
+  }
+
+  /** Rewrites the queries of `project`'s colour rules and automation conditions (every project's for none). */
+  private rewriteRuleQueries(project: FakeProject | null, rewrite: (query: string) => string | undefined): EntityChange[] {
+    const changes: EntityChange[] = [];
+    for (const [projectId, layout] of Object.entries(this.state.layouts)) {
+      if (project !== null && projectId !== project.id) {
+        continue;
+      }
+      const rules = layout.colour_rules.map((rule) => {
+        const query = rewrite(rule.query);
+        return query === undefined ? rule : { ...rule, query };
+      });
+      if (rules.some((rule, at) => rule !== layout.colour_rules[at])) {
+        layout.colour_rules = rules;
+        changes.push({ entity: "layout", id: projectId, fields: ["settings"], ...some("project", this.state.projects.find((each) => each.id === projectId)?.key) });
+      }
+    }
+    for (const rule of this.state.automations ?? []) {
+      if (project !== null && rule.project !== project.key) {
+        continue;
+      }
+      const condition = rule.condition === undefined || rule.condition === "" ? undefined : rewrite(rule.condition);
+      if (condition !== undefined) {
+        rule.condition = condition;
+        changes.push({ entity: "automation_rule", id: rule.id, fields: ["record"], ...some("project", rule.project) });
+      }
+    }
+    return changes;
+  }
 
   private viewChange(view: SavedView, fields: string[]): EntityChange[] {
     return [{ entity: "view", id: view.id, fields, ...some("project", view.project) }];
@@ -2885,6 +2964,10 @@ export class FakeWorkspace {
           changes.push(...this.viewChange(view, ["query"]));
         }
       }
+      changes.push(...this.rewriteRuleQueries(null, (query) => {
+        const next = query.replace(pattern, (_match, before: string) => `${before}${wanted}`);
+        return next === query ? undefined : next;
+      }));
       return { output: { project: this.fullProject(project), ...(rewritten.length > 0 ? { views_rewritten: rewritten } : {}) }, changes };
     },
     "project.move": ({ project: ref, parent, top_level }) => {
@@ -2939,9 +3022,12 @@ export class FakeWorkspace {
       const project = this.writable(ref);
       const status = this.statusIn(project, statusRef);
       const fields: string[] = [];
+      const rewritten: EntityChange[] = [];
       if (name !== null && name !== undefined) {
+        const before = status.name;
         status.name = this.uniqueName(project.statuses, name, "status", status.id);
         fields.push("name");
+        rewritten.push(...this.rewriteQueries(project, (query) => renameInQuery(query, ["status"], before, status.name)));
       }
       if (category !== null && category !== undefined) {
         status.category = category;
@@ -2974,7 +3060,8 @@ export class FakeWorkspace {
         fields.push("wip_min");
       }
       this.checkWipRange(status);
-      return this.projectChange(project, "status", fields);
+      const result = this.projectChange(project, "status", fields);
+      return { ...result, changes: [...result.changes, ...rewritten] };
     },
     "rules.update": ({ project: ref, statuses, agents }) => {
       const project = this.writable(ref);
@@ -3035,9 +3122,12 @@ export class FakeWorkspace {
         delete type.due_offset_days;
         fields.push("due_offset_days");
       }
+      const rewritten: EntityChange[] = [];
       if (name !== null && name !== undefined) {
+        const before = type.name;
         type.name = this.uniqueName(project.types, name, "task type", type.id);
         fields.push("name");
+        rewritten.push(...this.rewriteQueries(project, (query) => renameInQuery(query, ["type"], before, type.name)));
       }
       if (glyph !== null && glyph !== undefined) {
         type.glyph = glyph;
@@ -3056,7 +3146,8 @@ export class FakeWorkspace {
         project.types = this.place(project.types, type, { before, after, at }, "task type");
         fields.push("rank");
       }
-      return this.projectChange(project, "task_type", fields);
+      const result = this.projectChange(project, "task_type", fields);
+      return { ...result, changes: [...result.changes, ...rewritten] };
     },
     "type.delete": ({ project: ref, type: typeRef, move_tasks_to }) => {
       const project = this.writable(ref);
@@ -3085,16 +3176,20 @@ export class FakeWorkspace {
       const project = this.writable(ref);
       const label = this.labelIn(project, labelRef);
       const fields: string[] = [];
+      const rewritten: EntityChange[] = [];
       if (name !== null && name !== undefined) {
+        const before = label.name;
         label.name = this.uniqueName(project.labels, name, "label", label.id);
         fields.push("name");
+        rewritten.push(...this.rewriteQueries(project, (query) => renameInQuery(query, ["label", "labels"], before, label.name)));
       }
       if (hue !== null && hue !== undefined) {
         this.validHue(hue);
         label.hue = hue;
         fields.push("hue");
       }
-      return this.projectChange(project, "label", fields);
+      const result = this.projectChange(project, "label", fields);
+      return { ...result, changes: [...result.changes, ...rewritten] };
     },
     "label.delete": ({ project: ref, label: labelRef }) => {
       const project = this.writable(ref);
@@ -4334,6 +4429,15 @@ export class FakeWorkspace {
     "sprint.complete": (input) => completeSprint(this.sprintHost, input),
     "sprint.add_tasks": (input) => addSprintTasks(this.sprintHost, input),
     "sprint.remove_tasks": (input) => removeSprintTasks(this.sprintHost, input),
+    "dashboard.list": (input) => listDashboards(this.dashboardHost, input),
+    "dashboard.show": (input) => showDashboard(this.dashboardHost, input),
+    "dashboard.widget": (input) => dashboardWidget(this.dashboardHost, input),
+    "dashboard.create": (input) => createDashboard(this.dashboardHost, input),
+    "dashboard.update": (input) => updateDashboard(this.dashboardHost, input),
+    "dashboard.delete": (input) => deleteDashboard(this.dashboardHost, input),
+    "dashboard.add_widget": (input) => addDashboardWidget(this.dashboardHost, input),
+    "dashboard.update_widget": (input) => updateDashboardWidget(this.dashboardHost, input),
+    "dashboard.remove_widget": (input) => removeDashboardWidget(this.dashboardHost, input),
     "view.create": (input) => {
       if (input.query.trim() !== "") {
         this.runQuery(() => searchTasks([], { query: input.query }, this.queryNames(), { archived: new Set(), scoped: false, statusOrder: () => 0 }));
@@ -4882,6 +4986,7 @@ export class FakeWorkspace {
         labels: [],
         fields: [],
         versions: [],
+        sprints: [],
         fallback_status: this.fallbackStatus(to).name,
         fallback_type: this.fallbackType(to).name,
       };
@@ -4920,6 +5025,15 @@ export class FakeWorkspace {
             const found = check.versions.find((each) => each.name === planned.name);
             if (found === undefined) {
               check.versions.push({ name: planned.name, tasks: 1, ...some("target", kept ? planned.name : undefined) });
+            } else {
+              found.tasks += 1;
+            }
+          }
+          const sprint = sprintRef(this.sprintHost, one);
+          if (sprint !== undefined) {
+            const found = check.sprints.find((each) => each.name === sprint.name);
+            if (found === undefined) {
+              check.sprints.push({ name: sprint.name, tasks: 1 });
             } else {
               found.tasks += 1;
             }

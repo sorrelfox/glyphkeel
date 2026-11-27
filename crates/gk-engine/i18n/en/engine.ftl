@@ -182,6 +182,7 @@ transfer-invalid-field-value = { $path }, line { $line }: a value of the custom 
 transfer-invalid-task-label = { $path }, line { $line }: the label { $label } is not one of the project's.
 transfer-invalid-version = { $path }, line { $line }: the version "{ $version }" is not valid (name, status, sharing or dates), or its name is used twice.
 transfer-invalid-sprint = { $path }, line { $line }: the sprint "{ $sprint }" is not valid (name, state, goal or dates), its name is used twice, or a second sprint is active.
+transfer-invalid-automation = { $path }, line { $line }: the automation rule "{ $rule }" is not valid (name, rank, actors or actions), or its name is used twice.
 transfer-invalid-title = { $path }, line { $line }: the title is empty or too long.
 transfer-invalid-description-size = { $path }, line { $line }: the description is larger than 1 MB.
 transfer-invalid-link-target = { $path }, line { $line }: a link points to no other task in the archive.
@@ -1027,6 +1028,7 @@ template-needs-project = A task template belongs to a project: give `project`.
 template-unreadable = The template's content can't be read.
 template-project-gone = The project of the template "{ $template }" no longer exists; give `project`.
 template-project-needs-name = A project template makes a project: give its `name` and `key`.
+template-sprint-active-only = A template can only name the sprint `active` (the sprint running when a task is made from it), not "{ $sprint }".
 template-too-many-tasks = A template makes at most { $max } tasks.
 template-too-many-pages = A template makes at most { $max } wiki pages.
 template-under-later = A subtask can only sit under a subtask listed before it.
@@ -1132,4 +1134,38 @@ automation-action-count = A rule has 1 to { $max } actions.
 automation-depth-limit = The rule didn't run: { $max } rules had already set each other off after one change.
 automation-rate-limit = The rule didn't run: it already ran { $max } times in the last hour. It runs again after that.
 automation-draft-name = Test rule
+automation-off-status-removed = The rule was turned off: the status "{ $name }" it uses was deleted. Choose another status, then turn the rule on again.
+automation-off-label-removed = The rule was turned off: the label "{ $name }" it uses was deleted. Choose another label, then turn the rule on again.
+automation-off-type-removed = The rule was turned off: the task type "{ $name }" it uses was deleted. Choose another type, then turn the rule on again.
+automation-off-field-removed = The rule was turned off: the custom field "{ $field }" it uses was deleted. Change the rule, then turn it on again.
+automation-off-option-removed = The rule was turned off: the custom field "{ $field }" no longer has the option "{ $option }" it sets. Change the rule, then turn it on again.
 automation-test-rule-or-draft = Name a saved rule with `rule`, or give one that isn't saved with `draft`; not both.
+
+## Dashboards
+
+dashboard-not-found = There is no dashboard "{ $dashboard }".
+dashboard-not-found-hint = Name a dashboard of the project given with `project` (or of the whole workspace without one), or use its ID from dashboard.list.
+dashboard-name-taken = There is already a dashboard named "{ $dashboard }" here.
+dashboard-name-taken-hint = Choose another name, or change that dashboard.
+dashboard-widget-not-found = { $count ->
+        [0] The dashboard "{ $dashboard }" has no widgets, so it has no widget "{ $widget }".
+        [one] The dashboard "{ $dashboard }" has one widget; "{ $widget }" isn't it.
+       *[other] The dashboard "{ $dashboard }" has { $count } widgets; none of them is "{ $widget }".
+    }
+dashboard-widget-not-found-hint = Name a widget by its ID, or by its place in the grid: 1 is the first.
+dashboard-setting-unused = A { $kind } widget takes no "{ $setting }" setting.
+dashboard-query-too-long = A widget's query is at most { $max } characters long.
+dashboard-needs-project = A { $kind } widget needs a project: give one, or pin the dashboard to a project.
+dashboard-needs-field = Name the field to count tasks by: status, priority, type, label or a custom field (cf.<name>).
+dashboard-field-unknown = Tasks can't be counted by "{ $field }".
+dashboard-field-unknown-hint = Use status, priority, type, label, or a custom select or yes/no field as cf.<name>.
+dashboard-limit = A widget lists 1 to { $max } rows.
+dashboard-days = A widget looks at 1 to { $max } days.
+dashboard-text-too-long = A note is at most { $max } characters long.
+dashboard-width = A widget is 1, 2 or 3 columns wide.
+dashboard-too-many-widgets = A dashboard holds at most { $max } widgets.
+dashboard-position = Give a place from 1 to { $max }.
+dashboard-project-gone = The widget's project ({ $project }) no longer exists.
+dashboard-project-gone-hint = Choose another project for the widget, or remove it.
+# The title of the starter dashboard's first widget, which counts the open tasks.
+dashboard-starter-open = Open tasks

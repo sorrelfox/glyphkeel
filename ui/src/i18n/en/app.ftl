@@ -783,6 +783,13 @@ move-to-versions-row =
         [one] { $name } (1 task)
        *[other] { $name } ({ $count } tasks)
     }
+move-to-sprints-left = A task can only be in a sprint of its own project, so in { $project } the moving tasks leave these sprints:
+# $name is a sprint the tasks are in; $count how many of them.
+move-to-sprints-row =
+    { $count ->
+        [one] { $name } (1 task)
+       *[other] { $name } ({ $count } tasks)
+    }
 move-to-confirm = Move
 move-to-done = Moved: the task is { $key } now.
 move-to-done-many =

@@ -28,6 +28,7 @@ How to use the desktop app.
 | [The wiki](guide/wiki.md) | Pages, links, macros, page templates, export and import |
 | [Roadmap and versions](guide/roadmap.md) | Planning tasks for releases |
 | [Sprints](guide/sprints.md) | Time-boxed cycles of work, the backlog and the burndown |
+| [Dashboards](guide/dashboards.md) | Pages of widgets: counts, lists, charts from the reports, burndown, versions, activity and notes |
 | [Custom fields](guide/custom-fields.md) | Your own fields on tasks |
 | [Status rules](guide/rules.md) | What happens when a task enters a status, and rules for agents |
 | [Automation rules](guide/automation.md) | Rules that act on their own when a task changes, a due date comes, or on a schedule |
@@ -53,6 +54,7 @@ How to use the desktop app.
 | [Connecting MCP clients](mcp-clients.md) | Set-up for Claude Code, Claude Desktop, Codex, Cursor and VS Code |
 | [Data and settings](data-and-settings.md) | Where your data and settings are kept, and how to move them |
 | [Glyphkeel on Windows](windows.md) | Installing, updating and removing Glyphkeel on Windows |
+| [Security](security.md) | What Glyphkeel protects you against, the local endpoint for agents, reporting a problem |
 
 ## Reference
 

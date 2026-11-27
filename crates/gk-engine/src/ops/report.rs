@@ -55,6 +55,30 @@ pub(super) fn register(r: &mut Registry) {
     });
 }
 
+/// Tasks created against closed, as `report.created_closed` gives it.
+pub(crate) fn created_closed_report(
+    q: &QueryCtx<'_>,
+    input: &FlowReportInput,
+) -> Result<CreatedClosedReport, Failure> {
+    created_closed(&Flow::load(q, input)?, input)
+}
+
+/// The cumulative flow, as `report.cumulative_flow` gives it.
+pub(crate) fn cumulative_flow_report(
+    q: &QueryCtx<'_>,
+    input: &FlowReportInput,
+) -> Result<CumulativeFlowReport, Failure> {
+    cumulative_flow(&Flow::load(q, input)?, input)
+}
+
+/// Cycle and lead time, as `report.cycle_time` gives it.
+pub(crate) fn cycle_time_report(
+    q: &QueryCtx<'_>,
+    input: &FlowReportInput,
+) -> Result<CycleTimeReport, Failure> {
+    cycle_time(&Flow::load(q, input)?, input)
+}
+
 // ---------------------------------------------------------------------
 // Loading
 

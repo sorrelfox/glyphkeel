@@ -267,6 +267,7 @@ pub(crate) fn purge_projects(
             run(w, sql, *p)?;
         }
         super::automation::purge_project(w.tx(), *p)?;
+        super::dashboard::purge_project(w.tx(), *p)?;
         w.tx().execute(
             "DELETE FROM view_settings WHERE scope = ?1",
             [p.to_string()],

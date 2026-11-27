@@ -16,9 +16,10 @@ use serde::Serialize;
 use serde_json::Value;
 
 use super::model::{
-    Activity, AgentSession, Attachment, Claim, Comment, CommentRevision, Counts, Label, Layout,
-    Manifest, ManifestProject, Modules, Project, ProjectFile, Relation, Revision, SavedView,
-    SeriesLine, Sprint, Status, Task, TaskType, TemplateLine, TimeEntry, Version, WikiPage,
+    Activity, AgentSession, Attachment, AutomationLine, Claim, Comment, CommentRevision, Counts,
+    Label, Layout, Manifest, ManifestProject, Modules, Project, ProjectFile, Relation, Revision,
+    SavedView, SeriesLine, Sprint, Status, Task, TaskType, TemplateLine, TimeEntry, Version,
+    WikiPage,
 };
 use super::sink::Sink;
 use super::{FORMAT_NAME, FORMAT_VERSION, Progress, project_dir, report};
@@ -296,6 +297,10 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
             created_by_name: s.created_by_name,
             updated_at: s.updated_at,
         })
+        .collect();
+    let automations = crate::ops::automation::of_scope(tx, Some(id))?
+        .into_iter()
+        .map(|(rid, r)| automation_line(rid, r))
         .collect();
 
     let mut descriptions = Vec::new();
@@ -684,6 +689,7 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
             key_aliases,
             templates,
             series,
+            automations,
             custom_fields,
         },
         tasks,
@@ -695,6 +701,23 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
         files,
         activity,
     })
+}
+
+fn automation_line(id: Id, r: crate::ops::automation::Record) -> AutomationLine {
+    AutomationLine {
+        id: id.to_string(),
+        name: r.name,
+        enabled: r.enabled,
+        trigger: r.trigger,
+        condition: r.condition,
+        actions: r.actions,
+        rank: r.rank,
+        created_at: r.created_at,
+        created_by_kind: r.created_by_kind,
+        created_by_name: r.created_by_name,
+        updated_at: r.updated_at,
+        updated_by_kind: r.updated_by_kind,
+    }
 }
 
 fn template_line(id: Id, t: crate::ops::template::Record) -> TemplateLine {
@@ -802,7 +825,7 @@ pub(crate) fn export(
 ) -> Result<ExportResult, OpError> {
     report(progress, TransferPhase::Reading, 0, 1);
     let whole = input.projects.is_empty();
-    let (projects, sessions, templates) = engine
+    let (projects, sessions, templates, automations) = engine
         .store()
         .read(|tx| {
             let ids = chosen(tx, input)?;
@@ -849,7 +872,16 @@ pub(crate) fn export(
             } else {
                 Vec::new()
             };
-            Ok::<_, Failure>((out, sessions, templates))
+            // So do the workspace's own automation rules.
+            let automations: Vec<AutomationLine> = if whole {
+                crate::ops::automation::of_scope(tx, None)?
+                    .into_iter()
+                    .map(|(rid, r)| automation_line(rid, r))
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            Ok::<_, Failure>((out, sessions, templates, automations))
         })
         .map_err(OpError::from)?;
 
@@ -865,7 +897,13 @@ pub(crate) fn export(
     };
     let mut sink = Sink::create(target, format).map_err(cant_write)?;
     let written = write_all(
-        engine, &mut sink, &projects, &sessions, &templates, progress,
+        engine,
+        &mut sink,
+        &projects,
+        &sessions,
+        &templates,
+        &automations,
+        progress,
     );
     let counts = match written {
         Ok(counts) => counts,
@@ -894,6 +932,7 @@ fn write_all(
     projects: &[Out],
     sessions: &[AgentSession],
     templates: &[TemplateLine],
+    automations: &[AutomationLine],
     progress: &Progress,
 ) -> Result<ArchiveCounts, OpError> {
     let io = |e: std::io::Error| {
@@ -911,6 +950,10 @@ fn write_all(
     counts.agent_sessions = sessions.len() as u64;
     if !templates.is_empty() {
         sink.put(super::TEMPLATES, &jsonl(templates)?).map_err(io)?;
+    }
+    if !automations.is_empty() {
+        sink.put(super::AUTOMATIONS, &jsonl(automations)?)
+            .map_err(io)?;
     }
     for (i, p) in projects.iter().enumerate() {
         report(

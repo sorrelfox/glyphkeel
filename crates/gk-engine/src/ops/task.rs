@@ -1920,6 +1920,7 @@ fn move_check(tx: &Transaction<'_>, input: &TaskMoveCheckInput) -> Result<MoveCh
     let (mut statuses, mut types, mut labels) = (Vec::new(), Vec::new(), Vec::new());
     let mut fields: Vec<MoveMatch> = Vec::new();
     let mut versions: Vec<MoveMatch> = Vec::new();
+    let mut sprints: Vec<MoveMatch> = Vec::new();
     let mut required_fields: Vec<MoveRequiredField> = Vec::new();
     let fallback_type = default_type(tx, &to)?;
     fn count(list: &mut Vec<MoveMatch>, target: &[lookup::Named], name: &str) {
@@ -1989,6 +1990,16 @@ fn move_check(tx: &Transaction<'_>, input: &TaskMoveCheckInput) -> Result<MoveCh
                     }),
                 }
             }
+            if let Some(sprint) = super::sprint::of_task(tx, id)? {
+                match sprints.iter_mut().find(|m| m.name == sprint.name) {
+                    Some(m) => m.tasks += 1,
+                    None => sprints.push(MoveMatch {
+                        name: sprint.name,
+                        tasks: 1,
+                        target: None,
+                    }),
+                }
+            }
             for (name, target) in super::custom_field::move_matches(tx, id, &to)? {
                 let folded = fold(&name);
                 match fields
@@ -2027,6 +2038,7 @@ fn move_check(tx: &Transaction<'_>, input: &TaskMoveCheckInput) -> Result<MoveCh
         labels,
         fields,
         versions,
+        sprints,
         required_fields,
         fallback_status: name_of(&to_statuses, first_status(tx, &to)?),
         fallback_type: name_of(&to_types, fallback_type),

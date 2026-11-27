@@ -1732,6 +1732,27 @@ fn rewrite_views(
     Ok(())
 }
 
+/// Option `from` of field `row` is now `to` (`None`: taken out), in the
+/// automation rules that set the field.
+fn option_in_rules(
+    w: &mut WriteCtx<'_>,
+    row: &FieldRow,
+    from: &str,
+    to: Option<&str>,
+) -> Result<(), Failure> {
+    super::automation::field_option_changed(
+        w,
+        row.project,
+        &super::automation::FieldNames {
+            id: row.id,
+            name: &row.name,
+            query_name: &row.query_name,
+        },
+        from,
+        to,
+    )
+}
+
 /// Whether a column names the field with this query name.
 fn is_column_of(column: &str, query_name: &str) -> bool {
     gk_query::fields::strip_custom_prefix(column).is_some_and(|c| fold(c) == query_name)
@@ -1776,7 +1797,21 @@ fn update(
             Some(row.id),
         )?;
         let old_query = row.query_name.clone();
-        if set_setting(w, &row, "name", text(name))? && old_query != query_name {
+        let old_name = row.name.clone();
+        let renamed = set_setting(w, &row, "name", text(name.clone()))?;
+        if renamed {
+            super::automation::field_renamed(
+                w,
+                row.project,
+                &super::automation::FieldNames {
+                    id: row.id,
+                    name: &old_name,
+                    query_name: &old_query,
+                },
+                &name,
+            )?;
+        }
+        if renamed && old_query != query_name {
             let (old, new) = (old_query.clone(), query_name.clone());
             rewrite_views(
                 w,
@@ -1869,6 +1904,7 @@ fn update(
         }
         set_setting(w, &row, "options", list_value(&options))?;
         for (from, to) in &renames {
+            option_in_rules(w, &row, from, Some(to))?;
             let q = row.query_name.clone();
             let (from, to) = (from.clone(), to.clone());
             rewrite_views(
@@ -1879,6 +1915,7 @@ fn update(
             )?;
         }
         for gone in &dropped {
+            option_in_rules(w, &row, gone, None)?;
             let q = row.query_name.clone();
             let gone = gone.clone();
             rewrite_views(
@@ -1987,6 +2024,15 @@ fn delete(
         text(row.name.clone()),
         None,
     );
+    super::automation::field_removed(
+        w,
+        row.project,
+        &super::automation::FieldNames {
+            id: row.id,
+            name: &row.name,
+            query_name: &row.query_name,
+        },
+    )?;
     let q = row.query_name.clone();
     rewrite_views(
         w,

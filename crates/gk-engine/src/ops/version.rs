@@ -411,7 +411,7 @@ pub(crate) fn of_task(tx: &Transaction<'_>, task: Id) -> Result<Option<VersionRe
     Ok(row)
 }
 
-fn list(tx: &Transaction<'_>, input: &VersionListInput) -> Result<VersionList, Failure> {
+pub(crate) fn list(tx: &Transaction<'_>, input: &VersionListInput) -> Result<VersionList, Failure> {
     let project = lookup::project(tx, "project", &input.project)?;
     let mut items = Vec::new();
     for (id, r, inherited) in visible(tx, project.id)? {

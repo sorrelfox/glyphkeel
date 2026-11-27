@@ -75,7 +75,7 @@ export function describeChange(t: Translate, entry: ActivityEntry, locale: strin
   return { what, item, fields };
 }
 
-const ENTITIES = new Set(["task", "project", "comment", "attachment", "time_entry", "relation", "status", "task_type", "label", "layout", "list_layout", "gantt_layout", "view", "version", "sprint", "wiki_page", "settings", "timer", "description", "series", "template", "work_kind", "automation_rule"]);
+const ENTITIES = new Set(["task", "project", "comment", "attachment", "time_entry", "relation", "status", "task_type", "label", "layout", "list_layout", "gantt_layout", "view", "version", "sprint", "wiki_page", "settings", "timer", "description", "series", "template", "work_kind", "automation_rule", "dashboard"]);
 
 /** The entity's name in the messages; anything newer reads as an item. */
 function entityName(entity: string): string {
@@ -111,6 +111,7 @@ export function ActivityScreen() {
   const byId = new Map((projects.data?.items ?? []).map((each) => [each.id, each]));
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  // eslint-disable-next-line react-hooks/incompatible-library -- the virtualizer returns new functions each render, so React Compiler rightly leaves this component unmemoized
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,

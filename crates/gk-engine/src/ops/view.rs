@@ -417,6 +417,8 @@ pub(crate) fn rewrite_queries(
     }
     // Automation rules' conditions are queries too.
     super::automation::rewrite_conditions(w, project, &rewrite)?;
+    // So are dashboards' widgets.
+    super::dashboard::rewrite_queries(w, project, &rewrite)?;
     // Boards' colour rules are saved queries too.
     super::board::rewrite_colour_rules(w, project, &rewrite)?;
     Ok(changed)
@@ -489,7 +491,10 @@ pub(crate) fn rewrite_views(
             changed += 1;
         }
     }
+    // Automation rules' conditions are queries too.
+    super::automation::rewrite_conditions(w, project, query)?;
     super::board::rewrite_colour_rules(w, project, query)?;
+    super::dashboard::rewrite_queries(w, project, query)?;
     Ok(changed)
 }
 

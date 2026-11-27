@@ -433,6 +433,8 @@ export function groupTaskInput(grouping: Grouping, group: { value?: string }, pr
   switch (grouping) {
     case "status":
       return { ...input, status: value };
+    case "type":
+      return { ...input, type: value };
     case "priority": {
       const priority = PRIORITIES.find((candidate) => candidate === value);
       return priority === undefined ? input : { ...input, priority };
