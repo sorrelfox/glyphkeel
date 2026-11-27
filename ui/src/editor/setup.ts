@@ -9,7 +9,7 @@
 import { autocompletion, completionKeymap } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
-import { drawSelection, EditorView, keymap } from "@codemirror/view";
+import { drawSelection, EditorView, keymap, tooltips, type Rect } from "@codemirror/view";
 
 import { completionProviders, completionSources, editorText } from "./complete";
 import { formatKeys } from "./format";
@@ -80,6 +80,35 @@ export function rendererExtension(renderer: BlockRenderer | null): Extension {
   return renderer ? blockRenderer.of(renderer) : [];
 }
 
+/** The gap between the cursor's line and the completion list, as in the app's menus. */
+const POPUP_GAP = 4;
+
+/**
+ * Where the completion list may go: the window's content area (the closest
+ * `main`, which leaves out the header and status bars), or the whole window
+ * where the editor sits elsewhere (a dialog, a window of its own). The list
+ * opens below the cursor when it fits there and above it otherwise, and moves
+ * sideways to stay inside.
+ */
+export function popupSpace(view: EditorView): Rect {
+  const root = view.dom.ownerDocument.documentElement;
+  let space = { top: 0, left: 0, right: root.clientWidth, bottom: root.clientHeight };
+  const area = view.dom.closest("main");
+  if (area) {
+    const rect = area.getBoundingClientRect();
+    space = { top: Math.max(space.top, rect.top), left: Math.max(space.left, rect.left), right: Math.min(space.right, rect.right), bottom: Math.min(space.bottom, rect.bottom) };
+  }
+  return { top: space.top + POPUP_GAP, left: space.left + POPUP_GAP, right: space.right - POPUP_GAP, bottom: space.bottom - POPUP_GAP };
+}
+
+/**
+ * Pop-ups (the completion list) live at the end of the page's body, so no
+ * scrolling or clipping box around the editor cuts them off.
+ */
+function popupPlacement(): Extension {
+  return tooltips({ position: "fixed", tooltipSpace: popupSpace, ...(typeof document === "undefined" ? {} : { parent: document.body }) });
+}
+
 /** Every extension of the editor. */
 export function editorExtensions(options: EditorOptions): Extension[] {
   const { environment } = options;
@@ -91,6 +120,9 @@ export function editorExtensions(options: EditorOptions): Extension[] {
     EditorView.lineWrapping,
     glyphkeelMarkdown(),
     autocompletion({ override: completionSources, icons: false }),
+    popupPlacement(),
+    // The completion list's accessible name.
+    EditorState.phrases.of({ Completions: environment.text("editor-completions") }),
     completionProviders.of(environment.providers),
     editorText.of(environment.text),
     checklistHandler.of(environment.toggle),

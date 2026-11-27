@@ -11,6 +11,8 @@ editor-line-break-cr = CR (classic Mac)
 editor-dismiss-note = Dismiss
 editor-spelling-menu = Spelling
 editor-no-suggestions = No suggestions
+# The name of the list of completions (tasks, wiki pages) that opens while typing.
+editor-completions = Suggestions
 
 ## Slash commands
 
