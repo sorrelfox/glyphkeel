@@ -9,10 +9,15 @@ import { createRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { type QueryField as FieldInfo } from "../../generated/ops";
+import { I18n } from "../../i18n/I18n";
 import { QueryField, type QueryFieldHandle } from "./QueryField";
 import { decorationsOf, queryCompletions, queryFieldExtensions, quoteValue, type QueryNames } from "./queryField";
 
 afterEach(cleanup);
+
+function English({ children }: { children: React.ReactNode }) {
+  return <I18n locale="en-US">{children}</I18n>;
+}
 
 const FIELDS: FieldInfo[] = [
   { name: "status", operators: [":", "!="], ranges: false, sortable: true, values: "status names" },
@@ -116,7 +121,7 @@ describe("one line", () => {
     const view = new EditorView({
       state: EditorState.create({
         doc: "",
-        extensions: queryFieldExtensions({ label: "Filter", placeholder: "", environment: { fields: () => FIELDS, names: () => NAMES }, onSubmit, onEscape: vi.fn(), onText }),
+        extensions: queryFieldExtensions({ label: "Filter", placeholder: "", environment: { fields: () => FIELDS, names: () => NAMES }, onSubmit, onEscape: vi.fn(() => true), onText }),
       }),
     });
     view.dispatch({ changes: { from: 0, insert: "is:open\nlabel:bug\r\nsort:due" } });
@@ -139,7 +144,7 @@ describe("the field", () => {
       placeholder: "Filter",
       ref,
     };
-    const { rerender } = render(<QueryField {...props} value="status:Doing" problem='No status "Doing".' />);
+    const { rerender } = render(<QueryField {...props} value="status:Doing" problem='No status "Doing".' />, { wrapper: English });
     const field = screen.getByRole("textbox", { name: "Filter query" });
     expect(field.textContent).toBe("status:Doing");
     expect(screen.getByRole("alert").textContent).toBe('No status "Doing".');
@@ -157,5 +162,17 @@ describe("the field", () => {
       ref.current?.addCondition();
     });
     expect(props.onChange).toHaveBeenLastCalledWith("status:Done ");
+  });
+});
+
+describe("help", () => {
+  it("gives each field its help as the completion's tooltip", () => {
+    const state = EditorState.create({ doc: "sta" });
+    const result = queryCompletions({ fields: () => FIELDS, names: () => NAMES, help: (name) => (name === "status" ? "The status by name." : undefined) })(
+      new CompletionContext(state, 3, false),
+    );
+    const status = result?.options.find((option) => option.label === "status:");
+    expect(status?.info).toBe("The status by name.");
+    expect(result?.options.find((option) => option.label === "due:")?.info).toBeUndefined();
   });
 });

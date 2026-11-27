@@ -1206,6 +1206,25 @@ fn combined(
     parts.join(" ")
 }
 
+/// The fields that choose tasks by their state: `is:closed`, a category,
+/// a status, or when a task closed.
+const STATE_FIELDS: &[&str] = &["is", "category", "cat", "status", "closed"];
+
+/// Whether a query chooses tasks by their state, so that a widget of open
+/// tasks leaves the choice to it.
+fn names_state(query: &str) -> bool {
+    let (_, tokens) = gk_query::parse_with_tokens(query);
+    tokens
+        .iter()
+        .filter(|token| token.kind == gk_query::TokenKind::Field)
+        .filter_map(|token| query.get(token.span.start..token.span.end))
+        .any(|name| {
+            STATE_FIELDS
+                .iter()
+                .any(|field| field.eq_ignore_ascii_case(name))
+        })
+}
+
 fn limit_of(stored: &Stored) -> u32 {
     stored.settings.limit.unwrap_or(LIMIT_DEFAULT)
 }
@@ -1408,6 +1427,8 @@ fn compute(
 
 /// Open tasks (or the widget's query) counted by a field, one bar per
 /// value in the field's order, each with the query that lists its tasks.
+/// Only open tasks count, unless the widget's query says which states it
+/// wants (see [`names_state`]).
 fn by_field(
     q: &QueryCtx<'_>,
     record: &Record,
@@ -1417,12 +1438,14 @@ fn by_field(
     let s = &stored.settings;
     let key = scope_key(q, record, stored)?;
     let field = s.field.clone().unwrap_or_else(|| "status".to_owned());
-    let base_query = s
-        .query
-        .clone()
-        .filter(|q| !q.trim().is_empty())
-        .unwrap_or_else(|| "is:open".to_owned());
-    let query = combined(key.as_deref(), Some(&base_query), &[], None);
+    // The widget counts open tasks; a query narrows them, unless it asks
+    // for tasks by their state itself (closed ones, a category, a status).
+    let base_query = s.query.clone().filter(|q| !q.trim().is_empty());
+    let open_only: &[&str] = match &base_query {
+        Some(text) if names_state(text) => &[],
+        _ => &["is:open"],
+    };
+    let query = combined(key.as_deref(), base_query.as_deref(), open_only, None);
     let (group_by, group_by_field) = match field.as_str() {
         "status" => (Some(ListGrouping::Status), None),
         "priority" => (Some(ListGrouping::Priority), None),
@@ -1497,6 +1520,31 @@ mod tests {
             "is:open sort:-priority due<today"
         );
         assert_eq!(combined(None, None, &[], None), "");
+    }
+
+    #[test]
+    fn a_query_names_the_state_only_through_its_state_fields() {
+        for query in [
+            "is:closed",
+            "-is:open",
+            "category:done",
+            "cat:todo label:bug",
+            "Status:Done",
+            "closed>-7d",
+            "label:bug OR is:closed",
+        ] {
+            assert!(names_state(query), "{query}");
+        }
+        for query in [
+            "sprint:active",
+            "label:bug",
+            "title:closed",
+            "text:status",
+            "cf.status:Beta",
+            "",
+        ] {
+            assert!(!names_state(query), "{query}");
+        }
     }
 
     #[test]

@@ -35,7 +35,7 @@ dashboard back, and the same goes for every change to its widgets.
 |---|---|---|
 | Matching tasks | How many tasks match a query; **Open as a list** opens the list with it | query, project |
 | Task list | The first tasks matching a query | query, project, rows |
-| Tasks by field | Open tasks counted by status, priority, type, label or a custom select or yes/no field, as bars; each bar opens its tasks | field, query, project |
+| Tasks by field | Open tasks counted by status, priority, type, label or a custom select or yes/no field, as bars; each bar opens its tasks. A query narrows the open tasks; one that chooses a state itself (`is:closed`, `category:done`, `status:Done`) counts those instead | field, query, project |
 | Due soon | Open tasks due in the next days (7 unless set) | query, project, days, rows |
 | Overdue | Open tasks past their due date, oldest first | query, project, rows |
 | Created and closed | The flow report of tasks created against closed | query, project, periods |

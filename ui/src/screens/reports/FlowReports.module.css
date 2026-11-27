@@ -27,6 +27,7 @@
 }
 
 .queryField {
+  display: flex;
   flex: 1 1 16em;
   min-inline-size: 12em;
   max-inline-size: 36em;
@@ -59,7 +60,6 @@
   flex-direction: column;
   gap: 8px;
   margin: 0;
-  max-inline-size: 1100px;
 }
 
 .chart {
@@ -221,7 +221,6 @@
 
 .table {
   inline-size: 100%;
-  max-inline-size: 1100px;
   border-collapse: collapse;
 }
 

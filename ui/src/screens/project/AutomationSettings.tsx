@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { useLocalization } from "@fluent/react";
 import { ArrowDown, ArrowUp, ChevronDown, Pencil, Plus, Trash2 } from "lucide-react";
-import { useId, useRef, useState } from "react";
+import { useId, useState } from "react";
 import { Button, useLocale } from "react-aria-components";
 
 import { classes } from "../../classes";
-import { QueryField, type QueryFieldHandle } from "../../components/QueryField/QueryField";
 import { Select } from "../../components/Select";
 import { Switch } from "../../components/Switch";
 import {
@@ -36,12 +34,10 @@ import {
 } from "../../data/automation";
 import { PRIORITIES, type Project } from "../../data/catalog";
 import { useCommand, useOp, failureText } from "../../data/hooks";
-import { useListNames, useParsedQuery, useQueryFields } from "../../data/list";
 import { useTemplates } from "../../data/recurrence";
-import type { ActionKind, AutomationAction, AutomationRule, AutomationTrigger, AutomationRun, AutomationTestChange, AutomationTestResult, QueryProblem, RelationKind, ScheduleEvery, TriggerKind, Weekday } from "../../generated/ops";
+import type { ActionKind, AutomationAction, AutomationRule, AutomationTrigger, AutomationRun, AutomationTestChange, AutomationTestResult, RelationKind, ScheduleEvery, TriggerKind, Weekday } from "../../generated/ops";
 import { useT, type Translate } from "../../i18n/I18n";
-import { Chips } from "../list/Chips";
-import { removeRanges } from "../list/model";
+import { QueryInput } from "../list/QueryInput";
 import styles from "./Automation.module.css";
 
 /** How the page names lists, weekdays and moments in the person's language. */
@@ -232,38 +228,7 @@ function RunLog({ id, rule }: { id: string; rule: AutomationRule }) {
  */
 function ConditionField({ project, value, hintId, onChange }: { project: string | undefined; value: string; hintId: string; onChange: (text: string) => void }) {
   const t = useT();
-  const { l10n } = useLocalization();
-  const parsed = useParsedQuery(value);
-  const reading = parsed.data && !parsed.isPlaceholderData ? parsed.data : undefined;
-  const names = useListNames(project);
-  const fields = useQueryFields();
-  const field = useRef<QueryFieldHandle>(null);
-  const problem = value.trim() === "" ? undefined : reading?.error;
-  const problemText = (p: QueryProblem) => (l10n.getBundle(p.message_id) ? l10n.getString(p.message_id, p.args ?? null) : p.message);
-  return (
-    <>
-      <QueryField
-        ref={field}
-        value={value}
-        onChange={onChange}
-        reading={reading ? { text: value, tokens: reading.tokens, error: reading.error } : undefined}
-        problem={problem ? problemText(problem) : undefined}
-        fields={fields}
-        names={names}
-        label={t("automation-condition")}
-        placeholder={t("automation-condition-placeholder")}
-        describedBy={hintId}
-      />
-      <Chips
-        chips={reading?.valid === true ? reading.chips : undefined}
-        advanced={reading?.advanced ?? false}
-        onRemove={(chip) => {
-          onChange(removeRanges(value, chip.ranges));
-        }}
-        onAdd={() => field.current?.addCondition()}
-      />
-    </>
-  );
+  return <QueryInput project={project} value={value} onChange={onChange} label={t("automation-condition")} placeholder={t("automation-condition-placeholder")} describedBy={hintId} chips />;
 }
 
 function RuleEditor({ project, editing, onDone }: { project: Project; editing: Editing; onDone: () => void }) {

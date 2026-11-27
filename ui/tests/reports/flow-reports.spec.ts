@@ -106,8 +106,10 @@ test("a project, a version and a query narrow the report, and a wrong query says
   await page.getByRole("button", { name: /^Version/ }).click();
   await page.getByRole("listbox").getByRole("option", { name: "Any version", exact: true }).click();
   await expect.poll(async () => Number(plain(await total.textContent()).replace(/\D/g, ""))).toBe(inProject);
-  const query = page.getByRole("searchbox", { name: "Query" });
+  const query = page.getByRole("textbox", { name: "Query" });
   await query.fill("priority:");
+  // The first Escape closes the list of values, if it opened; Enter then runs the query.
+  await query.press("Escape");
   await query.press("Enter");
   await expect(page.locator("[data-flow-error]")).not.toBeEmpty();
   await query.fill("");

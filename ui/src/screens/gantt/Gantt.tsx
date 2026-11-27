@@ -38,7 +38,7 @@ import { type VersionMarker } from "../../data/versions";
 import { type GanttGrouping, type ReadOnlyReason, type Schedule, type ScheduleDependency, type SchedulePreviewInput, type ScheduleProblem, type ScheduledTask, type UnscheduledTask } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { addDays, asDate, daysBetween, firstDayOfWeek, weekday, type Day } from "../calendar/model";
-import { COLUMN_MAX, COLUMN_MIN, SIZED, TABLE_MAX, TABLE_MIN, type Column } from "./layout";
+import { COLUMN_MAX, COLUMN_MIN, SIZED, TABLE_MAX, TABLE_MIN, TABLE_SHARE, type Column } from "./layout";
 import {
   PLAIN_ORDER,
   ROW,
@@ -252,7 +252,9 @@ export const Gantt = memo(function Gantt({
 
   const [liveTable, setLiveTable] = useState<number | null>(null);
   const [liveWidths, setLiveWidths] = useState<Partial<Record<Column, number>>>({});
-  const tableW = liveTable ?? table;
+  /** The chart's width: the table never takes more than this share of it, so a narrow window keeps some timeline. */
+  const [chartW, setChartW] = useState(Number.POSITIVE_INFINITY);
+  const tableW = Math.min(liveTable ?? table, Math.max(TABLE_MIN, Math.round(chartW * TABLE_SHARE)));
   const widths = { ...savedWidths, ...liveWidths };
 
   // ---------- rows ----------
@@ -292,6 +294,7 @@ export const Gantt = memo(function Gantt({
     if (!el) {
       return;
     }
+    setChartW(el.clientWidth);
     const [r0, r1] = rowWindow(el.scrollTop, el.clientHeight, rows.length);
     const [x0, x1] = columnWindow(scrollX(el), el.clientWidth);
     setView((now) => (now.r0 === r0 && now.r1 === r1 && now.x0 === x0 && now.x1 === x1 ? now : { r0, r1, x0, x1 }));

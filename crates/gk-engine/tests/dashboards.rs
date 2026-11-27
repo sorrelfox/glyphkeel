@@ -370,3 +370,53 @@ fn widget_queries_follow_a_renamed_status_of_their_project() {
     );
     assert_eq!(value["count"], 1);
 }
+
+#[test]
+fn tasks_by_field_counts_open_tasks_unless_its_query_names_a_state() {
+    let (_dir, e) = setup();
+    call(
+        &e,
+        "sprint.create",
+        json!({ "project": "TM", "name": "One", "tasks": ["TM-1", "TM-2"] }),
+    );
+    call(
+        &e,
+        "sprint.start",
+        json!({ "sprint": "One", "project": "TM" }),
+    );
+    call(&e, "task.move", json!({ "key": "TM-2", "status": "Done" }));
+    call(
+        &e,
+        "dashboard.create",
+        json!({ "name": "Counts", "widgets": [
+            { "kind": "tasks_by_field", "settings": { "field": "status", "query": "sprint:active" } },
+            { "kind": "tasks_by_field", "settings": { "field": "status", "query": "sprint:active is:closed" } },
+            { "kind": "tasks_by_field", "settings": { "field": "status" } }
+        ] }),
+    );
+    let shown = call(&e, "dashboard.show", json!({ "dashboard": "Counts" }));
+    let v = shown["widgets"].as_array().unwrap();
+    let bars = |widget: &Value| -> Vec<(String, u64)> {
+        widget["bars"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|b| b["count"].as_u64().unwrap() > 0)
+            .map(|b| {
+                (
+                    b["value"].as_str().unwrap().to_owned(),
+                    b["count"].as_u64().unwrap(),
+                )
+            })
+            .collect()
+    };
+    // The sprint's done task doesn't count among open tasks.
+    assert_eq!(v[0]["count"], 1);
+    assert!(bars(&v[0]).iter().all(|(status, _)| status != "Done"));
+    assert_eq!(v[0]["query"], "sprint:active is:open");
+    // A query that asks for closed tasks gets them.
+    assert_eq!(v[1]["count"], 1);
+    assert_eq!(bars(&v[1]), [("Done".to_owned(), 1)]);
+    // No query: every open task.
+    assert_eq!(v[2]["count"], 4 - 1);
+}

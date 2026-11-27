@@ -375,6 +375,14 @@ export function quote(text: string): string {
   return /^[\p{L}\p{N}_.-]+$/u.test(text) ? text : `"${text.replace(/["\\]/g, (c) => `\\${c}`)}"`;
 }
 
+/** A condition on a field that chooses tasks by their state: `is:closed`, a category, a status, or when a task closed. */
+const STATE_CONDITION = /(?:^|[\s(])-?(?:is|category|cat|status|closed)(?::|!=|<=|>=|<|>|=)/i;
+
+/** Whether a query chooses tasks by their state, so that a widget of open tasks leaves the choice to it. */
+export function namesState(query: string): boolean {
+  return STATE_CONDITION.test(query);
+}
+
 /** The widget's query with its project and extra conditions, as the engine combines them. */
 export function combined(project: string | undefined, query: string | undefined, extra: readonly string[], sort?: string): string {
   const parts: string[] = [];
@@ -436,7 +444,9 @@ function compute(host: DashboardHost, board: FakeDashboard, widget: FakeWidget, 
       return;
     case "tasks_by_field": {
       const field = s.field ?? "status";
-      const query = combined(scopeKey(host, board, widget), s.query ?? "is:open", []);
+      // Open tasks, narrowed by the query, unless the query chooses tasks by their state itself.
+      const given = s.query?.trim() === "" ? undefined : s.query;
+      const query = combined(scopeKey(host, board, widget), given, given !== undefined && namesState(given) ? [] : ["is:open"]);
       const builtIn = FIELDS.includes(field);
       const found = host.read("task.search", { query, limit: 1, ...(builtIn ? { group_by: field as ListGrouping } : { group_by_field: field }) }) as TaskSearchResult;
       value.count = found.total;

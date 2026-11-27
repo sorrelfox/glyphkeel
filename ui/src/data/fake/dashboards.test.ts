@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 
 import { type DashboardChange, type DashboardList, type DashboardShow, type WidgetValue } from "../../generated/ops";
-import { combined, quote } from "./dashboards";
+import { combined, namesState, quote } from "./dashboards";
 import { FakeError, FakeWorkspace } from "./engine";
 import { seed } from "./seed";
 
@@ -38,6 +38,15 @@ describe("queries of widgets", () => {
     expect(combined(undefined, "is:open sort:-priority", ["due<today"], "due")).toBe("is:open sort:-priority due<today");
     expect(quote("In progress")).toBe('"In progress"');
     expect(quote("Done")).toBe("Done");
+  });
+
+  it("know when a query chooses tasks by their state", () => {
+    for (const query of ["is:closed", "-is:open", "category:done", "cat:todo label:bug", "Status:Done", "closed>-7d"]) {
+      expect(namesState(query), query).toBe(true);
+    }
+    for (const query of ["sprint:active", "label:bug", "title:closed", "text:status", ""]) {
+      expect(namesState(query), query).toBe(false);
+    }
   });
 });
 

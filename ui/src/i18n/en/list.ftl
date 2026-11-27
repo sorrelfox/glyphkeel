@@ -226,3 +226,48 @@ list-group-add-to = Add a task to { $group }
 list-group-add-title = Title of the new task
 list-group-add-title-in = Title of the new task in { $group }
 list-group-added = { $key } added to { $group }
+
+## Help on each query field, shown beside it in the field's completion list.
+## The examples are query text and stay as they are.
+
+query-help-key = A task by its key. For example: key:TM-41
+query-help-project = Tasks of a project, with its sub-projects. For example: project:TM
+query-help-title = Words in the title. For example: title:login
+query-help-text = Words in the title or the description. For example: text:"time zone"
+query-help-description = Words in the description. For example: description:crash
+query-help-comment = Words in the comments. For example: comment:agreed
+query-help-status = The status by name. For example: status:"In progress" or status!=Done
+query-help-category = The kind of status: to do, in progress, done or cancelled; open or closed. For example: category:done
+query-help-type = The task type by name. For example: type:Bug
+query-help-priority = The priority, from none to urgent; compares in that order. For example: priority>=high
+query-help-label = Tasks with a label, or without any. For example: label:bug or label:none
+query-help-version = The version a task is planned for. For example: version:1.0
+query-help-sprint = The sprint a task is in; active is the running one. For example: sprint:active
+query-help-parent = The direct parent task. For example: parent:TM-12
+query-help-under = Every task below a task, at any depth. For example: under:TM-12
+query-help-blocks = Tasks that block the given task. For example: blocks:TM-7
+query-help-blocked-by = Tasks blocked by the given task. For example: blocked-by:TM-7
+query-help-relates = Tasks related to the given task. For example: relates:TM-7
+query-help-duplicates = Tasks that duplicate the given task. For example: duplicates:TM-7
+query-help-start = The start date: a date, today, or days from today. For example: start<=today
+query-help-due = The due date: a date, today, or days from today. For example: due<+7d
+query-help-during = Tasks whose dates overlap a day or a range. For example: during:2026-11-01..2026-11-30
+query-help-created = When the task was made. For example: created>-7d
+query-help-edited = When the task's text last changed. For example: edited>-3d
+query-help-updated = When anything about the task last changed. For example: updated>-1d
+query-help-closed = When the task was closed. For example: closed>-30d
+query-help-estimate = The estimate, as a duration. For example: estimate>2h
+query-help-spent = The time logged. For example: spent>=1h
+query-help-remaining = The estimate less the time logged. For example: remaining>0
+query-help-progress = The share done, from 0 to 100. For example: progress<50
+query-help-author = Who made the task: me, agent, or an agent's name. For example: author:me
+query-help-claimed = Tasks an agent has claimed. For example: claimed:any
+query-help-comments = The number of comments. For example: comments>0
+query-help-files = The number of attached files. For example: files>0
+query-help-subtasks = The number of sub-tasks. For example: subtasks>0
+query-help-has = Tasks that have something: a description, files, comments… For example: has:files
+query-help-is = A state: open, closed, blocked or unscheduled. For example: is:open
+query-help-was = A value the task had at any time. For example: was:status:Review
+query-help-changed = A field that changed, and when. For example: changed:due>-7d
+query-help-changed-by = Who changed the task: me, agent, or an agent's name. For example: changed-by:agent
+query-help-sort = The order of the results; a minus sorts the other way. For example: sort:-priority,due

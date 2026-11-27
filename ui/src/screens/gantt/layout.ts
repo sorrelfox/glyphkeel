@@ -23,6 +23,8 @@ export const GROUPINGS: readonly GanttGrouping[] = ["parent", "label", "status",
 /** The narrowest and widest table and column, in pixels. */
 export const TABLE_MIN = 240;
 export const TABLE_MAX = 900;
+/** The largest share of the chart's width the table takes, whatever its own width. */
+export const TABLE_SHARE = 0.6;
 export const COLUMN_MIN = 32;
 export const COLUMN_MAX = 400;
 

@@ -11,6 +11,7 @@ import { BUCKETS, COUNT_FIELDS, defaultWidth, KIND_SETTINGS, NEEDS_PROJECT, TIME
 import { useOp } from "../../data/hooks";
 import { type ActorKind, type Dashboard, type FlowBucket, type TimeGroupBy, type Widget, type WidgetKind, type WidgetSetting, type WidgetSettings } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
+import { QueryInput } from "../list/QueryInput";
 import { widgetTitle } from "./WidgetBody";
 import styles from "./Dashboards.module.css";
 
@@ -167,20 +168,21 @@ export function WidgetDialog({ dashboard, widget, error, onSave, onEdit, onClose
           </Row>
         )}
         {takes("query") && (
-          <label className={styles.formRow}>
-            <span className={styles.formLabel}>{t("widget-field-query")}</span>
-            <span className="field">
-              <input
+          <Row label={t("widget-field-query")}>
+            <div className={styles.queryCell} data-widget-query>
+              <QueryInput
+                project={settings.project ?? dashboard.project}
                 value={settings.query ?? ""}
-                spellCheck={false}
-                placeholder={t("widget-query-placeholder")}
-                onChange={(event) => {
-                  set("query", event.target.value);
+                onChange={(text) => {
+                  set("query", text);
                 }}
-                data-widget-query
+                label={t("widget-field-query")}
+                placeholder={t("widget-query-placeholder")}
+                onSubmit={save}
+                chips
               />
-            </span>
-          </label>
+            </div>
+          </Row>
         )}
         {takes("project") && (
           <Row label={t("widget-field-project")}>

@@ -112,11 +112,14 @@
   padding-inline: 12px;
 }
 
+/* The table keeps to its width: in a narrow window its last columns are cut
+   off rather than drawn over the timeline. */
 .corner {
   position: sticky;
   inset-block-start: 0;
   inset-inline-start: 0;
   z-index: 4;
+  overflow: clip;
   background: var(--sunken);
   border-block-end: 1px solid var(--border);
   border-inline-end: 1px solid var(--border);
@@ -242,6 +245,7 @@
   position: sticky;
   inset-inline-start: 0;
   z-index: 2;
+  overflow: clip;
   background: var(--surface);
   border-inline-end: 1px solid var(--border);
 }
@@ -425,8 +429,9 @@
   white-space: nowrap;
 }
 
+/* A released version: muted, still readable (fading it would lose the contrast). */
 .versionDone {
-  opacity: 0.6;
+  color: var(--fg-muted);
 }
 
 .link {
