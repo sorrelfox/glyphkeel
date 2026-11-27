@@ -76,7 +76,7 @@ pub(super) fn register(r: &mut Registry) {
 
 /// Folders arrange the whole workspace's sidebar: a caller limited to one
 /// project reads them but doesn't change them.
-fn whole_workspace() -> Result<(), Failure> {
+pub(crate) fn whole_workspace() -> Result<(), Failure> {
     if crate::scope::root().is_some() {
         return Err(crate::scope::outside());
     }
@@ -367,7 +367,7 @@ fn list(tx: &Transaction<'_>) -> Result<FolderList, Failure> {
 }
 
 /// The folder `text` names: its ID, or its name (ignoring case).
-fn find(tx: &Transaction<'_>, field: &str, text: &str) -> Result<(Id, Record), Failure> {
+pub(crate) fn find(tx: &Transaction<'_>, field: &str, text: &str) -> Result<(Id, Record), Failure> {
     let text = text.trim();
     if let Ok(id) = text.parse::<Id>()
         && let Some(r) = load(tx, id)?

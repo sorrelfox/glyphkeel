@@ -236,7 +236,7 @@ Input: `ProjectRef`. Output: `Project`. Schemas: [catalog.schema.json](catalog.s
 
 ## `project.create`
 
-Create a project, or a sub-project that copies its parent's statuses, types and labels; without a colour it gets one its sibling projects don't use yet.
+Create a project, optionally in a folder, or a sub-project that copies its parent's statuses, types and labels; without a colour it gets one its sibling projects don't use yet.
 
 Input: `ProjectCreateInput`. Output: `ProjectChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 

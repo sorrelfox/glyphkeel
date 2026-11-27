@@ -105,7 +105,7 @@ import { createRule, DEPTH_MAX, fill, findRule, fits, listRules, listRuns, logRu
 /** The Gantt chart's layout until the person changes it. */
 const DEFAULT_GANTT_LAYOUT: GanttLayout = { zoom: "day", widths: {}, group_by: "parent", move_dependents: false };
 import { linksIn, placePage, subtree, type TextLink } from "./wiki";
-import { createFolder, deleteFolder, listFolders, moveToFolder, renameFolder, updateFolder, type FolderHost } from "./folders";
+import { createFolder, deleteFolder, find as findFolder, listFolders, moveToFolder, renameFolder, updateFolder, type FolderHost } from "./folders";
 import { addWidget as addDashboardWidget, createDashboard, dashboardWidget, deleteDashboard, listDashboards, removeWidget as removeDashboardWidget, showDashboard, updateDashboard, updateWidget as updateDashboardWidget, type DashboardHost } from "./dashboards";
 import { addSprintTasks, completeSprint, createSprint, deleteSprint, getSprint, listSprints, removeSprintTasks, sprintBurndown, sprintForTask, sprintRef, startSprint, updateSprint, type SprintHost } from "./sprints";
 import { createVersion, deleteVersion, getVersion, listVersions, updateVersion, versionForTask, versionRef, visibleVersions, type VersionHost } from "./versions";
@@ -2795,8 +2795,8 @@ export class FakeWorkspace {
     insertTask: (project, fields) => this.insertTask(project, fields),
     fullTask: (task) => this.fullTask(task),
     fullProject: (project) => this.fullProject(project),
-    createProject: ({ name, key, parent, hue, description }) => {
-      this.handlers["project.create"]?.({ name, key, ...some("parent", parent), ...some("hue", hue), description });
+    createProject: ({ name, key, parent, folder, hue, description }) => {
+      this.handlers["project.create"]?.({ name, key, ...some("parent", parent), ...some("folder", folder), ...some("hue", hue), description });
       return this.project(key);
     },
     createPage: (project, title, body, parentTitle) => {
@@ -2881,7 +2881,7 @@ export class FakeWorkspace {
       return { items: ordered.map((project) => this.summary(project)), total: ordered.length };
     },
     "project.get": ({ project }) => this.fullProject(this.project(project)),
-    "project.create": ({ name, key, parent, hue, icon, description }) => {
+    "project.create": ({ name, key, parent, folder, hue, icon, description }) => {
       const trimmed = name.trim();
       if (trimmed === "") {
         fail("invalid", "A project needs a name.", { details: { path: "name" } });
@@ -2900,6 +2900,11 @@ export class FakeWorkspace {
       if (parentProject && this.depth(parentProject) >= MAX_DEPTH) {
         fail("limit", "Sub-projects go at most three levels deep.");
       }
+      if (parentProject && folder) {
+        fail("invalid", "A sub-project follows its parent, so it can't go into a folder: give either parent or folder.", { details: { path: "folder" } });
+      }
+      // A new top-level project can go straight into a folder, as its last project.
+      const inFolder = folder ? findFolder(this.folderHost, folder).id : undefined;
       const siblings = this.state.projects.filter((project) => project.parent === (parentProject?.id ?? null));
       this.validIcon(icon);
       const project = newProject({
@@ -2912,6 +2917,7 @@ export class FakeWorkspace {
       });
       project.description = description ?? "";
       project.icon = icon ?? undefined;
+      project.folder = inFolder;
       if (parentProject) {
         // A sub-project starts with copies of its parent's statuses, types and labels.
         project.statuses = parentProject.statuses.map((status) => ({ ...structuredClone(status), id: nextId("s") }));

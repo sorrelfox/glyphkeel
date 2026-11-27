@@ -690,7 +690,7 @@ export function templateHandlers(host: FakeHost): Handlers {
       if (input.name === null || input.name === undefined || input.key === null || input.key === undefined) {
         host.fail("invalid", "A project template makes a project: give its `name` and `key`.", { details: { path: "name", message_id: "template-project-needs-name" } });
       }
-      const project = host.createProject({ name: input.name, key: input.key, parent: input.parent_project ?? null, hue: input.hue ?? null, description: setup.description ?? "" });
+      const project = host.createProject({ name: input.name, key: input.key, parent: input.parent_project ?? null, folder: input.folder ?? null, hue: input.hue ?? null, description: setup.description ?? "" });
       setUp(host, project, setup);
       if (project.modules.wiki) {
         for (const page of setup.wiki ?? []) {

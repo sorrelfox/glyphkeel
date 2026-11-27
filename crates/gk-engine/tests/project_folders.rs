@@ -347,3 +347,94 @@ fn an_agent_limited_to_a_project_cannot_change_folders() {
     assert_eq!(refused.code, ErrorCode::Forbidden);
     assert!(folders(&e).is_empty());
 }
+
+#[test]
+fn a_new_project_goes_straight_into_a_folder_and_one_undo_removes_it() {
+    let dir = TempDir::new().unwrap();
+    let e = setup(&dir);
+    call(&e, "folder.create", json!({ "name": "Clients" }));
+    call(
+        &e,
+        "folder.move",
+        json!({ "project": "AA", "folder": "Clients" }),
+    );
+    let made = call(
+        &e,
+        "project.create",
+        json!({ "name": "Delta", "key": "DD", "folder": "clients" }),
+    );
+    let folder_id = folders(&e)[0]["id"].as_str().unwrap().to_owned();
+    assert_eq!(made["project"]["folder"], folder_id.as_str());
+    assert_eq!(
+        tree(&e),
+        pairs(&[("AA", "Clients"), ("BB", ""), ("CC", ""), ("DD", "Clients"),])
+    );
+    let listed = folders(&e);
+    assert_eq!(listed[0]["projects"], json!(["AA", "DD"]), "{listed:?}");
+
+    // Without a folder it lands at the top level.
+    call(&e, "project.create", json!({ "name": "Echo", "key": "EE" }));
+    assert_eq!(tree(&e).last().unwrap(), &("EE".to_owned(), String::new()));
+
+    call(&e, "history.undo", json!({}));
+    call(&e, "history.undo", json!({}));
+    assert_eq!(
+        tree(&e),
+        pairs(&[("AA", "Clients"), ("BB", ""), ("CC", "")])
+    );
+    assert_eq!(names(&e), ["Clients"]);
+    assert_eq!(folders(&e)[0]["projects"], json!(["AA"]));
+}
+
+#[test]
+fn a_project_from_a_template_goes_into_a_folder_in_one_change() {
+    let dir = TempDir::new().unwrap();
+    let e = setup(&dir);
+    call(&e, "folder.create", json!({ "name": "Clients" }));
+    call(
+        &e,
+        "template.apply",
+        json!({ "template": "software project", "name": "App", "key": "APP", "folder": "Clients" }),
+    );
+    assert_eq!(folders(&e)[0]["projects"], json!(["APP"]));
+    call(&e, "history.undo", json!({}));
+    assert_eq!(folders(&e)[0]["projects"], json!([]));
+    assert!(tree(&e).iter().all(|(key, _)| key != "APP"));
+}
+
+#[test]
+fn a_new_project_refuses_a_folder_with_a_parent_or_an_unknown_folder() {
+    let dir = TempDir::new().unwrap();
+    let e = setup(&dir);
+    call(&e, "folder.create", json!({ "name": "Clients" }));
+    let both = fail(
+        &e,
+        "project.create",
+        json!({ "name": "Kid", "key": "KD", "parent": "BB", "folder": "Clients" }),
+    );
+    assert_eq!(both.code, ErrorCode::Invalid);
+    assert_eq!(both.details["path"], "folder", "{both:?}");
+    let missing = fail(
+        &e,
+        "project.create",
+        json!({ "name": "Kid", "key": "KD", "folder": "Nope" }),
+    );
+    assert_eq!(missing.code, ErrorCode::NotFound);
+    let mut ctx = Context::user(Via::Mcp);
+    ctx.project_scope = Some("BB".to_owned());
+    let scoped = e
+        .call(
+            &ctx,
+            "project.create",
+            json!({ "name": "Kid", "key": "KD", "folder": "Clients" }),
+        )
+        .expect_err("scoped");
+    assert_eq!(scoped.code, ErrorCode::Forbidden);
+    assert!(
+        call(&e, "project.list", json!({}))["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|p| p["key"] != "KD")
+    );
+}

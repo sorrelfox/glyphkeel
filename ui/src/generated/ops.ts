@@ -2926,6 +2926,8 @@ export type ProjectCreateInput = {
   client_request_id?: string | null;
   /** The description (Markdown). */
   description?: string | null;
+  /** The folder to put the new top-level project in (ID or name), as its last project; default: no folder. Not with `parent`: a sub-project follows its parent. */
+  folder?: string | null;
   /** The colour; default: the first palette colour that no sibling project uses yet (the least-used one when all are taken). */
   hue?: Hue | null;
   /** An icon shown instead of the circle; default: none (the circle). */
@@ -4833,6 +4835,8 @@ export type TemplateApplyInput = {
   date?: string | null;
   /** With a task template: the new task's due date instead of the template's (a date: `2026-12-01`, or `fri`, `next mon`, `+3d`). */
   due_date?: string | null;
+  /** A project template: the folder to put the new top-level project in (ID or name); not with `parent_project`. */
+  folder?: string | null;
   /** A project template: its colour. */
   hue?: Hue | null;
   /** A project template: the new project's key. */
@@ -6908,7 +6912,7 @@ export function makeOps(call: Call) {
       list: (input: OpMap["project.list"]["input"] = {}) => call("project.list", input),
       /** One project with its statuses (board order, category, WIP limit), task types, labels, modules, sub-projects and counts. (read) */
       get: (input: OpMap["project.get"]["input"]) => call("project.get", input),
-      /** Create a project, or a sub-project that copies its parent's statuses, types and labels; without a colour it gets one its sibling projects don't use yet. (write) */
+      /** Create a project, optionally in a folder, or a sub-project that copies its parent's statuses, types and labels; without a colour it gets one its sibling projects don't use yet. (write) */
       create: (input: OpMap["project.create"]["input"]) => call("project.create", input),
       /** Change a project: name, description, colour, icon, modules, key, place in the tree, archived; add, change, reorder or remove statuses, types and labels, all in one change. (write) */
       update: (input: OpMap["project.update"]["input"]) => call("project.update", input),

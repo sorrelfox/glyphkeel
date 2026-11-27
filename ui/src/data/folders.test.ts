@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 
 import { type ProjectFolder, type ProjectSummary } from "../generated/ops";
-import { dropMove, folderKey, folderOfKey, groupTopLevel, stepMove } from "./folders";
+import { dropMove, folderKey, folderOfKey, folderOfProject, groupTopLevel, stepMove } from "./folders";
 
 function project(key: string, fields: Partial<ProjectSummary> = {}): ProjectSummary {
   return { key, name: key, path: key, depth: 0, hue: "blue", state: "active", open_tasks: 0, open_tasks_with_subprojects: 0, id: `id-${key}`, ...fields };
@@ -53,5 +53,13 @@ describe("the project tree's folders", () => {
     expect(stepMove(TOP, folderKey("f1"), "down")).toEqual({ op: "folder.update", input: { folder: "f1", after: "f2" } });
     expect(stepMove(TOP, folderKey("f1"), "up")).toBeNull();
     expect(stepMove(TOP, "AK", "up")).toBeNull();
+  });
+
+  it("count a sub-project as in its top-level project's folder", () => {
+    expect(folderOfProject(PROJECTS, "AA")).toBe("f1");
+    expect(folderOfProject(PROJECTS, "AK")).toBe("f1");
+    expect(folderOfProject(PROJECTS, "BB")).toBeUndefined();
+    expect(folderOfProject(PROJECTS, undefined)).toBeUndefined();
+    expect(folderOfProject(PROJECTS, "ZZ")).toBeUndefined();
   });
 });

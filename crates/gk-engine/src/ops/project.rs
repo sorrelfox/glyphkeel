@@ -708,6 +708,16 @@ pub(crate) fn create(
         }
         None => None,
     };
+    let folder = match &input.folder {
+        Some(_) if parent.is_some() => {
+            return Err(messages::invalid("folder", "folder-with-parent", &[]));
+        }
+        Some(text) => {
+            super::folder::whole_workspace()?;
+            Some(super::folder::find(w.tx(), "folder", text)?.0)
+        }
+        None => None,
+    };
     let description = input.description.unwrap_or_default();
     gk_core::check_markdown("description", &description).map_err(|e| invalid("description", e))?;
     let parent_id = parent.as_ref().map(|p| p.id);
@@ -759,12 +769,13 @@ pub(crate) fn create(
         }
     }
     w.tx().execute(
-        "INSERT INTO projects (id, parent_id, rank, key, name, name_fold, description, hue, icon,
-                               modules, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11)",
+        "INSERT INTO projects (id, parent_id, folder_id, rank, key, name, name_fold, description,
+                               hue, icon, modules, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?12)",
         params![
             b(id),
             parent_id.map(b),
+            folder.map(b),
             rank.as_str(),
             key.as_str(),
             name,
@@ -794,6 +805,16 @@ pub(crate) fn create(
     w.record_field(PROJECT, id, Some(id), "name", None, text(name.as_str()));
     if let Some(p) = parent_id {
         w.record_field(PROJECT, id, Some(id), "parent", None, id_value(p));
+    }
+    if let Some(f) = folder {
+        w.record_field(
+            PROJECT,
+            id,
+            Some(id),
+            super::folder::FIELD,
+            None,
+            id_value(f),
+        );
     }
     changed(w, id)
 }

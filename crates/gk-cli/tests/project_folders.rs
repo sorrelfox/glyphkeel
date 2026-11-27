@@ -43,3 +43,23 @@ fn folders_are_made_filled_renamed_and_deleted_from_the_command_line() {
         "{projects}"
     );
 }
+
+#[test]
+fn a_project_is_created_in_a_folder_from_the_command_line() {
+    let ws = Workspace::new();
+    ws.ok(&["-q", "folder", "create", "--name", "Clients"]);
+    let made = ws.json(&[
+        "project", "create", "--name", "Garden", "--key", "GA", "--folder", "Clients",
+    ]);
+    assert!(made["project"]["folder"].is_string(), "{made}");
+    let listed = ws.json(&["folder", "list"]);
+    assert_eq!(listed["items"][0]["projects"], json!(["GA"]));
+    let refused = ws.fails(
+        1,
+        &[
+            "project", "create", "--name", "Kid", "--key", "KD", "--parent", "GA", "--folder",
+            "Clients",
+        ],
+    );
+    assert!(refused.contains("sub-project"), "{refused}");
+}
