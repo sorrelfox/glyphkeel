@@ -143,10 +143,7 @@ pub(crate) fn apply(
 /// workspace setting.
 fn effective_profile(w: &WriteCtx<'_>) -> Result<Profile, Failure> {
     let cap = super::settings::load(w.tx())?.agent_max_profile;
-    Ok(w.caller()
-        .profile
-        .unwrap_or(Profile::Standard)
-        .capped_by(cap))
+    Ok(w.caller().agent_profile_under(cap))
 }
 
 /// Checks that the caller may change task `task` (named `key` in errors):

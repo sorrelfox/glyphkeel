@@ -864,6 +864,7 @@ history-title = History
 history-none = No changes recorded.
 history-by = { $actor } · { $via } · { $time }
 history-by-reverted = { $actor } · { $via } · { $time } · reverted
+history-confirmed-by-you = You allowed this when the agent asked.
 history-created = Created { $key }
 history-changed = { $field }: { $before } → { $after }
 # A long value the activity log keeps only the beginning of; the item itself

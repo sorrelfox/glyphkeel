@@ -52,8 +52,9 @@ icu_collator = "2.4.0"
 # The MCP server of `glyphkeel mcp`: both protocol eras over standard input
 # and output. The minor version is pinned because it ships protocol fixes
 # often; read its changelog on every bump. The `client` feature is used by
-# tests only.
-rmcp = { version = "~3.11.0", default-features = false, features = ["server", "transport-io"] }
+# tests only. `elicitation` asks the person to confirm in the old era;
+# the Streamable HTTP server serves the opt-in local endpoint.
+rmcp = { version = "~3.11.0", default-features = false, features = ["server", "transport-io", "elicitation", "transport-streamable-http-server"] }
 # Snapshots of command output in tests (development only).
 insta = "1.49.0"
 # Thumbnails of attached images. Only the decoders for the image types the
@@ -146,6 +147,20 @@ winreg = "=0.56.0"
 # The async runtime: the MCP server uses only the single-threaded parts; the
 # development bridge adds its own features in its manifest.
 tokio = { version = "1.54.1", default-features = false, features = ["rt", "time", "macros"] }
+# The local HTTP endpoint for agents (off by default, 127.0.0.1 only): the
+# HTTP/1 server under rmcp's Streamable HTTP service, its body helpers and
+# the service trait. All were in the lock already through Tauri's
+# dependencies.
+hyper = { version = "1.12.0", default-features = false, features = ["server", "http1"] }
+hyper-util = { version = "0.1.21", default-features = false, features = ["tokio"] }
+http-body-util = "0.1.5"
+bytes = "1.12.2"
+tower-service = "0.3.3"
+# Stopping the MCP server's watchers and its HTTP endpoint.
+tokio-util = { version = "0.7.20", default-features = false }
+# Secrets from the system's random source: the HTTP endpoint's token and the
+# request states of confirmations.
+getrandom = "0.3.4"
 # Log lines of `glyphkeel mcp` on standard error (standard output carries the
 # protocol).
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt", "std"] }

@@ -216,6 +216,12 @@ impl AppSettings {
         stored.clone()
     }
 
+    /// The personal settings file shared with the command line and the
+    /// agent server, when there is a home folder.
+    pub(crate) fn user_file(&self) -> Option<&Path> {
+        self.user_file.as_deref()
+    }
+
     /// The personal time zone as chosen: `"system"` or an IANA name.
     pub(crate) fn time_zone(&self) -> String {
         let user = self

@@ -455,13 +455,12 @@ impl Engine {
         if !ctx.is_agent() {
             return Ok(None);
         }
-        let requested = ctx.profile.unwrap_or(Profile::Standard);
         let cap = self
             .store
             .read(|tx| settings::load(tx).map_err(Failure::from))
             .map_err(OpError::from)?
             .agent_max_profile;
-        let profile = requested.capped_by(cap);
+        let profile = ctx.agent_profile_under(cap);
         let refused = std::iter::once(desc)
             .chain(parts.iter().copied())
             .find(|d| !profile.allows(d.safety));

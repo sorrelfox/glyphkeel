@@ -3,7 +3,9 @@
 # Security
 
 Glyphkeel keeps your tasks, wiki and files in a folder on your own computer
-and never connects to the network. This page explains what it protects you
+and never connects to the network. The only thing that listens is the
+optional local endpoint for agents, which is off unless you turn it on
+([below](#the-local-http-endpoint-for-agents)). This page explains what it protects you
 against, what it doesn't, and how to report a problem.
 
 ## Reporting a problem
@@ -98,13 +100,27 @@ their size, the number of entries and the length of every field.
 ## Agents and the MCP server
 
 `glyphkeel mcp` serves AI agents over standard input and output. It opens no
-network port.
+network port. The app (or `glyphkeel mcp --http`) can also serve them on a
+local address; see the next section.
 
 - **Profiles.** Every agent session has a profile: *read-only*, *standard*
   (changes and moving to the trash, nothing permanent) or *full*. You set the
   most any agent may have in Preferences; an agent that asks for more gets
   less. The engine checks the profile on every operation, whichever tool or
   prompt asked for it, so a tool can't do more than its profile allows.
+- **Asking you.** When an agent's client can show you a question, an agent
+  may ask to make one change its profile doesn't allow, and is made to ask
+  before deleting a project, purging the trash or moving more tasks to the
+  trash than one call may. The question comes from Glyphkeel, through the
+  client ("Claude Code wants to delete the project Home lab with 42 tasks
+  for good. Allow?"). Only what you allow runs, once, and the history notes
+  that you confirmed it; declining, or not answering within five minutes,
+  refuses the change. The answer is tied to that one call: a 2026-07-28
+  client sends it back with a random, single-use handle that the server
+  keeps, so an agent can't reuse or forge it. Operations only the app may
+  run (backups, settings about agents) are never offered, asked or not. You
+  can turn the questions off in Preferences › Agents & CLI; turning them on
+  again asks you in a window of the desktop.
 - **A project scope.** An agent can be limited to one project and its
   sub-projects.
 - **Limits.** Agents may make only a limited number of changes a minute, and
@@ -130,6 +146,35 @@ network port.
   personal and applies to every agent on this computer. See
   [Files on disk](mcp.md#files-on-disk).
 
+## The local HTTP endpoint for agents
+
+For MCP clients that connect to an address instead of starting a program,
+the app can serve agents over HTTP (Preferences › Agents & CLI › **Local
+HTTP endpoint**), and so can `glyphkeel mcp --http` without the app.
+
+- **Off by default.** Turning it on in the app asks you in a window of the
+  desktop, so script in the page can't open it.
+- **This computer only.** It listens on 127.0.0.1, never on another
+  address, on the port you choose or a free one. It makes no connection of
+  its own.
+- **A token.** Every request must carry `Authorization: Bearer <token>`;
+  anything else gets `401`. The token is 256 random bits, made by the app
+  (or the first `glyphkeel mcp --http`) and kept in your personal settings
+  file, which only your account may read. **New token** in Preferences makes
+  another one and locks out every client with the old one.
+- **No web pages.** A request must name the endpoint itself in `Host`
+  (`127.0.0.1:<port>` or `localhost:<port>`), so a web site can't reach it by
+  pointing a name of its own at your computer (DNS rebinding), and may carry
+  no `Origin` but the endpoint's own, so a page open in your browser can't
+  use it.
+- **The same rules as over standard input and output.** The same profiles
+  and cap, limits, project scope, file checks and questions; `/mcp` serves
+  the standard profile and `/mcp/read-only` and `/mcp/full` those profiles.
+  Each client's work is one agent session in the history.
+
+Any program running as you that can read your settings file can read the
+token too, as it could read the workspace itself.
+
 ## The command line
 
 `glyphkeel` acts as you. It asks before anything permanent unless you pass
@@ -151,6 +196,9 @@ profiles.
 - **Changes while a path is checked.** Another program running as you could
   swap a file for a link between the check and the read. That needs a
   program on your account already, which can read your files anyway.
+- **Programs on your computer with the token.** While the HTTP endpoint is
+  on, a program that has the token works as an agent. Turn the endpoint off
+  when no client needs it, and make a new token if you think it leaked.
 - **Agents you allow to do more.** An agent with the standard or full profile
   can change or delete what its profile allows, within its limits. Every
   change can be reverted from the history, and backups are made every day.

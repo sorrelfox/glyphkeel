@@ -33,6 +33,12 @@
 //!   `exports`. Only the person sets it, here or in the app's Preferences;
 //!   it doesn't limit the person's own commands.
 //!
+//! - `agent_http`: the local HTTP endpoint for agents whose client can't
+//!   start a program: `enabled` (left out: off), `port` (left out: a
+//!   free port chosen when it starts) and `token`, the secret a client
+//!   sends as `Authorization: Bearer <token>`. The app generates the
+//!   token; the file is readable by its owner only, because of it.
+//!
 //! Fields this program doesn't know are kept when it writes the file, so an
 //! older and a newer program can share it. A missing or damaged file means
 //! the defaults. The app's own settings (`app.json`, the window and page
@@ -95,9 +101,26 @@ pub struct UserSettings {
     /// folder, by absolute path; empty (left out): only `exports`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub agent_folders: Vec<String>,
+    /// The local HTTP endpoint for agents; left out: off.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_http: Option<AgentHttp>,
     /// Fields of other versions of the program, kept as they are.
     #[serde(flatten)]
     pub other: Map<String, Value>,
+}
+
+/// The local HTTP endpoint for agents, as the person set it up.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentHttp {
+    /// Whether the app serves it.
+    #[serde(default)]
+    pub enabled: bool,
+    /// The port on 127.0.0.1; `None` (left out): a free port each start.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub port: Option<u16>,
+    /// The bearer token clients send; `None` until one is generated.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token: Option<String>,
 }
 
 impl UserSettings {
@@ -133,6 +156,13 @@ impl UserSettings {
         }
         let temporary = path.with_extension("json.tmp");
         let mut file = fs::File::create(&temporary)?;
+        // The file can hold a secret (the agents' HTTP token), so only its
+        // owner may read it.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            file.set_permissions(fs::Permissions::from_mode(0o600))?;
+        }
         file.write_all(&serde_json::to_vec_pretty(self).map_err(std::io::Error::other)?)?;
         file.write_all(b"\n")?;
         file.sync_all()?;

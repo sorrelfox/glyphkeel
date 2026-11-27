@@ -5,7 +5,8 @@
 An MCP client, such as a coding agent, starts Glyphkeel's server itself, as
 the command `glyphkeel mcp`, and talks to it over standard input and output.
 Nothing listens on the network, and the server works while the app is
-closed.
+closed. Clients that can only connect to a URL use the
+[local HTTP endpoint](#clients-that-connect-over-http) instead.
 
 The quickest way is Preferences › Agents & CLI in the app: pick a client and
 copy its set-up, with the full path of the command already filled in. The
@@ -99,6 +100,40 @@ project:
   }
 }
 ```
+
+## Clients that connect over HTTP
+
+Some clients don't start programs; they connect to an address. Turn on
+Preferences › Agents & CLI › **Local HTTP endpoint**, then copy the address
+and the token, or the whole set-up, from there. Most clients take it in this
+form:
+
+```json
+{
+  "mcpServers": {
+    "glyphkeel": {
+      "type": "http",
+      "url": "http://127.0.0.1:41000/mcp",
+      "headers": { "Authorization": "Bearer <token>" }
+    }
+  }
+}
+```
+
+Claude Code adds it with
+
+```sh
+claude mcp add --transport http glyphkeel http://127.0.0.1:41000/mcp \
+  --header "Authorization: Bearer <token>"
+```
+
+Use the port Preferences shows; choose a fixed port there if the client's
+set-up should keep working after the app restarts. For another profile, end
+the address with `/mcp/read-only` or `/mcp/full`. The endpoint serves only
+while the app runs; without the app, `glyphkeel mcp --http --port 41000`
+serves it from the command line, with the same token. Browser-based tools
+can't use it: requests that come from a web page are refused
+([Security](security.md#the-local-http-endpoint-for-agents)).
 
 ## Prompts
 

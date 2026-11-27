@@ -3,7 +3,7 @@
 
 [package]
 name = "gk-mcp"
-description = "Glyphkeel's MCP server over standard input and output."
+description = "Glyphkeel's MCP server over standard input and output, and over local HTTP."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,14 +12,21 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
+bytes = { workspace = true }
 clap = { workspace = true }
+getrandom = { workspace = true }
 gk-api = { workspace = true }
 gk-core = { workspace = true }
 gk-engine = { workspace = true }
 gk-store = { workspace = true }
+http-body-util = { workspace = true }
+hyper = { workspace = true }
+hyper-util = { workspace = true }
 rmcp = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["net", "sync", "signal"] }
+tokio-util = { workspace = true }
+tower-service = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 

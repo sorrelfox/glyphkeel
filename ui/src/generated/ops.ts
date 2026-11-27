@@ -12,6 +12,8 @@ export type ActivityEntry = {
   actor: Actor;
   /** When (RFC 3339, UTC). */
   at: string;
+  /** Whether the person allowed this change when the agent asked for it, through the agent's client. */
+  confirmed_by_person?: boolean;
   /** What kind of item changed. */
   entity: string;
   /** The changed fields, each with its value before and after. */
@@ -140,6 +142,8 @@ export type AgentLimitsPatch = {
 
 /** The agent policy to set. */
 export type AgentPolicyPatch = {
+  /** Whether agents whose client can ask the person may ask to make one change beyond their profile, or one that deletes for good or deletes many items; left out: unchanged. */
+  confirmations?: boolean | null;
   /** The most an agent may do, whatever profile it asks for. */
   max_profile: Profile;
 };
@@ -3191,6 +3195,8 @@ export type SettingKey = "trash_days" | "reminder_time" | "hours_per_day" | "day
 
 /** The workspace's settings, with defaults filled in. */
 export type Settings = {
+  /** Whether an agent whose client can ask the person may ask to make one change its profile doesn't allow, or one that deletes for good or deletes many items; the person allows or declines each. */
+  agent_confirmations: boolean;
   /** The limits on every agent session. Only the person sets them, in the app. */
   agent_limits: AgentLimits;
   /** The most an agent may do, whatever profile it asks for. */
@@ -5642,7 +5648,7 @@ export function makeOps(call: Call) {
     agent: {
       /** List agent sessions, newest first, with their client, profile, times and counts of reads and writes. (read) */
       sessions: (input: OpMap["agent.sessions"]["input"] = {}) => call("agent.sessions", input),
-      /** Set the most an agent may do, whatever profile it asks for. (app) */
+      /** Set the most an agent may do, whatever profile it asks for, and whether agents may ask the person to allow one change beyond it. (app) */
       policyUpdate: (input: OpMap["agent.policy.update"]["input"]) => call("agent.policy.update", input),
       /** Change the limits on agent sessions: changes a minute, new tasks a day, and items moved to the trash per call and per hour. Each is a number or no limit. (app) */
       limitsUpdate: (input: OpMap["agent.limits.update"]["input"] = {}) => call("agent.limits.update", input),

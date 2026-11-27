@@ -378,6 +378,10 @@
             "additionalProperties": false,
             "description": "The workspace settings.",
             "properties": {
+              "agent_confirmations": {
+                "description": "Whether an agent whose client can ask the person may ask to make\none change its profile doesn't allow, or one that deletes for good\nor deletes many items; the person allows or declines each.",
+                "type": "boolean"
+              },
               "agent_limits": {
                 "additionalProperties": false,
                 "description": "The limits on every agent session. Only the person sets them, in the\napp.",
@@ -487,6 +491,7 @@
               "week_start",
               "file_max_mb",
               "agent_max_profile",
+              "agent_confirmations",
               "agent_limits",
               "timer_reminder_hours"
             ],
@@ -1102,6 +1107,10 @@
                 "at": {
                   "description": "When (RFC 3339, UTC).",
                   "type": "string"
+                },
+                "confirmed_by_person": {
+                  "description": "Whether the person allowed this change when the agent asked for it,\nthrough the agent's client.",
+                  "type": "boolean"
                 },
                 "entity": {
                   "description": "What kind of item changed.",
@@ -53871,6 +53880,10 @@
             "additionalProperties": false,
             "description": "All settings, after the change.",
             "properties": {
+              "agent_confirmations": {
+                "description": "Whether an agent whose client can ask the person may ask to make\none change its profile doesn't allow, or one that deletes for good\nor deletes many items; the person allows or declines each.",
+                "type": "boolean"
+              },
               "agent_limits": {
                 "additionalProperties": false,
                 "description": "The limits on every agent session. Only the person sets them, in the\napp.",
@@ -53980,6 +53993,7 @@
               "week_start",
               "file_max_mb",
               "agent_max_profile",
+              "agent_confirmations",
               "agent_limits",
               "timer_reminder_hours"
             ],

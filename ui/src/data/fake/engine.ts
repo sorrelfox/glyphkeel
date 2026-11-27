@@ -3040,6 +3040,21 @@ export class FakeWorkspace {
       ]);
       return { output: { items: chosen.map((deletion) => deletion.entry), total: changes.length }, changes };
     },
+    "agent.policy.update": (patch) => {
+      // Like the engine: the most an agent may do, and whether agents may ask
+      // the person to allow more.
+      const before = this.settingsNow();
+      const changed: string[] = [];
+      if (patch.max_profile !== before.agent_max_profile) {
+        this.state.settings.agent_max_profile = patch.max_profile;
+        changed.push("agent_max_profile");
+      }
+      if (typeof patch.confirmations === "boolean" && patch.confirmations !== before.agent_confirmations) {
+        this.state.settings.agent_confirmations = patch.confirmations;
+        changed.push("agent_confirmations");
+      }
+      return { output: { changed, settings: this.settingsNow() }, changes: changed.length ? [{ entity: "settings", id: "w-1", fields: changed }] : [] };
+    },
     "agent.limits.update": (patch) => {
       // Like the engine: only the app reaches it; numbers from 1 to 1000000,
       // lifted limits left out, and a reset brings back the default.
