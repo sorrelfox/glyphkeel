@@ -285,7 +285,17 @@ export function updateDashboard(host: DashboardHost, input: DashboardUpdateInput
   if (input.clear?.includes("description") === true) {
     next.description = "";
   }
-  if (next.name === board.name && next.description === board.description) {
+  const unpins = input.clear?.includes("pin_to") === true;
+  if (unpins && input.pin_to !== null && input.pin_to !== undefined) {
+    host.fail("invalid", "pin_to is both given and cleared.", "clear");
+  }
+  if (input.pin_to !== null && input.pin_to !== undefined) {
+    next.projectId = host.writable(input.pin_to).id;
+  }
+  if (unpins) {
+    next.projectId = null;
+  }
+  if (next.name === board.name && next.description === board.description && next.projectId === board.projectId) {
     return { output: { dashboard: out(host, board) }, changes: [] };
   }
   unique(host, next);

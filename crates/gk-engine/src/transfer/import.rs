@@ -19,12 +19,12 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 use super::model::{
-    Activity, AgentSession, Attachment, AutomationLine, Comment, Manifest, ProjectFile, Revision,
-    Task, TemplateLine, TimeEntry, WikiPage,
+    Activity, AgentSession, Attachment, AutomationLine, Comment, DashboardLine, Manifest,
+    ProjectFile, Revision, Task, TemplateLine, TimeEntry, WikiPage,
 };
 use super::source::{Source, safe_path};
 use super::{
-    AUTOMATIONS, FORMAT_NAME, FORMAT_VERSION, Limits, Progress, Rejected, TEMPLATES,
+    AUTOMATIONS, DASHBOARDS, FORMAT_NAME, FORMAT_VERSION, Limits, Progress, Rejected, TEMPLATES,
     plain_project_dir, project_dir, report,
 };
 use crate::context::Context;
@@ -70,6 +70,8 @@ pub(crate) struct Parsed {
     pub(crate) templates: Vec<TemplateLine>,
     /// The workspace's own automation rules.
     pub(crate) automations: Vec<AutomationLine>,
+    /// The workspace's own dashboards.
+    pub(crate) dashboards: Vec<DashboardLine>,
     /// Parents before their sub-projects.
     pub(crate) projects: Vec<Proj>,
     /// Stored files by SHA-256, with their sizes.
@@ -109,7 +111,7 @@ fn is_hash(s: &str) -> bool {
 fn classify(path: &str, keys: &HashMap<String, String>) -> Option<Class> {
     match path {
         MANIFEST => return Some(Class::Manifest),
-        SESSIONS | TEMPLATES | AUTOMATIONS => return Some(Class::Sessions),
+        SESSIONS | TEMPLATES | AUTOMATIONS | DASHBOARDS => return Some(Class::Sessions),
         FIXTURES => return Some(Class::Fixtures),
         _ => {}
     }
@@ -275,6 +277,10 @@ pub(crate) fn read(
         Some(bytes) => lines(AUTOMATIONS, &bytes, limits, &mut records)?,
         None => Vec::new(),
     };
+    let dashboards = match texts.remove(DASHBOARDS) {
+        Some(bytes) => lines(DASHBOARDS, &bytes, limits, &mut records)?,
+        None => Vec::new(),
+    };
     let mut projects = Vec::new();
     for mp in &manifest.projects {
         // The folder the manifest names: checked to be the key's.
@@ -328,6 +334,7 @@ pub(crate) fn read(
         sessions,
         templates,
         automations,
+        dashboards,
         projects,
         blobs,
     };
@@ -416,6 +423,32 @@ fn check_automation(
     Ok(())
 }
 
+/// Checks a dashboard of the archive: its rank, its name (unique in its
+/// scope), its description and its widgets.
+fn check_dashboard(
+    path: &str,
+    line: usize,
+    d: &DashboardLine,
+    names: &mut HashSet<String>,
+) -> Result<(), Rejected> {
+    rank_ok(path, line, &d.rank)?;
+    if d.name.trim().is_empty()
+        || d.name.chars().count() > 100
+        || d.description.chars().count() > 1000
+        || crate::ops::dashboard::archived_widgets(&d.widgets).is_none()
+        || !matches!(d.created_by_kind.as_str(), "user" | "agent" | "automation")
+        || !names.insert(fold(&d.name))
+    {
+        return Err(bad_with(
+            path.to_owned(),
+            line,
+            "transfer-invalid-dashboard",
+            &[("dashboard", &d.name)],
+        ));
+    }
+    Ok(())
+}
+
 fn check(parsed: &mut Parsed) -> Result<(), Rejected> {
     let mut ids: HashSet<Id> = HashSet::new();
     let mut unique = |path: &str, line: usize, text: &str| -> Result<Id, Rejected> {
@@ -438,6 +471,11 @@ fn check(parsed: &mut Parsed) -> Result<(), Rejected> {
     for (i, r) in parsed.automations.iter().enumerate() {
         unique(AUTOMATIONS, i + 1, &r.id)?;
         check_automation(AUTOMATIONS, i + 1, r, &mut rule_names)?;
+    }
+    let mut board_names = HashSet::new();
+    for (i, d) in parsed.dashboards.iter().enumerate() {
+        unique(DASHBOARDS, i + 1, &d.id)?;
+        check_dashboard(DASHBOARDS, i + 1, d, &mut board_names)?;
     }
     let archive_projects: HashSet<String> = parsed
         .projects
@@ -558,6 +596,11 @@ fn check(parsed: &mut Parsed) -> Result<(), Rejected> {
         for r in &proj.file.automations {
             unique(&pj, 1, &r.id)?;
             check_automation(&pj, 1, r, &mut rule_names)?;
+        }
+        let mut board_names = HashSet::new();
+        for d in &proj.file.dashboards {
+            unique(&pj, 1, &d.id)?;
+            check_dashboard(&pj, 1, d, &mut board_names)?;
         }
         let tp = format!("{dir}/tasks.jsonl");
         super::custom_fields::check(&pj, &tp, &proj.file.custom_fields, &proj.tasks)?;
@@ -833,12 +876,28 @@ pub(crate) struct Plan {
     pub(crate) ids: HashMap<Id, Id>,
     /// History groups that exist here already, with their replacements.
     pub(crate) groups: HashMap<Id, Id>,
+    /// The archive's project keys that change here, with their new keys.
+    pub(crate) rekeyed: Vec<(String, String)>,
 }
 
 impl Plan {
     fn id(&self, text: &str) -> Id {
         let id: Id = text.parse().unwrap_or_else(|_| Id::generate());
         self.ids.get(&id).copied().unwrap_or(id)
+    }
+
+    /// Saved query `q` with the project keys that change here written as
+    /// their new keys, in `project:` conditions and in task keys.
+    pub(crate) fn query(&self, q: &str) -> String {
+        if self.rekeyed.is_empty() {
+            return q.to_owned();
+        }
+        let keys: Vec<(&str, &str)> = self
+            .rekeyed
+            .iter()
+            .map(|(a, b)| (a.as_str(), b.as_str()))
+            .collect();
+        gk_query::rename::rename_projects(q, &keys).unwrap_or_else(|| q.to_owned())
     }
 
     fn opt(&self, text: Option<&String>) -> Option<Vec<u8>> {
@@ -922,6 +981,9 @@ pub(crate) fn plan(
         if key_taken(tx, &key)? || !chosen.insert(key.clone()) {
             plan.taken.push(from.clone());
         }
+        if &key != from {
+            plan.rekeyed.push((from.clone(), key.clone()));
+        }
         plan.keys.push(key);
     }
     if strict && !plan.taken.is_empty() {
@@ -952,10 +1014,16 @@ pub(crate) fn plan(
     for r in &parsed.automations {
         replace("automation_rules", &r.id)?;
     }
+    for d in &parsed.dashboards {
+        replace("dashboards", &d.id)?;
+    }
     for p in &parsed.projects {
         replace("projects", &p.file.project.id)?;
         for r in &p.file.automations {
             replace("automation_rules", &r.id)?;
+        }
+        for d in &p.file.dashboards {
+            replace("dashboards", &d.id)?;
         }
         for s in &p.file.statuses {
             replace("statuses", &s.id)?;
@@ -1584,7 +1652,7 @@ fn write(
                 v.view_kind,
                 v.name,
                 v.description,
-                v.query,
+                plan.query(&v.query),
                 j(&v.columns),
                 j(&v.sort),
                 j(&v.group_by),
@@ -1618,6 +1686,18 @@ fn write(
             crate::ops::recurrence::insert_row(tx, plan.id(&r.id), &record)?;
         }
         for l in &proj.file.layouts {
+            // Colour rules are saved queries.
+            let mut settings = l.settings.clone();
+            if let Some(rules) = settings
+                .get_mut("colour_rules")
+                .and_then(Value::as_array_mut)
+            {
+                for rule in rules {
+                    if let Some(q) = rule.get("query").and_then(Value::as_str) {
+                        rule["query"] = Value::String(plan.query(q));
+                    }
+                }
+            }
             tx.prepare_cached(
                 "INSERT OR REPLACE INTO view_settings (scope, view_kind, settings, updated_at)
                  VALUES (?1, ?2, ?3, ?4)",
@@ -1625,7 +1705,7 @@ fn write(
             .execute(params![
                 id.to_string(),
                 l.view_kind,
-                l.settings.to_string(),
+                settings.to_string(),
                 l.updated_at
             ])?;
         }
@@ -2131,6 +2211,20 @@ fn write(
         }
     }
 
+    // Dashboards, as rules are: a workspace dashboard whose name is taken
+    // here is left out.
+    for d in &parsed.dashboards {
+        if !crate::ops::dashboard::name_taken(tx, None, &d.name)? {
+            insert_dashboard(tx, plan, d, None)?;
+        }
+    }
+    for proj in &parsed.projects {
+        let id = plan.id(&proj.file.project.id);
+        for d in &proj.file.dashboards {
+            insert_dashboard(tx, plan, d, Some(id))?;
+        }
+    }
+
     // History, in its original order across the archive.
     let mut rows: Vec<(&Activity, Id)> = parsed
         .projects
@@ -2225,7 +2319,7 @@ fn insert_automation(
         name: r.name.clone(),
         enabled: r.enabled,
         trigger,
-        condition: r.condition.clone(),
+        condition: plan.query(&r.condition),
         actions,
         rank: r.rank.clone(),
         created_at: r.created_at,
@@ -2235,6 +2329,37 @@ fn insert_automation(
         updated_by_kind: r.updated_by_kind.clone(),
     };
     crate::ops::automation::insert_imported(tx, plan.id(&r.id), &record, now, today)
+}
+
+/// Stores a dashboard of the archive. The projects its widgets name take
+/// the IDs they get here, and their queries the project keys.
+fn insert_dashboard(
+    tx: &Transaction<'_>,
+    plan: &Plan,
+    d: &DashboardLine,
+    project: Option<Id>,
+) -> Result<(), Failure> {
+    let mut widgets = crate::ops::dashboard::archived_widgets(&d.widgets).unwrap_or_default();
+    for w in &mut widgets {
+        if let Some(p) = w.settings.project.as_deref() {
+            w.settings.project = Some(plan.id(p).to_string());
+        }
+        if let Some(q) = w.settings.query.as_deref() {
+            w.settings.query = Some(plan.query(q));
+        }
+    }
+    let record = crate::ops::dashboard::Record {
+        project: project.map(|p| p.to_string()),
+        name: d.name.clone(),
+        description: d.description.clone(),
+        widgets,
+        rank: d.rank.clone(),
+        created_at: d.created_at,
+        created_by_kind: d.created_by_kind.clone(),
+        created_by_name: d.created_by_name.clone(),
+        updated_at: d.updated_at,
+    };
+    crate::ops::dashboard::insert_imported(tx, plan.id(&d.id), &record)
 }
 
 fn insert_template(

@@ -242,6 +242,45 @@ pub(crate) fn named(
     .into())
 }
 
+/// Whether query `src` limits its tasks to project `project`: every match
+/// must meet a `project:KEY` naming it by its key or an earlier one.
+pub(crate) fn query_limits_to(
+    tx: &Transaction<'_>,
+    src: &str,
+    project: Id,
+) -> Result<bool, Failure> {
+    let Some(key) = gk_query::rename::limited_to_project(src) else {
+        return Ok(false);
+    };
+    let found: Option<Vec<u8>> = tx
+        .prepare_cached(
+            "SELECT id FROM projects WHERE key = ?1
+             UNION ALL SELECT project_id FROM project_key_aliases WHERE key = ?1 LIMIT 1",
+        )?
+        .query_row([key.as_str()], |r| r.get(0))
+        .optional()?;
+    Ok(found.and_then(|b| Id::from_slice(&b).ok()) == Some(project))
+}
+
+/// Whether a live project other than `project` has an item of `list`
+/// named `name` (ignoring case).
+pub(crate) fn named_elsewhere(
+    tx: &Transaction<'_>,
+    list: List,
+    project: Id,
+    name: &str,
+) -> Result<bool, Failure> {
+    let found: Option<i64> = tx
+        .prepare_cached(&format!(
+            "SELECT 1 FROM {} i JOIN projects p ON p.id = i.project_id
+              WHERE i.name_fold = ?1 AND i.project_id <> ?2 AND p.deleted_at IS NULL LIMIT 1",
+            list.table()
+        ))?
+        .query_row(params![fold(name.trim()), b(project)], |r| r.get(0))
+        .optional()?;
+    Ok(found.is_some())
+}
+
 /// What the engine needs of a task row.
 #[derive(Debug, Clone)]
 pub(crate) struct TaskRow {

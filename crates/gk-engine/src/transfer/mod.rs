@@ -8,7 +8,8 @@
 //! agent_sessions.jsonl               agent sessions the history, comments and claims refer to
 //! templates.jsonl                    project templates (whole-workspace exports)
 //! automations.jsonl                  the workspace's automation rules (whole-workspace exports)
-//! projects/<KEY>/project.json        project, statuses, types, labels, views, layouts, rules
+//! dashboards.jsonl                   the workspace's own dashboards (whole-workspace exports)
+//! projects/<KEY>/project.json        project, statuses, types, labels, views, layouts, rules, dashboards
 //! projects/<KEY>/tasks.jsonl         one task per line, with labels, relations, claim
 //! projects/<KEY>/tasks/<KEY>-<n>.md  the description (no file when it is empty)
 //! projects/<KEY>/comments.jsonl      comments, each with its earlier texts
@@ -68,6 +69,9 @@ pub(crate) const TEMPLATES: &str = "templates.jsonl";
 /// The workspace's own automation rules (a project's are in its
 /// `project.json`); left out when there are none.
 pub(crate) const AUTOMATIONS: &str = "automations.jsonl";
+/// The workspace's own dashboards (a project's pinned ones are in its
+/// `project.json`); left out when there are none.
+pub(crate) const DASHBOARDS: &str = "dashboards.jsonl";
 
 /// A function that hears how far an export or import is.
 pub type Progress = Arc<dyn Fn(TransferProgress) + Send + Sync>;

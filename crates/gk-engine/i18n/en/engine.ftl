@@ -183,6 +183,7 @@ transfer-invalid-task-label = { $path }, line { $line }: the label { $label } is
 transfer-invalid-version = { $path }, line { $line }: the version "{ $version }" is not valid (name, status, sharing or dates), or its name is used twice.
 transfer-invalid-sprint = { $path }, line { $line }: the sprint "{ $sprint }" is not valid (name, state, goal or dates), its name is used twice, or a second sprint is active.
 transfer-invalid-automation = { $path }, line { $line }: the automation rule "{ $rule }" is not valid (name, rank, actors or actions), or its name is used twice.
+transfer-invalid-dashboard = { $path }, line { $line }: the dashboard "{ $dashboard }" is not valid (name, rank, description, actor or widgets), or its name is used twice.
 transfer-invalid-title = { $path }, line { $line }: the title is empty or too long.
 transfer-invalid-description-size = { $path }, line { $line }: the description is larger than 1 MB.
 transfer-invalid-link-target = { $path }, line { $line }: a link points to no other task in the archive.

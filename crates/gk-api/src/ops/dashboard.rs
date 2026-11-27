@@ -460,6 +460,8 @@ pub struct DashboardCreateInput {
 pub enum DashboardField {
     /// The description.
     Description,
+    /// The project it is pinned to: it then belongs to the whole workspace.
+    PinTo,
 }
 
 /// Changes to a dashboard; fields left out keep their value.
@@ -477,6 +479,10 @@ pub struct DashboardUpdateInput {
     /// A new description.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// Pins it to this project (key or ID); its widgets that name no
+    /// project then look at that project.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pin_to: Option<String>,
     /// Fields to clear.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub clear: Vec<DashboardField>,

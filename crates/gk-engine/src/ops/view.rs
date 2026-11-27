@@ -381,6 +381,25 @@ fn create(w: &mut WriteCtx<'_>, input: ViewCreateInput) -> Result<ViewChange, Fa
     })
 }
 
+/// The saved views of project `p`, and the workspace's views whose query
+/// keeps them to `p`: the views a change to the project's names reaches.
+fn with_views_about(tx: &Transaction<'_>, p: Id) -> Result<Vec<(Id, Record)>, Failure> {
+    let mut stmt = tx.prepare_cached(&format!(
+        "SELECT {COLUMNS} FROM saved_views
+          WHERE project_id = ?1 OR project_id IS NULL ORDER BY rank, id"
+    ))?;
+    let rows = stmt
+        .query_map([b(p)], read_row)?
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut out = Vec::with_capacity(rows.len());
+    for (id, r) in rows {
+        if r.project_id().is_some() || super::lookup::query_limits_to(tx, &r.query, p)? {
+            out.push((id, r));
+        }
+    }
+    Ok(out)
+}
+
 /// Rewrites the query of every saved view of `project` (every view of the
 /// workspace for `None`) that `rewrite` changes, in the running command,
 /// so each change shows in the view's history and undoes with the rest.
@@ -391,13 +410,7 @@ pub(crate) fn rewrite_queries(
     rewrite: impl Fn(&str) -> Option<String>,
 ) -> Result<usize, Failure> {
     let views: Vec<(Id, Record)> = match project {
-        Some(p) => {
-            let mut stmt = w.tx().prepare_cached(&format!(
-                "SELECT {COLUMNS} FROM saved_views WHERE project_id = ?1 ORDER BY rank, id"
-            ))?;
-            stmt.query_map([b(p)], read_row)?
-                .collect::<Result<Vec<_>, _>>()?
-        }
+        Some(p) => with_views_about(w.tx(), p)?,
         None => {
             let mut stmt = w.tx().prepare_cached(&format!(
                 "SELECT {COLUMNS} FROM saved_views ORDER BY rank, id"
@@ -434,22 +447,15 @@ pub(crate) fn rewrite_views(
     query: &dyn Fn(&str) -> Option<String>,
     column: &dyn Fn(&str) -> Option<Option<String>>,
 ) -> Result<usize, Failure> {
-    let views: Vec<(Id, Record)> = {
-        let (sql, arg) = match project {
-            Some(p) => (
-                format!(
-                    "SELECT {COLUMNS} FROM saved_views WHERE project_id = ?1 ORDER BY rank, id"
-                ),
-                Some(b(p)),
-            ),
-            None => (
-                format!("SELECT {COLUMNS} FROM saved_views WHERE ?1 IS NULL ORDER BY rank, id"),
-                None,
-            ),
-        };
-        let mut stmt = w.tx().prepare_cached(&sql)?;
-        stmt.query_map([arg], read_row)?
-            .collect::<Result<Vec<_>, _>>()?
+    let views: Vec<(Id, Record)> = match project {
+        Some(p) => with_views_about(w.tx(), p)?,
+        None => {
+            let mut stmt = w.tx().prepare_cached(&format!(
+                "SELECT {COLUMNS} FROM saved_views ORDER BY rank, id"
+            ))?;
+            stmt.query_map([], read_row)?
+                .collect::<Result<Vec<_>, _>>()?
+        }
     };
     let mut changed = 0;
     for (id, mut record) in views {

@@ -40,6 +40,79 @@ pub fn rename(src: &str, kind: NameKind, old: &str, new: &str) -> Option<String>
     (out != src).then_some(out)
 }
 
+/// `src` with each project key `old` of `keys` written as its `new`, all
+/// at once (so `A`→`B` and `B`→`A` swap rather than chain): in conditions
+/// on projects and in task keys, as [`rename`] does for one key. `None`
+/// when nothing names any of them or the text doesn't parse.
+#[must_use]
+pub fn rename_projects(src: &str, keys: &[(&str, &str)]) -> Option<String> {
+    let query = parse(src).ok()?;
+    let filter = query.filter.as_ref()?;
+    let mut edits: Vec<(Span, String)> = Vec::new();
+    for (old, new) in keys {
+        if !old.eq_ignore_ascii_case(new) {
+            collect(filter, NameKind::Project, old, new, &mut edits);
+        }
+    }
+    if edits.is_empty() {
+        return None;
+    }
+    edits.sort_by_key(|(span, _)| std::cmp::Reverse(span.start));
+    edits.dedup_by_key(|(span, _)| span.start);
+    let mut out = src.to_owned();
+    for (span, text) in edits {
+        out.replace_range(span.start..span.end, &text);
+    }
+    (out != src).then_some(out)
+}
+
+/// The one project key that `src` limits its tasks to: a condition
+/// `project:KEY` (or `project=KEY`) that every match must meet, at the top
+/// level of the query or in a group that is. `None` when there is no such
+/// condition, it names several projects or sub-projects (`KEY/*`), it
+/// names two different keys, or the text doesn't parse.
+#[must_use]
+pub fn limited_to_project(src: &str) -> Option<String> {
+    let query = parse(src).ok()?;
+    let mut found: Option<String> = None;
+    let mut clash = false;
+    limits(query.filter.as_ref()?, &mut found, &mut clash);
+    if clash { None } else { found }
+}
+
+fn limits(e: &Expr, found: &mut Option<String>, clash: &mut bool) {
+    match e {
+        Expr::And(items) => {
+            for item in items {
+                limits(item, found, clash);
+            }
+        }
+        Expr::Group(inner, _) => limits(inner, found, clash),
+        Expr::Pred(p) => {
+            let is_project =
+                fields::find_target(&p.field).is_some_and(|f| f.ty == FieldType::Project);
+            if !is_project || !matches!(p.op, crate::syntax::Op::Is | crate::syntax::Op::Eq) {
+                return;
+            }
+            let [v] = p.values.as_slice() else {
+                return;
+            };
+            let ValueKind::Word { text, .. } = &v.kind else {
+                return;
+            };
+            if text.contains('/') || text.trim().is_empty() {
+                return;
+            }
+            match found {
+                Some(k) if !k.eq_ignore_ascii_case(text) => *clash = true,
+                Some(_) => {}
+                None => *found = Some(text.trim().to_uppercase()),
+            }
+        }
+        Expr::Or(_) | Expr::Not(..) | Expr::Text(_) | Expr::Key(_) => {}
+    }
+}
+
 fn collect(e: &Expr, kind: NameKind, old: &str, new: &str, edits: &mut Vec<(Span, String)>) {
     match e {
         Expr::And(items) | Expr::Or(items) => {
@@ -629,5 +702,41 @@ mod tests {
         );
         assert_eq!(remove_label("label:old", "old").as_deref(), Some(""));
         assert_eq!(remove_label("label:other", "old"), None);
+    }
+
+    #[test]
+    fn several_project_keys_are_renamed_at_once() {
+        assert_eq!(
+            rename_projects(
+                "project:TM is:open TM-4 parent:ZZ-2 -project:ZZ",
+                &[("TM", "ZZ"), ("ZZ", "TM")]
+            )
+            .as_deref(),
+            Some("project:ZZ is:open ZZ-4 parent:TM-2 -project:TM")
+        );
+        assert_eq!(rename_projects("is:open", &[("TM", "ZZ")]), None);
+        assert_eq!(rename_projects("project:TM", &[("TM", "TM")]), None);
+    }
+
+    #[test]
+    fn a_query_limited_to_one_project_names_it() {
+        assert_eq!(
+            limited_to_project("project:tm status:Done").as_deref(),
+            Some("TM")
+        );
+        assert_eq!(
+            limited_to_project("(project=TM label:bug) is:open").as_deref(),
+            Some("TM")
+        );
+        assert_eq!(
+            limited_to_project("project:TM project:TM").as_deref(),
+            Some("TM")
+        );
+        assert_eq!(limited_to_project("project:TM OR project:ZZ"), None);
+        assert_eq!(limited_to_project("project:TM,ZZ"), None);
+        assert_eq!(limited_to_project("project:TM/*"), None);
+        assert_eq!(limited_to_project("-project:TM"), None);
+        assert_eq!(limited_to_project("project:TM project:ZZ"), None);
+        assert_eq!(limited_to_project("status:Done"), None);
     }
 }

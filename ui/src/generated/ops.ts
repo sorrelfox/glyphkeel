@@ -1720,7 +1720,7 @@ export type DashboardCreateInput = {
 };
 
 /** A dashboard field that can be cleared. */
-export type DashboardField = "description";
+export type DashboardField = "description" | "pin_to";
 
 /** Dashboards, in order: the workspace's first, then by project. */
 export type DashboardList = {
@@ -1774,6 +1774,8 @@ export type DashboardUpdateInput = {
   description?: string | null;
   /** A new name. */
   name?: string | null;
+  /** Pins it to this project (key or ID); its widgets that name no project then look at that project. */
+  pin_to?: string | null;
   /** With a name: the project it is pinned to (key or ID). */
   project?: string | null;
 };

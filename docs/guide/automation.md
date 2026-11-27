@@ -41,9 +41,15 @@ the condition, the trigger's status, and the statuses, labels, types, fields
 and options the actions use. The change is part of the rename, so Undo takes
 both back.
 
+A workspace rule follows one project's renames too when it is about that
+project: its condition keeps it to the project (`project:TM` that every match
+must meet), or it names a status, label, type or custom field that only that
+project has (a custom field also when it is named by its ID).
+
 When you delete a status, a label, a task type, a custom field or an option
 that a rule's trigger or actions use, the rule is turned off, and its run log
-says which name went away. Change the rule and turn it on again. Conditions
+says which name went away; so is a workspace rule about that project. Change
+the rule and turn it on again. Conditions
 change as saved views do: a deleted label or custom field is taken out of them;
 a deleted status or type stays, and the run log shows the mistake when the rule
 runs.
@@ -126,4 +132,5 @@ export of the whole workspace also carries the workspace's own rules. Imported
 rules start afresh: with an empty run log, a scheduled rule waits for its next
 time, and a due date rule acts only on what comes due after the import. A
 workspace rule whose name is already taken in the workspace you import into is
-left out.
+left out. When a project comes in under a new key, conditions that name its old
+key (`project:OLD`, or a task key such as `OLD-12`) name the new one.

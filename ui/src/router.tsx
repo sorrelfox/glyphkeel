@@ -99,11 +99,14 @@ const timeReportRoute = createRoute({ getParentRoute: () => shellRoute, path: "/
 /** The flow reports: created against closed, cumulative flow, cycle time. */
 const reportsRoute = createRoute({ getParentRoute: () => shellRoute, path: "/reports", component: FlowReportsScreen });
 
-/** Dashboards; `dashboard` is the one shown. Loaded on first use. */
+/** Dashboards; `dashboard` is the one shown, `project` the project they were opened from. Loaded on first use. */
 const dashboardsRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: "/dashboards",
-  validateSearch: (search: Record<string, unknown>): { dashboard?: string } => (typeof search.dashboard === "string" && search.dashboard !== "" ? { dashboard: search.dashboard } : {}),
+  validateSearch: (search: Record<string, unknown>): { dashboard?: string; project?: string } => ({
+    ...(typeof search.dashboard === "string" && search.dashboard !== "" ? { dashboard: search.dashboard } : {}),
+    ...(typeof search.project === "string" && search.project !== "" ? { project: search.project } : {}),
+  }),
   component: LazyDashboardsScreen,
 });
 
