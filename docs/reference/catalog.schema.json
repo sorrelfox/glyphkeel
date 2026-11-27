@@ -1726,6 +1726,10 @@
                 "minimum": 0,
                 "type": "integer"
               },
+              "folder": {
+                "description": "The ID of the folder a top-level project is in; left out for\nprojects in no folder and for sub-projects.",
+                "type": "string"
+              },
               "hue": {
                 "$ref": "#/$defs/Hue",
                 "description": "Its colour."
@@ -2282,6 +2286,10 @@
             "description": "Its description (Markdown).",
             "type": "string"
           },
+          "folder": {
+            "description": "The ID of the folder a top-level project is in (see folder.list);\nleft out for projects in no folder and for sub-projects.",
+            "type": "string"
+          },
           "hue": {
             "$ref": "#/$defs/Hue",
             "description": "Its colour."
@@ -2774,6 +2782,10 @@
               },
               "description": {
                 "description": "Its description (Markdown).",
+                "type": "string"
+              },
+              "folder": {
+                "description": "The ID of the folder a top-level project is in (see folder.list);\nleft out for projects in no folder and for sub-projects.",
                 "type": "string"
               },
               "hue": {
@@ -3991,6 +4003,10 @@
                 "description": "Its description (Markdown).",
                 "type": "string"
               },
+              "folder": {
+                "description": "The ID of the folder a top-level project is in (see folder.list);\nleft out for projects in no folder and for sub-projects.",
+                "type": "string"
+              },
               "hue": {
                 "$ref": "#/$defs/Hue",
                 "description": "Its colour."
@@ -4649,6 +4665,10 @@
                 "description": "Its description (Markdown).",
                 "type": "string"
               },
+              "folder": {
+                "description": "The ID of the folder a top-level project is in (see folder.list);\nleft out for projects in no folder and for sub-projects.",
+                "type": "string"
+              },
               "hue": {
                 "$ref": "#/$defs/Hue",
                 "description": "Its colour."
@@ -5258,6 +5278,10 @@
                 "description": "Its description (Markdown).",
                 "type": "string"
               },
+              "folder": {
+                "description": "The ID of the folder a top-level project is in (see folder.list);\nleft out for projects in no folder and for sub-projects.",
+                "type": "string"
+              },
               "hue": {
                 "$ref": "#/$defs/Hue",
                 "description": "Its colour."
@@ -5860,6 +5884,10 @@
               },
               "description": {
                 "description": "Its description (Markdown).",
+                "type": "string"
+              },
+              "folder": {
+                "description": "The ID of the folder a top-level project is in (see folder.list);\nleft out for projects in no folder and for sub-projects.",
                 "type": "string"
               },
               "hue": {
@@ -6466,6 +6494,10 @@
                 "description": "Its description (Markdown).",
                 "type": "string"
               },
+              "folder": {
+                "description": "The ID of the folder a top-level project is in (see folder.list);\nleft out for projects in no folder and for sub-projects.",
+                "type": "string"
+              },
               "hue": {
                 "$ref": "#/$defs/Hue",
                 "description": "Its colour."
@@ -6999,6 +7031,1527 @@
       "summary": "The project's instructions for agents: the wiki page marked as the brief, else the project's description."
     },
     {
+      "cli": "folder list",
+      "exposure": "data",
+      "id": "folder.list",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Which folders to list: all of them.",
+        "title": "FolderListInput",
+        "type": "object"
+      },
+      "input_name": "FolderListInput",
+      "kind": "query",
+      "mcp_tool": "list_folders",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person, agent or automation rule."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person, an agent, or an automation rule acting on its own.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              },
+              {
+                "const": "automation",
+                "description": "An automation rule of the workspace; the actor's name is the rule's.",
+                "type": "string"
+              }
+            ]
+          },
+          "Hue": {
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
+            "oneOf": [
+              {
+                "const": "red",
+                "description": "Red.",
+                "type": "string"
+              },
+              {
+                "const": "orange",
+                "description": "Orange.",
+                "type": "string"
+              },
+              {
+                "const": "yellow",
+                "description": "Yellow.",
+                "type": "string"
+              },
+              {
+                "const": "green",
+                "description": "Green.",
+                "type": "string"
+              },
+              {
+                "const": "teal",
+                "description": "Teal.",
+                "type": "string"
+              },
+              {
+                "const": "blue",
+                "description": "Blue.",
+                "type": "string"
+              },
+              {
+                "const": "purple",
+                "description": "Purple.",
+                "type": "string"
+              },
+              {
+                "const": "pink",
+                "description": "Pink.",
+                "type": "string"
+              },
+              {
+                "const": "grey",
+                "description": "Grey.",
+                "type": "string"
+              }
+            ]
+          },
+          "ProjectFolder": {
+            "additionalProperties": false,
+            "description": "A folder of top-level projects.",
+            "properties": {
+              "created_at": {
+                "description": "When it was made (RFC 3339).",
+                "type": "string"
+              },
+              "created_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who made it."
+              },
+              "hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "Its colour, if one was chosen."
+              },
+              "id": {
+                "description": "The folder's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name, unique among the folders (ignoring case).",
+                "type": "string"
+              },
+              "open_tasks": {
+                "description": "Open tasks in its active projects and their sub-projects.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "projects": {
+                "description": "The keys of its projects, in sidebar order, archived ones included.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "rank": {
+                "description": "Its place among the folders.",
+                "type": "string"
+              },
+              "updated_at": {
+                "description": "When it last changed (RFC 3339).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "rank",
+              "projects",
+              "open_tasks",
+              "created_by",
+              "created_at",
+              "updated_at"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The folders, in sidebar order.",
+        "properties": {
+          "items": {
+            "description": "The folders.",
+            "items": {
+              "$ref": "#/$defs/ProjectFolder"
+            },
+            "type": "array"
+          },
+          "total": {
+            "description": "How many there are.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "FolderList",
+        "type": "object"
+      },
+      "output_name": "FolderList",
+      "safety": "read",
+      "summary": "The project folders in sidebar order, each with its projects and their open tasks."
+    },
+    {
+      "cli": "folder create",
+      "exposure": "data",
+      "id": "folder.create",
+      "input": {
+        "$defs": {
+          "Edge": {
+            "description": "The two ends of an ordered list.",
+            "oneOf": [
+              {
+                "const": "top",
+                "description": "First.",
+                "type": "string"
+              },
+              {
+                "const": "bottom",
+                "description": "Last.",
+                "type": "string"
+              }
+            ]
+          },
+          "Hue": {
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
+            "oneOf": [
+              {
+                "const": "red",
+                "description": "Red.",
+                "type": "string"
+              },
+              {
+                "const": "orange",
+                "description": "Orange.",
+                "type": "string"
+              },
+              {
+                "const": "yellow",
+                "description": "Yellow.",
+                "type": "string"
+              },
+              {
+                "const": "green",
+                "description": "Green.",
+                "type": "string"
+              },
+              {
+                "const": "teal",
+                "description": "Teal.",
+                "type": "string"
+              },
+              {
+                "const": "blue",
+                "description": "Blue.",
+                "type": "string"
+              },
+              {
+                "const": "purple",
+                "description": "Purple.",
+                "type": "string"
+              },
+              {
+                "const": "pink",
+                "description": "Pink.",
+                "type": "string"
+              },
+              {
+                "const": "grey",
+                "description": "Grey.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A new folder.",
+        "properties": {
+          "after": {
+            "description": "Place it after this folder (ID or name).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "at": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Edge"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Place it first or last; default: last."
+          },
+          "before": {
+            "description": "Place it before this folder (ID or name).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "hue": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Hue"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its colour; left out: none."
+          },
+          "name": {
+            "description": "Its name, unique among the folders.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "FolderCreateInput",
+        "type": "object"
+      },
+      "input_name": "FolderCreateInput",
+      "kind": "command",
+      "mcp_tool": "create_folder",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person, agent or automation rule."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person, an agent, or an automation rule acting on its own.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              },
+              {
+                "const": "automation",
+                "description": "An automation rule of the workspace; the actor's name is the rule's.",
+                "type": "string"
+              }
+            ]
+          },
+          "Hue": {
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
+            "oneOf": [
+              {
+                "const": "red",
+                "description": "Red.",
+                "type": "string"
+              },
+              {
+                "const": "orange",
+                "description": "Orange.",
+                "type": "string"
+              },
+              {
+                "const": "yellow",
+                "description": "Yellow.",
+                "type": "string"
+              },
+              {
+                "const": "green",
+                "description": "Green.",
+                "type": "string"
+              },
+              {
+                "const": "teal",
+                "description": "Teal.",
+                "type": "string"
+              },
+              {
+                "const": "blue",
+                "description": "Blue.",
+                "type": "string"
+              },
+              {
+                "const": "purple",
+                "description": "Purple.",
+                "type": "string"
+              },
+              {
+                "const": "pink",
+                "description": "Pink.",
+                "type": "string"
+              },
+              {
+                "const": "grey",
+                "description": "Grey.",
+                "type": "string"
+              }
+            ]
+          },
+          "ProjectFolder": {
+            "additionalProperties": false,
+            "description": "A folder of top-level projects.",
+            "properties": {
+              "created_at": {
+                "description": "When it was made (RFC 3339).",
+                "type": "string"
+              },
+              "created_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who made it."
+              },
+              "hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "Its colour, if one was chosen."
+              },
+              "id": {
+                "description": "The folder's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name, unique among the folders (ignoring case).",
+                "type": "string"
+              },
+              "open_tasks": {
+                "description": "Open tasks in its active projects and their sub-projects.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "projects": {
+                "description": "The keys of its projects, in sidebar order, archived ones included.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "rank": {
+                "description": "Its place among the folders.",
+                "type": "string"
+              },
+              "updated_at": {
+                "description": "When it last changed (RFC 3339).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "rank",
+              "projects",
+              "open_tasks",
+              "created_by",
+              "created_at",
+              "updated_at"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A folder after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether the folder was deleted.",
+            "type": "boolean"
+          },
+          "folder": {
+            "$ref": "#/$defs/ProjectFolder",
+            "description": "The folder after the change (before it, for a deletion); left out\nwhen a project was taken out of its folder."
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project moved, by key.",
+            "type": "string"
+          },
+          "released": {
+            "description": "The projects that were in a deleted folder, now at the top level.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "FolderChange",
+        "type": "object"
+      },
+      "output_name": "FolderChange",
+      "safety": "write",
+      "summary": "Make a folder to group top-level projects in the sidebar."
+    },
+    {
+      "cli": "folder edit <folder>",
+      "exposure": "data",
+      "id": "folder.update",
+      "input": {
+        "$defs": {
+          "Edge": {
+            "description": "The two ends of an ordered list.",
+            "oneOf": [
+              {
+                "const": "top",
+                "description": "First.",
+                "type": "string"
+              },
+              {
+                "const": "bottom",
+                "description": "Last.",
+                "type": "string"
+              }
+            ]
+          },
+          "FolderField": {
+            "description": "A folder field that can be cleared.",
+            "oneOf": [
+              {
+                "const": "hue",
+                "description": "The colour.",
+                "type": "string"
+              }
+            ]
+          },
+          "Hue": {
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
+            "oneOf": [
+              {
+                "const": "red",
+                "description": "Red.",
+                "type": "string"
+              },
+              {
+                "const": "orange",
+                "description": "Orange.",
+                "type": "string"
+              },
+              {
+                "const": "yellow",
+                "description": "Yellow.",
+                "type": "string"
+              },
+              {
+                "const": "green",
+                "description": "Green.",
+                "type": "string"
+              },
+              {
+                "const": "teal",
+                "description": "Teal.",
+                "type": "string"
+              },
+              {
+                "const": "blue",
+                "description": "Blue.",
+                "type": "string"
+              },
+              {
+                "const": "purple",
+                "description": "Purple.",
+                "type": "string"
+              },
+              {
+                "const": "pink",
+                "description": "Pink.",
+                "type": "string"
+              },
+              {
+                "const": "grey",
+                "description": "Grey.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Changes to a folder; fields left out keep their value.",
+        "properties": {
+          "after": {
+            "description": "Move it after this folder (ID or name).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "at": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Edge"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Move it first or last among the folders."
+          },
+          "before": {
+            "description": "Move it before this folder (ID or name).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "clear": {
+            "description": "Fields to clear.",
+            "items": {
+              "$ref": "#/$defs/FolderField"
+            },
+            "type": "array"
+          },
+          "folder": {
+            "description": "The folder: its ID or its name.",
+            "type": "string"
+          },
+          "hue": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Hue"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A new colour."
+          },
+          "name": {
+            "description": "A new name.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "folder"
+        ],
+        "title": "FolderUpdateInput",
+        "type": "object"
+      },
+      "input_name": "FolderUpdateInput",
+      "kind": "command",
+      "mcp_tool": "update_folder",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person, agent or automation rule."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person, an agent, or an automation rule acting on its own.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              },
+              {
+                "const": "automation",
+                "description": "An automation rule of the workspace; the actor's name is the rule's.",
+                "type": "string"
+              }
+            ]
+          },
+          "Hue": {
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
+            "oneOf": [
+              {
+                "const": "red",
+                "description": "Red.",
+                "type": "string"
+              },
+              {
+                "const": "orange",
+                "description": "Orange.",
+                "type": "string"
+              },
+              {
+                "const": "yellow",
+                "description": "Yellow.",
+                "type": "string"
+              },
+              {
+                "const": "green",
+                "description": "Green.",
+                "type": "string"
+              },
+              {
+                "const": "teal",
+                "description": "Teal.",
+                "type": "string"
+              },
+              {
+                "const": "blue",
+                "description": "Blue.",
+                "type": "string"
+              },
+              {
+                "const": "purple",
+                "description": "Purple.",
+                "type": "string"
+              },
+              {
+                "const": "pink",
+                "description": "Pink.",
+                "type": "string"
+              },
+              {
+                "const": "grey",
+                "description": "Grey.",
+                "type": "string"
+              }
+            ]
+          },
+          "ProjectFolder": {
+            "additionalProperties": false,
+            "description": "A folder of top-level projects.",
+            "properties": {
+              "created_at": {
+                "description": "When it was made (RFC 3339).",
+                "type": "string"
+              },
+              "created_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who made it."
+              },
+              "hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "Its colour, if one was chosen."
+              },
+              "id": {
+                "description": "The folder's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name, unique among the folders (ignoring case).",
+                "type": "string"
+              },
+              "open_tasks": {
+                "description": "Open tasks in its active projects and their sub-projects.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "projects": {
+                "description": "The keys of its projects, in sidebar order, archived ones included.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "rank": {
+                "description": "Its place among the folders.",
+                "type": "string"
+              },
+              "updated_at": {
+                "description": "When it last changed (RFC 3339).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "rank",
+              "projects",
+              "open_tasks",
+              "created_by",
+              "created_at",
+              "updated_at"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A folder after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether the folder was deleted.",
+            "type": "boolean"
+          },
+          "folder": {
+            "$ref": "#/$defs/ProjectFolder",
+            "description": "The folder after the change (before it, for a deletion); left out\nwhen a project was taken out of its folder."
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project moved, by key.",
+            "type": "string"
+          },
+          "released": {
+            "description": "The projects that were in a deleted folder, now at the top level.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "FolderChange",
+        "type": "object"
+      },
+      "output_name": "FolderChange",
+      "safety": "write",
+      "summary": "Rename a folder, change its colour or move it among the folders."
+    },
+    {
+      "cli": "folder rename <folder> <name>",
+      "exposure": "data",
+      "id": "folder.rename",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A new name for a folder.",
+        "properties": {
+          "folder": {
+            "description": "The folder: its ID or its name.",
+            "type": "string"
+          },
+          "name": {
+            "description": "Its new name.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "folder",
+          "name"
+        ],
+        "title": "FolderRenameInput",
+        "type": "object"
+      },
+      "input_name": "FolderRenameInput",
+      "kind": "command",
+      "mcp_tool": "update_folder",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person, agent or automation rule."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person, an agent, or an automation rule acting on its own.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              },
+              {
+                "const": "automation",
+                "description": "An automation rule of the workspace; the actor's name is the rule's.",
+                "type": "string"
+              }
+            ]
+          },
+          "Hue": {
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
+            "oneOf": [
+              {
+                "const": "red",
+                "description": "Red.",
+                "type": "string"
+              },
+              {
+                "const": "orange",
+                "description": "Orange.",
+                "type": "string"
+              },
+              {
+                "const": "yellow",
+                "description": "Yellow.",
+                "type": "string"
+              },
+              {
+                "const": "green",
+                "description": "Green.",
+                "type": "string"
+              },
+              {
+                "const": "teal",
+                "description": "Teal.",
+                "type": "string"
+              },
+              {
+                "const": "blue",
+                "description": "Blue.",
+                "type": "string"
+              },
+              {
+                "const": "purple",
+                "description": "Purple.",
+                "type": "string"
+              },
+              {
+                "const": "pink",
+                "description": "Pink.",
+                "type": "string"
+              },
+              {
+                "const": "grey",
+                "description": "Grey.",
+                "type": "string"
+              }
+            ]
+          },
+          "ProjectFolder": {
+            "additionalProperties": false,
+            "description": "A folder of top-level projects.",
+            "properties": {
+              "created_at": {
+                "description": "When it was made (RFC 3339).",
+                "type": "string"
+              },
+              "created_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who made it."
+              },
+              "hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "Its colour, if one was chosen."
+              },
+              "id": {
+                "description": "The folder's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name, unique among the folders (ignoring case).",
+                "type": "string"
+              },
+              "open_tasks": {
+                "description": "Open tasks in its active projects and their sub-projects.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "projects": {
+                "description": "The keys of its projects, in sidebar order, archived ones included.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "rank": {
+                "description": "Its place among the folders.",
+                "type": "string"
+              },
+              "updated_at": {
+                "description": "When it last changed (RFC 3339).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "rank",
+              "projects",
+              "open_tasks",
+              "created_by",
+              "created_at",
+              "updated_at"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A folder after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether the folder was deleted.",
+            "type": "boolean"
+          },
+          "folder": {
+            "$ref": "#/$defs/ProjectFolder",
+            "description": "The folder after the change (before it, for a deletion); left out\nwhen a project was taken out of its folder."
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project moved, by key.",
+            "type": "string"
+          },
+          "released": {
+            "description": "The projects that were in a deleted folder, now at the top level.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "FolderChange",
+        "type": "object"
+      },
+      "output_name": "FolderChange",
+      "safety": "write",
+      "summary": "Rename a folder."
+    },
+    {
+      "cli": "folder delete <folder>",
+      "exposure": "data",
+      "id": "folder.delete",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "One folder.",
+        "properties": {
+          "folder": {
+            "description": "The folder: its ID or its name.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "folder"
+        ],
+        "title": "FolderRef",
+        "type": "object"
+      },
+      "input_name": "FolderRef",
+      "kind": "command",
+      "mcp_tool": "delete_folder",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person, agent or automation rule."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person, an agent, or an automation rule acting on its own.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              },
+              {
+                "const": "automation",
+                "description": "An automation rule of the workspace; the actor's name is the rule's.",
+                "type": "string"
+              }
+            ]
+          },
+          "Hue": {
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
+            "oneOf": [
+              {
+                "const": "red",
+                "description": "Red.",
+                "type": "string"
+              },
+              {
+                "const": "orange",
+                "description": "Orange.",
+                "type": "string"
+              },
+              {
+                "const": "yellow",
+                "description": "Yellow.",
+                "type": "string"
+              },
+              {
+                "const": "green",
+                "description": "Green.",
+                "type": "string"
+              },
+              {
+                "const": "teal",
+                "description": "Teal.",
+                "type": "string"
+              },
+              {
+                "const": "blue",
+                "description": "Blue.",
+                "type": "string"
+              },
+              {
+                "const": "purple",
+                "description": "Purple.",
+                "type": "string"
+              },
+              {
+                "const": "pink",
+                "description": "Pink.",
+                "type": "string"
+              },
+              {
+                "const": "grey",
+                "description": "Grey.",
+                "type": "string"
+              }
+            ]
+          },
+          "ProjectFolder": {
+            "additionalProperties": false,
+            "description": "A folder of top-level projects.",
+            "properties": {
+              "created_at": {
+                "description": "When it was made (RFC 3339).",
+                "type": "string"
+              },
+              "created_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who made it."
+              },
+              "hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "Its colour, if one was chosen."
+              },
+              "id": {
+                "description": "The folder's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name, unique among the folders (ignoring case).",
+                "type": "string"
+              },
+              "open_tasks": {
+                "description": "Open tasks in its active projects and their sub-projects.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "projects": {
+                "description": "The keys of its projects, in sidebar order, archived ones included.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "rank": {
+                "description": "Its place among the folders.",
+                "type": "string"
+              },
+              "updated_at": {
+                "description": "When it last changed (RFC 3339).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "rank",
+              "projects",
+              "open_tasks",
+              "created_by",
+              "created_at",
+              "updated_at"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A folder after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether the folder was deleted.",
+            "type": "boolean"
+          },
+          "folder": {
+            "$ref": "#/$defs/ProjectFolder",
+            "description": "The folder after the change (before it, for a deletion); left out\nwhen a project was taken out of its folder."
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project moved, by key.",
+            "type": "string"
+          },
+          "released": {
+            "description": "The projects that were in a deleted folder, now at the top level.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "FolderChange",
+        "type": "object"
+      },
+      "output_name": "FolderChange",
+      "safety": "write",
+      "summary": "Delete a folder; its projects stay and go back to the top level. Revert brings it back."
+    },
+    {
+      "cli": "folder move <project>",
+      "exposure": "data",
+      "id": "folder.move",
+      "input": {
+        "$defs": {
+          "Edge": {
+            "description": "The two ends of an ordered list.",
+            "oneOf": [
+              {
+                "const": "top",
+                "description": "First.",
+                "type": "string"
+              },
+              {
+                "const": "bottom",
+                "description": "Last.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Where to put a top-level project: into a folder, or out of its folder,\nand where among the projects there.",
+        "properties": {
+          "after": {
+            "description": "Place it after this project of the same folder.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "at": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Edge"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Place it first or last in the folder (or among the projects in no\nfolder); default when it changes folder: last."
+          },
+          "before": {
+            "description": "Place it before this project of the same folder.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "folder": {
+            "description": "The folder to put it in (ID or name); left out with `none`: out of\nany folder, back at the top level; left out without `none`: it\nstays in its folder and only moves within it.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "none": {
+            "description": "Take it out of its folder.",
+            "type": "boolean"
+          },
+          "project": {
+            "description": "The project: its key (current or old) or ID. Only top-level\nprojects go into folders; their sub-projects come along.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "title": "FolderMoveInput",
+        "type": "object"
+      },
+      "input_name": "FolderMoveInput",
+      "kind": "command",
+      "mcp_tool": "move_project_to_folder",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person, agent or automation rule."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person, an agent, or an automation rule acting on its own.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              },
+              {
+                "const": "automation",
+                "description": "An automation rule of the workspace; the actor's name is the rule's.",
+                "type": "string"
+              }
+            ]
+          },
+          "Hue": {
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
+            "oneOf": [
+              {
+                "const": "red",
+                "description": "Red.",
+                "type": "string"
+              },
+              {
+                "const": "orange",
+                "description": "Orange.",
+                "type": "string"
+              },
+              {
+                "const": "yellow",
+                "description": "Yellow.",
+                "type": "string"
+              },
+              {
+                "const": "green",
+                "description": "Green.",
+                "type": "string"
+              },
+              {
+                "const": "teal",
+                "description": "Teal.",
+                "type": "string"
+              },
+              {
+                "const": "blue",
+                "description": "Blue.",
+                "type": "string"
+              },
+              {
+                "const": "purple",
+                "description": "Purple.",
+                "type": "string"
+              },
+              {
+                "const": "pink",
+                "description": "Pink.",
+                "type": "string"
+              },
+              {
+                "const": "grey",
+                "description": "Grey.",
+                "type": "string"
+              }
+            ]
+          },
+          "ProjectFolder": {
+            "additionalProperties": false,
+            "description": "A folder of top-level projects.",
+            "properties": {
+              "created_at": {
+                "description": "When it was made (RFC 3339).",
+                "type": "string"
+              },
+              "created_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who made it."
+              },
+              "hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "Its colour, if one was chosen."
+              },
+              "id": {
+                "description": "The folder's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name, unique among the folders (ignoring case).",
+                "type": "string"
+              },
+              "open_tasks": {
+                "description": "Open tasks in its active projects and their sub-projects.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "projects": {
+                "description": "The keys of its projects, in sidebar order, archived ones included.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "rank": {
+                "description": "Its place among the folders.",
+                "type": "string"
+              },
+              "updated_at": {
+                "description": "When it last changed (RFC 3339).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "rank",
+              "projects",
+              "open_tasks",
+              "created_by",
+              "created_at",
+              "updated_at"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A folder after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether the folder was deleted.",
+            "type": "boolean"
+          },
+          "folder": {
+            "$ref": "#/$defs/ProjectFolder",
+            "description": "The folder after the change (before it, for a deletion); left out\nwhen a project was taken out of its folder."
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project moved, by key.",
+            "type": "string"
+          },
+          "released": {
+            "description": "The projects that were in a deleted folder, now at the top level.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "FolderChange",
+        "type": "object"
+      },
+      "output_name": "FolderChange",
+      "safety": "write",
+      "summary": "Put a top-level project into a folder or take it out, or move it within its folder."
+    },
+    {
       "cli": "status add",
       "exposure": "data",
       "id": "status.create",
@@ -7395,6 +8948,10 @@
               },
               "description": {
                 "description": "Its description (Markdown).",
+                "type": "string"
+              },
+              "folder": {
+                "description": "The ID of the folder a top-level project is in (see folder.list);\nleft out for projects in no folder and for sub-projects.",
                 "type": "string"
               },
               "hue": {
@@ -8152,6 +9709,10 @@
                 "description": "Its description (Markdown).",
                 "type": "string"
               },
+              "folder": {
+                "description": "The ID of the folder a top-level project is in (see folder.list);\nleft out for projects in no folder and for sub-projects.",
+                "type": "string"
+              },
               "hue": {
                 "$ref": "#/$defs/Hue",
                 "description": "Its colour."
@@ -8803,6 +10364,10 @@
                 "description": "Its description (Markdown).",
                 "type": "string"
               },
+              "folder": {
+                "description": "The ID of the folder a top-level project is in (see folder.list);\nleft out for projects in no folder and for sub-projects.",
+                "type": "string"
+              },
               "hue": {
                 "$ref": "#/$defs/Hue",
                 "description": "Its colour."
@@ -9417,6 +10982,10 @@
               },
               "description": {
                 "description": "Its description (Markdown).",
+                "type": "string"
+              },
+              "folder": {
+                "description": "The ID of the folder a top-level project is in (see folder.list);\nleft out for projects in no folder and for sub-projects.",
                 "type": "string"
               },
               "hue": {
@@ -10149,6 +11718,10 @@
               },
               "description": {
                 "description": "Its description (Markdown).",
+                "type": "string"
+              },
+              "folder": {
+                "description": "The ID of the folder a top-level project is in (see folder.list);\nleft out for projects in no folder and for sub-projects.",
                 "type": "string"
               },
               "hue": {
@@ -10934,6 +12507,10 @@
                 "description": "Its description (Markdown).",
                 "type": "string"
               },
+              "folder": {
+                "description": "The ID of the folder a top-level project is in (see folder.list);\nleft out for projects in no folder and for sub-projects.",
+                "type": "string"
+              },
               "hue": {
                 "$ref": "#/$defs/Hue",
                 "description": "Its colour."
@@ -11548,6 +13125,10 @@
               },
               "description": {
                 "description": "Its description (Markdown).",
+                "type": "string"
+              },
+              "folder": {
+                "description": "The ID of the folder a top-level project is in (see folder.list);\nleft out for projects in no folder and for sub-projects.",
                 "type": "string"
               },
               "hue": {
@@ -12220,6 +13801,10 @@
               },
               "description": {
                 "description": "Its description (Markdown).",
+                "type": "string"
+              },
+              "folder": {
+                "description": "The ID of the folder a top-level project is in (see folder.list);\nleft out for projects in no folder and for sub-projects.",
                 "type": "string"
               },
               "hue": {
@@ -12901,6 +14486,10 @@
                 "description": "Its description (Markdown).",
                 "type": "string"
               },
+              "folder": {
+                "description": "The ID of the folder a top-level project is in (see folder.list);\nleft out for projects in no folder and for sub-projects.",
+                "type": "string"
+              },
               "hue": {
                 "$ref": "#/$defs/Hue",
                 "description": "Its colour."
@@ -13508,6 +15097,10 @@
               },
               "description": {
                 "description": "Its description (Markdown).",
+                "type": "string"
+              },
+              "folder": {
+                "description": "The ID of the folder a top-level project is in (see folder.list);\nleft out for projects in no folder and for sub-projects.",
                 "type": "string"
               },
               "hue": {
@@ -48437,6 +50030,10 @@
                 "description": "Its description (Markdown).",
                 "type": "string"
               },
+              "folder": {
+                "description": "The ID of the folder a top-level project is in (see folder.list);\nleft out for projects in no folder and for sub-projects.",
+                "type": "string"
+              },
               "hue": {
                 "$ref": "#/$defs/Hue",
                 "description": "Its colour."
@@ -75341,6 +76938,10 @@
               },
               "description": {
                 "description": "Its description (Markdown).",
+                "type": "string"
+              },
+              "folder": {
+                "description": "The ID of the folder a top-level project is in (see folder.list);\nleft out for projects in no folder and for sub-projects.",
                 "type": "string"
               },
               "hue": {

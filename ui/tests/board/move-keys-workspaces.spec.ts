@@ -65,7 +65,7 @@ test("move a project under another one from its menu, then back to the top level
   await expect(homeLab).toHaveAttribute("aria-level", "1");
 
   await page.getByRole("button", { name: /Home lab.*project menu/ }).click();
-  await page.getByRole("menuitem", { name: "Move to" }).click();
+  await page.getByRole("menuitem", { name: "Move to", exact: true }).click();
   // It is at the top level already.
   await expect(page.getByRole("menuitem", { name: "Top level" })).toBeDisabled();
   await page.getByRole("menuitem", { name: "Personal", exact: true }).click();
@@ -74,7 +74,7 @@ test("move a project under another one from its menu, then back to the top level
 
   // From the sidebar's menu, back to the top level.
   await homeLab.click({ button: "right" });
-  await page.getByRole("menuitem", { name: "Move to" }).click();
+  await page.getByRole("menuitem", { name: "Move to", exact: true }).click();
   await page.getByRole("menuitem", { name: "Top level" }).click();
   await expect(homeLab).toHaveAttribute("aria-level", "1");
 });

@@ -15,6 +15,11 @@
 //!   fixes the protocol error without slowing drawing down.
 //! - With NVIDIA's driver on X11, the DMA-BUF renderer is turned off. It is
 //!   slower, but reliable.
+//! - Without a GPU to render on (no render node, as in a virtual machine
+//!   or a container), the DMA-BUF renderer is turned off too. It would hand
+//!   every frame over in buffers the software renderer fills in the web
+//!   view's own memory: about 200 MB more for a large board, and slower
+//!   scrolling, than with shared-memory buffers.
 //! - Safe rendering, chosen in Preferences and kept in the app's settings,
 //!   or asked for once with `--safe-graphics`, turns GPU compositing off
 //!   altogether and paints on the CPU. It is for any other driver that
@@ -50,6 +55,9 @@ const NVIDIA_WAYLAND: (&str, &str) = ("__NV_DISABLE_EXPLICIT_SYNC", "1");
 /// NVIDIA's driver on X11.
 #[cfg(target_os = "linux")]
 const NVIDIA_X11: (&str, &str) = ("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+/// No GPU to render on.
+#[cfg(target_os = "linux")]
+const NO_RENDER_NODE: (&str, &str) = ("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
 
 /// Every name this module may add, so that programs the app opens for the
 /// person get their environment without them.
@@ -69,6 +77,8 @@ pub(crate) struct Session {
     pub(crate) nvidia: bool,
     /// The web view draws through Wayland, not X11.
     pub(crate) wayland: bool,
+    /// A GPU can render: the kernel offers a DRM render node.
+    pub(crate) render_node: bool,
 }
 
 #[cfg(target_os = "linux")]
@@ -82,8 +92,21 @@ impl Session {
                 var("WAYLAND_DISPLAY").as_deref(),
                 var("GDK_BACKEND").as_deref(),
             ),
+            render_node: has_render_node(Path::new("/dev/dri")),
         }
     }
+}
+
+/// Whether `dri` (the kernel's DRM device folder) holds a render node,
+/// `renderD128` and up. A display-only device (`card0` of a simple frame
+/// buffer) isn't one.
+#[cfg(target_os = "linux")]
+fn has_render_node(dri: &Path) -> bool {
+    std::fs::read_dir(dri).is_ok_and(|entries| {
+        entries
+            .filter_map(Result::ok)
+            .any(|entry| entry.file_name().to_string_lossy().starts_with("renderD"))
+    })
 }
 
 /// Whether GTK draws through Wayland: a Wayland display, unless GTK is
@@ -115,6 +138,9 @@ pub(crate) fn settings(session: Session, safe: bool) -> Vec<(&'static str, &'sta
         } else {
             NVIDIA_X11
         });
+    }
+    if !session.render_node {
+        add(NO_RENDER_NODE);
     }
     if safe {
         SAFE.into_iter().for_each(&mut add);
@@ -291,6 +317,7 @@ mod tests {
     const AMD_WAYLAND: Session = Session {
         nvidia: false,
         wayland: true,
+        render_node: true,
     };
 
     #[test]
@@ -304,10 +331,12 @@ mod tests {
         let wayland = Session {
             nvidia: true,
             wayland: true,
+            render_node: true,
         };
         let x11 = Session {
             nvidia: true,
             wayland: false,
+            render_node: true,
         };
         assert_eq!(settings(wayland, false), [NVIDIA_WAYLAND]);
         assert_eq!(settings(x11, false), [NVIDIA_X11]);
@@ -327,6 +356,12 @@ mod tests {
             Session {
                 nvidia: true,
                 wayland: false,
+                render_node: true,
+            },
+            Session {
+                nvidia: false,
+                wayland: false,
+                render_node: false,
             },
         ] {
             for (name, _) in settings(session, true) {
@@ -334,6 +369,30 @@ mod tests {
             }
         }
         assert!(NAMES.contains(&NVIDIA_WAYLAND.0));
+    }
+
+    #[test]
+    fn without_a_render_node_the_dma_buf_renderer_is_off() {
+        let software = Session {
+            render_node: false,
+            ..AMD_WAYLAND
+        };
+        assert_eq!(settings(software, false), [NO_RENDER_NODE]);
+        // Safe rendering names it once.
+        let safe = settings(software, true);
+        assert_eq!(safe.len(), SAFE.len());
+        assert!(SAFE.iter().all(|setting| safe.contains(setting)));
+    }
+
+    #[test]
+    fn a_render_node_is_a_renderd_entry() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(!has_render_node(dir.path()));
+        assert!(!has_render_node(&dir.path().join("missing")));
+        std::fs::write(dir.path().join("card0"), "").unwrap();
+        assert!(!has_render_node(dir.path()));
+        std::fs::write(dir.path().join("renderD128"), "").unwrap();
+        assert!(has_render_node(dir.path()));
     }
 
     #[test]

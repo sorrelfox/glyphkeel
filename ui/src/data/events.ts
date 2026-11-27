@@ -27,11 +27,11 @@ export const ENTITY_QUERIES: Readonly<Record<string, readonly OpId[]>> = {
   // Its cover marks one of its files.
   // Deleting, restoring and purging show in the trash.
   // Its description links to pages and tasks, and its key is a link's target.
-  task: ["trash.list", "task.get", "board.get", "project.list", "markdown.render", "description.history", "description.revision", "time.report", "timer.get", "task.search", "today.get", "search.query", "schedule.get", "schedule.preview_move", "version.list", "version.get", "sprint.list", "sprint.get", "sprint.burndown", "field.list", "file.get", ...LINKS, ...FLOW],
+  task: ["trash.list", "task.get", "board.get", "project.list", "folder.list", "markdown.render", "description.history", "description.revision", "time.report", "timer.get", "task.search", "today.get", "search.query", "schedule.get", "schedule.preview_move", "version.list", "version.get", "sprint.list", "sprint.get", "sprint.burndown", "field.list", "file.get", ...LINKS, ...FLOW],
   // Statuses, types and labels show on every card and in the task panel;
   // a wiki page's task lists (`{{tasks …}}`) show statuses and match by them.
-  project: ["trash.list", "project.list", "project.get", "board.get", "task.get", "layout.get", "list.layout.get", "markdown.render", "time.report", "task.search", "query.parse", "view.list", "today.get", "search.query", "wiki.search", "wiki.get", "wiki.list", "schedule.get", "schedule.preview_move", "gantt.layout.get", "version.list", "version.get", "sprint.list", "sprint.get", "field.list", ...LINKS, ...FLOW],
-  status: ["project.get", "board.get", "task.get", "project.list", "task.search", "query.parse", "today.get", "search.query", "schedule.get", "markdown.render", ...FLOW],
+  project: ["trash.list", "project.list", "folder.list", "project.get", "board.get", "task.get", "layout.get", "list.layout.get", "markdown.render", "time.report", "task.search", "query.parse", "view.list", "today.get", "search.query", "wiki.search", "wiki.get", "wiki.list", "schedule.get", "schedule.preview_move", "gantt.layout.get", "version.list", "version.get", "sprint.list", "sprint.get", "field.list", ...LINKS, ...FLOW],
+  status: ["project.get", "board.get", "task.get", "project.list", "folder.list", "task.search", "query.parse", "today.get", "search.query", "schedule.get", "markdown.render", ...FLOW],
   task_type: ["project.get", "board.get", "task.get", "task.search", "query.parse", "schedule.get", "markdown.render", "field.list", ...FLOW],
   label: ["project.get", "board.get", "task.get", "task.search", "query.parse", "schedule.get", "markdown.render", ...FLOW],
   // Custom fields: their list, the values tasks show, the columns and the query field.
@@ -64,6 +64,8 @@ export const ENTITY_QUERIES: Readonly<Record<string, readonly OpId[]>> = {
   series: ["task.get", "task.search", "today.get", "schedule.get", "board.get"],
   // Templates: their lists, and the one shown.
   template: ["template.list", "template.get"],
+  // Project folders: their list, and the projects' folders in the tree.
+  project_folder: ["folder.list", "project.list"],
   // Dashboards: their list; each widget's value comes with every change (see ALWAYS).
   dashboard: ["dashboard.list"],
   // Automation rules: their list, the one shown and the run log.

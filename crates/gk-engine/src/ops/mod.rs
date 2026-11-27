@@ -23,6 +23,7 @@ pub(crate) mod draft;
 pub(crate) mod duplicate;
 pub(crate) mod fields;
 pub(crate) mod file;
+pub(crate) mod folder;
 pub(crate) mod gantt_layout;
 pub(crate) mod history;
 pub(crate) mod links;
@@ -89,6 +90,7 @@ pub(crate) fn register(r: &mut Registry) {
     bulk::register(r);
     view::register(r);
     dashboard::register(r);
+    folder::register(r);
     version::register(r);
     sprint::register(r);
     schedule::register(r);

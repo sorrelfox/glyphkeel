@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { ChartArea, Clock, History, LayoutDashboard, List, Plus, SlidersHorizontal, Sun, Trash2 } from "lucide-react";
+import { ChartArea, Clock, FolderPlus, History, LayoutDashboard, List, Plus, SlidersHorizontal, Sun, Trash2 } from "lucide-react";
+import { useState } from "react";
 
 import { useAction } from "../actions/ActionsProvider";
 import { Kbd } from "../components/Kbd";
@@ -10,6 +11,7 @@ import { useCounts } from "../data/board";
 import { useSidebarCounts } from "../data/today";
 import { useT } from "../i18n/I18n";
 import { dragRegion, type TitleBar } from "../start";
+import { FolderDialog, type FolderRequest } from "../screens/project/FolderDialog";
 import { type NewProjectRequest } from "../screens/project/NewProjectDialog";
 import { ProjectTree } from "../screens/project/ProjectTree";
 import { type View } from "./shellActions";
@@ -36,7 +38,7 @@ interface SidebarProps {
  * The sidebar, top to bottom: the search field (typing suggests tasks,
  * projects and actions; Enter opens the search page with its text; the
  * command palette keeps its own key), Today and All
- * tasks with their counts, the dashboards, the time report, the reports, the activity, the project tree, the
+ * tasks with their counts, the dashboards, the time report, the reports, the activity, the project tree (with its folders and the buttons for a new folder and a new project), the
  * timer chip while a timer runs, then Trash and Preferences.
  */
 export function Sidebar({ view, project, width, titleBar = "app", onNewProject, onProjectSettings, onExportProject, onDeleteProject, onImportCsv }: SidebarProps) {
@@ -50,6 +52,7 @@ export function Sidebar({ view, project, width, titleBar = "app", onNewProject, 
   const trash = useAction("nav.trash");
   const preferences = useAction("app.preferences");
   const counts = useCounts();
+  const [folderDialog, setFolderDialog] = useState<FolderRequest | null>(null);
   const sidebarCounts = useSidebarCounts();
   // Until Today's counts are in, the project tree's.
   const allCount = sidebarCounts?.open ?? counts?.all;
@@ -102,6 +105,16 @@ export function Sidebar({ view, project, width, titleBar = "app", onNewProject, 
         <button
           type="button"
           className="btn flat icon sm"
+          aria-label={t("sidebar-new-folder")}
+          onClick={() => {
+            setFolderDialog({ kind: "new" });
+          }}
+        >
+          <FolderPlus className="ic s" />
+        </button>
+        <button
+          type="button"
+          className="btn flat icon sm"
           aria-label={t("sidebar-new-project")}
           onClick={() => {
             onNewProject({ parent: null });
@@ -111,8 +124,21 @@ export function Sidebar({ view, project, width, titleBar = "app", onNewProject, 
         </button>
       </div>
       <div className={styles.projectTree}>
-        <ProjectTree current={project} onNewProject={onNewProject} onSettings={onProjectSettings} onExport={onExportProject} onImportCsv={onImportCsv} onDelete={onDeleteProject} />
+        <ProjectTree current={project} onNewProject={onNewProject} onSettings={onProjectSettings} onExport={onExportProject} onImportCsv={onImportCsv}
+          onDelete={onDeleteProject}
+          onRenameFolder={(folder) => {
+            setFolderDialog({ kind: "rename", folder });
+          }}
+        />
       </div>
+      {folderDialog !== null && (
+        <FolderDialog
+          request={folderDialog}
+          onClose={() => {
+            setFolderDialog(null);
+          }}
+        />
+      )}
 
       <TimerChip />
       <div className={styles.navGroup}>

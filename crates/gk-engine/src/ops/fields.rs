@@ -100,6 +100,7 @@ const SPECS: &[Spec] = &[
     spec(PROJECT, "key", "projects", "key", Enc::Text),
     spec(PROJECT, "parent", "projects", "parent_id", Enc::Id),
     spec(PROJECT, "rank", "projects", "rank", Enc::Text),
+    spec(PROJECT, "folder", "projects", "folder_id", Enc::Id),
     spec(PROJECT, "state", "projects", "state", Enc::Text),
     spec(PROJECT, "agent_rules", "projects", "agent_rules", Enc::Json),
     folded(STATUS, "name", "statuses"),

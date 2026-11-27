@@ -21,6 +21,7 @@ import { keysOf } from "../../actions/actions";
 import { errorToast, failureText, useCall, useCommand } from "../../data/hooks";
 import { allRows, defaultView, LIST_PAGE, toCsv, toJson, useListLayout, useListNames, useListRows, useParsedQuery, useQueryFields, useSavedViews, useUnfilteredCount, type ListScope } from "../../data/list";
 import { joinable, useSprints } from "../../data/sprints";
+import { formatDuration } from "../../data/duration";
 import { useDurationUnits } from "../../data/time";
 import { type CustomField, type ListedTask, type ListGroup, type ListLayout, type QueryChip, type QueryProblem, type SavedView } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
@@ -202,6 +203,7 @@ function LoadedList({ project, views, layout, openTask, onOpen, initialQuery }: 
     setDue: (task, day) => {
       update.mutate(day === null ? { key: task.key, clear: ["due_date"] } : { key: task.key, due_date: day });
     },
+    formatDuration: (minutes) => formatDuration(minutes, units),
   };
 
   // The header shows an order someone chose, not the default one.
