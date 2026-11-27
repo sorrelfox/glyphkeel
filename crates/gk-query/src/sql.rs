@@ -644,6 +644,18 @@ fn was(test: &WasTest) -> Sql {
                 false,
             )
         }
+        WasTest::Sprints(n) => {
+            let mut now = Sql::default();
+            now.push("t.sprint_id IN (SELECT sp.id FROM sprints sp WHERE ");
+            now.append(names_in("sp.name_fold", n));
+            now.push(")");
+            (
+                now,
+                "sprint",
+                ids("sprints", names_in("x.name_fold", n)),
+                false,
+            )
+        }
         WasTest::Labels(n) => {
             let mut now = Sql::default();
             now.push(
@@ -951,6 +963,31 @@ fn cond(c: &Cond, today: Day, now: i64) -> Sql {
             }
             sql.append(any(parts));
         }
+        Cond::Sprints {
+            names,
+            active,
+            none,
+        } => {
+            let mut parts = Vec::new();
+            if !names.is_empty() {
+                let mut p = Sql::default();
+                p.push("t.sprint_id IN (SELECT sp.id FROM sprints sp WHERE ");
+                p.append(names_in("sp.name_fold", names));
+                p.push(")");
+                parts.push(p);
+            }
+            if *active {
+                let mut p = Sql::default();
+                p.push("t.sprint_id IN (SELECT sp.id FROM sprints sp WHERE sp.state = 'active')");
+                parts.push(p);
+            }
+            if *none {
+                let mut p = Sql::default();
+                p.push("t.sprint_id IS NULL");
+                parts.push(p);
+            }
+            sql.append(any(parts));
+        }
         Cond::Categories(cats) => {
             sql.push("s.category IN (");
             for (i, c) in cats.iter().enumerate() {
@@ -1129,6 +1166,7 @@ fn cond(c: &Cond, today: Day, now: i64) -> Sql {
                         "description" => "t.description <> ''",
                         "labels" => "EXISTS (SELECT 1 FROM task_labels tl WHERE tl.task_id = t.id)",
                         "version" => "t.fix_version_id IS NOT NULL",
+                        "sprint" => "t.sprint_id IS NOT NULL",
                         "files" => "0 < (SELECT count(*) FROM attachments a WHERE a.deleted_at IS NULL \
                              AND ((a.owner_kind = 'task' AND a.owner_id = t.id) OR (a.owner_kind = 'comment' \
                              AND a.owner_id IN (SELECT c.id FROM comments c WHERE c.task_id = t.id \
@@ -1310,6 +1348,11 @@ fn sort_exprs(by: &SortBy, relevance: bool) -> Vec<Sql> {
                 "(SELECT v.due_date IS NULL FROM versions v WHERE v.id = t.fix_version_id)",
                 "(SELECT v.due_date FROM versions v WHERE v.id = t.fix_version_id)",
                 "(SELECT v.name_fold FROM versions v WHERE v.id = t.fix_version_id)",
+            ],
+            FieldType::Sprint => vec![
+                "(SELECT sp.start_date IS NULL FROM sprints sp WHERE sp.id = t.sprint_id)",
+                "(SELECT sp.start_date FROM sprints sp WHERE sp.id = t.sprint_id)",
+                "(SELECT sp.rank FROM sprints sp WHERE sp.id = t.sprint_id)",
             ],
             FieldType::Priority => vec!["t.priority"],
             FieldType::Parent => vec!["(SELECT k.number FROM tasks k WHERE k.id = t.parent_id)"],

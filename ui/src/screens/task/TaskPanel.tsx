@@ -51,6 +51,7 @@ import { LinksSection, SubtasksSection } from "./Sections";
 import { RecurrenceNote, RepeatValue } from "./Recurrence";
 import { SaveTemplateDialog } from "./SaveTemplate";
 import { QuickLog, ReminderValue, TimerButton } from "./Time";
+import { SprintPicker } from "./SprintPicker";
 import { VersionPicker } from "./VersionPicker";
 import styles from "./TaskPanel.module.css";
 
@@ -434,6 +435,9 @@ function Loaded({
           </Prop>
           <Prop label={t("prop-version")}>
             <VersionPicker task={task} readOnly={lockedOr("fix_version")} onChange={(version) => { setOrClear("fix_version", version); }} />
+          </Prop>
+          <Prop label={t("prop-sprint")}>
+            <SprintPicker task={task} readOnly={lockedOr("sprint")} onChange={(sprint) => { setOrClear("sprint", sprint); }} />
           </Prop>
           <Prop label={t("prop-labels")} wide>
             <Labels task={task} project={project} readOnly={lockedOr("labels")} onChange={(labels) => { setOrClear("labels", labels.length === 0 ? null : labels); }} />

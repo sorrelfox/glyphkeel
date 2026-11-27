@@ -419,6 +419,14 @@ function BuiltinCell({ column, task }: { column: Exclude<ColumnId, `cf.${string}
           {task.fix_version.name}
         </span>
       );
+    case "sprint":
+      return task.sprint === undefined ? (
+        <Empty />
+      ) : (
+        <span className="truncate" title={task.sprint.name}>
+          {task.sprint.name}
+        </span>
+      );
     case "start":
       return task.start_date === undefined ? <Empty /> : <span className="meta">{day(task.start_date)}</span>;
     case "due":

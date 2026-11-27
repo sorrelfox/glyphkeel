@@ -892,6 +892,7 @@ const BACK_TO_3: &str = "
     DROP TABLE templates; DROP INDEX tasks_series; ALTER TABLE tasks DROP COLUMN series_id;
     DROP TABLE task_series; ALTER TABLE task_types DROP COLUMN due_offset_days;
     ALTER TABLE statuses DROP COLUMN rules; ALTER TABLE projects DROP COLUMN agent_rules;
+    DROP INDEX tasks_sprint; ALTER TABLE tasks DROP COLUMN sprint_id; DROP TABLE sprints;
     DROP INDEX tasks_fix_version; ALTER TABLE tasks DROP COLUMN fix_version_id;
     DROP TABLE versions;
     DROP TABLE custom_values; DROP TABLE custom_fields;

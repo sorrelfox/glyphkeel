@@ -17,10 +17,15 @@ export interface Filters {
   labels: string[];
   priorities: Priority[];
   due: DueFilter[];
+  /** Sprint IDs, and {@link BACKLOG} for cards in no sprint. */
+  sprints: string[];
   recentlyUpdated: boolean;
 }
 
-export const NO_FILTERS: Readonly<Filters> = { text: "", labels: [], priorities: [], due: [], recentlyUpdated: false };
+/** The sprint filter's choice for cards in no sprint. */
+export const BACKLOG = "*backlog";
+
+export const NO_FILTERS: Readonly<Filters> = { text: "", labels: [], priorities: [], due: [], sprints: [], recentlyUpdated: false };
 
 /** "Recently updated" means within this many days. */
 export const RECENT_DAYS = 7;
@@ -31,6 +36,7 @@ export function isFiltered(filters: Filters): boolean {
     filters.labels.length > 0 ||
     filters.priorities.length > 0 ||
     filters.due.length > 0 ||
+    filters.sprints.length > 0 ||
     filters.recentlyUpdated
   );
 }
@@ -91,6 +97,9 @@ export function matches(card: Card, filters: Filters, now: Date): boolean {
     if (!hit) {
       return false;
     }
+  }
+  if (filters.sprints.length > 0 && !filters.sprints.includes(card.sprint?.id ?? BACKLOG)) {
+    return false;
   }
   if (filters.recentlyUpdated && now.getTime() - Date.parse(card.updated_at) > RECENT_DAYS * 86_400_000) {
     return false;

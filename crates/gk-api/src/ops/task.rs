@@ -98,6 +98,9 @@ pub struct Task {
     /// The version (release) it is planned for.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fix_version: Option<crate::ops::version::VersionRef>,
+    /// The sprint it is in.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sprint: Option<crate::ops::sprint::SprintRef>,
     /// Its description (Markdown).
     pub description: String,
     /// The description's revision; pass it as `base_revision` when you save
@@ -390,6 +393,10 @@ pub struct TaskCreateInput {
     /// project or one shared with it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fix_version: Option<String>,
+    /// The sprint it goes in (name or ID, or `active`): a planned or active
+    /// sprint of the project.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sprint: Option<String>,
     /// The parent task, for a subtask (same project, at most 5 levels).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,
@@ -445,6 +452,8 @@ pub enum TaskField {
     Labels,
     /// The version it is planned for.
     FixVersion,
+    /// The sprint it is in (back to the backlog).
+    Sprint,
 }
 
 /// Changes to a task; fields left out keep their value. Status and
@@ -495,6 +504,10 @@ pub struct TaskUpdateInput {
     /// project or one shared with it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fix_version: Option<String>,
+    /// Put it in this sprint (name or ID, or `active`): a planned or active
+    /// sprint of the project.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sprint: Option<String>,
     /// A new parent task (same project, at most 5 levels, no loops).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,

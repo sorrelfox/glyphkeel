@@ -358,6 +358,7 @@ fn cards_of(
                     priority: parse_enum(priority_name(r.get(7)?)).unwrap_or(Priority::None),
                     labels: Vec::new(),
                     parent: opt_id_at(r, 8)?.map(|id| id.to_string()),
+                    sprint: None,
                     start_date: r.get(9)?,
                     due_date: r.get(10)?,
                     estimate_minutes: r.get(11)?,
@@ -399,6 +400,7 @@ fn finish_card(tx: &Transaction<'_>, card: &mut Card) -> Result<(), Failure> {
         .parse()
         .map_err(|_| Failure::Op(messages::storage("storage-task-id", &[])))?;
     card.labels = task_labels(tx, id)?;
+    card.sprint = super::sprint::of_task(tx, id)?;
     card.progress_percent = super::rollup::progress(tx, id)?;
     if let Some(parent) = card.parent.take()
         && let Ok(parent) = parent.parse::<Id>()

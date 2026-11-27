@@ -442,6 +442,8 @@ export type BulkChanges = {
   shift_due?: string | null;
   /** Move start dates by calendar days, weeks, months or years (`+2d`, `-1w`); tasks without one keep none. */
   shift_start?: string | null;
+  /** Put them in the sprint of this name (in each task's project), or `active` for each project's active sprint. */
+  sprint?: string | null;
   /** The start date: `YYYY-MM-DD`, or `today`, `fri`, `next mon`, `+3d`. */
   start_date?: string | null;
   /** Move to the status of this name (in each task's project). */
@@ -500,6 +502,20 @@ export type BulkUpdateInput = {
   query?: string | null;
 };
 
+/** One day of a burndown, as it stood at the end of the day (or at the moment the sprint was completed, on that day). */
+export type BurndownDay = {
+  /** The day (`YYYY-MM-DD`). */
+  date: string;
+  /** The open tasks' estimates added up, in minutes. */
+  open_estimate_minutes: number;
+  /** The tasks in the sprint that were still open. */
+  open_tasks: number;
+  /** All the tasks' estimates added up, in minutes. */
+  total_estimate_minutes: number;
+  /** All the tasks in the sprint, open or closed (its scope). */
+  total_tasks: number;
+};
+
 /** The caller of an operation as the engine sees it. */
 export type Caller = {
   /** The person or the agent. */
@@ -552,6 +568,8 @@ export type Card = {
   recurring?: boolean;
   /** Logged time in minutes. */
   spent_minutes: number;
+  /** The sprint it is in. */
+  sprint?: SprintRef;
   /** The start date. */
   start_date?: string;
   /** When it entered its status. */
@@ -2030,6 +2048,8 @@ export type ListedTask = {
   remaining_minutes?: number;
   /** Logged time in minutes. */
   spent_minutes: number;
+  /** The sprint it is in. */
+  sprint?: SprintRef;
   /** The start date. */
   start_date?: string;
   /** Its status. */
@@ -3261,6 +3281,236 @@ export type SkippedGroup = {
 /** How a column's cards are ordered. */
 export type SortMode = "manual" | "priority" | "due" | "updated";
 
+/** A sprint. */
+export type Sprint = {
+  /** When it was completed (RFC 3339, UTC). */
+  completed_at?: string;
+  /** When it was created (RFC 3339, UTC). */
+  created_at: string;
+  /** Its last day (`YYYY-MM-DD`). */
+  end_date?: string;
+  /** What the sprint is meant to achieve: plain text. */
+  goal?: string;
+  /** Its ID. */
+  id: string;
+  /** Its name, unique in its project (ignoring case). */
+  name: string;
+  /** Its progress. */
+  progress: SprintProgress;
+  /** The key of the project it belongs to. */
+  project: string;
+  /** Its place among the project's sprints. */
+  rank: string;
+  /** Its first day (`YYYY-MM-DD`). */
+  start_date?: string;
+  /** When it was started (RFC 3339, UTC). */
+  started_at?: string;
+  /** Where it stands. */
+  state: SprintState;
+  /** Its tasks, when asked for: by board order. */
+  tasks?: SprintTask[];
+  /** When it last changed. */
+  updated_at: string;
+};
+
+/** Tasks to put in a sprint. */
+export type SprintAddTasksInput = {
+  /** With a name or `active`: the sprint's project (key or ID). */
+  project?: string | null;
+  /** The sprint (planned or active): its ID, its name, or `active`. */
+  sprint: string;
+  /** The tasks (keys or IDs), of the sprint's project; up to 500. A task in another sprint moves to this one. */
+  tasks: string[];
+};
+
+/** How a sprint's open work went down, day by day. */
+export type SprintBurndown = {
+  /** Its days from the first to the last (or to today, for an active sprint that runs over); days still to come are left out. */
+  days: BurndownDay[];
+  /** The sprint. */
+  sprint: SprintRef;
+  /** The estimates at the start, in minutes. */
+  start_estimate_minutes: number;
+  /** The work at the start: the first day's totals. */
+  start_tasks: number;
+};
+
+/** Which sprint's burndown to read. */
+export type SprintBurndownInput = {
+  /** With a name or `active`: the sprint's project (key or ID). */
+  project?: string | null;
+  /** The sprint (active or closed): its ID, its name, or `active`. */
+  sprint: string;
+};
+
+/** A sprint after a change. */
+export type SprintChange = {
+  /** Whether it was deleted. */
+  deleted?: boolean;
+  /** The history group, for revert and Undo; left out when nothing changed. */
+  group?: string;
+  /** The sprint after the change (before it, for a deletion); left out when tasks were only taken out of their sprints. */
+  sprint?: Sprint;
+  /** The keys of the tasks whose sprint changed: added, taken out, moved on when it was completed, or cleared by a deletion. */
+  tasks_changed?: string[];
+  /** The saved views whose query was rewritten because they named the sprint (renamed or deleted), by name. */
+  views_rewritten?: string[];
+};
+
+/** Which sprint to complete, and where its unfinished tasks go. */
+export type SprintCompleteInput = {
+  /** Where its open tasks go: a planned sprint of the project (name or ID), or `backlog` (the default) for no sprint. Closed tasks stay in the completed sprint. */
+  move_open_tasks_to?: string | null;
+  /** With a name or `active`: the sprint's project (key or ID). */
+  project?: string | null;
+  /** The sprint (active): its ID, its name, or `active`. */
+  sprint: string;
+};
+
+/** A new sprint. */
+export type SprintCreateInput = {
+  /** Its last day: `YYYY-MM-DD`, or `today`, `fri`, `+2w`, `dec 12`. */
+  end_date?: string | null;
+  /** What it is meant to achieve: plain text, up to 4,000 characters. */
+  goal?: string | null;
+  /** Its name, up to 100 characters, unique in the project; not `active`, `none` or `backlog`. */
+  name: string;
+  /** The project (key or ID). */
+  project: string;
+  /** Its first day: `YYYY-MM-DD`, or `today`, `mon`, `+1w`, `dec 1`. */
+  start_date?: string | null;
+  /** Tasks to put in it straight away (keys or IDs, of the project). */
+  tasks?: string[];
+};
+
+/** Which sprint to delete. */
+export type SprintDeleteInput = {
+  /** With a name: the sprint's project (key or ID). */
+  project?: string | null;
+  /** The sprint: its ID or its name. An active sprint is completed first, not deleted. */
+  sprint: string;
+};
+
+/** A sprint field that can be cleared. */
+export type SprintField = "goal" | "start_date" | "end_date";
+
+/** One sprint to read. */
+export type SprintGetInput = {
+  /** With a name or `active`: the project (key or ID). */
+  project?: string | null;
+  /** The sprint: its ID, its name, or `active` for the project's active sprint. */
+  sprint: string;
+};
+
+/** Sprints: closed ones first, then the active one, then planned ones, each by their order. */
+export type SprintList = {
+  /** With `include_tasks`: the project's open tasks in no sprint, by board order. */
+  backlog?: SprintTask[];
+  /** The sprints. */
+  items: Sprint[];
+  /** How many. */
+  total: number;
+};
+
+/** Which sprints to list. */
+export type SprintListInput = {
+  /** Include each sprint's tasks and the backlog, for the sprints page. */
+  include_tasks?: boolean;
+  /** The project (key or ID). */
+  project: string;
+  /** Only sprints in these states; default: all. */
+  state?: SprintState[];
+};
+
+/** How far a sprint has come. */
+export type SprintProgress = {
+  /** How many of them are closed. */
+  closed: number;
+  /** The estimates of the closed ones, in minutes. */
+  closed_estimate_minutes: number;
+  /** Their estimates added up, in minutes. */
+  estimate_minutes: number;
+  /** The tasks in it (not in the trash). */
+  total: number;
+};
+
+/** A sprint as a task shows it. */
+export type SprintRef = {
+  /** Its last day (`YYYY-MM-DD`). */
+  end_date?: string;
+  /** Its ID. */
+  id: string;
+  /** Its name. */
+  name: string;
+  /** Its first day (`YYYY-MM-DD`). */
+  start_date?: string;
+  /** Where it stands. */
+  state: SprintState;
+};
+
+/** Tasks to take out of their sprint, back to the backlog. */
+export type SprintRemoveTasksInput = {
+  /** The tasks (keys or IDs); up to 500. Tasks in no sprint are left as they are. */
+  tasks: string[];
+};
+
+/** Which sprint to start, and its dates. */
+export type SprintStartInput = {
+  /** Its last day; default: its end date, or two weeks after the start. */
+  end_date?: string | null;
+  /** A new goal. */
+  goal?: string | null;
+  /** With a name: the sprint's project (key or ID). */
+  project?: string | null;
+  /** The sprint (planned): its ID or its name. */
+  sprint: string;
+  /** Its first day; default: its start date, or today. */
+  start_date?: string | null;
+};
+
+/** Where a sprint stands. */
+export type SprintState = "planned" | "active" | "closed";
+
+/** A task of a sprint or of the backlog, as the sprints page lists it. */
+export type SprintTask = {
+  /** Whether it is closed (done or cancelled). */
+  closed: boolean;
+  /** Its estimate in minutes. */
+  estimate_minutes?: number;
+  /** Its ID. */
+  id: string;
+  /** Its key. */
+  key: string;
+  /** The parent task's key, for a subtask. */
+  parent?: string;
+  /** Its priority. */
+  priority: Priority;
+  /** Its status. */
+  status: StatusRef;
+  /** Its title. */
+  title: string;
+  /** Its type's name. */
+  type: string;
+};
+
+/** Changes to a sprint; fields left out keep their value. Start and complete it with `sprint.start` and `sprint.complete`. */
+export type SprintUpdateInput = {
+  /** Fields to clear. */
+  clear?: SprintField[];
+  /** A new end date. */
+  end_date?: string | null;
+  /** A new goal. */
+  goal?: string | null;
+  /** A new name; saved views that name the old one are rewritten. */
+  name?: string | null;
+  /** With a name or `active`: the sprint's project (key or ID). */
+  project?: string | null;
+  /** The sprint: its ID, its name, or `active`. */
+  sprint: string;
+  /** A new start date. */
+  start_date?: string | null;
+};
+
 /** A status: one board column. */
 export type Status = {
   /** What it means for the work in it. */
@@ -3548,6 +3798,8 @@ export type Task = {
   revisions?: RevisionInfo[];
   /** Logged time in minutes. */
   spent_minutes: number;
+  /** The sprint it is in. */
+  sprint?: SprintRef;
   /** The start date. */
   start_date?: string;
   /** Its status. */
@@ -3658,6 +3910,8 @@ export type TaskCreateInput = {
   priority?: Priority | null;
   /** The project: its key (current or old) or ID. */
   project: string;
+  /** The sprint it goes in (name or ID, or `active`): a planned or active sprint of the project. */
+  sprint?: string | null;
   /** The start date: `YYYY-MM-DD`, or `today`, `fri`, `next mon`, `+3d`, `in 2 weeks`, `dec 1`, in the workspace's time zone. */
   start_date?: string | null;
   /** The status; default: the project's first to-do status. */
@@ -3689,7 +3943,7 @@ export type TaskDuplicateInput = {
 };
 
 /** A task field that can be cleared. */
-export type TaskField = "description" | "parent" | "start_date" | "due_date" | "estimate" | "progress" | "labels" | "fix_version";
+export type TaskField = "description" | "parent" | "start_date" | "due_date" | "estimate" | "progress" | "labels" | "fix_version" | "sprint";
 
 /** Which tasks to read. */
 export type TaskGetInput = {
@@ -3886,6 +4140,8 @@ export type TaskUpdateInput = {
   remove_labels?: string[];
   /** Resolve a conflict copy of the description. */
   resolve_conflict?: ConflictResolution | null;
+  /** Put it in this sprint (name or ID, or `active`): a planned or active sprint of the project. */
+  sprint?: string | null;
   /** A new start date: `YYYY-MM-DD`, or a natural date such as `fri` or `in 3d`. */
   start_date?: string | null;
   /** A new title. */
@@ -5359,6 +5615,16 @@ export interface OpMap {
   "version.create": { input: VersionCreateInput; output: VersionChange; safety: "write"; kind: "command" };
   "version.update": { input: VersionUpdateInput; output: VersionChange; safety: "write"; kind: "command" };
   "version.delete": { input: VersionDeleteInput; output: VersionChange; safety: "write"; kind: "command" };
+  "sprint.list": { input: SprintListInput; output: SprintList; safety: "read"; kind: "query" };
+  "sprint.get": { input: SprintGetInput; output: Sprint; safety: "read"; kind: "query" };
+  "sprint.create": { input: SprintCreateInput; output: SprintChange; safety: "write"; kind: "command" };
+  "sprint.update": { input: SprintUpdateInput; output: SprintChange; safety: "write"; kind: "command" };
+  "sprint.delete": { input: SprintDeleteInput; output: SprintChange; safety: "write"; kind: "command" };
+  "sprint.start": { input: SprintStartInput; output: SprintChange; safety: "write"; kind: "command" };
+  "sprint.complete": { input: SprintCompleteInput; output: SprintChange; safety: "write"; kind: "command" };
+  "sprint.add_tasks": { input: SprintAddTasksInput; output: SprintChange; safety: "write"; kind: "command" };
+  "sprint.remove_tasks": { input: SprintRemoveTasksInput; output: SprintChange; safety: "write"; kind: "command" };
+  "sprint.burndown": { input: SprintBurndownInput; output: SprintBurndown; safety: "read"; kind: "query" };
   "field.list": { input: CustomFieldListInput; output: CustomFieldList; safety: "read"; kind: "query" };
   "field.create": { input: CustomFieldCreateInput; output: CustomFieldChange; safety: "write"; kind: "command" };
   "field.update": { input: CustomFieldUpdateInput; output: CustomFieldChange; safety: "write"; kind: "command" };
@@ -5513,6 +5779,16 @@ export const OP_SAFETY = {
   "version.create": "write",
   "version.update": "write",
   "version.delete": "write",
+  "sprint.list": "read",
+  "sprint.get": "read",
+  "sprint.create": "write",
+  "sprint.update": "write",
+  "sprint.delete": "write",
+  "sprint.start": "write",
+  "sprint.complete": "write",
+  "sprint.add_tasks": "write",
+  "sprint.remove_tasks": "write",
+  "sprint.burndown": "read",
   "field.list": "read",
   "field.create": "write",
   "field.update": "write",
@@ -5846,6 +6122,28 @@ export function makeOps(call: Call) {
       get: (input: OpMap["settings.get"]["input"] = {}) => call("settings.get", input),
       /** Change workspace settings that are not about agents: trash retention, reminder time, working hours and days, first day of the week, the timer reminder. (write) */
       update: (input: OpMap["settings.update"]["input"] = {}) => call("settings.update", input),
+    },
+    sprint: {
+      /** The sprints of a project with their state, dates and progress; with their tasks and the backlog for the sprints page. (read) */
+      list: (input: OpMap["sprint.list"]["input"]) => call("sprint.list", input),
+      /** One sprint with its progress and its tasks. (read) */
+      get: (input: OpMap["sprint.get"]["input"]) => call("sprint.get", input),
+      /** Plan a sprint in a project: name, goal, start and end dates, and tasks to put in it. (write) */
+      create: (input: OpMap["sprint.create"]["input"]) => call("sprint.create", input),
+      /** Rename a sprint or change its goal or dates. (write) */
+      update: (input: OpMap["sprint.update"]["input"]) => call("sprint.update", input),
+      /** Delete a planned or closed sprint; its tasks go back to the backlog. Revert brings both back. (write) */
+      delete: (input: OpMap["sprint.delete"]["input"]) => call("sprint.delete", input),
+      /** Start a planned sprint, with its dates; a project has one active sprint at a time. (write) */
+      start: (input: OpMap["sprint.start"]["input"]) => call("sprint.start", input),
+      /** Complete the active sprint and move its open tasks to a planned sprint or back to the backlog. (write) */
+      complete: (input: OpMap["sprint.complete"]["input"]) => call("sprint.complete", input),
+      /** Put tasks in a planned or active sprint of their project, moving them from any other sprint. (write) */
+      addTasks: (input: OpMap["sprint.add_tasks"]["input"]) => call("sprint.add_tasks", input),
+      /** Take tasks out of their sprint, back to the backlog. (write) */
+      removeTasks: (input: OpMap["sprint.remove_tasks"]["input"]) => call("sprint.remove_tasks", input),
+      /** The burndown of an active or closed sprint: its open and total tasks and estimates at the end of each day. (read) */
+      burndown: (input: OpMap["sprint.burndown"]["input"]) => call("sprint.burndown", input),
     },
     status: {
       /** Add a status (a board column) to a project. (write) */

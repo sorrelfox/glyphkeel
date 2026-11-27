@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { ArrowDownWideNarrow, CalendarDays, ChevronDown, EyeOff, Filter, Flag, History, Network, SlidersHorizontal, Tag } from "lucide-react";
+import { ArrowDownWideNarrow, CalendarDays, ChevronDown, EyeOff, Filter, Flag, History, IterationCw, Network, SlidersHorizontal, Tag } from "lucide-react";
 import { type ReactNode } from "react";
 import { Button, Menu, MenuItem, MenuTrigger, Popover, type Selection } from "react-aria-components";
 
@@ -11,7 +11,8 @@ import { cardsOf, type LayoutEdit } from "../../data/board";
 import { CARD_FIELDS, PRIORITIES, SORT_MODES, type Board, type BoardLayout, type CardSize, type Project } from "../../data/catalog";
 import { useCustomFields } from "../../data/fields";
 import { useT } from "../../i18n/I18n";
-import { DUE_FILTERS, type BoardView, type Filters } from "./model";
+import { joinable, useSprints } from "../../data/sprints";
+import { BACKLOG, DUE_FILTERS, type BoardView, type Filters } from "./model";
 import styles from "./Board.module.css";
 
 interface ToolbarProps {
@@ -100,6 +101,7 @@ function MenuButton({ label, children, entries, on = false, icon }: { label: str
 export function Toolbar({ project, board, layout, view, filters, onFilters, onLayout, cardSize, onCardSize }: ToolbarProps) {
   const t = useT();
   const customFields = useCustomFields(project.key);
+  const sprints = useSprints(project.key);
   const cards = [...cardsOf(board).values()];
   const labelNames = [...new Set(cards.flatMap((card) => card.labels.map((label) => label.name)))].sort();
   const allLabels = new Map(cards.flatMap((card) => card.labels.map((label) => [label.name, label] as const)));
@@ -142,6 +144,18 @@ export function Toolbar({ project, board, layout, view, filters, onFilters, onLa
         value={filters.priorities}
         onChange={(priorities) => {
           onFilters({ ...filters, priorities });
+        }}
+      />
+      <Picker
+        label={t("filter-sprint")}
+        icon={<IterationCw className="ic" />}
+        options={[
+          ...joinable(sprints.data?.items ?? []).map((sprint) => ({ id: sprint.id, label: sprint.state === "active" ? t("prop-sprint-active", { name: sprint.name }) : sprint.name })),
+          { id: BACKLOG, label: t("filter-sprint-backlog") },
+        ]}
+        value={filters.sprints}
+        onChange={(chosen) => {
+          onFilters({ ...filters, sprints: chosen });
         }}
       />
       <Picker

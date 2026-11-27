@@ -97,6 +97,7 @@ const SCREENS: { name: string; path?: string; open: (page: Page) => Promise<void
   { name: "gantt", open: (page) => view(page, "Gantt") },
   { name: "wiki", path: "/?wiki", open: (page) => view(page, "Wiki") },
   { name: "roadmap", open: (page) => view(page, "Roadmap") },
+  { name: "sprints", open: (page) => view(page, "Sprints") },
 ];
 
 test.describe("Tab", () => {

@@ -18,7 +18,7 @@ use serde_json::Value;
 use super::model::{
     Activity, AgentSession, Attachment, Claim, Comment, CommentRevision, Counts, Label, Layout,
     Manifest, ManifestProject, Modules, Project, ProjectFile, Relation, Revision, SavedView,
-    SeriesLine, Status, Task, TaskType, TemplateLine, TimeEntry, Version, WikiPage,
+    SeriesLine, Sprint, Status, Task, TaskType, TemplateLine, TimeEntry, Version, WikiPage,
 };
 use super::sink::Sink;
 use super::{FORMAT_NAME, FORMAT_VERSION, Progress, project_dir, report};
@@ -207,6 +207,28 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
             })
         },
     )?;
+    let sprints = all(
+        tx,
+        "SELECT id, name, goal, state, start_date, end_date, started_at, completed_at, rank,
+                created_at, updated_at
+           FROM sprints WHERE project_id = ?1 ORDER BY rank, id",
+        &pid,
+        |r| {
+            Ok(Sprint {
+                id: text_id(r, 0)?,
+                name: r.get(1)?,
+                goal: r.get(2)?,
+                state: r.get(3)?,
+                start_date: r.get(4)?,
+                end_date: r.get(5)?,
+                started_at: r.get(6)?,
+                completed_at: r.get(7)?,
+                rank: r.get(8)?,
+                created_at: r.get(9)?,
+                updated_at: r.get(10)?,
+            })
+        },
+    )?;
     let views = all(
         tx,
         "SELECT id, view_kind, name, description, query, columns, sort, group_by, totals,
@@ -285,7 +307,7 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
                 t.checklist_total, t.spent_min, t.claim_session, t.claim_name, t.claim_until,
                 t.created_at, t.created_by_kind, t.created_by_name, t.edited_at, t.updated_at,
                 t.closed_at, t.deleted_at, t.deleted_group, t.version, t.subtask_rank,
-                t.fix_version_id, t.series_id
+                t.fix_version_id, t.series_id, t.sprint_id
            FROM tasks t WHERE t.project_id = ?1 ORDER BY t.number",
         &pid,
         |r| {
@@ -337,6 +359,7 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
                     fix_version_id: opt_id(r, 31)?,
                     custom_values: Vec::new(),
                     series_id: opt_id(r, 32)?,
+                    sprint_id: opt_id(r, 33)?,
                 },
                 description,
             ))
@@ -654,6 +677,7 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
             types,
             labels,
             versions,
+            sprints,
             views,
             layouts,
             key_aliases,

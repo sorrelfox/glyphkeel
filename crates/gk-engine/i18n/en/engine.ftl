@@ -181,6 +181,7 @@ transfer-invalid-field = { $path }, line { $line }: the custom field { $value } 
 transfer-invalid-field-value = { $path }, line { $line }: a value of the custom field { $value } is not one of the project's fields, or not text or a number.
 transfer-invalid-task-label = { $path }, line { $line }: the label { $label } is not one of the project's.
 transfer-invalid-version = { $path }, line { $line }: the version "{ $version }" is not valid (name, status, sharing or dates), or its name is used twice.
+transfer-invalid-sprint = { $path }, line { $line }: the sprint "{ $sprint }" is not valid (name, state, goal or dates), its name is used twice, or a second sprint is active.
 transfer-invalid-title = { $path }, line { $line }: the title is empty or too long.
 transfer-invalid-description-size = { $path }, line { $line }: the description is larger than 1 MB.
 transfer-invalid-link-target = { $path }, line { $line }: a link points to no other task in the archive.
@@ -483,6 +484,46 @@ version-move-needs-close = Open tasks can only be moved on when the version is c
 version-move-to-itself = Choose another version to move the open tasks to.
 version-move-not-shared = { $task } can't be planned for the chosen version, because that version isn't shared with its project.
 task-version-left-off = Version "{ $version }" isn't available in { $project } and was taken off.
+
+## Sprints
+
+sprint-not-found = There is no sprint "{ $sprint }".
+sprint-not-found-hint = Name a sprint of the project given with `project`, or use its ID; sprint.list lists them.
+sprint-name-ambiguous = Several projects have a sprint named "{ $sprint }".
+sprint-name-ambiguous-hint = Give the project with `project`, or use the sprint's ID.
+sprint-active-needs-project = Give the project with `project` to name its active sprint.
+sprint-none-active = The project has no active sprint.
+sprint-none-active-hint = Start a planned sprint first, or name a sprint.
+sprint-name-taken = The project already has a sprint named "{ $sprint }".
+sprint-name-taken-hint = Choose another name, or change that sprint.
+sprint-name-reserved = A sprint can't be named "{ $name }": the word has a meaning of its own in queries.
+sprint-goal-long = A sprint's goal is at most { $max } characters.
+sprint-dates-order = A sprint's start date can't be after its end date.
+sprint-closed = Sprint "{ $sprint }" is completed, so no tasks can be added to it.
+sprint-closed-hint = Choose a planned or active sprint.
+sprint-other-project = Sprint "{ $sprint }" isn't one of { $project }'s sprints; a task can only be in a sprint of its own project.
+sprint-task-other-project = { $task } isn't a task of { $project }; a sprint only takes tasks of its own project.
+sprint-too-many-tasks = At most { $max } tasks at a time.
+sprint-no-tasks = Name at least one task.
+sprint-already-active = Sprint "{ $sprint }" is already active; a project has one active sprint at a time.
+sprint-already-active-hint = Complete the active sprint first.
+sprint-start-not-planned = { $state ->
+        [active] Sprint "{ $sprint }" has already started.
+       *[closed] Sprint "{ $sprint }" is completed and can't be started again.
+    }
+sprint-complete-not-active = { $state ->
+        [planned] Sprint "{ $sprint }" hasn't started yet, so it can't be completed.
+       *[closed] Sprint "{ $sprint }" is already completed.
+    }
+sprint-move-to-itself = Choose another sprint to move the open tasks to, or the backlog.
+sprint-move-not-planned = { $state ->
+        [active] Sprint "{ $sprint }" is active; open tasks can only move to a planned sprint or the backlog.
+       *[closed] Sprint "{ $sprint }" is completed; open tasks can only move to a planned sprint or the backlog.
+    }
+sprint-delete-active = Sprint "{ $sprint }" is active, so it can't be deleted.
+sprint-delete-active-hint = Complete it first; its open tasks can go back to the backlog.
+sprint-burndown-not-started = Sprint "{ $sprint }" hasn't started yet, so it has no burndown.
+task-sprint-left-off = The task left sprint "{ $sprint }", because sprints belong to one project and it moved to { $project }.
 
 ## Stored data that can't be read
 

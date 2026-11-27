@@ -38,6 +38,7 @@ pub(crate) mod rules;
 pub(crate) mod schedule;
 pub(crate) mod search;
 pub(crate) mod settings;
+pub(crate) mod sprint;
 pub(crate) mod task;
 pub(crate) mod template;
 pub(crate) mod time;
@@ -83,6 +84,7 @@ pub(crate) fn register(r: &mut Registry) {
     bulk::register(r);
     view::register(r);
     version::register(r);
+    sprint::register(r);
     schedule::register(r);
     list_layout::register(r);
     gantt_layout::register(r);

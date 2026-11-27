@@ -15,7 +15,7 @@ A condition is a field, an operator and one or more values separated by commas (
 them): `label:bug,crash`. The operators are `:` (is, contains, on or within), `=` (exactly),
 `!=` (is not; tasks without a value match too), and `<`, `<=`, `>`, `>=` for ordered fields.
 Values with spaces go in quotes: `status:"In progress"`. Names (statuses, types, labels,
-versions) are matched without regard to case; an unknown name is an error with the names
+versions, sprints) are matched without regard to case; an unknown name is an error with the names
 that exist.
 
 Dates are written `2026-12-31`, as `today`, `yesterday`, `tomorrow`, as an offset (`-7d`,
@@ -40,6 +40,7 @@ answer a mistake with its place in the query and a suggestion.
 | `priority` (`prio`) | `none` < `low` < `normal` < `high` < `urgent` |
 | `label` (`labels`) | label names, or `none` |
 | `version` (`fix-version`) | version names, or `none` |
+| `sprint` (`sprints`) | sprint names, `active` (the project's running sprint), or `none` (the backlog) |
 | `parent`, `under` | a task key (`parent` also `none`); `under` reaches every depth |
 | `blocks`, `blocked-by`, `relates`, `duplicates` | a task key, or `any` |
 | `start`, `due` | a date, or `none` |
@@ -51,7 +52,7 @@ answer a mistake with its place in the query and a suggestion.
 | `claimed` | an agent's name, or `any` |
 | `comments`, `files`, `subtasks` | a number |
 | `is` | `open`, `closed`, `overdue`, `due-soon`, `blocked`, `claimed`, `subtask`, `parent`, `unscheduled`, `milestone`, `over-estimate` |
-| `has` | `due`, `start`, `estimate`, `description`, `labels`, `version`, `files`, `comments`, `subtasks`, `parent`, `links`, `time`, `reminder` |
+| `has` | `due`, `start`, `estimate`, `description`, `labels`, `version`, `sprint`, `files`, `comments`, `subtasks`, `parent`, `links`, `time`, `reminder` |
 | `was`, `changed`, `changed-by` | the history: see below |
 | `cf.<name>` | a custom field, with the operators of its kind |
 
@@ -71,7 +72,7 @@ was:category:in_progress      tasks that were ever started
 was:label:regression is:open  open tasks that once had the label
 ```
 
-`was:` looks up `status`, `category`, `type`, `priority`, `label` and `version`, and every
+`was:` looks up `status`, `category`, `type`, `priority`, `label`, `version` and `sprint`, and every
 custom field as `was:cf.<name>`. It takes `:` and `!=` (`was:status!=Review` is "never in
 review"); `none` can't be looked up, use `status:none` and the like for a value that is empty
 now.
@@ -101,7 +102,7 @@ changed:priority:2026-11-01..2026-11-15
 ```
 
 `changed:` looks up `status`, `type`, `priority`, `title`, `description`, `start`, `due`,
-`estimate`, `progress`, `parent`, `label`, `version`, `project` and `closed`, and custom
+`estimate`, `progress`, `parent`, `label`, `version`, `sprint`, `project` and `closed`, and custom
 fields as `cf.<name>` (`changed:status,cf.story-points`, `changed:cf.area>-7d`). The dates take
 the operators of dates (`:`, `!=`, `<`, `<=`, `>`, `>=` and ranges), in the workspace's time
 zone. Creating a task is not a change of its fields.

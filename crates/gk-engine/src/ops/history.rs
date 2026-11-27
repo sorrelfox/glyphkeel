@@ -30,7 +30,7 @@ use serde_json::{Map, Value};
 use super::description::{self, Owner};
 use super::{
     agent, board, claim, comment, custom_field, desc, fields, file, gantt_layout, list_layout,
-    lookup, project, relation, reminder, settings, task, time, trash, version, view, wiki,
+    lookup, project, relation, reminder, settings, sprint, task, time, trash, version, view, wiki,
     work_kind,
 };
 use super::{recurrence, template};
@@ -413,6 +413,7 @@ fn current(
         (template::ENTITY, template::RECORD) => template::raw(tx, id)?,
         (recurrence::ENTITY, recurrence::RECORD) => recurrence::raw(tx, id)?,
         (version::ENTITY, version::RECORD) => version::raw(tx, id)?,
+        (sprint::ENTITY, sprint::RECORD) => sprint::raw(tx, id)?,
         (_, "deleted" | trash::PURGED) => return Ok(None),
         (fields::PROJECT | fields::TASK | fields::WIKI, trash::TRASHED) => {
             trash::raw_trashed(tx, entity, id)?
@@ -535,6 +536,12 @@ fn apply(
         (version::ENTITY, version::RECORD) => {
             let before = version::raw(w.tx(), id)?;
             version::write_raw(w, id, value.as_ref())?;
+            w.record_field(entity, id, project, field, before, value);
+            Ok(())
+        }
+        (sprint::ENTITY, sprint::RECORD) => {
+            let before = sprint::raw(w.tx(), id)?;
+            sprint::write_raw(w, id, value.as_ref())?;
             w.record_field(entity, id, project, field, before, value);
             Ok(())
         }

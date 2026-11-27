@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-import { BookOpen, CalendarDays, ChartGantt, ChevronDown, Columns3, List, Menu as MenuIcon, Milestone, Minus, PanelLeft, Plus, Square, X } from "lucide-react";
+import { BookOpen, CalendarDays, ChartGantt, ChevronDown, Columns3, IterationCw, List, Menu as MenuIcon, Milestone, Minus, PanelLeft, Plus, Square, X } from "lucide-react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { Button, Menu, MenuTrigger, Popover } from "react-aria-components";
 
@@ -170,18 +170,19 @@ function ProjectButton({ project, onSettings, onNewSubproject }: ProjectButtonPr
   );
 }
 
-/** Board, List, Calendar, Gantt, Roadmap and Wiki. */
+/** Board, List, Calendar, Gantt, Roadmap, Sprints and Wiki. */
 function ViewSwitcher({ project }: { project: string }) {
   const t = useT();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
-  const current = pathname.endsWith("/list") ? "list" : pathname.endsWith("/calendar") ? "calendar" : pathname.endsWith("/gantt") ? "gantt" : pathname.endsWith("/roadmap") ? "roadmap" : pathname.endsWith("/wiki") ? "wiki" : "board";
+  const current = pathname.endsWith("/list") ? "list" : pathname.endsWith("/calendar") ? "calendar" : pathname.endsWith("/gantt") ? "gantt" : pathname.endsWith("/roadmap") ? "roadmap" : pathname.endsWith("/sprints") ? "sprints" : pathname.endsWith("/wiki") ? "wiki" : "board";
   const views = [
     { id: "board", icon: <Columns3 className="ic" />, ready: true },
     { id: "list", icon: <List className="ic" />, ready: true },
     { id: "calendar", icon: <CalendarDays className="ic" />, ready: true },
     { id: "gantt", icon: <ChartGantt className="ic" />, ready: true },
     { id: "roadmap", icon: <Milestone className="ic" />, ready: true },
+    { id: "sprints", icon: <IterationCw className="ic" />, ready: true },
     { id: "wiki", icon: <BookOpen className="ic" />, ready: true },
   ];
   return (
@@ -203,6 +204,8 @@ function ViewSwitcher({ project }: { project: string }) {
               void navigate({ to: "/projects/$key/gantt", params: { key: project } });
             } else if (view.id === "roadmap") {
               void navigate({ to: "/projects/$key/roadmap", params: { key: project } });
+            } else if (view.id === "sprints") {
+              void navigate({ to: "/projects/$key/sprints", params: { key: project } });
             } else if (view.id === "wiki") {
               void navigate({ to: "/projects/$key/wiki", params: { key: project } });
             } else if (view.id === "board") {
