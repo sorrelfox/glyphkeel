@@ -59,7 +59,7 @@ const SCREENS: Screen[] = [
   { name: "fields tab", open: settingsTab(4), data: [] },
   // The status names are the project's own.
   { name: "rules tab", open: settingsTab(5), data: ["[data-testid^='rules-'] > button > span:nth-child(2)"] },
-  { name: "templates tab", open: settingsTab(6), data: [] },
+  { name: "templates tab", open: settingsTab(7), data: [] },
   {
     name: "CSV import dialog",
     open: async (page) => {

@@ -199,6 +199,37 @@ mod tests {
         assert_eq!(again.other["later"], serde_json::json!({"x": 1}));
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn a_saved_token_is_readable_by_its_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("glyphkeel").join(USER_SETTINGS_FILE);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        // A file an older version left readable by everyone.
+        fs::write(&path, br#"{"time_zone": "UTC"}"#).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+        let mut settings = UserSettings::load(&path);
+        settings.agent_http = Some(AgentHttp {
+            enabled: true,
+            port: Some(8765),
+            token: Some("secret-token".into()),
+        });
+        settings.save(&path).unwrap();
+        let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "{mode:o}");
+        assert_eq!(
+            UserSettings::load(&path)
+                .agent_http
+                .unwrap()
+                .token
+                .as_deref(),
+            Some("secret-token")
+        );
+        // No temporary copy is left beside it.
+        assert!(!path.with_extension("json.tmp").exists());
+    }
+
     #[test]
     fn missing_damaged_or_system_means_the_computers_zone() {
         let dir = tempfile::tempdir().unwrap();

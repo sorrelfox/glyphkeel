@@ -251,6 +251,23 @@ pub(crate) fn all(watched: &Watched, into: &mut BTreeSet<String>) {
     into.extend(watched.keys().cloned());
 }
 
+/// Adds to `dirty` what one receive from the feed may have changed: the
+/// URIs an event touches, or every URI in `watched` when the watcher fell
+/// more than the feed's capacity behind and events were lost. `false` when
+/// the feed has closed.
+pub(crate) fn note(
+    event: Result<Arc<Changed>, broadcast::error::RecvError>,
+    watched: &Watched,
+    dirty: &mut BTreeSet<String>,
+) -> bool {
+    match event {
+        Ok(event) => touched(watched, &event, dirty),
+        Err(broadcast::error::RecvError::Lagged(_)) => all(watched, dirty),
+        Err(broadcast::error::RecvError::Closed) => return false,
+    }
+    true
+}
+
 /// Of the `dirty` URIs, those that really changed: a query's only when its
 /// result differs from the last one, read again for `ctx`.
 pub(crate) fn changed(
@@ -336,6 +353,85 @@ impl Feed {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gk_api::event::{EntityChange, Origin};
+    use gk_api::ops::common::{Actor, ActorKind, Via};
+
+    fn event(task: &str) -> Arc<Changed> {
+        Arc::new(Changed {
+            seq: 1,
+            group: "g".to_owned(),
+            origin: Origin {
+                via: Via::Cli,
+                actor: Actor {
+                    kind: ActorKind::User,
+                    name: "You".to_owned(),
+                },
+                session: None,
+            },
+            changes: vec![EntityChange {
+                entity: "task".to_owned(),
+                id: task.to_owned(),
+                project: Some("p1".to_owned()),
+                fields: vec!["title".to_owned()],
+            }],
+        })
+    }
+
+    fn watching() -> Watched {
+        let watched: Watched = Watched::default();
+        {
+            let mut w = watched.lock().unwrap();
+            w.insert(
+                "glyphkeel://tasks/A".to_owned(),
+                Target::Task("a".to_owned()),
+            );
+            w.insert(
+                "glyphkeel://tasks/B".to_owned(),
+                Target::Task("b".to_owned()),
+            );
+            w.insert(
+                "glyphkeel://projects/Q".to_owned(),
+                Target::Project("q".to_owned()),
+            );
+        }
+        watched
+    }
+
+    #[test]
+    fn a_watcher_that_falls_behind_treats_everything_as_changed() {
+        let watched = watching();
+        let (sender, mut receiver) = broadcast::channel(FEED_CAPACITY);
+
+        // Within the feed's capacity, only what the events touch.
+        sender.send(event("a")).unwrap();
+        let mut dirty = BTreeSet::new();
+        assert!(note(Ok(receiver.try_recv().unwrap()), &watched, &mut dirty));
+        assert_eq!(dirty, BTreeSet::from(["glyphkeel://tasks/A".to_owned()]));
+
+        // More events than the feed keeps: the lost ones may have touched
+        // anything, so every watched URI is dirty.
+        for _ in 0..=FEED_CAPACITY {
+            sender.send(event("a")).unwrap();
+        }
+        let mut dirty = BTreeSet::new();
+        let lagged = match receiver.try_recv() {
+            Err(broadcast::error::TryRecvError::Lagged(n)) => {
+                Err(broadcast::error::RecvError::Lagged(n))
+            }
+            other => panic!("the watcher fell behind: {other:?}"),
+        };
+        assert!(note(lagged, &watched, &mut dirty));
+        assert_eq!(dirty.len(), 3, "{dirty:?}");
+        assert!(dirty.contains("glyphkeel://projects/Q"));
+
+        // A closed feed ends the watcher.
+        drop(sender);
+        assert!(!note(
+            Err(broadcast::error::RecvError::Closed),
+            &watched,
+            &mut BTreeSet::new()
+        ));
+    }
 
     #[test]
     fn uris_name_tasks_projects_and_queries() {

@@ -323,3 +323,187 @@ fn covers_and_colour_rules_travel_with_an_export() {
     assert_eq!(copy["cover"]["name"], "shot.png");
     assert_eq!(copy["edge"]["hue"], "green");
 }
+
+/// A board like data set L's: project BIG with `total` tasks, of which
+/// `open` are open across the first statuses and the rest closed long ago
+/// in the last one; four labels; two images on each open task, sharing the
+/// stored file of `sketch.png`.
+fn large_board(e: &Engine, total: usize, open: usize) {
+    use gk_store::rusqlite::params;
+    call(e, "project.create", json!({ "name": "Big", "key": "BIG" }));
+    for l in ["bug", "ui", "backend", "docs"] {
+        call(e, "label.create", json!({ "project": "BIG", "name": l }));
+    }
+    let first = call(
+        e,
+        "task.create",
+        json!({ "project": "BIG", "title": "Seed" }),
+    );
+    call(
+        e,
+        "file.attach",
+        json!({ "task": first["task"]["key"], "name": "sketch.png", "data_base64": png() }),
+    );
+    e.store()
+        .write("test.large_board", move |tx| {
+            let project: Vec<u8> =
+                tx.query_row("SELECT id FROM projects WHERE key = 'BIG'", [], |r| {
+                    r.get(0)
+                })?;
+            let sha: String =
+                tx.query_row("SELECT sha256 FROM attachments LIMIT 1", [], |r| r.get(0))?;
+            let ids = |sql: &str| -> Result<Vec<Vec<u8>>, gk_engine::Failure> {
+                let mut stmt = tx.prepare(sql)?;
+                let rows = stmt
+                    .query_map([&project], |r| r.get::<_, Vec<u8>>(0))?
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok(rows)
+            };
+            let statuses = ids("SELECT id FROM statuses WHERE project_id = ?1 ORDER BY rank")?;
+            let types = ids("SELECT id FROM task_types WHERE project_id = ?1 ORDER BY rank")?;
+            let labels = ids("SELECT id FROM labels WHERE project_id = ?1 ORDER BY rank")?;
+            let done = statuses.last().unwrap().clone();
+            let long_ago = NOW - 400 * 86_400_000;
+            for i in 0..total {
+                let id = gk_core::Id::generate().as_bytes().to_vec();
+                let is_open = i < open;
+                let status = if is_open {
+                    statuses[i % (statuses.len() - 1)].clone()
+                } else {
+                    done.clone()
+                };
+                let at = if is_open {
+                    NOW - (i as i64) * 60_000
+                } else {
+                    long_ago
+                };
+                let title = format!("Task {i}");
+                tx.execute(
+                    "INSERT INTO tasks (id, project_id, number, title, title_fold, status_id,
+                        status_entered_at, type_id, priority, rank, created_at, created_by_kind,
+                        created_by_name, edited_at, updated_at, closed_at)
+                     VALUES (?1, ?2, ?3, ?4, lower(?4), ?5, ?6, ?7, ?8, ?9, ?6, 'user', 'You',
+                        ?6, ?6, ?10)",
+                    params![
+                        id,
+                        project,
+                        (i + 2) as i64,
+                        title,
+                        status,
+                        at,
+                        types[i % types.len()],
+                        (i % 5) as i64,
+                        format!("r{i:07}"),
+                        (!is_open).then_some(at),
+                    ],
+                )?;
+                if i % 2 == 0 {
+                    tx.execute(
+                        "INSERT INTO task_labels (task_id, label_id) VALUES (?1, ?2)",
+                        params![id, labels[i % labels.len()]],
+                    )?;
+                }
+                if is_open {
+                    for (k, name) in ["one.png", "two.png"].iter().enumerate() {
+                        tx.execute(
+                            "INSERT INTO attachments (id, owner_kind, owner_id, file_name, mime,
+                                size, sha256, width, height, actor_kind, actor_name, created_at)
+                             VALUES (?1, 'task', ?2, ?3, 'image/png', 70, ?4, 4, 3, 'user',
+                                'You', ?5)",
+                            params![
+                                gk_core::Id::generate().as_bytes().to_vec(),
+                                id,
+                                name,
+                                sha,
+                                at + k as i64,
+                            ],
+                        )?;
+                    }
+                }
+            }
+            tx.execute(
+                "UPDATE projects SET next_number = ?1 WHERE id = ?2",
+                params![(total + 2) as i64, project],
+            )?;
+            Ok::<_, gk_engine::Failure>(())
+        })
+        .unwrap();
+}
+
+/// The board of data set L's size with twenty colour rules and covers from
+/// the first image stays within a bound: generous in a debug build, where
+/// it runs with the other tests, and tight in a release build.
+#[test]
+fn colour_rules_and_covers_on_a_large_board_stay_within_a_bound() {
+    let dir = TempDir::new().unwrap();
+    let e = open(&dir);
+    large_board(&e, 20_000, 1_000);
+    let board = || call(&e, "board.get", json!({ "project": "BIG" }));
+    let timed = || {
+        // Once to warm the caches, then the best of three, so a busy
+        // machine's pause doesn't count.
+        board();
+        (0..3)
+            .map(|_| {
+                let start = std::time::Instant::now();
+                let out = board();
+                (start.elapsed(), out)
+            })
+            .min_by_key(|(t, _)| *t)
+            .unwrap()
+    };
+    let (plain, out) = timed();
+    let shown: usize = out["columns"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["cards"].as_array().unwrap().len())
+        .sum();
+    assert_eq!(shown, 1_001, "the open tasks and the seed task");
+
+    let words = ["bug", "ui", "backend", "docs"];
+    let rules: Vec<Value> = (0..20)
+        .map(|i| {
+            let levels = ["low", "normal", "high", "urgent"];
+            let hues = ["red", "blue", "green", "pink"];
+            json!({
+                "query": format!("label:{} priority>={}", words[i % 4], levels[i / 5]),
+                "hue": hues[i % 4],
+            })
+        })
+        .collect();
+    call(
+        &e,
+        "layout.update",
+        json!({ "project": "BIG", "colour_by": "query", "colour_rules": rules, "covers": "first_image" }),
+    );
+    let (coloured, out) = timed();
+    let cards: Vec<&Value> = out["columns"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|c| c["cards"].as_array().unwrap())
+        .collect();
+    assert_eq!(cards.len(), 1_001);
+    let with_cover = cards.iter().filter(|c| c.get("cover").is_some()).count();
+    assert_eq!(
+        with_cover, 1_001,
+        "every open task and the seed have an image"
+    );
+    let edged = cards.iter().filter(|c| c.get("edge").is_some()).count();
+    assert!(edged > 0 && edged < cards.len(), "{edged}");
+    assert!(
+        cards
+            .iter()
+            .filter(|c| c["key"] != "BIG-1")
+            .all(|c| c["cover"]["name"] == "one.png")
+    );
+
+    let bound = if cfg!(debug_assertions) {
+        std::time::Duration::from_secs(3)
+    } else {
+        std::time::Duration::from_millis(500)
+    };
+    eprintln!("board of 20,000 tasks: {plain:?} plain, {coloured:?} with 20 rules and covers");
+    assert!(coloured < bound, "{coloured:?} (plain {plain:?})");
+}

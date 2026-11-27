@@ -604,3 +604,130 @@ impl ServerHandler for Router {
         server.listen(context).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::session::ClientInfo;
+    use gk_api::ops::common::Via;
+    use gk_engine::Context;
+    use serde_json::{Value, json};
+
+    /// The endpoint's shared state over a new workspace, as `/mcp` has it.
+    fn shared() -> (tempfile::TempDir, Shared) {
+        let dir = tempfile::tempdir().unwrap();
+        let mut options = crate::Options::with_workspace(dir.path().join("Test").to_str().unwrap());
+        options.settings_file = Some(dir.path().join("settings.json"));
+        let engine = Arc::new(crate::open_engine(&options).unwrap());
+        let shared = Shared::new(engine, options.setup(), Arc::new(Feed::new(false)));
+        (dir, shared)
+    }
+
+    fn client(n: usize) -> Implementation {
+        Implementation::new(format!("client-{n}"), "1.0")
+    }
+
+    /// Starts the agent session of `client`'s server, as its first call does.
+    fn start(shared: &Shared, n: usize) -> Server {
+        let server = shared.stateless(Some(client(n)));
+        let info = ClientInfo {
+            name: format!("client-{n}"),
+            version: "1.0".to_owned(),
+            title: None,
+        };
+        server
+            .session()
+            .context(&shared.engine, Some(&info))
+            .unwrap();
+        server
+    }
+
+    fn sessions(shared: &Shared) -> Vec<Value> {
+        let all = shared
+            .engine
+            .call(
+                &Context::user(Via::App),
+                "agent.sessions",
+                json!({ "limit": 500 }),
+            )
+            .unwrap();
+        all["items"].as_array().unwrap().clone()
+    }
+
+    fn open_count(shared: &Shared) -> usize {
+        sessions(shared)
+            .iter()
+            .filter(|s| s["ended_at"].is_null())
+            .count()
+    }
+
+    #[test]
+    fn an_idle_2026_session_ends_after_the_idle_time_and_a_new_request_starts_another() {
+        let (_dir, shared) = shared();
+        let first = start(&shared, 1);
+        let started = Instant::now();
+        assert_eq!(open_count(&shared), 1);
+
+        // Just short of the idle time it stays.
+        shared.end_idle(started + IDLE - Duration::from_secs(1));
+        assert_eq!(open_count(&shared), 1);
+        let again = shared.stateless(Some(client(1)));
+        assert_eq!(again.session().id(), first.session().id());
+
+        // A request refreshed it: the idle time counts from there.
+        let refreshed = Instant::now();
+        shared.end_idle(refreshed + IDLE - Duration::from_secs(1));
+        assert_eq!(open_count(&shared), 1);
+
+        shared.end_idle(refreshed + IDLE);
+        assert_eq!(open_count(&shared), 0);
+        let all = sessions(&shared);
+        assert_eq!(all.len(), 1);
+        assert!(all[0]["ended_at"].is_string(), "{}", all[0]);
+
+        // The same client comes back later: a new agent session.
+        let later = start(&shared, 1);
+        assert_ne!(later.session().id(), first.session().id());
+        assert_eq!(sessions(&shared).len(), 2);
+        assert_eq!(open_count(&shared), 1);
+        shared.end_all();
+        assert_eq!(open_count(&shared), 0);
+    }
+
+    #[test]
+    fn many_clients_have_a_session_each_and_only_the_idle_ones_end() {
+        let (_dir, shared) = shared();
+        let clients = 150;
+        let servers: Vec<Server> = (0..clients).map(|n| start(&shared, n)).collect();
+        let ids: std::collections::BTreeSet<_> =
+            servers.iter().map(|s| s.session().id().unwrap()).collect();
+        assert_eq!(ids.len(), clients);
+        assert_eq!(open_count(&shared), clients);
+
+        // Every client asks again: still one session each.
+        for (n, server) in servers.iter().enumerate() {
+            let again = shared.stateless(Some(client(n)));
+            assert_eq!(again.session().id(), server.session().id());
+        }
+        assert_eq!(sessions(&shared).len(), clients);
+
+        // The even ones keep asking; the odd ones fall idle.
+        let now = Instant::now();
+        {
+            let mut stateless = shared.stateless.lock().unwrap();
+            for (_, last) in stateless.values_mut() {
+                *last = now;
+            }
+            for n in (1..clients).step_by(2) {
+                let key = format!("client-{n}\u{1f}1.0");
+                stateless.get_mut(&key).unwrap().1 = now - Duration::from_secs(60);
+            }
+        }
+        shared.end_idle(now + IDLE - Duration::from_secs(30));
+        assert_eq!(open_count(&shared), clients / 2);
+        assert_eq!(shared.stateless.lock().unwrap().len(), clients / 2);
+        shared.end_all();
+        assert_eq!(open_count(&shared), 0);
+        assert!(shared.stateless.lock().unwrap().is_empty());
+    }
+}
