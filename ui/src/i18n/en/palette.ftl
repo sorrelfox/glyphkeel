@@ -40,6 +40,8 @@ quick-add-placeholder = Add a task. Try: Renew domain fri #Personal !high
 quick-add-syntax = #project picks the project, !high the priority, and a date at the end the due date.
 quick-add-project = Project
 quick-add-due = Due { $words }
+# $day is the day the engine reads in the words, for example "Fri, 27 Nov".
+quick-add-due-on = Due { $words }: { $day }
 quick-add-keep-date = Keep “{ $words }” in the title
 quick-add-unknown-project = No project “{ $token }”
 quick-add-hint-add = Add

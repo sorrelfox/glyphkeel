@@ -49,6 +49,13 @@ icu_normalizer = "2.4.0"
 # The Unicode Collation Algorithm for sorting names, registered on every
 # database connection.
 icu_collator = "2.4.0"
+# The command line's and the app's own text in the chosen language: plural
+# categories, and numbers and dates in that language's formats.
+icu_calendar = "2.4.0"
+icu_datetime = "2.4.0"
+icu_decimal = "2.4.0"
+icu_locale_core = "2.4.0"
+icu_plurals = "2.4.0"
 # The MCP server of `glyphkeel mcp`: both protocol eras over standard input
 # and output. The minor version is pinned because it ships protocol fixes
 # often; read its changelog on every bump. The `client` feature is used by
@@ -71,9 +78,13 @@ jiff = { version = "1.0.2", features = ["tzdb-bundle-always"] }
 # busy handler; the online backup API restores a snapshot into the open
 # database. The bundled SQLite is SQLCipher's, for encrypted workspaces; it
 # opens plain ones as SQLite does. Its cryptography is the system's OpenSSL
-# (libcrypto) on Linux. Windows builds keep plain SQLite (see
-# crates/gk-store/Cargo.toml).
+# (libcrypto) on Linux and LibTomCrypt on Windows (see
+# crates/gk-store/build.rs).
 rusqlite = { version = "0.43.0", features = ["collation", "backup"] }
+# The SQLCipher source with its LibTomCrypt, and the C compiler driver:
+# gk-store builds LibTomCrypt for Windows (both were in the lock already).
+cc = "1.11.3"
+sqlcipher-src = "420.0.0"
 # The key of an encrypted workspace from its passphrase: PBKDF2-HMAC-SHA512,
 # as SQLCipher derives it (hmac and sha2 0.10 were in the lock already).
 pbkdf2 = { version = "0.12.2", default-features = false, features = ["hmac"] }

@@ -11,12 +11,18 @@
 //!   which prompts each profile gets;
 //! - `docs/reference/operations.md`, `docs/reference/cli.md` and
 //!   `docs/reference/mcp-prompts.md`: the reference pages;
-//! - `ui/src/generated/ops.ts`: the TypeScript client.
+//! - `ui/src/generated/ops.ts`: the TypeScript client;
+//! - `crates/gk-cli/i18n/en/ops.ftl`: the help of the command line's
+//!   commands and options as messages, for translation.
+//! - `ui/src/generated/naturalDates.ts`: the worked examples of friendly
+//!   dates with the day the engine's parser gives each, which the page's
+//!   test engine is checked against.
 //!
 //! `--check` writes nothing and fails when a file differs from what the
 //! catalog generates now.
 
 mod docs;
+mod ftl;
 mod ts;
 
 use std::fs;
@@ -63,6 +69,14 @@ pub(crate) fn outputs() -> Result<Vec<Output>> {
             path: "ui/src/generated/ops.ts",
             content: ts::generate(&catalog)?,
         },
+        Output {
+            path: "crates/gk-cli/i18n/en/ops.ftl",
+            content: ftl::cli_ops()?,
+        },
+        Output {
+            path: "ui/src/generated/naturalDates.ts",
+            content: natural_dates()?,
+        },
     ])
 }
 
@@ -101,6 +115,34 @@ pub(crate) fn run(root: &Path, args: &[String]) -> Result<bool> {
         eprintln!("gen: run `cargo xtask gen` to regenerate");
         Ok(false)
     }
+}
+
+/// The friendly-date examples as a TypeScript module: each with the day the
+/// engine's parser gives now, so a change to the parser shows up here.
+fn natural_dates() -> Result<String> {
+    let cases: Vec<Value> = gk_query::NATURAL_EXAMPLES
+        .iter()
+        .map(|e| {
+            serde_json::json!({
+                "today": e.today,
+                "week_start": e.week_start_name(),
+                "text": e.text,
+                "day": e.read().map(|d| d.to_string()),
+            })
+        })
+        .collect();
+    let mut s = String::new();
+    s += "// SPDX-License-Identifier: GPL-3.0-or-later\n";
+    s += "// Copyright (C) 2026 Glyphkeel contributors\n\n";
+    s += "// Generated from the engine's friendly-date examples by `cargo xtask gen`.\n";
+    s += "// Do not edit: change crates/gk-query/src/examples.rs and run it again.\n\n";
+    s += "import { type WeekStart } from \"./ops\";\n\n";
+    s += "/** On `today`, with weeks from `week_start`, `text` means `day` (null: no date). */\n";
+    s += "export interface NaturalDateCase {\n  today: string;\n  week_start: WeekStart;\n  text: string;\n  day: string | null;\n}\n\n";
+    s += "export const NATURAL_DATES: readonly NaturalDateCase[] = ";
+    s += &serde_json::to_string_pretty(&sorted(&Value::Array(cases)))?;
+    s += ";\n";
+    Ok(s)
 }
 
 /// Pretty JSON with keys sorted at every level, so the file doesn't depend

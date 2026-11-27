@@ -60,9 +60,9 @@ fn workspace(dir: &tempfile::TempDir) -> WorkspaceLayout {
     layout
 }
 
-/// Whether this build can encrypt. The Windows build has no SQLCipher:
-/// there encrypting is refused (see the last test) and the other tests
-/// have nothing to check.
+/// Whether this build can encrypt. Every release build can; a build
+/// without SQLCipher refuses (see the last test) and the other tests have
+/// nothing to check.
 fn can_encrypt() -> bool {
     gk_store::encryption_available()
 }
@@ -330,8 +330,8 @@ fn a_remembered_passphrase_opens_copies_with_the_same_salt() {
 
 #[test]
 fn a_build_without_sqlcipher_refuses_to_encrypt_and_keeps_plain_workspaces() {
-    // Every build but the Windows one has SQLCipher.
-    assert_eq!(can_encrypt(), !cfg!(windows));
+    // The Linux and Windows builds both have SQLCipher.
+    assert!(can_encrypt());
     if can_encrypt() {
         return;
     }

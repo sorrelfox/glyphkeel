@@ -144,9 +144,9 @@ pub(crate) fn macro_note(note: &gk_markdown::Note) -> String {
             let file = if messages::ENGINE.has(&error.id) {
                 messages::ENGINE
             } else {
-                messages::Messages(gk_query::error::MESSAGES_FTL)
+                messages::Messages::new(gk_query::error::MESSAGES_FTL)
             };
-            let why = file.text(&error.id, &args);
+            let why = file.english(&error.id, &args);
             messages::text("wiki-macro-tasks-error", &[("error", why)])
         }
     }

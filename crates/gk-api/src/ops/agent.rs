@@ -19,6 +19,15 @@ pub const AGENT_TRASH_ITEMS_PER_CALL: u32 = 20;
 /// Items an agent session with the standard profile may move to the trash
 /// in an hour, unless the person set another limit.
 pub const AGENT_TRASH_ITEMS_PER_HOUR: u32 = 50;
+/// Reads an agent session may make at once, before the sustained rate
+/// applies, unless the person set another limit.
+pub const AGENT_READ_BURST: u32 = 60;
+/// Reads an agent session may make in a minute, sustained (ten a second),
+/// unless the person set another limit.
+pub const AGENT_READS_PER_MINUTE: u32 = 600;
+/// Megabytes an agent session may read in a minute, unless the person set
+/// another limit.
+pub const AGENT_READ_MB_PER_MINUTE: u32 = 8;
 /// The largest number a limit on agents can be set to.
 pub const AGENT_LIMIT_MAX: u32 = 1_000_000;
 
@@ -43,6 +52,18 @@ pub struct AgentLimits {
     /// left out: no limit.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub trash_items_per_hour: Option<u32>,
+    /// Reads a session may make at once before `reads_per_minute` applies;
+    /// left out: one minute's worth.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub read_burst: Option<u32>,
+    /// Reads (tool calls that read, resources read, prompts) a session may
+    /// make in a minute, sustained; left out: no limit on reads.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reads_per_minute: Option<u32>,
+    /// Megabytes of results a session may read in a minute; left out: no
+    /// limit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub read_mb_per_minute: Option<u32>,
 }
 
 impl AgentLimits {
@@ -53,6 +74,9 @@ impl AgentLimits {
         new_tasks_per_day: None,
         trash_items_per_call: Some(AGENT_TRASH_ITEMS_PER_CALL),
         trash_items_per_hour: Some(AGENT_TRASH_ITEMS_PER_HOUR),
+        read_burst: Some(AGENT_READ_BURST),
+        reads_per_minute: Some(AGENT_READS_PER_MINUTE),
+        read_mb_per_minute: Some(AGENT_READ_MB_PER_MINUTE),
     };
 
     /// The value of one limit.
@@ -63,6 +87,9 @@ impl AgentLimits {
             AgentLimit::NewTasksPerDay => self.new_tasks_per_day,
             AgentLimit::TrashItemsPerCall => self.trash_items_per_call,
             AgentLimit::TrashItemsPerHour => self.trash_items_per_hour,
+            AgentLimit::ReadBurst => self.read_burst,
+            AgentLimit::ReadsPerMinute => self.reads_per_minute,
+            AgentLimit::ReadMbPerMinute => self.read_mb_per_minute,
         }
     }
 
@@ -73,6 +100,9 @@ impl AgentLimits {
             AgentLimit::NewTasksPerDay => self.new_tasks_per_day = value,
             AgentLimit::TrashItemsPerCall => self.trash_items_per_call = value,
             AgentLimit::TrashItemsPerHour => self.trash_items_per_hour = value,
+            AgentLimit::ReadBurst => self.read_burst = value,
+            AgentLimit::ReadsPerMinute => self.reads_per_minute = value,
+            AgentLimit::ReadMbPerMinute => self.read_mb_per_minute = value,
         }
     }
 
@@ -109,15 +139,24 @@ pub enum AgentLimit {
     /// Items a standard agent session moves to the trash in an hour
     /// (default 50).
     TrashItemsPerHour,
+    /// Reads at once before the sustained rate applies (default 60).
+    ReadBurst,
+    /// Reads in a minute, sustained (default 600).
+    ReadsPerMinute,
+    /// Megabytes read in a minute (default 8).
+    ReadMbPerMinute,
 }
 
 impl AgentLimit {
     /// Every limit.
-    pub const ALL: [Self; 4] = [
+    pub const ALL: [Self; 7] = [
         Self::WritesPerMinute,
         Self::NewTasksPerDay,
         Self::TrashItemsPerCall,
         Self::TrashItemsPerHour,
+        Self::ReadBurst,
+        Self::ReadsPerMinute,
+        Self::ReadMbPerMinute,
     ];
 
     /// The limit's name, as in [`AgentLimits`].
@@ -128,6 +167,9 @@ impl AgentLimit {
             Self::NewTasksPerDay => "new_tasks_per_day",
             Self::TrashItemsPerCall => "trash_items_per_call",
             Self::TrashItemsPerHour => "trash_items_per_hour",
+            Self::ReadBurst => "read_burst",
+            Self::ReadsPerMinute => "reads_per_minute",
+            Self::ReadMbPerMinute => "read_mb_per_minute",
         }
     }
 }
@@ -152,6 +194,15 @@ pub struct AgentLimitsPatch {
     /// to 1000000.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub trash_items_per_hour: Option<u32>,
+    /// Reads a session may make at once, 1 to 1000000.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub read_burst: Option<u32>,
+    /// Reads a session may make in a minute, sustained, 1 to 1000000.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reads_per_minute: Option<u32>,
+    /// Megabytes a session may read in a minute, 1 to 1000000.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub read_mb_per_minute: Option<u32>,
     /// Limits to lift: agents then have no limit there.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub no_limit: Vec<AgentLimit>,
@@ -187,6 +238,9 @@ impl AgentLimitsPatch {
             AgentLimit::NewTasksPerDay => self.new_tasks_per_day,
             AgentLimit::TrashItemsPerCall => self.trash_items_per_call,
             AgentLimit::TrashItemsPerHour => self.trash_items_per_hour,
+            AgentLimit::ReadBurst => self.read_burst,
+            AgentLimit::ReadsPerMinute => self.reads_per_minute,
+            AgentLimit::ReadMbPerMinute => self.read_mb_per_minute,
         }
     }
 }
@@ -218,6 +272,9 @@ pub struct AgentSession {
     pub reads: u64,
     /// Operations that changed something.
     pub writes: u64,
+    /// Reads refused because the session read faster than its limits.
+    #[serde(default)]
+    pub rate_limited: u64,
 }
 
 /// Which sessions to list.
@@ -278,7 +335,7 @@ op!(
 );
 
 pub(crate) const AGENT_SESSIONS: OpDescriptor = OpDescriptor::of::<AgentSessions>(Meta {
-    summary: "List agent sessions, newest first, with their client, profile, times and counts of reads and writes.",
+    summary: "List agent sessions, newest first, with their client, profile, times and counts of reads, writes and reads refused by the read limits.",
     kind: OpKind::Query,
     safety: Safety::Read,
     exposure: Exposure::Data,
@@ -300,7 +357,7 @@ pub(crate) const AGENT_POLICY_UPDATE: OpDescriptor = OpDescriptor::of::<AgentPol
 });
 
 pub(crate) const AGENT_LIMITS_UPDATE: OpDescriptor = OpDescriptor::of::<AgentLimitsUpdate>(Meta {
-    summary: "Change the limits on agent sessions: changes a minute, new tasks a day, and items moved to the trash per call and per hour. Each is a number or no limit.",
+    summary: "Change the limits on agent sessions: changes a minute, new tasks a day, items moved to the trash per call and per hour, and reads (at once, a minute, megabytes a minute). Each is a number or no limit.",
     kind: OpKind::Command,
     safety: Safety::App,
     exposure: Exposure::App {

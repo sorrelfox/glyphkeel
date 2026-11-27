@@ -35,14 +35,16 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 zeroize = { workspace = true }
 
-# SQLite: SQLCipher's build everywhere but Windows, where the bundled
-# SQLite stays plain until an OpenSSL can be built for it in the cross
-# build. The program checks at run time which one it has.
-[target.'cfg(not(windows))'.dependencies]
+# SQLite: SQLCipher's build, on every system. Its cryptography is the
+# system's OpenSSL on Linux and LibTomCrypt on Windows (see build.rs). The
+# program still checks at run time that it can encrypt.
 rusqlite = { workspace = true, features = ["bundled-sqlcipher"] }
 
-[target.'cfg(windows)'.dependencies]
-rusqlite = { workspace = true, features = ["bundled"] }
+[build-dependencies]
+# LibTomCrypt for the Windows build: its source comes with SQLCipher's
+# (already a build dependency of libsqlite3-sys), compiled with cc.
+cc = { workspace = true }
+sqlcipher-src = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

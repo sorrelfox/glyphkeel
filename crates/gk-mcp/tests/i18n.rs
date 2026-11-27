@@ -10,7 +10,7 @@ use std::path::Path;
 
 use gk_engine::Messages;
 
-const MCP: Messages = Messages(include_str!("../i18n/en/mcp.ftl"));
+const MCP: Messages = Messages::new(include_str!("../i18n/en/mcp.ftl"));
 
 #[test]
 fn every_message_the_server_names_exists_and_every_message_is_named() {

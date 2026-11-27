@@ -111,12 +111,18 @@ export type AgentBrief = {
 };
 
 /** One of the limits on agent sessions. */
-export type AgentLimit = "writes_per_minute" | "new_tasks_per_day" | "trash_items_per_call" | "trash_items_per_hour";
+export type AgentLimit = "writes_per_minute" | "new_tasks_per_day" | "trash_items_per_call" | "trash_items_per_hour" | "read_burst" | "reads_per_minute" | "read_mb_per_minute";
 
 /** The limits on every agent session, so a runaway loop can't flood the workspace. A limit that is left out is lifted: there is no limit. Only the person changes them, in the app. */
 export type AgentLimits = {
   /** Tasks a session may create in any 24 hours; left out: no limit. */
   new_tasks_per_day?: number;
+  /** Reads a session may make at once before `reads_per_minute` applies; left out: one minute's worth. */
+  read_burst?: number;
+  /** Megabytes of results a session may read in a minute; left out: no limit. */
+  read_mb_per_minute?: number;
+  /** Reads (tool calls that read, resources read, prompts) a session may make in a minute, sustained; left out: no limit on reads. */
+  reads_per_minute?: number;
   /** Items a standard agent may move to the trash in one call; left out: no limit. */
   trash_items_per_call?: number;
   /** Items a standard agent session may move to the trash in an hour; left out: no limit. */
@@ -131,6 +137,12 @@ export type AgentLimitsPatch = {
   new_tasks_per_day?: number | null;
   /** Limits to lift: agents then have no limit there. */
   no_limit?: AgentLimit[];
+  /** Reads a session may make at once, 1 to 1000000. */
+  read_burst?: number | null;
+  /** Megabytes a session may read in a minute, 1 to 1000000. */
+  read_mb_per_minute?: number | null;
+  /** Reads a session may make in a minute, sustained, 1 to 1000000. */
+  reads_per_minute?: number | null;
   /** Limits to set back to their default. */
   reset?: AgentLimit[];
   /** Items a standard agent may move to the trash in one call, 1 to 1000000. */
@@ -171,6 +183,8 @@ export type AgentSession = {
   name: string;
   /** The profile the session ran with. */
   profile: Profile;
+  /** Reads refused because the session read faster than its limits. */
+  rate_limited: number;
   /** Operations that read. */
   reads: number;
   /** When it started (RFC 3339, UTC). */
@@ -1810,6 +1824,14 @@ export type DashboardWidgetInput = {
   widget: string;
 };
 
+/** A date typed in a field. */
+export type DateParseInput = {
+  /** What was typed: `2026-12-31`, `today`, `fri`, `next mon`, `in 3d`, `+3d`, `dec 1`, `end of month`. */
+  text: string;
+  /** The day the words count from (`YYYY-MM-DD`), for example today in the person's own time zone; default: today in the workspace's time zone. Weeks start on the workspace's first day of the week. */
+  today?: string | null;
+};
+
 /** A range of days, both included. */
 export type DayRange = {
   /** The last day (`YYYY-MM-DD`). */
@@ -1957,7 +1979,7 @@ export type EntityChange = {
 };
 
 /** What kind of failure an operation error is. Adapters decide on the code, never on the message. */
-export type ErrorCode = "invalid" | "not_found" | "conflict" | "forbidden" | "limit" | "busy" | "workspace_upgraded" | "workspace_too_new" | "storage";
+export type ErrorCode = "invalid" | "not_found" | "conflict" | "forbidden" | "limit" | "rate_limited" | "busy" | "workspace_upgraded" | "workspace_too_new" | "storage";
 
 /** What to export. */
 export type ExportInput = {
@@ -2692,6 +2714,12 @@ export type PageBlueprint = {
   parent?: string | null;
   /** Its title. */
   title: string;
+};
+
+/** The day the words mean. */
+export type ParsedDate = {
+  /** The day, `YYYY-MM-DD`. */
+  date: string;
 };
 
 /** A query as the query field shows it. */
@@ -6316,6 +6344,7 @@ export interface OpMap {
   "list.layout.get": { input: ListLayoutGetInput; output: ListLayoutChange; safety: "read"; kind: "query" };
   "list.layout.update": { input: ListLayoutUpdateInput; output: ListLayoutChange; safety: "write"; kind: "command" };
   "query.parse": { input: QueryParseInput; output: ParsedQuery; safety: "read"; kind: "query" };
+  "date.parse": { input: DateParseInput; output: ParsedDate; safety: "read"; kind: "query" };
   "schedule.get": { input: ScheduleInput; output: Schedule; safety: "read"; kind: "query" };
   "schedule.preview_move": { input: SchedulePreviewInput; output: SchedulePreview; safety: "read"; kind: "query" };
   "gantt.layout.get": { input: GanttLayoutGetInput; output: GanttLayoutChange; safety: "read"; kind: "query" };
@@ -6498,6 +6527,7 @@ export const OP_SAFETY = {
   "list.layout.get": "read",
   "list.layout.update": "write",
   "query.parse": "read",
+  "date.parse": "read",
   "schedule.get": "read",
   "schedule.preview_move": "read",
   "gantt.layout.get": "read",
@@ -6562,11 +6592,11 @@ export type Call = <K extends OpId>(op: K, input: OpMap[K]["input"]) => Promise<
 export function makeOps(call: Call) {
   return {
     agent: {
-      /** List agent sessions, newest first, with their client, profile, times and counts of reads and writes. (read) */
+      /** List agent sessions, newest first, with their client, profile, times and counts of reads, writes and reads refused by the read limits. (read) */
       sessions: (input: OpMap["agent.sessions"]["input"] = {}) => call("agent.sessions", input),
       /** Set the most an agent may do, whatever profile it asks for, and whether agents may ask the person to allow one change beyond it. (app) */
       policyUpdate: (input: OpMap["agent.policy.update"]["input"]) => call("agent.policy.update", input),
-      /** Change the limits on agent sessions: changes a minute, new tasks a day, and items moved to the trash per call and per hour. Each is a number or no limit. (app) */
+      /** Change the limits on agent sessions: changes a minute, new tasks a day, items moved to the trash per call and per hour, and reads (at once, a minute, megabytes a minute). Each is a number or no limit. (app) */
       limitsUpdate: (input: OpMap["agent.limits.update"]["input"] = {}) => call("agent.limits.update", input),
     },
     automation: {
@@ -6646,6 +6676,10 @@ export function makeOps(call: Call) {
       updateWidget: (input: OpMap["dashboard.update_widget"]["input"]) => call("dashboard.update_widget", input),
       /** Remove a widget from a dashboard. (write) */
       removeWidget: (input: OpMap["dashboard.remove_widget"]["input"]) => call("dashboard.remove_widget", input),
+    },
+    date: {
+      /** Read a date typed in words (fri, next mon, in 3d, +3d, dec 1, end of month, 2026-12-31) as the day it means, the way every date field reads it. Words that are no date fail with message date-invalid. (read) */
+      parse: (input: OpMap["date.parse"]["input"]) => call("date.parse", input),
     },
     description: {
       /** List the revisions of a task's or project's description, newest first, conflict copies included. (read) */

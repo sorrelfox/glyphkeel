@@ -271,12 +271,19 @@ impl WinStep {
         .to_vec()
     }
 
-    fn run(&self, root: &Path) -> Result<bool> {
+    /// Runs the step. `build_env` goes to every step that compiles.
+    fn run(&self, root: &Path, build_env: &[(String, String)]) -> Result<bool> {
         match self {
-            Self::Pnpm(args) => ci::status(Command::new("pnpm").args(args).current_dir(root)),
+            Self::Pnpm(args) => ci::status(
+                Command::new("pnpm")
+                    .args(args)
+                    .envs(build_env.iter().cloned())
+                    .current_dir(root),
+            ),
             Self::Xwin(args) => ci::status(
                 Command::new(crate::cargo())
                     .args(Self::xwin_args(args))
+                    .envs(build_env.iter().cloned())
                     .current_dir(root),
             ),
             Self::FreshPrefix(name) => fresh_prefix(&prefix_dir(name)),
@@ -286,7 +293,9 @@ impl WinStep {
                 fs::create_dir_all(&data)
                     .with_context(|| format!("cannot create {}", data.display()))?;
                 let mut cmd = Command::new(crate::cargo());
-                cmd.args(Self::xwin_args(args)).current_dir(root);
+                cmd.args(Self::xwin_args(args))
+                    .envs(build_env.iter().cloned())
+                    .current_dir(root);
                 for (name, value) in test_env(root, &prefix, &data) {
                     cmd.env(name, value);
                 }
@@ -313,6 +322,7 @@ impl WinStep {
             Self::Bundle => ci::status(
                 Command::new("pnpm")
                     .args(Self::bundle_args())
+                    .envs(build_env.iter().cloned())
                     // The Tauri CLI reads CI as a boolean and refuses `1`.
                     .env("CI", "true")
                     .current_dir(root),
@@ -397,6 +407,60 @@ fn publish(root: &Path, dir: &Path) -> Result<bool> {
     Ok(true)
 }
 
+/// The environment that builds SQLCipher with LibTomCrypt for Windows, the
+/// crypto library gk-store's build script compiles there: the provider is
+/// chosen with a compile flag, and LibTomCrypt's headers take the place of
+/// OpenSSL's. Only the Windows target reads the OpenSSL variables;
+/// `LIBSQLITE3_FLAGS` would reach every target, so it is set only here.
+pub(crate) fn sqlcipher_env(headers: &Path) -> Vec<(String, String)> {
+    let prefix = TARGET.to_uppercase().replace('-', "_");
+    let headers = headers.display().to_string();
+    vec![
+        (
+            "LIBSQLITE3_FLAGS".to_owned(),
+            "-DSQLCIPHER_CRYPTO_LIBTOMCRYPT".to_owned(),
+        ),
+        (format!("{prefix}_OPENSSL_INCLUDE_DIR"), headers.clone()),
+        // Read together with the include folder; the library itself comes
+        // from gk-store's build script.
+        (format!("{prefix}_OPENSSL_LIB_DIR"), headers),
+    ]
+}
+
+/// LibTomCrypt's header folder in the locked sqlcipher-src package, which
+/// `cargo metadata` locates (and fetches if needed).
+fn libtomcrypt_headers(root: &Path) -> Result<PathBuf> {
+    let output = Command::new(crate::cargo())
+        .args(["metadata", "--format-version", "1", "--locked"])
+        .current_dir(root)
+        .output()
+        .context("cannot run cargo metadata")?;
+    anyhow::ensure!(
+        output.status.success(),
+        "cargo metadata failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let metadata: serde_json::Value =
+        serde_json::from_slice(&output.stdout).context("cargo metadata printed no JSON")?;
+    let manifest = metadata["packages"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|package| package["name"] == "sqlcipher-src")
+        .and_then(|package| package["manifest_path"].as_str())
+        .context("the lock file has no sqlcipher-src")?;
+    let headers = Path::new(manifest)
+        .parent()
+        .context("sqlcipher-src has no folder")?
+        .join("sqlcipher/libtomcrypt/headers");
+    anyhow::ensure!(
+        headers.join("tomcrypt.h").is_file(),
+        "no tomcrypt.h in {}",
+        headers.display()
+    );
+    Ok(headers)
+}
+
 /// Runs the suites on this machine, stopping at the first failure. This is
 /// what runs inside the container.
 pub(crate) fn run_here(
@@ -406,17 +470,18 @@ pub(crate) fn run_here(
 ) -> Result<bool> {
     if suites.iter().any(|suite| suite.needs_node_modules()) {
         eprintln!("==> pnpm install --frozen-lockfile");
-        if !WinStep::pnpm(&["install", "--frozen-lockfile"]).run(root)? {
+        if !WinStep::pnpm(&["install", "--frozen-lockfile"]).run(root, &[])? {
             return Ok(false);
         }
     }
+    let build_env = sqlcipher_env(&libtomcrypt_headers(root)?);
     let mut times = Vec::new();
     for &suite in suites {
         let started = Instant::now();
         for step in suite.steps(release_dir) {
             eprintln!("==> [{NAME}/{}] {step}", suite.name());
             let step_started = Instant::now();
-            let ok = step.run(root)?;
+            let ok = step.run(root, &build_env)?;
             eprintln!(
                 "==> [{NAME}/{}] {} in {} s",
                 suite.name(),
@@ -528,7 +593,8 @@ mod tests {
 
     use super::{
         INSTALL_SCRIPT, NAME, SMOKE_SCRIPT, TARGET, VERSION, WinStep, WinSuite, cache_mounts,
-        container_script, installer, installer_name, release_folder, test_env, wine_path,
+        container_script, installer, installer_name, libtomcrypt_headers, release_folder,
+        sqlcipher_env, test_env, wine_path,
     };
 
     fn steps(suite: WinSuite, release: Option<&Path>) -> Vec<String> {
@@ -612,6 +678,33 @@ mod tests {
         assert_eq!(
             get("GLYPHKEEL_CONFIG_DIR"),
             r"Z:\tmp\gk-wine\test-data\config"
+        );
+    }
+
+    #[test]
+    fn sqlcipher_is_built_with_libtomcrypt_for_windows_only() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let headers = libtomcrypt_headers(&root).unwrap();
+        assert!(headers.join("tomcrypt.h").is_file());
+        let env = sqlcipher_env(Path::new("/h"));
+        let get = |name: &str| {
+            env.iter()
+                .find(|(key, _)| key == name)
+                .map(|(_, value)| value.as_str())
+        };
+        assert_eq!(
+            get("LIBSQLITE3_FLAGS"),
+            Some("-DSQLCIPHER_CRYPTO_LIBTOMCRYPT")
+        );
+        assert_eq!(
+            get("X86_64_PC_WINDOWS_MSVC_OPENSSL_INCLUDE_DIR"),
+            Some("/h")
+        );
+        assert_eq!(get("X86_64_PC_WINDOWS_MSVC_OPENSSL_LIB_DIR"), Some("/h"));
+        assert_eq!(
+            get("OPENSSL_INCLUDE_DIR"),
+            None,
+            "the Linux build keeps its own"
         );
     }
 

@@ -26,6 +26,19 @@ cli-man-about = Print the man page (roff)
 cli-group-about = Commands: { $commands }
 cli-input-help = The whole input as JSON, or `-` to read it from standard input; options given as well take precedence
 cli-yes-help = Confirm in advance: this can't be undone
+cli-lang-help = The language of help, messages and output for people, as a tag such as de or pt-BR [default: GLYPHKEEL_LANG, else the language chosen in the app, else the system's]
+cli-completions-shell-help = The shell to write the script for
+cli-help-about = Print the help of the program or of the given command
+cli-help-commands-help = The command's words, such as `task show`
+# An option's help followed by the words it takes.
+cli-help-with-values = { $help } [possible values: { $values }]
+# The help's headings and the help of the options every command has.
+cli-help-usage = Usage:
+cli-help-commands = Commands
+cli-help-arguments = Arguments
+cli-help-options = Options
+cli-help-help = Print help (more with --help)
+cli-version-help = Print the version
 
 ## Values of options
 
@@ -33,6 +46,24 @@ cli-expected-bool = expected `true` or `false`
 cli-expected-integer = expected a whole number
 cli-expected-number = expected a number
 cli-expected-json = expected JSON: { $error }
+
+## Mistakes on the command line
+
+cli-usage-unknown-argument = unexpected argument '{ $arg }'
+cli-usage-unknown-command = unknown command '{ $command }'
+cli-usage-missing-command = '{ $command }' needs one of its commands
+cli-usage-missing-arguments = missing: { $args }
+cli-usage-conflict = '{ $arg }' can't be used with '{ $other }'
+cli-usage-repeated = '{ $arg }' can be given only once
+cli-usage-no-value = '{ $arg }' needs a value
+cli-usage-invalid-value = invalid value '{ $value }' for '{ $arg }'
+cli-usage-invalid-value-why = invalid value '{ $value }' for '{ $arg }': { $reason }
+cli-usage-invalid-value-choices = invalid value '{ $value }' for '{ $arg }'; possible values: { $values }
+# A correction clap suggests: a command, an option or a value.
+cli-usage-did-you-mean = did you mean '{ $suggestion }'?
+cli-usage-line = Usage: { $usage }
+cli-usage-more = For more information, add --help.
+cli-help-unknown = There is no command '{ $command }'.
 
 ## Output
 

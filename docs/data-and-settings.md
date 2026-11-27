@@ -35,14 +35,16 @@ yours is stored there.
 
 ## Moving them
 
-Three environment variables change where Glyphkeel looks. They work the same
-on Linux and Windows, for the app, the command line and the MCP server:
+Four environment variables change where Glyphkeel looks and what it shows. They work the same
+on Linux and Windows, for the app, the command line and the MCP server (`GLYPHKEEL_LANG`
+only for the command line):
 
 | Variable | What it does |
 |---|---|
 | `GLYPHKEEL_DATA_DIR` | The data folder (workspaces and backups) |
 | `GLYPHKEEL_CONFIG_DIR` | The configuration folder (settings). On every platform the window's size and position then go there too |
 | `GLYPHKEEL_WORKSPACE` | The workspace to open: a name in the data folder, or the path of a workspace folder |
+| `GLYPHKEEL_LANG` | The language of the command line, such as `de`; it comes before the one chosen in the app's Preferences |
 
 One more gives the passphrase of an encrypted workspace to programs that
 can't ask for it, such as agent servers and scripts:

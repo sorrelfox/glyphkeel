@@ -139,3 +139,5 @@ Preferences, start the app once with `glyphkeel-app --safe-graphics`.
 - [Tasks](tasks.md)
 - [The board](board.md)
 - [Working with AI agents](../mcp.md)
+- [Encryption and the app lock](encryption-and-lock.md): a passphrase for a
+  workspace, on Linux and Windows alike

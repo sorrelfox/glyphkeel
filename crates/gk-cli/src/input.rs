@@ -153,7 +153,15 @@ pub(crate) fn args(op: &OpDescriptor, fields: &[Field]) -> Vec<Arg> {
     for f in fields {
         let mut arg = Arg::new(f.name.clone());
         if let Some(help) = &f.help {
-            arg = arg.help(help.clone());
+            let help = messages::field_help(op.id, &f.name, help);
+            arg = match &f.kind {
+                // The values are machine words, listed after the help in
+                // the chosen language.
+                Kind::Choice(words) => arg
+                    .hide_possible_values(true)
+                    .help(crate::commands::with_values(&help, words)),
+                _ => arg.help(help),
+            };
         }
         if !f.positional {
             arg = arg.long(f.long());

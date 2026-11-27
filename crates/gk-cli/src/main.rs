@@ -42,8 +42,10 @@ fn main() -> ExitCode {
     let args: Vec<OsString> = std::env::args_os().collect();
     let pre = prescan(&args);
     if let Some(mcp_args) = pre.mcp {
+        // The MCP server's text is for agents: it stays English.
         return gk_mcp::run_stdio(&mcp_args);
     }
+    messages::choose_language(pre.lang.as_deref());
     let ops = commands::op_commands();
     let color = if pre.no_color || std::env::var_os("NO_COLOR").is_some_and(|v| !v.is_empty()) {
         clap::ColorChoice::Never
@@ -71,13 +73,108 @@ fn main() -> ExitCode {
 }
 
 /// Help and version go to standard output with exit code 0; every other
-/// parse error is a usage error, exit code 1.
+/// parse error is a usage error, exit code 1, told in the chosen language.
 fn usage_error(e: &clap::Error) -> ExitCode {
-    let _ = e.print();
     match e.kind() {
-        ErrorKind::DisplayHelp | ErrorKind::DisplayVersion => ExitCode::SUCCESS,
-        _ => ExitCode::from(1),
+        ErrorKind::DisplayHelp | ErrorKind::DisplayVersion => {
+            let _ = e.print();
+            ExitCode::SUCCESS
+        }
+        _ => {
+            match usage_text(e) {
+                Some(text) => eprint!("{text}"),
+                None => {
+                    let _ = e.print();
+                }
+            }
+            ExitCode::from(1)
+        }
     }
+}
+
+/// A usage error in the chosen language, from what clap found; `None` for
+/// the kinds clap tells best itself (in English).
+fn usage_text(e: &clap::Error) -> Option<String> {
+    use clap::error::{ContextKind, ContextValue};
+    let one = |kind| match e.get(kind) {
+        Some(ContextValue::String(s)) => Some(s.clone()),
+        Some(ContextValue::Strings(v)) => Some(v.join(", ")),
+        _ => None,
+    };
+    let message = match e.kind() {
+        ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand => return Some(e.render().to_string()),
+        ErrorKind::UnknownArgument => messages::text(
+            "cli-usage-unknown-argument",
+            &[("arg", one(ContextKind::InvalidArg)?)],
+        ),
+        ErrorKind::InvalidSubcommand => messages::text(
+            "cli-usage-unknown-command",
+            &[("command", one(ContextKind::InvalidSubcommand)?)],
+        ),
+        ErrorKind::MissingSubcommand => messages::text(
+            "cli-usage-missing-command",
+            &[("command", one(ContextKind::InvalidSubcommand)?)],
+        ),
+        ErrorKind::MissingRequiredArgument => messages::text(
+            "cli-usage-missing-arguments",
+            &[("args", one(ContextKind::InvalidArg)?)],
+        ),
+        ErrorKind::ArgumentConflict => {
+            let arg = one(ContextKind::InvalidArg)?;
+            match one(ContextKind::PriorArg) {
+                Some(other) if other != arg => {
+                    messages::text("cli-usage-conflict", &[("arg", arg), ("other", other)])
+                }
+                _ => messages::text("cli-usage-repeated", &[("arg", arg)]),
+            }
+        }
+        ErrorKind::InvalidValue | ErrorKind::ValueValidation | ErrorKind::TooManyValues => {
+            let arg = one(ContextKind::InvalidArg)?;
+            let value = one(ContextKind::InvalidValue)?;
+            let reason = std::error::Error::source(e).map(ToString::to_string);
+            match (value.is_empty(), reason, one(ContextKind::ValidValue)) {
+                (true, _, _) => messages::text("cli-usage-no-value", &[("arg", arg)]),
+                (false, Some(reason), _) => messages::text(
+                    "cli-usage-invalid-value-why",
+                    &[("arg", arg), ("value", value), ("reason", reason)],
+                ),
+                (false, None, Some(values)) => messages::text(
+                    "cli-usage-invalid-value-choices",
+                    &[("arg", arg), ("value", value), ("values", values)],
+                ),
+                (false, None, None) => {
+                    messages::text("cli-usage-invalid-value", &[("arg", arg), ("value", value)])
+                }
+            }
+        }
+        _ => return None,
+    };
+    let mut out = messages::text("cli-error", &[("message", message)]);
+    out.push('\n');
+    let suggestion = one(ContextKind::SuggestedSubcommand)
+        .or_else(|| one(ContextKind::SuggestedArg))
+        .or_else(|| one(ContextKind::SuggestedValue));
+    if let Some(suggestion) = suggestion {
+        out.push_str(&messages::text(
+            "cli-usage-did-you-mean",
+            &[("suggestion", suggestion)],
+        ));
+        out.push('\n');
+    }
+    if let Some(ContextValue::StyledStr(usage)) = e.get(ContextKind::Usage) {
+        let usage = usage.to_string();
+        let usage = usage.trim().split_once(' ').map_or("", |(_, rest)| rest);
+        out.push('\n');
+        out.push_str(&messages::text(
+            "cli-usage-line",
+            &[("usage", usage.trim().to_owned())],
+        ));
+        out.push('\n');
+    }
+    out.push('\n');
+    out.push_str(&messages::text("cli-usage-more", &[]));
+    out.push('\n');
+    Some(out)
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -117,6 +214,20 @@ fn run(ops: &[OpCommand], matches: &ArgMatches, out: Out) -> Result<(), OpError>
             let mut buf = Vec::new();
             clap_complete::generate(shell, &mut cmd, "glyphkeel", &mut buf);
             print_bytes(&buf)
+        }
+        Some((commands::HELP, m)) => {
+            let words: Vec<String> = m
+                .get_many::<String>("commands")
+                .map(|v| v.cloned().collect())
+                .unwrap_or_default();
+            let help = commands::help_of(ops, &words).ok_or_else(|| {
+                messages::error(
+                    "cli-help-unknown",
+                    &[("command", words.join(" "))],
+                    OpError::invalid,
+                )
+            })?;
+            print_bytes(help.as_bytes())
         }
         Some((commands::MAN, _)) => {
             let mut buf = Vec::new();
@@ -226,7 +337,7 @@ fn ask_on_terminal() -> Confirmation {
     Confirmation::Ask(Arc::new(|req| {
         eprint!(
             "{} ",
-            messages::text("cli-confirm", &[("summary", req.op.summary.to_owned())])
+            messages::text("cli-confirm", &[("summary", messages::op_summary(req.op))])
         );
         let _ = std::io::stderr().flush();
         let mut answer = String::new();
@@ -259,6 +370,8 @@ struct Prescan {
     /// The arguments for the MCP server, when the command is `mcp`.
     mcp: Option<Vec<OsString>>,
     no_color: bool,
+    /// The language `--lang` names, wherever it is given.
+    lang: Option<String>,
 }
 
 /// Finds `mcp` behind the global options. Everything after it belongs to
@@ -266,7 +379,10 @@ struct Prescan {
 /// `--tz` given before `mcp` is passed on unless the server's own arguments
 /// name one.
 fn prescan(args: &[OsString]) -> Prescan {
-    let mut pre = Prescan::default();
+    let mut pre = Prescan {
+        lang: lang_flag(args),
+        ..Prescan::default()
+    };
     let mut workspace: Option<OsString> = None;
     let mut tz: Option<OsString> = None;
     let mut i = 1;
@@ -289,6 +405,8 @@ fn prescan(args: &[OsString]) -> Prescan {
             a if a.starts_with("--tz=") => {
                 tz = Some(OsString::from(&a["--tz=".len()..]));
             }
+            "--lang" => i += 1,
+            a if a.starts_with("--lang=") => {}
             "mcp" => {
                 let mut rest: Vec<OsString> = args[i + 1..].to_vec();
                 let names_one = rest.iter().any(|a| {
@@ -315,9 +433,57 @@ fn prescan(args: &[OsString]) -> Prescan {
     pre
 }
 
+/// The language `--lang` names, before the help is built in it: the
+/// option is global, so it may follow the command's words. Arguments after
+/// `--` are values.
+fn lang_flag(args: &[OsString]) -> Option<String> {
+    let mut rest = args.iter().skip(1).map(|a| a.to_string_lossy());
+    while let Some(arg) = rest.next() {
+        if arg == "--" {
+            break;
+        }
+        if arg == "--lang" {
+            return rest.next().map(|v| v.into_owned());
+        }
+        if let Some(value) = arg.strip_prefix("--lang=") {
+            return Some(value.to_owned());
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_language_option_is_found_anywhere_and_not_passed_to_mcp() {
+        assert_eq!(
+            prescan(&os(&["glyphkeel", "task", "show", "--lang", "de", "TM-1"]))
+                .lang
+                .as_deref(),
+            Some("de")
+        );
+        assert_eq!(
+            prescan(&os(&["glyphkeel", "--lang=fr", "--help"]))
+                .lang
+                .as_deref(),
+            Some("fr")
+        );
+        assert_eq!(
+            prescan(&os(&["glyphkeel", "x", "--", "--lang", "de"])).lang,
+            None
+        );
+        let pre = prescan(&os(&[
+            "glyphkeel",
+            "--lang",
+            "de",
+            "mcp",
+            "--profile",
+            "full",
+        ]));
+        assert_eq!(pre.mcp, Some(os(&["--profile", "full"])));
+    }
 
     fn os(args: &[&str]) -> Vec<OsString> {
         args.iter().map(OsString::from).collect()

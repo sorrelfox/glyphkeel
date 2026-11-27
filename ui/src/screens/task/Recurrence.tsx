@@ -116,7 +116,7 @@ export function RepeatValue({ task, readOnly }: { task: Task; readOnly: boolean 
         ) : (
           <>
             <Repeat className="ic s" />
-            <span className="truncate">{label}</span>
+            <span className="truncate" title={label}>{label}</span>
           </>
         )}
       </Button>

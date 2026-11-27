@@ -32,6 +32,8 @@ async function renderQuickAdd() {
       applied.push(input);
       return Promise.resolve({ task: { key: "TM-2", title: input.title ?? "Report" }, tasks: 1 } as TemplateApplied);
     },
+    // The engine reads the date words for the chip: here only "fri".
+    "date.parse": (input) => (input.text === "fri" ? Promise.resolve({ date: "2026-11-27" }) : rejectWith({ code: "invalid", message: "not a date", details: { path: "text", message_id: "date-invalid", args: { text: input.text } } })),
     "workspace.get": () => workspaceInfo(),
     "settings.get": () => settings(),
     "project.list": () => ({ items: [project("TM", "Task Manager"), project("PER", "Personal")], total: 2 }),
@@ -84,6 +86,10 @@ describe("the quick-add window", () => {
     const { field, created } = await renderQuickAdd();
     type(field, "Renew domain fri #Personal !high");
     expect(screen.getByTestId("quick-add-due").textContent).toMatch(/^Due /);
+    // The day the engine reads in the words shows beside them.
+    await waitFor(() => {
+      expect(screen.getByTestId("quick-add-due").textContent).toMatch(/^Due \u2068?fri\u2069?: \u2068?Fri,? 27 Nov/);
+    });
     expect(screen.getByTestId("quick-add-priority").textContent).toBe("High");
     expect(projectField().textContent).toContain("Personal");
     enter(field);
