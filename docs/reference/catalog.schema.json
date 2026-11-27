@@ -15646,6 +15646,3283 @@
       "summary": "Delete a version; its tasks are planned for no version. Revert brings both back."
     },
     {
+      "cli": "sprint list <project>",
+      "exposure": "data",
+      "id": "sprint.list",
+      "input": {
+        "$defs": {
+          "SprintState": {
+            "description": "Where a sprint stands.",
+            "oneOf": [
+              {
+                "const": "planned",
+                "description": "Being planned; not started yet (the default).",
+                "type": "string"
+              },
+              {
+                "const": "active",
+                "description": "Running: started and not completed. One per project at most.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Completed.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Which sprints to list.",
+        "properties": {
+          "include_tasks": {
+            "description": "Include each sprint's tasks and the backlog, for the sprints page.",
+            "type": "boolean"
+          },
+          "project": {
+            "description": "The project (key or ID).",
+            "type": "string"
+          },
+          "state": {
+            "description": "Only sprints in these states; default: all.",
+            "items": {
+              "$ref": "#/$defs/SprintState"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "title": "SprintListInput",
+        "type": "object"
+      },
+      "input_name": "SprintListInput",
+      "kind": "query",
+      "mcp_tool": "list_sprints",
+      "output": {
+        "$defs": {
+          "Category": {
+            "description": "What a status means for the work in it.",
+            "oneOf": [
+              {
+                "const": "todo",
+                "description": "Not started.",
+                "type": "string"
+              },
+              {
+                "const": "in_progress",
+                "description": "Being worked on.",
+                "type": "string"
+              },
+              {
+                "const": "done",
+                "description": "Finished; closes the task.",
+                "type": "string"
+              },
+              {
+                "const": "cancelled",
+                "description": "Dropped; closes the task.",
+                "type": "string"
+              }
+            ]
+          },
+          "Priority": {
+            "description": "A task's priority.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No priority (the default).",
+                "type": "string"
+              },
+              {
+                "const": "low",
+                "description": "Low.",
+                "type": "string"
+              },
+              {
+                "const": "normal",
+                "description": "Normal.",
+                "type": "string"
+              },
+              {
+                "const": "high",
+                "description": "High.",
+                "type": "string"
+              },
+              {
+                "const": "urgent",
+                "description": "Urgent.",
+                "type": "string"
+              }
+            ]
+          },
+          "Sprint": {
+            "additionalProperties": false,
+            "description": "A sprint.",
+            "properties": {
+              "completed_at": {
+                "description": "When it was completed (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "goal": {
+                "description": "What the sprint is meant to achieve: plain text.",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name, unique in its project (ignoring case).",
+                "type": "string"
+              },
+              "progress": {
+                "$ref": "#/$defs/SprintProgress",
+                "description": "Its progress."
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place among the project's sprints.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "started_at": {
+                "description": "When it was started (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "state": {
+                "$ref": "#/$defs/SprintState",
+                "description": "Where it stands."
+              },
+              "tasks": {
+                "description": "Its tasks, when asked for: by board order.",
+                "items": {
+                  "$ref": "#/$defs/SprintTask"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "description": "When it last changed.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "state",
+              "progress",
+              "rank",
+              "created_at",
+              "updated_at",
+              "id"
+            ],
+            "type": "object"
+          },
+          "SprintProgress": {
+            "additionalProperties": false,
+            "description": "How far a sprint has come.",
+            "properties": {
+              "closed": {
+                "description": "How many of them are closed.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "closed_estimate_minutes": {
+                "description": "The estimates of the closed ones, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "estimate_minutes": {
+                "description": "Their estimates added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "total": {
+                "description": "The tasks in it (not in the trash).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "total",
+              "closed",
+              "estimate_minutes",
+              "closed_estimate_minutes"
+            ],
+            "type": "object"
+          },
+          "SprintState": {
+            "description": "Where a sprint stands.",
+            "oneOf": [
+              {
+                "const": "planned",
+                "description": "Being planned; not started yet (the default).",
+                "type": "string"
+              },
+              {
+                "const": "active",
+                "description": "Running: started and not completed. One per project at most.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Completed.",
+                "type": "string"
+              }
+            ]
+          },
+          "SprintTask": {
+            "additionalProperties": false,
+            "description": "A task of a sprint or of the backlog, as the sprints page lists it.",
+            "properties": {
+              "closed": {
+                "description": "Whether it is closed (done or cancelled).",
+                "type": "boolean"
+              },
+              "estimate_minutes": {
+                "description": "Its estimate in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "Its key.",
+                "type": "string"
+              },
+              "parent": {
+                "description": "The parent task's key, for a subtask.",
+                "type": "string"
+              },
+              "priority": {
+                "$ref": "#/$defs/Priority",
+                "description": "Its priority."
+              },
+              "status": {
+                "$ref": "#/$defs/StatusRef",
+                "description": "Its status."
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              },
+              "type": {
+                "description": "Its type's name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "status",
+              "closed",
+              "type",
+              "priority",
+              "id"
+            ],
+            "type": "object"
+          },
+          "StatusRef": {
+            "additionalProperties": false,
+            "description": "A task's status, as tasks carry it.",
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/Category",
+                "description": "Its category."
+              },
+              "id": {
+                "description": "The status's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "category"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Sprints: closed ones first, then the active one, then planned ones, each\nby their order.",
+        "properties": {
+          "backlog": {
+            "description": "With `include_tasks`: the project's open tasks in no sprint, by\nboard order.",
+            "items": {
+              "$ref": "#/$defs/SprintTask"
+            },
+            "type": "array"
+          },
+          "items": {
+            "description": "The sprints.",
+            "items": {
+              "$ref": "#/$defs/Sprint"
+            },
+            "type": "array"
+          },
+          "total": {
+            "description": "How many.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "SprintList",
+        "type": "object"
+      },
+      "output_name": "SprintList",
+      "safety": "read",
+      "summary": "The sprints of a project with their state, dates and progress; with their tasks and the backlog for the sprints page."
+    },
+    {
+      "cli": "sprint show <sprint>",
+      "exposure": "data",
+      "id": "sprint.get",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "One sprint to read.",
+        "properties": {
+          "project": {
+            "description": "With a name or `active`: the project (key or ID).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sprint": {
+            "description": "The sprint: its ID, its name, or `active` for the project's active\nsprint.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sprint"
+        ],
+        "title": "SprintGetInput",
+        "type": "object"
+      },
+      "input_name": "SprintGetInput",
+      "kind": "query",
+      "mcp_tool": "get_sprint",
+      "output": {
+        "$defs": {
+          "Category": {
+            "description": "What a status means for the work in it.",
+            "oneOf": [
+              {
+                "const": "todo",
+                "description": "Not started.",
+                "type": "string"
+              },
+              {
+                "const": "in_progress",
+                "description": "Being worked on.",
+                "type": "string"
+              },
+              {
+                "const": "done",
+                "description": "Finished; closes the task.",
+                "type": "string"
+              },
+              {
+                "const": "cancelled",
+                "description": "Dropped; closes the task.",
+                "type": "string"
+              }
+            ]
+          },
+          "Priority": {
+            "description": "A task's priority.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No priority (the default).",
+                "type": "string"
+              },
+              {
+                "const": "low",
+                "description": "Low.",
+                "type": "string"
+              },
+              {
+                "const": "normal",
+                "description": "Normal.",
+                "type": "string"
+              },
+              {
+                "const": "high",
+                "description": "High.",
+                "type": "string"
+              },
+              {
+                "const": "urgent",
+                "description": "Urgent.",
+                "type": "string"
+              }
+            ]
+          },
+          "SprintProgress": {
+            "additionalProperties": false,
+            "description": "How far a sprint has come.",
+            "properties": {
+              "closed": {
+                "description": "How many of them are closed.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "closed_estimate_minutes": {
+                "description": "The estimates of the closed ones, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "estimate_minutes": {
+                "description": "Their estimates added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "total": {
+                "description": "The tasks in it (not in the trash).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "total",
+              "closed",
+              "estimate_minutes",
+              "closed_estimate_minutes"
+            ],
+            "type": "object"
+          },
+          "SprintState": {
+            "description": "Where a sprint stands.",
+            "oneOf": [
+              {
+                "const": "planned",
+                "description": "Being planned; not started yet (the default).",
+                "type": "string"
+              },
+              {
+                "const": "active",
+                "description": "Running: started and not completed. One per project at most.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Completed.",
+                "type": "string"
+              }
+            ]
+          },
+          "SprintTask": {
+            "additionalProperties": false,
+            "description": "A task of a sprint or of the backlog, as the sprints page lists it.",
+            "properties": {
+              "closed": {
+                "description": "Whether it is closed (done or cancelled).",
+                "type": "boolean"
+              },
+              "estimate_minutes": {
+                "description": "Its estimate in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "Its key.",
+                "type": "string"
+              },
+              "parent": {
+                "description": "The parent task's key, for a subtask.",
+                "type": "string"
+              },
+              "priority": {
+                "$ref": "#/$defs/Priority",
+                "description": "Its priority."
+              },
+              "status": {
+                "$ref": "#/$defs/StatusRef",
+                "description": "Its status."
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              },
+              "type": {
+                "description": "Its type's name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "status",
+              "closed",
+              "type",
+              "priority",
+              "id"
+            ],
+            "type": "object"
+          },
+          "StatusRef": {
+            "additionalProperties": false,
+            "description": "A task's status, as tasks carry it.",
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/Category",
+                "description": "Its category."
+              },
+              "id": {
+                "description": "The status's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "category"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A sprint.",
+        "properties": {
+          "completed_at": {
+            "description": "When it was completed (RFC 3339, UTC).",
+            "type": "string"
+          },
+          "created_at": {
+            "description": "When it was created (RFC 3339, UTC).",
+            "type": "string"
+          },
+          "end_date": {
+            "description": "Its last day (`YYYY-MM-DD`).",
+            "type": "string"
+          },
+          "goal": {
+            "description": "What the sprint is meant to achieve: plain text.",
+            "type": "string"
+          },
+          "id": {
+            "description": "Its ID.",
+            "type": "string"
+          },
+          "name": {
+            "description": "Its name, unique in its project (ignoring case).",
+            "type": "string"
+          },
+          "progress": {
+            "$ref": "#/$defs/SprintProgress",
+            "description": "Its progress."
+          },
+          "project": {
+            "description": "The key of the project it belongs to.",
+            "type": "string"
+          },
+          "rank": {
+            "description": "Its place among the project's sprints.",
+            "type": "string"
+          },
+          "start_date": {
+            "description": "Its first day (`YYYY-MM-DD`).",
+            "type": "string"
+          },
+          "started_at": {
+            "description": "When it was started (RFC 3339, UTC).",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/$defs/SprintState",
+            "description": "Where it stands."
+          },
+          "tasks": {
+            "description": "Its tasks, when asked for: by board order.",
+            "items": {
+              "$ref": "#/$defs/SprintTask"
+            },
+            "type": "array"
+          },
+          "updated_at": {
+            "description": "When it last changed.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "project",
+          "state",
+          "progress",
+          "rank",
+          "created_at",
+          "updated_at",
+          "id"
+        ],
+        "title": "Sprint",
+        "type": "object"
+      },
+      "output_name": "Sprint",
+      "safety": "read",
+      "summary": "One sprint with its progress and its tasks."
+    },
+    {
+      "cli": "sprint create",
+      "exposure": "data",
+      "id": "sprint.create",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A new sprint.",
+        "properties": {
+          "end_date": {
+            "description": "Its last day: `YYYY-MM-DD`, or `today`, `fri`, `+2w`, `dec 12`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "goal": {
+            "description": "What it is meant to achieve: plain text, up to 4,000 characters.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "description": "Its name, up to 100 characters, unique in the project; not `active`,\n`none` or `backlog`.",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project (key or ID).",
+            "type": "string"
+          },
+          "start_date": {
+            "description": "Its first day: `YYYY-MM-DD`, or `today`, `mon`, `+1w`, `dec 1`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tasks": {
+            "description": "Tasks to put in it straight away (keys or IDs, of the project).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "project",
+          "name"
+        ],
+        "title": "SprintCreateInput",
+        "type": "object"
+      },
+      "input_name": "SprintCreateInput",
+      "kind": "command",
+      "mcp_tool": "create_sprint",
+      "output": {
+        "$defs": {
+          "Category": {
+            "description": "What a status means for the work in it.",
+            "oneOf": [
+              {
+                "const": "todo",
+                "description": "Not started.",
+                "type": "string"
+              },
+              {
+                "const": "in_progress",
+                "description": "Being worked on.",
+                "type": "string"
+              },
+              {
+                "const": "done",
+                "description": "Finished; closes the task.",
+                "type": "string"
+              },
+              {
+                "const": "cancelled",
+                "description": "Dropped; closes the task.",
+                "type": "string"
+              }
+            ]
+          },
+          "Priority": {
+            "description": "A task's priority.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No priority (the default).",
+                "type": "string"
+              },
+              {
+                "const": "low",
+                "description": "Low.",
+                "type": "string"
+              },
+              {
+                "const": "normal",
+                "description": "Normal.",
+                "type": "string"
+              },
+              {
+                "const": "high",
+                "description": "High.",
+                "type": "string"
+              },
+              {
+                "const": "urgent",
+                "description": "Urgent.",
+                "type": "string"
+              }
+            ]
+          },
+          "Sprint": {
+            "additionalProperties": false,
+            "description": "A sprint.",
+            "properties": {
+              "completed_at": {
+                "description": "When it was completed (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "goal": {
+                "description": "What the sprint is meant to achieve: plain text.",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name, unique in its project (ignoring case).",
+                "type": "string"
+              },
+              "progress": {
+                "$ref": "#/$defs/SprintProgress",
+                "description": "Its progress."
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place among the project's sprints.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "started_at": {
+                "description": "When it was started (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "state": {
+                "$ref": "#/$defs/SprintState",
+                "description": "Where it stands."
+              },
+              "tasks": {
+                "description": "Its tasks, when asked for: by board order.",
+                "items": {
+                  "$ref": "#/$defs/SprintTask"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "description": "When it last changed.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "state",
+              "progress",
+              "rank",
+              "created_at",
+              "updated_at",
+              "id"
+            ],
+            "type": "object"
+          },
+          "SprintProgress": {
+            "additionalProperties": false,
+            "description": "How far a sprint has come.",
+            "properties": {
+              "closed": {
+                "description": "How many of them are closed.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "closed_estimate_minutes": {
+                "description": "The estimates of the closed ones, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "estimate_minutes": {
+                "description": "Their estimates added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "total": {
+                "description": "The tasks in it (not in the trash).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "total",
+              "closed",
+              "estimate_minutes",
+              "closed_estimate_minutes"
+            ],
+            "type": "object"
+          },
+          "SprintState": {
+            "description": "Where a sprint stands.",
+            "oneOf": [
+              {
+                "const": "planned",
+                "description": "Being planned; not started yet (the default).",
+                "type": "string"
+              },
+              {
+                "const": "active",
+                "description": "Running: started and not completed. One per project at most.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Completed.",
+                "type": "string"
+              }
+            ]
+          },
+          "SprintTask": {
+            "additionalProperties": false,
+            "description": "A task of a sprint or of the backlog, as the sprints page lists it.",
+            "properties": {
+              "closed": {
+                "description": "Whether it is closed (done or cancelled).",
+                "type": "boolean"
+              },
+              "estimate_minutes": {
+                "description": "Its estimate in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "Its key.",
+                "type": "string"
+              },
+              "parent": {
+                "description": "The parent task's key, for a subtask.",
+                "type": "string"
+              },
+              "priority": {
+                "$ref": "#/$defs/Priority",
+                "description": "Its priority."
+              },
+              "status": {
+                "$ref": "#/$defs/StatusRef",
+                "description": "Its status."
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              },
+              "type": {
+                "description": "Its type's name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "status",
+              "closed",
+              "type",
+              "priority",
+              "id"
+            ],
+            "type": "object"
+          },
+          "StatusRef": {
+            "additionalProperties": false,
+            "description": "A task's status, as tasks carry it.",
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/Category",
+                "description": "Its category."
+              },
+              "id": {
+                "description": "The status's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "category"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A sprint after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether it was deleted.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "sprint": {
+            "$ref": "#/$defs/Sprint",
+            "description": "The sprint after the change (before it, for a deletion); left out\nwhen tasks were only taken out of their sprints."
+          },
+          "tasks_changed": {
+            "description": "The keys of the tasks whose sprint changed: added, taken out, moved\non when it was completed, or cleared by a deletion.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "views_rewritten": {
+            "description": "The saved views whose query was rewritten because they named the\nsprint (renamed or deleted), by name.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "SprintChange",
+        "type": "object"
+      },
+      "output_name": "SprintChange",
+      "safety": "write",
+      "summary": "Plan a sprint in a project: name, goal, start and end dates, and tasks to put in it."
+    },
+    {
+      "cli": "sprint edit <sprint>",
+      "exposure": "data",
+      "id": "sprint.update",
+      "input": {
+        "$defs": {
+          "SprintField": {
+            "description": "A sprint field that can be cleared.",
+            "oneOf": [
+              {
+                "const": "goal",
+                "description": "The goal.",
+                "type": "string"
+              },
+              {
+                "const": "start_date",
+                "description": "The start date.",
+                "type": "string"
+              },
+              {
+                "const": "end_date",
+                "description": "The end date.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Changes to a sprint; fields left out keep their value. Start and\ncomplete it with `sprint.start` and `sprint.complete`.",
+        "properties": {
+          "clear": {
+            "description": "Fields to clear.",
+            "items": {
+              "$ref": "#/$defs/SprintField"
+            },
+            "type": "array"
+          },
+          "end_date": {
+            "description": "A new end date.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "goal": {
+            "description": "A new goal.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "description": "A new name; saved views that name the old one are rewritten.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "project": {
+            "description": "With a name or `active`: the sprint's project (key or ID).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sprint": {
+            "description": "The sprint: its ID, its name, or `active`.",
+            "type": "string"
+          },
+          "start_date": {
+            "description": "A new start date.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "sprint"
+        ],
+        "title": "SprintUpdateInput",
+        "type": "object"
+      },
+      "input_name": "SprintUpdateInput",
+      "kind": "command",
+      "mcp_tool": "update_sprint",
+      "output": {
+        "$defs": {
+          "Category": {
+            "description": "What a status means for the work in it.",
+            "oneOf": [
+              {
+                "const": "todo",
+                "description": "Not started.",
+                "type": "string"
+              },
+              {
+                "const": "in_progress",
+                "description": "Being worked on.",
+                "type": "string"
+              },
+              {
+                "const": "done",
+                "description": "Finished; closes the task.",
+                "type": "string"
+              },
+              {
+                "const": "cancelled",
+                "description": "Dropped; closes the task.",
+                "type": "string"
+              }
+            ]
+          },
+          "Priority": {
+            "description": "A task's priority.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No priority (the default).",
+                "type": "string"
+              },
+              {
+                "const": "low",
+                "description": "Low.",
+                "type": "string"
+              },
+              {
+                "const": "normal",
+                "description": "Normal.",
+                "type": "string"
+              },
+              {
+                "const": "high",
+                "description": "High.",
+                "type": "string"
+              },
+              {
+                "const": "urgent",
+                "description": "Urgent.",
+                "type": "string"
+              }
+            ]
+          },
+          "Sprint": {
+            "additionalProperties": false,
+            "description": "A sprint.",
+            "properties": {
+              "completed_at": {
+                "description": "When it was completed (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "goal": {
+                "description": "What the sprint is meant to achieve: plain text.",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name, unique in its project (ignoring case).",
+                "type": "string"
+              },
+              "progress": {
+                "$ref": "#/$defs/SprintProgress",
+                "description": "Its progress."
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place among the project's sprints.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "started_at": {
+                "description": "When it was started (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "state": {
+                "$ref": "#/$defs/SprintState",
+                "description": "Where it stands."
+              },
+              "tasks": {
+                "description": "Its tasks, when asked for: by board order.",
+                "items": {
+                  "$ref": "#/$defs/SprintTask"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "description": "When it last changed.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "state",
+              "progress",
+              "rank",
+              "created_at",
+              "updated_at",
+              "id"
+            ],
+            "type": "object"
+          },
+          "SprintProgress": {
+            "additionalProperties": false,
+            "description": "How far a sprint has come.",
+            "properties": {
+              "closed": {
+                "description": "How many of them are closed.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "closed_estimate_minutes": {
+                "description": "The estimates of the closed ones, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "estimate_minutes": {
+                "description": "Their estimates added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "total": {
+                "description": "The tasks in it (not in the trash).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "total",
+              "closed",
+              "estimate_minutes",
+              "closed_estimate_minutes"
+            ],
+            "type": "object"
+          },
+          "SprintState": {
+            "description": "Where a sprint stands.",
+            "oneOf": [
+              {
+                "const": "planned",
+                "description": "Being planned; not started yet (the default).",
+                "type": "string"
+              },
+              {
+                "const": "active",
+                "description": "Running: started and not completed. One per project at most.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Completed.",
+                "type": "string"
+              }
+            ]
+          },
+          "SprintTask": {
+            "additionalProperties": false,
+            "description": "A task of a sprint or of the backlog, as the sprints page lists it.",
+            "properties": {
+              "closed": {
+                "description": "Whether it is closed (done or cancelled).",
+                "type": "boolean"
+              },
+              "estimate_minutes": {
+                "description": "Its estimate in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "Its key.",
+                "type": "string"
+              },
+              "parent": {
+                "description": "The parent task's key, for a subtask.",
+                "type": "string"
+              },
+              "priority": {
+                "$ref": "#/$defs/Priority",
+                "description": "Its priority."
+              },
+              "status": {
+                "$ref": "#/$defs/StatusRef",
+                "description": "Its status."
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              },
+              "type": {
+                "description": "Its type's name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "status",
+              "closed",
+              "type",
+              "priority",
+              "id"
+            ],
+            "type": "object"
+          },
+          "StatusRef": {
+            "additionalProperties": false,
+            "description": "A task's status, as tasks carry it.",
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/Category",
+                "description": "Its category."
+              },
+              "id": {
+                "description": "The status's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "category"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A sprint after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether it was deleted.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "sprint": {
+            "$ref": "#/$defs/Sprint",
+            "description": "The sprint after the change (before it, for a deletion); left out\nwhen tasks were only taken out of their sprints."
+          },
+          "tasks_changed": {
+            "description": "The keys of the tasks whose sprint changed: added, taken out, moved\non when it was completed, or cleared by a deletion.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "views_rewritten": {
+            "description": "The saved views whose query was rewritten because they named the\nsprint (renamed or deleted), by name.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "SprintChange",
+        "type": "object"
+      },
+      "output_name": "SprintChange",
+      "safety": "write",
+      "summary": "Rename a sprint or change its goal or dates."
+    },
+    {
+      "cli": "sprint delete <sprint>",
+      "exposure": "data",
+      "id": "sprint.delete",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Which sprint to delete.",
+        "properties": {
+          "project": {
+            "description": "With a name: the sprint's project (key or ID).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sprint": {
+            "description": "The sprint: its ID or its name. An active sprint is completed\nfirst, not deleted.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sprint"
+        ],
+        "title": "SprintDeleteInput",
+        "type": "object"
+      },
+      "input_name": "SprintDeleteInput",
+      "kind": "command",
+      "mcp_tool": "delete_sprint",
+      "output": {
+        "$defs": {
+          "Category": {
+            "description": "What a status means for the work in it.",
+            "oneOf": [
+              {
+                "const": "todo",
+                "description": "Not started.",
+                "type": "string"
+              },
+              {
+                "const": "in_progress",
+                "description": "Being worked on.",
+                "type": "string"
+              },
+              {
+                "const": "done",
+                "description": "Finished; closes the task.",
+                "type": "string"
+              },
+              {
+                "const": "cancelled",
+                "description": "Dropped; closes the task.",
+                "type": "string"
+              }
+            ]
+          },
+          "Priority": {
+            "description": "A task's priority.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No priority (the default).",
+                "type": "string"
+              },
+              {
+                "const": "low",
+                "description": "Low.",
+                "type": "string"
+              },
+              {
+                "const": "normal",
+                "description": "Normal.",
+                "type": "string"
+              },
+              {
+                "const": "high",
+                "description": "High.",
+                "type": "string"
+              },
+              {
+                "const": "urgent",
+                "description": "Urgent.",
+                "type": "string"
+              }
+            ]
+          },
+          "Sprint": {
+            "additionalProperties": false,
+            "description": "A sprint.",
+            "properties": {
+              "completed_at": {
+                "description": "When it was completed (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "goal": {
+                "description": "What the sprint is meant to achieve: plain text.",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name, unique in its project (ignoring case).",
+                "type": "string"
+              },
+              "progress": {
+                "$ref": "#/$defs/SprintProgress",
+                "description": "Its progress."
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place among the project's sprints.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "started_at": {
+                "description": "When it was started (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "state": {
+                "$ref": "#/$defs/SprintState",
+                "description": "Where it stands."
+              },
+              "tasks": {
+                "description": "Its tasks, when asked for: by board order.",
+                "items": {
+                  "$ref": "#/$defs/SprintTask"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "description": "When it last changed.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "state",
+              "progress",
+              "rank",
+              "created_at",
+              "updated_at",
+              "id"
+            ],
+            "type": "object"
+          },
+          "SprintProgress": {
+            "additionalProperties": false,
+            "description": "How far a sprint has come.",
+            "properties": {
+              "closed": {
+                "description": "How many of them are closed.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "closed_estimate_minutes": {
+                "description": "The estimates of the closed ones, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "estimate_minutes": {
+                "description": "Their estimates added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "total": {
+                "description": "The tasks in it (not in the trash).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "total",
+              "closed",
+              "estimate_minutes",
+              "closed_estimate_minutes"
+            ],
+            "type": "object"
+          },
+          "SprintState": {
+            "description": "Where a sprint stands.",
+            "oneOf": [
+              {
+                "const": "planned",
+                "description": "Being planned; not started yet (the default).",
+                "type": "string"
+              },
+              {
+                "const": "active",
+                "description": "Running: started and not completed. One per project at most.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Completed.",
+                "type": "string"
+              }
+            ]
+          },
+          "SprintTask": {
+            "additionalProperties": false,
+            "description": "A task of a sprint or of the backlog, as the sprints page lists it.",
+            "properties": {
+              "closed": {
+                "description": "Whether it is closed (done or cancelled).",
+                "type": "boolean"
+              },
+              "estimate_minutes": {
+                "description": "Its estimate in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "Its key.",
+                "type": "string"
+              },
+              "parent": {
+                "description": "The parent task's key, for a subtask.",
+                "type": "string"
+              },
+              "priority": {
+                "$ref": "#/$defs/Priority",
+                "description": "Its priority."
+              },
+              "status": {
+                "$ref": "#/$defs/StatusRef",
+                "description": "Its status."
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              },
+              "type": {
+                "description": "Its type's name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "status",
+              "closed",
+              "type",
+              "priority",
+              "id"
+            ],
+            "type": "object"
+          },
+          "StatusRef": {
+            "additionalProperties": false,
+            "description": "A task's status, as tasks carry it.",
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/Category",
+                "description": "Its category."
+              },
+              "id": {
+                "description": "The status's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "category"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A sprint after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether it was deleted.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "sprint": {
+            "$ref": "#/$defs/Sprint",
+            "description": "The sprint after the change (before it, for a deletion); left out\nwhen tasks were only taken out of their sprints."
+          },
+          "tasks_changed": {
+            "description": "The keys of the tasks whose sprint changed: added, taken out, moved\non when it was completed, or cleared by a deletion.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "views_rewritten": {
+            "description": "The saved views whose query was rewritten because they named the\nsprint (renamed or deleted), by name.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "SprintChange",
+        "type": "object"
+      },
+      "output_name": "SprintChange",
+      "safety": "write",
+      "summary": "Delete a planned or closed sprint; its tasks go back to the backlog. Revert brings both back."
+    },
+    {
+      "cli": "sprint start <sprint>",
+      "exposure": "data",
+      "id": "sprint.start",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Which sprint to start, and its dates.",
+        "properties": {
+          "end_date": {
+            "description": "Its last day; default: its end date, or two weeks after the start.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "goal": {
+            "description": "A new goal.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "project": {
+            "description": "With a name: the sprint's project (key or ID).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sprint": {
+            "description": "The sprint (planned): its ID or its name.",
+            "type": "string"
+          },
+          "start_date": {
+            "description": "Its first day; default: its start date, or today.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "sprint"
+        ],
+        "title": "SprintStartInput",
+        "type": "object"
+      },
+      "input_name": "SprintStartInput",
+      "kind": "command",
+      "mcp_tool": "start_sprint",
+      "output": {
+        "$defs": {
+          "Category": {
+            "description": "What a status means for the work in it.",
+            "oneOf": [
+              {
+                "const": "todo",
+                "description": "Not started.",
+                "type": "string"
+              },
+              {
+                "const": "in_progress",
+                "description": "Being worked on.",
+                "type": "string"
+              },
+              {
+                "const": "done",
+                "description": "Finished; closes the task.",
+                "type": "string"
+              },
+              {
+                "const": "cancelled",
+                "description": "Dropped; closes the task.",
+                "type": "string"
+              }
+            ]
+          },
+          "Priority": {
+            "description": "A task's priority.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No priority (the default).",
+                "type": "string"
+              },
+              {
+                "const": "low",
+                "description": "Low.",
+                "type": "string"
+              },
+              {
+                "const": "normal",
+                "description": "Normal.",
+                "type": "string"
+              },
+              {
+                "const": "high",
+                "description": "High.",
+                "type": "string"
+              },
+              {
+                "const": "urgent",
+                "description": "Urgent.",
+                "type": "string"
+              }
+            ]
+          },
+          "Sprint": {
+            "additionalProperties": false,
+            "description": "A sprint.",
+            "properties": {
+              "completed_at": {
+                "description": "When it was completed (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "goal": {
+                "description": "What the sprint is meant to achieve: plain text.",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name, unique in its project (ignoring case).",
+                "type": "string"
+              },
+              "progress": {
+                "$ref": "#/$defs/SprintProgress",
+                "description": "Its progress."
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place among the project's sprints.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "started_at": {
+                "description": "When it was started (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "state": {
+                "$ref": "#/$defs/SprintState",
+                "description": "Where it stands."
+              },
+              "tasks": {
+                "description": "Its tasks, when asked for: by board order.",
+                "items": {
+                  "$ref": "#/$defs/SprintTask"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "description": "When it last changed.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "state",
+              "progress",
+              "rank",
+              "created_at",
+              "updated_at",
+              "id"
+            ],
+            "type": "object"
+          },
+          "SprintProgress": {
+            "additionalProperties": false,
+            "description": "How far a sprint has come.",
+            "properties": {
+              "closed": {
+                "description": "How many of them are closed.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "closed_estimate_minutes": {
+                "description": "The estimates of the closed ones, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "estimate_minutes": {
+                "description": "Their estimates added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "total": {
+                "description": "The tasks in it (not in the trash).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "total",
+              "closed",
+              "estimate_minutes",
+              "closed_estimate_minutes"
+            ],
+            "type": "object"
+          },
+          "SprintState": {
+            "description": "Where a sprint stands.",
+            "oneOf": [
+              {
+                "const": "planned",
+                "description": "Being planned; not started yet (the default).",
+                "type": "string"
+              },
+              {
+                "const": "active",
+                "description": "Running: started and not completed. One per project at most.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Completed.",
+                "type": "string"
+              }
+            ]
+          },
+          "SprintTask": {
+            "additionalProperties": false,
+            "description": "A task of a sprint or of the backlog, as the sprints page lists it.",
+            "properties": {
+              "closed": {
+                "description": "Whether it is closed (done or cancelled).",
+                "type": "boolean"
+              },
+              "estimate_minutes": {
+                "description": "Its estimate in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "Its key.",
+                "type": "string"
+              },
+              "parent": {
+                "description": "The parent task's key, for a subtask.",
+                "type": "string"
+              },
+              "priority": {
+                "$ref": "#/$defs/Priority",
+                "description": "Its priority."
+              },
+              "status": {
+                "$ref": "#/$defs/StatusRef",
+                "description": "Its status."
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              },
+              "type": {
+                "description": "Its type's name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "status",
+              "closed",
+              "type",
+              "priority",
+              "id"
+            ],
+            "type": "object"
+          },
+          "StatusRef": {
+            "additionalProperties": false,
+            "description": "A task's status, as tasks carry it.",
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/Category",
+                "description": "Its category."
+              },
+              "id": {
+                "description": "The status's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "category"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A sprint after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether it was deleted.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "sprint": {
+            "$ref": "#/$defs/Sprint",
+            "description": "The sprint after the change (before it, for a deletion); left out\nwhen tasks were only taken out of their sprints."
+          },
+          "tasks_changed": {
+            "description": "The keys of the tasks whose sprint changed: added, taken out, moved\non when it was completed, or cleared by a deletion.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "views_rewritten": {
+            "description": "The saved views whose query was rewritten because they named the\nsprint (renamed or deleted), by name.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "SprintChange",
+        "type": "object"
+      },
+      "output_name": "SprintChange",
+      "safety": "write",
+      "summary": "Start a planned sprint, with its dates; a project has one active sprint at a time."
+    },
+    {
+      "cli": "sprint complete <sprint>",
+      "exposure": "data",
+      "id": "sprint.complete",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Which sprint to complete, and where its unfinished tasks go.",
+        "properties": {
+          "move_open_tasks_to": {
+            "description": "Where its open tasks go: a planned sprint of the project (name or\nID), or `backlog` (the default) for no sprint. Closed tasks stay in\nthe completed sprint.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "project": {
+            "description": "With a name or `active`: the sprint's project (key or ID).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sprint": {
+            "description": "The sprint (active): its ID, its name, or `active`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sprint"
+        ],
+        "title": "SprintCompleteInput",
+        "type": "object"
+      },
+      "input_name": "SprintCompleteInput",
+      "kind": "command",
+      "mcp_tool": "complete_sprint",
+      "output": {
+        "$defs": {
+          "Category": {
+            "description": "What a status means for the work in it.",
+            "oneOf": [
+              {
+                "const": "todo",
+                "description": "Not started.",
+                "type": "string"
+              },
+              {
+                "const": "in_progress",
+                "description": "Being worked on.",
+                "type": "string"
+              },
+              {
+                "const": "done",
+                "description": "Finished; closes the task.",
+                "type": "string"
+              },
+              {
+                "const": "cancelled",
+                "description": "Dropped; closes the task.",
+                "type": "string"
+              }
+            ]
+          },
+          "Priority": {
+            "description": "A task's priority.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No priority (the default).",
+                "type": "string"
+              },
+              {
+                "const": "low",
+                "description": "Low.",
+                "type": "string"
+              },
+              {
+                "const": "normal",
+                "description": "Normal.",
+                "type": "string"
+              },
+              {
+                "const": "high",
+                "description": "High.",
+                "type": "string"
+              },
+              {
+                "const": "urgent",
+                "description": "Urgent.",
+                "type": "string"
+              }
+            ]
+          },
+          "Sprint": {
+            "additionalProperties": false,
+            "description": "A sprint.",
+            "properties": {
+              "completed_at": {
+                "description": "When it was completed (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "goal": {
+                "description": "What the sprint is meant to achieve: plain text.",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name, unique in its project (ignoring case).",
+                "type": "string"
+              },
+              "progress": {
+                "$ref": "#/$defs/SprintProgress",
+                "description": "Its progress."
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place among the project's sprints.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "started_at": {
+                "description": "When it was started (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "state": {
+                "$ref": "#/$defs/SprintState",
+                "description": "Where it stands."
+              },
+              "tasks": {
+                "description": "Its tasks, when asked for: by board order.",
+                "items": {
+                  "$ref": "#/$defs/SprintTask"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "description": "When it last changed.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "state",
+              "progress",
+              "rank",
+              "created_at",
+              "updated_at",
+              "id"
+            ],
+            "type": "object"
+          },
+          "SprintProgress": {
+            "additionalProperties": false,
+            "description": "How far a sprint has come.",
+            "properties": {
+              "closed": {
+                "description": "How many of them are closed.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "closed_estimate_minutes": {
+                "description": "The estimates of the closed ones, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "estimate_minutes": {
+                "description": "Their estimates added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "total": {
+                "description": "The tasks in it (not in the trash).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "total",
+              "closed",
+              "estimate_minutes",
+              "closed_estimate_minutes"
+            ],
+            "type": "object"
+          },
+          "SprintState": {
+            "description": "Where a sprint stands.",
+            "oneOf": [
+              {
+                "const": "planned",
+                "description": "Being planned; not started yet (the default).",
+                "type": "string"
+              },
+              {
+                "const": "active",
+                "description": "Running: started and not completed. One per project at most.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Completed.",
+                "type": "string"
+              }
+            ]
+          },
+          "SprintTask": {
+            "additionalProperties": false,
+            "description": "A task of a sprint or of the backlog, as the sprints page lists it.",
+            "properties": {
+              "closed": {
+                "description": "Whether it is closed (done or cancelled).",
+                "type": "boolean"
+              },
+              "estimate_minutes": {
+                "description": "Its estimate in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "Its key.",
+                "type": "string"
+              },
+              "parent": {
+                "description": "The parent task's key, for a subtask.",
+                "type": "string"
+              },
+              "priority": {
+                "$ref": "#/$defs/Priority",
+                "description": "Its priority."
+              },
+              "status": {
+                "$ref": "#/$defs/StatusRef",
+                "description": "Its status."
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              },
+              "type": {
+                "description": "Its type's name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "status",
+              "closed",
+              "type",
+              "priority",
+              "id"
+            ],
+            "type": "object"
+          },
+          "StatusRef": {
+            "additionalProperties": false,
+            "description": "A task's status, as tasks carry it.",
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/Category",
+                "description": "Its category."
+              },
+              "id": {
+                "description": "The status's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "category"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A sprint after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether it was deleted.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "sprint": {
+            "$ref": "#/$defs/Sprint",
+            "description": "The sprint after the change (before it, for a deletion); left out\nwhen tasks were only taken out of their sprints."
+          },
+          "tasks_changed": {
+            "description": "The keys of the tasks whose sprint changed: added, taken out, moved\non when it was completed, or cleared by a deletion.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "views_rewritten": {
+            "description": "The saved views whose query was rewritten because they named the\nsprint (renamed or deleted), by name.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "SprintChange",
+        "type": "object"
+      },
+      "output_name": "SprintChange",
+      "safety": "write",
+      "summary": "Complete the active sprint and move its open tasks to a planned sprint or back to the backlog."
+    },
+    {
+      "cli": "sprint add <sprint>",
+      "exposure": "data",
+      "id": "sprint.add_tasks",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Tasks to put in a sprint.",
+        "properties": {
+          "project": {
+            "description": "With a name or `active`: the sprint's project (key or ID).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sprint": {
+            "description": "The sprint (planned or active): its ID, its name, or `active`.",
+            "type": "string"
+          },
+          "tasks": {
+            "description": "The tasks (keys or IDs), of the sprint's project; up to 500. A task\nin another sprint moves to this one.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "sprint",
+          "tasks"
+        ],
+        "title": "SprintAddTasksInput",
+        "type": "object"
+      },
+      "input_name": "SprintAddTasksInput",
+      "kind": "command",
+      "mcp_tool": "add_tasks_to_sprint",
+      "output": {
+        "$defs": {
+          "Category": {
+            "description": "What a status means for the work in it.",
+            "oneOf": [
+              {
+                "const": "todo",
+                "description": "Not started.",
+                "type": "string"
+              },
+              {
+                "const": "in_progress",
+                "description": "Being worked on.",
+                "type": "string"
+              },
+              {
+                "const": "done",
+                "description": "Finished; closes the task.",
+                "type": "string"
+              },
+              {
+                "const": "cancelled",
+                "description": "Dropped; closes the task.",
+                "type": "string"
+              }
+            ]
+          },
+          "Priority": {
+            "description": "A task's priority.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No priority (the default).",
+                "type": "string"
+              },
+              {
+                "const": "low",
+                "description": "Low.",
+                "type": "string"
+              },
+              {
+                "const": "normal",
+                "description": "Normal.",
+                "type": "string"
+              },
+              {
+                "const": "high",
+                "description": "High.",
+                "type": "string"
+              },
+              {
+                "const": "urgent",
+                "description": "Urgent.",
+                "type": "string"
+              }
+            ]
+          },
+          "Sprint": {
+            "additionalProperties": false,
+            "description": "A sprint.",
+            "properties": {
+              "completed_at": {
+                "description": "When it was completed (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "goal": {
+                "description": "What the sprint is meant to achieve: plain text.",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name, unique in its project (ignoring case).",
+                "type": "string"
+              },
+              "progress": {
+                "$ref": "#/$defs/SprintProgress",
+                "description": "Its progress."
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place among the project's sprints.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "started_at": {
+                "description": "When it was started (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "state": {
+                "$ref": "#/$defs/SprintState",
+                "description": "Where it stands."
+              },
+              "tasks": {
+                "description": "Its tasks, when asked for: by board order.",
+                "items": {
+                  "$ref": "#/$defs/SprintTask"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "description": "When it last changed.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "state",
+              "progress",
+              "rank",
+              "created_at",
+              "updated_at",
+              "id"
+            ],
+            "type": "object"
+          },
+          "SprintProgress": {
+            "additionalProperties": false,
+            "description": "How far a sprint has come.",
+            "properties": {
+              "closed": {
+                "description": "How many of them are closed.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "closed_estimate_minutes": {
+                "description": "The estimates of the closed ones, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "estimate_minutes": {
+                "description": "Their estimates added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "total": {
+                "description": "The tasks in it (not in the trash).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "total",
+              "closed",
+              "estimate_minutes",
+              "closed_estimate_minutes"
+            ],
+            "type": "object"
+          },
+          "SprintState": {
+            "description": "Where a sprint stands.",
+            "oneOf": [
+              {
+                "const": "planned",
+                "description": "Being planned; not started yet (the default).",
+                "type": "string"
+              },
+              {
+                "const": "active",
+                "description": "Running: started and not completed. One per project at most.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Completed.",
+                "type": "string"
+              }
+            ]
+          },
+          "SprintTask": {
+            "additionalProperties": false,
+            "description": "A task of a sprint or of the backlog, as the sprints page lists it.",
+            "properties": {
+              "closed": {
+                "description": "Whether it is closed (done or cancelled).",
+                "type": "boolean"
+              },
+              "estimate_minutes": {
+                "description": "Its estimate in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "Its key.",
+                "type": "string"
+              },
+              "parent": {
+                "description": "The parent task's key, for a subtask.",
+                "type": "string"
+              },
+              "priority": {
+                "$ref": "#/$defs/Priority",
+                "description": "Its priority."
+              },
+              "status": {
+                "$ref": "#/$defs/StatusRef",
+                "description": "Its status."
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              },
+              "type": {
+                "description": "Its type's name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "status",
+              "closed",
+              "type",
+              "priority",
+              "id"
+            ],
+            "type": "object"
+          },
+          "StatusRef": {
+            "additionalProperties": false,
+            "description": "A task's status, as tasks carry it.",
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/Category",
+                "description": "Its category."
+              },
+              "id": {
+                "description": "The status's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "category"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A sprint after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether it was deleted.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "sprint": {
+            "$ref": "#/$defs/Sprint",
+            "description": "The sprint after the change (before it, for a deletion); left out\nwhen tasks were only taken out of their sprints."
+          },
+          "tasks_changed": {
+            "description": "The keys of the tasks whose sprint changed: added, taken out, moved\non when it was completed, or cleared by a deletion.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "views_rewritten": {
+            "description": "The saved views whose query was rewritten because they named the\nsprint (renamed or deleted), by name.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "SprintChange",
+        "type": "object"
+      },
+      "output_name": "SprintChange",
+      "safety": "write",
+      "summary": "Put tasks in a planned or active sprint of their project, moving them from any other sprint."
+    },
+    {
+      "cli": "sprint remove",
+      "exposure": "data",
+      "id": "sprint.remove_tasks",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Tasks to take out of their sprint, back to the backlog.",
+        "properties": {
+          "tasks": {
+            "description": "The tasks (keys or IDs); up to 500. Tasks in no sprint are left\nas they are.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "tasks"
+        ],
+        "title": "SprintRemoveTasksInput",
+        "type": "object"
+      },
+      "input_name": "SprintRemoveTasksInput",
+      "kind": "command",
+      "mcp_tool": "remove_tasks_from_sprint",
+      "output": {
+        "$defs": {
+          "Category": {
+            "description": "What a status means for the work in it.",
+            "oneOf": [
+              {
+                "const": "todo",
+                "description": "Not started.",
+                "type": "string"
+              },
+              {
+                "const": "in_progress",
+                "description": "Being worked on.",
+                "type": "string"
+              },
+              {
+                "const": "done",
+                "description": "Finished; closes the task.",
+                "type": "string"
+              },
+              {
+                "const": "cancelled",
+                "description": "Dropped; closes the task.",
+                "type": "string"
+              }
+            ]
+          },
+          "Priority": {
+            "description": "A task's priority.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No priority (the default).",
+                "type": "string"
+              },
+              {
+                "const": "low",
+                "description": "Low.",
+                "type": "string"
+              },
+              {
+                "const": "normal",
+                "description": "Normal.",
+                "type": "string"
+              },
+              {
+                "const": "high",
+                "description": "High.",
+                "type": "string"
+              },
+              {
+                "const": "urgent",
+                "description": "Urgent.",
+                "type": "string"
+              }
+            ]
+          },
+          "Sprint": {
+            "additionalProperties": false,
+            "description": "A sprint.",
+            "properties": {
+              "completed_at": {
+                "description": "When it was completed (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "created_at": {
+                "description": "When it was created (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "goal": {
+                "description": "What the sprint is meant to achieve: plain text.",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name, unique in its project (ignoring case).",
+                "type": "string"
+              },
+              "progress": {
+                "$ref": "#/$defs/SprintProgress",
+                "description": "Its progress."
+              },
+              "project": {
+                "description": "The key of the project it belongs to.",
+                "type": "string"
+              },
+              "rank": {
+                "description": "Its place among the project's sprints.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "started_at": {
+                "description": "When it was started (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "state": {
+                "$ref": "#/$defs/SprintState",
+                "description": "Where it stands."
+              },
+              "tasks": {
+                "description": "Its tasks, when asked for: by board order.",
+                "items": {
+                  "$ref": "#/$defs/SprintTask"
+                },
+                "type": "array"
+              },
+              "updated_at": {
+                "description": "When it last changed.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "project",
+              "state",
+              "progress",
+              "rank",
+              "created_at",
+              "updated_at",
+              "id"
+            ],
+            "type": "object"
+          },
+          "SprintProgress": {
+            "additionalProperties": false,
+            "description": "How far a sprint has come.",
+            "properties": {
+              "closed": {
+                "description": "How many of them are closed.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "closed_estimate_minutes": {
+                "description": "The estimates of the closed ones, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "estimate_minutes": {
+                "description": "Their estimates added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "total": {
+                "description": "The tasks in it (not in the trash).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "total",
+              "closed",
+              "estimate_minutes",
+              "closed_estimate_minutes"
+            ],
+            "type": "object"
+          },
+          "SprintState": {
+            "description": "Where a sprint stands.",
+            "oneOf": [
+              {
+                "const": "planned",
+                "description": "Being planned; not started yet (the default).",
+                "type": "string"
+              },
+              {
+                "const": "active",
+                "description": "Running: started and not completed. One per project at most.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Completed.",
+                "type": "string"
+              }
+            ]
+          },
+          "SprintTask": {
+            "additionalProperties": false,
+            "description": "A task of a sprint or of the backlog, as the sprints page lists it.",
+            "properties": {
+              "closed": {
+                "description": "Whether it is closed (done or cancelled).",
+                "type": "boolean"
+              },
+              "estimate_minutes": {
+                "description": "Its estimate in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "key": {
+                "description": "Its key.",
+                "type": "string"
+              },
+              "parent": {
+                "description": "The parent task's key, for a subtask.",
+                "type": "string"
+              },
+              "priority": {
+                "$ref": "#/$defs/Priority",
+                "description": "Its priority."
+              },
+              "status": {
+                "$ref": "#/$defs/StatusRef",
+                "description": "Its status."
+              },
+              "title": {
+                "description": "Its title.",
+                "type": "string"
+              },
+              "type": {
+                "description": "Its type's name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "status",
+              "closed",
+              "type",
+              "priority",
+              "id"
+            ],
+            "type": "object"
+          },
+          "StatusRef": {
+            "additionalProperties": false,
+            "description": "A task's status, as tasks carry it.",
+            "properties": {
+              "category": {
+                "$ref": "#/$defs/Category",
+                "description": "Its category."
+              },
+              "id": {
+                "description": "The status's ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "category"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A sprint after a change.",
+        "properties": {
+          "deleted": {
+            "description": "Whether it was deleted.",
+            "type": "boolean"
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "sprint": {
+            "$ref": "#/$defs/Sprint",
+            "description": "The sprint after the change (before it, for a deletion); left out\nwhen tasks were only taken out of their sprints."
+          },
+          "tasks_changed": {
+            "description": "The keys of the tasks whose sprint changed: added, taken out, moved\non when it was completed, or cleared by a deletion.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "views_rewritten": {
+            "description": "The saved views whose query was rewritten because they named the\nsprint (renamed or deleted), by name.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "SprintChange",
+        "type": "object"
+      },
+      "output_name": "SprintChange",
+      "safety": "write",
+      "summary": "Take tasks out of their sprint, back to the backlog."
+    },
+    {
+      "cli": "sprint burndown <sprint>",
+      "exposure": "data",
+      "id": "sprint.burndown",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Which sprint's burndown to read.",
+        "properties": {
+          "project": {
+            "description": "With a name or `active`: the sprint's project (key or ID).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sprint": {
+            "description": "The sprint (active or closed): its ID, its name, or `active`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sprint"
+        ],
+        "title": "SprintBurndownInput",
+        "type": "object"
+      },
+      "input_name": "SprintBurndownInput",
+      "kind": "query",
+      "mcp_tool": "get_sprint_burndown",
+      "output": {
+        "$defs": {
+          "BurndownDay": {
+            "additionalProperties": false,
+            "description": "One day of a burndown, as it stood at the end of the day (or at the\nmoment the sprint was completed, on that day).",
+            "properties": {
+              "date": {
+                "description": "The day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "open_estimate_minutes": {
+                "description": "The open tasks' estimates added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "open_tasks": {
+                "description": "The tasks in the sprint that were still open.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "total_estimate_minutes": {
+                "description": "All the tasks' estimates added up, in minutes.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "total_tasks": {
+                "description": "All the tasks in the sprint, open or closed (its scope).",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "date",
+              "open_tasks",
+              "total_tasks",
+              "open_estimate_minutes",
+              "total_estimate_minutes"
+            ],
+            "type": "object"
+          },
+          "SprintRef": {
+            "additionalProperties": false,
+            "description": "A sprint as a task shows it.",
+            "properties": {
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "state": {
+                "$ref": "#/$defs/SprintState",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "state",
+              "id"
+            ],
+            "type": "object"
+          },
+          "SprintState": {
+            "description": "Where a sprint stands.",
+            "oneOf": [
+              {
+                "const": "planned",
+                "description": "Being planned; not started yet (the default).",
+                "type": "string"
+              },
+              {
+                "const": "active",
+                "description": "Running: started and not completed. One per project at most.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Completed.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "How a sprint's open work went down, day by day.",
+        "properties": {
+          "days": {
+            "description": "Its days from the first to the last (or to today, for an active\nsprint that runs over); days still to come are left out.",
+            "items": {
+              "$ref": "#/$defs/BurndownDay"
+            },
+            "type": "array"
+          },
+          "sprint": {
+            "$ref": "#/$defs/SprintRef",
+            "description": "The sprint."
+          },
+          "start_estimate_minutes": {
+            "description": "The estimates at the start, in minutes.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "start_tasks": {
+            "description": "The work at the start: the first day's totals.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sprint",
+          "days",
+          "start_tasks",
+          "start_estimate_minutes"
+        ],
+        "title": "SprintBurndown",
+        "type": "object"
+      },
+      "output_name": "SprintBurndown",
+      "safety": "read",
+      "summary": "The burndown of an active or closed sprint: its open and total tasks and estimates at the end of each day."
+    },
+    {
       "cli": "field list",
       "exposure": "data",
       "id": "field.list",
@@ -17101,6 +20378,10 @@
                 "format": "int64",
                 "type": "integer"
               },
+              "sprint": {
+                "$ref": "#/$defs/SprintRef",
+                "description": "The sprint it is in."
+              },
               "start_date": {
                 "description": "The start date.",
                 "type": "string"
@@ -17181,6 +20462,58 @@
               {
                 "const": "urgent",
                 "description": "Urgent.",
+                "type": "string"
+              }
+            ]
+          },
+          "SprintRef": {
+            "additionalProperties": false,
+            "description": "A sprint as a task shows it.",
+            "properties": {
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "state": {
+                "$ref": "#/$defs/SprintState",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "state",
+              "id"
+            ],
+            "type": "object"
+          },
+          "SprintState": {
+            "description": "Where a sprint stands.",
+            "oneOf": [
+              {
+                "const": "planned",
+                "description": "Being planned; not started yet (the default).",
+                "type": "string"
+              },
+              {
+                "const": "active",
+                "description": "Running: started and not completed. One per project at most.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Completed.",
                 "type": "string"
               }
             ]
@@ -17482,6 +20815,10 @@
               "comment": {
                 "description": "The comment's ID, for a file attached to a comment.",
                 "type": "string"
+              },
+              "cover": {
+                "description": "Whether it is chosen as its task's cover on the board.",
+                "type": "boolean"
               },
               "created_at": {
                 "description": "When it was attached (RFC 3339, UTC).",
@@ -18486,6 +21823,58 @@
               }
             ]
           },
+          "SprintRef": {
+            "additionalProperties": false,
+            "description": "A sprint as a task shows it.",
+            "properties": {
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "state": {
+                "$ref": "#/$defs/SprintState",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "state",
+              "id"
+            ],
+            "type": "object"
+          },
+          "SprintState": {
+            "description": "Where a sprint stands.",
+            "oneOf": [
+              {
+                "const": "planned",
+                "description": "Being planned; not started yet (the default).",
+                "type": "string"
+              },
+              {
+                "const": "active",
+                "description": "Running: started and not completed. One per project at most.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Completed.",
+                "type": "string"
+              }
+            ]
+          },
           "StatusRef": {
             "additionalProperties": false,
             "description": "A task's status, as tasks carry it.",
@@ -18705,6 +22094,10 @@
                 "description": "Logged time in minutes.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "sprint": {
+                "$ref": "#/$defs/SprintRef",
+                "description": "The sprint it is in."
               },
               "start_date": {
                 "description": "The start date.",
@@ -19270,6 +22663,13 @@
             "description": "The project: its key (current or old) or ID.",
             "type": "string"
           },
+          "sprint": {
+            "description": "The sprint it goes in (name or ID, or `active`): a planned or active\nsprint of the project.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "start_date": {
             "description": "The start date: `YYYY-MM-DD`, or `today`, `fri`, `next mon`, `+3d`,\n`in 2 weeks`, `dec 1`, in the workspace's time zone.",
             "type": [
@@ -19353,6 +22753,10 @@
               "comment": {
                 "description": "The comment's ID, for a file attached to a comment.",
                 "type": "string"
+              },
+              "cover": {
+                "description": "Whether it is chosen as its task's cover on the board.",
+                "type": "boolean"
               },
               "created_at": {
                 "description": "When it was attached (RFC 3339, UTC).",
@@ -20437,6 +23841,58 @@
               }
             ]
           },
+          "SprintRef": {
+            "additionalProperties": false,
+            "description": "A sprint as a task shows it.",
+            "properties": {
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "state": {
+                "$ref": "#/$defs/SprintState",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "state",
+              "id"
+            ],
+            "type": "object"
+          },
+          "SprintState": {
+            "description": "Where a sprint stands.",
+            "oneOf": [
+              {
+                "const": "planned",
+                "description": "Being planned; not started yet (the default).",
+                "type": "string"
+              },
+              {
+                "const": "active",
+                "description": "Running: started and not completed. One per project at most.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Completed.",
+                "type": "string"
+              }
+            ]
+          },
           "StatusRef": {
             "additionalProperties": false,
             "description": "A task's status, as tasks carry it.",
@@ -20656,6 +24112,10 @@
                 "description": "Logged time in minutes.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "sprint": {
+                "$ref": "#/$defs/SprintRef",
+                "description": "The sprint it is in."
               },
               "start_date": {
                 "description": "The start date.",
@@ -21218,6 +24678,11 @@
                 "const": "fix_version",
                 "description": "The version it is planned for.",
                 "type": "string"
+              },
+              {
+                "const": "sprint",
+                "description": "The sprint it is in (back to the backlog).",
+                "type": "string"
               }
             ]
           },
@@ -21384,6 +24849,13 @@
             ],
             "description": "Resolve a conflict copy of the description."
           },
+          "sprint": {
+            "description": "Put it in this sprint (name or ID, or `active`): a planned or active\nsprint of the project.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "start_date": {
             "description": "A new start date: `YYYY-MM-DD`, or a natural date such as `fri` or\n`in 3d`.",
             "type": [
@@ -21462,6 +24934,10 @@
               "comment": {
                 "description": "The comment's ID, for a file attached to a comment.",
                 "type": "string"
+              },
+              "cover": {
+                "description": "Whether it is chosen as its task's cover on the board.",
+                "type": "boolean"
               },
               "created_at": {
                 "description": "When it was attached (RFC 3339, UTC).",
@@ -22546,6 +26022,58 @@
               }
             ]
           },
+          "SprintRef": {
+            "additionalProperties": false,
+            "description": "A sprint as a task shows it.",
+            "properties": {
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "state": {
+                "$ref": "#/$defs/SprintState",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "state",
+              "id"
+            ],
+            "type": "object"
+          },
+          "SprintState": {
+            "description": "Where a sprint stands.",
+            "oneOf": [
+              {
+                "const": "planned",
+                "description": "Being planned; not started yet (the default).",
+                "type": "string"
+              },
+              {
+                "const": "active",
+                "description": "Running: started and not completed. One per project at most.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Completed.",
+                "type": "string"
+              }
+            ]
+          },
           "StatusRef": {
             "additionalProperties": false,
             "description": "A task's status, as tasks carry it.",
@@ -22765,6 +26293,10 @@
                 "description": "Logged time in minutes.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "sprint": {
+                "$ref": "#/$defs/SprintRef",
+                "description": "The sprint it is in."
               },
               "start_date": {
                 "description": "The start date.",
@@ -23387,6 +26919,10 @@
                 "description": "The comment's ID, for a file attached to a comment.",
                 "type": "string"
               },
+              "cover": {
+                "description": "Whether it is chosen as its task's cover on the board.",
+                "type": "boolean"
+              },
               "created_at": {
                 "description": "When it was attached (RFC 3339, UTC).",
                 "type": "string"
@@ -24470,6 +28006,58 @@
               }
             ]
           },
+          "SprintRef": {
+            "additionalProperties": false,
+            "description": "A sprint as a task shows it.",
+            "properties": {
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "state": {
+                "$ref": "#/$defs/SprintState",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "state",
+              "id"
+            ],
+            "type": "object"
+          },
+          "SprintState": {
+            "description": "Where a sprint stands.",
+            "oneOf": [
+              {
+                "const": "planned",
+                "description": "Being planned; not started yet (the default).",
+                "type": "string"
+              },
+              {
+                "const": "active",
+                "description": "Running: started and not completed. One per project at most.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Completed.",
+                "type": "string"
+              }
+            ]
+          },
           "StatusRef": {
             "additionalProperties": false,
             "description": "A task's status, as tasks carry it.",
@@ -24689,6 +28277,10 @@
                 "description": "Logged time in minutes.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "sprint": {
+                "$ref": "#/$defs/SprintRef",
+                "description": "The sprint it is in."
               },
               "start_date": {
                 "description": "The start date.",
@@ -25639,6 +29231,13 @@
                   "null"
                 ]
               },
+              "sprint": {
+                "description": "Put them in the sprint of this name (in each task's project), or\n`active` for each project's active sprint.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "start_date": {
                 "description": "The start date: `YYYY-MM-DD`, or `today`, `fri`, `next mon`, `+3d`.",
                 "type": [
@@ -25762,6 +29361,11 @@
               {
                 "const": "fix_version",
                 "description": "The version it is planned for.",
+                "type": "string"
+              },
+              {
+                "const": "sprint",
+                "description": "The sprint it is in (back to the backlog).",
                 "type": "string"
               }
             ]
@@ -26044,6 +29648,10 @@
               "comment": {
                 "description": "The comment's ID, for a file attached to a comment.",
                 "type": "string"
+              },
+              "cover": {
+                "description": "Whether it is chosen as its task's cover on the board.",
+                "type": "boolean"
               },
               "created_at": {
                 "description": "When it was attached (RFC 3339, UTC).",
@@ -27128,6 +30736,58 @@
               }
             ]
           },
+          "SprintRef": {
+            "additionalProperties": false,
+            "description": "A sprint as a task shows it.",
+            "properties": {
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "state": {
+                "$ref": "#/$defs/SprintState",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "state",
+              "id"
+            ],
+            "type": "object"
+          },
+          "SprintState": {
+            "description": "Where a sprint stands.",
+            "oneOf": [
+              {
+                "const": "planned",
+                "description": "Being planned; not started yet (the default).",
+                "type": "string"
+              },
+              {
+                "const": "active",
+                "description": "Running: started and not completed. One per project at most.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Completed.",
+                "type": "string"
+              }
+            ]
+          },
           "StatusRef": {
             "additionalProperties": false,
             "description": "A task's status, as tasks carry it.",
@@ -27347,6 +31007,10 @@
                 "description": "Logged time in minutes.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "sprint": {
+                "$ref": "#/$defs/SprintRef",
+                "description": "The sprint it is in."
               },
               "start_date": {
                 "description": "The start date.",
@@ -27902,6 +31566,10 @@
                 "description": "The comment's ID, for a file attached to a comment.",
                 "type": "string"
               },
+              "cover": {
+                "description": "Whether it is chosen as its task's cover on the board.",
+                "type": "boolean"
+              },
               "created_at": {
                 "description": "When it was attached (RFC 3339, UTC).",
                 "type": "string"
@@ -28985,6 +32653,58 @@
               }
             ]
           },
+          "SprintRef": {
+            "additionalProperties": false,
+            "description": "A sprint as a task shows it.",
+            "properties": {
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "state": {
+                "$ref": "#/$defs/SprintState",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "state",
+              "id"
+            ],
+            "type": "object"
+          },
+          "SprintState": {
+            "description": "Where a sprint stands.",
+            "oneOf": [
+              {
+                "const": "planned",
+                "description": "Being planned; not started yet (the default).",
+                "type": "string"
+              },
+              {
+                "const": "active",
+                "description": "Running: started and not completed. One per project at most.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Completed.",
+                "type": "string"
+              }
+            ]
+          },
           "StatusRef": {
             "additionalProperties": false,
             "description": "A task's status, as tasks carry it.",
@@ -29204,6 +32924,10 @@
                 "description": "Logged time in minutes.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "sprint": {
+                "$ref": "#/$defs/SprintRef",
+                "description": "The sprint it is in."
               },
               "start_date": {
                 "description": "The start date.",
@@ -29996,6 +33720,10 @@
                 "description": "The comment's ID, for a file attached to a comment.",
                 "type": "string"
               },
+              "cover": {
+                "description": "Whether it is chosen as its task's cover on the board.",
+                "type": "boolean"
+              },
               "created_at": {
                 "description": "When it was attached (RFC 3339, UTC).",
                 "type": "string"
@@ -31079,6 +34807,58 @@
               }
             ]
           },
+          "SprintRef": {
+            "additionalProperties": false,
+            "description": "A sprint as a task shows it.",
+            "properties": {
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "state": {
+                "$ref": "#/$defs/SprintState",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "state",
+              "id"
+            ],
+            "type": "object"
+          },
+          "SprintState": {
+            "description": "Where a sprint stands.",
+            "oneOf": [
+              {
+                "const": "planned",
+                "description": "Being planned; not started yet (the default).",
+                "type": "string"
+              },
+              {
+                "const": "active",
+                "description": "Running: started and not completed. One per project at most.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Completed.",
+                "type": "string"
+              }
+            ]
+          },
           "StatusRef": {
             "additionalProperties": false,
             "description": "A task's status, as tasks carry it.",
@@ -31298,6 +35078,10 @@
                 "description": "Logged time in minutes.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "sprint": {
+                "$ref": "#/$defs/SprintRef",
+                "description": "The sprint it is in."
               },
               "start_date": {
                 "description": "The start date.",
@@ -31833,6 +35617,10 @@
                 "description": "The comment's ID, for a file attached to a comment.",
                 "type": "string"
               },
+              "cover": {
+                "description": "Whether it is chosen as its task's cover on the board.",
+                "type": "boolean"
+              },
               "created_at": {
                 "description": "When it was attached (RFC 3339, UTC).",
                 "type": "string"
@@ -32916,6 +36704,58 @@
               }
             ]
           },
+          "SprintRef": {
+            "additionalProperties": false,
+            "description": "A sprint as a task shows it.",
+            "properties": {
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "state": {
+                "$ref": "#/$defs/SprintState",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "state",
+              "id"
+            ],
+            "type": "object"
+          },
+          "SprintState": {
+            "description": "Where a sprint stands.",
+            "oneOf": [
+              {
+                "const": "planned",
+                "description": "Being planned; not started yet (the default).",
+                "type": "string"
+              },
+              {
+                "const": "active",
+                "description": "Running: started and not completed. One per project at most.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Completed.",
+                "type": "string"
+              }
+            ]
+          },
           "StatusRef": {
             "additionalProperties": false,
             "description": "A task's status, as tasks carry it.",
@@ -33135,6 +36975,10 @@
                 "description": "Logged time in minutes.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "sprint": {
+                "$ref": "#/$defs/SprintRef",
+                "description": "The sprint it is in."
               },
               "start_date": {
                 "description": "The start date.",
@@ -33663,6 +37507,10 @@
                 "description": "The comment's ID, for a file attached to a comment.",
                 "type": "string"
               },
+              "cover": {
+                "description": "Whether it is chosen as its task's cover on the board.",
+                "type": "boolean"
+              },
               "created_at": {
                 "description": "When it was attached (RFC 3339, UTC).",
                 "type": "string"
@@ -34746,6 +38594,58 @@
               }
             ]
           },
+          "SprintRef": {
+            "additionalProperties": false,
+            "description": "A sprint as a task shows it.",
+            "properties": {
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "state": {
+                "$ref": "#/$defs/SprintState",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "state",
+              "id"
+            ],
+            "type": "object"
+          },
+          "SprintState": {
+            "description": "Where a sprint stands.",
+            "oneOf": [
+              {
+                "const": "planned",
+                "description": "Being planned; not started yet (the default).",
+                "type": "string"
+              },
+              {
+                "const": "active",
+                "description": "Running: started and not completed. One per project at most.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Completed.",
+                "type": "string"
+              }
+            ]
+          },
           "StatusRef": {
             "additionalProperties": false,
             "description": "A task's status, as tasks carry it.",
@@ -34965,6 +38865,10 @@
                 "description": "Logged time in minutes.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "sprint": {
+                "$ref": "#/$defs/SprintRef",
+                "description": "The sprint it is in."
               },
               "start_date": {
                 "description": "The start date.",
@@ -35544,6 +39448,10 @@
                 "description": "The comment's ID, for a file attached to a comment.",
                 "type": "string"
               },
+              "cover": {
+                "description": "Whether it is chosen as its task's cover on the board.",
+                "type": "boolean"
+              },
               "created_at": {
                 "description": "When it was attached (RFC 3339, UTC).",
                 "type": "string"
@@ -36627,6 +40535,58 @@
               }
             ]
           },
+          "SprintRef": {
+            "additionalProperties": false,
+            "description": "A sprint as a task shows it.",
+            "properties": {
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "state": {
+                "$ref": "#/$defs/SprintState",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "state",
+              "id"
+            ],
+            "type": "object"
+          },
+          "SprintState": {
+            "description": "Where a sprint stands.",
+            "oneOf": [
+              {
+                "const": "planned",
+                "description": "Being planned; not started yet (the default).",
+                "type": "string"
+              },
+              {
+                "const": "active",
+                "description": "Running: started and not completed. One per project at most.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Completed.",
+                "type": "string"
+              }
+            ]
+          },
           "StatusRef": {
             "additionalProperties": false,
             "description": "A task's status, as tasks carry it.",
@@ -36846,6 +40806,10 @@
                 "description": "Logged time in minutes.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "sprint": {
+                "$ref": "#/$defs/SprintRef",
+                "description": "The sprint it is in."
               },
               "start_date": {
                 "description": "The start date.",
@@ -37425,6 +41389,10 @@
                 "description": "The comment's ID, for a file attached to a comment.",
                 "type": "string"
               },
+              "cover": {
+                "description": "Whether it is chosen as its task's cover on the board.",
+                "type": "boolean"
+              },
               "created_at": {
                 "description": "When it was attached (RFC 3339, UTC).",
                 "type": "string"
@@ -38508,6 +42476,58 @@
               }
             ]
           },
+          "SprintRef": {
+            "additionalProperties": false,
+            "description": "A sprint as a task shows it.",
+            "properties": {
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "state": {
+                "$ref": "#/$defs/SprintState",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "state",
+              "id"
+            ],
+            "type": "object"
+          },
+          "SprintState": {
+            "description": "Where a sprint stands.",
+            "oneOf": [
+              {
+                "const": "planned",
+                "description": "Being planned; not started yet (the default).",
+                "type": "string"
+              },
+              {
+                "const": "active",
+                "description": "Running: started and not completed. One per project at most.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Completed.",
+                "type": "string"
+              }
+            ]
+          },
           "StatusRef": {
             "additionalProperties": false,
             "description": "A task's status, as tasks carry it.",
@@ -38727,6 +42747,10 @@
                 "description": "Logged time in minutes.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "sprint": {
+                "$ref": "#/$defs/SprintRef",
+                "description": "The sprint it is in."
               },
               "start_date": {
                 "description": "The start date.",
@@ -43472,6 +47496,10 @@
                 "description": "The comment's ID, for a file attached to a comment.",
                 "type": "string"
               },
+              "cover": {
+                "description": "Whether it is chosen as its task's cover on the board.",
+                "type": "boolean"
+              },
               "created_at": {
                 "description": "When it was attached (RFC 3339, UTC).",
                 "type": "string"
@@ -44753,6 +48781,58 @@
             ],
             "type": "object"
           },
+          "SprintRef": {
+            "additionalProperties": false,
+            "description": "A sprint as a task shows it.",
+            "properties": {
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "state": {
+                "$ref": "#/$defs/SprintState",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "state",
+              "id"
+            ],
+            "type": "object"
+          },
+          "SprintState": {
+            "description": "Where a sprint stands.",
+            "oneOf": [
+              {
+                "const": "planned",
+                "description": "Being planned; not started yet (the default).",
+                "type": "string"
+              },
+              {
+                "const": "active",
+                "description": "Running: started and not completed. One per project at most.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Completed.",
+                "type": "string"
+              }
+            ]
+          },
           "Status": {
             "additionalProperties": false,
             "description": "A status: one board column.",
@@ -45071,6 +49151,10 @@
                 "description": "Logged time in minutes.",
                 "format": "int64",
                 "type": "integer"
+              },
+              "sprint": {
+                "$ref": "#/$defs/SprintRef",
+                "description": "The sprint it is in."
               },
               "start_date": {
                 "description": "The start date.",
@@ -46159,6 +50243,10 @@
                 "description": "The comment's ID, for a file attached to a comment.",
                 "type": "string"
               },
+              "cover": {
+                "description": "Whether it is chosen as its task's cover on the board.",
+                "type": "boolean"
+              },
               "created_at": {
                 "description": "When it was attached (RFC 3339, UTC).",
                 "type": "string"
@@ -46490,6 +50578,10 @@
                 "description": "The comment's ID, for a file attached to a comment.",
                 "type": "string"
               },
+              "cover": {
+                "description": "Whether it is chosen as its task's cover on the board.",
+                "type": "boolean"
+              },
               "created_at": {
                 "description": "When it was attached (RFC 3339, UTC).",
                 "type": "string"
@@ -46815,6 +50907,10 @@
                 "description": "The comment's ID, for a file attached to a comment.",
                 "type": "string"
               },
+              "cover": {
+                "description": "Whether it is chosen as its task's cover on the board.",
+                "type": "boolean"
+              },
               "created_at": {
                 "description": "When it was attached (RFC 3339, UTC).",
                 "type": "string"
@@ -47126,6 +51222,10 @@
               "comment": {
                 "description": "The comment's ID, for a file attached to a comment.",
                 "type": "string"
+              },
+              "cover": {
+                "description": "Whether it is chosen as its task's cover on the board.",
+                "type": "boolean"
               },
               "created_at": {
                 "description": "When it was attached (RFC 3339, UTC).",
@@ -52518,6 +56618,10 @@
                 "format": "int64",
                 "type": "integer"
               },
+              "sprint": {
+                "$ref": "#/$defs/SprintRef",
+                "description": "The sprint it is in."
+              },
               "start_date": {
                 "description": "The start date.",
                 "type": "string"
@@ -52642,6 +56746,58 @@
               {
                 "const": "timer",
                 "description": "The timer has run for longer than the workspace's setting.",
+                "type": "string"
+              }
+            ]
+          },
+          "SprintRef": {
+            "additionalProperties": false,
+            "description": "A sprint as a task shows it.",
+            "properties": {
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "state": {
+                "$ref": "#/$defs/SprintState",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "state",
+              "id"
+            ],
+            "type": "object"
+          },
+          "SprintState": {
+            "description": "Where a sprint stands.",
+            "oneOf": [
+              {
+                "const": "planned",
+                "description": "Being planned; not started yet (the default).",
+                "type": "string"
+              },
+              {
+                "const": "active",
+                "description": "Running: started and not completed. One per project at most.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Completed.",
                 "type": "string"
               }
             ]
@@ -53068,12 +57224,30 @@
                 },
                 "type": "array"
               },
+              "colour_by": {
+                "$ref": "#/$defs/CardColourBy",
+                "default": "none",
+                "description": "What colours the edge of the cards."
+              },
+              "colour_rules": {
+                "default": [],
+                "description": "The colour rules for `colour_by: query`, in order; the first whose\nquery a card matches colours it.",
+                "items": {
+                  "$ref": "#/$defs/ColourRule"
+                },
+                "type": "array"
+              },
               "column_sort": {
                 "additionalProperties": {
                   "$ref": "#/$defs/SortMode"
                 },
                 "description": "Sort modes of single columns, by status ID.",
                 "type": "object"
+              },
+              "covers": {
+                "$ref": "#/$defs/CoverMode",
+                "default": "off",
+                "description": "Which image the cards show as their cover."
               },
               "hidden": {
                 "description": "Hidden columns, as status IDs.",
@@ -53112,7 +57286,10 @@
               "column_sort",
               "hide_done_after_days",
               "card_fields",
-              "include_subprojects"
+              "include_subprojects",
+              "colour_by",
+              "colour_rules",
+              "covers"
             ],
             "type": "object"
           },
@@ -53142,9 +57319,17 @@
                 "minimum": 0,
                 "type": "integer"
               },
+              "cover": {
+                "$ref": "#/$defs/CardCover",
+                "description": "Its cover image, as the layout's `covers` chooses; left out when it\nhas none."
+              },
               "due_date": {
                 "description": "The due date.",
                 "type": "string"
+              },
+              "edge": {
+                "$ref": "#/$defs/CardEdge",
+                "description": "Its coloured edge, as the layout's `colour_by` chooses; left out\nwhen it has none."
               },
               "estimate_minutes": {
                 "description": "The estimate in minutes.",
@@ -53209,6 +57394,10 @@
                 "format": "int64",
                 "type": "integer"
               },
+              "sprint": {
+                "$ref": "#/$defs/SprintRef",
+                "description": "The sprint it is in."
+              },
               "start_date": {
                 "description": "The start date.",
                 "type": "string"
@@ -53258,6 +57447,96 @@
               "updated_at",
               "version",
               "id"
+            ],
+            "type": "object"
+          },
+          "CardColourBy": {
+            "description": "What colours the edge of a card.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No coloured edge (the default).",
+                "type": "string"
+              },
+              {
+                "const": "type",
+                "description": "The colour of the task's type.",
+                "type": "string"
+              },
+              {
+                "const": "priority",
+                "description": "A colour for each priority: urgent red, high orange, normal blue,\nlow grey; none has no edge.",
+                "type": "string"
+              },
+              {
+                "const": "label",
+                "description": "The colour of the task's first label.",
+                "type": "string"
+              },
+              {
+                "const": "query",
+                "description": "The first of the layout's colour rules whose query the task matches.",
+                "type": "string"
+              }
+            ]
+          },
+          "CardCover": {
+            "additionalProperties": false,
+            "description": "The image a card shows as its cover.",
+            "properties": {
+              "attachment": {
+                "description": "The attachment's ID.",
+                "type": "string"
+              },
+              "height": {
+                "description": "Its height in pixels, when known.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "mime": {
+                "description": "Its media type.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its file name, for the image's text.",
+                "type": "string"
+              },
+              "width": {
+                "description": "Its width in pixels, when known.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "attachment",
+              "name",
+              "mime"
+            ],
+            "type": "object"
+          },
+          "CardEdge": {
+            "additionalProperties": false,
+            "description": "The coloured edge of a card and the rule that gave it.",
+            "properties": {
+              "by": {
+                "$ref": "#/$defs/CardColourBy",
+                "description": "What chose it."
+              },
+              "hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "The colour."
+              },
+              "name": {
+                "description": "What it stands for: the type's or label's name, the priority, or the\nrule's name (its query when it has none).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "hue",
+              "by",
+              "name"
             ],
             "type": "object"
           },
@@ -53330,6 +57609,29 @@
               "agent",
               "session",
               "until"
+            ],
+            "type": "object"
+          },
+          "ColourRule": {
+            "additionalProperties": false,
+            "description": "One colour rule: the cards a query matches get its colour.",
+            "properties": {
+              "hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "The colour of the cards it matches."
+              },
+              "name": {
+                "description": "A name for the rule, shown with the edge; empty shows the query.",
+                "type": "string"
+              },
+              "query": {
+                "description": "A query in the query language, such as `label:urgent due<today`.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "query",
+              "hue"
             ],
             "type": "object"
           },
@@ -53429,6 +57731,26 @@
               "cards"
             ],
             "type": "object"
+          },
+          "CoverMode": {
+            "description": "Which image a card shows as its cover.",
+            "oneOf": [
+              {
+                "const": "off",
+                "description": "No covers (the default).",
+                "type": "string"
+              },
+              {
+                "const": "chosen",
+                "description": "The image chosen as the task's cover (`file.cover`), if it has one.",
+                "type": "string"
+              },
+              {
+                "const": "first_image",
+                "description": "The chosen image, or else the task's first attached image.",
+                "type": "string"
+              }
+            ]
           },
           "Glyph": {
             "description": "The shape that shows a task's type.",
@@ -53594,6 +57916,58 @@
               }
             ]
           },
+          "SprintRef": {
+            "additionalProperties": false,
+            "description": "A sprint as a task shows it.",
+            "properties": {
+              "end_date": {
+                "description": "Its last day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Its ID.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Its name.",
+                "type": "string"
+              },
+              "start_date": {
+                "description": "Its first day (`YYYY-MM-DD`).",
+                "type": "string"
+              },
+              "state": {
+                "$ref": "#/$defs/SprintState",
+                "description": "Where it stands."
+              }
+            },
+            "required": [
+              "name",
+              "state",
+              "id"
+            ],
+            "type": "object"
+          },
+          "SprintState": {
+            "description": "Where a sprint stands.",
+            "oneOf": [
+              {
+                "const": "planned",
+                "description": "Being planned; not started yet (the default).",
+                "type": "string"
+              },
+              {
+                "const": "active",
+                "description": "Running: started and not completed. One per project at most.",
+                "type": "string"
+              },
+              {
+                "const": "closed",
+                "description": "Completed.",
+                "type": "string"
+              }
+            ]
+          },
           "TypeRef": {
             "additionalProperties": false,
             "description": "A task's type, as tasks carry it.",
@@ -53708,12 +58082,30 @@
                 },
                 "type": "array"
               },
+              "colour_by": {
+                "$ref": "#/$defs/CardColourBy",
+                "default": "none",
+                "description": "What colours the edge of the cards."
+              },
+              "colour_rules": {
+                "default": [],
+                "description": "The colour rules for `colour_by: query`, in order; the first whose\nquery a card matches colours it.",
+                "items": {
+                  "$ref": "#/$defs/ColourRule"
+                },
+                "type": "array"
+              },
               "column_sort": {
                 "additionalProperties": {
                   "$ref": "#/$defs/SortMode"
                 },
                 "description": "Sort modes of single columns, by status ID.",
                 "type": "object"
+              },
+              "covers": {
+                "$ref": "#/$defs/CoverMode",
+                "default": "off",
+                "description": "Which image the cards show as their cover."
               },
               "hidden": {
                 "description": "Hidden columns, as status IDs.",
@@ -53752,9 +58144,135 @@
               "column_sort",
               "hide_done_after_days",
               "card_fields",
-              "include_subprojects"
+              "include_subprojects",
+              "colour_by",
+              "colour_rules",
+              "covers"
             ],
             "type": "object"
+          },
+          "CardColourBy": {
+            "description": "What colours the edge of a card.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No coloured edge (the default).",
+                "type": "string"
+              },
+              {
+                "const": "type",
+                "description": "The colour of the task's type.",
+                "type": "string"
+              },
+              {
+                "const": "priority",
+                "description": "A colour for each priority: urgent red, high orange, normal blue,\nlow grey; none has no edge.",
+                "type": "string"
+              },
+              {
+                "const": "label",
+                "description": "The colour of the task's first label.",
+                "type": "string"
+              },
+              {
+                "const": "query",
+                "description": "The first of the layout's colour rules whose query the task matches.",
+                "type": "string"
+              }
+            ]
+          },
+          "ColourRule": {
+            "additionalProperties": false,
+            "description": "One colour rule: the cards a query matches get its colour.",
+            "properties": {
+              "hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "The colour of the cards it matches."
+              },
+              "name": {
+                "description": "A name for the rule, shown with the edge; empty shows the query.",
+                "type": "string"
+              },
+              "query": {
+                "description": "A query in the query language, such as `label:urgent due<today`.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "query",
+              "hue"
+            ],
+            "type": "object"
+          },
+          "CoverMode": {
+            "description": "Which image a card shows as its cover.",
+            "oneOf": [
+              {
+                "const": "off",
+                "description": "No covers (the default).",
+                "type": "string"
+              },
+              {
+                "const": "chosen",
+                "description": "The image chosen as the task's cover (`file.cover`), if it has one.",
+                "type": "string"
+              },
+              {
+                "const": "first_image",
+                "description": "The chosen image, or else the task's first attached image.",
+                "type": "string"
+              }
+            ]
+          },
+          "Hue": {
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
+            "oneOf": [
+              {
+                "const": "red",
+                "description": "Red.",
+                "type": "string"
+              },
+              {
+                "const": "orange",
+                "description": "Orange.",
+                "type": "string"
+              },
+              {
+                "const": "yellow",
+                "description": "Yellow.",
+                "type": "string"
+              },
+              {
+                "const": "green",
+                "description": "Green.",
+                "type": "string"
+              },
+              {
+                "const": "teal",
+                "description": "Teal.",
+                "type": "string"
+              },
+              {
+                "const": "blue",
+                "description": "Blue.",
+                "type": "string"
+              },
+              {
+                "const": "purple",
+                "description": "Purple.",
+                "type": "string"
+              },
+              {
+                "const": "pink",
+                "description": "Pink.",
+                "type": "string"
+              },
+              {
+                "const": "grey",
+                "description": "Grey.",
+                "type": "string"
+              }
+            ]
           },
           "SortMode": {
             "description": "How a column's cards are ordered.",
@@ -53808,7 +58326,7 @@
       },
       "output_name": "LayoutChange",
       "safety": "read",
-      "summary": "The person's layout of a project's board: column order, hidden and collapsed columns, sort modes, card fields."
+      "summary": "The person's layout of a project's board: column order, hidden and collapsed columns, sort modes, card fields, card colours and covers."
     },
     {
       "cli": "board layout set <project>",
@@ -53816,6 +58334,129 @@
       "id": "layout.update",
       "input": {
         "$defs": {
+          "CardColourBy": {
+            "description": "What colours the edge of a card.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No coloured edge (the default).",
+                "type": "string"
+              },
+              {
+                "const": "type",
+                "description": "The colour of the task's type.",
+                "type": "string"
+              },
+              {
+                "const": "priority",
+                "description": "A colour for each priority: urgent red, high orange, normal blue,\nlow grey; none has no edge.",
+                "type": "string"
+              },
+              {
+                "const": "label",
+                "description": "The colour of the task's first label.",
+                "type": "string"
+              },
+              {
+                "const": "query",
+                "description": "The first of the layout's colour rules whose query the task matches.",
+                "type": "string"
+              }
+            ]
+          },
+          "ColourRule": {
+            "additionalProperties": false,
+            "description": "One colour rule: the cards a query matches get its colour.",
+            "properties": {
+              "hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "The colour of the cards it matches."
+              },
+              "name": {
+                "description": "A name for the rule, shown with the edge; empty shows the query.",
+                "type": "string"
+              },
+              "query": {
+                "description": "A query in the query language, such as `label:urgent due<today`.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "query",
+              "hue"
+            ],
+            "type": "object"
+          },
+          "CoverMode": {
+            "description": "Which image a card shows as its cover.",
+            "oneOf": [
+              {
+                "const": "off",
+                "description": "No covers (the default).",
+                "type": "string"
+              },
+              {
+                "const": "chosen",
+                "description": "The image chosen as the task's cover (`file.cover`), if it has one.",
+                "type": "string"
+              },
+              {
+                "const": "first_image",
+                "description": "The chosen image, or else the task's first attached image.",
+                "type": "string"
+              }
+            ]
+          },
+          "Hue": {
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
+            "oneOf": [
+              {
+                "const": "red",
+                "description": "Red.",
+                "type": "string"
+              },
+              {
+                "const": "orange",
+                "description": "Orange.",
+                "type": "string"
+              },
+              {
+                "const": "yellow",
+                "description": "Yellow.",
+                "type": "string"
+              },
+              {
+                "const": "green",
+                "description": "Green.",
+                "type": "string"
+              },
+              {
+                "const": "teal",
+                "description": "Teal.",
+                "type": "string"
+              },
+              {
+                "const": "blue",
+                "description": "Blue.",
+                "type": "string"
+              },
+              {
+                "const": "purple",
+                "description": "Purple.",
+                "type": "string"
+              },
+              {
+                "const": "pink",
+                "description": "Pink.",
+                "type": "string"
+              },
+              {
+                "const": "grey",
+                "description": "Grey.",
+                "type": "string"
+              }
+            ]
+          },
           "SortMode": {
             "description": "How a column's cards are ordered.",
             "oneOf": [
@@ -53863,6 +58504,27 @@
             },
             "type": "array"
           },
+          "colour_by": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/CardColourBy"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What colours the edge of the cards: `none`, `type`, `priority`,\n`label` or `query` (the colour rules)."
+          },
+          "colour_rules": {
+            "description": "The colour rules, in order, replacing the old ones: each a query and\na colour, and an optional name. At most 20.",
+            "items": {
+              "$ref": "#/$defs/ColourRule"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "column_sort": {
             "additionalProperties": {
               "$ref": "#/$defs/SortMode"
@@ -53872,6 +58534,17 @@
               "object",
               "null"
             ]
+          },
+          "covers": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/CoverMode"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which image the cards show as their cover: `off`, `chosen` or\n`first_image`."
           },
           "expand": {
             "description": "Columns to expand again.",
@@ -53970,12 +58643,30 @@
                 },
                 "type": "array"
               },
+              "colour_by": {
+                "$ref": "#/$defs/CardColourBy",
+                "default": "none",
+                "description": "What colours the edge of the cards."
+              },
+              "colour_rules": {
+                "default": [],
+                "description": "The colour rules for `colour_by: query`, in order; the first whose\nquery a card matches colours it.",
+                "items": {
+                  "$ref": "#/$defs/ColourRule"
+                },
+                "type": "array"
+              },
               "column_sort": {
                 "additionalProperties": {
                   "$ref": "#/$defs/SortMode"
                 },
                 "description": "Sort modes of single columns, by status ID.",
                 "type": "object"
+              },
+              "covers": {
+                "$ref": "#/$defs/CoverMode",
+                "default": "off",
+                "description": "Which image the cards show as their cover."
               },
               "hidden": {
                 "description": "Hidden columns, as status IDs.",
@@ -54014,9 +58705,135 @@
               "column_sort",
               "hide_done_after_days",
               "card_fields",
-              "include_subprojects"
+              "include_subprojects",
+              "colour_by",
+              "colour_rules",
+              "covers"
             ],
             "type": "object"
+          },
+          "CardColourBy": {
+            "description": "What colours the edge of a card.",
+            "oneOf": [
+              {
+                "const": "none",
+                "description": "No coloured edge (the default).",
+                "type": "string"
+              },
+              {
+                "const": "type",
+                "description": "The colour of the task's type.",
+                "type": "string"
+              },
+              {
+                "const": "priority",
+                "description": "A colour for each priority: urgent red, high orange, normal blue,\nlow grey; none has no edge.",
+                "type": "string"
+              },
+              {
+                "const": "label",
+                "description": "The colour of the task's first label.",
+                "type": "string"
+              },
+              {
+                "const": "query",
+                "description": "The first of the layout's colour rules whose query the task matches.",
+                "type": "string"
+              }
+            ]
+          },
+          "ColourRule": {
+            "additionalProperties": false,
+            "description": "One colour rule: the cards a query matches get its colour.",
+            "properties": {
+              "hue": {
+                "$ref": "#/$defs/Hue",
+                "description": "The colour of the cards it matches."
+              },
+              "name": {
+                "description": "A name for the rule, shown with the edge; empty shows the query.",
+                "type": "string"
+              },
+              "query": {
+                "description": "A query in the query language, such as `label:urgent due<today`.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "query",
+              "hue"
+            ],
+            "type": "object"
+          },
+          "CoverMode": {
+            "description": "Which image a card shows as its cover.",
+            "oneOf": [
+              {
+                "const": "off",
+                "description": "No covers (the default).",
+                "type": "string"
+              },
+              {
+                "const": "chosen",
+                "description": "The image chosen as the task's cover (`file.cover`), if it has one.",
+                "type": "string"
+              },
+              {
+                "const": "first_image",
+                "description": "The chosen image, or else the task's first attached image.",
+                "type": "string"
+              }
+            ]
+          },
+          "Hue": {
+            "description": "The design's nine colours, for projects, statuses, types and labels, in\npalette order: a new label or project without a colour gets the first one\nits neighbours don't use yet.",
+            "oneOf": [
+              {
+                "const": "red",
+                "description": "Red.",
+                "type": "string"
+              },
+              {
+                "const": "orange",
+                "description": "Orange.",
+                "type": "string"
+              },
+              {
+                "const": "yellow",
+                "description": "Yellow.",
+                "type": "string"
+              },
+              {
+                "const": "green",
+                "description": "Green.",
+                "type": "string"
+              },
+              {
+                "const": "teal",
+                "description": "Teal.",
+                "type": "string"
+              },
+              {
+                "const": "blue",
+                "description": "Blue.",
+                "type": "string"
+              },
+              {
+                "const": "purple",
+                "description": "Purple.",
+                "type": "string"
+              },
+              {
+                "const": "pink",
+                "description": "Pink.",
+                "type": "string"
+              },
+              {
+                "const": "grey",
+                "description": "Grey.",
+                "type": "string"
+              }
+            ]
           },
           "SortMode": {
             "description": "How a column's cards are ordered.",
@@ -54070,7 +58887,7 @@
       },
       "output_name": "LayoutChange",
       "safety": "write",
-      "summary": "Hide, show, collapse or reorder board columns, set sort modes, card fields and older closed cards, or reset to the project's layout."
+      "summary": "Hide, show, collapse or reorder board columns, set sort modes, card fields, card colours (by type, priority, label or ordered query rules), covers and older closed cards, or reset to the project's layout."
     },
     {
       "cli": "view list",
@@ -57127,6 +61944,10 @@
                 "description": "The comment's ID, for a file attached to a comment.",
                 "type": "string"
               },
+              "cover": {
+                "description": "Whether it is chosen as its task's cover on the board.",
+                "type": "boolean"
+              },
               "created_at": {
                 "description": "When it was attached (RFC 3339, UTC).",
                 "type": "string"
@@ -57687,6 +62508,10 @@
               "comment": {
                 "description": "The comment's ID, for a file attached to a comment.",
                 "type": "string"
+              },
+              "cover": {
+                "description": "Whether it is chosen as its task's cover on the board.",
+                "type": "boolean"
               },
               "created_at": {
                 "description": "When it was attached (RFC 3339, UTC).",
@@ -58441,6 +63266,10 @@
                 "description": "The comment's ID, for a file attached to a comment.",
                 "type": "string"
               },
+              "cover": {
+                "description": "Whether it is chosen as its task's cover on the board.",
+                "type": "boolean"
+              },
               "created_at": {
                 "description": "When it was attached (RFC 3339, UTC).",
                 "type": "string"
@@ -59048,6 +63877,10 @@
               "comment": {
                 "description": "The comment's ID, for a file attached to a comment.",
                 "type": "string"
+              },
+              "cover": {
+                "description": "Whether it is chosen as its task's cover on the board.",
+                "type": "boolean"
               },
               "created_at": {
                 "description": "When it was attached (RFC 3339, UTC).",
@@ -60838,6 +65671,10 @@
             "description": "The comment's ID, for a file attached to a comment.",
             "type": "string"
           },
+          "cover": {
+            "description": "Whether it is chosen as its task's cover on the board.",
+            "type": "boolean"
+          },
           "created_at": {
             "description": "When it was attached (RFC 3339, UTC).",
             "type": "string"
@@ -60981,6 +65818,10 @@
               "comment": {
                 "description": "The comment's ID, for a file attached to a comment.",
                 "type": "string"
+              },
+              "cover": {
+                "description": "Whether it is chosen as its task's cover on the board.",
+                "type": "boolean"
               },
               "created_at": {
                 "description": "When it was attached (RFC 3339, UTC).",
@@ -61299,6 +66140,10 @@
                 "description": "The comment's ID, for a file attached to a comment.",
                 "type": "string"
               },
+              "cover": {
+                "description": "Whether it is chosen as its task's cover on the board.",
+                "type": "boolean"
+              },
               "created_at": {
                 "description": "When it was attached (RFC 3339, UTC).",
                 "type": "string"
@@ -61493,6 +66338,10 @@
                 "description": "The comment's ID, for a file attached to a comment.",
                 "type": "string"
               },
+              "cover": {
+                "description": "Whether it is chosen as its task's cover on the board.",
+                "type": "boolean"
+              },
               "created_at": {
                 "description": "When it was attached (RFC 3339, UTC).",
                 "type": "string"
@@ -61615,6 +66464,209 @@
       "output_name": "FileChange",
       "safety": "trash",
       "summary": "Move an attached file to the trash."
+    },
+    {
+      "cli": "file cover <task>",
+      "exposure": "data",
+      "id": "file.cover",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Which image a task's board card shows as its cover.",
+        "properties": {
+          "attachment": {
+            "description": "The image attached to the task itself to show, by its ID; left out\nto choose none.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "task": {
+            "description": "The task: its key or ID.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task"
+        ],
+        "title": "FileCoverInput",
+        "type": "object"
+      },
+      "input_name": "FileCoverInput",
+      "kind": "command",
+      "mcp_tool": "set_card_cover",
+      "output": {
+        "$defs": {
+          "Actor": {
+            "additionalProperties": false,
+            "description": "Who did something.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/ActorKind",
+                "description": "Person or agent."
+              },
+              "name": {
+                "description": "The display name (\"You\", \"Claude Code\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ],
+            "type": "object"
+          },
+          "ActorKind": {
+            "description": "A person or an agent.",
+            "oneOf": [
+              {
+                "const": "user",
+                "description": "The person who owns the workspace.",
+                "type": "string"
+              },
+              {
+                "const": "agent",
+                "description": "An agent working through MCP.",
+                "type": "string"
+              }
+            ]
+          },
+          "Attachment": {
+            "additionalProperties": false,
+            "description": "One attached file.",
+            "properties": {
+              "added_by": {
+                "$ref": "#/$defs/Actor",
+                "description": "Who attached it."
+              },
+              "comment": {
+                "description": "The comment's ID, for a file attached to a comment.",
+                "type": "string"
+              },
+              "cover": {
+                "description": "Whether it is chosen as its task's cover on the board.",
+                "type": "boolean"
+              },
+              "created_at": {
+                "description": "When it was attached (RFC 3339, UTC).",
+                "type": "string"
+              },
+              "height": {
+                "description": "An image's height in pixels.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "description": "The attachment's ID.",
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/FileKind",
+                "description": "What it holds."
+              },
+              "mime": {
+                "description": "The media type, read from the content.",
+                "type": "string"
+              },
+              "name": {
+                "description": "The file name.",
+                "type": "string"
+              },
+              "page": {
+                "description": "The wiki page's ID, for a file attached to a page.",
+                "type": "string"
+              },
+              "project": {
+                "description": "The project's key, for a file attached to a wiki page.",
+                "type": "string"
+              },
+              "sha256": {
+                "description": "The content's SHA-256.",
+                "type": "string"
+              },
+              "size": {
+                "description": "The size in bytes.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "task": {
+                "description": "The task's key; empty for a file on a wiki page.",
+                "type": "string"
+              },
+              "width": {
+                "description": "An image's width in pixels.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "mime",
+              "kind",
+              "size",
+              "sha256",
+              "task",
+              "added_by",
+              "created_at"
+            ],
+            "type": "object"
+          },
+          "FileKind": {
+            "description": "What a file holds, which decides how it is shown.",
+            "oneOf": [
+              {
+                "const": "image",
+                "description": "A picture shown inline.",
+                "type": "string"
+              },
+              {
+                "const": "text",
+                "description": "Text in UTF-8.",
+                "type": "string"
+              },
+              {
+                "const": "executable",
+                "description": "A program or script: only ever saved, never opened or shown.",
+                "type": "string"
+              },
+              {
+                "const": "other",
+                "description": "Anything else.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A task's cover after a change.",
+        "properties": {
+          "cover": {
+            "$ref": "#/$defs/Attachment",
+            "description": "The chosen cover; left out when none is chosen."
+          },
+          "group": {
+            "description": "The history group, for revert and Undo; left out when nothing\nchanged.",
+            "type": "string"
+          },
+          "task": {
+            "description": "The task's key.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task"
+        ],
+        "title": "FileCoverChange",
+        "type": "object"
+      },
+      "output_name": "FileCoverChange",
+      "safety": "write",
+      "summary": "Choose the PNG, JPEG, GIF or WebP image attached to a task that its board card shows as its cover, or choose none; boards show covers when their layout's covers setting is on."
     },
     {
       "cli": "agents sessions",

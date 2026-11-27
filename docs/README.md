@@ -27,6 +27,7 @@ How to use the desktop app.
 | [Calendar and Gantt chart](guide/calendar-and-gantt.md) | Dates on a calendar, the schedule, dependencies and milestones |
 | [The wiki](guide/wiki.md) | Pages, links, macros, page templates, export and import |
 | [Roadmap and versions](guide/roadmap.md) | Planning tasks for releases |
+| [Sprints](guide/sprints.md) | Time-boxed cycles of work, the backlog and the burndown |
 | [Custom fields](guide/custom-fields.md) | Your own fields on tasks |
 | [Status rules](guide/rules.md) | What happens when a task enters a status, and rules for agents |
 | [Recurring tasks and templates](guide/recurring-and-templates.md) | Tasks that repeat, task templates and project templates |

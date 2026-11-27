@@ -19,7 +19,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 use crate::error::{Result, StoreError};
 
 /// The schema version this program is built for.
-pub const SCHEMA_VERSION: i64 = 16;
+pub const SCHEMA_VERSION: i64 = 18;
 
 /// One migration: the SQL that takes the schema from `version - 1` to
 /// `version`.
@@ -94,6 +94,14 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 16,
         sql: include_str!("../migrations/0016_epic_and_story_glyphs.sql"),
+    },
+    Migration {
+        version: 17,
+        sql: include_str!("../migrations/0017_card_covers.sql"),
+    },
+    Migration {
+        version: 18,
+        sql: include_str!("../migrations/0018_sprints.sql"),
     },
 ];
 
@@ -725,7 +733,7 @@ mod tests {
         )
         .unwrap();
         migrate(&mut conn, MIGRATIONS, |_| Ok(())).unwrap();
-        assert_eq!(user_version(&conn).unwrap(), 16);
+        assert!(user_version(&conn).unwrap() >= 16);
         let kept: (String, i64, Option<i64>) = conn
             .query_row(
                 "SELECT y.glyph, y.is_default, y.due_offset_days
@@ -774,6 +782,44 @@ mod tests {
             .is_err(),
             "tasks still need a type that exists"
         );
+    }
+
+    #[test]
+    fn card_covers_keep_tasks_and_take_an_id_or_nothing() {
+        let mut conn = memory();
+        let before = MIGRATIONS
+            .iter()
+            .position(|m| m.sql.contains("ADD COLUMN cover_id"))
+            .unwrap();
+        migrate(&mut conn, &MIGRATIONS[..before], |_| Ok(())).unwrap();
+        conn.execute_batch(
+            "INSERT INTO projects (id, rank, key, name, name_fold, hue, modules, created_at,
+                                   updated_at)
+             VALUES (x'01010101010101010101010101010101', 'i', 'CV', 'CV', 'cv', 'blue', '{}',
+                     0, 0);
+             INSERT INTO statuses (id, project_id, name, name_fold, category, hue, rank)
+             VALUES (x'02020202020202020202020202020202', x'01010101010101010101010101010101',
+                     'To do', 'to do', 'todo', 'blue', 'i');
+             INSERT INTO task_types (id, project_id, name, name_fold, glyph, hue, rank)
+             VALUES (x'03030303030303030303030303030303', x'01010101010101010101010101010101',
+                     'Task', 'task', 'task', 'blue', 'i');
+             INSERT INTO tasks (id, project_id, number, title, title_fold, status_id, type_id,
+                                rank, status_entered_at, created_at, created_by_kind,
+                                created_by_name, edited_at, updated_at)
+             VALUES (x'04040404040404040404040404040404', x'01010101010101010101010101010101',
+                     1, 'Crash', 'crash', x'02020202020202020202020202020202',
+                     x'03030303030303030303030303030303', 'i', 0, 0, 'user', 'You', 0, 0);",
+        )
+        .unwrap();
+        migrate(&mut conn, MIGRATIONS, |_| Ok(())).unwrap();
+        let cover: Option<Vec<u8>> = conn
+            .query_row("SELECT cover_id FROM tasks", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(cover, None);
+        let set = |value: &str| conn.execute(&format!("UPDATE tasks SET cover_id = {value}"), []);
+        set("randomblob(16)").unwrap();
+        assert!(set("randomblob(3)").is_err(), "a cover is an ID");
+        set("NULL").unwrap();
     }
 
     #[test]
@@ -915,5 +961,51 @@ mod tests {
         ] {
             assert!(conn.execute(bad, []).is_err(), "{bad} must be refused");
         }
+    }
+
+    #[test]
+    fn version_17_adds_sprints_with_one_active_per_project() {
+        let mut conn = memory();
+        let before = MIGRATIONS.iter().position(|m| m.version == 17).unwrap();
+        migrate(&mut conn, &MIGRATIONS[..before], |_| Ok(())).unwrap();
+        conn.execute_batch(
+            "INSERT INTO projects (id, rank, key, name, name_fold, hue, modules, created_at,
+                                   updated_at)
+             VALUES (x'01010101010101010101010101010101', 'i', 'SP', 'SP', 'sp', 'blue', '{}',
+                     0, 0);",
+        )
+        .unwrap();
+        migrate(&mut conn, MIGRATIONS, |_| Ok(())).unwrap();
+        assert!(user_version(&conn).unwrap() >= 17);
+        let add = |id: u8, name: &str, state: &str| {
+            conn.execute(
+                "INSERT INTO sprints (id, project_id, name, name_fold, state, rank, created_at,
+                                      updated_at)
+                 VALUES (?1, x'01010101010101010101010101010101', ?2, lower(?2), ?3, 'i', 0, 0)",
+                rusqlite::params![vec![id; 16], name, state],
+            )
+        };
+        add(2, "Sprint 1", "active").unwrap();
+        assert!(
+            add(3, "sprint 1", "planned").is_err(),
+            "names are unique per project"
+        );
+        assert!(
+            add(4, "Sprint 2", "active").is_err(),
+            "one active sprint per project"
+        );
+        assert!(
+            add(5, "Sprint 3", "done").is_err(),
+            "planned, active or closed"
+        );
+        add(6, "Sprint 4", "planned").unwrap();
+        let columns: i64 = conn
+            .query_row(
+                "SELECT count(*) FROM pragma_table_info('tasks') WHERE name = 'sprint_id'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(columns, 1);
     }
 }

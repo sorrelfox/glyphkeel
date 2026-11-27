@@ -23,13 +23,14 @@ export interface Reading {
   error?: QueryProblem | undefined;
 }
 
-/** Names that complete values: the workspace's statuses, types, labels, projects and versions. */
+/** Names that complete values: the workspace's statuses, types, labels, projects, versions and sprints. */
 export interface QueryNames {
   statuses: readonly string[];
   types: readonly string[];
   labels: readonly string[];
   projects: readonly string[];
   versions?: readonly string[] | undefined;
+  sprints?: readonly string[] | undefined;
 }
 
 /** What completion reads while the field runs. */
@@ -129,6 +130,8 @@ function valuesFor(field: QueryField, names: QueryNames, fields: readonly QueryF
       return [...names.projects];
     case "version":
       return [...(names.versions ?? []), "none"];
+    case "sprint":
+      return ["active", ...(names.sprints ?? []), "none"];
     case "start":
     case "due":
     case "created":

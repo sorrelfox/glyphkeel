@@ -24,12 +24,13 @@ export const ENTITY_QUERIES: Readonly<Record<string, readonly OpId[]>> = {
   // Open-task counts show in the project tree. Rendered texts link task keys
   // only while the task exists, and descriptions keep their revisions.
   // A task's reminder is one of its fields; the time report shows titles.
+  // Its cover marks one of its files.
   // Deleting, restoring and purging show in the trash.
   // Its description links to pages and tasks, and its key is a link's target.
-  task: ["trash.list", "task.get", "board.get", "project.list", "markdown.render", "description.history", "description.revision", "time.report", "timer.get", "task.search", "today.get", "search.query", "schedule.get", "schedule.preview_move", "version.list", "version.get", "field.list", ...LINKS, ...FLOW],
+  task: ["trash.list", "task.get", "board.get", "project.list", "markdown.render", "description.history", "description.revision", "time.report", "timer.get", "task.search", "today.get", "search.query", "schedule.get", "schedule.preview_move", "version.list", "version.get", "sprint.list", "sprint.get", "sprint.burndown", "field.list", "file.get", ...LINKS, ...FLOW],
   // Statuses, types and labels show on every card and in the task panel;
   // a wiki page's task lists (`{{tasks …}}`) show statuses and match by them.
-  project: ["trash.list", "project.list", "project.get", "board.get", "task.get", "layout.get", "list.layout.get", "markdown.render", "time.report", "task.search", "query.parse", "view.list", "today.get", "search.query", "wiki.search", "wiki.get", "wiki.list", "schedule.get", "schedule.preview_move", "gantt.layout.get", "version.list", "version.get", "field.list", ...LINKS, ...FLOW],
+  project: ["trash.list", "project.list", "project.get", "board.get", "task.get", "layout.get", "list.layout.get", "markdown.render", "time.report", "task.search", "query.parse", "view.list", "today.get", "search.query", "wiki.search", "wiki.get", "wiki.list", "schedule.get", "schedule.preview_move", "gantt.layout.get", "version.list", "version.get", "sprint.list", "sprint.get", "field.list", ...LINKS, ...FLOW],
   status: ["project.get", "board.get", "task.get", "project.list", "task.search", "query.parse", "today.get", "search.query", "schedule.get", "markdown.render", ...FLOW],
   task_type: ["project.get", "board.get", "task.get", "task.search", "query.parse", "schedule.get", "markdown.render", "field.list", ...FLOW],
   label: ["project.get", "board.get", "task.get", "task.search", "query.parse", "schedule.get", "markdown.render", ...FLOW],
@@ -56,6 +57,8 @@ export const ENTITY_QUERIES: Readonly<Record<string, readonly OpId[]>> = {
   view: ["view.list"],
   // Versions: the roadmap, the task panel's picker, queries naming them and the Gantt chart's markers.
   version: ["version.list", "version.get", "task.get", "task.search", "query.parse", ...FLOW],
+  // Sprints: the sprints page and its burndown, the task panel's picker, cards and queries naming them.
+  sprint: ["sprint.list", "sprint.get", "sprint.burndown", "task.get", "task.search", "board.get", "query.parse", "view.list"],
   // Wiki pages: their search, links to them and their text, and their revisions (read like a description's).
   // A recurring task's series: the task carries it, and lists mark its current occurrence.
   series: ["task.get", "task.search", "today.get", "schedule.get", "board.get"],

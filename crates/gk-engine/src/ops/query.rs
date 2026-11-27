@@ -156,6 +156,10 @@ fn live_names(tx: &Transaction<'_>, kind: NameKind) -> Result<Vec<String>, Failu
             "SELECT DISTINCT x.name FROM versions x JOIN projects p ON p.id = x.project_id
               WHERE p.deleted_at IS NULL ORDER BY x.name_fold"
         }
+        NameKind::Sprint => {
+            "SELECT DISTINCT x.name FROM sprints x JOIN projects p ON p.id = x.project_id
+              WHERE p.deleted_at IS NULL ORDER BY x.name_fold"
+        }
         NameKind::Project => "SELECT key FROM projects WHERE deleted_at IS NULL ORDER BY key",
         NameKind::Task => return Ok(Vec::new()),
     };
@@ -178,6 +182,7 @@ fn check_names(tx: &Transaction<'_>, uses: &[NameUse]) -> Result<Option<QueryErr
             NameKind::Label => (2, "query-unknown-label", "query-unknown-label-none"),
             NameKind::Project => (3, "query-unknown-project", "query-unknown-project-none"),
             NameKind::Version => (4, "query-unknown-version", "query-unknown-version-none"),
+            NameKind::Sprint => (5, "query-unknown-sprint", "query-unknown-sprint-none"),
             NameKind::Task => {
                 if lookup::task(tx, "query", &u.text).is_err() {
                     return Ok(Some(
@@ -789,6 +794,7 @@ pub(crate) fn listed(tx: &Transaction<'_>, id: Id, now: i64) -> Result<ListedTas
                 labels: Vec::new(),
                 fields: BTreeMap::new(),
                 fix_version: None,
+                sprint: None,
                 parent: None,
                 start_date: r.get(11)?,
                 due_date: r.get(12)?,
@@ -840,6 +846,7 @@ pub(crate) fn listed(tx: &Transaction<'_>, id: Id, now: i64) -> Result<ListedTas
     task.labels = task_labels(tx, id)?;
     task.fields = super::custom_field::listed_values(tx, id)?;
     task.fix_version = super::version::of_task(tx, id)?;
+    task.sprint = super::sprint::of_task(tx, id)?;
     task.progress_percent = super::rollup::progress(tx, id)?;
     Ok(task)
 }

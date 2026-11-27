@@ -106,6 +106,7 @@ const TASK_FIELDS: Record<string, (task: FakeTask) => unknown> = {
   start_date: (task) => task.startDate,
   due_date: (task) => task.dueDate,
   estimate: (task) => task.estimateMin,
+  sprint: (task) => task.sprintId ?? null,
 };
 
 const side = (value: unknown) => (value === null || value === undefined ? undefined : value);

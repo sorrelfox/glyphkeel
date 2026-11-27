@@ -265,6 +265,7 @@ pub(crate) fn load(
                 fields: Vec::new(),
                 parent: None,
                 fix_version: None,
+                sprint: None,
                 description: r.get(3)?,
                 description_revision: opt_id_at(r, 36)?.map(|id| id.to_string()),
                 conflict_copies: count(r.get(37)?),
@@ -334,6 +335,7 @@ pub(crate) fn load(
     task.labels = task_labels(tx, id)?;
     task.recurrence = super::recurrence::of_task(tx, id)?;
     task.fix_version = super::version::of_task(tx, id)?;
+    task.sprint = super::sprint::of_task(tx, id)?;
     task.fields = super::custom_field::task_values(tx, id)?;
     task.progress_percent = super::rollup::progress(tx, id)?;
     if task.subtask_count.total > 0 {
@@ -975,6 +977,11 @@ pub(crate) fn create_new(
         .as_deref()
         .map(|v| super::version::resolve_for_task(w.tx(), &project, "fix_version", v))
         .transpose()?;
+    let sprint = input
+        .sprint
+        .as_deref()
+        .map(|s| super::sprint::resolve_for_task(w.tx(), &project, "sprint", s))
+        .transpose()?;
     let parent = match &input.parent {
         Some(p) => {
             let parent = lookup::task(w.tx(), "parent", p)?;
@@ -1033,6 +1040,9 @@ pub(crate) fn create_new(
     )?;
     if fix_version.is_some() {
         super::version::set_task(w, id, project.id, fix_version)?;
+    }
+    if sprint.is_some() {
+        super::sprint::set_task(w, id, project.id, sprint)?;
     }
     super::custom_field::apply_input(w, id, &project, &input.fields, true)?;
     Ok((id, key))
@@ -1248,6 +1258,7 @@ pub(crate) fn update(w: &mut WriteCtx<'_>, input: TaskUpdateInput) -> Result<Tas
             TaskField::FixVersion,
             "fix_version",
         ),
+        (input.sprint.is_some(), TaskField::Sprint, "sprint"),
     ] {
         if given && clears(field) {
             return Err(messages::invalid(
@@ -1364,6 +1375,13 @@ pub(crate) fn update(w: &mut WriteCtx<'_>, input: TaskUpdateInput) -> Result<Tas
     }
     if clears(TaskField::FixVersion) {
         super::version::set_task(w, id, project.id, None)?;
+    }
+    if let Some(s) = &input.sprint {
+        let sprint = super::sprint::resolve_for_task(w.tx(), &project, "sprint", s)?;
+        super::sprint::set_task(w, id, project.id, Some(sprint))?;
+    }
+    if clears(TaskField::Sprint) {
+        super::sprint::set_task(w, id, project.id, None)?;
     }
     if let Some(p) = &input.parent {
         let parent = lookup::task(w.tx(), "parent", p)?;
@@ -1817,6 +1835,12 @@ fn move_to_project(
             warn(messages::text(
                 "task-version-left-off",
                 &[("version", key), ("project", to.key.clone())],
+            ));
+        }
+        if let Some(name) = super::sprint::leave_on_move(w, id, to.id)? {
+            warn(messages::text(
+                "task-sprint-left-off",
+                &[("sprint", name), ("project", to.key.clone())],
             ));
         }
         for warning in super::custom_field::follow_move(w, id, to)? {

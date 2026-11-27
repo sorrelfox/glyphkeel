@@ -20,7 +20,7 @@ An agent can do what you can do in the app, through MCP tools in these groups:
 | Group | Tools for |
 |---|---|
 | workspace | The workspace and its rules, search, the activity log, revert |
-| projects | Projects, custom fields, templates, versions, the agent brief |
+| projects | Projects, custom fields, templates, versions, sprints, the agent brief |
 | tasks | Finding, creating, changing, moving, linking, duplicating and claiming tasks; checklists; recurrence |
 | comments | Adding, editing and deleting comments |
 | time | Logging time, the timer, reminders, kinds of work, the time and flow reports |

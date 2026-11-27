@@ -18,8 +18,8 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel backup restore <name>` | `backup.restore` | Replace the workspace with a backup, after backing up the current state. Other programs with the workspace open must restart. |
 | `glyphkeel backup verify <name>` | `backup.verify` | Check a backup: the database copy's integrity and every stored file it needs. |
 | `glyphkeel board <project>` | `board.get` | A project's board as the person sees it: columns in the personal order with hidden ones flagged, WIP state and compact cards. |
-| `glyphkeel board layout set <project>` | `layout.update` | Hide, show, collapse or reorder board columns, set sort modes, card fields and older closed cards, or reset to the project's layout. |
-| `glyphkeel board layout show <project>` | `layout.get` | The person's layout of a project's board: column order, hidden and collapsed columns, sort modes, card fields. |
+| `glyphkeel board layout set <project>` | `layout.update` | Hide, show, collapse or reorder board columns, set sort modes, card fields, card colours (by type, priority, label or ordered query rules), covers and older closed cards, or reset to the project's layout. |
+| `glyphkeel board layout show <project>` | `layout.get` | The person's layout of a project's board: column order, hidden and collapsed columns, sort modes, card fields, card colours and covers. |
 | `glyphkeel comment add <key>` | `comment.add` | Add a Markdown comment to a task, optionally answering another. |
 | `glyphkeel comment delete <comment>` | `comment.delete` | Move a comment to the trash. |
 | `glyphkeel comment edit <comment>` | `comment.update` | Change a comment's text; the earlier text is kept and can be viewed. |
@@ -36,6 +36,7 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel field list` | `field.list` | The custom fields of a project (its own and those of every project) or of the whole workspace: name, query name, kind, options, default, task types, required, and how many tasks have a value. |
 | `glyphkeel file attach` | `file.attach` | Attach a local file, or Base64 data with a name, to a task, a comment or a wiki page. |
 | `glyphkeel file cat <attachment>` | `file.read` | An attached file's content: text for text files, Base64 for images, otherwise only its details. |
+| `glyphkeel file cover <task>` | `file.cover` | Choose the PNG, JPEG, GIF or WebP image attached to a task that its board card shows as its cover, or choose none; boards show covers when their layout's covers setting is on. |
 | `glyphkeel file delete <attachment>` | `file.delete` | Move an attached file to the trash. |
 | `glyphkeel file show <attachment>` | `file.get` | An attached file's name, type, size and owner. |
 | `glyphkeel import <path>` | `transfer.import` | Import an archive as new projects; checks it completely first and never changes existing data. |
@@ -71,6 +72,16 @@ With `--json` a command prints exactly the operation's output, as described in [
 | `glyphkeel search <text>` | `search.query` | Search task titles and descriptions, comments, wiki pages and file names for words and fragments, ranked, with the matches marked; a task key finds that task. |
 | `glyphkeel settings get` | `settings.get` | Read the workspace settings. |
 | `glyphkeel settings set` | `settings.update` | Change workspace settings that are not about agents: trash retention, reminder time, working hours and days, first day of the week, the timer reminder. |
+| `glyphkeel sprint add <sprint>` | `sprint.add_tasks` | Put tasks in a planned or active sprint of their project, moving them from any other sprint. |
+| `glyphkeel sprint burndown <sprint>` | `sprint.burndown` | The burndown of an active or closed sprint: its open and total tasks and estimates at the end of each day. |
+| `glyphkeel sprint complete <sprint>` | `sprint.complete` | Complete the active sprint and move its open tasks to a planned sprint or back to the backlog. |
+| `glyphkeel sprint create` | `sprint.create` | Plan a sprint in a project: name, goal, start and end dates, and tasks to put in it. |
+| `glyphkeel sprint delete <sprint>` | `sprint.delete` | Delete a planned or closed sprint; its tasks go back to the backlog. Revert brings both back. |
+| `glyphkeel sprint edit <sprint>` | `sprint.update` | Rename a sprint or change its goal or dates. |
+| `glyphkeel sprint list <project>` | `sprint.list` | The sprints of a project with their state, dates and progress; with their tasks and the backlog for the sprints page. |
+| `glyphkeel sprint remove` | `sprint.remove_tasks` | Take tasks out of their sprint, back to the backlog. |
+| `glyphkeel sprint show <sprint>` | `sprint.get` | One sprint with its progress and its tasks. |
+| `glyphkeel sprint start <sprint>` | `sprint.start` | Start a planned sprint, with its dates; a project has one active sprint at a time. |
 | `glyphkeel status add` | `status.create` | Add a status (a board column) to a project. |
 | `glyphkeel status delete` | `status.delete` | Delete a status; its tasks move to the status named. Can't be undone. |
 | `glyphkeel status edit` | `status.update` | Rename or recolour a status, change its category or its WIP limit. |

@@ -415,6 +415,8 @@ pub(crate) fn rewrite_queries(
             changed += 1;
         }
     }
+    // Boards' colour rules are saved queries too.
+    super::board::rewrite_colour_rules(w, project, &rewrite)?;
     Ok(changed)
 }
 
@@ -485,6 +487,7 @@ pub(crate) fn rewrite_views(
             changed += 1;
         }
     }
+    super::board::rewrite_colour_rules(w, project, query)?;
     Ok(changed)
 }
 

@@ -476,6 +476,36 @@ fn check(parsed: &mut Parsed) -> Result<(), Rejected> {
                 ));
             }
         }
+        let mut sprint_names = HashSet::new();
+        let mut active = 0;
+        for s in &proj.file.sprints {
+            unique(&pj, 1, &s.id)?;
+            rank_ok(&pj, 1, &s.rank)?;
+            let dates_ok = [&s.start_date, &s.end_date].iter().all(|d| {
+                d.as_deref()
+                    .is_none_or(|d| d.parse::<gk_core::Day>().is_ok())
+            }) && (s.start_date.is_none()
+                || s.end_date.is_none()
+                || s.start_date <= s.end_date);
+            if s.state == "active" {
+                active += 1;
+            }
+            if s.name.trim().is_empty()
+                || s.name.chars().count() > 100
+                || s.goal.chars().count() > 4000
+                || !matches!(s.state.as_str(), "planned" | "active" | "closed")
+                || active > 1
+                || !dates_ok
+                || !sprint_names.insert(fold(&s.name))
+            {
+                return Err(bad_with(
+                    pj.clone(),
+                    1,
+                    "transfer-invalid-sprint",
+                    &[("sprint", &s.name)],
+                ));
+            }
+        }
         for v in &proj.file.views {
             unique(&pj, 1, &v.id)?;
             rank_ok(&pj, 1, &v.rank)?;
@@ -883,6 +913,9 @@ pub(crate) fn plan(
         }
         for v in &p.file.versions {
             replace("versions", &v.id)?;
+        }
+        for s in &p.file.sprints {
+            replace("sprints", &s.id)?;
         }
         for v in &p.file.views {
             replace("saved_views", &v.id)?;
@@ -1459,6 +1492,28 @@ fn write(
                 v.updated_at
             ])?;
         }
+        for s in &proj.file.sprints {
+            tx.prepare_cached(
+                "INSERT INTO sprints (id, project_id, name, name_fold, goal, state, start_date,
+                   end_date, started_at, completed_at, rank, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            )?
+            .execute(params![
+                b(plan.id(&s.id)),
+                b(id),
+                s.name,
+                fold(&s.name),
+                s.goal,
+                s.state,
+                s.start_date,
+                s.end_date,
+                s.started_at,
+                s.completed_at,
+                s.rank,
+                s.created_at,
+                s.updated_at
+            ])?;
+        }
         super::custom_fields::write_fields(tx, &proj.file.custom_fields, id, &|t| plan.id(t), now)?;
         for v in &proj.file.views {
             let j = |v: &Option<Value>| v.as_ref().map(Value::to_string);
@@ -1973,6 +2028,34 @@ fn write(
             {
                 tx.prepare_cached("UPDATE tasks SET fix_version_id = ?2 WHERE id = ?1")?
                     .execute(params![b(plan.id(&t.id)), b(plan.id(v))])?;
+            }
+        }
+    }
+
+    // Tasks' sprints: only a sprint of the task's own project in the
+    // archive; any other is left off.
+    for proj in &parsed.projects {
+        let own: HashSet<&String> = proj.file.sprints.iter().map(|s| &s.id).collect();
+        for t in &proj.tasks {
+            if let Some(s) = t.sprint_id.as_ref().filter(|s| own.contains(s)) {
+                tx.prepare_cached("UPDATE tasks SET sprint_id = ?2 WHERE id = ?1")?
+                    .execute(params![b(plan.id(&t.id)), b(plan.id(s))])?;
+            }
+        }
+    }
+
+    // Covers: an image attached to the task itself in the archive.
+    for proj in &parsed.projects {
+        let own: HashSet<(&String, &String)> = proj
+            .files
+            .iter()
+            .filter(|a| a.owner_kind == "task")
+            .map(|a| (&a.id, &a.owner_id))
+            .collect();
+        for t in &proj.tasks {
+            if let Some(c) = t.cover_id.as_ref().filter(|c| own.contains(&(*c, &t.id))) {
+                tx.prepare_cached("UPDATE tasks SET cover_id = ?2 WHERE id = ?1")?
+                    .execute(params![b(plan.id(&t.id)), b(plan.id(c))])?;
             }
         }
     }

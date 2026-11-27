@@ -41,6 +41,10 @@ pub struct BulkChanges {
     /// or shared with it).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fix_version: Option<String>,
+    /// Put them in the sprint of this name (in each task's project), or
+    /// `active` for each project's active sprint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sprint: Option<String>,
     /// Make them subtasks of this task.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,
