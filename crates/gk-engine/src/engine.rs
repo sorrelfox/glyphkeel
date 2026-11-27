@@ -107,6 +107,9 @@ impl std::fmt::Debug for EngineConfig {
 
 /// How many groups the app's Undo stack keeps.
 const UNDO_DEPTH: usize = 200;
+/// How often a session's count of refused reads is written while its agent
+/// keeps being refused.
+const LIMITED_WRITE_EVERY: Duration = Duration::from_secs(2);
 
 /// An agent's change that touches more items than this is preceded by a
 /// safety backup of the workspace.
@@ -150,6 +153,9 @@ pub struct Engine {
     pub(crate) upgraded: AtomicBool,
     undo: Mutex<UndoStacks>,
     pending_reads: Mutex<HashMap<Id, i64>>,
+    /// Reads refused by each session's read limits, not yet recorded, and
+    /// when the session's count was last written.
+    pending_limited: Mutex<HashMap<Id, (i64, Option<Instant>)>>,
     jobs: Mutex<Jobs>,
     /// Where backups go when neither the configuration nor the workspace's
     /// setting names a folder, or the one the configuration fixes.
@@ -299,6 +305,7 @@ impl Engine {
             upgraded: AtomicBool::new(false),
             undo: Mutex::new(UndoStacks::default()),
             pending_reads: Mutex::new(HashMap::new()),
+            pending_limited: Mutex::new(HashMap::new()),
             jobs: Mutex::new(Jobs {
                 lock: jobs_lock,
                 checkpoints: None,
@@ -866,9 +873,57 @@ impl Engine {
         Ok(id)
     }
 
+    /// Counts a read that `session`'s read limits refused. The count is
+    /// written at once, then at most every [`LIMITED_WRITE_EVERY`] while
+    /// the agent keeps being refused, and when the session ends.
+    pub fn note_rate_limited(&self, session: Id) {
+        let now = Instant::now();
+        let due = {
+            let mut pending = self.lock_limited();
+            let entry = pending.entry(session).or_insert((0, None));
+            entry.0 += 1;
+            if entry
+                .1
+                .is_none_or(|t| now.saturating_duration_since(t) >= LIMITED_WRITE_EVERY)
+            {
+                let count = entry.0;
+                *entry = (0, Some(now));
+                Some(count)
+            } else {
+                None
+            }
+        };
+        if let Some(count) = due {
+            self.write_limited(session, count);
+        }
+    }
+
+    fn write_limited(&self, session: Id, count: i64) {
+        if count == 0 {
+            return;
+        }
+        let written = self.store.write("agent.session_limited", move |tx| {
+            tx.execute(
+                "UPDATE agent_sessions SET rate_limited = rate_limited + ?2 WHERE id = ?1",
+                params![session.as_bytes().as_slice(), count],
+            )?;
+            Ok::<_, Failure>(())
+        });
+        if let Err(e) = written.map_err(OpError::from) {
+            tracing::warn!(session = %session, error = %e, "counting refused reads failed");
+        }
+    }
+
+    /// Writes the refused reads not yet recorded for `session`.
+    fn flush_limited(&self, session: Id) {
+        let count = self.lock_limited().remove(&session).map_or(0, |(n, _)| n);
+        self.write_limited(session, count);
+    }
+
     /// Ends an agent session: records the end time and the reads not yet
     /// counted.
     pub fn end_session(&self, session: Id) -> Result<(), OpError> {
+        self.flush_limited(session);
         let at = (self.clock)();
         let reads = self.lock_reads().remove(&session).unwrap_or(0);
         self.store
@@ -959,6 +1014,10 @@ impl Engine {
     /// Closes the workspace: counts the open sessions' reads, checkpoints
     /// the log if this process holds the jobs lock, and stops the writer.
     pub fn close(self) {
+        let limited: Vec<Id> = self.lock_limited().keys().copied().collect();
+        for session in limited {
+            self.flush_limited(session);
+        }
         let sessions: Vec<Id> = self.lock_reads().keys().copied().collect();
         for session in sessions {
             let reads = self.lock_reads().remove(&session).unwrap_or(0);
@@ -985,6 +1044,12 @@ impl Engine {
 
     fn lock_reads(&self) -> MutexGuard<'_, HashMap<Id, i64>> {
         self.pending_reads
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+    }
+
+    fn lock_limited(&self) -> MutexGuard<'_, HashMap<Id, (i64, Option<Instant>)>> {
+        self.pending_limited
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
     }

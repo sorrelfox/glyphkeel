@@ -120,6 +120,17 @@ Other global options:
 | `--quiet`, `-q` | Print nothing on success; errors still go to standard error |
 | `--no-color` | No colours (also with `NO_COLOR` set) |
 | `--tz ZONE` | The time zone of "today" for this command, such as `Europe/Berlin` |
+| `--lang LANG` | The language of help, messages and output for people, such as `de` or `pt-BR` |
+
+**Language.** Help, error messages and output for people are in the language
+`--lang` names, else the one in `GLYPHKEEL_LANG`, else the language chosen in
+the app's Preferences, else the system's (`LANGUAGE`, `LC_ALL`, `LC_MESSAGES`
+and `LANG` on Linux, the display language on Windows), else English. Text not
+yet translated shows in English. Numbers and dates in the output for people are
+written the way that language writes them. Machine text stays English, so that
+scripts work everywhere: the `--json` output (an error's `message` comes with
+its `message_id` and `args`), the names of commands and options, and everything
+`glyphkeel mcp` gives agents.
 
 **Input as JSON.** Every command takes `--input` with the whole input as a JSON
 object, or `--input -` to read it from standard input. Options given as well

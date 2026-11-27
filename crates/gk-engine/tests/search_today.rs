@@ -517,6 +517,55 @@ fn task_dates_accept_natural_forms_in_the_workspace_zone() {
 }
 
 #[test]
+fn date_parse_reads_words_as_the_date_fields_do() {
+    let ws = open();
+    let day = |input: Value| ws.call("date.parse", input)["date"].clone();
+    assert_eq!(day(json!({ "text": "fri" })), "2026-11-27");
+    assert_eq!(day(json!({ "text": " in 3d " })), "2026-11-26");
+    // A reference day of the person's own, for example in another zone.
+    assert_eq!(
+        day(json!({ "text": "tomorrow", "today": "2026-12-31" })),
+        "2027-01-01"
+    );
+    // Today in the workspace's zone otherwise.
+    ws.engine.set_time_zone("Pacific/Kiritimati").unwrap();
+    assert_eq!(day(json!({ "text": "today" })), "2026-11-24");
+    ws.engine.set_time_zone("UTC").unwrap();
+
+    let bad = ws.fails("date.parse", json!({ "text": "someday" }));
+    assert_eq!(bad.code, ErrorCode::Invalid);
+    assert_eq!(bad.details["message_id"], "date-invalid");
+    assert_eq!(bad.details["path"], "text");
+    assert_eq!(bad.details["args"]["text"], "someday");
+    let impossible = ws.fails("date.parse", json!({ "text": "2026-02-30" }));
+    assert_eq!(
+        impossible.details["message_id"],
+        "value-day-not-in-calendar"
+    );
+    let reference = ws.fails("date.parse", json!({ "text": "fri", "today": "monday" }));
+    assert_eq!(reference.details["path"], "today");
+
+    // Every worked example of the parser, which the page's test engine is
+    // checked against too, with the workspace's first day of the week.
+    for e in gk_query::NATURAL_EXAMPLES {
+        ws.call(
+            "settings.update",
+            json!({ "week_start": e.week_start_name() }),
+        );
+        let out = ws.engine.call(
+            &me(),
+            "date.parse",
+            json!({ "text": e.text, "today": e.today }),
+        );
+        match (out, e.day) {
+            (Ok(v), Some(want)) => assert_eq!(v["date"], want, "{:?} on {}", e.text, e.today),
+            (Err(err), None) => assert_eq!(err.code, ErrorCode::Invalid, "{:?}", e.text),
+            (got, want) => panic!("{:?} on {}: {got:?}, expected {want:?}", e.text, e.today),
+        }
+    }
+}
+
+#[test]
 fn recent_changes_show_the_latest_change_to_the_task_or_what_it_holds() {
     let ws = open();
     ws.call("project.create", json!({ "name": "T", "key": "TM" }));

@@ -49,6 +49,13 @@ icu_normalizer = "2.4.0"
 # The Unicode Collation Algorithm for sorting names, registered on every
 # database connection.
 icu_collator = "2.4.0"
+# The command line's and the app's own text in the chosen language: plural
+# categories, and numbers and dates in that language's formats.
+icu_calendar = "2.4.0"
+icu_datetime = "2.4.0"
+icu_decimal = "2.4.0"
+icu_locale_core = "2.4.0"
+icu_plurals = "2.4.0"
 # The MCP server of `glyphkeel mcp`: both protocol eras over standard input
 # and output. The minor version is pinned because it ships protocol fixes
 # often; read its changelog on every bump. The `client` feature is used by

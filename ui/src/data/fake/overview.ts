@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Glyphkeel contributors
 
-// The in-memory engine's global search, Today lists, wiki pages and dates
-// in words: plainer than the engine's, enough for the screens and tests.
+// The in-memory engine's global search, Today lists and wiki pages: plainer
+// than the engine's, enough for the screens and tests.
 
 import {
   type ListedTask,
@@ -18,49 +18,6 @@ import {
 } from "../../generated/ops";
 import { addDays } from "./time";
 import { type FakeWikiPage } from "./state";
-
-const WEEKDAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
-
-/**
- * A day typed as `YYYY-MM-DD` or in words: today, tomorrow, yesterday,
- * `+3d`, `in 2w`, a weekday (the next one after today) or `next fri`.
- * Null when the text is not a day.
- */
-export function naturalDay(text: string, today: string): string | null {
-  const words = text.trim().toLowerCase().replace(/\s+/g, " ");
-  if (/^\d{4}-\d{2}-\d{2}$/.test(words)) {
-    return Number.isNaN(Date.parse(`${words}T00:00:00Z`)) ? null : words;
-  }
-  const shift = ({ today: 0, tomorrow: 1, yesterday: -1 } as Record<string, number | undefined>)[words];
-  if (shift !== undefined) {
-    return addDays(today, shift);
-  }
-  const relative = /^(?:\+|in )(\d+) ?(d|w|m|y)$/.exec(words);
-  if (relative) {
-    const count = Number(relative[1]);
-    const unit = relative[2];
-    if (unit === "d" || unit === "w") {
-      return addDays(today, unit === "d" ? count : 7 * count);
-    }
-    const date = new Date(`${today}T00:00:00Z`);
-    if (unit === "m") {
-      date.setUTCMonth(date.getUTCMonth() + count);
-    } else {
-      date.setUTCFullYear(date.getUTCFullYear() + count);
-    }
-    return date.toISOString().slice(0, 10);
-  }
-  const weekday = /^(next )?(sun|mon|tue|wed|thu|fri|sat)[a-z]*$/.exec(words);
-  if (weekday) {
-    const now = new Date(`${today}T00:00:00Z`).getUTCDay();
-    let ahead = (WEEKDAYS.indexOf(weekday[2] ?? "") - now + 7) % 7 || 7;
-    if (weekday[1] !== undefined && ahead < 7) {
-      ahead += 7;
-    }
-    return addDays(today, ahead);
-  }
-  return null;
-}
 
 /** Where each word of `words` occurs in `text`, ignoring case. */
 export function matchRanges(text: string, words: readonly string[]): TextRange[] {

@@ -6,8 +6,8 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent, type RefObject 
 import { Button, Dialog, useLocale } from "react-aria-components";
 
 import { classes } from "../classes";
-import { useOp } from "../data/hooks";
-import { parseNaturalDay } from "../data/naturalDate";
+import { useDayInWords } from "../data/dayWords";
+import { failureText } from "../data/hooks";
 import { useToday } from "../data/zone";
 import { useT } from "../i18n/I18n";
 import { addDays, addMonths, asDate, firstDayOfWeek, startOfWeek } from "../screens/calendar/model";
@@ -22,8 +22,9 @@ const format = (locale: string, options: Intl.DateTimeFormatOptions) => new Intl
 /**
  * A day field's editor in a popover anchored to its value: one line for a
  * day in words (`next fri`, `+3d`, `dec 1`, `2026-12-01`) with the day it
- * means shown under it, a month to pick from, Today and Clear. Enter or a
- * click on a day saves; Escape leaves the day as it was; a click outside
+ * means shown under it, a month to pick from, Today and Clear. The engine
+ * reads the words (as every date field does) while they are typed. Enter or
+ * a click on a day saves; Escape leaves the day as it was; a click outside
  * keeps a day typed in words.
  */
 export function DayPopover({
@@ -39,14 +40,15 @@ export function DayPopover({
   value: string | null;
   onDone: (choice: DayChoice) => void;
 }) {
-  const pending = useRef<DayChoice>(undefined);
+  // What a click outside keeps: the day typed in words, once the engine has read them.
+  const settle = useRef<() => Promise<DayChoice>>(() => Promise.resolve(undefined));
   return (
     <FitPopover
       triggerRef={triggerRef}
       isOpen={isOpen}
       onOpenChange={(open) => {
         if (!open) {
-          onDone(pending.current);
+          void settle.current().then(onDone);
         }
       }}
       placement="bottom start"
@@ -56,8 +58,8 @@ export function DayPopover({
         <DayPicker
           label={label}
           value={value}
-          onTyped={(day) => {
-            pending.current = day ?? undefined;
+          onSettle={(next) => {
+            settle.current = next;
           }}
           onDone={onDone}
         />
@@ -66,18 +68,32 @@ export function DayPopover({
   );
 }
 
-function DayPicker({ label, value, onTyped, onDone }: { label: string; value: string | null; onTyped: (day: string | null) => void; onDone: (choice: DayChoice) => void }) {
+function DayPicker({ label, value, onSettle, onDone }: { label: string; value: string | null; onSettle: (settle: () => Promise<DayChoice>) => void; onDone: (choice: DayChoice) => void }) {
   const t = useT();
   const { locale, direction } = useLocale();
   const today = useToday();
-  const settings = useOp("settings.get", {});
   const [words, setWords] = useState("");
   const [invalid, setInvalid] = useState(false);
   const typed = words.trim();
-  const parsed = typed === "" ? null : parseNaturalDay(typed, today, settings.data?.week_start ?? "monday");
+  const reading = useDayInWords(typed, today);
+  const parsed = reading.day;
   const shown = parsed ?? value;
   const [cursor, setCursor] = useState(shown ?? today);
+  const [followed, setFollowed] = useState(parsed);
+  if (parsed !== followed) {
+    setFollowed(parsed);
+    if (parsed !== null) {
+      // The month follows the day the words mean.
+      setCursor(parsed);
+    }
+  }
+  useEffect(() => {
+    // Words not read yet are read now; words that mean no day leave the day as it was.
+    onSettle(async () => (typed === "" ? undefined : ((reading.current ? parsed : await reading.read(typed)) ?? undefined)));
+  });
   const focusCursor = useRef(false);
+  // Asks for the cursor's day to take the focus once it is shown, where it already is too.
+  const [focusAsked, askFocus] = useState(0);
   const grid = useRef<HTMLTableElement>(null);
   const first = firstDayOfWeek(locale);
   const id = useId();
@@ -87,7 +103,7 @@ function DayPicker({ label, value, onTyped, onDone }: { label: string; value: st
       focusCursor.current = false;
       grid.current?.querySelector<HTMLButtonElement>(`button[data-day="${cursor}"]`)?.focus();
     }
-  }, [cursor]);
+  }, [cursor, focusAsked]);
 
   const month = `${cursor.slice(0, 7)}-01`;
   const start = startOfWeek(month, first);
@@ -97,7 +113,10 @@ function DayPicker({ label, value, onTyped, onDone }: { label: string; value: st
   const monthTitle = format(locale, { month: "long", year: "numeric" });
   const weekdayShort = format(locale, { weekday: "narrow" });
   const weekdayLong = format(locale, { weekday: "long" });
-  const preview = typed === "" ? null : parsed === null ? t("day-picker-unknown") : long.format(asDate(parsed));
+  // The engine's reading of the words; a failure of the transport itself says so.
+  const unknown = reading.error !== null && reading.error.error.code === "ipc" ? failureText(t, reading.error) : t("day-picker-unknown");
+  const problem = typed !== "" && reading.error !== null;
+  const preview = typed === "" ? null : parsed !== null ? long.format(asDate(parsed)) : problem ? unknown : null;
 
   const move = (to: string) => {
     if (to === cursor) {
@@ -160,32 +179,43 @@ function DayPicker({ label, value, onTyped, onDone }: { label: string; value: st
             onChange={(event) => {
               setWords(event.target.value);
               setInvalid(false);
-              const next = event.target.value.trim();
-              const day = next === "" ? null : parseNaturalDay(next, today, settings.data?.week_start ?? "monday");
-              onTyped(day);
-              if (day !== null) {
-                // The month follows the day the words mean.
-                setCursor(day);
-              }
             }}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 event.preventDefault();
                 if (typed === "") {
                   onDone(undefined);
-                } else if (parsed !== null) {
+                } else if (reading.current && parsed !== null) {
                   onDone(parsed);
                 } else {
-                  setInvalid(true);
+                  // Words typed faster than they were read: read them now.
+                  void reading.read(typed).then((day) => {
+                    if (day === null) {
+                      setInvalid(true);
+                    } else {
+                      onDone(day);
+                    }
+                  });
                 }
               } else if (event.key === "ArrowDown") {
                 event.preventDefault();
-                move(cursor);
+                if (typed === "" || reading.current) {
+                  move(cursor);
+                } else {
+                  // Words typed faster than they were read: into the month at the day they mean.
+                  void reading.read(typed).then((day) => {
+                    focusCursor.current = true;
+                    if (day !== null) {
+                      setCursor(day);
+                    }
+                    askFocus((asked) => asked + 1);
+                  });
+                }
               }
             }}
           />
         </span>
-        <p id={`${id}-preview`} className={classes(styles.preview, parsed === null && typed !== "" ? styles.problem : "muted")} aria-live="polite" data-testid="day-picker-preview">
+        <p id={`${id}-preview`} className={classes(styles.preview, problem && parsed === null ? styles.problem : "muted")} aria-live="polite" data-testid="day-picker-preview">
           {preview ?? t("day-picker-hint")}
         </p>
       </div>

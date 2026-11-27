@@ -30,6 +30,11 @@
             "type": "string"
           },
           {
+            "const": "rate_limited",
+            "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
+            "type": "string"
+          },
+          {
             "const": "busy",
             "description": "Another program kept the workspace locked; trying again later works.",
             "type": "string"
@@ -293,6 +298,24 @@
             "properties": {
               "new_tasks_per_day": {
                 "description": "Tasks a session may create in any 24 hours; left out: no limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "read_burst": {
+                "description": "Reads a session may make at once before `reads_per_minute` applies;\nleft out: one minute's worth.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "read_mb_per_minute": {
+                "description": "Megabytes of results a session may read in a minute; left out: no\nlimit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "reads_per_minute": {
+                "description": "Reads (tool calls that read, resources read, prompts) a session may\nmake in a minute, sustained; left out: no limit on reads.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
@@ -744,6 +767,24 @@
                 "minimum": 0,
                 "type": "integer"
               },
+              "read_burst": {
+                "description": "Reads a session may make at once before `reads_per_minute` applies;\nleft out: one minute's worth.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "read_mb_per_minute": {
+                "description": "Megabytes of results a session may read in a minute; left out: no\nlimit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "reads_per_minute": {
+                "description": "Reads (tool calls that read, resources read, prompts) a session may\nmake in a minute, sustained; left out: no limit on reads.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
               "trash_items_per_call": {
                 "description": "Items a standard agent may move to the trash in one call; left out:\nno limit.",
                 "format": "uint32",
@@ -1040,6 +1081,24 @@
             "properties": {
               "new_tasks_per_day": {
                 "description": "Tasks a session may create in any 24 hours; left out: no limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "read_burst": {
+                "description": "Reads a session may make at once before `reads_per_minute` applies;\nleft out: one minute's worth.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "read_mb_per_minute": {
+                "description": "Megabytes of results a session may read in a minute; left out: no\nlimit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "reads_per_minute": {
+                "description": "Reads (tool calls that read, resources read, prompts) a session may\nmake in a minute, sustained; left out: no limit on reads.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
@@ -61066,6 +61125,11 @@
                 "type": "string"
               },
               {
+                "const": "rate_limited",
+                "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
+                "type": "string"
+              },
+              {
                 "const": "busy",
                 "description": "Another program kept the workspace locked; trying again later works.",
                 "type": "string"
@@ -62936,6 +63000,11 @@
               {
                 "const": "limit",
                 "description": "A size limit, a cap on bulk changes or a rate limit.",
+                "type": "string"
+              },
+              {
+                "const": "rate_limited",
+                "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
                 "type": "string"
               },
               {
@@ -67715,6 +67784,55 @@
       "output_name": "ParsedQuery",
       "safety": "read",
       "summary": "Read a task query for the query field: highlighted pieces, the chips of the condition builder, the normal form and the first mistake with its place."
+    },
+    {
+      "app_reason": "It shows the app's date fields which day the words mean while they are typed; agents and scripts pass the same words to the date fields themselves, which read them the same way.",
+      "exposure": "app",
+      "id": "date.parse",
+      "input": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "A date typed in a field.",
+        "properties": {
+          "text": {
+            "description": "What was typed: `2026-12-31`, `today`, `fri`, `next mon`, `in 3d`,\n`+3d`, `dec 1`, `end of month`.",
+            "type": "string"
+          },
+          "today": {
+            "description": "The day the words count from (`YYYY-MM-DD`), for example today in\nthe person's own time zone; default: today in the workspace's time\nzone. Weeks start on the workspace's first day of the week.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "DateParseInput",
+        "type": "object"
+      },
+      "input_name": "DateParseInput",
+      "kind": "query",
+      "output": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "The day the words mean.",
+        "properties": {
+          "date": {
+            "description": "The day, `YYYY-MM-DD`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date"
+        ],
+        "title": "ParsedDate",
+        "type": "object"
+      },
+      "output_name": "ParsedDate",
+      "safety": "read",
+      "summary": "Read a date typed in words (fri, next mon, in 3d, +3d, dec 1, end of month, 2026-12-31) as the day it means, the way every date field reads it. Words that are no date fail with message date-invalid."
     },
     {
       "cli": "schedule",
@@ -74201,6 +74319,13 @@
                 "$ref": "#/$defs/Profile",
                 "description": "The profile the session ran with."
               },
+              "rate_limited": {
+                "default": 0,
+                "description": "Reads refused because the session read faster than its limits.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
               "reads": {
                 "description": "Operations that read.",
                 "format": "uint64",
@@ -74225,7 +74350,8 @@
               "started_at",
               "last_seen_at",
               "reads",
-              "writes"
+              "writes",
+              "rate_limited"
             ],
             "type": "object"
           },
@@ -74277,7 +74403,7 @@
       },
       "output_name": "AgentSessionList",
       "safety": "read",
-      "summary": "List agent sessions, newest first, with their client, profile, times and counts of reads and writes."
+      "summary": "List agent sessions, newest first, with their client, profile, times and counts of reads, writes and reads refused by the read limits."
     },
     {
       "app_reason": "It sets the rights of agents; an agent that could call it would raise its own rights beyond what the person allowed.",
@@ -74339,6 +74465,24 @@
             "properties": {
               "new_tasks_per_day": {
                 "description": "Tasks a session may create in any 24 hours; left out: no limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "read_burst": {
+                "description": "Reads a session may make at once before `reads_per_minute` applies;\nleft out: one minute's worth.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "read_mb_per_minute": {
+                "description": "Megabytes of results a session may read in a minute; left out: no\nlimit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "reads_per_minute": {
+                "description": "Reads (tool calls that read, resources read, prompts) a session may\nmake in a minute, sustained; left out: no limit on reads.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
@@ -74537,6 +74681,21 @@
                 "const": "trash_items_per_hour",
                 "description": "Items a standard agent session moves to the trash in an hour\n(default 50).",
                 "type": "string"
+              },
+              {
+                "const": "read_burst",
+                "description": "Reads at once before the sustained rate applies (default 60).",
+                "type": "string"
+              },
+              {
+                "const": "reads_per_minute",
+                "description": "Reads in a minute, sustained (default 600).",
+                "type": "string"
+              },
+              {
+                "const": "read_mb_per_minute",
+                "description": "Megabytes read in a minute (default 8).",
+                "type": "string"
               }
             ]
           }
@@ -74560,6 +74719,33 @@
               "$ref": "#/$defs/AgentLimit"
             },
             "type": "array"
+          },
+          "read_burst": {
+            "description": "Reads a session may make at once, 1 to 1000000.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "read_mb_per_minute": {
+            "description": "Megabytes a session may read in a minute, 1 to 1000000.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "reads_per_minute": {
+            "description": "Reads a session may make in a minute, sustained, 1 to 1000000.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "reset": {
             "description": "Limits to set back to their default.",
@@ -74609,6 +74795,24 @@
             "properties": {
               "new_tasks_per_day": {
                 "description": "Tasks a session may create in any 24 hours; left out: no limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "read_burst": {
+                "description": "Reads a session may make at once before `reads_per_minute` applies;\nleft out: one minute's worth.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "read_mb_per_minute": {
+                "description": "Megabytes of results a session may read in a minute; left out: no\nlimit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "reads_per_minute": {
+                "description": "Reads (tool calls that read, resources read, prompts) a session may\nmake in a minute, sustained; left out: no limit on reads.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
@@ -74777,7 +74981,7 @@
       },
       "output_name": "SettingsChange",
       "safety": "app",
-      "summary": "Change the limits on agent sessions: changes a minute, new tasks a day, and items moved to the trash per call and per hour. Each is a number or no limit."
+      "summary": "Change the limits on agent sessions: changes a minute, new tasks a day, items moved to the trash per call and per hour, and reads (at once, a minute, megabytes a minute). Each is a number or no limit."
     },
     {
       "app_reason": "It sets what agents may do; an agent that could call it would lift the rules the person set for agents.",
@@ -75860,6 +76064,11 @@
                 "type": "string"
               },
               {
+                "const": "rate_limited",
+                "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
+                "type": "string"
+              },
+              {
                 "const": "busy",
                 "description": "Another program kept the workspace locked; trying again later works.",
                 "type": "string"
@@ -76387,6 +76596,11 @@
               {
                 "const": "limit",
                 "description": "A size limit, a cap on bulk changes or a rate limit.",
+                "type": "string"
+              },
+              {
+                "const": "rate_limited",
+                "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
                 "type": "string"
               },
               {
@@ -77341,6 +77555,11 @@
                 "type": "string"
               },
               {
+                "const": "rate_limited",
+                "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
+                "type": "string"
+              },
+              {
                 "const": "busy",
                 "description": "Another program kept the workspace locked; trying again later works.",
                 "type": "string"
@@ -78254,6 +78473,11 @@
                 "type": "string"
               },
               {
+                "const": "rate_limited",
+                "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
+                "type": "string"
+              },
+              {
                 "const": "busy",
                 "description": "Another program kept the workspace locked; trying again later works.",
                 "type": "string"
@@ -78857,6 +79081,11 @@
                 "type": "string"
               },
               {
+                "const": "rate_limited",
+                "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
+                "type": "string"
+              },
+              {
                 "const": "busy",
                 "description": "Another program kept the workspace locked; trying again later works.",
                 "type": "string"
@@ -79235,6 +79464,11 @@
               {
                 "const": "limit",
                 "description": "A size limit, a cap on bulk changes or a rate limit.",
+                "type": "string"
+              },
+              {
+                "const": "rate_limited",
+                "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
                 "type": "string"
               },
               {
@@ -79789,6 +80023,11 @@
                 "type": "string"
               },
               {
+                "const": "rate_limited",
+                "description": "An agent read faster than its session's read limits allow;\n`details.retry_after` says how many seconds to wait.",
+                "type": "string"
+              },
+              {
                 "const": "busy",
                 "description": "Another program kept the workspace locked; trying again later works.",
                 "type": "string"
@@ -80222,6 +80461,13 @@
                 "$ref": "#/$defs/Profile",
                 "description": "The profile the session ran with."
               },
+              "rate_limited": {
+                "default": 0,
+                "description": "Reads refused because the session read faster than its limits.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
               "reads": {
                 "description": "Operations that read.",
                 "format": "uint64",
@@ -80246,7 +80492,8 @@
               "started_at",
               "last_seen_at",
               "reads",
-              "writes"
+              "writes",
+              "rate_limited"
             ],
             "type": "object"
           },
@@ -81901,6 +82148,24 @@
             "properties": {
               "new_tasks_per_day": {
                 "description": "Tasks a session may create in any 24 hours; left out: no limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "read_burst": {
+                "description": "Reads a session may make at once before `reads_per_minute` applies;\nleft out: one minute's worth.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "read_mb_per_minute": {
+                "description": "Megabytes of results a session may read in a minute; left out: no\nlimit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "reads_per_minute": {
+                "description": "Reads (tool calls that read, resources read, prompts) a session may\nmake in a minute, sustained; left out: no limit on reads.",
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"

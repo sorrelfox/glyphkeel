@@ -14,6 +14,8 @@ publish.workspace = true
 [dependencies]
 anyhow = { workspace = true }
 gk-api = { workspace = true }
+# The worked examples of friendly dates, written for the page's tests.
+gk-query = { workspace = true }
 serde_json = { workspace = true }
 # The licence policy (licences.toml) and cargo-deny's list, for the notices.
 toml = { workspace = true }

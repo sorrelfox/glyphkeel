@@ -8,13 +8,42 @@
 /// The English messages.
 const MESSAGES_FTL: &str = include_str!("../i18n/en/app.ftl");
 
-/// Message `id` with its placeables filled in; the ID itself when there is
-/// no such message.
+/// The app's messages, in English and the languages they are translated to.
+const MESSAGES: gk_engine::Messages = gk_engine::Messages::new(MESSAGES_FTL);
+
+/// Message `id` in the app's language (the one chosen in Preferences, else
+/// the system's; see [`follow_preferences`]) with its placeables filled in:
+/// for what Rust shows itself, such as native dialogs, notifications and
+/// the tray menu. The ID itself when there is no such message.
 pub(crate) fn text(id: &str, args: &[(&str, String)]) -> String {
-    match pattern(id) {
-        Some(p) => render(&p, args),
-        None => id.to_owned(),
-    }
+    MESSAGES.text(id, args)
+}
+
+/// Message `id` in English: the `message` of an error, which the page
+/// shows in its own language by the error's message ID.
+fn english(id: &str, args: &[(&str, String)]) -> String {
+    MESSAGES.english(id, args)
+}
+
+/// The language of the app's own text for the page's preferences `ui`:
+/// the language chosen in Preferences, else the system's, else English;
+/// the same as the page's, so that a dialog never speaks another language
+/// than the window behind it.
+pub(crate) fn language_for(
+    ui: &serde_json::Map<String, serde_json::Value>,
+    system: Option<&str>,
+) -> String {
+    let chosen = ui
+        .get(gk_engine::language::UI_LANGUAGE_PREF)
+        .and_then(serde_json::Value::as_str);
+    gk_engine::language::resolve(None, None, chosen, system)
+}
+
+/// Makes the app's own text follow the page's preferences `ui`: at the
+/// start, and again whenever the page changes its language.
+pub(crate) fn follow_preferences(ui: &serde_json::Map<String, serde_json::Value>) {
+    let system = gk_engine::language::system_language();
+    gk_engine::language::set_language(&language_for(ui, system.as_deref()));
 }
 
 fn args_value(args: &[(&str, String)]) -> serde_json::Value {
@@ -34,7 +63,7 @@ pub(crate) fn error(
     args: &[(&str, String)],
     make: impl FnOnce(String) -> gk_api::OpError,
 ) -> gk_api::OpError {
-    let mut error = make(text(id, args)).with_detail("message_id", id);
+    let mut error = make(english(id, args)).with_detail("message_id", id);
     if !args.is_empty() {
         error = error.with_detail("args", args_value(args));
     }
@@ -44,106 +73,13 @@ pub(crate) fn error(
 /// Sets `error`'s hint to message `id`, with its ID and arguments
 /// (`hint_id`, `hint_args`).
 pub(crate) fn hint(error: gk_api::OpError, id: &str, args: &[(&str, String)]) -> gk_api::OpError {
-    let mut error = error.with_hint(text(id, args)).with_detail("hint_id", id);
+    let mut error = error
+        .with_hint(english(id, args))
+        .with_detail("hint_id", id);
     if !args.is_empty() {
         error = error.with_detail("hint_args", args_value(args));
     }
     error
-}
-
-/// The pattern of message `id`: its first line and the indented lines that
-/// continue it (the variants of a plural).
-fn pattern(id: &str) -> Option<String> {
-    let mut lines = MESSAGES_FTL.lines();
-    let first = lines.find_map(|line| {
-        let (name, value) = line.split_once(" = ")?;
-        (!line.starts_with([' ', '#']) && name.trim() == id).then_some(value)
-    })?;
-    let mut out = first.to_owned();
-    for line in lines.take_while(|l| l.starts_with(' ')) {
-        out.push('\n');
-        out.push_str(line.trim());
-    }
-    Some(out)
-}
-
-/// The index just after the `}` that closes the placeable opened at `open`.
-fn closing(s: &str, open: usize) -> Option<usize> {
-    let mut depth = 0usize;
-    for (i, c) in s[open..].char_indices() {
-        match c {
-            '{' => depth += 1,
-            '}' => {
-                depth -= 1;
-                if depth == 0 {
-                    return Some(open + i + 1);
-                }
-            }
-            _ => {}
-        }
-    }
-    None
-}
-
-/// Fills in a pattern: `{ $name }` placeables, `{ "text" }` literals and
-/// selections on a number (`{ $count -> [one] … *[other] … }`) with
-/// English plural rules.
-fn render(pattern: &str, args: &[(&str, String)]) -> String {
-    let value = |name: &str| {
-        args.iter()
-            .find(|(n, _)| *n == name)
-            .map(|(_, v)| v.as_str())
-    };
-    let mut out = String::with_capacity(pattern.len() + 16);
-    let mut rest = pattern;
-    while let Some(open) = rest.find('{') {
-        out.push_str(&rest[..open]);
-        let Some(close) = closing(rest, open) else {
-            out.push_str(&rest[open..]);
-            return out;
-        };
-        let inner = rest[open + 1..close - 1].trim();
-        if let Some((selector, variants)) = inner.split_once("->") {
-            let name = selector.trim().trim_start_matches('$');
-            out.push_str(&render(select(value(name), variants), args));
-        } else if let Some(name) = inner.strip_prefix('$') {
-            out.push_str(value(name).unwrap_or(name));
-        } else {
-            out.push_str(inner.trim_matches('"'));
-        }
-        rest = &rest[close..];
-    }
-    out.push_str(rest);
-    out
-}
-
-/// The pattern of the variant that `value` selects.
-fn select<'a>(value: Option<&str>, variants: &'a str) -> &'a str {
-    let category = match value.map(str::parse::<f64>) {
-        Some(Ok(n)) if (n - 1.0).abs() < f64::EPSILON => "one",
-        _ => "other",
-    };
-    let mut fallback = "";
-    let mut chosen = None;
-    for line in variants
-        .lines()
-        .map(str::trim)
-        .filter(|l| l.starts_with(['[', '*']))
-    {
-        let default = line.starts_with('*');
-        let line = line.trim_start_matches('*');
-        let Some((key, text)) = line.trim_start_matches('[').split_once(']') else {
-            continue;
-        };
-        let text = text.trim();
-        if default {
-            fallback = text;
-        }
-        if chosen.is_none() && (Some(key) == value || key == category) {
-            chosen = Some(text);
-        }
-    }
-    chosen.unwrap_or(fallback)
 }
 
 #[cfg(test)]
@@ -169,7 +105,7 @@ mod tests {
                 ("name", "daily-2026-11-24".to_owned()),
                 ("summary", "Something.".to_owned()),
             ];
-            let shown = text(id, &args);
+            let shown = english(id, &args);
             assert!(!shown.trim().is_empty(), "{id}");
             assert!(!shown.contains(['{', '}', '[']), "{id}: {shown}");
         }
@@ -199,7 +135,7 @@ mod tests {
         let refs: Vec<&str> = texts.iter().map(String::as_str).collect();
         // Window labels and their prefixes, not messages.
         let labels = ["quick-add", "task-", "wiki-"];
-        let (missing, unused) = gk_engine::Messages(MESSAGES_FTL).check_usage(&refs, &labels);
+        let (missing, unused) = MESSAGES.check_usage(&refs, &labels);
         assert!(
             missing.is_empty(),
             "named in the code but not in app.ftl: {missing:?}"
@@ -223,5 +159,28 @@ mod tests {
             text("confirm-backup-delete", &[("name", "manual-1".into())]).contains("“manual-1”")
         );
         assert_eq!(text("no-such-message", &[]), "no-such-message");
+    }
+
+    #[test]
+    fn the_language_follows_preferences_then_the_system() {
+        let mut ui = serde_json::Map::new();
+        assert_eq!(language_for(&ui, None), "en");
+        assert_eq!(language_for(&ui, Some("de_DE.UTF-8")), "de-DE");
+        ui.insert("language".into(), "system".into());
+        assert_eq!(language_for(&ui, Some("fr")), "fr");
+        ui.insert("language".into(), "en-XA".into());
+        assert_eq!(language_for(&ui, Some("fr")), "en-XA");
+    }
+
+    #[test]
+    fn shown_text_follows_the_language_and_errors_stay_english() {
+        gk_engine::language::with_language("en-XA", || {
+            let shown = text("lock-notice-title", &[]);
+            assert!(shown.starts_with('[') && shown.ends_with(']'), "{shown}");
+            assert_ne!(shown, english("lock-notice-title", &[]));
+            let e = error("preferences-too-many", &[], gk_api::OpError::invalid);
+            assert_eq!(e.message, english("preferences-too-many", &[]));
+            assert_eq!(e.details["message_id"], "preferences-too-many");
+        });
     }
 }

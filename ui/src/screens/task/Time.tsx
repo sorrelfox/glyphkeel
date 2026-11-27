@@ -432,7 +432,9 @@ export function ReminderValue({ task, readOnly }: { task: Task; readOnly: boolea
         ) : (
           <>
             <Bell className={classes("ic s", reminder.acknowledged && "faint")} />
-            {label}
+            <span className="truncate" title={label}>
+              {label}
+            </span>
           </>
         )}
       </Button>

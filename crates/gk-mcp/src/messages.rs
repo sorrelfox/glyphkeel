@@ -12,11 +12,13 @@ use serde_json::{Map, Value};
 /// The English messages, in Fluent's syntax.
 pub(crate) const MCP_FTL: &str = include_str!("../i18n/en/mcp.ftl");
 
-const MCP: Messages = Messages(MCP_FTL);
+const MCP: Messages = Messages::new(MCP_FTL);
 
-/// Message `id` with its placeables filled in.
+/// Message `id` with its placeables filled in. Always in English: the MCP
+/// server's text is for agents and their logs, whatever language the
+/// process shows its own text in.
 pub(crate) fn text(id: &str, args: &[(&str, String)]) -> String {
-    MCP.text(id, args)
+    MCP.english(id, args)
 }
 
 fn args_value(args: &[(&str, String)]) -> Value {

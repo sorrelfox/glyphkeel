@@ -17,6 +17,11 @@ gk-core = { workspace = true }
 gk-markdown = { workspace = true }
 gk-query = { workspace = true }
 gk-store = { workspace = true }
+icu_calendar = { workspace = true }
+icu_datetime = { workspace = true }
+icu_decimal = { workspace = true }
+icu_locale_core = { workspace = true }
+icu_plurals = { workspace = true }
 image = { workspace = true }
 jiff = { workspace = true }
 serde = { workspace = true }
@@ -24,6 +29,10 @@ serde_json = { workspace = true }
 serde_path_to_error = { workspace = true }
 tracing = { workspace = true }
 zip = { workspace = true }
+
+# The person's language on Windows (the Desktop key's preferred UI languages).
+[target.'cfg(windows)'.dependencies]
+winreg = { workspace = true }
 
 [dev-dependencies]
 gk-seed = { workspace = true }

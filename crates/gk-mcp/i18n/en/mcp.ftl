@@ -21,6 +21,15 @@ mcp-rate-limit-hint = { $seconds ->
         [one] Wait one second before the next change.
        *[other] Wait { $seconds } s before the next change.
     }
+mcp-read-limit-calls = { $per_minute ->
+        [one] This session read faster than its limit: { $burst } at once, then one a minute.
+       *[other] This session read faster than its limit: { $burst } at once, then { $per_minute } a minute.
+    }
+mcp-read-limit-bytes = This session read more than its limit of { $mb } MB a minute.
+mcp-read-limit-hint = { $seconds ->
+        [one] Wait one second, then read again; read fewer or smaller results, such as with a narrower query or a lower limit.
+       *[other] Wait { $seconds } s, then read again; read fewer or smaller results, such as with a narrower query or a lower limit.
+    }
 
 ## Starting the server
 

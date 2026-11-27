@@ -135,6 +135,7 @@ The safety class decides who may run an operation:
 | `list.layout.get` | read | app | — | — |
 | `list.layout.update` | write | app | — | — |
 | `query.parse` | read | app | — | — |
+| `date.parse` | read | app | — | — |
 | `schedule.get` | read | app, command line, MCP | `get_schedule` | `glyphkeel schedule` |
 | `schedule.preview_move` | read | app | — | — |
 | `gantt.layout.get` | read | app | — | — |
@@ -929,6 +930,14 @@ Input: `QueryParseInput`. Output: `ParsedQuery`. Schemas: [catalog.schema.json](
 
 Not available to agents: It serves the app's query field as the person types; agents and scripts run queries with task.search, which reports the same mistakes.
 
+## `date.parse`
+
+Read a date typed in words (fri, next mon, in 3d, +3d, dec 1, end of month, 2026-12-31) as the day it means, the way every date field reads it. Words that are no date fail with message date-invalid.
+
+Input: `DateParseInput`. Output: `ParsedDate`. Schemas: [catalog.schema.json](catalog.schema.json).
+
+Not available to agents: It shows the app's date fields which day the words mean while they are typed; agents and scripts pass the same words to the date fields themselves, which read them the same way.
+
 ## `schedule.get`
 
 The schedule of a project or a query for the Gantt chart: dated tasks as a tree with summary ranges for parents, milestones, the tasks without dates, blocks links as finish-to-start dependencies, and problems such as a task starting before its blocker ends.
@@ -1083,7 +1092,7 @@ Input: `FileCoverInput`. Output: `FileCoverChange`. Schemas: [catalog.schema.jso
 
 ## `agent.sessions`
 
-List agent sessions, newest first, with their client, profile, times and counts of reads and writes.
+List agent sessions, newest first, with their client, profile, times and counts of reads, writes and reads refused by the read limits.
 
 Input: `AgentSessionsInput`. Output: `AgentSessionList`. Schemas: [catalog.schema.json](catalog.schema.json).
 
@@ -1097,7 +1106,7 @@ Not available to agents: It sets the rights of agents; an agent that could call 
 
 ## `agent.limits.update`
 
-Change the limits on agent sessions: changes a minute, new tasks a day, and items moved to the trash per call and per hour. Each is a number or no limit.
+Change the limits on agent sessions: changes a minute, new tasks a day, items moved to the trash per call and per hour, and reads (at once, a minute, megabytes a minute). Each is a number or no limit.
 
 Input: `AgentLimitsPatch`. Output: `SettingsChange`. Schemas: [catalog.schema.json](catalog.schema.json).
 

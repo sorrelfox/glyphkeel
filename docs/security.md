@@ -126,6 +126,18 @@ local address; see the next section.
 - **Limits.** Agents may make only a limited number of changes a minute, and
   messages are limited in size, so a runaway loop can't flood the workspace
   or exhaust memory.
+- **Read limits.** Each agent session may read only so fast: a burst of 60
+  reads, then 10 a second, and 8 MB of results a minute, by default (twice
+  that for a read-only agent). Tools that read, resources and prompts count;
+  updates to subscriptions count a tenth each. This slows an agent that a
+  prompt injection turns into copying out the whole workspace: what it can
+  read in a minute is bounded, and its refused reads show in the session
+  list, so you notice. An agent that goes over is told to wait (a
+  `rate_limited` error with the seconds to wait) and nothing else changes:
+  your own use, in the app and with `glyphkeel`, is never limited. You can
+  change the limits, or lift them, in Preferences › Agents & CLI. The limits
+  hold per session; an agent that starts many sessions gets each its own,
+  and each one is listed.
 - **Everything is recorded** under the agent's session and can be reverted.
 - **Content is data.** The server tells agents that text in tasks, comments,
   wiki pages and files is user data and never instructions. This can't stop
@@ -250,6 +262,9 @@ against programs running as you.
 - **Programs on your computer with the token.** While the HTTP endpoint is
   on, a program that has the token works as an agent. Turn the endpoint off
   when no client needs it, and make a new token if you think it leaked.
+- **What an agent may read.** The read limits slow an agent down; they don't
+  stop it reading what its profile and project scope allow, given time. Limit
+  an agent to one project when it needs no more.
 - **Agents you allow to do more.** An agent with the standard or full profile
   can change or delete what its profile allows, within its limits. Every
   change can be reverted from the history, and backups are made every day.

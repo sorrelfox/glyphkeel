@@ -65,7 +65,7 @@ describe("labels from the task panel", () => {
     fireEvent.change(search, { target: { value: "garden" } });
     const create = await screen.findByRole("menuitemcheckbox", { name: named(/^Create label “garden”$/) });
     fireEvent.click(create);
-    const chip = await within(panel).findByText("garden", { selector: ".chip" });
+    const chip = (await within(panel).findByText("garden", { selector: ".chip > span" })).parentElement as HTMLElement;
     // Personal's labels are green, orange and yellow: red is the first one free.
     expect(chip.className).toContain("hue-red");
     const stored = (await transport.call("task.get", { keys: [task.key] })) as { items: { labels: { name: string }[] }[] };
@@ -95,7 +95,7 @@ describe("labels from the task panel", () => {
     const name = within(form).getByRole("textbox", { name: "Name" });
     fireEvent.change(name, { target: { value: "urgent" } });
     fireEvent.submit(name);
-    const chip = await within(panel).findByText("urgent", { selector: ".chip" });
+    const chip = (await within(panel).findByText("urgent", { selector: ".chip > span" })).parentElement as HTMLElement;
     expect(chip.className).toContain("hue-red");
   });
 });

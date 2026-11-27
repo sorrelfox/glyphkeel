@@ -81,7 +81,7 @@ pub(super) fn cli() -> String {
     s += "# Command line\n\n";
     s += "`glyphkeel <area> <verb> [arguments] [--options]`. Every command runs one operation \
 of the catalog ([operations.md](operations.md)). Global options: `--workspace`, `--json`, \
-`--quiet`, `--no-color`.\n\n";
+`--quiet`, `--no-color`, `--tz`, `--lang`.\n\n";
     s += "With `--json` a command prints exactly the operation's output, as described in \
 [catalog.schema.json](catalog.schema.json).\n\n";
     s += "| Command | Operation | What it does |\n|---|---|---|\n";
@@ -109,6 +109,15 @@ commands work on the workspaces of the data folder rather than inside one:\n\n";
     s += "| `glyphkeel workspace decrypt` | Store the workspace unencrypted again; nobody may have it open |\n";
     s += "| `glyphkeel workspace open <name or path>` | Work in this workspace from now on: \
 commands, agents and the app's next start use it |\n";
+    s += "\n## Language\n\n";
+    s += "Help, output for people and error messages are in the language `--lang` names (a \
+language tag such as `de` or `pt-BR`), else the one `GLYPHKEEL_LANG` names, else the language \
+chosen in the app's Preferences, else the system's (`LANGUAGE`, `LC_ALL`, `LC_MESSAGES`, `LANG`; \
+on Windows the display language), else English. A message not yet translated shows in English. \
+Numbers and dates in the output for people follow the language. `en-XA` is a pseudo-language for \
+testing translations. Machine text stays English: `--json` output (an error's `message`, with \
+its `message_id` and `args` for translating it), command and option names, and everything \
+`glyphkeel mcp` serves to agents.\n";
     s += "\n## Exit codes\n\n";
     s += "| Code | Meaning |\n|---|---|\n";
     s += "| 0 | Success |\n";

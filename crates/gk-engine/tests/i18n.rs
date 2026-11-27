@@ -43,7 +43,7 @@ fn every_message_the_engine_names_exists_and_every_message_is_named() {
     let texts = sources(&["gk-engine/src", "gk-core/src"]);
     let refs: Vec<&str> = texts.iter().map(String::as_str).collect();
     // Messages about queries are gk-query's own.
-    let query = Messages(gk_query::error::MESSAGES_FTL).ids();
+    let query = Messages::new(gk_query::error::MESSAGES_FTL).ids();
     let (missing, unused) = ENGINE_MESSAGES.check_usage(&refs, &query);
     assert!(
         missing.is_empty(),

@@ -32,6 +32,12 @@ pub fn glyphkeel(home: &Path) -> Command {
         )
         .env("HOME", home)
         .env("NO_COLOR", "1")
+        // English whatever the language of the machine running the tests.
+        .env("LANG", "C.UTF-8")
+        .env_remove("LANGUAGE")
+        .env_remove("LC_ALL")
+        .env_remove("LC_MESSAGES")
+        .env_remove(gk_engine::language::LANG_ENV)
         .env_remove("GLYPHKEEL_WORKSPACE")
         .env_remove(gk_store::PASSPHRASE_ENV)
         .env_remove("RUST_LOG");

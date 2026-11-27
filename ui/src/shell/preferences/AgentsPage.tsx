@@ -359,6 +359,9 @@ export const LIMIT_ROWS: readonly LimitRow[] = [
   { limit: "new_tasks_per_day", message: "agents-limit-tasks", byDefault: undefined, offered: 500 },
   { limit: "trash_items_per_call", message: "agents-limit-trash-call", byDefault: 20, offered: 20 },
   { limit: "trash_items_per_hour", message: "agents-limit-trash-hour", byDefault: 50, offered: 50 },
+  { limit: "read_burst", message: "agents-limit-read-burst", byDefault: 60, offered: 60 },
+  { limit: "reads_per_minute", message: "agents-limit-reads", byDefault: 600, offered: 600 },
+  { limit: "read_mb_per_minute", message: "agents-limit-read-mb", byDefault: 8, offered: 8 },
 ];
 
 /** The largest number a limit can be set to, as the engine accepts it. */
@@ -619,6 +622,9 @@ function SessionRow({ session }: { session: AgentSession }) {
               : t("agents-session-ran", { started: moment(session.started_at), ended: moment(session.ended_at ?? session.last_seen_at) })}
           </small>
           <small>{t("agents-session-counts", { reads: session.reads, writes: session.writes })}</small>
+          {session.rate_limited > 0 && (
+            <small data-testid="agent-session-limited">{t("agents-session-limited", { count: session.rate_limited })}</small>
+          )}
         </span>
         <span className={styles.control}>
           {session.writes > 0 && asking === null && (
