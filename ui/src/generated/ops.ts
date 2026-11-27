@@ -1810,6 +1810,14 @@ export type DashboardWidgetInput = {
   widget: string;
 };
 
+/** A date typed in a field. */
+export type DateParseInput = {
+  /** What was typed: `2026-12-31`, `today`, `fri`, `next mon`, `in 3d`, `+3d`, `dec 1`, `end of month`. */
+  text: string;
+  /** The day the words count from (`YYYY-MM-DD`), for example today in the person's own time zone; default: today in the workspace's time zone. Weeks start on the workspace's first day of the week. */
+  today?: string | null;
+};
+
 /** A range of days, both included. */
 export type DayRange = {
   /** The last day (`YYYY-MM-DD`). */
@@ -2688,6 +2696,12 @@ export type PageBlueprint = {
   parent?: string | null;
   /** Its title. */
   title: string;
+};
+
+/** The day the words mean. */
+export type ParsedDate = {
+  /** The day, `YYYY-MM-DD`. */
+  date: string;
 };
 
 /** A query as the query field shows it. */
@@ -6308,6 +6322,7 @@ export interface OpMap {
   "list.layout.get": { input: ListLayoutGetInput; output: ListLayoutChange; safety: "read"; kind: "query" };
   "list.layout.update": { input: ListLayoutUpdateInput; output: ListLayoutChange; safety: "write"; kind: "command" };
   "query.parse": { input: QueryParseInput; output: ParsedQuery; safety: "read"; kind: "query" };
+  "date.parse": { input: DateParseInput; output: ParsedDate; safety: "read"; kind: "query" };
   "schedule.get": { input: ScheduleInput; output: Schedule; safety: "read"; kind: "query" };
   "schedule.preview_move": { input: SchedulePreviewInput; output: SchedulePreview; safety: "read"; kind: "query" };
   "gantt.layout.get": { input: GanttLayoutGetInput; output: GanttLayoutChange; safety: "read"; kind: "query" };
@@ -6490,6 +6505,7 @@ export const OP_SAFETY = {
   "list.layout.get": "read",
   "list.layout.update": "write",
   "query.parse": "read",
+  "date.parse": "read",
   "schedule.get": "read",
   "schedule.preview_move": "read",
   "gantt.layout.get": "read",
@@ -6638,6 +6654,10 @@ export function makeOps(call: Call) {
       updateWidget: (input: OpMap["dashboard.update_widget"]["input"]) => call("dashboard.update_widget", input),
       /** Remove a widget from a dashboard. (write) */
       removeWidget: (input: OpMap["dashboard.remove_widget"]["input"]) => call("dashboard.remove_widget", input),
+    },
+    date: {
+      /** Read a date typed in words (fri, next mon, in 3d, +3d, dec 1, end of month, 2026-12-31) as the day it means, the way every date field reads it. Words that are no date fail with message date-invalid. (read) */
+      parse: (input: OpMap["date.parse"]["input"]) => call("date.parse", input),
     },
     description: {
       /** List the revisions of a task's or project's description, newest first, conflict copies included. (read) */

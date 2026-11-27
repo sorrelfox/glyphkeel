@@ -372,7 +372,7 @@ function Loaded({
             <MenuTrigger>
               <Button className="val" isDisabled={lockedOr("priority")} aria-label={t("prop-priority-value", { value: t(`priority-${task.priority}`) })} data-task-key="priority">
                 <PriorityGlyph priority={task.priority} />
-                {t(`priority-${task.priority}`)}
+                <Whole text={t(`priority-${task.priority}`)} />
               </Button>
               <FitPopover className="menuPopover" placement="bottom start" offset={4}>
                 <Menu className="menu" aria-label={t("prop-priority")}>
@@ -393,7 +393,7 @@ function Loaded({
             <MenuTrigger>
               <Button className="val" isDisabled={lockedOr("type")} aria-label={t("prop-type-value", { value: task.type.name })}>
                 <TypeGlyph glyph={task.type.glyph} />
-                {task.type.name}
+                <Whole text={task.type.name} />
               </Button>
               <FitPopover className="menuPopover" placement="bottom start" offset={4}>
                 <Menu className="menu" aria-label={t("prop-type")}>
@@ -426,12 +426,8 @@ function Loaded({
           </Prop>
           <Prop label={t("prop-spent")}>
             <span className={classes("num", styles.static)}>
-              {spent === 0 && left === null ? <span className="faint">{t("prop-none")}</span> : durations.format(spent)}
-              {left !== null && (
-                <span className={left < 0 ? styles.over : "faint"}>
-                  {left < 0 ? t("prop-over-by", { time: durations.format(-left) }) : t("prop-left", { time: durations.format(left) })}
-                </span>
-              )}
+              {spent === 0 && left === null ? <span className="faint">{t("prop-none")}</span> : <Whole text={durations.format(spent)} />}
+              {left !== null && <Whole className={left < 0 ? styles.over : "faint"} text={left < 0 ? t("prop-over-by", { time: durations.format(-left) }) : t("prop-left", { time: durations.format(left) })} />}
             </span>
           </Prop>
           <Prop label={t("prop-version")}>
@@ -513,6 +509,19 @@ function LockedNote({ locked, status, project }: { locked: ReadonlySet<string>; 
     <p className={classes("meta", styles.ruleNote)} role="note">
       {t("panel-rule-read-only", { status, fields: list, count: names.length })}
     </p>
+  );
+}
+
+/**
+ * A phrase of a value that never breaks inside: on one line, ending in an
+ * ellipsis when even its own line is too narrow, with the whole text in its
+ * tooltip. The value's accessible name holds it too.
+ */
+function Whole({ text, className }: { text: string; className?: string | undefined }) {
+  return (
+    <span className={classes("truncate", className)} title={text}>
+      {text}
+    </span>
   );
 }
 
@@ -712,7 +721,7 @@ function DurationValue({
   }
   return (
     <Button className="val num" isDisabled={readOnly} aria-label={t("prop-date-value", { name: label, value: value === null ? t("prop-none") : durations.format(value) })} onPress={() => { setEditing(value === null ? "" : durations.format(value)); }}>
-      {value === null ? <span className="faint">{t("prop-none")}</span> : durations.format(value)}
+      {value === null ? <span className="faint">{t("prop-none")}</span> : <Whole text={durations.format(value)} />}
     </Button>
   );
 }
@@ -738,8 +747,8 @@ function Labels({ task, project, readOnly, onChange }: { task: Task; project: Pr
   return (
     <>
       {task.labels.map((label) => (
-        <span key={label.id} className={`chip hue-${label.hue}`}>
-          {label.name}
+        <span key={label.id} className={classes(`chip hue-${label.hue}`, styles.labelChip)}>
+          <Whole text={label.name} />
         </span>
       ))}
       {project.labels.length === 0 ? (

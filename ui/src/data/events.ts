@@ -19,8 +19,8 @@ const FLOW: readonly OpId[] = ["report.created_closed", "report.cumulative_flow"
 export const ENTITY_QUERIES: Readonly<Record<string, readonly OpId[]>> = {
   // `workspace.get` carries the settings too.
   // Durations are told in the workspace's units, and the timer reminds after its hours.
-  // The trash counts its days left by the `trash_days` setting.
-  settings: ["settings.get", "workspace.get", "timer.get", "time.report", "trash.list", ...FLOW],
+  // The trash counts its days left by the `trash_days` setting, and dates in words count weeks from `week_start`.
+  settings: ["settings.get", "workspace.get", "date.parse", "timer.get", "time.report", "trash.list", ...FLOW],
   // Open-task counts show in the project tree. Rendered texts link task keys
   // only while the task exists, and descriptions keep their revisions.
   // A task's reminder is one of its fields; the time report shows titles.
