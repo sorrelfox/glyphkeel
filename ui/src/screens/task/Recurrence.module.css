@@ -16,11 +16,16 @@
 }
 
 .form {
+  inline-size: min(34rem, calc(100vw - 32px));
+  max-inline-size: 100%;
+}
+
+/* The choices and the preview scroll when the window is short; the buttons stay. */
+.body {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  inline-size: min(34rem, 90vw);
-  padding: 12px;
+  padding: 12px 12px 10px;
 }
 
 .group {
@@ -54,8 +59,19 @@
 }
 
 .day {
+  position: relative;
   min-inline-size: 3.5ch;
   justify-content: center;
+}
+
+/* Read out, not shown. */
+.spoken {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .dayOn {
@@ -100,8 +116,11 @@
 
 .buttons {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+  padding: 10px 12px 12px;
+  border-block-start: 1px solid var(--border);
 }
 
 /* ---------- what the panel says about a series ---------- */

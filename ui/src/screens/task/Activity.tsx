@@ -3,9 +3,10 @@
 
 import { History as HistoryIcon, MoreHorizontal, Paperclip, Pencil, Quote, Trash2, Undo2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Button, Menu, MenuTrigger, Popover, Tab, TabList, TabPanel, Tabs, useLocale, type Key } from "react-aria-components";
+import { Button, Menu, MenuTrigger, Tab, TabList, TabPanel, Tabs, useLocale, type Key } from "react-aria-components";
 
 import { classes } from "../../classes";
+import { FitPopover } from "../../components/FitPopover";
 import { MenuEntries } from "../../components/ContextMenu";
 import { Segmented } from "../../components/Segmented";
 import { skippedReason } from "../../data/safety";
@@ -159,7 +160,7 @@ function CommentView({ comment, rendered, readOnly, kept, onOpenTask, onQuote }:
           <Button className="btn flat icon sm" isDisabled={readOnly} aria-label={t("comment-menu")} onPressStart={pick}>
             <MoreHorizontal className="ic s" />
           </Button>
-          <Popover className="pop menuPopover" placement="bottom end" offset={4}>
+          <FitPopover className="menuPopover" placement="bottom end" offset={4}>
             <Menu className="menu" aria-label={t("comment-menu")}>
               <MenuEntries
                 entries={[
@@ -169,7 +170,7 @@ function CommentView({ comment, rendered, readOnly, kept, onOpenTask, onQuote }:
                 ]}
               />
             </Menu>
-          </Popover>
+          </FitPopover>
         </MenuTrigger>
       </div>
       {editing === null && draft !== undefined && draft.text !== comment.body && (

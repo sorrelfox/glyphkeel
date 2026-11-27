@@ -499,8 +499,9 @@ test("time on the engine: log, edit and delete time, run the timer in two window
 
   // A reminder some days before the due date, which the engine places on the calendar.
   await panel.getByRole("button", { name: /^\W*Due\W*: / }).click();
-  await panel.getByLabel("Due", { exact: true }).fill("2030-06-15");
-  await panel.getByLabel("Due", { exact: true }).press("Enter");
+  const due = page.getByRole("textbox", { name: /Due\W* in words/ });
+  await due.fill("2030-06-15");
+  await due.press("Enter");
   await expect(panel.getByRole("button", { name: /^\W*Due\W*: \W*Jun 15/ })).toBeVisible();
   await panel.getByRole("button", { name: /^\W*Reminder\W*: \W*None/ }).click();
   const reminder = page.getByRole("dialog", { name: "Reminder" });

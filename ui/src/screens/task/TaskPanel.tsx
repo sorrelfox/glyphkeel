@@ -12,7 +12,6 @@ import {
   Menu,
   MenuItem,
   MenuTrigger,
-  Popover,
   SearchField,
   useFilter,
   useLocale,
@@ -21,6 +20,8 @@ import {
 
 import { contextOf, matches, parseChord } from "../../actions/keymap";
 import { classes } from "../../classes";
+import { DayPopover } from "../../components/DayPicker";
+import { FitPopover } from "../../components/FitPopover";
 import { TASK_KEYS, type TaskKeyId } from "../../shell/screenKeys";
 import { MenuEntries } from "../../components/ContextMenu";
 import { useAskCloseDuplicates } from "../../components/DuplicatePrompt";
@@ -278,7 +279,7 @@ function Loaded({
           <Button className="btn flat icon" aria-label={t("panel-menu")}>
             <MoreHorizontal className="ic" />
           </Button>
-          <Popover className="pop menuPopover" placement="bottom end" offset={4}>
+          <FitPopover className="menuPopover" placement="bottom end" offset={4}>
             <Menu className="menu" aria-label={t("panel-menu")}>
               <MenuEntries
                 entries={[
@@ -296,7 +297,7 @@ function Loaded({
                 ]}
               />
             </Menu>
-          </Popover>
+          </FitPopover>
         </MenuTrigger>
         <Button className="btn flat icon" aria-label={t(mode === "window" ? "panel-close-window" : "panel-close")} onPress={onClose}>
           <X className="ic" />
@@ -333,7 +334,7 @@ function Loaded({
               <span>{task.status.name}</span>
               <ChevronDown className="ic s muted" />
             </Button>
-            <Popover className="pop menuPopover" placement="bottom start" offset={4}>
+            <FitPopover className="menuPopover" placement="bottom start" offset={4}>
               <Menu className="menu" aria-label={t("panel-status-menu")}>
                 <MenuEntries
                   entries={project.statuses.map((status) => {
@@ -349,7 +350,7 @@ function Loaded({
                   })}
                 />
               </Menu>
-            </Popover>
+            </FitPopover>
           </MenuTrigger>
           {task.blocked && (
             <span className="chip hue-red" role="note" aria-label={t("panel-blocked-by", { keys: blockers.join(", "), count: blockers.length })}>
@@ -373,7 +374,7 @@ function Loaded({
                 <PriorityGlyph priority={task.priority} />
                 {t(`priority-${task.priority}`)}
               </Button>
-              <Popover className="pop menuPopover" placement="bottom start" offset={4}>
+              <FitPopover className="menuPopover" placement="bottom start" offset={4}>
                 <Menu className="menu" aria-label={t("prop-priority")}>
                   <MenuEntries
                     entries={[...PRIORITIES].reverse().map((priority) => ({
@@ -385,7 +386,7 @@ function Loaded({
                     }))}
                   />
                 </Menu>
-              </Popover>
+              </FitPopover>
             </MenuTrigger>
           </Prop>
           <Prop label={t("prop-type")}>
@@ -394,7 +395,7 @@ function Loaded({
                 <TypeGlyph glyph={task.type.glyph} />
                 {task.type.name}
               </Button>
-              <Popover className="pop menuPopover" placement="bottom start" offset={4}>
+              <FitPopover className="menuPopover" placement="bottom start" offset={4}>
                 <Menu className="menu" aria-label={t("prop-type")}>
                   <MenuEntries
                     entries={project.types.map((type) => ({
@@ -406,7 +407,7 @@ function Loaded({
                     }))}
                   />
                 </Menu>
-              </Popover>
+              </FitPopover>
             </MenuTrigger>
           </Prop>
           <Prop label={t("prop-start")}>
@@ -581,63 +582,9 @@ function Title({ task, readOnly, onSave }: { task: Task; readOnly: boolean; onSa
 }
 
 /**
- * A day being edited: typed in words ("next fri", "in 3d", "dec 1"), which
- * the engine reads in the workspace's calendar, or picked in the platform's
- * date field. Answers the words, the picked day, null to clear it, or
- * undefined to leave it.
+ * A day: shown as "Nov 24", with how far off it is under it when the cell is
+ * too narrow for both on one line; edited in a day picker anchored to it.
  */
-function DateEditor({ label, value, onDone }: { label: string; value: string | null; onDone: (next: string | null | undefined) => void }) {
-  const t = useT();
-  const [words, setWords] = useState("");
-  const [picked, setPicked] = useState(value ?? "");
-  const finish = () => {
-    onDone(words.trim() !== "" ? words.trim() : picked === "" ? null : picked);
-  };
-  return (
-    <span
-      className={classes("field", styles.inlineField)}
-      title={t("date-words-hint")}
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) {
-          finish();
-        }
-      }}
-      onKeyDown={(event) => {
-        if (event.key === "Enter") {
-          event.preventDefault();
-          finish();
-        } else if (event.key === "Escape") {
-          event.preventDefault();
-          event.stopPropagation();
-          onDone(undefined);
-        }
-      }}
-    >
-      <input
-        type="text"
-        aria-label={t("date-words-label", { name: label })}
-        placeholder={t("date-words-placeholder")}
-        autoFocus
-        size={12}
-        value={words}
-        onChange={(event) => {
-          setWords(event.target.value);
-        }}
-      />
-      <input
-        type="date"
-        aria-label={label}
-        value={picked}
-        onChange={(event) => {
-          setPicked(event.target.value);
-          setWords("");
-        }}
-      />
-    </span>
-  );
-}
-
-/** A day: shown as "Nov 24", edited in words or with the platform's date field; empty clears it. */
 function DateValue({
   label,
   value,
@@ -660,10 +607,36 @@ function DateValue({
   const { locale } = useLocale();
   const day = useDayFormat();
   const [editing, setEditing] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
   const today = useToday();
-  if (editing) {
-    return (
-      <DateEditor
+  const state = relative ? dueState(value, closed, today) : null;
+  const days = value === null ? 0 : Math.round((Date.parse(`${value}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
+  const away = value !== null && relative && !closed ? new Intl.RelativeTimeFormat(locale, { numeric: "auto" }).format(days, "day") : null;
+  return (
+    <>
+      <Button
+        ref={trigger}
+        className={classes("val num", styles.dateValue)}
+        isDisabled={readOnly}
+        aria-label={away === null ? t("prop-date-value", { name: label, value: value === null ? t("prop-none") : day(value) }) : t("prop-date-value-away", { name: label, value: day(value ?? today), away })}
+        data-task-key={keyTarget}
+        data-date-value={label}
+        onPress={() => {
+          setEditing(true);
+        }}
+      >
+        {value === null ? (
+          <span className="faint">{t("prop-none")}</span>
+        ) : (
+          <>
+            <span className={classes("meta", styles.dateText, state === "overdue" && "overdue", (state === "soon" || state === "today") && "soon")}>{day(value)}</span>
+            {away !== null && <span className={classes("faint", styles.relative)} title={away}>{away}</span>}
+          </>
+        )}
+      </Button>
+      <DayPopover
+        triggerRef={trigger}
+        isOpen={editing}
         label={label}
         value={value}
         onDone={(next) => {
@@ -673,21 +646,7 @@ function DateValue({
           }
         }}
       />
-    );
-  }
-  const state = relative ? dueState(value, closed, today) : null;
-  const days = value === null ? 0 : Math.round((Date.parse(`${value}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
-  return (
-    <Button className="val num" isDisabled={readOnly} aria-label={t("prop-date-value", { name: label, value: value === null ? t("prop-none") : day(value) })} data-task-key={keyTarget} onPress={() => { setEditing(true); }}>
-      {value === null ? (
-        <span className="faint">{t("prop-none")}</span>
-      ) : (
-        <>
-          <span className={classes("meta", styles.dateText, state === "overdue" && "overdue", (state === "soon" || state === "today") && "soon")}>{day(value)}</span>
-          {relative && !closed && <span className="faint">{new Intl.RelativeTimeFormat(locale, { numeric: "auto" }).format(days, "day")}</span>}
-        </>
-      )}
-    </Button>
+    </>
   );
 }
 
@@ -788,7 +747,7 @@ function Labels({ task, project, readOnly, onChange }: { task: Task; project: Pr
           <Button className="btn flat icon sm" isDisabled={readOnly} aria-label={t("prop-labels-edit")} data-task-key="labels">
             <Plus className="ic s" />
           </Button>
-          <Popover className="pop" placement="bottom start" offset={4}>
+          <FitPopover placement="bottom start" offset={4}>
             <AriaDialog className={classes(styles.labelDialog)} aria-label={t("label-create-title")}>
               {({ close }) => (
                 <NewLabelForm
@@ -800,7 +759,7 @@ function Labels({ task, project, readOnly, onChange }: { task: Task; project: Pr
                 />
               )}
             </AriaDialog>
-          </Popover>
+          </FitPopover>
         </DialogTrigger>
       ) : (
         <MenuTrigger
@@ -815,7 +774,7 @@ function Labels({ task, project, readOnly, onChange }: { task: Task; project: Pr
           <Button className="btn flat icon sm" isDisabled={readOnly} aria-label={t("prop-labels-edit")} data-task-key="labels">
             <Plus className="ic s" />
           </Button>
-          <Popover className={classes("pop menuPopover", styles.labelPicker)} placement="bottom start" offset={4}>
+          <FitPopover className={classes("menuPopover", styles.labelPicker)} placement="bottom start" offset={4}>
             <Autocomplete
               inputValue={query}
               onInputChange={setQuery}
@@ -869,7 +828,7 @@ function Labels({ task, project, readOnly, onChange }: { task: Task; project: Pr
                 )}
               </Menu>
             </Autocomplete>
-          </Popover>
+          </FitPopover>
         </MenuTrigger>
       )}
     </>

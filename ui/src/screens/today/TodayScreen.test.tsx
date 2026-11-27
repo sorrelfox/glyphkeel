@@ -43,7 +43,7 @@ describe("Today", () => {
     render(<App start={{ titleBar: "app", locale: "en-US" }} client={createClient(transport)} path={`/?task=${task.key}`} />);
     const panel = await screen.findByRole("complementary", { name: (name) => plain(name).startsWith(`Task ${task.key}`) });
     fireEvent.click(await within(panel).findByRole("button", { name: (name) => plain(name).startsWith("Due") }));
-    const words = within(panel).getByRole("textbox", { name: (name) => plain(name) === "Due in words" });
+    const words = await screen.findByRole("textbox", { name: (name) => plain(name) === "Due in words" });
     fireEvent.change(words, { target: { value: "tomorrow" } });
     fireEvent.keyDown(words, { key: "Enter" });
     await waitFor(async () => {

@@ -89,7 +89,7 @@ test("Today shows an overdue task, counts it in the sidebar, and a due date can 
   const panel = page.getByRole("complementary", { name: new RegExp(`^Task \\W*${key}\\W*$`) });
   // Fluent isolates placeables with invisible marks.
   await panel.getByRole("button", { name: /^\W*Due\W*:/ }).click();
-  const words = panel.getByRole("textbox", { name: /Due\W* in words/ });
+  const words = page.getByRole("textbox", { name: /Due\W* in words/ });
   await words.fill("in 3d");
   await words.press("Enter");
   await expect(overdue).toBeHidden();

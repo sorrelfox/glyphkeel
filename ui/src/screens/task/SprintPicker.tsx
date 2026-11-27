@@ -3,8 +3,9 @@
 
 import { IterationCw } from "lucide-react";
 import { useState } from "react";
-import { Button, Menu, MenuTrigger, Popover } from "react-aria-components";
+import { Button, Menu, MenuTrigger } from "react-aria-components";
 
+import { FitPopover } from "../../components/FitPopover";
 import { MenuEntries, type MenuEntry } from "../../components/ContextMenu";
 import { type Task } from "../../data/catalog";
 import { joinable, useSprints } from "../../data/sprints";
@@ -68,11 +69,11 @@ export function SprintPicker({ task, readOnly, onChange }: SprintPickerProps) {
         {current !== undefined && " "}
         {current !== undefined && current.state !== "planned" && <span className="chip sm">{t(`sprint-state-${current.state}`)}</span>}
       </Button>
-      <Popover className="pop menuPopover" placement="bottom start" offset={4}>
+      <FitPopover className="menuPopover" placement="bottom start" offset={4}>
         <Menu className="menu" aria-label={t("prop-sprint")}>
           <MenuEntries entries={entries} />
         </Menu>
-      </Popover>
+      </FitPopover>
     </MenuTrigger>
   );
 }

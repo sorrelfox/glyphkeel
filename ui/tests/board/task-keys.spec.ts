@@ -51,7 +51,7 @@ test("S, P, L and D open the status, priority, labels and due date of the open t
 
   await panel.getByRole("button", { name: "Copy key" }).focus();
   await page.keyboard.press("d");
-  await expect(panel.getByRole("textbox", { name: /Due\W* in words/ })).toBeFocused();
+  await expect(page.getByRole("textbox", { name: /Due\W* in words/ })).toBeFocused();
   await page.keyboard.press("Escape");
 
   await panel.getByRole("button", { name: "Copy key" }).focus();

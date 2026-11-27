@@ -31,4 +31,10 @@ today-timer-paused = Paused, { $elapsed }
 
 date-words-label = { $name } in words
 date-words-placeholder = next fri, in 3d, dec 1
-date-words-hint = Type a date in words, or pick one. Enter saves, Escape cancels.
+day-picker-hint = Type a day in words, or pick one.
+# The words typed in a date field don't name a day.
+day-picker-unknown = Not a date. Try next fri, +3d or 2026-12-01.
+day-picker-previous-month = Previous month
+day-picker-next-month = Next month
+day-picker-today = Today
+day-picker-clear = Clear
