@@ -104,6 +104,7 @@ import { createRule, DEPTH_MAX, fill, findRule, fits, listRules, listRuns, logRu
 /** The Gantt chart's layout until the person changes it. */
 const DEFAULT_GANTT_LAYOUT: GanttLayout = { zoom: "day", widths: {}, group_by: "parent", move_dependents: false };
 import { linksIn, placePage, subtree, type TextLink } from "./wiki";
+import { addWidget as addDashboardWidget, createDashboard, dashboardWidget, deleteDashboard, listDashboards, removeWidget as removeDashboardWidget, showDashboard, updateDashboard, updateWidget as updateDashboardWidget, type DashboardHost } from "./dashboards";
 import { addSprintTasks, completeSprint, createSprint, deleteSprint, getSprint, listSprints, removeSprintTasks, sprintBurndown, sprintForTask, sprintRef, startSprint, updateSprint, type SprintHost } from "./sprints";
 import { createVersion, deleteVersion, getVersion, listVersions, updateVersion, versionForTask, versionRef, visibleVersions, type VersionHost } from "./versions";
 import { createView, deleteView, listViews, matchingKeys, parseQuery, queryError, renameInQuery, searchTasks, updateView, type GroupInfo, type QueryNames, type TaskHistory } from "./query";
@@ -2577,6 +2578,34 @@ export class FakeWorkspace {
     fail: (code, message, path) => fail(code, message, path === undefined ? {} : { details: { path } }),
   };
 
+  /** What the dashboards need of this workspace. */
+  private readonly dashboardHost: DashboardHost = {
+    dashboards: () => (this.state.dashboards ??= []),
+    projects: () => this.state.projects,
+    project: (ref) => this.project(ref),
+    writable: (ref) => this.writable(ref),
+    read: (op, input) => {
+      const handler = (this.handlers as Record<string, ((input: unknown) => unknown) | undefined>)[op];
+      return handler ? handler(input) : fail("not_found", `There is no operation "${op}".`);
+    },
+    checkQuery: (query, path) => {
+      try {
+        this.runQuery(() => searchTasks([], { query }, this.queryNames(), { archived: new Set(), scoped: false, statusOrder: () => 0 }));
+      } catch (error) {
+        if (error instanceof FakeError) {
+          error.error.details = { ...error.error.details, path };
+        }
+        throw error;
+      }
+    },
+    countableField: (name) => queryFields(this.state).some((field) => field.queryName === name && (field.kind === "select" || field.kind === "multi_select" || field.kind === "boolean")),
+    actor: () => (this.byAgent ? { kind: "agent", name: SAMPLE_AGENT } : { kind: "user", name: "You" }),
+    now: () => this.today().toISOString(),
+    today: () => localDay(this.today()),
+    newId: () => nextUuid(),
+    fail: (code, message, path) => fail(code, message, path === undefined ? {} : { details: { path } }),
+  };
+
   /** What the versions need of this workspace. */
   private readonly versionHost: VersionHost = {
     versions: () => (this.state.versions ??= []),
@@ -4400,6 +4429,15 @@ export class FakeWorkspace {
     "sprint.complete": (input) => completeSprint(this.sprintHost, input),
     "sprint.add_tasks": (input) => addSprintTasks(this.sprintHost, input),
     "sprint.remove_tasks": (input) => removeSprintTasks(this.sprintHost, input),
+    "dashboard.list": (input) => listDashboards(this.dashboardHost, input),
+    "dashboard.show": (input) => showDashboard(this.dashboardHost, input),
+    "dashboard.widget": (input) => dashboardWidget(this.dashboardHost, input),
+    "dashboard.create": (input) => createDashboard(this.dashboardHost, input),
+    "dashboard.update": (input) => updateDashboard(this.dashboardHost, input),
+    "dashboard.delete": (input) => deleteDashboard(this.dashboardHost, input),
+    "dashboard.add_widget": (input) => addDashboardWidget(this.dashboardHost, input),
+    "dashboard.update_widget": (input) => updateDashboardWidget(this.dashboardHost, input),
+    "dashboard.remove_widget": (input) => removeDashboardWidget(this.dashboardHost, input),
     "view.create": (input) => {
       if (input.query.trim() !== "") {
         this.runQuery(() => searchTasks([], { query: input.query }, this.queryNames(), { archived: new Set(), scoped: false, statusOrder: () => 0 }));

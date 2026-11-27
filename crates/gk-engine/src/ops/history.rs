@@ -33,7 +33,7 @@ use super::{
     lookup, project, relation, reminder, settings, sprint, task, time, trash, version, view, wiki,
     work_kind,
 };
-use super::{automation, recurrence, template};
+use super::{automation, dashboard, recurrence, template};
 use crate::failure::Failure;
 use crate::messages;
 use crate::registry::{QueryCtx, Registry};
@@ -134,7 +134,7 @@ const OF_PROJECT: &str = "project_id IN (
         UNION SELECT p.id FROM projects p JOIN tree ON p.parent_id = tree.id)
     SELECT id FROM tree)";
 
-fn feed(q: &QueryCtx<'_>, input: ActivityQuery) -> Result<ActivityPage, Failure> {
+pub(crate) fn feed(q: &QueryCtx<'_>, input: ActivityQuery) -> Result<ActivityPage, Failure> {
     let limit = input.limit.unwrap_or(DEFAULT_LIMIT);
     if !(1..=MAX_LIMIT).contains(&limit) {
         return Err(messages::invalid_at(
@@ -415,6 +415,7 @@ fn current(
         (template::ENTITY, template::RECORD) => template::raw(tx, id)?,
         (recurrence::ENTITY, recurrence::RECORD) => recurrence::raw(tx, id)?,
         (automation::ENTITY, automation::RECORD) => automation::raw(tx, id)?,
+        (dashboard::ENTITY, dashboard::RECORD) => dashboard::raw(tx, id)?,
         (version::ENTITY, version::RECORD) => version::raw(tx, id)?,
         (sprint::ENTITY, sprint::RECORD) => sprint::raw(tx, id)?,
         (_, "deleted" | trash::PURGED) => return Ok(None),
@@ -539,6 +540,12 @@ fn apply(
         (automation::ENTITY, automation::RECORD) => {
             let before = automation::raw(w.tx(), id)?;
             automation::write_raw(w, id, value.as_ref())?;
+            w.record_field(entity, id, project, field, before, value);
+            Ok(())
+        }
+        (dashboard::ENTITY, dashboard::RECORD) => {
+            let before = dashboard::raw(w.tx(), id)?;
+            dashboard::write_raw(w, id, value.as_ref())?;
             w.record_field(entity, id, project, field, before, value);
             Ok(())
         }

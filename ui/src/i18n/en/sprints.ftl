@@ -142,3 +142,5 @@ burndown-day-ahead = { $date }: still to come; ideal { $ideal }.
 burndown-legend-remaining = Still open
 burndown-legend-ideal = Ideal
 burndown-legend-scope = All work in the sprint
+# The column of days in the burndown's table.
+burndown-day-column = Day

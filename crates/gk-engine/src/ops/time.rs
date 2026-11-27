@@ -544,7 +544,7 @@ pub(crate) fn first_weekday(start: WeekStart) -> Weekday {
     }
 }
 
-fn report(
+pub(crate) fn report(
     tx: &Transaction<'_>,
     zone: &Zone,
     now: i64,

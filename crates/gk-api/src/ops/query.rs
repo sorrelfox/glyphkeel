@@ -214,13 +214,15 @@ pub enum ListGrouping {
     DueWeek,
     /// The project.
     Project,
+    /// The type, in the order of the project's types.
+    Type,
 }
 
 /// One group of a grouped list.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ListGroup {
-    /// What its tasks share: the status, label or project name, the
+    /// What its tasks share: the status, type, label or project name, the
     /// priority (`urgent` … `none`), the parent's key, the first day of
     /// the due week (`YYYY-MM-DD`), or a custom field's option or `yes` or
     /// `no`; left out for the tasks without one.

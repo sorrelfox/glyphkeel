@@ -1179,7 +1179,10 @@ fn truthy(v: Option<&Value>) -> bool {
     }
 }
 
-fn burndown(q: &QueryCtx<'_>, input: &SprintBurndownInput) -> Result<SprintBurndown, Failure> {
+pub(crate) fn burndown(
+    q: &QueryCtx<'_>,
+    input: &SprintBurndownInput,
+) -> Result<SprintBurndown, Failure> {
     let tx = q.tx;
     let (id, r) = find(tx, &input.sprint, input.project.as_ref())?;
     if r.state == SprintState::Planned {

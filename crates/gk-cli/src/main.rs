@@ -15,6 +15,7 @@
 //! 3 change rejected, 4 workspace or storage problem.
 
 mod commands;
+mod dashboard;
 mod input;
 mod launch;
 mod messages;
@@ -158,6 +159,10 @@ fn run(ops: &[OpCommand], matches: &ArgMatches, out: Out) -> Result<(), OpError>
             }
             let text = if out.json {
                 output::json(&value)
+            } else if cmd.op.id == "dashboard.show" {
+                dashboard::show(&value)
+            } else if cmd.op.id == "dashboard.widget" {
+                dashboard::widget(&value)
             } else if let Some(csv) = value.get("csv").and_then(serde_json::Value::as_str) {
                 // An operation asked for CSV text prints just that, ready to
                 // save or pipe.

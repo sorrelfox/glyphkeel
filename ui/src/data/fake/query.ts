@@ -1053,6 +1053,8 @@ function groupTasks(found: readonly ListedTask[], by: ListGrouping | `cf.${strin
       }
       case "project":
         return { value: task.project, order: [task.project], ...some("title", info.projectName(task.project)) };
+      case "type":
+        return { value: task.type.name, order: [task.type.name.toLowerCase()] };
     }
   };
   const byValue = new Map<string, { group: ListGroup; order: (string | number)[]; tasks: ListedTask[] }>();

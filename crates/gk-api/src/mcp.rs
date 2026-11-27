@@ -31,7 +31,7 @@ pub enum Toolset {
     Comments,
     /// Time entries, the time and flow reports, timer, reminders.
     Time,
-    /// Today, the board, saved views, personal layout.
+    /// Today, the board, saved views, dashboards, personal layout.
     Views,
     /// Wiki pages and the agent brief.
     Wiki,
@@ -1405,6 +1405,117 @@ Example: delete_view {\"view\": \"Due this week\", \"project\": \"TM\"}",
         idempotent: true,
     },
     McpTool {
+        name: "list_dashboards",
+        toolset: Toolset::Views,
+        title: "List dashboards",
+        description: "Lists the dashboards of the whole workspace, or those pinned to a `project` \
+(`all: true` lists every one): name, description and widgets, each with its `id`, `kind`, `title`, \
+`width` (1 to 3 grid columns) and `settings`. Read what the widgets show with get_dashboard. \
+Example: list_dashboards {\"all\": true}",
+        main: "dashboard.list",
+        covers: &["dashboard.list"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "get_dashboard",
+        toolset: Toolset::Views,
+        title: "Get a dashboard",
+        description: "Returns a dashboard, named by ID or by name with its `project`, with what each \
+widget shows now: `count` and `tasks` for queries, due soon and overdue; `bars` for tasks by \
+field; the report for flow, time and burndown widgets; `versions`, `activity`, failed automation \
+`runs`, or a note's `text`. A widget that can't be computed has `error`, the others still show. \
+Example: get_dashboard {\"dashboard\": \"Team\"}",
+        main: "dashboard.show",
+        covers: &["dashboard.show"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "get_dashboard_widget",
+        toolset: Toolset::Views,
+        title: "Get one dashboard widget",
+        description: "Returns what one widget of a dashboard shows now, the widget named by its ID or \
+its place in the grid (`1` is the first). Example: get_dashboard_widget {\"dashboard\": \"Team\", \
+\"widget\": \"2\"}",
+        main: "dashboard.widget",
+        covers: &["dashboard.widget"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "create_dashboard",
+        toolset: Toolset::Views,
+        title: "Make a dashboard",
+        description: "Makes a dashboard for the whole workspace or pinned to a `project`, with \
+`starter: true` for the starter widgets and/or `widgets`, each {`kind`, `title`, `width`, \
+`settings`}. Kinds: query_count, query_list, tasks_by_field (`field`: status, priority, type, \
+label or cf.<name>), due_soon, overdue, created_closed, cumulative_flow, cycle_time, time_report, \
+burndown, version_progress, activity, automation_failures, note (`text` in Markdown). Settings: \
+`query`, `project`, `field`, `limit`, `days`, `bucket`, `group_by`, `actor_kind`, `text`; each \
+kind takes only its own. Only make dashboards the person asked for. \
+Example: create_dashboard {\"name\": \"Bugs\", \"project\": \"TM\", \"widgets\": [{\"kind\": \
+\"query_count\", \"title\": \"Open bugs\", \"settings\": {\"query\": \"is:open label:bug\"}}]}",
+        main: "dashboard.create",
+        covers: &["dashboard.create"],
+        idempotent: false,
+    },
+    McpTool {
+        name: "update_dashboard",
+        toolset: Toolset::Views,
+        title: "Change a dashboard",
+        description: "Renames a dashboard or changes its `description` (`clear` empties it). Name it \
+by ID, or by name with its `project`. Widgets are changed with add_dashboard_widget, \
+update_dashboard_widget and remove_dashboard_widget. \
+Example: update_dashboard {\"dashboard\": \"Bugs\", \"project\": \"TM\", \"name\": \"Bug watch\"}",
+        main: "dashboard.update",
+        covers: &["dashboard.update"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "delete_dashboard",
+        toolset: Toolset::Views,
+        title: "Delete a dashboard",
+        description: "Deletes a dashboard, named by ID or by name with its `project`. Nothing it \
+shows is touched; revert_changes brings it back. \
+Example: delete_dashboard {\"dashboard\": \"Bugs\", \"project\": \"TM\"}",
+        main: "dashboard.delete",
+        covers: &["dashboard.delete"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "add_dashboard_widget",
+        toolset: Toolset::Views,
+        title: "Add a dashboard widget",
+        description: "Adds a `widget` {`kind`, `title`, `width`, `settings`} to a dashboard, at the \
+end or at `position` (`1` is the first); see create_dashboard for the kinds and settings. \
+Example: add_dashboard_widget {\"dashboard\": \"Team\", \"widget\": {\"kind\": \"burndown\", \
+\"width\": 2, \"settings\": {\"project\": \"TM\"}}}",
+        main: "dashboard.add_widget",
+        covers: &["dashboard.add_widget"],
+        idempotent: false,
+    },
+    McpTool {
+        name: "update_dashboard_widget",
+        toolset: Toolset::Views,
+        title: "Change a dashboard widget",
+        description: "Changes a widget, named by ID or by its place (`1` is the first): `title`, \
+`width` (1 to 3), `position` to move it, `settings` to change (the others keep theirs) and \
+`clear` to drop settings. Example: update_dashboard_widget {\"dashboard\": \"Team\", \"widget\": \
+\"1\", \"width\": 3, \"settings\": {\"query\": \"is:open label:bug\"}}",
+        main: "dashboard.update_widget",
+        covers: &["dashboard.update_widget"],
+        idempotent: true,
+    },
+    McpTool {
+        name: "remove_dashboard_widget",
+        toolset: Toolset::Views,
+        title: "Remove a dashboard widget",
+        description: "Removes a widget from a dashboard, named by ID or by its place (`1` is the \
+first). revert_changes brings it back. \
+Example: remove_dashboard_widget {\"dashboard\": \"Team\", \"widget\": \"3\"}",
+        main: "dashboard.remove_widget",
+        covers: &["dashboard.remove_widget"],
+        idempotent: true,
+    },
+    McpTool {
         name: "list_wiki_pages",
         toolset: Toolset::Wiki,
         title: "List wiki pages",
@@ -1923,6 +2034,9 @@ mod tests {
                 "get_today",
                 "get_board",
                 "list_views",
+                "list_dashboards",
+                "get_dashboard",
+                "get_dashboard_widget",
                 "list_wiki_pages",
                 "search_wiki_pages",
                 "get_wiki_page",

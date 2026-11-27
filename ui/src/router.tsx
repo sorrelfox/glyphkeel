@@ -38,6 +38,7 @@ const EditorPlayground = lazy(() => import("./editor/dev/EditorPlayground"));
 const CalendarScreen = lazy(() => import("./screens/calendar/CalendarScreen").then((module) => ({ default: module.CalendarScreen })));
 const GanttScreen = lazy(() => import("./screens/gantt/GanttScreen").then((module) => ({ default: module.GanttScreen })));
 const SprintsScreen = lazy(() => import("./screens/sprints/SprintsScreen").then((module) => ({ default: module.SprintsScreen })));
+const DashboardsRoute = lazy(() => import("./screens/dashboards/DashboardsRoute").then((module) => ({ default: module.DashboardsRoute })));
 const RoadmapScreen = lazy(() => import("./screens/roadmap/RoadmapScreen").then((module) => ({ default: module.RoadmapScreen })));
 
 /** The path that opens the gallery directly, for the browser tests. */
@@ -84,13 +85,27 @@ const todayRoute = createRoute({ getParentRoute: () => shellRoute, path: "/", va
 /** The search page: the text, filters and the task open beside the results. */
 const searchRoute = createRoute({ getParentRoute: () => shellRoute, path: "/search", validateSearch: searchParams, component: SearchScreen });
 
+/** A list's search: the task open beside it, and `query`, when given, the query it opens with instead of the default view's. */
+const listSearch = (search: Record<string, unknown>): { task?: string; query?: string } => ({
+  ...taskSearch(search),
+  ...(typeof search.query === "string" && search.query.trim() !== "" ? { query: search.query } : {}),
+});
+
 /** Every task of the workspace, as a list. */
-const allTasksRoute = createRoute({ getParentRoute: () => shellRoute, path: "/all", validateSearch: taskSearch, component: AllTasksListScreen });
+const allTasksRoute = createRoute({ getParentRoute: () => shellRoute, path: "/all", validateSearch: listSearch, component: AllTasksListScreen });
 
 /** The time report: logged time over a range of days. */
 const timeReportRoute = createRoute({ getParentRoute: () => shellRoute, path: "/time", component: TimeReportScreen });
 /** The flow reports: created against closed, cumulative flow, cycle time. */
 const reportsRoute = createRoute({ getParentRoute: () => shellRoute, path: "/reports", component: FlowReportsScreen });
+
+/** Dashboards; `dashboard` is the one shown. Loaded on first use. */
+const dashboardsRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: "/dashboards",
+  validateSearch: (search: Record<string, unknown>): { dashboard?: string } => (typeof search.dashboard === "string" && search.dashboard !== "" ? { dashboard: search.dashboard } : {}),
+  component: LazyDashboardsScreen,
+});
 
 /** The trash: deleted items, to restore or delete for good. */
 const trashRoute = createRoute({ getParentRoute: () => shellRoute, path: "/trash", component: TrashScreen });
@@ -105,12 +120,6 @@ export const boardRoute = createRoute({
   validateSearch: (search: Record<string, unknown>): { task?: string } =>
     typeof search.task === "string" && search.task !== "" ? { task: search.task } : {},
   component: BoardScreen,
-});
-
-/** A project's list; `query`, when given, is the query it opens with instead of the default view's. */
-const listSearch = (search: Record<string, unknown>): { task?: string; query?: string } => ({
-  ...taskSearch(search),
-  ...(typeof search.query === "string" && search.query.trim() !== "" ? { query: search.query } : {}),
 });
 
 /** A project's list. */
@@ -184,7 +193,7 @@ const routeTree = rootRoute.addChildren([
   quickAddRoute,
   taskWindowRoute,
   wikiWindowRoute,
-  shellRoute.addChildren([todayRoute, searchRoute, allTasksRoute, timeReportRoute, reportsRoute, trashRoute, activityRoute, boardRoute, projectListRoute, projectCalendarRoute, projectGanttRoute, projectRoadmapRoute, projectSprintsRoute, wikiRoute, openTaskRoute]),
+  shellRoute.addChildren([todayRoute, searchRoute, allTasksRoute, timeReportRoute, reportsRoute, dashboardsRoute, trashRoute, activityRoute, boardRoute, projectListRoute, projectCalendarRoute, projectGanttRoute, projectRoadmapRoute, projectSprintsRoute, wikiRoute, openTaskRoute]),
 ]);
 
 /**
@@ -279,6 +288,14 @@ function LazyGanttScreen() {
   return (
     <Suspense>
       <GanttScreen />
+    </Suspense>
+  );
+}
+
+function LazyDashboardsScreen() {
+  return (
+    <Suspense>
+      <DashboardsRoute />
     </Suspense>
   );
 }

@@ -40,6 +40,7 @@ export function useGroupText(fields: readonly CustomField[] = []): (grouping: Gr
       case "due_week":
         return /^\d{4}-\d{2}-\d{2}$/.test(value) ? t("list-group-week", { day: day(value) }) : value;
       case "status":
+      case "type":
       case "label":
         return value;
     }
@@ -81,6 +82,7 @@ export function GroupName({ grouping, group, fields = [] }: { grouping: Grouping
       // While another grouping's rows still show, their values aren't days.
       return <span className="truncate">{/^\d{4}-\d{2}-\d{2}$/.test(value) ? t("list-group-week", { day: day(value) }) : value}</span>;
     case "status":
+    case "type":
     case "label":
       return <span className="truncate">{value}</span>;
   }

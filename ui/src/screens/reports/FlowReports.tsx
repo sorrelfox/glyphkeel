@@ -391,7 +391,8 @@ function LegendItem({ colour, line = false, children }: { colour: string; line?:
   );
 }
 
-function CreatedClosed({ report, asTable }: { report: CreatedClosedReport; asTable: boolean }) {
+/** Tasks created against closed, as a chart or a table; dashboards show it too. */
+export function CreatedClosed({ report, asTable }: { report: CreatedClosedReport; asTable: boolean }) {
   const t = useT();
   const { locale } = useLocale();
   const number = new Intl.NumberFormat(locale);
@@ -461,7 +462,8 @@ function CreatedClosed({ report, asTable }: { report: CreatedClosedReport; asTab
   );
 }
 
-function CumulativeFlow({ report, asTable }: { report: CumulativeFlowReport; asTable: boolean }) {
+/** The tasks in each status per period, as a chart or a table; dashboards show it too. */
+export function CumulativeFlow({ report, asTable }: { report: CumulativeFlowReport; asTable: boolean }) {
   const t = useT();
   const { locale } = useLocale();
   const number = new Intl.NumberFormat(locale);
@@ -566,7 +568,8 @@ function Stats({ title, help, stats, days }: { title: string; help: string; stat
   );
 }
 
-function CycleTime({ report, asTable, metric }: { report: CycleTimeReport; asTable: boolean; metric: Metric }) {
+/** Cycle and lead time, as a chart with their figures or as tables; `compact` leaves the figures out (dashboards). */
+export function CycleTime({ report, asTable, metric, compact = false }: { report: CycleTimeReport; asTable: boolean; metric: Metric; compact?: boolean }) {
   const t = useT();
   const { locale } = useLocale();
   const navigate = useNavigate();
@@ -583,7 +586,7 @@ function CycleTime({ report, asTable, metric }: { report: CycleTimeReport; asTab
     const r = rows[i];
     return r ? t("flow-point-cycle", { period: names.full(r.start, r.end), count: r.lead.count, cycle: days(r.cycle.p50), lead: days(r.lead.p50) }) : null;
   };
-  const figures = (
+  const figures = compact ? null : (
     <div className={styles.statsRow}>
       <Stats title={t("flow-cycle-time")} help={t("flow-cycle-help")} stats={report.cycle} days={days} />
       <Stats title={t("flow-lead-time")} help={t("flow-lead-help")} stats={report.lead} days={days} />
