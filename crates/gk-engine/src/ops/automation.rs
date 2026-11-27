@@ -138,19 +138,19 @@ struct Definition {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Record {
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    project: Option<String>,
-    name: String,
-    enabled: bool,
-    trigger: AutomationTrigger,
+    pub(crate) project: Option<String>,
+    pub(crate) name: String,
+    pub(crate) enabled: bool,
+    pub(crate) trigger: AutomationTrigger,
     #[serde(default, skip_serializing_if = "String::is_empty")]
-    condition: String,
-    actions: Vec<AutomationAction>,
-    rank: String,
-    created_at: i64,
-    created_by_kind: String,
-    created_by_name: String,
-    updated_at: i64,
-    updated_by_kind: String,
+    pub(crate) condition: String,
+    pub(crate) actions: Vec<AutomationAction>,
+    pub(crate) rank: String,
+    pub(crate) created_at: i64,
+    pub(crate) created_by_kind: String,
+    pub(crate) created_by_name: String,
+    pub(crate) updated_at: i64,
+    pub(crate) updated_by_kind: String,
 }
 
 impl Record {
@@ -261,7 +261,95 @@ pub(crate) fn write_raw(w: &WriteCtx<'_>, id: Id, value: Option<&Value>) -> Resu
     Ok(())
 }
 
-/// Writes rule `id` and records the change.
+/// The rules of exactly `project` (`None`: the workspace's own), in
+/// order, for an export.
+pub(crate) fn of_scope(
+    tx: &Transaction<'_>,
+    project: Option<Id>,
+) -> Result<Vec<(Id, Record)>, Failure> {
+    Ok(rows(tx, false)?
+        .into_iter()
+        .filter(|(_, r)| r.project_id() == project)
+        .collect())
+}
+
+/// Whether the workspace's own rules (`project` `None`) or a project's
+/// already have a rule named `name`.
+pub(crate) fn name_taken(
+    tx: &Transaction<'_>,
+    project: Option<Id>,
+    name: &str,
+) -> Result<bool, Failure> {
+    let wanted = fold(name);
+    Ok(of_scope(tx, project)?
+        .iter()
+        .any(|(_, r)| fold(&r.name) == wanted))
+}
+
+/// Stores rule `id` from an archive, outside history (an import is one
+/// change of its own). Its run state starts afresh at `now`: no run log, no
+/// count for the rate limit, a scheduled rule waits for its next time, and
+/// a due date rule acts only on what comes due (or overdue) after the day
+/// of the import.
+pub(crate) fn insert_imported(
+    tx: &Transaction<'_>,
+    id: Id,
+    record: &Record,
+    now: i64,
+    today: Day,
+) -> Result<(), Failure> {
+    let definition = serde_json::to_string(&Definition {
+        trigger: record.trigger.clone(),
+        condition: record.condition.clone(),
+        actions: record.actions.clone(),
+    })
+    .map_err(|e| Failure::Store(StoreError::Corrupt(e.to_string())))?;
+    tx.execute(
+        "INSERT INTO automation_rules (id, project_id, name, name_fold, enabled, trigger_kind,
+                                       definition, rank, created_at, created_by_kind,
+                                       created_by_name, updated_at, updated_by_kind,
+                                       scheduled_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+        params![
+            b(id),
+            record.project_id().map(b),
+            record.name,
+            fold(&record.name),
+            record.enabled,
+            record.trigger.on.as_str(),
+            definition,
+            record.rank,
+            record.created_at,
+            record.created_by_kind,
+            record.created_by_name,
+            record.updated_at,
+            record.updated_by_kind,
+            now,
+        ],
+    )?;
+    let mark = match record.trigger.on {
+        TriggerKind::Overdue => "<",
+        TriggerKind::DueDateReached => "<=",
+        _ => return Ok(()),
+    };
+    // What came due before the import counts as acted on.
+    let scope = if record.project_id().is_some() {
+        "AND project_id = ?4"
+    } else {
+        "AND (?4 IS NULL)"
+    };
+    tx.execute(
+        &format!(
+            "INSERT OR IGNORE INTO automation_fired (rule_id, task_id, mark, fired_at)
+             SELECT ?1, id, due_date, ?2 FROM tasks
+              WHERE due_date IS NOT NULL AND due_date {mark} ?3 {scope}"
+        ),
+        params![b(id), now, today.to_string(), record.project_id().map(b)],
+    )?;
+    Ok(())
+}
+
+/// Writes rule `id` and records the change./// Writes rule `id` and records the change.
 fn set(w: &mut WriteCtx<'_>, id: Id, record: Option<&Record>) -> Result<(), Failure> {
     let before = raw(w.tx(), id)?;
     let after = record
@@ -883,6 +971,309 @@ pub(crate) fn rewrite_conditions(
             record.condition = condition;
             set(w, id, Some(&record))?;
         }
+    }
+    Ok(())
+}
+
+/// A kind of name a rule's trigger and actions hold, besides its
+/// condition: a status (the trigger's and `move_to_status`), a label
+/// (`add_label`, `remove_label`) or a task type (`set_fields` `type`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Named {
+    Status,
+    Label,
+    Type,
+}
+
+impl Named {
+    /// The message that says why a rule was turned off when a name it
+    /// uses went away.
+    fn removed_message(self) -> &'static str {
+        match self {
+            Self::Status => "automation-off-status-removed",
+            Self::Label => "automation-off-label-removed",
+            Self::Type => "automation-off-type-removed",
+        }
+    }
+}
+
+/// The places in `record`'s trigger and actions that hold a name of
+/// `kind`, each given to `f`; returns whether `f` changed any.
+fn each_name(record: &mut Record, kind: Named, f: &mut dyn FnMut(&mut String) -> bool) -> bool {
+    let mut changed = false;
+    if kind == Named::Status
+        && let Some(s) = record.trigger.status.as_mut()
+    {
+        changed |= f(s);
+    }
+    for a in &mut record.actions {
+        match (kind, a.kind) {
+            (Named::Status, ActionKind::MoveToStatus) => {
+                if let Some(s) = a.status.as_mut() {
+                    changed |= f(s);
+                }
+            }
+            (Named::Label, ActionKind::AddLabel | ActionKind::RemoveLabel) => {
+                if let Some(l) = a.label.as_mut() {
+                    changed |= f(l);
+                }
+            }
+            (Named::Type, ActionKind::SetFields) => {
+                if let Some(Value::String(t)) = a.fields.get_mut("type") {
+                    changed |= f(t);
+                }
+            }
+            _ => {}
+        }
+    }
+    changed
+}
+
+/// The rules of `project` (every rule for `None`), as they are stored.
+fn rules_of(tx: &Transaction<'_>, project: Option<Id>) -> Result<Vec<(Id, Record)>, Failure> {
+    Ok(rows(tx, false)?
+        .into_iter()
+        .filter(|(_, r)| project.is_none() || r.project_id() == project)
+        .collect())
+}
+
+/// Turns rule `id` off, in the running command, and says why in its run
+/// log: a name it uses went away.
+fn turn_off(
+    w: &mut WriteCtx<'_>,
+    id: Id,
+    mut record: Record,
+    message: &str,
+    args: &[(&str, String)],
+) -> Result<(), Failure> {
+    let was_on = record.enabled;
+    record.enabled = false;
+    set(w, id, Some(&record))?;
+    if was_on {
+        let error = messages::invalid_at("rule", message, args);
+        log(
+            w.tx(),
+            w.now(),
+            &Logged {
+                rule: id,
+                name: &record.name,
+                result: RunResult::Failed,
+                trigger: record.trigger.on,
+                task: None,
+                group: None,
+                changes: 0,
+                depth: 0,
+                error: Some(&error),
+            },
+        )?;
+    }
+    Ok(())
+}
+
+/// Renames `old` to `new` in the triggers and actions of the rules of
+/// `project`, in the running command, as saved views' queries are
+/// rewritten when a name they use changes.
+pub(crate) fn rename_in_rules(
+    w: &mut WriteCtx<'_>,
+    project: Id,
+    kind: Named,
+    old: &str,
+    new: &str,
+) -> Result<(), Failure> {
+    let old = fold(old);
+    for (id, mut record) in rules_of(w.tx(), Some(project))? {
+        let renamed = each_name(&mut record, kind, &mut |name| {
+            if fold(name) == old {
+                new.clone_into(name);
+                true
+            } else {
+                false
+            }
+        });
+        if renamed {
+            set(w, id, Some(&record))?;
+        }
+    }
+    Ok(())
+}
+
+/// Turns off the rules of `project` whose trigger or actions name `name`,
+/// which went away, and says why in each one's run log.
+pub(crate) fn name_removed(
+    w: &mut WriteCtx<'_>,
+    project: Id,
+    kind: Named,
+    name: &str,
+) -> Result<(), Failure> {
+    let gone = fold(name);
+    for (id, mut record) in rules_of(w.tx(), Some(project))? {
+        if each_name(&mut record, kind, &mut |n| fold(n) == gone) {
+            turn_off(
+                w,
+                id,
+                record,
+                kind.removed_message(),
+                &[("name", name.to_owned())],
+            )?;
+        }
+    }
+    Ok(())
+}
+
+/// A custom field as rules name it: in a `field_changed` trigger as `cf:`
+/// and its ID, in a `set_fields` action by its name, query name or ID.
+pub(crate) struct FieldNames<'a> {
+    pub(crate) id: Id,
+    pub(crate) name: &'a str,
+    pub(crate) query_name: &'a str,
+}
+
+impl FieldNames<'_> {
+    /// Whether the key of a `set_fields` action names this field.
+    fn is_key(&self, key: &str) -> bool {
+        let key = key.trim();
+        let bare = gk_query::fields::strip_custom_prefix(key)
+            .or_else(|| key.strip_prefix(CUSTOM_FIELD_PREFIX))
+            .unwrap_or(key);
+        let folded = fold(bare);
+        folded == fold(self.name)
+            || folded == fold(self.query_name)
+            || bare.parse::<Id>().is_ok_and(|id| id == self.id)
+    }
+
+    fn is_watched(&self, field: &str) -> bool {
+        field
+            .strip_prefix(CUSTOM_FIELD_PREFIX)
+            .and_then(|id| id.parse::<Id>().ok())
+            == Some(self.id)
+    }
+}
+
+/// The scope of a custom field's rules: its project's, or every rule for
+/// a field of the workspace.
+fn field_rules(
+    tx: &Transaction<'_>,
+    scope: Option<Id>,
+    field: &FieldNames<'_>,
+) -> Result<Vec<(Id, Record)>, Failure> {
+    Ok(rules_of(tx, scope)?
+        .into_iter()
+        .filter(|(_, r)| {
+            r.trigger.fields.iter().any(|f| field.is_watched(f))
+                || r.actions
+                    .iter()
+                    .any(|a| a.fields.keys().any(|k| field.is_key(k)))
+        })
+        .collect())
+}
+
+/// Custom field `old` is now called `new_name`: `set_fields` actions that
+/// name it by its name or query name follow. (Triggers name it by ID.)
+pub(crate) fn field_renamed(
+    w: &mut WriteCtx<'_>,
+    scope: Option<Id>,
+    old: &FieldNames<'_>,
+    new_name: &str,
+) -> Result<(), Failure> {
+    for (id, mut record) in field_rules(w.tx(), scope, old)? {
+        let mut renamed = false;
+        for a in &mut record.actions {
+            let keys: Vec<String> = a
+                .fields
+                .keys()
+                .filter(|k| old.is_key(k) && k.trim().parse::<Id>().is_err())
+                .cloned()
+                .collect();
+            for k in keys {
+                if let Some(v) = a.fields.remove(&k) {
+                    a.fields.insert(new_name.to_owned(), v);
+                    renamed = true;
+                }
+            }
+        }
+        if renamed {
+            set(w, id, Some(&record))?;
+        }
+    }
+    Ok(())
+}
+
+/// Option `from` of custom field `field` is now `to` (`None`: it was
+/// taken out): the values `set_fields` actions give it follow, and a rule
+/// that gives a removed option is turned off.
+pub(crate) fn field_option_changed(
+    w: &mut WriteCtx<'_>,
+    scope: Option<Id>,
+    field: &FieldNames<'_>,
+    from: &str,
+    to: Option<&str>,
+) -> Result<(), Failure> {
+    let wanted = fold(from);
+    for (id, mut record) in field_rules(w.tx(), scope, field)? {
+        let mut hit = false;
+        for a in &mut record.actions {
+            for (k, v) in &mut a.fields {
+                if !field.is_key(k) {
+                    continue;
+                }
+                let mut one = |s: &mut String| {
+                    if fold(s) == wanted {
+                        hit = true;
+                        if let Some(to) = to {
+                            to.clone_into(s);
+                        }
+                    }
+                };
+                match v {
+                    Value::String(s) => one(s),
+                    Value::Array(items) => {
+                        for item in items {
+                            if let Value::String(s) = item {
+                                one(s);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        match (hit, to) {
+            (false, _) => {}
+            (true, Some(_)) => set(w, id, Some(&record))?,
+            (true, None) => {
+                // Turn it off as it was stored, not with the value taken out.
+                let stored = load(w.tx(), id)?.unwrap_or(record);
+                turn_off(
+                    w,
+                    id,
+                    stored,
+                    "automation-off-option-removed",
+                    &[
+                        ("field", field.name.to_owned()),
+                        ("option", from.to_owned()),
+                    ],
+                )?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Custom field `field` was deleted: the rules that watch or set it are
+/// turned off, and say why in their run logs.
+pub(crate) fn field_removed(
+    w: &mut WriteCtx<'_>,
+    scope: Option<Id>,
+    field: &FieldNames<'_>,
+) -> Result<(), Failure> {
+    for (id, record) in field_rules(w.tx(), scope, field)? {
+        turn_off(
+            w,
+            id,
+            record,
+            "automation-off-field-removed",
+            &[("field", field.name.to_owned())],
+        )?;
     }
     Ok(())
 }

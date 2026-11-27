@@ -238,6 +238,34 @@ fn cumulative_flow_follows_the_history_and_status_renames() {
 }
 
 #[test]
+fn csv_cells_that_look_like_formulas_are_defused() {
+    let dir = TempDir::new().unwrap();
+    let ws = open(&dir);
+    two_weeks(&ws);
+    // A status name and a task title a spreadsheet would run as formulas.
+    ws.call(
+        "status.update",
+        json!({ "project": "TM", "status": "In progress", "name": "=HYPERLINK(\"x\")" }),
+    );
+    ws.call("task.update", json!({ "key": "TM-4", "title": "@SUM(A1)" }));
+    let flow = ws.call(
+        "report.cumulative_flow",
+        json!({ "from": RANGE.0, "to": RANGE.1, "project": "TM", "csv": true }),
+    );
+    let csv = flow["csv"].as_str().unwrap();
+    assert!(
+        csv.starts_with("start,end,Backlog,To do,\"'=HYPERLINK(\"\"x\"\")\",Review,Done\r\n"),
+        "{csv}"
+    );
+    let cycle = ws.call(
+        "report.cycle_time",
+        json!({ "from": RANGE.0, "to": RANGE.1, "tasks": true, "csv": true }),
+    );
+    let csv = cycle["csv"].as_str().unwrap();
+    assert!(csv.contains("\r\nTM-4,'@SUM(A1),"), "{csv}");
+}
+
+#[test]
 fn a_task_in_the_trash_is_not_counted_meanwhile() {
     let dir = TempDir::new().unwrap();
     let ws = open(&dir);

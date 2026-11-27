@@ -659,6 +659,10 @@ pub struct MoveCheck {
     /// would take it off.
     #[serde(default)]
     pub versions: Vec<MoveMatch>,
+    /// The sprints they are in. A task is only ever in a sprint of its own
+    /// project, so the move takes them out of these: there is no target.
+    #[serde(default)]
+    pub sprints: Vec<MoveMatch>,
     /// The target's required custom fields (shown for the type a task would
     /// have there) that moving tasks would have no value of. A field with a
     /// default gives it; without one the move is refused unless `fields`

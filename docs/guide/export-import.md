@@ -19,7 +19,10 @@ Data and backups › **Export and import**. Then choose:
 - the **Format**: **One .zip file** or **A folder**.
 
 Glyphkeel then shows what it wrote: projects, tasks, comments, files, wiki pages
-and time entries.
+and time entries. Each project's automation rules go with it; an export of the
+whole workspace also takes the project templates and the workspace's own
+automation rules. Rules start afresh when they are imported (see
+[Automation rules](automation.md#export-and-import)).
 
 ### Importing
 

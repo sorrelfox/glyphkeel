@@ -39,7 +39,6 @@ pub(crate) fn generate(catalog: &Value) -> Result<String> {
     s += "// Copyright (C) 2026 Glyphkeel contributors\n\n";
     s += "// Generated from the operation catalog by `cargo xtask gen`. Do not edit:\n";
     s += "// change the catalog in crates/gk-api and run `cargo xtask gen` again.\n\n";
-    s += "/* eslint-disable */\n\n";
 
     for (name, schema) in &types.0 {
         s += &doc(schema, "");

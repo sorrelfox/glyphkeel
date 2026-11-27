@@ -313,6 +313,7 @@ interface VirtualBodyProps {
 function VirtualBody({ keys, cards, handlers, active, sortable, closed, setDroppable, onScroller, children }: VirtualBodyProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const dragged = active === null ? -1 : keys.indexOf(active);
+  // eslint-disable-next-line react-hooks/incompatible-library -- the virtualizer returns new functions each render, so React Compiler rightly leaves this component unmemoized
   const virtualizer = useVirtualizer({
     count: keys.length,
     getScrollElement: () => scrollRef.current,

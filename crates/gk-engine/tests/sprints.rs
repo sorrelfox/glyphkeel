@@ -430,3 +430,114 @@ fn sprints_and_their_tasks_survive_export_and_import() {
     assert_eq!(list(&a), list(&b));
     assert_eq!(sprint_of(&b, &k).as_deref(), Some("Sprint 1"));
 }
+
+#[test]
+fn copies_templates_and_recurring_tasks_follow_the_sprint_rules() {
+    let (_dir, _clock, e) = setup();
+    let a = new_task(&e, "A", json!({}));
+    let b = new_task(&e, "B", json!({}));
+    call(
+        &e,
+        "sprint.create",
+        json!({ "project": "TM", "name": "Sprint 1", "tasks": [a, b] }),
+    );
+    call(
+        &e,
+        "sprint.create",
+        json!({ "project": "TM", "name": "Sprint 2", "tasks": [] }),
+    );
+    call(
+        &e,
+        "sprint.start",
+        json!({ "sprint": "Sprint 1", "project": "TM" }),
+    );
+
+    // The move preview says the tasks leave their sprint.
+    let check = call(
+        &e,
+        "task.move_check",
+        json!({ "keys": [a, b], "project": "ZZ" }),
+    );
+    assert_eq!(
+        check["sprints"],
+        json!([{ "name": "Sprint 1", "tasks": 2 }])
+    );
+
+    // A copy stays in the sprint.
+    let copy = call(&e, "task.duplicate", json!({ "key": a }))["task"]["key"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert_eq!(sprint_of(&e, &copy).as_deref(), Some("Sprint 1"));
+
+    // A template made from a task in the active sprint names `active`;
+    // a task made from it goes into the sprint running then.
+    let made = call(
+        &e,
+        "template.create",
+        json!({ "name": "Chore", "from_task": b }),
+    );
+    assert_eq!(made["template"]["task"]["sprint"], "active");
+    let used = call(
+        &e,
+        "template.apply",
+        json!({ "template": "Chore", "project": "TM" }),
+    );
+    let key = used["task"]["key"].as_str().unwrap().to_owned();
+    assert_eq!(sprint_of(&e, &key).as_deref(), Some("Sprint 1"));
+    // Any other sprint is refused in a template.
+    assert_eq!(
+        code(
+            &e,
+            "template.create",
+            json!({ "name": "Planned", "project": "TM",
+                    "task": { "title": "X", "sprint": "Sprint 2" } })
+        ),
+        ErrorCode::Invalid
+    );
+
+    // A recurring task in the active sprint: the next occurrence goes into
+    // the sprint running when it is made; none once the sprints are over.
+    call(
+        &e,
+        "recurrence.set",
+        json!({ "key": b, "text": "every day" }),
+    );
+    call(
+        &e,
+        "sprint.complete",
+        json!({ "sprint": "Sprint 1", "project": "TM", "move_open_tasks_to": "Sprint 2" }),
+    );
+    call(
+        &e,
+        "sprint.start",
+        json!({ "sprint": "Sprint 2", "project": "TM" }),
+    );
+    let done = done_status(&e);
+    call(&e, "task.move", json!({ "key": b, "status": done }));
+    let open = call(
+        &e,
+        "task.search",
+        json!({ "query": "project:TM is:open title:B" }),
+    );
+    let occurrence = keys(&open).into_iter().find(|k| *k != b).unwrap();
+    assert_eq!(sprint_of(&e, &occurrence).as_deref(), Some("Sprint 2"));
+
+    // Duplicating a task of a closed sprint leaves the copy in the backlog.
+    call(
+        &e,
+        "sprint.complete",
+        json!({ "sprint": "Sprint 2", "project": "TM", "move_open_tasks_to": "backlog" }),
+    );
+    let closed = call(
+        &e,
+        "task.search",
+        json!({ "query": "project:TM sprint:\"Sprint 2\"" }),
+    );
+    let old = keys(&closed)[0].clone();
+    let copy = call(&e, "task.duplicate", json!({ "key": old }))["task"]["key"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert_eq!(sprint_of(&e, &copy), None);
+}

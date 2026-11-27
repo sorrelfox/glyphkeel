@@ -140,6 +140,7 @@ function LoadedList({ project, views, layout, openTask, onOpen, initialQuery }: 
   const rowHeight = ROW_HEIGHT[density];
   // Lines: the rows and, when grouped, a header per group.
   const [lineCount, setLineCount] = useState(0);
+  // eslint-disable-next-line react-hooks/incompatible-library -- the virtualizer returns new functions each render, so React Compiler rightly leaves this component unmemoized
   const virtualizer = useVirtualizer({
     count: lineCount,
     getScrollElement: () => scrollRef.current,

@@ -120,7 +120,22 @@ export function blueprintOf(host: FakeHost, task: FakeTask, anchor: string): Tas
     }
   };
   walk(task, undefined);
-  return { ...plainOf(host, task, anchor), ...(subtasks.length > 0 ? { subtasks } : {}) };
+  // Only the running sprint is carried, as `active`.
+  const sprint = (host.state().sprints ?? []).find((candidate) => candidate.id === task.sprintId);
+  return { ...plainOf(host, task, anchor), ...(sprint?.state === "active" ? { sprint: ACTIVE_SPRINT } : {}), ...(subtasks.length > 0 ? { subtasks } : {}) };
+}
+
+/** The one sprint a blueprint may name. */
+const ACTIVE_SPRINT = "active";
+
+/** Refuses a blueprint that names a sprint other than `active`. */
+function checkSprint(host: FakeHost, bp: TaskBlueprint | null | undefined): void {
+  const sprint = bp?.sprint;
+  if (sprint !== null && sprint !== undefined && fold(sprint) !== ACTIVE_SPRINT) {
+    host.fail("invalid", `A template can only name the sprint \`active\` (the sprint running when a task is made from it), not "${sprint}".`, {
+      details: { path: "task.sprint", message_id: "template-sprint-active-only", args: { sprint } },
+    });
+  }
 }
 
 function writeOne(host: FakeHost, project: FakeProject, t: Omit<TaskBlueprint, "subtasks">, anchor: string, parentId: string | null, statusId: string | null, leftOut: string[]): FakeTask {
@@ -172,6 +187,12 @@ function writeOne(host: FakeHost, project: FakeProject, t: Omit<TaskBlueprint, "
 /** Makes the task `bp` describes with its subtasks; returns it and every task made. */
 export function makeTask(host: FakeHost, project: FakeProject, bp: TaskBlueprint, title: string | null, anchor: string, parentId: string | null, statusId: string | null, leftOut: string[]): { task: FakeTask; made: FakeTask[] } {
   const root = writeOne(host, project, { ...bp, title: title ?? bp.title }, anchor, parentId, statusId, leftOut);
+  if (bp.sprint !== null && bp.sprint !== undefined && fold(bp.sprint) === ACTIVE_SPRINT) {
+    const running = (host.state().sprints ?? []).find((candidate) => candidate.projectId === project.id && candidate.state === "active");
+    if (running) {
+      root.sprintId = running.id;
+    }
+  }
   const made: FakeTask[] = [root];
   const subs: FakeTask[] = [];
   for (const sub of bp.subtasks ?? []) {
@@ -576,6 +597,7 @@ export function templateHandlers(host: FakeHost): Handlers {
             host.fail("invalid", "A task template belongs to a project: give `project`.", { details: { path: "project", message_id: "template-needs-project" } });
           }
           projectId = host.project(input.project).id;
+          checkSprint(host, input.task);
           task = structuredClone(input.task ?? { title: name });
         }
         host.writable(projectId);
@@ -602,6 +624,7 @@ export function templateHandlers(host: FakeHost): Handlers {
       if ((input.task && template.kind !== "task") || (input.setup && template.kind !== "project")) {
         host.fail("invalid", "A task template holds a task, and a project template a project's set-up.", { details: { path: "task", message_id: "template-kind-mismatch" } });
       }
+      checkSprint(host, input.task);
       if (input.task) next.task = structuredClone(input.task);
       if (input.setup) next.setup = checkRequired(host, structuredClone(input.setup));
       if (JSON.stringify(next) === JSON.stringify(template)) {

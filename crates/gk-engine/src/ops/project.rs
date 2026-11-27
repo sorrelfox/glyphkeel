@@ -1487,6 +1487,13 @@ pub(crate) fn apply_status(
             super::view::rewrite_queries(w, Some(p.id), |q| {
                 gk_query::rename::rename(q, gk_query::NameKind::Status, &status.name, &name)
             })?;
+            super::automation::rename_in_rules(
+                w,
+                p.id,
+                super::automation::Named::Status,
+                &status.name,
+                &name,
+            )?;
         }
     }
     if let Some(category) = c.category {
@@ -1652,6 +1659,7 @@ fn delete_status(
     record_removal(w, STATUS, status, p.id)?;
     w.tx()
         .execute("DELETE FROM statuses WHERE id = ?1", [b(status.id)])?;
+    super::automation::name_removed(w, p.id, super::automation::Named::Status, &status.name)?;
     Ok(())
 }
 
@@ -1738,6 +1746,13 @@ pub(crate) fn apply_type(
             super::view::rewrite_queries(w, Some(p.id), |q| {
                 gk_query::rename::rename(q, gk_query::NameKind::Type, &item.name, &name)
             })?;
+            super::automation::rename_in_rules(
+                w,
+                p.id,
+                super::automation::Named::Type,
+                &item.name,
+                &name,
+            )?;
             super::custom_field::rename_type(w, p.id, &item.name, &name)?;
         }
     }
@@ -1864,6 +1879,7 @@ fn delete_type(
     record_removal(w, TYPE, item, p.id)?;
     w.tx()
         .execute("DELETE FROM task_types WHERE id = ?1", [b(item.id)])?;
+    super::automation::name_removed(w, p.id, super::automation::Named::Type, &item.name)?;
     Ok(())
 }
 
@@ -1926,6 +1942,7 @@ pub(crate) fn apply_label(
         super::view::rewrite_queries(w, Some(p.id), |q| {
             gk_query::rename::remove_label(q, &item.name)
         })?;
+        super::automation::name_removed(w, p.id, super::automation::Named::Label, &item.name)?;
         return Ok(());
     }
     if let Some(name) = &c.name {
@@ -1935,6 +1952,13 @@ pub(crate) fn apply_label(
             super::view::rewrite_queries(w, Some(p.id), |q| {
                 gk_query::rename::rename(q, gk_query::NameKind::Label, &item.name, &name)
             })?;
+            super::automation::rename_in_rules(
+                w,
+                p.id,
+                super::automation::Named::Label,
+                &item.name,
+                &name,
+            )?;
         }
     }
     if let Some(hue) = c.hue {
