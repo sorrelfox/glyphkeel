@@ -147,7 +147,11 @@ pub fn rename_with(
         let (Some(jobs), Some(open)) = (lock(&from.jobs_lock()), lock(&from.open_lock())) else {
             return Err(in_use("workspace-in-use", "workspace-in-use-hint"));
         };
-        let moved = fs::rename(from.root(), to.root());
+        let moved = if same_folder {
+            rename_case(from.root(), to.root())
+        } else {
+            fs::rename(from.root(), to.root())
+        };
         drop((app, jobs, open));
         moved.map_err(|e| {
             messages::storage(
@@ -164,6 +168,18 @@ pub fn rename_with(
         }
     }
     Ok(to)
+}
+
+/// Renames folder `from` to `to`, a name that differs only in case. A
+/// system that ignores case may take that rename for no change at all, so
+/// the folder goes through a passing name; when the second step fails it
+/// goes back.
+fn rename_case(from: &Path, to: &Path) -> std::io::Result<()> {
+    let passing = from.with_file_name(format!(".renaming-{}", std::process::id()));
+    fs::rename(from, &passing)?;
+    fs::rename(&passing, to).inspect_err(|_| {
+        let _ = fs::rename(&passing, from);
+    })
 }
 
 /// Remembers `workspace` (a name in the data folder or a folder) as the

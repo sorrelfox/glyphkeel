@@ -60,8 +60,18 @@ fn workspace(dir: &tempfile::TempDir) -> WorkspaceLayout {
     layout
 }
 
+/// Whether this build can encrypt. The Windows build has no SQLCipher:
+/// there encrypting is refused (see the last test) and the other tests
+/// have nothing to check.
+fn can_encrypt() -> bool {
+    gk_store::encryption_available()
+}
+
 #[test]
 fn a_workspace_is_encrypted_and_decrypted_back() {
+    if !can_encrypt() {
+        return;
+    }
     let dir = tempfile::tempdir().unwrap();
     let layout = workspace(&dir);
     assert_eq!(
@@ -104,6 +114,9 @@ fn a_workspace_is_encrypted_and_decrypted_back() {
 
 #[test]
 fn an_encrypted_workspace_needs_its_passphrase() {
+    if !can_encrypt() {
+        return;
+    }
     let dir = tempfile::tempdir().unwrap();
     let layout = workspace(&dir);
     encrypt_workspace(&layout, &pass("needs its own")).unwrap();
@@ -120,6 +133,9 @@ fn an_encrypted_workspace_needs_its_passphrase() {
 
 #[test]
 fn a_process_without_the_passphrase_is_refused() {
+    if !can_encrypt() {
+        return;
+    }
     let dir = tempfile::tempdir().unwrap();
     let layout = workspace(&dir);
     encrypt_workspace(&layout, &pass("only in the parent")).unwrap();
@@ -189,6 +205,9 @@ fn child_opens() {
 
 #[test]
 fn two_processes_write_one_encrypted_workspace() {
+    if !can_encrypt() {
+        return;
+    }
     let dir = tempfile::tempdir().unwrap();
     let layout = workspace(&dir);
     encrypt_workspace(&layout, &pass("shared by two")).unwrap();
@@ -227,6 +246,9 @@ fn two_processes_write_one_encrypted_workspace() {
 
 #[test]
 fn converting_waits_for_the_workspace_to_be_closed() {
+    if !can_encrypt() {
+        return;
+    }
     let dir = tempfile::tempdir().unwrap();
     let layout = workspace(&dir);
     let store = Store::open(&layout, StoreConfig::default()).unwrap();
@@ -244,6 +266,9 @@ fn converting_waits_for_the_workspace_to_be_closed() {
 
 #[test]
 fn snapshots_of_an_encrypted_workspace_are_encrypted_and_restore_across_kinds() {
+    if !can_encrypt() {
+        return;
+    }
     let dir = tempfile::tempdir().unwrap();
     let layout = workspace(&dir);
     encrypt_workspace(&layout, &pass("snapshots too")).unwrap();
@@ -287,6 +312,9 @@ fn snapshots_of_an_encrypted_workspace_are_encrypted_and_restore_across_kinds() 
 
 #[test]
 fn a_remembered_passphrase_opens_copies_with_the_same_salt() {
+    if !can_encrypt() {
+        return;
+    }
     let dir = tempfile::tempdir().unwrap();
     let layout = workspace(&dir);
     let passphrase = pass("remembered once");
@@ -298,4 +326,27 @@ fn a_remembered_passphrase_opens_copies_with_the_same_salt() {
         gk_store::schema_version_of(&copy).unwrap(),
         gk_store::SCHEMA_VERSION
     );
+}
+
+#[test]
+fn a_build_without_sqlcipher_refuses_to_encrypt_and_keeps_plain_workspaces() {
+    // Every build but the Windows one has SQLCipher.
+    assert_eq!(can_encrypt(), !cfg!(windows));
+    if can_encrypt() {
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let layout = workspace(&dir);
+    let refused = encrypt_workspace(&layout, &pass("not on this build"));
+    assert!(
+        matches!(refused, Err(StoreError::EncryptionUnavailable)),
+        "{refused:?}"
+    );
+    assert_eq!(
+        encryption_of(&layout.database()).unwrap(),
+        Encryption::Plain
+    );
+    let store = Store::open(&layout, StoreConfig::default()).unwrap();
+    assert_eq!(get(&store, "trash_days").as_deref(), Some("7"));
+    store.close();
 }

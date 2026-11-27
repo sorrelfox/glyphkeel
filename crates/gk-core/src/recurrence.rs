@@ -937,7 +937,17 @@ mod tests {
                 (Frequency::Month | Frequency::Year, 3) => r.month_day = Some(-1),
                 _ => {}
             }
-            let next = r.next_after(after).unwrap();
+            let Some(next) = r.next_after(after) else {
+                // A day some months lack (a fifth Monday, the 30th) may
+                // never come in the months the rule steps through: the
+                // fifth Monday of February every second year from an odd
+                // one is never there.
+                proptest::prop_assert!(
+                    r.nth.is_some_and(|n| n.nth == 5) || r.month_day.is_some_and(|d| d >= 29),
+                    "{r:?} never comes"
+                );
+                return Ok(());
+            };
             proptest::prop_assert!(next > after && next >= start);
             let mut d = after.add_days(1).unwrap();
             while d < next {

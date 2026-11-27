@@ -22,7 +22,7 @@ fn the_person_attaches_any_file_and_agents_only_from_their_folders() {
     ws.ok(&["task", "create", "--project", "GK", "--title", "Ship"]);
     let elsewhere = ws.home().join("Documents");
     fs::create_dir_all(&elsewhere).unwrap();
-    let elsewhere = fs::canonicalize(&elsewhere).unwrap();
+    let elsewhere = gk_store::canonical_path(&elsewhere).unwrap();
     let file = elsewhere.join("report.txt");
     fs::write(&file, "Report.\n").unwrap();
     let file_arg = file.to_string_lossy().into_owned();

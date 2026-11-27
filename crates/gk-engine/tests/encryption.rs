@@ -59,6 +59,9 @@ fn backup_files(layout: &WorkspaceLayout) -> Vec<std::path::PathBuf> {
 
 #[test]
 fn an_encrypted_workspace_through_the_engine() {
+    if !gk_store::encryption_available() {
+        return;
+    }
     let dir = TempDir::new().unwrap();
     let clock = Arc::new(AtomicI64::new(START));
     let layout = WorkspaceLayout::new(dir.path().join("Personal"));
@@ -188,6 +191,9 @@ fn an_encrypted_workspace_through_the_engine() {
 
 #[test]
 fn encrypting_refuses_while_the_workspace_is_open() {
+    if !gk_store::encryption_available() {
+        return;
+    }
     let dir = TempDir::new().unwrap();
     let clock = Arc::new(AtomicI64::new(START));
     let layout = WorkspaceLayout::new(dir.path().join("Open"));
@@ -207,4 +213,46 @@ fn encrypting_refuses_while_the_workspace_is_open() {
         encryption_of(&layout.database()).unwrap(),
         Encryption::Plain
     );
+}
+
+/// The Windows build has no SQLCipher: it says so, refuses to encrypt and
+/// keeps working on plain workspaces.
+#[test]
+fn a_build_that_cannot_encrypt_says_so() {
+    if gk_store::encryption_available() {
+        return;
+    }
+    let dir = TempDir::new().unwrap();
+    let clock = Arc::new(AtomicI64::new(START));
+    let layout = WorkspaceLayout::new(dir.path().join("Plain"));
+    let engine = Engine::open(&layout, config(&clock)).unwrap();
+    call(
+        &engine,
+        "project.create",
+        json!({ "name": "Tasks", "key": "TM" }),
+    );
+    engine.close();
+    let status = encryption::status(&layout).unwrap();
+    assert!(!status.available && !status.encrypted);
+    let err = encryption::change(
+        &layout,
+        None,
+        &Change::Encrypt(Passphrase::new("not on this build").unwrap()),
+        START + 1,
+        "test",
+    )
+    .unwrap_err();
+    assert_eq!(err.code, ErrorCode::Storage, "{err:?}");
+    assert_eq!(err.details["message_id"], "storage-encryption-unavailable");
+    assert_eq!(
+        encryption_of(&layout.database()).unwrap(),
+        Encryption::Plain
+    );
+    let engine = Engine::open(&layout, config(&clock)).unwrap();
+    call(
+        &engine,
+        "task.create",
+        json!({ "project": "TM", "title": "Still plain" }),
+    );
+    engine.close();
 }

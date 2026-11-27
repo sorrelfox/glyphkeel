@@ -20,6 +20,7 @@ pub mod link;
 pub mod merge;
 pub mod message;
 pub mod palette;
+pub mod plain_path;
 pub mod portable;
 pub mod progress;
 pub mod rank;
@@ -45,6 +46,7 @@ pub use link::{LinkKind, Relation};
 pub use merge::{Edit, EditError, Merge, apply_edits, merge3, unified_diff};
 pub use message::Message;
 pub use palette::{PALETTE, suggest_hue};
+pub use plain_path::{plain_path, without_verbatim_prefix};
 pub use portable::{
     PORTABLE_NAME_MAX_BYTES, is_windows_device, numbered_file_name, portable_file_name,
     unique_file_name,

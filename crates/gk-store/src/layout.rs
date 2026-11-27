@@ -424,6 +424,16 @@ fn open_lock_file(path: &Path) -> Result<File> {
         .map_err(|e| StoreError::io("opening", path, e))
 }
 
+/// `path` made absolute with links followed, as [`fs::canonicalize`]
+/// does, in the form people write: without Windows' `\\?\` prefix
+/// where the plain form names the same file ([`gk_core::plain_path`]).
+///
+/// # Errors
+/// As [`fs::canonicalize`]: `path` doesn't exist or can't be read.
+pub fn canonical_path(path: &Path) -> std::io::Result<PathBuf> {
+    fs::canonicalize(path).map(gk_core::plain_path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

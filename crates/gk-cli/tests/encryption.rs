@@ -74,6 +74,20 @@ fn an_encrypted_workspace_from_the_command_line_and_the_agent_server() {
         &["--json", w[0], w[1], "workspace", "encrypt"],
         &format!("{PASSPHRASE}\n"),
     );
+    if !gk_store::encryption_available() {
+        // The Windows build has no SQLCipher: it says so and the workspace
+        // stays plain and usable.
+        assert_eq!(code(&out), 4, "{}", stderr(&out));
+        let error: Value = serde_json::from_slice(&out.stderr).unwrap();
+        assert_eq!(
+            error["details"]["message_id"], "storage-encryption-unavailable",
+            "{error}"
+        );
+        assert_eq!(encryption_of(&database).unwrap(), Encryption::Plain);
+        let listed = run(home, &[], &[w[0], w[1], "project", "list"]);
+        assert_eq!(code(&listed), 0, "{}", stderr(&listed));
+        return;
+    }
     assert_eq!(code(&out), 0, "{}", stderr(&out));
     let value: Value = serde_json::from_str(&stdout(&out)).unwrap();
     assert_eq!(value["encrypted"], true, "{value}");
