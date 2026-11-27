@@ -78,18 +78,21 @@ fn the_language_comes_from_the_option_the_environment_the_app_then_the_system() 
     let task = help(home, &[], &["task", "show", "--lang=en-XA"]);
     assert!(task.starts_with("[Óóñéé ţóó 20 ţáášķš"), "{task}");
 
-    // The system's language, as gettext reads it.
-    assert!(is_pseudo(&help(home, &[("LANG", "en_XA.UTF-8")], &[])));
-    assert!(is_pseudo(&help(
-        home,
-        &[("LANGUAGE", "en_XA:de"), ("LANG", "de_DE.UTF-8")],
-        &[]
-    )));
-    assert!(is_english(&help(
-        home,
-        &[("LANGUAGE", "en_XA"), ("LC_ALL", "C")],
-        &[]
-    )));
+    // The system's language, as gettext reads it. Windows has its own
+    // display language, which comes before these variables there.
+    if cfg!(not(windows)) {
+        assert!(is_pseudo(&help(home, &[("LANG", "en_XA.UTF-8")], &[])));
+        assert!(is_pseudo(&help(
+            home,
+            &[("LANGUAGE", "en_XA:de"), ("LANG", "de_DE.UTF-8")],
+            &[]
+        )));
+        assert!(is_english(&help(
+            home,
+            &[("LANGUAGE", "en_XA"), ("LC_ALL", "C")],
+            &[]
+        )));
+    }
 
     // The language chosen in the app's Preferences comes before the
     // system's.

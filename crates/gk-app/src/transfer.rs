@@ -423,7 +423,28 @@ mod tests {
 
     /// Fields with such a name that are not a place on disk: the field and
     /// what it is instead.
-    const NOT_ON_DISK: &[(&str, &str, &str)] = &[];
+    const NOT_ON_DISK: &[(&str, &str, &str)] = &[
+        (
+            "folder.update",
+            "folder",
+            "a folder of projects in the sidebar, by ID or name",
+        ),
+        (
+            "folder.rename",
+            "folder",
+            "a folder of projects in the sidebar, by ID or name",
+        ),
+        (
+            "folder.delete",
+            "folder",
+            "a folder of projects in the sidebar, by ID or name",
+        ),
+        (
+            "folder.move",
+            "folder",
+            "a folder of projects in the sidebar, by ID or name",
+        ),
+    ];
 
     /// The top-level fields of an input schema, also those of each variant.
     fn fields(schema: &serde_json::Value, out: &mut Vec<String>) {

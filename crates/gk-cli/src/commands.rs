@@ -77,6 +77,9 @@ pub(crate) fn op_commands() -> Vec<OpCommand> {
 /// The whole command line definition.
 pub(crate) fn build(ops: &[OpCommand]) -> Command {
     let mut root = Command::new("glyphkeel")
+        // The same name in usage lines everywhere, not `glyphkeel.exe` on
+        // Windows: the command runs without its extension there too.
+        .bin_name("glyphkeel")
         .version(env!("CARGO_PKG_VERSION"))
         .about(text("cli-about", &[]))
         .long_about(format!(
