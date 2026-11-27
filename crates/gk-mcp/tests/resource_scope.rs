@@ -12,8 +12,8 @@ use std::time::Duration;
 
 use common::{connect_person, lifecycles, open_as_person, workspace};
 use rmcp::model::{
-    ElicitationAction, ReadResourceRequestParams, ResourceContents, SubscribeRequestParams,
-    SubscriptionFilter,
+    ElicitationAction, ReadResourceRequestParams, ResourceContents, ServerNotification,
+    SubscribeRequestParams, SubscriptionFilter,
 };
 use serde_json::{Value, json};
 
@@ -127,6 +127,126 @@ async fn listening_leaves_out_what_the_limited_agent_cannot_see() {
         subscription.acknowledged().resource_subscriptions,
         Some(vec![mine])
     );
+    drop(subscription);
+    c.close().await;
+}
+
+/// Calls `op` as the person, from another program.
+fn person_calls(options: &gk_mcp::Options, op: &str, input: Value) -> Value {
+    let (engine, person) = open_as_person(options);
+    let out = engine.call(&person, op, input).unwrap();
+    engine.close();
+    out
+}
+
+/// TM-1's ID.
+fn shared_id(options: &gk_mcp::Options) -> String {
+    let out = person_calls(options, "task.get", json!({ "keys": ["TM-1"] }));
+    out["items"][0]["id"].as_str().unwrap().to_owned()
+}
+
+/// Moves TM-1 (by `id`) into PRV, then changes it there.
+fn move_out_and_change(options: &gk_mcp::Options, id: &str) {
+    person_calls(options, "task.move", json!({ "key": id, "project": "PRV" }));
+    person_calls(
+        options,
+        "task.update",
+        json!({ "key": id, "title": "Now secret" }),
+    );
+}
+
+#[tokio::test]
+#[allow(deprecated)]
+async fn a_watched_task_moved_out_of_the_project_is_no_longer_heard_of() {
+    let (_, mode, asked, _) = lifecycles().remove(0);
+    let (_dir, mut options) = workspace();
+    seed(&options);
+    let id = shared_id(&options);
+    options.project = Some("TM".to_owned());
+    let mut c = connect_person(&options, mode, asked, ElicitationAction::Accept).await;
+    let uri = "glyphkeel://tasks/TM-1";
+    c.client
+        .subscribe(SubscribeRequestParams::new(uri))
+        .await
+        .unwrap();
+
+    // Within TM, a change is heard.
+    person_calls(
+        &options,
+        "task.update",
+        json!({ "key": id, "title": "Shared!" }),
+    );
+    let heard = tokio::time::timeout(Duration::from_secs(10), c.updates.recv())
+        .await
+        .expect("an update in time")
+        .expect("the channel is open");
+    assert_eq!(heard, uri);
+
+    // Moved into PRV, neither the move nor later changes are heard, and
+    // the task can't be read by its old key or its ID.
+    move_out_and_change(&options, &id);
+    let quiet = tokio::time::timeout(Duration::from_millis(3500), c.updates.recv()).await;
+    assert!(quiet.is_err(), "{quiet:?}");
+    for read in [uri.to_owned(), format!("glyphkeel://tasks/{id}")] {
+        assert!(
+            c.client
+                .read_resource(ReadResourceRequestParams::new(read.clone()))
+                .await
+                .is_err(),
+            "{read}"
+        );
+    }
+
+    // Moved back, it isn't watched any more: the subscription was dropped.
+    person_calls(&options, "task.move", json!({ "key": id, "project": "TM" }));
+    person_calls(
+        &options,
+        "task.update",
+        json!({ "key": id, "title": "Back" }),
+    );
+    let quiet = tokio::time::timeout(Duration::from_millis(2500), c.updates.recv()).await;
+    assert!(quiet.is_err(), "{quiet:?}");
+    c.close().await;
+}
+
+#[tokio::test]
+async fn a_listened_task_moved_out_of_the_project_is_no_longer_heard_of() {
+    let (_, mode, asked, _) = lifecycles().remove(1);
+    let (_dir, mut options) = workspace();
+    seed(&options);
+    let id = shared_id(&options);
+    options.project = Some("TM".to_owned());
+    let c = connect_person(&options, mode, asked, ElicitationAction::Accept).await;
+    let uri = "glyphkeel://tasks/TM-1".to_owned();
+    let filter = SubscriptionFilter::builder()
+        .resource_subscriptions([uri.clone()])
+        .build();
+    let mut subscription = c.client.peer().listen(filter).await.unwrap();
+    assert_eq!(
+        subscription.acknowledged().resource_subscriptions,
+        Some(vec![uri.clone()])
+    );
+
+    let mut next_update = async || loop {
+        let next = subscription.next().await.unwrap()?;
+        if let ServerNotification::ResourceUpdatedNotification(n) = next {
+            return Some(n.params.uri);
+        }
+    };
+
+    person_calls(
+        &options,
+        "task.update",
+        json!({ "key": id, "title": "Shared!" }),
+    );
+    let heard = tokio::time::timeout(Duration::from_secs(10), next_update())
+        .await
+        .expect("an update in time");
+    assert_eq!(heard, Some(uri));
+
+    move_out_and_change(&options, &id);
+    let quiet = tokio::time::timeout(Duration::from_millis(3500), next_update()).await;
+    assert!(quiet.is_err(), "{quiet:?}");
     drop(subscription);
     c.close().await;
 }

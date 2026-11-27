@@ -15,6 +15,8 @@ version-sharing-descendants = This project and its sub-projects
 
 prop-version = Version
 prop-version-value = Version: { $value }
+# The version picker's name when the version isn't open: its name, then its status (Locked, Closed).
+prop-version-value-status = Version: { $value } { $status }
 prop-version-shared = { $name } (from { $project })
 prop-version-loading = Loading versions…
 prop-version-none-open = No open versions

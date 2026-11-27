@@ -258,6 +258,7 @@ export function Toolbar({ project, board, layout, view, filters, onFilters, onLa
               id: `field-${id}`,
               label,
               checked: layout.card_fields.includes(id),
+              checkbox: true,
               run: () => {
                 onLayout({
                   card_fields: layout.card_fields.includes(id) ? layout.card_fields.filter((other) => other !== id) : [...layout.card_fields, id],

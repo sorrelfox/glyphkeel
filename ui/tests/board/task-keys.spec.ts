@@ -34,14 +34,14 @@ test("S, P, L and D open the status, priority, labels and due date of the open t
   await page.keyboard.press("s");
   const statuses = page.getByRole("menu", { name: "Status" });
   await expect(statuses).toBeVisible();
-  await statuses.getByRole("menuitem", { name: "In progress" }).click();
+  await statuses.getByRole("menuitemradio", { name: "In progress" }).click();
   await expect(panel.getByRole("button", { name: /^Status: \W*In progress/ })).toBeVisible();
 
   await panel.getByRole("button", { name: "Copy key" }).focus();
   await page.keyboard.press("p");
   const priorities = page.getByRole("menu", { name: "Priority" });
   await expect(priorities).toBeVisible();
-  await priorities.getByRole("menuitem", { name: "High" }).click();
+  await priorities.getByRole("menuitemradio", { name: "High" }).click();
   await expect(panel.getByRole("button", { name: /^Priority: \W*High/ })).toBeVisible();
 
   await panel.getByRole("button", { name: "Copy key" }).focus();

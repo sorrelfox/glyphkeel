@@ -39,8 +39,8 @@ async function renderPanel(title = "Sort the sprint") {
   return { transport, task, panel, sprintOf };
 }
 
-/** Whether a menu entry shows the check mark of the current choice. */
-const isChecked = (item: HTMLElement) => item.querySelector(".menuCheck")?.textContent === "✓";
+/** Whether a menu entry is the current choice: said (aria-checked) and shown (the check mark). */
+const isChecked = (item: HTMLElement) => item.getAttribute("aria-checked") === "true" && item.querySelector(".menuCheck")?.textContent === "✓";
 
 const picker = (panel: HTMLElement, value: string) => within(panel).getByRole("button", { name: named(new RegExp(`^Sprint: ${value}$`)) });
 
@@ -50,18 +50,18 @@ describe("the task panel's sprint picker", () => {
     fireEvent.click(picker(panel, "Backlog"));
     const menu = await screen.findByRole("menu");
     // The running sprint says so; the completed one isn't offered.
-    await within(menu).findByRole("menuitem", { name: named(/^Sprint 2 \(active\)$/) });
+    await within(menu).findByRole("menuitemradio", { name: named(/^Sprint 2 \(active\)$/) });
     const names = within(menu)
-      .getAllByRole("menuitem")
+      .getAllByRole("menuitemradio")
       .map((item) => plain(item.textContent));
     expect(names.some((name) => name.includes("Sprint 3"))).toBe(true);
     expect(names.some((name) => name.includes("Sprint 1"))).toBe(false);
     // Already in the backlog: that choice is checked and can't be chosen.
-    const backlog = within(menu).getByRole("menuitem", { name: "Backlog" });
+    const backlog = within(menu).getByRole("menuitemradio", { name: "Backlog" });
     expect(isChecked(backlog)).toBe(true);
     expect(backlog.getAttribute("aria-disabled")).toBe("true");
 
-    fireEvent.click(within(menu).getByRole("menuitem", { name: named(/^Sprint 3$/) }));
+    fireEvent.click(within(menu).getByRole("menuitemradio", { name: named(/^Sprint 3$/) }));
     await waitFor(() => {
       expect(picker(panel, "Sprint 3")).toBeTruthy();
     });
@@ -70,18 +70,18 @@ describe("the task panel's sprint picker", () => {
     // Moved to the running sprint, the value says it is active.
     fireEvent.click(picker(panel, "Sprint 3"));
     const again = await screen.findByRole("menu");
-    const current = await within(again).findByRole("menuitem", { name: named(/^Sprint 3$/) });
+    const current = await within(again).findByRole("menuitemradio", { name: named(/^Sprint 3$/) });
     expect(isChecked(current)).toBe(true);
-    fireEvent.click(within(again).getByRole("menuitem", { name: named(/^Sprint 2 \(active\)$/) }));
+    fireEvent.click(within(again).getByRole("menuitemradio", { name: named(/^Sprint 2 \(active\)$/) }));
     await waitFor(() => {
-      expect(within(picker(panel, "Sprint 2")).getByText("Active")).toBeTruthy();
+      expect(within(picker(panel, "Sprint 2 Active")).getByText("Active")).toBeTruthy();
     });
     expect(await sprintOf()).toBe("Sprint 2");
 
     // And back to the backlog.
-    fireEvent.click(picker(panel, "Sprint 2"));
+    fireEvent.click(picker(panel, "Sprint 2 Active"));
     const last = await screen.findByRole("menu");
-    fireEvent.click(within(last).getByRole("menuitem", { name: "Backlog" }));
+    fireEvent.click(within(last).getByRole("menuitemradio", { name: "Backlog" }));
     await waitFor(() => {
       expect(picker(panel, "Backlog")).toBeTruthy();
     });

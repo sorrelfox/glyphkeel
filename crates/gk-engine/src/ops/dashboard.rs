@@ -705,17 +705,16 @@ fn starter() -> Vec<WidgetSpec> {
         width: None,
         settings,
     };
+    // No titles are stored: each program shows a widget's default title
+    // in its own language.
     vec![
-        WidgetSpec {
-            title: Some(messages::text("dashboard-starter-open", &[])),
-            ..spec(
-                WidgetKind::QueryCount,
-                WidgetSettings {
-                    query: Some("is:open".to_owned()),
-                    ..WidgetSettings::default()
-                },
-            )
-        },
+        spec(
+            WidgetKind::QueryCount,
+            WidgetSettings {
+                query: Some("is:open".to_owned()),
+                ..WidgetSettings::default()
+            },
+        ),
         spec(WidgetKind::Overdue, WidgetSettings::default()),
         spec(WidgetKind::DueSoon, WidgetSettings::default()),
         spec(

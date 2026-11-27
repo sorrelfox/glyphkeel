@@ -207,6 +207,9 @@ function StatusMenu({ task, close }: { task: ListedTask; close: () => void }) {
       aria-label={task.key}
       items={statuses}
       disabledKeys={[...reasons.keys()]}
+      // The statuses are a choice: the current one is checked (aria-checked).
+      selectionMode="single"
+      selectedKeys={[task.status.id]}
       autoFocus="first"
       onAction={(id) => {
         close();
@@ -276,6 +279,8 @@ function PriorityCell({ task }: { task: ListedTask }) {
           className="menu"
           aria-label={task.key}
           items={items}
+          selectionMode="single"
+          selectedKeys={[task.priority]}
           autoFocus="first"
           onAction={(id) => {
             close();

@@ -127,7 +127,7 @@ describe("the board", () => {
     fireEvent.keyDown(card ?? document.body, { key: "Enter" });
     const panel = await screen.findByRole("complementary", { name: new RegExp(`Task.*${key}`) });
     fireEvent.click(await within(panel).findByRole("button", { name: /^Priority:/ }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: /Urgent/ }));
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /Urgent/ }));
     await waitFor(() => {
       expect(plain(within(panel).getByRole("button", { name: /^Priority:/ }).getAttribute("aria-label"))).toBe("Priority: Urgent");
     });

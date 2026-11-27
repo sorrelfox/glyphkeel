@@ -57,7 +57,7 @@ test("a version is made, a task planned for it in the panel, and the version clo
   const version = page.getByRole("button", { name: /^Version: / });
   await expect(version).toHaveAccessibleName(/1\.0/);
   await version.click();
-  await page.getByRole("menuitem", { name: "2.0" }).click();
+  await page.getByRole("menuitemradio", { name: "2.0" }).click();
   await expect(version).toHaveAccessibleName(/2\.0/);
   await expect(card(page, "2.0").getByRole("button", { name: new RegExp(`^${key} `) })).toBeVisible();
 

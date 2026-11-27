@@ -72,7 +72,7 @@ test("the roadmap shows a version made elsewhere, and a task planned in the pane
   await version("1.0").getByRole("button", { name: /^RM-2 / }).click();
   const planned = page.getByRole("button", { name: /^Version: / });
   await planned.click();
-  await page.getByRole("menuitem", { name: "2.0" }).click();
+  await page.getByRole("menuitemradio", { name: "2.0" }).click();
   await expect.poll(() => show("RM-2").fix_version?.name).toBe("2.0");
   await expect(version("2.0").getByRole("button", { name: /^RM-2 / })).toBeVisible();
 
@@ -132,8 +132,8 @@ test("a status rule set from the command line refuses a move in the board, and t
   gk("task", "edit", "RU-1", "--estimate", "2h");
   const panel = await openPanel(page, "Needs an estimate");
   await panel.getByRole("button", { name: /^Status:/ }).click();
-  await expect(page.getByRole("menuitem", { name: /^Done/ })).toBeEnabled();
-  await page.getByRole("menuitem", { name: /^Done/ }).click();
+  await expect(page.getByRole("menuitemradio", { name: /^Done/ })).toBeEnabled();
+  await page.getByRole("menuitemradio", { name: /^Done/ }).click();
   await expect.poll(() => show("RU-1").status.name).toBe("Done");
 });
 
@@ -146,7 +146,7 @@ test("closing a repeating task in the panel makes the next one in the engine", a
   const panel = await openPanel(page, "Water the plants");
   await expect(panel.getByTestId("recurrence-note")).toBeVisible();
   await panel.getByRole("button", { name: /^Status:/ }).click();
-  await page.getByRole("menuitem", { name: "Done" }).click();
+  await page.getByRole("menuitemradio", { name: "Done" }).click();
 
   await expect.poll(() => list('project:CH title:"Water the plants" is:open').length).toBe(1);
   const next = list('project:CH title:"Water the plants" is:open')[0];

@@ -124,7 +124,7 @@ test("a project's board on the engine: create a project and a task, drag the tas
   const panel = page.getByRole("complementary", { name: /^Task / });
   await expect(panel).toHaveAccessibleName(new RegExp(key));
   await panel.getByRole("button", { name: /^Priority:/ }).click();
-  await page.getByRole("menuitem", { name: "High" }).click();
+  await page.getByRole("menuitemradio", { name: "High" }).click();
   await expect(panel.getByRole("button", { name: /^Priority:/ })).toHaveAccessibleName(/High/);
   await panel.getByRole("button", { name: /Estimate\u2069?:/ }).click();
   await page.keyboard.type("1:30");
@@ -195,9 +195,9 @@ test("task details on the engine: a subtask, a link, a comment and an attachment
   const sand = (await rows.filter({ hasText: "Sand the walls" }).getAttribute("data-subtask")) ?? "";
   const order = () => rows.evaluateAll((all) => all.map((row) => row.getAttribute("data-subtask")));
   await expect.poll(order).toEqual([tape, sand]);
-  await subtasks.getByRole("button", { name: new RegExp(`^\\W*Open \\W*${tape}`) }).press("Alt+ArrowDown");
+  await subtasks.getByRole("button", { name: new RegExp(`^\\W*${tape}\\b`) }).press("Alt+ArrowDown");
   await expect.poll(order).toEqual([sand, tape]);
-  await expect(subtasks.getByRole("button", { name: new RegExp(`^\\W*Open \\W*${tape}`) })).toBeFocused();
+  await expect(subtasks.getByRole("button", { name: new RegExp(`^\\W*${tape}\\b`) })).toBeFocused();
   const grip = subtasks.locator(`[data-subtask-grip="${tape}"]`);
   await rows.filter({ hasText: "Tape the edges" }).hover();
   const from = await grip.boundingBox();
@@ -262,7 +262,7 @@ test("task details on the engine: a subtask, a link, a comment and an attachment
   await expect(history).not.toContainText(new RegExp(`Created\\W*${paint}`));
 
   // The subtask's own history tells its moves in words.
-  await subtasks.getByRole("button", { name: new RegExp(`^\\W*Open \\W*${tape}`) }).click();
+  await subtasks.getByRole("button", { name: new RegExp(`^\\W*${tape}\\b`) }).click();
   await expect(panel).toHaveAccessibleName(new RegExp(tape));
   await panel.getByRole("tab", { name: /History/ }).click();
   await expect(panel.getByRole("list", { name: "History" })).toContainText("Moved among its parent's subtasks");
@@ -512,7 +512,8 @@ test("time on the engine: log, edit and delete time, run the timer in two window
   // The time report adds up the week.
   await page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: "Time report" }).click();
   await expect(page.locator(`[data-report-row="${key}"]`)).toContainText("1d");
-  await page.getByRole("radio", { name: "Project" }).click();
+  await page.getByRole("button", { name: /Group by/ }).click();
+  await page.getByRole("listbox").getByRole("option", { name: "Project", exact: true }).click();
   await expect(page.getByRole("columnheader", { name: "Project" })).toBeVisible();
 
   await page.close();

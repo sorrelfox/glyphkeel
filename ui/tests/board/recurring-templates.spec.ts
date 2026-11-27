@@ -60,7 +60,7 @@ test("make a task repeat, close it for the next one, skip it and stop it", async
   const first = (await card.getAttribute("data-card")) ?? "";
   expect(first).toMatch(/^PER-\d+$/);
   await panel.getByRole("button", { name: /^Status:/ }).click();
-  await page.getByRole("menuitem", { name: "Done" }).click();
+  await page.getByRole("menuitemradio", { name: "Done" }).click();
   await expect(page.locator(`section[data-lane] [data-card="${first}"]`)).toHaveClass(/\bdone\b/);
   const next = page.locator("section[data-lane] [data-card]", { hasText: "Water the plants" }).and(page.locator(`:not([data-card="${first}"])`));
   await expect(next).toBeVisible();

@@ -667,7 +667,7 @@ test("saved views: a query and a grouping saved as a view of the chart, chosen a
 
   // All tasks: the person's own grouping and no query.
   await page.getByRole("button", { name: /Saved view: / }).click();
-  await page.getByRole("menuitem", { name: "All tasks" }).click();
+  await page.getByRole("menuitemradio", { name: "All tasks" }).click();
   await expect.poll(async () => plain(await counts.textContent())).toBe(all);
   await expect.poll(async () => plain(await page.getByRole("button", { name: /^Group: / }).getAttribute("aria-label"))).toBe("Group: Parent");
 
@@ -675,7 +675,7 @@ test("saved views: a query and a grouping saved as a view of the chart, chosen a
   await page.getByRole("group", { name: "Project views" }).getByRole("button", { name: "Board" }).click();
   await page.getByRole("group", { name: "Project views" }).getByRole("button", { name: "Gantt" }).click();
   await page.getByRole("button", { name: /Saved view: / }).click();
-  await page.getByRole("menuitem", { name: /Finished work/ }).click();
+  await page.getByRole("menuitemradio", { name: /Finished work/ }).click();
   await expect.poll(async () => plain(await counts.textContent())).toBe(filtered);
   await expect(field).toHaveText("is:closed");
   await expect.poll(async () => plain(await page.getByRole("button", { name: /^Group: / }).getAttribute("aria-label"))).toBe("Group: Status");

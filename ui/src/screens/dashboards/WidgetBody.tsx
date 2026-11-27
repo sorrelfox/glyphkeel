@@ -26,6 +26,10 @@ export function widgetTitle(t: Translate, widget: Widget): string {
   if (widget.title !== undefined && widget.title !== "") {
     return widget.title;
   }
+  // The starter dashboard's first widget, which counts the open tasks.
+  if (widget.kind === "query_count" && widget.settings.query?.trim() === "is:open") {
+    return t("widget-open-tasks");
+  }
   if (widget.kind === "tasks_by_field") {
     const field = widget.settings.field ?? "status";
     switch (field) {

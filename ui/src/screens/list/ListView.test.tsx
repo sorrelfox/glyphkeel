@@ -102,11 +102,11 @@ describe("the list's views", () => {
     await renderList(transport);
     fireEvent.click(screen.getByRole("button", { name: named(/^Saved view: All tasks/) }));
     const menu = await screen.findByRole("menu");
-    const due = within(menu).getByRole("menuitem", { name: /Due soon/ });
+    const due = within(menu).getByRole("menuitemradio", { name: /Due soon/ });
     expect(due.textContent).toContain("What needs doing this week");
     const describedBy = due.getAttribute("aria-describedby") ?? "";
     expect(describedBy.split(" ").map((id) => document.getElementById(id)?.textContent)).toContain("What needs doing this week");
-    expect(within(menu).getByRole("menuitem", { name: /Bugs/ }).getAttribute("aria-describedby")).toBeNull();
+    expect(within(menu).getByRole("menuitemradio", { name: /Bugs/ }).getAttribute("aria-describedby")).toBeNull();
   });
 });
 

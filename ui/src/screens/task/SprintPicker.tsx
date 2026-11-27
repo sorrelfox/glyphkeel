@@ -50,9 +50,22 @@ export function SprintPicker({ task, readOnly, onChange }: SprintPickerProps) {
         }
       }}
     >
-      <Button className="val" isDisabled={readOnly} aria-label={t("prop-sprint-value", { value: current?.name ?? t("prop-sprint-clear") })}>
+      {/* The name holds all the text shown: the sprint and, when it runs or ended, its state. */}
+      <Button
+        className="val"
+        isDisabled={readOnly}
+        aria-label={
+          current === undefined
+            ? t("prop-sprint-value", { value: t("prop-sprint-clear") })
+            : current.state === "planned"
+              ? t("prop-sprint-value", { value: current.name })
+              : t("prop-sprint-value-state", { value: current.name, state: t(`sprint-state-${current.state}`) })
+        }
+      >
         <IterationCw className="ic s muted" aria-hidden="true" />
-        {current === undefined ? <span className="faint">{t("prop-none")}</span> : <span className="truncate">{current.name}</span>}
+        {current === undefined ? <span className="faint">{t("prop-sprint-clear")}</span> : <span className="truncate">{current.name}</span>}
+        {/* A space, so the name and the state read as two words. */}
+        {current !== undefined && " "}
         {current !== undefined && current.state !== "planned" && <span className="chip sm">{t(`sprint-state-${current.state}`)}</span>}
       </Button>
       <Popover className="pop menuPopover" placement="bottom start" offset={4}>

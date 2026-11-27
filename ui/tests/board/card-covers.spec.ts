@@ -13,9 +13,10 @@ const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
 /** The WCAG 2.0, 2.1 and 2.2 rules at levels A and AA. */
 const TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22a", "wcag22aa"];
 
+/** Chooses `item` in the board's options: a choice, or an action. */
 async function options(page: Page, item: string | RegExp): Promise<void> {
   await page.getByRole("button", { name: /^Board options/ }).click();
-  await page.getByRole("menuitem", { name: item }).click();
+  await page.getByRole("menuitemradio", { name: item }).or(page.getByRole("menuitem", { name: item })).click();
 }
 
 // The board's options colour the cards' edges and show covers; a rule's

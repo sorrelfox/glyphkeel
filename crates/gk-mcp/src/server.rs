@@ -642,6 +642,7 @@ async fn watch(server: Weak<Inner>, watched: Watched, sink: Sink, stop: Cancella
         let uris = resources::changed(
             server.engine(),
             &server.lookup_context(),
+            &server.inner.session.housekeeping_context(),
             &watched,
             std::mem::take(&mut dirty),
         );

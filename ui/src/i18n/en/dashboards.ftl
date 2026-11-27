@@ -112,6 +112,8 @@ widget-kind-version_progress = Version progress
 widget-kind-activity = Recent activity
 widget-kind-automation_failures = Automation failures
 widget-kind-note = Note
+# The title of a widget that counts the open tasks (query is:open), as the starter dashboard has.
+widget-open-tasks = Open tasks
 # The titles of a widget that counts tasks by a field; a custom field by its name.
 widget-tasks-by = Tasks by { $field }
 widget-tasks-by-status = Tasks by status
