@@ -77,9 +77,14 @@ export function useWidgetValue(dashboard: string, widget: string) {
   return useOp("dashboard.widget", { dashboard, widget });
 }
 
-/** The dashboard to show: the one asked for, else the first. */
-export function chosenDashboard(dashboards: readonly Dashboard[], id: string | undefined): Dashboard | undefined {
-  return dashboards.find((each) => each.id === id) ?? dashboards[0];
+/** The dashboard to show: the one asked for, else the first pinned to the project it was opened from, else the first. */
+export function chosenDashboard(dashboards: readonly Dashboard[], id: string | undefined, from?: string): Dashboard | undefined {
+  return dashboards.find((each) => each.id === id) ?? (from === undefined ? undefined : pinnedTo(dashboards, from)[0]) ?? dashboards[0];
+}
+
+/** The dashboards pinned to the project with key `project`, in order. */
+export function pinnedTo(dashboards: readonly Dashboard[], project: string): Dashboard[] {
+  return dashboards.filter((each) => each.project === project);
 }
 
 /** The place (1 is the first) a widget moves to one step `step` away, or null at an end. */

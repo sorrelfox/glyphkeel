@@ -68,6 +68,11 @@ the command line: `glyphkeel board layout set TM --colour-by priority`,
 `glyphkeel file cover TM-41 --attachment <id>`; agents use the
 `set_board_layout` and `set_card_cover` tools.
 
+`glyphkeel board TM` prints the board column by column: each column's name,
+count and limits, then its cards, one a line, with the key, the title, the
+name of what colours the edge (`edge: Urgent bugs`) and the cover's file name
+(`cover: shot.png`). With `--json` it prints the whole board.
+
 ## Filtering
 
 The filter bar above the board narrows the cards:

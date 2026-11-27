@@ -9,6 +9,7 @@ import { useAction } from "../actions/ActionsProvider";
 import { ActionMenu, SEPARATOR } from "../components/ActionMenu";
 import { MenuEntries } from "../components/ContextMenu";
 import { useProjects } from "../data/board";
+import { pinnedTo, useDashboards } from "../data/dashboards";
 import { type Project } from "../data/catalog";
 import { Tooltip } from "../components/Tooltip";
 import { classes } from "../classes";
@@ -126,6 +127,9 @@ function ProjectButton({ project, onSettings, onNewSubproject }: ProjectButtonPr
   const importCsv = useAction("app.importCsv");
   const projects = useProjects();
   const moveEntry = useMoveProjectEntry();
+  const navigate = useNavigate();
+  const dashboards = useDashboards();
+  const pinned = pinnedTo(dashboards.data?.items ?? [], project.key);
   const summary = projects.data?.items.find((candidate) => candidate.key === project.key);
   const path: string[] = [];
   let parent = project.parent;
@@ -162,6 +166,27 @@ function ProjectButton({ project, onSettings, onNewSubproject }: ProjectButtonPr
               },
               { id: "import-csv", label: t("project-import-csv"), run: () => { importCsv.run(); }, disabled: project.state === "archived" },
               ...(project.state === "archived" ? [] : [moveEntry(summary)]),
+              "separator",
+              {
+                id: "dashboards",
+                section: t("project-dashboards"),
+                items: [
+                  ...pinned.map((each) => ({
+                    id: `dashboard-${each.id}`,
+                    label: each.name,
+                    run: () => {
+                      void navigate({ to: "/dashboards", search: { dashboard: each.id, project: project.key } });
+                    },
+                  })),
+                  {
+                    id: "all-dashboards",
+                    label: pinned.length === 0 ? t("project-dashboards-pin") : t("project-dashboards-all"),
+                    run: () => {
+                      void navigate({ to: "/dashboards", search: { project: project.key } });
+                    },
+                  },
+                ],
+              },
             ]}
           />
         </Menu>

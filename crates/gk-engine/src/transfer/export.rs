@@ -17,9 +17,9 @@ use serde_json::Value;
 
 use super::model::{
     Activity, AgentSession, Attachment, AutomationLine, Claim, Comment, CommentRevision, Counts,
-    Label, Layout, Manifest, ManifestProject, Modules, Project, ProjectFile, Relation, Revision,
-    SavedView, SeriesLine, Sprint, Status, Task, TaskType, TemplateLine, TimeEntry, Version,
-    WikiPage,
+    DashboardLine, Label, Layout, Manifest, ManifestProject, Modules, Project, ProjectFile,
+    Relation, Revision, SavedView, SeriesLine, Sprint, Status, Task, TaskType, TemplateLine,
+    TimeEntry, Version, WikiPage,
 };
 use super::sink::Sink;
 use super::{FORMAT_NAME, FORMAT_VERSION, Progress, project_dir, report};
@@ -301,6 +301,10 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
     let automations = crate::ops::automation::of_scope(tx, Some(id))?
         .into_iter()
         .map(|(rid, r)| automation_line(rid, r))
+        .collect();
+    let dashboards = crate::ops::dashboard::of_scope(tx, Some(id))?
+        .into_iter()
+        .map(|(did, d)| dashboard_line(did, d))
         .collect();
 
     let mut descriptions = Vec::new();
@@ -690,6 +694,7 @@ fn read_project(tx: &Transaction<'_>, id: Id, tasks_in: &HashSet<String>) -> Res
             templates,
             series,
             automations,
+            dashboards,
             custom_fields,
         },
         tasks,
@@ -717,6 +722,24 @@ fn automation_line(id: Id, r: crate::ops::automation::Record) -> AutomationLine 
         created_by_name: r.created_by_name,
         updated_at: r.updated_at,
         updated_by_kind: r.updated_by_kind,
+    }
+}
+
+fn dashboard_line(id: Id, d: crate::ops::dashboard::Record) -> DashboardLine {
+    DashboardLine {
+        id: id.to_string(),
+        name: d.name,
+        description: d.description,
+        widgets: d
+            .widgets
+            .iter()
+            .filter_map(|w| serde_json::to_value(w).ok())
+            .collect(),
+        rank: d.rank,
+        created_at: d.created_at,
+        created_by_kind: d.created_by_kind,
+        created_by_name: d.created_by_name,
+        updated_at: d.updated_at,
     }
 }
 
@@ -825,7 +848,7 @@ pub(crate) fn export(
 ) -> Result<ExportResult, OpError> {
     report(progress, TransferPhase::Reading, 0, 1);
     let whole = input.projects.is_empty();
-    let (projects, sessions, templates, automations) = engine
+    let (projects, sessions, templates, automations, dashboards) = engine
         .store()
         .read(|tx| {
             let ids = chosen(tx, input)?;
@@ -881,7 +904,16 @@ pub(crate) fn export(
             } else {
                 Vec::new()
             };
-            Ok::<_, Failure>((out, sessions, templates, automations))
+            // And the workspace's own dashboards.
+            let dashboards: Vec<DashboardLine> = if whole {
+                crate::ops::dashboard::of_scope(tx, None)?
+                    .into_iter()
+                    .map(|(did, d)| dashboard_line(did, d))
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            Ok::<_, Failure>((out, sessions, templates, automations, dashboards))
         })
         .map_err(OpError::from)?;
 
@@ -901,8 +933,11 @@ pub(crate) fn export(
         &mut sink,
         &projects,
         &sessions,
-        &templates,
-        &automations,
+        &Own {
+            templates: &templates,
+            automations: &automations,
+            dashboards: &dashboards,
+        },
         progress,
     );
     let counts = match written {
@@ -926,15 +961,26 @@ pub(crate) fn export(
     })
 }
 
+/// What an export takes of the workspace itself, besides its projects.
+struct Own<'a> {
+    templates: &'a [TemplateLine],
+    automations: &'a [AutomationLine],
+    dashboards: &'a [DashboardLine],
+}
+
 fn write_all(
     engine: &Engine,
     sink: &mut Sink,
     projects: &[Out],
     sessions: &[AgentSession],
-    templates: &[TemplateLine],
-    automations: &[AutomationLine],
+    own: &Own<'_>,
     progress: &Progress,
 ) -> Result<ArchiveCounts, OpError> {
+    let Own {
+        templates,
+        automations,
+        dashboards,
+    } = *own;
     let io = |e: std::io::Error| {
         messages::error(
             ErrorCode::Storage,
@@ -953,6 +999,10 @@ fn write_all(
     }
     if !automations.is_empty() {
         sink.put(super::AUTOMATIONS, &jsonl(automations)?)
+            .map_err(io)?;
+    }
+    if !dashboards.is_empty() {
+        sink.put(super::DASHBOARDS, &jsonl(dashboards)?)
             .map_err(io)?;
     }
     for (i, p) in projects.iter().enumerate() {

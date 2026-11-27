@@ -14,6 +14,7 @@
 //! Exit codes: 0 success, 1 usage error or invalid input, 2 not found,
 //! 3 change rejected, 4 workspace or storage problem.
 
+mod board;
 mod commands;
 mod dashboard;
 mod input;
@@ -160,6 +161,8 @@ fn run(ops: &[OpCommand], matches: &ArgMatches, out: Out) -> Result<(), OpError>
             }
             let text = if out.json {
                 output::json(&value)
+            } else if cmd.op.id == "board.get" {
+                board::show(&value)
             } else if cmd.op.id == "dashboard.show" {
                 dashboard::show(&value)
             } else if cmd.op.id == "dashboard.widget" {

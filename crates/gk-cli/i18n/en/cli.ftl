@@ -102,6 +102,36 @@ cli-app-missing = The desktop app ({ $app }) is neither next to this program nor
 cli-app-missing-hint = Install the desktop app, or use the commands listed by `glyphkeel --help`.
 cli-app-start-failed = Can't start { $app }: { $error }.
 
+## Boards, as `board` prints them
+
+# The board's heading: the project's key.
+cli-board-heading = Board of { $project }
+# A column's heading: the status and how many tasks it holds.
+cli-board-column = { $name } ({ $count ->
+        [one] 1 task
+       *[other] { $count } tasks
+    })
+cli-board-limit = limit { $limit }
+cli-board-over-limit = over its limit of { $limit }
+cli-board-under-minimum = under its minimum of { $minimum }
+cli-board-collapsed = collapsed
+cli-board-no-cards = no cards
+# A card's coloured edge: what it stands for (a colour rule's name, the type, label or priority).
+cli-board-edge = edge: { $name }
+# A card's cover: the image's file name.
+cli-board-cover = cover: { $name }
+cli-board-older = { $count ->
+        [one] 1 older closed task not shown
+       *[other] { $count } older closed tasks not shown
+    }
+cli-board-hidden = { $columns ->
+        [one] 1 hidden column
+       *[other] { $columns } hidden columns
+    }, with { $tasks ->
+        [one] 1 task
+       *[other] { $tasks } tasks
+    }
+
 ## Dashboards, as `dashboard show` prints them
 
 cli-dashboard-heading = { $name }

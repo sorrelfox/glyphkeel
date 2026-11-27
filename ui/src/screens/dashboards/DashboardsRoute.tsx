@@ -7,15 +7,16 @@ import { DashboardsScreen } from "./DashboardsScreen";
 
 const route = getRouteApi("/shell/dashboards");
 
-/** The dashboards page, with the dashboard shown kept in the route. */
+/** The dashboards page, with the dashboard shown and the project it was opened from kept in the route. */
 export function DashboardsRoute() {
-  const { dashboard } = route.useSearch();
+  const { dashboard, project } = route.useSearch();
   const navigate = useNavigate();
   return (
     <DashboardsScreen
       chosen={dashboard}
+      from={project}
       onChoose={(id) => {
-        void navigate({ to: "/dashboards", search: id === undefined ? {} : { dashboard: id } });
+        void navigate({ to: "/dashboards", search: { ...(id === undefined ? {} : { dashboard: id }), ...(project === undefined ? {} : { project }) } });
       }}
     />
   );

@@ -14,7 +14,7 @@ import { Switch } from "../../components/Switch";
 import { useToasts } from "../../components/Toasts";
 import { chosenDashboard, clampWidth, moved, useDashboards } from "../../data/dashboards";
 import { errorToast, failureText, useCall, useOp, useUndo } from "../../data/hooks";
-import { type Dashboard, type Widget } from "../../generated/ops";
+import { type Dashboard, type DashboardField, type Widget } from "../../generated/ops";
 import { useT } from "../../i18n/I18n";
 import { widgetTitle } from "./WidgetBody";
 import { WidgetCard } from "./WidgetCard";
@@ -39,7 +39,7 @@ type Editing = { kind: "new-dashboard" } | { kind: "dashboard"; dashboard: Dashb
  * choice of dashboard, a menu to make, rename and delete them, and an empty
  * state that makes a starter dashboard.
  */
-export function DashboardsScreen({ chosen, onChoose }: { chosen: string | undefined; onChoose: (id: string | undefined) => void }) {
+export function DashboardsScreen({ chosen, from, onChoose }: { chosen: string | undefined; /** The key of the project the page was opened from. */ from?: string | undefined; onChoose: (id: string | undefined) => void }) {
   const t = useT();
   const call = useCall();
   const toasts = useToasts();
@@ -47,7 +47,7 @@ export function DashboardsScreen({ chosen, onChoose }: { chosen: string | undefi
   const navigate = useNavigate();
   const dashboards = useDashboards();
   const items = dashboards.data?.items ?? [];
-  const dashboard = chosenDashboard(items, chosen);
+  const dashboard = chosenDashboard(items, chosen, from);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [said, setSaid] = useState("");
@@ -253,8 +253,16 @@ export function DashboardsScreen({ chosen, onChoose }: { chosen: string | undefi
                 if (key === "new") setEditing({ kind: "new-dashboard" });
                 if (key === "edit") setEditing({ kind: "dashboard", dashboard });
                 if (key === "delete") setEditing({ kind: "delete", dashboard });
+                if (key === "pin-here" && from !== undefined) {
+                  run(call("dashboard.update", { dashboard: dashboard.id, pin_to: from }), (output) => t("dashboards-pinned", { name: output.dashboard.name, project: from }), false);
+                }
               }}
             >
+              {from !== undefined && dashboard.project !== from && (
+                <MenuItem id="pin-here" className="item">
+                  {t("dashboards-pin-here", { project: from })}
+                </MenuItem>
+              )}
               <MenuItem id="new" className="item">
                 {t("dashboards-new")}
               </MenuItem>
@@ -332,11 +340,18 @@ export function DashboardsScreen({ chosen, onChoose }: { chosen: string | undefi
           onSave={(input) => {
             if (editing.kind === "dashboard") {
               const old = editing.dashboard;
+              const repinned = input.project !== (old.project ?? WORKSPACE);
+              const clear: DashboardField[] = [
+                ...(input.description === "" && (old.description ?? "") !== "" ? (["description"] as const) : []),
+                ...(repinned && input.project === WORKSPACE ? (["pin_to"] as const) : []),
+              ];
               run(
                 call("dashboard.update", {
                   dashboard: old.id,
                   ...(input.name !== old.name ? { name: input.name } : {}),
-                  ...(input.description === "" ? ((old.description ?? "") === "" ? {} : { clear: ["description"] }) : input.description !== old.description ? { description: input.description } : {}),
+                  ...(input.description !== "" && input.description !== old.description ? { description: input.description } : {}),
+                  ...(repinned && input.project !== WORKSPACE ? { pin_to: input.project } : {}),
+                  ...(clear.length > 0 ? { clear } : {}),
                 }),
                 (output) => t("dashboards-changed", { name: output.dashboard.name }),
                 true,
@@ -402,10 +417,10 @@ interface DashboardInput {
 /** Makes a dashboard (for the whole workspace or pinned to a project, empty or with the starter widgets), or renames one. */
 function DashboardDialog({ dashboard, error, onEdit, onSave, onClose }: { dashboard?: Dashboard; error: string | null; onEdit: () => void; onSave: (input: DashboardInput) => void; onClose: () => void }) {
   const t = useT();
-  const projects = useOp("project.list", {}, { enabled: dashboard === undefined });
+  const projects = useOp("project.list", {});
   const [name, setName] = useState(dashboard?.name ?? "");
   const [description, setDescription] = useState(dashboard?.description ?? "");
-  const [project, setProject] = useState(WORKSPACE);
+  const [project, setProject] = useState(dashboard?.project ?? WORKSPACE);
   const [starter, setStarter] = useState(false);
   const save = () => {
     if (name.trim() !== "") {
@@ -464,9 +479,7 @@ function DashboardDialog({ dashboard, error, onEdit, onSave, onClose }: { dashbo
             />
           </span>
         </label>
-        {dashboard === undefined && (
-          <>
-            <div className={styles.formRow}>
+        <div className={styles.formRow}>
               <span className={styles.formLabel} aria-hidden="true">
                 {t("dashboards-field-project")}
               </span>
@@ -480,10 +493,10 @@ function DashboardDialog({ dashboard, error, onEdit, onSave, onClose }: { dashbo
                 options={[{ id: WORKSPACE, label: t("dashboards-whole-workspace") }, ...(projects.data?.items ?? []).map((each) => ({ id: each.key, label: each.path }))]}
               />
             </div>
-            <Switch isSelected={starter} onChange={setStarter}>
-              {t("dashboards-field-starter")}
-            </Switch>
-          </>
+        {dashboard === undefined && (
+          <Switch isSelected={starter} onChange={setStarter}>
+            {t("dashboards-field-starter")}
+          </Switch>
         )}
         {error !== null && (
           <p className={styles.problem} role="alert">
