@@ -5,6 +5,33 @@ Conventional Commits, and versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-11-27
+
+### Features
+
+- **Sprints:** sprints per project with a goal and dates, a backlog and
+  planning view, starting and completing with carry-over, a burndown
+  chart, the `sprint:` query field, a board filter and a list column.
+- **Automation rules:** a trigger, an optional query and actions (set
+  fields, labels or status, comment, create a linked task, notify). Each
+  run is recorded as the rule's own change and can be undone; loops and
+  runaway rules are stopped. Rules follow renames and travel in exports.
+- **Dashboards:** widgets for query counts and lists, tasks by field,
+  due and overdue tasks, flow and time reports, sprint burndown, version
+  progress, activity, automation failures and notes, arranged by pointer
+  or keyboard.
+- **Card colours and covers:** colour the card edge by type, priority,
+  label or query rules, and show an image from the task as its cover.
+- **Encryption and app lock:** encrypt a workspace with a passphrase
+  (Linux), with encrypted backups; lock the app when idle or on demand.
+- **Agents:** confirmations through the client for destructive or
+  beyond-profile changes, subscriptions to tasks, projects and queries,
+  and an optional MCP endpoint on 127.0.0.1 with a token.
+
+### Fixes
+
+- Every CSV export shares one guard against spreadsheet formulas.
+
 ## [0.1.7] - 2026-11-27
 
 ### Features

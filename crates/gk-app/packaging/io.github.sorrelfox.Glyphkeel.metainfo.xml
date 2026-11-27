@@ -88,6 +88,11 @@
   </supports>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.1.8" date="2026-11-27">
+      <description>
+        <p>Sprints with planning and burndown, automation rules, dashboards, card colours and covers, encrypted workspaces and an app lock, and for agents: confirmations, watching tasks and an optional local HTTP endpoint.</p>
+      </description>
+    </release>
     <release version="0.1.7" date="2026-11-27">
       <description>
         <p>Hardening for 1.0: a security review with limits on agents' file paths, accessibility fixes in every theme, much faster CSV import, boards and schedules, translatable messages throughout, an About page with third-party notices, an Arch package and signed APT and DNF repositories, column width reset, and new task shortcuts.</p>
