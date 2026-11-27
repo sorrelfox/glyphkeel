@@ -78,6 +78,11 @@ date. Glyphkeel itself never goes online.
   keeps for a device gets a `_` in front (a wiki page called *CON* is saved
   as `_con.md`). Importing such a folder of Markdown files takes the `_` off
   again.
+- **Encrypted workspaces:** Preferences › Security › Encrypt…, or
+  `glyphkeel workspace encrypt`, as on Linux. The file format is the same:
+  copy an encrypted workspace folder between Windows and Linux and it opens
+  with its passphrase. See
+  [Encryption and the app lock](guide/encryption-and-lock.md).
 - **If the window stays blank or flickers:** start it once with
   `glyphkeel-app.exe --safe-graphics`, or turn on Preferences › Appearance ›
   Safe rendering, which draws without the graphics card.

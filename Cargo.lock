@@ -1862,6 +1862,7 @@ dependencies = [
 name = "gk-store"
 version = "0.1.9"
 dependencies = [
+ "cc",
  "directories",
  "getrandom 0.3.4",
  "gk-core",
@@ -1871,6 +1872,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "sqlcipher-src",
  "tempfile",
  "thiserror 2.0.21",
  "tracing",

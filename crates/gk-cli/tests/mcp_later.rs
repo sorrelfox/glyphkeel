@@ -14,7 +14,7 @@ use std::net::{Ipv4Addr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Stdio};
 use std::sync::mpsc::Receiver;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use common::{Agent, Workspace, ZONE, glyphkeel};
 use serde_json::json;
@@ -174,10 +174,12 @@ impl Endpoint {
     }
 
     /// Stops it as Ctrl+C does and checks that it ends well.
-    fn stop(mut self) {
+    fn stop(self) {
         #[cfg(unix)]
         {
-            let pid = self.child.id().to_string();
+            use std::time::Instant;
+            let mut this = self;
+            let pid = this.child.id().to_string();
             let sent = std::process::Command::new("kill")
                 .args(["-INT", &pid])
                 .status()
@@ -185,7 +187,7 @@ impl Endpoint {
             assert!(sent.success());
             let until = Instant::now() + Duration::from_secs(20);
             loop {
-                if let Some(status) = self.child.try_wait().unwrap() {
+                if let Some(status) = this.child.try_wait().unwrap() {
                     assert!(status.success(), "it ended with {status}");
                     break;
                 }
